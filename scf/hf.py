@@ -11,7 +11,7 @@ Non-relativistic Hartree-Fock
 
 __author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
 
-import os
+import os, sys
 import tempfile
 import cPickle as pickle
 import ctypes
@@ -144,8 +144,12 @@ def scf_cycle(mol, scf, scf_threshold=1e-10, dump_chk=True, init_dm=None):
 class SCF(object):
     ''' SCF: == RHF '''
     def __init__(self, mol):
+        if not mol._built:
+            sys.stdout.write('Warning: mol.build() is not called in input\n' )
+            mol.build()
         self.mol = mol
         self.verbose = mol.verbose
+        self.max_memory = mol.max_memory
 
         self.mo_energy = None
         self.mo_coeff = None
@@ -237,13 +241,17 @@ class SCF(object):
         return scf_diis
 
     @lib.omnimethod
-    def get_hcore(self, mol):
+    def get_hcore(self, mol=None):
+        if mol is None:
+            mol = self.mol
         h = mol.intor_symmetric('cint1e_kin_sph') \
                 + mol.intor_symmetric('cint1e_nuc_sph')
         return h
 
     @lib.omnimethod
-    def get_ovlp(self, mol):
+    def get_ovlp(self, mol=None):
+        if mol is None:
+            mol = self.mol
         return mol.intor_symmetric('cint1e_ovlp_sph')
 
     def make_fock(self, h1e, vhf):
@@ -252,8 +260,10 @@ class SCF(object):
     def dump_scf_to_chkfile(self, *args):
         dump_scf_to_chkfile(self.mol, self.chkfile, *args)
 
-    def _init_guess_by_minao(self, mol):
+    def _init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
+        if mol is None:
+            mol = self.mol
         try:
             return init_guess_by_minao(self, mol)
         except:
@@ -261,8 +271,10 @@ class SCF(object):
                      'Use 1e initial guess')
             return self._init_guess_by_1e(mol)
 
-    def _init_guess_by_1e(self, mol):
+    def _init_guess_by_1e(self, mol=None):
         '''Initial guess from one electron system.'''
+        if mol is None:
+            mol = self.mol
         log.info(self, '\n')
         log.info(self, 'Initial guess from one electron system.')
         h1e = self.get_hcore(mol)
@@ -272,8 +284,10 @@ class SCF(object):
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return 0, dm
 
-    def _init_guess_by_chkfile(self, mol):
+    def _init_guess_by_chkfile(self, mol=None):
         '''Read initial guess from chkfile.'''
+        if mol is None:
+            mol = self.mol
         chkfile = self.chkfile
         try:
             chk_mol, scf_rec = read_scf_from_chkfile(chkfile)
@@ -309,8 +323,10 @@ class SCF(object):
             mo_occ = scf_rec['mo_occ']
         return scf_rec['hf_energy'], numpy.dot(mo_coeff*mo_occ, mo_coeff.T)
 
-    def _init_guess_by_atom(self, mol):
+    def _init_guess_by_atom(self, mol=None):
         '''Initial guess from occupancy-averaged atomic RHF'''
+        if mol is None:
+            mol = self.mol
         return init_guess_by_atom(self, mol)
 
     def init_guess(self, method='minao'):
@@ -350,7 +366,9 @@ class SCF(object):
     def set_direct_scf_threshold(self, threshold):
         _cint.set_direct_scf_cutoff_(lib.c_double_p(ctypes.c_double(threshold)))
 
-    def set_mo_occ(self, mo_energy):
+    def set_mo_occ(self, mo_energy=None):
+        if mo_energy is None:
+            mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = self.mol.nelectron / 2
         mo_occ[:nocc] = 2
@@ -364,7 +382,11 @@ class SCF(object):
 
     # full density matrix for RHF
     @lib.omnimethod
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def calc_den_mat(self, mo_coeff=None, mo_occ=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_occ is None:
+            mo_occ = self.mo_occ
         mo = mo_coeff[:,mo_occ>0]
         return numpy.dot(mo*mo_occ[mo_occ>0], mo.T.conj())
 
@@ -448,6 +470,10 @@ class SCF(object):
                 log.info(self, 'virtual MO #%d energy= %.15g occ= %g', \
                          i+1, mo_energy[i], mo_occ[i])
 
+    def _is_mem_enough(self):
+        nbf = self.mol.num_NR_function()
+        return nbf**4/1024**2 < self.max_memory
+
 ############
 
 def init_guess_by_atom(dev, mol):
@@ -530,7 +556,7 @@ class RHF(SCF):
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
         SCF.__init__(self, mol)
 
-        self.eri_in_memory = _is_mem_enough(mol)
+        self.eri_in_memory = self._is_mem_enough()
         self._eri = None
 
     def init_direct_scf(self, mol):
@@ -649,7 +675,7 @@ class UHF(SCF):
         self.fix_nelectron_alpha = 0
         self.break_symmetry = False
 
-        self.eri_in_memory = _is_mem_enough(mol)
+        self.eri_in_memory = self._is_mem_enough()
         self._eri = None
 
     def dump_scf_option(self):
@@ -715,11 +741,15 @@ class UHF(SCF):
         return scf_diis
 
     @lib.omnimethod
-    def get_hcore(self, mol):
+    def get_hcore(self, mol=None):
+        if mol is None:
+            mol = self.mol
         hcore = SCF.get_hcore(mol)
         return numpy.array((hcore,hcore))
 
-    def set_mo_occ(self, mo_energy):
+    def set_mo_occ(self, mo_energy=None):
+        if mo_energy is None:
+            mo_energy = self.mo_energy
         if self.fix_nelectron_alpha > 0:
             n_a = self.nelectron_alpha = self.fix_nelectron_alpha
             n_b = self.mol.nelectron - n_a
@@ -750,7 +780,11 @@ class UHF(SCF):
         return mo_occ
 
     @lib.omnimethod
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def calc_den_mat(self, mo_coeff=None, mo_occ=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_occ is None:
+            mo_occ = self.mo_occ
         mo_a = mo_coeff[0][:,mo_occ[0]>0]
         mo_b = mo_coeff[1][:,mo_occ[1]>0]
         occ_a = mo_occ[0][mo_occ[0]>0]
@@ -792,8 +826,10 @@ class UHF(SCF):
                 mo_coeff[1][:,nocc-1] = 0
         return mo_coeff
 
-    def _init_guess_by_1e(self, mol):
+    def _init_guess_by_1e(self, mol=None):
         '''Initial guess from one electron system.'''
+        if mol is None:
+            mol = self.mol
         log.info(self, '\n')
         log.info(self, 'Initial guess from one electron system.')
         h1e = self.get_hcore(mol)
@@ -805,7 +841,9 @@ class UHF(SCF):
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return 0, dm
 
-    def _init_minao_uhf_dm(self, mol):
+    def _init_minao_uhf_dm(self, mol=None):
+        if mol is None:
+            mol = self.mol
         def filter_alpha(x):
             if x > 1:
                 return 1
@@ -837,7 +875,9 @@ class UHF(SCF):
         dm = (numpy.dot(c*numpy.hstack(occa),c.T), \
               numpy.dot(c*numpy.hstack(occb),c.T))
         return numpy.array(dm)
-    def _init_guess_by_minao(self, mol):
+    def _init_guess_by_minao(self, mol=None):
+        if mol is None:
+            mol = self.mol
         log.info(self, 'initial guess from MINAO')
         try:
             return 0, self._init_minao_uhf_dm(mol)
@@ -846,12 +886,16 @@ class UHF(SCF):
                      'Use 1e initial guess')
             return self._init_guess_by_1e(mol)
 
-    def _init_guess_by_atom(self, mol):
+    def _init_guess_by_atom(self, mol=None):
+        if mol is None:
+            mol = self.mol
         e, dm = init_guess_by_atom(self, mol)
         return e, numpy.array((dm*.5, dm*.5))
 
-    def _init_guess_by_chkfile(self, mol):
+    def _init_guess_by_chkfile(self, mol=None):
         '''Read initial guess from chkfile.'''
+        if mol is None:
+            mol = self.mol
         chkfile = self.chkfile
         try:
             chk_mol, scf_rec = read_scf_from_chkfile(chkfile)
@@ -1110,10 +1154,6 @@ def spin_square(mol, occ_mo_a, occ_mo_b):
 #TODO:        v_1 = vj[0] + vj[1] - vk[0]
 #TODO:        v_2 = vj[0] + vj[1] - vk[1]
 #TODO:        return (v_1, v_2)
-
-def _is_mem_enough(mol):
-    nbf = mol.num_NR_function()
-    return nbf**4/1024**2 < param.MEMORY_MAX
 
 
 if __name__ == '__main__':

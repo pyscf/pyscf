@@ -16,8 +16,8 @@ import time
 import math
 import numpy
 import lib.parameters as param
-import logger as log
-import lib.pycint as pycint
+import lib.logger as log
+import cmd_args
 import basis
 import moleintor
 
@@ -51,42 +51,6 @@ def _symbol(symb_or_chg):
         return param.ELEMENTS[symb_or_chg][0]
 
 
-def cmd_args(mol):
-    '''
-    get input from cmdline
-    '''
-    import optparse
-    usage = 'Usage: %prog [options] arg1 arg2'
-    parser = optparse.OptionParser(usage=usage, version=__version__)
-    parser.add_option('-v', '--verbose',
-                      action='store_true', dest='verbose',
-                      help='make lots of noise [default]')
-    parser.add_option('-q', '--quiet',
-                      action='store_false', dest='verbose',
-                      help='be very quiet')
-    parser.add_option('-o', '--output',
-                      dest='fout', metavar='FILE', help='write output to FILE')
-
-    (opts_args, args_left) = parser.parse_args()
-
-    verbose = mol.verbose
-    if opts_args.verbose is not None:
-        if opts_args.verbose:
-            verbose = log.INFO
-
-    if opts_args.fout is not None:
-        output = opts_args.fout
-    else:
-        output = mol.output
-    try:
-        os.remove(output)
-        if verbose > log.QUITE:
-            print 'overwrite output file: %s' % format(output)
-    except:
-        if verbose > log.QUITE:
-            print 'output file: %s' % format(output)
-    return verbose, output
-
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
@@ -109,9 +73,11 @@ PTR_ENV_START   = 20
 class Mole(object):
     ''' moleinfo for contracted GTO '''
     def __init__(self):
+        self._built = False
         self.verbose = log.ERROR
         self.output = None
         self.fout = None
+        self.max_memory = param.MEMORY_MAX
 
         self.light_speed = param.LIGHTSPEED
         self.nelectron = 0
@@ -199,6 +165,18 @@ class Mole(object):
                 'grids'   : self.grids }
     def unpack(self, moldic):
         self.__dict__.update(moldic)
+
+
+    def update_from_cmdargs(self):
+        if not self._built: # parse cmdline args only once
+            opts = cmd_args.cmd_args()
+
+            if opts.verbose:
+                self.verbose = opts.verbose
+            if opts.output:
+                self.output = opts.output
+            if opts.max_memory:
+                self.max_memory = opts.max_memory
 
 
     def format_atom(self):
@@ -374,22 +352,22 @@ class Mole(object):
         return nelectron
 
 
-    def build_moleinfo(self, parse_cmd_args=True, dump_input=True):
-        self.build(parse_cmd_args, dump_input)
-    def build(self, parse_cmd_args=True, dump_input=True):
+    def build_moleinfo(self, dump_input=True):
+        self.build(dump_input)
+    def build(self, dump_input=True):
+        self._built = True
         # Ipython shell conflicts with optparse
         try:
             __IPYTHON__ is not None
         except:
-            if parse_cmd_args:
-                self.verbose, self.output = cmd_args(self)
+            self.update_from_cmdargs()
         else:
-            print 'Warn: Ipython shell catchs arguments'
+            print 'Warn: Ipython shell catchs sys.args'
 
         try:
             if self.fout is None \
                or self.fout.name != self.output:
-                # to avoid the output file be opened twice
+                # avoid to open output file twice
                 self.fout = open(self.output, 'w')
         except:
             self.fout = sys.stdout

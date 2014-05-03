@@ -1,3 +1,5 @@
+include_directories(${CINT_INCLUDE_DIR})
+
 add_library(pycint SHARED
   cint_const_mod.F90 cint_interface.F90
   dkb_vhf_coul_O00.F90 dkb_vhf_coul_O01.F90 dkb_vhf_coul_O02.F90
@@ -14,5 +16,5 @@ set_target_properties(pycint PROPERTIES PREFIX ""
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(pycint cint ${BLAS_LIBRARIES} ${OpenMP_C_FLAGS})
+target_link_libraries(pycint ${CINT_LIBRARIES} ${BLAS_LIBRARIES} ${OpenMP_C_FLAGS})
 

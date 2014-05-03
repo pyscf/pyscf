@@ -24,8 +24,8 @@ mol.atom.extend([
 
 mol.basis = {"H": 'cc-pvtz',
              "C": 'cc-pvtz',} # -230.776763774
-#mol.basis = {"H": '631g',
-#             "C": '631g',}  # E=-230.621312824
+#mol.basis = {"H": '6-31g',
+#             "C": '6-31g',}  # E=-230.621312905
 
 mol.build()
 
