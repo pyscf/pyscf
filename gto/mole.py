@@ -355,7 +355,6 @@ class Mole(object):
     def build_moleinfo(self, dump_input=True):
         self.build(dump_input)
     def build(self, dump_input=True):
-        self._built = True
         # Ipython shell conflicts with optparse
         try:
             __IPYTHON__ is not None
@@ -371,6 +370,8 @@ class Mole(object):
                 self.fout = open(self.output, 'w')
         except:
             self.fout = sys.stdout
+
+        self._built = True
 
         self.nelectron = self.tot_electrons()
         self.atom = self.format_atom()

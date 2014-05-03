@@ -5,6 +5,7 @@
 
 import os, sys
 import tempfile
+import shutil
 import ctypes
 import numpy
 import functools

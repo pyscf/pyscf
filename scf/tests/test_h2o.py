@@ -59,22 +59,22 @@ class KnowValues(unittest.TestCase):
         uhf.direct_scf = False
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
-    def test_r_uhf(self):
-        uhf = dhf.UHF(mol)
-        self.assertAlmostEqual(uhf.scf(), -76.03852219027, 9)
-
-    def test_r_rhf(self):
-        uhf = dhf.RHF(mol)
-        self.assertAlmostEqual(uhf.scf(), -76.03852219016, 9)
-
-    def test_r_dhf_dkb(self):
-        dkb = scf.dhf_dkb.UHF(mol)
-        self.assertAlmostEqual(dkb.scf(), -76.03856379177, 9)
-
-    def test_r_rhf_gaunt(self):
-        uhf = dhf.RHF(mol)
-        uhf.with_gaunt = True
-        self.assertAlmostEqual(uhf.scf(), -76.03070215725, 9)
+#    def test_r_uhf(self):
+#        uhf = dhf.UHF(mol)
+#        self.assertAlmostEqual(uhf.scf(), -76.03852219027, 9)
+#
+#    def test_r_rhf(self):
+#        uhf = dhf.RHF(mol)
+#        self.assertAlmostEqual(uhf.scf(), -76.03852219016, 9)
+#
+#    def test_r_dhf_dkb(self):
+#        dkb = scf.dhf_dkb.UHF(mol)
+#        self.assertAlmostEqual(dkb.scf(), -76.03856379177, 9)
+#
+#    def test_r_rhf_gaunt(self):
+#        uhf = dhf.RHF(mol)
+#        uhf.with_gaunt = True
+#        self.assertAlmostEqual(uhf.scf(), -76.03070215725, 9)
 
 
     def test_level_shift_uhf(self):

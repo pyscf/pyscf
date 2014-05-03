@@ -75,7 +75,7 @@ void CVHFset_direct_scf(CVHFOpt *opt, const int *atm, const int natm,
         }
 }
 
-void CVHFset_direct_scf_dm(CVHFOpt *opt, double *dm,
+void CVHFset_direct_scf_dm(CVHFOpt *opt, double *dm, const int nset,
                            const int *atm, const int natm,
                            const int *bas, const int nbas, const double *env)
 {
@@ -88,6 +88,8 @@ void CVHFset_direct_scf_dm(CVHFOpt *opt, double *dm,
 
         double dmax;
         unsigned int i, j, di, dj, ish, jsh, iloc, jloc;
+        unsigned int iset;
+        double *pdm;
         for (ish = 0; ish < nbas; ish++) {
                 iloc = ao_loc[ish];
                 di = CINTcgto_spheric(ish, bas);
@@ -95,10 +97,13 @@ void CVHFset_direct_scf_dm(CVHFOpt *opt, double *dm,
                         jloc = ao_loc[jsh];
                         dj = CINTcgto_spheric(jsh, bas);
                         dmax = 0;
-                        for (i = iloc; i < iloc+di; i++) {
-                        for (j = jloc; j < jloc+dj; j++) {
-                                dmax = MAX(dmax, fabs(dm[i*nao+j]));
-                        } }
+                        for (iset = 0; iset < nset; iset++) {
+                                pdm = dm + nao*nao*iset;
+                                for (i = iloc; i < iloc+di; i++) {
+                                for (j = jloc; j < jloc+dj; j++) {
+                                        dmax = MAX(dmax, fabs(pdm[i*nao+j]));
+                                } }
+                        }
                         opt->dm_cond[ish*nbas+jsh] = dmax * .25l;
                 }
         }

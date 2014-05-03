@@ -5,6 +5,7 @@
 
 import unittest
 import gto
+import lib
 from scf.rdft import *
 
 h2o = gto.Mole()
@@ -24,27 +25,32 @@ h2o.build_moleinfo()
 
 class KnowValues(unittest.TestCase):
     def test_unrestricted_dks_lda(self):
-        method = UKS(h2o)
+        with lib.quite_run():
+            method = UKS(h2o)
         method.xc_func(XC_LDA_X,XC_LDA_C_VWN_RPA)
         self.assertAlmostEqual(method.scf(), -76.068061721154891, 8)
 
     def test_unrestricted_dks_b88p86(self):
-        method = UKS(h2o)
+        with lib.quite_run():
+            method = UKS(h2o)
         method.xc_func(XC_GGA_X_B88,XC_GGA_C_P86)
         self.assertAlmostEqual(method.scf(), -76.439843608758949, 8)
 
     def test_unrestricted_dks_xlyp(self):
-        method = UKS(h2o)
+        with lib.quite_run():
+            method = UKS(h2o)
         method.xc_func(XC_GGA_XC_XLYP)
         self.assertAlmostEqual(method.scf(), -76.47234258410711, 8)
 
     def test_unrestricted_dks_b3lyp(self):
-        method = UKS(h2o)
+        with lib.quite_run():
+            method = UKS(h2o)
         method.xc_func(XC_HYB_GGA_XC_B3LYP)
         self.assertAlmostEqual(method.scf(), -76.439721041419972, 8)
 
     def test_restricted_dks_lda(self):
-        method = RKS(h2o)
+        with lib.quite_run():
+            method = RKS(h2o)
         method.xc_func(XC_LDA_X,XC_LDA_C_VWN_RPA)
         self.assertAlmostEqual(method.scf(), -76.068061720166284, 8)
 

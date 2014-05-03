@@ -5,6 +5,7 @@
 
 import unittest
 import gto
+import lib
 from scf.dft import *
 
 h2o = gto.Mole()
@@ -24,22 +25,26 @@ h2o.build()
 
 class KnowValues(unittest.TestCase):
     def test_nr_lda(self):
-        method = RKS(h2o)
+        with lib.quite_run():
+            method = RKS(h2o)
         method.xc_func(XC_LDA_X,XC_LDA_C_VWN_RPA)
         self.assertAlmostEqual(method.scf(), -76.013394314311597, 9)
 
     def test_nr_b88p86(self):
-        method = RKS(h2o)
+        with lib.quite_run():
+            method = RKS(h2o)
         method.xc_func(XC_GGA_X_B88,XC_GGA_C_P86)
         self.assertAlmostEqual(method.scf(), -76.385101833802537, 9)
 
     def test_nr_xlyp(self):
-        method = RKS(h2o)
+        with lib.quite_run():
+            method = RKS(h2o)
         method.xc_func(XC_GGA_XC_XLYP)
         self.assertAlmostEqual(method.scf(), -76.417563864361369, 9)
 
     def test_nr_b3lyp(self):
-        method = RKS(h2o)
+        with lib.quite_run():
+            method = RKS(h2o)
         method.xc_func(XC_HYB_GGA_XC_B3LYP)
         self.assertAlmostEqual(method.scf(), -76.384995400609824, 9)
 

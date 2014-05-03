@@ -3,6 +3,9 @@ pyscf
 
 Python module for quantum chemistry SCF
 
+version 0.1
+2014-05-03
+
 
 Installation
 ------------
@@ -13,7 +16,9 @@ Installation
     - Numpy version 1.6 or higher
     - Cython version 0.20 or higher (optional)
     - Libcint version 2.0 or higher
-    - Libxc version 0.0.9 or higher (optional)
+        https://github.com/sunqm/libcint
+    - Libxc version 1.2.0 or higher (optional)
+        http://www.tddft.org/programs/octopus/wiki/index.php/Libxc
 
 * Compile core module
 
@@ -37,4 +42,9 @@ Installation
   installed in /opt/libxc,
 
     CMAKE_PREFIX_PATH=/opt/libcint:/opt/libxc:$CMAKE_PREFIX_PATH cmake ..
+
+
+Bug report
+----------
+Qiming Sun <osirpt.sun@gmail.com>
 

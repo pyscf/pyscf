@@ -7,7 +7,7 @@ import unittest
 import numpy
 import scf
 import gto
-import lib.jacobi
+import lib
 
 # for cgto
 mol = gto.Mole()
@@ -29,8 +29,9 @@ class KnowValues_NR(unittest.TestCase):
     def test_init_guess(self):
         """NR HF"""
         rhf = scf.RHF(mol)
-        e = rhf._init_guess_by_1e(mol)[0]
-        self.assertAlmostEqual(e * .5, -1.9936233377269388, 12)
+        with lib.quite_run():
+            e = rhf._init_guess_by_atom(mol)[0]
+        self.assertAlmostEqual(e * .5, -1.4275802386182492, 12)
 
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)

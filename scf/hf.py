@@ -189,7 +189,6 @@ class SCF(object):
 
 
     def eig(self, h, s):
-        #return lib.jacobi.zgeeigen(h, s)
         c, e, info = lapack.dsygv(h, s)
         return e, c, info
 
@@ -332,13 +331,13 @@ class SCF(object):
     def init_guess(self, method='minao'):
         return self.set_init_guess(method)
     def set_init_guess(self, method='minao', f_init=None):
-        if self.method.lower() == '1e':
+        if method.lower() == '1e':
             self.init_guess_method = self._init_guess_by_1e
-        elif self.method.lower() == 'chkfile':
+        elif method.lower() == 'chkfile':
             self.init_guess_method = self._init_guess_by_chkfile
-        elif self.method.lower() == 'minao':
+        elif method.lower() == 'minao':
             self.init_guess_method = self._init_guess_by_minao
-        elif self.method.lower() == 'atom':
+        elif method.lower() == 'atom':
             self.init_guess_method = self._init_guess_by_atom
         elif f_init is not None:
             self.init_guess_method = f_init
@@ -540,11 +539,11 @@ def init_guess_by_minao(dev, mol):
 
 def dot_eri_dm(eri, dm):
     if dm.ndim == 2:
-        vj, vk = _vhf.vhf_jk_incore_o3(eri, dm)
+        vj, vk = _vhf.vhf_jk_incore_o4(eri, dm)
     else:
         vjk = []
         for dmi in dm:
-            vjk.append(_vhf.vhf_jk_incore_o3(eri, dmi))
+            vjk.append(_vhf.vhf_jk_incore_o4(eri, dmi))
         vj = numpy.array([v[0] for v in vjk])
         vk = numpy.array([v[1] for v in vjk])
     return vj, vk
@@ -580,20 +579,18 @@ class RHF(SCF):
                 self._eri = _ao2mo.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm)
             vhf = vj - vk * .5
-        elif self.direct_scf:
-            if dm.ndim == 2:
-                vj, vk = _vhf.vhf_jk_direct_o2(dm-dm_last, mol._atm, \
-                                                  mol._bas, mol._env, self.opt)
-            else:
-                vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
-            vhf = vhf_last + vj - vk * .5
         else:
             if dm.ndim == 2:
-                vj, vk = _vhf.vhf_jk_direct_o2(dm, mol._atm, \
-                                                  mol._bas, mol._env)
+                fnjk = _vhf.vhf_jk_direct_o4
             else:
-                vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
-            vhf = vj - vk * .5
+                fnjk = _vhf.vhf_jk_direct_m4
+            if self.direct_scf:
+                #vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
+                vj, vk = fnjk(dm-dm_last, mol._atm, mol._bas, mol._env, self.opt)
+                vhf = vhf_last + vj - vk * .5
+            else:
+                vj, vk = fnjk(dm, mol._atm, mol._bas, mol._env)
+                vhf = vj - vk * .5
         log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
         return vhf
 
@@ -759,8 +756,8 @@ class UHF(SCF):
             n_a = filter(lambda x: x[1]==0, ee[:self.mol.nelectron]).__len__()
             n_b = self.mol.nelectron - n_a
             if n_a != self.nelectron_alpha:
-                log.info(self, 'change num. alpha/beta electrons' \
-                         '%d / %d -> %d / %d', \
+                log.info(self, 'change num. alpha/beta electrons ' \
+                         ' %d / %d -> %d / %d', \
                          self.nelectron_alpha,
                          self.mol.nelectron-self.nelectron_alpha, n_a, n_b)
                 self.nelectron_alpha = n_a
@@ -960,12 +957,15 @@ class UHF(SCF):
             v_b = vj0 + vj1 - vk1
             vhf = numpy.array((v_a,v_b))
         elif self.direct_scf:
-            vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
+            #vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
+            vj, vk = _vhf.vhf_jk_direct_m4(dm-dm_last, mol._atm, mol._bas, \
+                                              mol._env, self.opt)
             v_a = vj[0] + vj[1] - vk[0]
             v_b = vj[0] + vj[1] - vk[1]
             vhf = vhf_last + numpy.array((v_a,v_b))
         else:
-            vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
+            #vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
+            vj, vk = _vhf.vhf_jk_direct_m4(dm, mol._atm, mol._bas, mol._env)
             v_a = vj[0] + vj[1] - vk[0]
             v_b = vj[0] + vj[1] - vk[1]
             vhf = numpy.array((v_a,v_b))

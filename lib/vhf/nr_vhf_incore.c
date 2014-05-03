@@ -136,6 +136,9 @@ void nr_eri8fold_vj_o3(double *tri_vj, const unsigned int ij,
         daxpy_(&nij, tri_dm+ij, eri, &INC1, tri_vj, &INC1);
 }
 
+/*
+ * dm can be non-Hermitian
+ */
 void nr_eri8fold_vk_o0(double *vk, int i, int j, int n,
                        const double *eri, const double *dm)
 {
@@ -372,8 +375,8 @@ void nr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                 for (k=0; k < j; k++) {
                         for (l = 0; l < k; l++) {
                                 vk[j*n+l] += eri[l] * dm[i*n+k];
-                                vk[i*n+l] += eri[l] * dm[j*n+k];
                                 vk[j*n+k] += eri[l] * dm[i*n+l];
+                                vk[i*n+l] += eri[l] * dm[j*n+k];
                                 vk[i*n+k] += eri[l] * dm[j*n+l];
                         }
                         // l = k
@@ -384,8 +387,8 @@ void nr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                 // k = j
                 for (l = 0; l < k; l++) {
                         vk[j*n+l] += eri[l] * dm[i*n+j];
-                        vk[i*n+l] += eri[l] * dm[j*n+j];
                         vk[j*n+j] += eri[l] *(dm[i*n+l] + dm[l*n+i]);
+                        vk[i*n+l] += eri[l] * dm[j*n+j];
                         vk[i*n+j] += eri[l] * dm[j*n+l];
                 }
                 eri += k;

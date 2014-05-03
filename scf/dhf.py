@@ -14,7 +14,7 @@ __version__ = '$ 0.1 $'
 
 import ctypes
 import numpy
-#import scipy.linalg.flapack as lapack
+import scipy.linalg.flapack as lapack
 import gto
 import lib.logger as log
 import lib
@@ -112,8 +112,13 @@ class UHF(hf.SCF):
         log.info(self, 'OOB = %d', self.oob)
 
     def eig(self, h, s):
-        import lib.jacobi
-        return lib.jacobi.zgeeigen(h, s)
+        try:
+            import lib.jacobi
+            return lib.jacobi.zgeeigen(h, s)
+        except ImportError:
+            c, e, info = lapack.zhegv(h, s)
+            print e
+            return e, c, info
 
     @lib.omnimethod
     def get_hcore(self, mol):

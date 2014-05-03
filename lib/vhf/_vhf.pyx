@@ -50,6 +50,9 @@ cdef extern from "cvhf.h":
                           int *bas, int nbas, double *env)
     void nr_vhf_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
                           int *atm, int natm, int *bas, int nbas, double *env)
+    void nr_vhf_direct_m4(double *dm, double *vj, double *vk, int nset,
+                          CVHFOpt *vhfopt,
+                          int *atm, int natm, int *bas, int nbas, double *env)
     void nr_vhf_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
     void nr_vhf_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
 
@@ -94,18 +97,17 @@ def vhf_jk_incore_o2(numpy.ndarray[double, ndim=2, mode='c'] eri, \
             vk[j,i] = vk[i,j]
     return vj, vk
 
-def vhf_jk_incore_o3(numpy.ndarray[double, ndim=1, mode='c'] eri, \
+def vhf_jk_incore_o4(numpy.ndarray[double, ndim=1, mode='c'] eri, \
                      numpy.ndarray[double, ndim=2, mode='c'] dm):
     '''use 8-fold symmetry for eri'''
     cdef int nao = dm.shape[0]
     cdef numpy.ndarray[double,ndim=2,mode='c'] vj = numpy.empty((nao,nao))
     cdef numpy.ndarray[double,ndim=2,mode='c'] vk = numpy.zeros((nao,nao))
     #nr_vhf_incore_o3(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
-    #nr_vhf_incore_o4(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
     nr_vhf_incore_o4(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
     return vj, vk
 
-def vhf_jk_direct_o2(numpy.ndarray[double, ndim=2, mode='c'] dm,
+def vhf_jk_direct_o4(numpy.ndarray[double, ndim=2, mode='c'] dm,
                      atm, bas, env, VHFOpt vhfopt=None):
     cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
     cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
@@ -120,5 +122,25 @@ def vhf_jk_direct_o2(numpy.ndarray[double, ndim=2, mode='c'] dm,
                          &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     else:
         nr_vhf_direct_o4(&dm[0,0], &vj[0,0], &vk[0,0], vhfopt._this,
+                         &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    return vj, vk
+
+# deal with multiple components of dm
+def vhf_jk_direct_m4(numpy.ndarray[double, ndim=3, mode='c'] dm,
+                     atm, bas, env, VHFOpt vhfopt=None):
+    cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
+    cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
+    cdef numpy.ndarray[double] c_env = numpy.array(env)
+    cdef int natm = c_atm.shape[0]
+    cdef int nbas = c_bas.shape[0]
+    cdef int nao = dm.shape[1]
+    cdef int nset = dm.shape[0]
+    cdef numpy.ndarray[double,ndim=3,mode='c'] vj = numpy.empty((nset,nao,nao))
+    cdef numpy.ndarray[double,ndim=3,mode='c'] vk = numpy.empty((nset,nao,nao))
+    if vhfopt is None:
+        nr_vhf_direct_m4(&dm[0,0,0], &vj[0,0,0], &vk[0,0,0], nset, NULL,
+                         &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    else:
+        nr_vhf_direct_m4(&dm[0,0,0], &vj[0,0,0], &vk[0,0,0], nset, vhfopt._this,
                          &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     return vj, vk
