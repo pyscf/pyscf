@@ -41,12 +41,7 @@ self.damp_factor = 1
 self.level_shift_factor = 0
 self.scf_threshold = 1e-10
 self.max_scf_cycle = 50
-
-self.init_guess(method)         # method = one of 'atom', '1e', 'chkfile'
-self.potential(v, oob)          # v = one of 'coulomb', 'gaunt'
-                                # oob = operator oriented basis level
-                                #       1 sp|f> -> |f>
-                                #       2 sp|f> -> sr|f>
+self.init_guess(method)         # method = one of 'atom', '1e', 'chkfile', 'minao'
 '''
 
 def read_scf_from_chkfile(chkfile):
@@ -168,7 +163,7 @@ class SCF(object):
         self.fout = mol.fout
         self.scf_threshold = 1e-10
         self.max_scf_cycle = 50
-        self._init_guess = 'minao'
+        self.init_guess_method = self._init_guess_by_minao
 
 
     def dump_scf_option(self):
@@ -176,7 +171,7 @@ class SCF(object):
         log.info(self, '******** SCF options ********')
         log.info(self, 'method = %s', self.__doc__)#self.__class__)
         log.info(self, 'potential = %s', self.get_eff_potential.__doc__)
-        log.info(self, 'initial guess = %s', self._init_guess)
+        log.info(self, 'initial guess = %s', self.init_guess_method.__doc__)
         log.info(self, 'damping factor = %g', self.damp_factor)
         log.info(self, 'level shift factor = %g', self.level_shift_factor)
         log.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
@@ -277,8 +272,9 @@ class SCF(object):
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return 0, dm
 
-    def _init_guess_by_chkfile(self, chkfile, mol):
+    def _init_guess_by_chkfile(self, mol):
         '''Read initial guess from chkfile.'''
+        chkfile = self.chkfile
         try:
             chk_mol, scf_rec = read_scf_from_chkfile(chkfile)
         except IOError:
@@ -314,28 +310,26 @@ class SCF(object):
         return scf_rec['hf_energy'], numpy.dot(mo_coeff*mo_occ, mo_coeff.T)
 
     def _init_guess_by_atom(self, mol):
+        '''Initial guess from occupancy-averaged atomic RHF'''
         return init_guess_by_atom(self, mol)
 
     def init_guess(self, method='minao'):
         return self.set_init_guess(method)
     def set_init_guess(self, method='minao', f_init=None):
-        if method.lower() in ('1e', 'chkfile', 'minao', 'atom'):
-            self._init_guess = method
+        if self.method.lower() == '1e':
+            self.init_guess_method = self._init_guess_by_1e
+        elif self.method.lower() == 'chkfile':
+            self.init_guess_method = self._init_guess_by_chkfile
+        elif self.method.lower() == 'minao':
+            self.init_guess_method = self._init_guess_by_minao
+        elif self.method.lower() == 'atom':
+            self.init_guess_method = self._init_guess_by_atom
         elif f_init is not None:
             self.init_guess_method = f_init
         else:
             raise KeyError('Unknown init guess.')
 
-    def init_guess_method(self, mol):
-        if self._init_guess.lower() == '1e':
-            return self._init_guess_by_1e(mol)
-        elif self._init_guess.lower() == 'chkfile':
-            return self._init_guess_by_chkfile(self.chkfile, mol)
-        elif self._init_guess.lower() == 'minao':
-            return self._init_guess_by_minao(mol)
-        elif self._init_guess.lower() == 'atom':
-            return self._init_guess_by_atom(mol)
-
+    # non-relativistic SCF uses new direct_scf module, see _vhf.VHFOpt
     def init_direct_scf(self, mol):
         if self.direct_scf:
             natm = lib.c_int_p(ctypes.c_int(mol._atm.__len__()))
@@ -348,9 +342,11 @@ class SCF(object):
         else:
             _cint.turnoff_direct_scf_()
 
+    # don't use me
     def del_direct_scf(self):
         _cint.del_nr_direct_scf_()
 
+    # don't use me
     def set_direct_scf_threshold(self, threshold):
         _cint.set_direct_scf_cutoff_(lib.c_double_p(ctypes.c_double(threshold)))
 
@@ -515,19 +511,6 @@ def init_guess_by_minao(dev, mol):
 #
 #
 ################################################
-
-#def gen_8fold_eri_sph(mol):
-#    nao = mol.num_NR_function()
-#    nao_pair = nao*(nao+1)/2
-#    eri = numpy.empty((nao_pair*(nao_pair+1)/2))
-#    natm = ctypes.c_int(mol._atm.__len__())
-#    nbas = ctypes.c_int(mol._bas.__len__())
-#    atm = lib.c_int_arr(mol._atm)
-#    bas = lib.c_int_arr(mol._bas)
-#    env = lib.c_double_arr(mol._env)
-#    ao2mo._mp.int2e_sph_o4(eri.ctypes.data_as(lib.c_double_p), \
-#                           atm, natm, bas, nbas, env)
-#    return eri
 
 def dot_eri_dm(eri, dm):
     if dm.ndim == 2:
@@ -867,8 +850,9 @@ class UHF(SCF):
         e, dm = init_guess_by_atom(self, mol)
         return e, numpy.array((dm*.5, dm*.5))
 
-    def _init_guess_by_chkfile(self, chkfile, mol):
+    def _init_guess_by_chkfile(self, mol):
         '''Read initial guess from chkfile.'''
+        chkfile = self.chkfile
         try:
             chk_mol, scf_rec = read_scf_from_chkfile(chkfile)
         except IOError:

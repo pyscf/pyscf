@@ -60,8 +60,9 @@ class UHF(hf.SCF):
         self._coulomb_type = 'ssss' # LLLL+LLSS+SSSS
         self.with_gaunt = False
 
-    def _init_guess_by_chkfile(self, chkfile, mol):
+    def _init_guess_by_chkfile(self, mol):
         '''Read initial guess from chkfile.'''
+        chkfile = self.chkfile
         try:
             chk_mol, scf_rec = hf.read_scf_from_chkfile(chkfile)
         except IOError:

@@ -215,8 +215,8 @@ class RHF(hf.RHF):
                      'Use 1e initial guess')
             return self._init_guess_by_1e(mol)
 
-    def _init_guess_by_chkfile(self, chkfile, mol):
-        e, dm = hf.RHF._init_guess_by_chkfile(self, chkfile, mol)
+    def _init_guess_by_chkfile(self, mol):
+        e, dm = hf.RHF._init_guess_by_chkfile(self, mol)
         if isinstance(dm,numpy.ndarray):
             dm = self.symmetrize_den_mat(dm)
         return e, dm
@@ -620,8 +620,8 @@ class UHF(hf.UHF):
                      'Use 1e initial guess')
             return self._init_guess_by_1e(mol)
 
-    def _init_guess_by_chkfile(self, chkfile, mol):
-        e, dm = hf.UHF._init_guess_by_chkfile(self, chkfile, mol)
+    def _init_guess_by_chkfile(self, mol):
+        e, dm = hf.UHF._init_guess_by_chkfile(self, mol)
         if isinstance(dm[0],numpy.ndarray):
             dm = self.symmetrize_den_mat(dm)
         return e, dm
