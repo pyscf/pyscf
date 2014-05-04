@@ -73,10 +73,8 @@ PTR_ENV_START   = 20
 class Mole(object):
     ''' moleinfo for contracted GTO '''
     def __init__(self):
-        self._built = False
         self.verbose = log.ERROR
         self.output = None
-        self.fout = None
         self.max_memory = param.MEMORY_MAX
 
         self.light_speed = param.LIGHTSPEED
@@ -106,7 +104,7 @@ class Mole(object):
 # self.grids = {atom_type/nuc_charge: [num_grid_radial, num_grid_angular]}
         self.grids = {}
 ##################################################
-# private variables:
+# don't modify the following private variables, they are not input options
 # _atm, _bas, _env save the formated inputs
 # arguments of integrals
         self._atm = []
@@ -118,6 +116,8 @@ class Mole(object):
         self._env[PTR_LIGHT_SPEED] = param.LIGHTSPEED
         self._gauge_method = param.MI_GAUGE_GIAO
 
+        self._built = False
+        self.fout = None
         self.pgname = 'C1'
         self.symm_orb = None
         self.irrep_name = None

@@ -150,24 +150,25 @@ class SCF(object):
         self.mol = mol
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
+        self.fout = mol.fout
 
-        self.mo_energy = None
-        self.mo_coeff = None
-        self.mo_occ = None
-        self.hf_energy = 0
+        self.chkfile = tempfile.mktemp(dir='/dev/shm')
+        self.scf_threshold = 1e-10
+        self.max_scf_cycle = 50
+        self.init_guess_method = self._init_guess_by_minao
         self.diis_space = 8
         self.diis_start_cycle = 3
         self.damp_factor = 0
         self.level_shift_factor = 0
-        self.scf_conv = False
         self.direct_scf = True
         self.direct_scf_threshold = 1e-13
-
-        self.chkfile = tempfile.mktemp(dir='/dev/shm')
-        self.fout = mol.fout
-        self.scf_threshold = 1e-10
-        self.max_scf_cycle = 50
-        self.init_guess_method = self._init_guess_by_minao
+##################################################
+# don't modify the following private variables, they are not input options
+        self.mo_energy = None
+        self.mo_coeff = None
+        self.mo_occ = None
+        self.hf_energy = 0
+        self.scf_conv = False
 
 
     def dump_scf_option(self):
