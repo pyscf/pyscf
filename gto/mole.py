@@ -173,10 +173,18 @@ class Mole(object):
 
             if opts.verbose:
                 self.verbose = opts.verbose
-            if opts.output:
-                self.output = opts.output
             if opts.max_memory:
                 self.max_memory = opts.max_memory
+
+            if opts.output:
+                self.output = opts.output
+            if os.path.isfile(self.output):
+                if self.verbose > log.QUITE:
+                    os.remove(self.output)
+                    print 'overwrite output file: %s' % self.output
+            else:
+                if self.verbose > log.QUITE:
+                    print 'output file: %s' % self.output
 
 
     def format_atom(self):
