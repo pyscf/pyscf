@@ -18,8 +18,8 @@
 /*
  * reorder the blocks, to a lower triangle sequence
  */
-void index_blocks2tri(unsigned int *idx, int *ao_loc,
-                      const int *bas, const int nbas)
+void CVHFindex_blocks2tri(unsigned int *idx, int *ao_loc,
+                          const int *bas, const int nbas)
 {
         unsigned int ish, jsh, i, j, i0, j0, ij;
         unsigned int di, dj;
@@ -65,10 +65,10 @@ int CVHFnr_vhf_prescreen(unsigned int *shls, CVHFOpt *opt)
         return dm_max*qijkl > opt->direct_scf_cutoff;
 }
 
-int nr8fold_eri_o1(double *eri, unsigned int ish, unsigned int jsh,
-                   CVHFOpt *vhfopt, const int *atm, const int natm,
-                   const int *bas, const int nbas, const double *env,
-                   CINTOpt *opt)
+int CVHFnr8fold_eri_o1(double *eri, unsigned int ish, unsigned int jsh,
+                       CVHFOpt *vhfopt, const int *atm, const int natm,
+                       const int *bas, const int nbas, const double *env,
+                       CINTOpt *opt)
 {
         const unsigned int di = CINTcgto_spheric(ish, bas);
         const unsigned int dj = CINTcgto_spheric(jsh, bas);
@@ -91,10 +91,10 @@ int nr8fold_eri_o1(double *eri, unsigned int ish, unsigned int jsh,
         return !empty;
 }
 
-int nr8fold_eri_o2(double *eri, unsigned int ish, unsigned int jsh,
-                   CVHFOpt *vhfopt, const int *atm, const int natm,
-                   const int *bas, const int nbas, const double *env,
-                   CINTOpt *opt)
+int CVHFnr8fold_eri_o2(double *eri, unsigned int ish, unsigned int jsh,
+                       CVHFOpt *vhfopt, const int *atm, const int natm,
+                       const int *bas, const int nbas, const double *env,
+                       CINTOpt *opt)
 {
         const unsigned int di = CINTcgto_spheric(ish, bas);
         const unsigned int dj = CINTcgto_spheric(jsh, bas);
@@ -121,9 +121,9 @@ int nr8fold_eri_o2(double *eri, unsigned int ish, unsigned int jsh,
         return !empty;
 }
 
-void nr8fold_jk_o3(double *vj, double *vk, double *tri_dm, double *dm,
-                   double *eri, unsigned int ish, unsigned int jsh, int *ao_loc,
-                   unsigned int *idx_tri, const int *bas, const int nbas)
+void CVHFnr8fold_jk_o3(double *vj, double *vk, double *tri_dm, double *dm,
+                       double *eri, unsigned int ish, unsigned int jsh, int *ao_loc,
+                       unsigned int *idx_tri, const int *bas, const int nbas)
 {
         const unsigned int nao = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1,bas);
         const unsigned int di = CINTcgto_spheric(ish, bas);
@@ -170,8 +170,8 @@ void nr8fold_jk_o3(double *vj, double *vk, double *tri_dm, double *dm,
                         i0 = idxi0[k+i];
                         j0 = idxj0[k+i];
                         ij0 = LOWERTRI_INDEX(i0, j0);
-                        nr_eri8fold_vj_o2(vj, ij0, peri, tri_dm);
-                        nr_eri8fold_vk_o4(vk, i0, j0, nao, peri, dm);
+                        CVHFnr_eri8fold_vj_o2(vj, ij0, peri, tri_dm);
+                        CVHFnr_eri8fold_vk_o4(vk, i0, j0, nao, peri, dm);
                 }
         }
         for (; k < lenij; k++) {
@@ -182,8 +182,8 @@ void nr8fold_jk_o3(double *vj, double *vk, double *tri_dm, double *dm,
                 i0 = idxi0[k];
                 j0 = idxj0[k];
                 ij0 = LOWERTRI_INDEX(i0, j0);
-                nr_eri8fold_vj_o2(vj, ij0, eri1, tri_dm);
-                nr_eri8fold_vk_o4(vk, i0, j0, nao, eri1, dm);
+                CVHFnr_eri8fold_vj_o2(vj, ij0, eri1, tri_dm);
+                CVHFnr_eri8fold_vk_o4(vk, i0, j0, nao, eri1, dm);
         }
         free(idxi0);
         free(idxj0);
@@ -191,7 +191,7 @@ void nr8fold_jk_o3(double *vj, double *vk, double *tri_dm, double *dm,
         free(eri1);
 }
 
-void nr_vhf_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
+void CVHFnr_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
                       const int *atm, const int natm,
                       const int *bas, const int nbas, const double *env)
 {
@@ -207,12 +207,12 @@ void nr_vhf_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
         unsigned int di, dj;
         double *eribuf;
 
-        compress_dm(tri_dm, dm, nao);
-        set_ij2i(ij2i, nbas);
+        CVHFcompress_nr_dm(tri_dm, dm, nao);
+        CVHFset_ij2i(ij2i, nbas);
         memset(tri_vj, 0, sizeof(double)*npair);
         memset(vk, 0, sizeof(double)*nao*nao);
         CINTshells_spheric_offset(ao_loc, bas, nbas);
-        index_blocks2tri(idx_tri, ao_loc, bas, nbas);
+        CVHFindex_blocks2tri(idx_tri, ao_loc, bas, nbas);
 
         CINTOpt *opt;
         cint2e_optimizer(&opt, atm, natm, bas, nbas, env);
@@ -236,9 +236,9 @@ void nr_vhf_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
                         di = CINTcgto_spheric(i, bas);
                         dj = CINTcgto_spheric(j, bas);
                         eribuf = (double *)malloc(sizeof(double)*di*dj*nao*nao);
-                        //nr8fold_eri_o1(eribuf, i, j, vhfopt, atm, natm, bas, nbas, env, opt);
-                        if (nr8fold_eri_o2(eribuf, i, j, vhfopt,
-                                           atm, natm, bas, nbas, env, opt)) {
+                        //CVHFnr8fold_eri_o1(eribuf, i, j, vhfopt, atm, natm, bas, nbas, env, opt);
+                        if (CVHFnr8fold_eri_o2(eribuf, i, j, vhfopt,
+                                               atm, natm, bas, nbas, env, opt)) {
                                 nr8fold_jk_o3(vj_priv, vk_priv, tri_dm, dm, eribuf,
                                               i, j, ao_loc, idx_tri, bas, nbas);
                         }
@@ -272,7 +272,7 @@ void nr_vhf_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
         free(tri_vj);
 }
 
-void nr_vhf_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
+void CVHFnr_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
                       const int *bas, const int nbas, const double *env)
 {
         CVHFinit_optimizer(vhfopt, atm, natm, bas, nbas, env);
@@ -283,9 +283,9 @@ void nr_vhf_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
 /*************************************************
  * dm has nset components
  *************************************************/
-void nr8fold_jk_m3(int nset, double *vj, double *vk, double *tri_dm, double *dm,
-                   double *eri, unsigned int ish, unsigned int jsh, int *ao_loc,
-                   unsigned int *idx_tri, const int *bas, const int nbas)
+void CVHFnr8fold_jk_m3(int nset, double *vj, double *vk, double *tri_dm, double *dm,
+                       double *eri, unsigned int ish, unsigned int jsh, int *ao_loc,
+                       unsigned int *idx_tri, const int *bas, const int nbas)
 {
         const unsigned int nao = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1,bas);
         const unsigned int nao2 = nao*nao;
@@ -335,8 +335,10 @@ void nr8fold_jk_m3(int nset, double *vj, double *vk, double *tri_dm, double *dm,
                         i0 = idxi0[k+i];
                         j0 = idxj0[k+i];
                         ij0 = LOWERTRI_INDEX(i0, j0);
-                        nr_eri8fold_vj_o2(vj+npair*iset, ij0, peri, tri_dm+npair*iset);
-                        nr_eri8fold_vk_o4(vk+nao2*iset, i0, j0, nao, peri, dm+nao2*iset);
+                        CVHFnr_eri8fold_vj_o2(vj+npair*iset, ij0, peri,
+                                              tri_dm+npair*iset);
+                        CVHFnr_eri8fold_vk_o4(vk+nao2*iset, i0, j0, nao, peri,
+                                              dm+nao2*iset);
                 } }
         }
         for (; k < lenij; k++) {
@@ -348,8 +350,10 @@ void nr8fold_jk_m3(int nset, double *vj, double *vk, double *tri_dm, double *dm,
                         i0 = idxi0[k];
                         j0 = idxj0[k];
                         ij0 = LOWERTRI_INDEX(i0, j0);
-                        nr_eri8fold_vj_o2(vj+npair*iset, ij0, eri1, tri_dm+npair*iset);
-                        nr_eri8fold_vk_o4(vk+nao2*iset, i0, j0, nao, eri1, dm+nao2*iset);
+                        CVHFnr_eri8fold_vj_o2(vj+npair*iset, ij0, eri1,
+                                              tri_dm+npair*iset);
+                        CVHFnr_eri8fold_vk_o4(vk+nao2*iset, i0, j0, nao, eri1,
+                                              dm+nao2*iset);
                 }
         }
         free(idxi0);
@@ -358,7 +362,7 @@ void nr8fold_jk_m3(int nset, double *vj, double *vk, double *tri_dm, double *dm,
         free(eri1);
 }
 
-void nr_vhf_direct_m4(double *dm, double *vj, double *vk, const int nset,
+void CVHFnr_direct_m4(double *dm, double *vj, double *vk, const int nset,
                       CVHFOpt *vhfopt, const int *atm, const int natm,
                       const int *bas, const int nbas, const double *env)
 {
@@ -375,13 +379,13 @@ void nr_vhf_direct_m4(double *dm, double *vj, double *vk, const int nset,
         double *eribuf;
 
         for (i = 0; i < nset; i++) {
-                compress_dm(tri_dm+npair*i, dm+nao*nao*i, nao);
+                CVHFcompress_nr_dm(tri_dm+npair*i, dm+nao*nao*i, nao);
         }
-        set_ij2i(ij2i, nbas);
+        CVHFset_ij2i(ij2i, nbas);
         memset(tri_vj, 0, sizeof(double)*npair*nset);
         memset(vk, 0, sizeof(double)*nao*nao*nset);
         CINTshells_spheric_offset(ao_loc, bas, nbas);
-        index_blocks2tri(idx_tri, ao_loc, bas, nbas);
+        CVHFindex_blocks2tri(idx_tri, ao_loc, bas, nbas);
 
         CINTOpt *opt;
         cint2e_optimizer(&opt, atm, natm, bas, nbas, env);
@@ -405,11 +409,11 @@ void nr_vhf_direct_m4(double *dm, double *vj, double *vk, const int nset,
                         di = CINTcgto_spheric(i, bas);
                         dj = CINTcgto_spheric(j, bas);
                         eribuf = (double *)malloc(sizeof(double)*di*dj*nao*nao);
-                        //nr8fold_eri_o1(eribuf, i, j, vhfopt, atm, natm, bas, nbas, env, opt);
-                        if (nr8fold_eri_o2(eribuf, i, j, vhfopt,
-                                           atm, natm, bas, nbas, env, opt)) {
-                                nr8fold_jk_m3(nset, vj_priv, vk_priv, tri_dm, dm, eribuf,
-                                              i, j, ao_loc, idx_tri, bas, nbas);
+                        //CVHFnr8fold_eri_o1(eribuf, i, j, vhfopt, atm, natm, bas, nbas, env, opt);
+                        if (CVHFnr8fold_eri_o2(eribuf, i, j, vhfopt,
+                                               atm, natm, bas, nbas, env, opt)) {
+                                CVHFnr8fold_jk_m3(nset, vj_priv, vk_priv, tri_dm, dm, eribuf,
+                                                  i, j, ao_loc, idx_tri, bas, nbas);
                         }
                         free(eribuf);
                 }
