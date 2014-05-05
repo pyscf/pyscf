@@ -42,19 +42,17 @@ cdef extern from "cvhf.h":
     ctypedef struct CVHFOpt:
         double direct_scf_cutoff
     void CVHFunpack(int, double*, double*)
-    void nr_vhf_k(int, double *eri, double *dm, double *vk)
+    void CVHFnr_k(int, double *eri, double *dm, double *vk)
     void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
                             int *bas, int nbas, double *env)
     void CVHFdel_optimizer(CVHFOpt **opt)
-    void nr_vhf_optimizer(CVHFOpt **vhfopt, int *atm, int natm,
+    void CVHFnr_optimizer(CVHFOpt **vhfopt, int *atm, int natm,
                           int *bas, int nbas, double *env)
-    void nr_vhf_direct_o4(double *dm, double *vj, double *vk, CVHFOpt *vhfopt,
-                          int *atm, int natm, int *bas, int nbas, double *env)
-    void nr_vhf_direct_m4(double *dm, double *vj, double *vk, int nset,
+    void CVHFnr_direct_o4(double *dm, double *vj, double *vk, int nset,
                           CVHFOpt *vhfopt,
                           int *atm, int natm, int *bas, int nbas, double *env)
-    void nr_vhf_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
-    void nr_vhf_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
+    void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
+    void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
 
 cdef class VHFOpt:
     cdef CVHFOpt *_this
@@ -68,7 +66,7 @@ cdef class VHFOpt:
         cdef numpy.ndarray[double] c_env = numpy.array(env)
         cdef int natm = c_atm.shape[0]
         cdef int nbas = c_bas.shape[0]
-        nr_vhf_optimizer(&self._this, &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+        CVHFnr_optimizer(&self._this, &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     property direct_scf_threshold:
         def __get__(self): return self._this.direct_scf_cutoff
         def __set__(self, v): self._this.direct_scf_cutoff = v
@@ -91,7 +89,7 @@ def vhf_jk_incore_o2(numpy.ndarray[double, ndim=2, mode='c'] eri, \
     CVHFunpack(nao, <double *>vj0.data, &vj[0,0])
 
     cdef numpy.ndarray[double,ndim=2,mode='c'] vk = numpy.zeros((nao,nao))
-    nr_vhf_k(nao, &eri[0,0], &dm[0,0], &vk[0,0])
+    CVHFnr_k(nao, &eri[0,0], &dm[0,0], &vk[0,0])
     for i in range(nao):
         for j in range(i):
             vk[j,i] = vk[i,j]
@@ -103,44 +101,34 @@ def vhf_jk_incore_o4(numpy.ndarray[double, ndim=1, mode='c'] eri, \
     cdef int nao = dm.shape[0]
     cdef numpy.ndarray[double,ndim=2,mode='c'] vj = numpy.empty((nao,nao))
     cdef numpy.ndarray[double,ndim=2,mode='c'] vk = numpy.zeros((nao,nao))
-    #nr_vhf_incore_o3(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
-    nr_vhf_incore_o4(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
-    return vj, vk
-
-def vhf_jk_direct_o4(numpy.ndarray[double, ndim=2, mode='c'] dm,
-                     atm, bas, env, VHFOpt vhfopt=None):
-    cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
-    cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
-    cdef numpy.ndarray[double] c_env = numpy.array(env)
-    cdef int natm = c_atm.shape[0]
-    cdef int nbas = c_bas.shape[0]
-    cdef int nao = dm.shape[0]
-    cdef numpy.ndarray[double,ndim=2,mode='c'] vj = numpy.empty((nao,nao))
-    cdef numpy.ndarray[double,ndim=2,mode='c'] vk = numpy.zeros((nao,nao))
-    if vhfopt is None:
-        nr_vhf_direct_o4(&dm[0,0], &vj[0,0], &vk[0,0], NULL,
-                         &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
-    else:
-        nr_vhf_direct_o4(&dm[0,0], &vj[0,0], &vk[0,0], vhfopt._this,
-                         &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    #CVHFnr_incore_o3(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
+    CVHFnr_incore_o4(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0])
     return vj, vk
 
 # deal with multiple components of dm
-def vhf_jk_direct_m4(numpy.ndarray[double, ndim=3, mode='c'] dm,
-                     atm, bas, env, VHFOpt vhfopt=None):
+def vhf_jk_direct_o4(numpy.ndarray dm, atm, bas, env, VHFOpt vhfopt=None):
+
     cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
     cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
     cdef numpy.ndarray[double] c_env = numpy.array(env)
     cdef int natm = c_atm.shape[0]
     cdef int nbas = c_bas.shape[0]
-    cdef int nao = dm.shape[1]
-    cdef int nset = dm.shape[0]
-    cdef numpy.ndarray[double,ndim=3,mode='c'] vj = numpy.empty((nset,nao,nao))
-    cdef numpy.ndarray[double,ndim=3,mode='c'] vk = numpy.empty((nset,nao,nao))
+    if dm.ndim == 2:
+        nset = 1
+        dm_shape = (dm.shape[0], dm.shape[1])
+    else:
+        nset = dm.shape[0]
+        dm_shape = (dm.shape[0], dm.shape[1], dm.shape[2])
+
+    cdef numpy.ndarray vj = numpy.empty(dm_shape)
+    cdef numpy.ndarray vk = numpy.empty(dm_shape)
+
     if vhfopt is None:
-        nr_vhf_direct_m4(&dm[0,0,0], &vj[0,0,0], &vk[0,0,0], nset, NULL,
+        CVHFnr_direct_o4(<double *>dm.data, <double *>vj.data, <double *>vk.data,
+                         nset, NULL,
                          &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     else:
-        nr_vhf_direct_m4(&dm[0,0,0], &vj[0,0,0], &vk[0,0,0], nset, vhfopt._this,
+        CVHFnr_direct_o4(<double *>dm.data, <double *>vj.data, <double *>vk.data,
+                         nset, vhfopt._this,
                          &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     return vj, vk

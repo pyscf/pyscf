@@ -150,24 +150,25 @@ class SCF(object):
         self.mol = mol
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
+        self.fout = mol.fout
 
-        self.mo_energy = None
-        self.mo_coeff = None
-        self.mo_occ = None
-        self.hf_energy = 0
+        self.chkfile = tempfile.mktemp(dir='/dev/shm')
+        self.scf_threshold = 1e-10
+        self.max_scf_cycle = 50
+        self.init_guess_method = self._init_guess_by_minao
         self.diis_space = 8
         self.diis_start_cycle = 3
         self.damp_factor = 0
         self.level_shift_factor = 0
-        self.scf_conv = False
         self.direct_scf = True
         self.direct_scf_threshold = 1e-13
-
-        self.chkfile = tempfile.mktemp(dir='/dev/shm')
-        self.fout = mol.fout
-        self.scf_threshold = 1e-10
-        self.max_scf_cycle = 50
-        self.init_guess_method = self._init_guess_by_minao
+##################################################
+# don't modify the following private variables, they are not input options
+        self.mo_energy = None
+        self.mo_coeff = None
+        self.mo_occ = None
+        self.hf_energy = 0
+        self.scf_conv = False
 
 
     def dump_scf_option(self):
@@ -580,16 +581,13 @@ class RHF(SCF):
             vj, vk = dot_eri_dm(self._eri, dm)
             vhf = vj - vk * .5
         else:
-            if dm.ndim == 2:
-                fnjk = _vhf.vhf_jk_direct_o4
-            else:
-                fnjk = _vhf.vhf_jk_direct_m4
             if self.direct_scf:
                 #vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
-                vj, vk = fnjk(dm-dm_last, mol._atm, mol._bas, mol._env, self.opt)
+                vj, vk = _vhf.vhf_jk_direct_o4(dm-dm_last, mol._atm, \
+                                               mol._bas, mol._env, self.opt)
                 vhf = vhf_last + vj - vk * .5
             else:
-                vj, vk = fnjk(dm, mol._atm, mol._bas, mol._env)
+                vj, vk = _vhf.vhf_jk_direct_o4(dm, mol._atm, mol._bas, mol._env)
                 vhf = vj - vk * .5
         log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
         return vhf
@@ -958,14 +956,14 @@ class UHF(SCF):
             vhf = numpy.array((v_a,v_b))
         elif self.direct_scf:
             #vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
-            vj, vk = _vhf.vhf_jk_direct_m4(dm-dm_last, mol._atm, mol._bas, \
+            vj, vk = _vhf.vhf_jk_direct_o4(dm-dm_last, mol._atm, mol._bas, \
                                               mol._env, self.opt)
             v_a = vj[0] + vj[1] - vk[0]
             v_b = vj[0] + vj[1] - vk[1]
             vhf = vhf_last + numpy.array((v_a,v_b))
         else:
             #vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
-            vj, vk = _vhf.vhf_jk_direct_m4(dm, mol._atm, mol._bas, mol._env)
+            vj, vk = _vhf.vhf_jk_direct_o4(dm, mol._atm, mol._bas, mol._env)
             v_a = vj[0] + vj[1] - vk[0]
             v_b = vj[0] + vj[1] - vk[1]
             vhf = numpy.array((v_a,v_b))

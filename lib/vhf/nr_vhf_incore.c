@@ -8,7 +8,7 @@
 #include <omp.h>
 #include "misc.h"
 
-void compress_dm(double *tri_dm, double *dm, unsigned int nao)
+void CVHFcompress_nr_dm(double *tri_dm, double *dm, unsigned int nao)
 {
         unsigned int i, j, ij;
         for (i = 0, ij = 0; i < nao; i++) {
@@ -20,7 +20,7 @@ void compress_dm(double *tri_dm, double *dm, unsigned int nao)
         }
 }
 
-void set_ij2i(unsigned int *ij2i, unsigned int n)
+void CVHFset_ij2i(unsigned int *ij2i, unsigned int n)
 {
         unsigned int i, j, ij;
         for (i = 0, ij = 0; i < n; i++) {
@@ -32,7 +32,7 @@ void set_ij2i(unsigned int *ij2i, unsigned int n)
         }
 }
 
-void nr_vhf_k(int n, double *eri, double *dm, double *vk)
+void CVHFnr_k(int n, double *eri, double *dm, double *vk)
 {
         const int INC1 = 1;
         const double D1 = 1;
@@ -62,7 +62,7 @@ void nr_vhf_k(int n, double *eri, double *dm, double *vk)
 }
 
 /* eri uses 8-fold symmetry: i>=j,k>=ln,ij>=kl */
-void nr_vhf_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
+void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
 {
         const int INC1 = 1;
         const double D1 = 1;
@@ -116,8 +116,8 @@ void nr_vhf_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
  * eri uses 8-fold symmetry: i>=j,k>=ln,ij>=kl
  * eri is the address of the first element for pair ij
  * i.e. ~ &eri_ao[ij*(ij+1)/2] */
-void nr_eri8fold_vj_o2(double *tri_vj, const unsigned int ij,
-                       const double *eri, const double *tri_dm)
+void CVHFnr_eri8fold_vj_o2(double *tri_vj, const unsigned int ij,
+                           const double *eri, const double *tri_dm)
 {
         unsigned int i;
         for (i = 0; i < ij; i++) {
@@ -126,8 +126,8 @@ void nr_eri8fold_vj_o2(double *tri_vj, const unsigned int ij,
         }
         tri_vj[ij] += eri[ij] * tri_dm[ij];
 }
-void nr_eri8fold_vj_o3(double *tri_vj, const unsigned int ij,
-                       const double *eri, const double *tri_dm)
+void CVHFnr_eri8fold_vj_o3(double *tri_vj, const unsigned int ij,
+                           const double *eri, const double *tri_dm)
 {
         const int INC1 = 1;
         int nij = ij;
@@ -139,8 +139,8 @@ void nr_eri8fold_vj_o3(double *tri_vj, const unsigned int ij,
 /*
  * dm can be non-Hermitian
  */
-void nr_eri8fold_vk_o0(double *vk, int i, int j, int n,
-                       const double *eri, const double *dm)
+void CVHFnr_eri8fold_vk_o0(double *vk, int i, int j, int n,
+                           const double *eri, const double *dm)
 {
         int k, l, kl;
         if (i > j) {
@@ -200,8 +200,8 @@ void nr_eri8fold_vk_o0(double *vk, int i, int j, int n,
                 vk[i*n+i] += eri[kl] * dm[i*n+i];
         }
 }
-void nr_eri8fold_vk_o1(double *vk, int i, int j, int n,
-                       const double *eri, const double *dm)
+void CVHFnr_eri8fold_vk_o1(double *vk, int i, int j, int n,
+                           const double *eri, const double *dm)
 {
         int k, l;
         if (i > j) {
@@ -248,8 +248,8 @@ void nr_eri8fold_vk_o1(double *vk, int i, int j, int n,
                 vk[i*n+i] += *eri * dm[i*n+i];
         }
 }
-void nr_eri8fold_vk_o2(double *vk, int i, int j, int n,
-                       const double *eri, const double *dm)
+void CVHFnr_eri8fold_vk_o2(double *vk, int i, int j, int n,
+                           const double *eri, const double *dm)
 {
         int k, l;
         if (i > j) {
@@ -334,8 +334,8 @@ void nr_eri8fold_vk_o2(double *vk, int i, int j, int n,
         }
 }
 // daxpy and ddot is not faster because the effect of unrolling
-void nr_eri8fold_vk_o3(double *vk, int i, int j, int n,
-                       const double *eri, const double *dm)
+void CVHFnr_eri8fold_vk_o3(double *vk, int i, int j, int n,
+                           const double *eri, const double *dm)
 {
         const int INC1 = 1;
         int k, n1;
@@ -366,8 +366,8 @@ void nr_eri8fold_vk_o3(double *vk, int i, int j, int n,
                 vk[i*n+i] += ddot_(&i, eri-i-1, &INC1, dm+i, &n);
         }
 }
-void nr_eri8fold_vk_o4(double *vk, int i, int j, int n,
-                       const double *eri, const double *dm)
+void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
+                           const double *eri, const double *dm)
 {
         unsigned int k, l;
         if (i > j) {
@@ -468,7 +468,7 @@ void nr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                 vk[i*n+i] += *eri * dm[i*n+i];
         }
 }
-void nr_vhf_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
+void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
 {
         unsigned int npair = n*(n+1)/2;
         double *tri_dm = malloc(sizeof(double)*npair);
@@ -478,8 +478,8 @@ void nr_vhf_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
         unsigned int *ij2i = malloc(sizeof(unsigned int)*npair);
         unsigned long off;
 
-        compress_dm(tri_dm, dm, n);
-        set_ij2i(ij2i, n);
+        CVHFcompress_nr_dm(tri_dm, dm, n);
+        CVHFset_ij2i(ij2i, n);
         memset(tri_vj, 0, sizeof(double)*npair);
         memset(vk, 0, sizeof(double)*n*n);
 
@@ -496,8 +496,8 @@ void nr_vhf_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
                         i = ij2i[ij];
                         j = ij - (i*(i+1)/2);
                         off = ij*(ij+1)/2;
-                        nr_eri8fold_vj_o2(vj_priv, ij, eri+off, tri_dm);
-                        nr_eri8fold_vk_o4(vk_priv, i, j, n, eri+off, dm);
+                        CVHFnr_eri8fold_vj_o2(vj_priv, ij, eri+off, tri_dm);
+                        CVHFnr_eri8fold_vk_o4(vk_priv, i, j, n, eri+off, dm);
                 }
 #pragma omp critical
                 {
@@ -523,3 +523,4 @@ void nr_vhf_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
         free(tri_dm);
         free(tri_vj);
 }
+

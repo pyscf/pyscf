@@ -32,15 +32,6 @@ def cmd_args():
     if opts.verbose:
         opts.verbose = log.DEBUG
 
-    if opts.output:
-        if os.path.isfile(opts.output):
-            if opts.verbose and opts.verbose > log.QUITE:
-                os.remove(opts.output)
-                print 'overwrite output file: %s' % opts.output
-        else:
-            if opts.verbose and opts.verbose > log.QUITE:
-                print 'output file: %s' % opts.output
-
     if opts.max_memory:
         opts.max_memory = float(opts.max_memory)
 
