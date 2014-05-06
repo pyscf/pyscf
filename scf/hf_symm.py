@@ -26,7 +26,6 @@ import diis
 import lib
 import lib.parameters as param
 import lib.pycint as pycint
-import ci
 import hf
 
 alib = '/'.join((os.environ['HOME'], 'code/lib/libvhf.so'))
