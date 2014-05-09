@@ -50,8 +50,8 @@ void CVHFset_direct_scf(CVHFOpt *opt, const int *atm, const int natm,
 
         double *buf;
         double qtmp;
-        unsigned int i, j, di, dj, ish, jsh;
-        unsigned int shls[4];
+        int i, j, di, dj, ish, jsh;
+        int shls[4];
         for (ish = 0; ish < nbas; ish++) {
                 di = CINTcgto_spheric(ish, bas);
                 for (jsh = 0; jsh <= ish; jsh++) {
@@ -85,13 +85,13 @@ void CVHFset_direct_scf_dm(CVHFOpt *opt, double *dm, const int nset,
                            const int *atm, const int natm,
                            const int *bas, const int nbas, const double *env)
 {
-        int *ao_loc = malloc(sizeof(unsigned int) * nbas);
-        unsigned int nao = CINTtot_cgto_spheric(bas, nbas);
+        int *ao_loc = malloc(sizeof(int) * nbas);
+        int nao = CINTtot_cgto_spheric(bas, nbas);
         CINTshells_spheric_offset(ao_loc, bas, nbas);
 
         double dmax;
-        unsigned int i, j, di, dj, ish, jsh, iloc, jloc;
-        unsigned int iset;
+        int i, j, di, dj, ish, jsh, iloc, jloc;
+        int iset;
         double *pdm;
         for (ish = 0; ish < nbas; ish++) {
                 iloc = ao_loc[ish];

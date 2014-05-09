@@ -3,7 +3,8 @@ pyscf
 
 Python module for quantum chemistry SCF
 
-version 0.1
+version 0.2
+
 2014-05-03
 
 
@@ -11,13 +12,15 @@ Installation
 ------------
 
 * Prerequisites
-    - Cmake version 2.8 or higher
-    - Python version 2.6 or higher
-    - Numpy version 1.6 or higher
-    - Cython version 0.20 or higher (optional)
-    - Libcint version 2.0 or higher
+    - Cmake 2.8 or higher
+    - Python 2.6 or higher
+    - Numpy 1.6 or higher
+    - HDF5 1.8.4 or higher
+    - h5py 1.3.0 or higher
+    - Cython 0.20 or higher (optional)
+    - Libcint 2.0 or higher
         https://github.com/sunqm/libcint
-    - Libxc version 1.2.0 or higher (optional)
+    - Libxc 1.2.0 or higher (optional)
         http://www.tddft.org/programs/octopus/wiki/index.php/Libxc
 
 * Compile core module
@@ -47,4 +50,13 @@ Installation
 Bug report
 ----------
 Qiming Sun <osirpt.sun@gmail.com>
+
+
+Changes
+-------
+Version 0.1 (2014-05-03):
+  * Setup pyscf
+
+Version 0.2 (2014-05-08):
+  * AO to MO transformation
 

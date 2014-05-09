@@ -7,27 +7,16 @@
 #include <math.h>
 #include <omp.h>
 #include "misc.h"
+#include "fblas.h"
 
-void CVHFcompress_nr_dm(double *tri_dm, double *dm, unsigned int nao)
+void CVHFcompress_nr_dm(double *tri_dm, double *dm, int nao)
 {
-        unsigned int i, j, ij;
+        int i, j, ij;
         for (i = 0, ij = 0; i < nao; i++) {
                 for (j = 0; j < i; j++, ij++) {
                         tri_dm[ij] = dm[i*nao+j] + dm[j*nao+i];
                 }
                 tri_dm[ij] = dm[i*nao+i];
-                ij++;
-        }
-}
-
-void CVHFset_ij2i(unsigned int *ij2i, unsigned int n)
-{
-        unsigned int i, j, ij;
-        for (i = 0, ij = 0; i < n; i++) {
-                for (j = 0; j < i; j++, ij++) {
-                        ij2i[ij] = i;
-                }
-                ij2i[ij] = i;
                 ij++;
         }
 }
@@ -39,8 +28,8 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk)
         const char TRANS_T = 'T';
         const int ln = n;
         double *tmp = malloc(sizeof(double)*n*n);
-        unsigned int nao_pair = n * (n+1) / 2;
-        unsigned int i, j;
+        int nao_pair = n * (n+1) / 2;
+        int i, j;
         int l1, l2;
         for (i = 0; i < n; i++) {
                 for (j = 0; j < i; j++, eri += nao_pair) {
@@ -72,7 +61,7 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
         double *tri_dm = malloc(sizeof(double)*n*n);
         double *tmp = malloc(sizeof(double)*n*n);
         const int nao_pair = n * (n+1) / 2;
-        unsigned int i, j, ij;
+        int i, j, ij;
         int l1, l2;
 
         ij = 0;
@@ -116,17 +105,17 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
  * eri uses 8-fold symmetry: i>=j,k>=ln,ij>=kl
  * eri is the address of the first element for pair ij
  * i.e. ~ &eri_ao[ij*(ij+1)/2] */
-void CVHFnr_eri8fold_vj_o2(double *tri_vj, const unsigned int ij,
+void CVHFnr_eri8fold_vj_o2(double *tri_vj, const int ij,
                            const double *eri, const double *tri_dm)
 {
-        unsigned int i;
+        int i;
         for (i = 0; i < ij; i++) {
                 tri_vj[ij] += eri[i] * tri_dm[i];
                 tri_vj[i] += eri[i] * tri_dm[ij];
         }
         tri_vj[ij] += eri[ij] * tri_dm[ij];
 }
-void CVHFnr_eri8fold_vj_o3(double *tri_vj, const unsigned int ij,
+void CVHFnr_eri8fold_vj_o3(double *tri_vj, const int ij,
                            const double *eri, const double *tri_dm)
 {
         const int INC1 = 1;
@@ -369,7 +358,7 @@ void CVHFnr_eri8fold_vk_o3(double *vk, int i, int j, int n,
 void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                            const double *eri, const double *dm)
 {
-        unsigned int k, l;
+        int k, l;
         if (i > j) {
                 // k < j
                 for (k=0; k < j; k++) {
@@ -470,12 +459,12 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
 }
 void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
 {
-        unsigned int npair = n*(n+1)/2;
+        int npair = n*(n+1)/2;
         double *tri_dm = malloc(sizeof(double)*npair);
         double *tri_vj = malloc(sizeof(double)*npair);
         double *vj_priv, *vk_priv;
-        unsigned int i, j, ij;
-        unsigned int *ij2i = malloc(sizeof(unsigned int)*npair);
+        int i, j, ij;
+        int *ij2i = malloc(sizeof(int)*npair);
         unsigned long off;
 
         CVHFcompress_nr_dm(tri_dm, dm, n);
@@ -491,7 +480,7 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*npair);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 20)
+#pragma omp for nowait schedule(guided, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = ij2i[ij];
                         j = ij - (i*(i+1)/2);

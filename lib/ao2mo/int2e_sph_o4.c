@@ -1,5 +1,5 @@
 /*
- * File: int2e_sph_o3.c
+ * File: int2e_sph_o4.c
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -17,11 +17,11 @@ void int2e_sph_o4(double *eri, const int *atm, const int natm,
 {
         int ish, jsh, ksh, lsh;
         int di, dj, dk, dl;
-        unsigned int i, j, k, l, ij, kl, ijkl, shls_ij, shls_kl, shls_kl_max;
-        unsigned int i0, j0, k0, l0;
+        int i, j, k, l, ij, kl, ijkl, shls_ij, shls_kl, shls_kl_max;
+        int i0, j0, k0, l0;
         int *ishls = malloc(sizeof(int)*nbas*nbas);
         int *jshls = malloc(sizeof(int)*nbas*nbas);
-        unsigned int shls[4];
+        int shls[4];
         int ao_loc[nbas];
         double *fijkl;
         for (i = 0, ij = 0; i < nbas; i++) {

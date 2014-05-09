@@ -70,66 +70,6 @@ static void del_optimizers(CINTOpt *opt_lst[])
  * dm_{ij} = C_i C_j^*
  * ndim = shape(vj,0) = shape(vk,0) = shape(dm,0)
  */
-// FIXME
-static int nr_vhf_drv_cart(const FPtr* filter,
-                           const double *dm, double *vj, double *vk,
-                           const int ndim, const int nset, const int nset_dm,
-                           const int *atm, const int natm,
-                           const int *bas, const int nbas, const double *env)
-{
-        const int len = ndim * ndim * nset * nset_dm;
-        int idx;
-        int *const ao_loc = malloc(sizeof(int) * nbas);
-        double *vj_priv, *vk_priv;
-        FPtr vhf_pre = filter[0];
-        FPtr vhf_after = filter[1];
-        filter += 2;
-
-        CINTOpt *opt_lst[MAX_OPTS];
-        init_optimizers(opt_lst, filter, atm, natm, bas, nbas, env);
-
-//TODO: dm -> dm:cart
-//TODO: len -> len:cart
-//TODO: vj, vk -> vj:cart, vk:cart
-//TODO: filter:di/dj/dk/dl -> ao_loc[i]-ao_loc[i-1]
-        CINTdset0(len, vj);
-        CINTdset0(len, vk);
-        CINTshells_cart_offset(ao_loc, bas, nbas);
-        (*vhf_pre)(dm, &ndim, &nset, &nset_dm,
-                   atm, &natm, bas, &nbas, env);
-
-#pragma omp parallel default(none) \
-        shared(filter, dm, vj, vk, atm, bas, env, opt_lst) \
-        private(vj_priv, vk_priv, idx)
-        {
-                vj_priv = malloc(sizeof(double) * len);
-                vk_priv = malloc(sizeof(double) * len);
-                CINTdset0(len, vj_priv);
-                CINTdset0(len, vk_priv);
-#pragma omp for nowait schedule(guided, 2)
-                for (idx = 0; idx < nbas * nbas; idx++) {
-                        //l = idx / nbas;
-                        //k = idx - l * nbas;
-                        vhf_reduce(filter, opt_lst, dm, vj_priv, vk_priv,
-                                   ndim, nset, nset_dm, idx, ao_loc,
-                                   atm, natm, bas, nbas, env);
-                }
-#pragma omp critical
-                {
-                        cblas_daxpy(len, 1, vj_priv, 1, vj, 1);
-                        cblas_daxpy(len, 1, vk_priv, 1, vk, 1);
-                }
-                free(vj_priv);
-                free(vk_priv);
-        }
-        free(ao_loc);
-
-        // post process to reform vj and vk
-        (*vhf_after)(vj, vk, &ndim, &nset, &nset_dm,
-                     atm, &natm, bas, &nbas, env);
-        del_optimizers(opt_lst);
-        return 0;
-}
 static int nr_vhf_drv_sph(const FPtr* filter,
                           const double *dm, double *vj, double *vk,
                           const int ndim, const int nset, const int nset_dm,

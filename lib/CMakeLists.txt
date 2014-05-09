@@ -37,7 +37,7 @@ find_package(PythonInterp REQUIRED)
 find_package(PythonLibs REQUIRED)
 execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print numpy.get_include()"
   OUTPUT_VARIABLE NUMPY_INCLUDE)
-include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+include_directories(${PROJECT_SOURCE_DIR} ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"

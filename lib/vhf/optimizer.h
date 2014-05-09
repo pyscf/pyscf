@@ -5,7 +5,7 @@
 #if !defined HAVE_DEFINED_CVHFOPT_H
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct {
-    unsigned int nbas;
+    int nbas;
     double direct_scf_cutoff;
     double *q_cond;
     double *dm_cond;
