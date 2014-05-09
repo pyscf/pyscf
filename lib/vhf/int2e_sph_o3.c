@@ -7,9 +7,9 @@
 #include <math.h>
 #include <omp.h>
 #include "cint.h"
-#include "int2e_ao2mo.h"
 
 //#define ERI_CUTOFF 1e-14
+#define LOWERTRI_INDEX(I,J)     ((I) > (J) ? ((I)*((I)+1)/2+(J)) : ((J)*((J)+1)/2+(I)))
 
 void int2e_sph_o3(double *eri, const int *atm, const int natm,
                   const int *bas, const int nbas, const double *env)

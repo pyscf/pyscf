@@ -1,7 +1,7 @@
 include_directories(${CINT_INCLUDE_DIR})
 
 add_library(_ao2mo SHARED
-  nr_ao2mo_O3.c int2e_sph_o3.c int2e_sph_o4.c misc.c ao2mo_helper.c _ao2mo.c)
+  nr_ao2mo_O3.c misc.c ao2mo_helper.c _ao2mo.c)
 
 
 set_target_properties(_ao2mo PROPERTIES PREFIX ""

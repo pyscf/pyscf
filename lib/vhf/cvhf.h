@@ -29,6 +29,7 @@ void CVHFindex_blocks2tri(int *idx, int *ao_loc,
                           const int *bas, const int nbas);
 void CVHFset_ij2i(int *ij2i, int n);
 void CVHFunpack(int n, double *vec, double *mat);
+void extract_row_from_tri(double *row, int row_id, int ndim, double *tri);
 
 void CVHFnr_k(int n, double *eri, double *dm, double *vk);
 void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk);

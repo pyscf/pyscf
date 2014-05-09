@@ -47,25 +47,23 @@ co = rhf.mo_coeff[:,:nocc]
 cv = rhf.mo_coeff[:,nocc:]
 ao2mo.direct.general(mol, (co,cv,co,cv), eritmp, max_memory=100, dataname='mp2_bz')
 f = h5py.File(eritmp, 'r')
-g = f['mp2_bz']
-g = numpy.array(g) # copy to memory, otherwise will be very slow to loop over it
-f.close()
-os.remove(eritmp)
 
 print time.clock()
 eia = rhf.mo_energy[:nocc].reshape(nocc,1) - rhf.mo_energy[nocc:]
 nvir = eia.shape[1]
 emp2 = 0
 for i in range(nocc):
+    # use numpy.array to load a block into memory
+    g_i = numpy.array(f['mp2_bz'][i*nvir:i*nvir+nvir])
     for j in range(nocc):
         for a in range(nvir):
-            ia = i * nvir + a
             ja = j * nvir + a
             for b in range(nvir):
-                ib = i * nvir + b
                 jb = j * nvir + b
-                emp2 += g[ia,jb] * (g[ia,jb]*2-g[ib,ja]) \
+                emp2 += g_i[a,jb] * (g_i[a,jb]*2-g_i[b,ja]) \
                         / (eia[i,a]+eia[j,b])
 print 'E_MP2 =', emp2 # -0.80003653259
-print time.clock()
+f.close()
+os.remove(eritmp)
 
+print time.clock()
