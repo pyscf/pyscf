@@ -8,9 +8,11 @@ typedef long FINT;
 typedef int FINT;
 #endif
 
-static void ci_misc_unpack(unsigned int n, double *vec, double *mat)
+#include "vhf/fblas.h"
+
+static void ao2mo_unpack(int n, double *vec, double *mat)
 {
-        unsigned int i, j;
+        int i, j;
         for (i = 0; i < n; i++) {
                 for (j = 0; j <= i; j++, vec++) {
                         mat[i*n+j] = *vec;
@@ -21,8 +23,8 @@ static void ci_misc_unpack(unsigned int n, double *vec, double *mat)
 
 
 /* eri uses 4-fold symmetry: i>=j,k>=l */
-void ci_misc_half_trans_o2(int nao, int nmo, double *eri, double *c,
-                           double *mat)
+void ao2mo_half_trans_o2(int nao, int nmo, double *eri, double *c,
+                         double *mat)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -30,10 +32,10 @@ void ci_misc_half_trans_o2(int nao, int nmo, double *eri, double *c,
         const char TRANS_N = 'N';
         const FINT lao = nao;
         const FINT lmo = nmo;
-        unsigned int i, j;
+        int i, j;
         double *tmp1 = malloc(sizeof(double)*nao*nao);
         double *tmp2 = malloc(sizeof(double)*nao*nmo);
-        ci_misc_unpack(nao, eri, tmp1);
+        ao2mo_unpack(nao, eri, tmp1);
         dgemm_(&TRANS_N, &TRANS_N, &lao, &lmo, &lao,
                &D1, tmp1, &lao, c, &lao, &D0, tmp2, &lao);
         dgemm_(&TRANS_T, &TRANS_N, &lmo, &lmo, &lao,
@@ -48,11 +50,10 @@ void ci_misc_half_trans_o2(int nao, int nmo, double *eri, double *c,
         free(tmp2);
 }
 
-static void extract_row_from_tri_eri(double *row, unsigned int row_id,
-                                     double *eri, unsigned int npair)
+void extract_row_from_tri_eri(double *row, int row_id, double *eri, int npair)
 {
         unsigned long idx;
-        unsigned int i;
+        int i;
         idx = (unsigned long)row_id * (row_id + 1) / 2;
         memcpy(row, eri+idx, sizeof(double)*row_id);
         for (i = row_id; i < npair; i++) {
@@ -63,8 +64,8 @@ static void extract_row_from_tri_eri(double *row, unsigned int row_id,
 
 
 /* eri uses 8-fold symmetry: i>=j,k>=l,ij>=kl */
-void ci_misc_half_trans_o3(int nao, int nmo, int pair_id,
-                           double *eri, double *c, double *mat)
+void ao2mo_half_trans_o3(int nao, int nmo, int pair_id,
+                         double *eri, double *c, double *mat)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -72,14 +73,14 @@ void ci_misc_half_trans_o3(int nao, int nmo, int pair_id,
         const char TRANS_N = 'N';
         const FINT lao = nao;
         const FINT lmo = nmo;
-        unsigned int i, j;
-        unsigned int nao_pair = nao * (nao+1) / 2;
+        int i, j;
+        int nao_pair = nao * (nao+1) / 2;
         double *row = malloc(sizeof(double)*nao_pair);
         double *tmp1 = malloc(sizeof(double)*nao*nao);
         double *tmp2 = malloc(sizeof(double)*nao*nmo);
 
         extract_row_from_tri_eri(row, pair_id, eri, nao_pair);
-        ci_misc_unpack(nao, row, tmp1);
+        ao2mo_unpack(nao, row, tmp1);
         dgemm_(&TRANS_N, &TRANS_N, &lao, &lmo, &lao,
                &D1, tmp1, &lao, c, &lao, &D0, tmp2, &lao);
         dgemm_(&TRANS_T, &TRANS_N, &lmo, &lmo, &lao,
@@ -94,3 +95,4 @@ void ci_misc_half_trans_o3(int nao, int nmo, int pair_id,
         free(tmp1);
         free(tmp2);
 }
+

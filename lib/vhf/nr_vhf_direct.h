@@ -2,7 +2,7 @@
  *
  */
 
-void CVHFindex_blocks2tri(unsigned int *idx, int *ao_loc,
+void CVHFindex_blocks2tri(int *idx, int *ao_loc,
                           const int *bas, const int nbas);
 
 void CVHFnr_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,

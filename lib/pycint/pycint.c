@@ -9,7 +9,7 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 #include "swig_numpy.h"
 #include "cint.h"
-#include "fblas.h"
+#include "vhf/fblas.h"
 
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 

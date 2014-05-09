@@ -1007,7 +1007,7 @@ static CYTHON_INLINE int __Pyx_PyInt_As_int(PyObject *);
 
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
 
-static CYTHON_INLINE unsigned int __Pyx_PyInt_As_unsigned_int(PyObject *);
+static CYTHON_INLINE int __Pyx_PyInt_As_unsigned_int(PyObject *);
 
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_long(long value);
 
@@ -1364,7 +1364,7 @@ static PyObject *__pyx_codeobj__14;
  * 
  * def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):             # <<<<<<<<<<<<<<
  *     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))
- *     cdef unsigned int i, j, k, l, ij, kl, ijkl
+ *     cdef int i, j, k, l, ij, kl, ijkl
  */
 
 /* Python wrapper */
@@ -1436,24 +1436,24 @@ static PyObject *__pyx_pw_4_vhf_1restore_full_eri(PyObject *__pyx_self, PyObject
 
 static PyObject *__pyx_pf_4_vhf_restore_full_eri(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_eri, int __pyx_v_nao) {
   PyArrayObject *__pyx_v_eri_full = 0;
-  unsigned int __pyx_v_i;
-  unsigned int __pyx_v_j;
-  unsigned int __pyx_v_k;
-  unsigned int __pyx_v_l;
-  unsigned int __pyx_v_ij;
-  unsigned int __pyx_v_kl;
-  unsigned int __pyx_v_ijkl;
-  unsigned int __pyx_v_pijkl;
-  unsigned int __pyx_v_pijlk;
-  unsigned int __pyx_v_pjikl;
-  unsigned int __pyx_v_pjilk;
-  unsigned int __pyx_v_pklij;
-  unsigned int __pyx_v_plkij;
-  unsigned int __pyx_v_pklji;
-  unsigned int __pyx_v_plkji;
-  unsigned int __pyx_v_d1;
-  unsigned int __pyx_v_d2;
-  unsigned int __pyx_v_d3;
+  int __pyx_v_i;
+  int __pyx_v_j;
+  int __pyx_v_k;
+  int __pyx_v_l;
+  int __pyx_v_ij;
+  int __pyx_v_kl;
+  int __pyx_v_ijkl;
+  int __pyx_v_pijkl;
+  int __pyx_v_pijlk;
+  int __pyx_v_pjikl;
+  int __pyx_v_pjilk;
+  int __pyx_v_pklij;
+  int __pyx_v_plkij;
+  int __pyx_v_pklji;
+  int __pyx_v_plkji;
+  int __pyx_v_d1;
+  int __pyx_v_d2;
+  int __pyx_v_d3;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_eri;
   __Pyx_Buffer __pyx_pybuffer_eri;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_eri_full;
@@ -1465,30 +1465,30 @@ static PyObject *__pyx_pf_4_vhf_restore_full_eri(CYTHON_UNUSED PyObject *__pyx_s
   PyObject *__pyx_t_3 = NULL;
   PyArrayObject *__pyx_t_4 = NULL;
   int __pyx_t_5;
-  unsigned int __pyx_t_6;
+  int __pyx_t_6;
   long __pyx_t_7;
-  unsigned int __pyx_t_8;
+  int __pyx_t_8;
   long __pyx_t_9;
-  unsigned int __pyx_t_10;
+  int __pyx_t_10;
   long __pyx_t_11;
-  unsigned int __pyx_t_12;
+  int __pyx_t_12;
   int __pyx_t_13;
-  unsigned int __pyx_t_14;
-  unsigned int __pyx_t_15;
-  unsigned int __pyx_t_16;
-  unsigned int __pyx_t_17;
-  unsigned int __pyx_t_18;
-  unsigned int __pyx_t_19;
-  unsigned int __pyx_t_20;
-  unsigned int __pyx_t_21;
-  unsigned int __pyx_t_22;
-  unsigned int __pyx_t_23;
-  unsigned int __pyx_t_24;
-  unsigned int __pyx_t_25;
-  unsigned int __pyx_t_26;
-  unsigned int __pyx_t_27;
-  unsigned int __pyx_t_28;
-  unsigned int __pyx_t_29;
+  int __pyx_t_14;
+  int __pyx_t_15;
+  int __pyx_t_16;
+  int __pyx_t_17;
+  int __pyx_t_18;
+  int __pyx_t_19;
+  int __pyx_t_20;
+  int __pyx_t_21;
+  int __pyx_t_22;
+  int __pyx_t_23;
+  int __pyx_t_24;
+  int __pyx_t_25;
+  int __pyx_t_26;
+  int __pyx_t_27;
+  int __pyx_t_28;
+  int __pyx_t_29;
   PyObject *__pyx_t_30 = NULL;
   PyObject *__pyx_t_31 = NULL;
   PyObject *__pyx_t_32 = NULL;
@@ -1514,8 +1514,8 @@ static PyObject *__pyx_pf_4_vhf_restore_full_eri(CYTHON_UNUSED PyObject *__pyx_s
  * 
  * def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):
  *     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))             # <<<<<<<<<<<<<<
- *     cdef unsigned int i, j, k, l, ij, kl, ijkl
- *     cdef unsigned int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
+ *     cdef int i, j, k, l, ij, kl, ijkl
+ *     cdef int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
  */
   __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_numpy); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 8; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
@@ -1548,35 +1548,35 @@ static PyObject *__pyx_pf_4_vhf_restore_full_eri(CYTHON_UNUSED PyObject *__pyx_s
   __pyx_t_1 = 0;
 
   /* "_vhf.pyx":11
- *     cdef unsigned int i, j, k, l, ij, kl, ijkl
- *     cdef unsigned int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
- *     cdef unsigned int d1 = nao             # <<<<<<<<<<<<<<
- *     cdef unsigned int d2 = nao * nao
- *     cdef unsigned int d3 = nao * nao * nao
+ *     cdef int i, j, k, l, ij, kl, ijkl
+ *     cdef int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
+ *     cdef int d1 = nao             # <<<<<<<<<<<<<<
+ *     cdef int d2 = nao * nao
+ *     cdef int d3 = nao * nao * nao
  */
   __pyx_v_d1 = __pyx_v_nao;
 
   /* "_vhf.pyx":12
- *     cdef unsigned int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
- *     cdef unsigned int d1 = nao
- *     cdef unsigned int d2 = nao * nao             # <<<<<<<<<<<<<<
- *     cdef unsigned int d3 = nao * nao * nao
+ *     cdef int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
+ *     cdef int d1 = nao
+ *     cdef int d2 = nao * nao             # <<<<<<<<<<<<<<
+ *     cdef int d3 = nao * nao * nao
  *     for i in range(nao):
  */
   __pyx_v_d2 = (__pyx_v_nao * __pyx_v_nao);
 
   /* "_vhf.pyx":13
- *     cdef unsigned int d1 = nao
- *     cdef unsigned int d2 = nao * nao
- *     cdef unsigned int d3 = nao * nao * nao             # <<<<<<<<<<<<<<
+ *     cdef int d1 = nao
+ *     cdef int d2 = nao * nao
+ *     cdef int d3 = nao * nao * nao             # <<<<<<<<<<<<<<
  *     for i in range(nao):
  *         for j in range(i+1):
  */
   __pyx_v_d3 = ((__pyx_v_nao * __pyx_v_nao) * __pyx_v_nao);
 
   /* "_vhf.pyx":14
- *     cdef unsigned int d2 = nao * nao
- *     cdef unsigned int d3 = nao * nao * nao
+ *     cdef int d2 = nao * nao
+ *     cdef int d3 = nao * nao * nao
  *     for i in range(nao):             # <<<<<<<<<<<<<<
  *         for j in range(i+1):
  *             for k in range(i+1):
@@ -1586,7 +1586,7 @@ static PyObject *__pyx_pf_4_vhf_restore_full_eri(CYTHON_UNUSED PyObject *__pyx_s
     __pyx_v_i = __pyx_t_6;
 
     /* "_vhf.pyx":15
- *     cdef unsigned int d3 = nao * nao * nao
+ *     cdef int d3 = nao * nao * nao
  *     for i in range(nao):
  *         for j in range(i+1):             # <<<<<<<<<<<<<<
  *             for k in range(i+1):
@@ -1867,7 +1867,7 @@ static PyObject *__pyx_pf_4_vhf_restore_full_eri(CYTHON_UNUSED PyObject *__pyx_s
  * 
  * def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):             # <<<<<<<<<<<<<<
  *     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))
- *     cdef unsigned int i, j, k, l, ij, kl, ijkl
+ *     cdef int i, j, k, l, ij, kl, ijkl
  */
 
   /* function exit code */
@@ -6082,7 +6082,7 @@ static int __Pyx_InitCachedConstants(void) {
  * 
  * def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):             # <<<<<<<<<<<<<<
  *     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))
- *     cdef unsigned int i, j, k, l, ij, kl, ijkl
+ *     cdef int i, j, k, l, ij, kl, ijkl
  */
   __pyx_tuple__7 = PyTuple_Pack(21, __pyx_n_s_eri, __pyx_n_s_nao, __pyx_n_s_eri_full, __pyx_n_s_i, __pyx_n_s_j, __pyx_n_s_k, __pyx_n_s_l, __pyx_n_s_ij, __pyx_n_s_kl, __pyx_n_s_ijkl, __pyx_n_s_pijkl, __pyx_n_s_pijlk, __pyx_n_s_pjikl, __pyx_n_s_pjilk, __pyx_n_s_pklij, __pyx_n_s_plkij, __pyx_n_s_pklji, __pyx_n_s_plkji, __pyx_n_s_d1, __pyx_n_s_d2, __pyx_n_s_d3); if (unlikely(!__pyx_tuple__7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 7; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_tuple__7);
@@ -6256,7 +6256,7 @@ PyMODINIT_FUNC PyInit__vhf(void)
  * 
  * def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):             # <<<<<<<<<<<<<<
  *     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))
- *     cdef unsigned int i, j, k, l, ij, kl, ijkl
+ *     cdef int i, j, k, l, ij, kl, ijkl
  */
   __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_4_vhf_1restore_full_eri, NULL, __pyx_n_s_vhf); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 7; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
@@ -6530,7 +6530,7 @@ static CYTHON_INLINE int __Pyx_ArgTypeTest(PyObject *obj, PyTypeObject *type, in
 }
 
 static CYTHON_INLINE int __Pyx_IsLittleEndian(void) {
-  unsigned int n = 1;
+  int n = 1;
   return *(unsigned char*)(&n) != 0;
 }
 static void __Pyx_BufFmt_Init(__Pyx_BufFmt_Context* ctx,
@@ -6594,7 +6594,7 @@ static const char* __Pyx_BufFmt_DescribeTypeChar(char ch, int is_complex) {
     case 'h': return "'short'";
     case 'H': return "'unsigned short'";
     case 'i': return "'int'";
-    case 'I': return "'unsigned int'";
+    case 'I': return "'int'";
     case 'l': return "'long'";
     case 'L': return "'unsigned long'";
     case 'q': return "'long long'";
@@ -7677,21 +7677,21 @@ static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value) {
   #include "longintrepr.h"
  #endif
 #endif
-static CYTHON_INLINE unsigned int __Pyx_PyInt_As_unsigned_int(PyObject *x) {
-    const unsigned int neg_one = (unsigned int) -1, const_zero = 0;
+static CYTHON_INLINE int __Pyx_PyInt_As_unsigned_int(PyObject *x) {
+    const int neg_one = (int) -1, const_zero = 0;
     const int is_unsigned = neg_one > const_zero;
 #if PY_MAJOR_VERSION < 3
     if (likely(PyInt_Check(x))) {
-        if (sizeof(unsigned int) < sizeof(long)) {
-            __PYX_VERIFY_RETURN_INT(unsigned int, long, PyInt_AS_LONG)
+        if (sizeof(int) < sizeof(long)) {
+            __PYX_VERIFY_RETURN_INT(int, long, PyInt_AS_LONG)
         } else {
             long val = PyInt_AS_LONG(x);
             if (is_unsigned && unlikely(val < 0)) {
                 PyErr_SetString(PyExc_OverflowError,
-                                "can't convert negative value to unsigned int");
-                return (unsigned int) -1;
+                                "can't convert negative value to int");
+                return (int) -1;
             }
-            return (unsigned int) val;
+            return (int) val;
         }
     } else
 #endif
@@ -7699,40 +7699,40 @@ static CYTHON_INLINE unsigned int __Pyx_PyInt_As_unsigned_int(PyObject *x) {
         if (is_unsigned) {
 #if CYTHON_COMPILING_IN_CPYTHON && PY_MAJOR_VERSION >= 3
  #if CYTHON_USE_PYLONG_INTERNALS
-            if (sizeof(digit) <= sizeof(unsigned int)) {
+            if (sizeof(digit) <= sizeof(int)) {
                 switch (Py_SIZE(x)) {
                     case  0: return 0;
-                    case  1: return (unsigned int) ((PyLongObject*)x)->ob_digit[0];
+                    case  1: return (int) ((PyLongObject*)x)->ob_digit[0];
                 }
             }
  #endif
 #endif
             if (unlikely(Py_SIZE(x) < 0)) {
                 PyErr_SetString(PyExc_OverflowError,
-                                "can't convert negative value to unsigned int");
-                return (unsigned int) -1;
+                                "can't convert negative value to int");
+                return (int) -1;
             }
-            if (sizeof(unsigned int) <= sizeof(unsigned long)) {
-                __PYX_VERIFY_RETURN_INT(unsigned int, unsigned long, PyLong_AsUnsignedLong)
-            } else if (sizeof(unsigned int) <= sizeof(unsigned long long)) {
-                __PYX_VERIFY_RETURN_INT(unsigned int, unsigned long long, PyLong_AsUnsignedLongLong)
+            if (sizeof(int) <= sizeof(unsigned long)) {
+                __PYX_VERIFY_RETURN_INT(int, unsigned long, PyLong_AsUnsignedLong)
+            } else if (sizeof(int) <= sizeof(unsigned long long)) {
+                __PYX_VERIFY_RETURN_INT(int, unsigned long long, PyLong_AsUnsignedLongLong)
             }
         } else {
 #if CYTHON_COMPILING_IN_CPYTHON && PY_MAJOR_VERSION >= 3
  #if CYTHON_USE_PYLONG_INTERNALS
-            if (sizeof(digit) <= sizeof(unsigned int)) {
+            if (sizeof(digit) <= sizeof(int)) {
                 switch (Py_SIZE(x)) {
                     case  0: return 0;
-                    case  1: return +(unsigned int) ((PyLongObject*)x)->ob_digit[0];
-                    case -1: return -(unsigned int) ((PyLongObject*)x)->ob_digit[0];
+                    case  1: return +(int) ((PyLongObject*)x)->ob_digit[0];
+                    case -1: return -(int) ((PyLongObject*)x)->ob_digit[0];
                 }
             }
  #endif
 #endif
-            if (sizeof(unsigned int) <= sizeof(long)) {
-                __PYX_VERIFY_RETURN_INT(unsigned int, long, PyLong_AsLong)
-            } else if (sizeof(unsigned int) <= sizeof(long long)) {
-                __PYX_VERIFY_RETURN_INT(unsigned int, long long, PyLong_AsLongLong)
+            if (sizeof(int) <= sizeof(long)) {
+                __PYX_VERIFY_RETURN_INT(int, long, PyLong_AsLong)
+            } else if (sizeof(int) <= sizeof(long long)) {
+                __PYX_VERIFY_RETURN_INT(int, long long, PyLong_AsLongLong)
             }
         }
         {
@@ -7740,7 +7740,7 @@ static CYTHON_INLINE unsigned int __Pyx_PyInt_As_unsigned_int(PyObject *x) {
             PyErr_SetString(PyExc_RuntimeError,
                             "_PyLong_AsByteArray() not available in PyPy, cannot convert large numbers");
 #else
-            unsigned int val;
+            int val;
             PyObject *v = __Pyx_PyNumber_Int(x);
  #if PY_MAJOR_VERSION < 3
             if (likely(v) && !PyLong_Check(v)) {
@@ -7760,12 +7760,12 @@ static CYTHON_INLINE unsigned int __Pyx_PyInt_As_unsigned_int(PyObject *x) {
                     return val;
             }
 #endif
-            return (unsigned int) -1;
+            return (int) -1;
         }
     } else {
-        unsigned int val;
+        int val;
         PyObject *tmp = __Pyx_PyNumber_Int(x);
-        if (!tmp) return (unsigned int) -1;
+        if (!tmp) return (int) -1;
         val = __Pyx_PyInt_As_unsigned_int(tmp);
         Py_DECREF(tmp);
         return val;
