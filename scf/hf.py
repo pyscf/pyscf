@@ -1155,12 +1155,11 @@ def spin_square(mol, occ_mo_a, occ_mo_b):
 
 
 if __name__ == '__main__':
-    import gto.basis as basis
     mol = gto.Mole()
     mol.verbose = 1
     mol.output = 'out_hf'
 
-    mol.atom.extend([['He', (0.,0.,0.)], ])
+    mol.atom = [['He', (0.,0.,0.)], ]
     mol.basis = {
         'He': 'ccpvdz'}
     mol.build()
@@ -1169,4 +1168,5 @@ if __name__ == '__main__':
 # SCF result
     method = RHF(mol)
     method.init_guess('1e')
-    energy = method.scf() #=-2.38146942866
+    energy = method.scf()
+    print energy
