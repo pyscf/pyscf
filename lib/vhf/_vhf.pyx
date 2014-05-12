@@ -24,11 +24,11 @@ def int2e_sph_8fold(atm, bas, env):
 
 def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):
     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))
-    cdef unsigned int i, j, k, l, ij, kl, ijkl
-    cdef unsigned int pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
-    cdef unsigned int d1 = nao
-    cdef unsigned int d2 = nao * nao
-    cdef unsigned int d3 = nao * nao * nao
+    cdef unsigned long i, j, k, l, ij, kl, ijkl
+    cdef unsigned long pijkl, pijlk, pjikl, pjilk, pklij, plkij, pklji, plkji
+    cdef unsigned long d1 = nao
+    cdef unsigned long d2 = nao * nao
+    cdef unsigned long d3 = nao * nao * nao
     for i in range(nao):
         for j in range(i+1):
             for k in range(i+1):
