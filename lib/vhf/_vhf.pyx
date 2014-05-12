@@ -7,7 +7,7 @@ cimport cython
 
 cdef extern int CINTtot_cgto_spheric(const int *bas, const int nbas)
 
-cdef extern void int2e_sph_o4(double *eri, int *atm, int natm,
+cdef extern void int2e_sph_o5(double *eri, int *atm, int natm,
                               int *bas, int nbas, double *env)
 
 def int2e_sph_8fold(atm, bas, env):
@@ -19,7 +19,7 @@ def int2e_sph_8fold(atm, bas, env):
     nao = CINTtot_cgto_spheric(&c_bas[0,0], nbas)
     nao_pair = nao*(nao+1)/2
     cdef numpy.ndarray[double,ndim=1] eri = numpy.empty((nao_pair*(nao_pair+1)/2))
-    int2e_sph_o4(&eri[0], &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    int2e_sph_o5(&eri[0], &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     return eri
 
 def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):

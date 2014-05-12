@@ -426,7 +426,7 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                 vk[i*n+j] += *eri * dm[j*n+i];
                 vk[i*n+i] += *eri * dm[j*n+j];
         } else { // i = j
-                for (k = 0; k+1 < i; k+=2) {
+                for (k = 0; k < i-1; k+=2) {
                         for (l = 0; l < k; l++) {
                                 vk[i*n+l] += eri[l] * dm[i*n+k];
                                 vk[i*n+k] += eri[l] * dm[i*n+l];
