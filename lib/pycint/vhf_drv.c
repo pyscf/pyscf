@@ -7,11 +7,11 @@
 
 #include <stdlib.h>
 #include <omp.h>
-#include <cblas.h>
 //#define NDEBUG //assert(X) if (!(X)) goto fail;
 #include <assert.h>
 #include "cint.h"
 #include "vhf_drv.h"
+#include "vhf/fblas.h"
 
 #define MAX_OPTS 8 // should decide length of list opt according to filter
 
@@ -76,6 +76,7 @@ static int nr_vhf_drv_sph(const FPtr* filter,
                           const int *atm, const int natm,
                           const int *bas, const int nbas, const double *env)
 {
+        const int INC1;
         const int len = ndim * ndim * nset * nset_dm;
         int idx;
         int *const ao_loc = malloc(sizeof(int) * nbas);
@@ -111,8 +112,8 @@ static int nr_vhf_drv_sph(const FPtr* filter,
                 }
 #pragma omp critical
                 {
-                        cblas_daxpy(len, 1, vj_priv, 1, vj, 1);
-                        cblas_daxpy(len, 1, vk_priv, 1, vk, 1);
+                        daxpy_(&len, &INC1, vj_priv, &INC1, vj, &INC1);
+                        daxpy_(&len, &INC1, vk_priv, &INC1, vk, &INC1);
                 }
                 free(vj_priv);
                 free(vk_priv);
@@ -152,6 +153,7 @@ int r_vhf_drv(const FPtr* filter,
               const int *atm, const int natm,
               const int *bas, const int nbas, const double *env)
 {
+        const int INC1;
         const int len = ndim * ndim * nset * nset_dm * OF_CMPLX;
         int idx;
         int *const ao_loc = malloc(sizeof(int) * (nbas + ndim));
@@ -190,8 +192,8 @@ int r_vhf_drv(const FPtr* filter,
                 }
 #pragma omp critical
                 {
-                        cblas_daxpy(len, 1, vj_priv, 1, vj, 1);
-                        cblas_daxpy(len, 1, vk_priv, 1, vk, 1);
+                        daxpy_(&len, &INC1, vj_priv, &INC1, vj, &INC1);
+                        daxpy_(&len, &INC1, vk_priv, &INC1, vk, &INC1);
                 }
                 free(vj_priv);
                 free(vk_priv);

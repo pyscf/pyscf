@@ -7,25 +7,6 @@ cimport cython
 from cython.parallel import parallel, prange
 from libc.stdlib cimport malloc, free
 
-cdef extern int CINTtot_cgto_spheric(const int *bas, const int nbas)
-
-cdef extern void int2e_sph_o4(double *eri, int *atm, int natm,
-                              int *bas, int nbas, double *env)
-
-def int2e_sph_8fold(atm, bas, env):
-    cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
-    cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
-    cdef numpy.ndarray[double] c_env = numpy.array(env)
-    cdef int natm = c_atm.shape[0]
-    cdef int nbas = c_bas.shape[0]
-    nao = CINTtot_cgto_spheric(&c_bas[0,0], nbas)
-    nao_pair = nao*(nao+1)/2
-    cdef numpy.ndarray[double,ndim=1] eri = numpy.empty((nao_pair*(nao_pair+1)/2))
-    int2e_sph_o4(&eri[0], &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
-    return eri
-
-
-#######################################
 cdef extern void nr_e1_ao2mo_o1(double *eri, double *mo_coeff,
                                 int i_start, int i_count, int j_start, int j_count,
                                 int *atm, int natm,
@@ -129,8 +110,8 @@ cdef extern void ao2mo_half_trans_o2(int nao, int nmo, double *eri, double *c,
 cdef extern void ao2mo_half_trans_o3(int nao, int nmo, int pair_id,
                                      double *eri, double *c, double *mat) nogil
 
-cdef extern void extract_row_from_tri_eri(double *row, unsigned int row_id,
-                                          double *eri, unsigned int npair) nogil
+cdef extern void extract_row_from_tri(double *row, int row_id, int ndim,
+                                      double *tri) nogil
 
 def partial_eri_ao2mo_o2(numpy.ndarray[double,ndim=2] eri_ao,
                          numpy.ndarray[double,ndim=2,mode='fortran'] mo_coeff):
@@ -244,7 +225,7 @@ def nr_e1_ao2mo_incore(numpy.ndarray[double,ndim=1] eri_ao,
     with nogil, parallel():
         for ij in prange(nao_pair, schedule='guided'):
             buf = <double *>malloc(sizeof(double)*nao_pair)
-            extract_row_from_tri_eri(buf, ij, &eri_ao[0], nao_pair)
+            extract_row_from_tri(buf, ij, nao_pair, &eri_ao[0])
             if ic <= jc:
                 trans_e2_tri_o2(&eri1[ij,0], buf, &mo_coeff[0,0], nao,
                                 i0, ic, j0, jc)

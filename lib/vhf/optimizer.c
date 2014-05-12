@@ -3,12 +3,15 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include "cint.h"
 #include "optimizer.h"
+#include "nr_vhf_direct.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
+
 
 void CVHFinit_optimizer(CVHFOpt **opt, const int *atm, const int natm,
                         const int *bas, const int nbas, const double *env)
@@ -18,6 +21,7 @@ void CVHFinit_optimizer(CVHFOpt **opt, const int *atm, const int natm,
         opt0->direct_scf_cutoff = 1e-13;
         opt0->q_cond = NULL;
         opt0->dm_cond = NULL;
+        opt0->fprescreen = &CVHFno_screen;
         *opt = opt0;
 }
 
@@ -40,6 +44,31 @@ void CVHFdel_optimizer(CVHFOpt **opt)
         free(opt0);
         *opt = NULL;
 }
+
+int CVHFno_screen(int *shls, CVHFOpt *opt)
+{
+        return 1;
+}
+
+int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt)
+{
+        if (!opt) {
+                return 1;
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        return qijkl > opt->direct_scf_cutoff;
+}
+
 
 void CVHFset_direct_scf(CVHFOpt *opt, const int *atm, const int natm,
                         const int *bas, const int nbas, const double *env)
@@ -78,6 +107,7 @@ void CVHFset_direct_scf(CVHFOpt *opt, const int *atm, const int natm,
 
         if (!opt->dm_cond) {
                 opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+                memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
         }
 }
 

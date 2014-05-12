@@ -9,6 +9,7 @@ typedef int FINT;
 #endif
 
 #include "vhf/fblas.h"
+#include "vhf/misc.h"
 
 static void ao2mo_unpack(int n, double *vec, double *mat)
 {
@@ -50,18 +51,6 @@ void ao2mo_half_trans_o2(int nao, int nmo, double *eri, double *c,
         free(tmp2);
 }
 
-void extract_row_from_tri_eri(double *row, int row_id, double *eri, int npair)
-{
-        unsigned long idx;
-        int i;
-        idx = (unsigned long)row_id * (row_id + 1) / 2;
-        memcpy(row, eri+idx, sizeof(double)*row_id);
-        for (i = row_id; i < npair; i++) {
-                idx += i;
-                row[i] = eri[idx];
-        }
-}
-
 
 /* eri uses 8-fold symmetry: i>=j,k>=l,ij>=kl */
 void ao2mo_half_trans_o3(int nao, int nmo, int pair_id,
@@ -79,7 +68,7 @@ void ao2mo_half_trans_o3(int nao, int nmo, int pair_id,
         double *tmp1 = malloc(sizeof(double)*nao*nao);
         double *tmp2 = malloc(sizeof(double)*nao*nmo);
 
-        extract_row_from_tri_eri(row, pair_id, eri, nao_pair);
+        extract_row_from_tri(row, pair_id, nao_pair, eri);
         ao2mo_unpack(nao, row, tmp1);
         dgemm_(&TRANS_N, &TRANS_N, &lao, &lmo, &lao,
                &D1, tmp1, &lao, c, &lao, &D0, tmp2, &lao);

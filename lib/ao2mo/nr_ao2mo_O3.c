@@ -35,47 +35,7 @@ struct _AO2MOEnvs {
 };
 
 
-/* *************************************************** */
-
-/*
- * for given pair of shls i and j, save all k,l in eri
- */
-static int nr8fold_eri_o2(double *eri, int ish, int jsh,
-                          struct _AO2MOEnvs *envs, CINTOpt *opt, CVHFOpt *vhfopt)
-{
-        const int *atm = envs->atm;
-        const int *bas = envs->bas;
-        const int natm = envs->natm;
-        const int nbas = envs->nbas;
-        const double *env = envs->env;
-        const int di = CINTcgto_spheric(ish, bas);
-        const int dj = CINTcgto_spheric(jsh, bas);
-        int ksh, lsh, dk, dl;
-        int shls[4];
-        double *buf = eri;
-        int empty = 1;
-        for (ksh = 0; ksh < nbas; ksh++) {
-        for (lsh = 0; lsh <= ksh; lsh++) {
-                dk = CINTcgto_spheric(ksh, bas);
-                dl = CINTcgto_spheric(lsh, bas);
-                if (!vhfopt ||
-                    (vhfopt->q_cond[ish*nbas+jsh]*vhfopt->q_cond[ksh*nbas+lsh]
-                     > vhfopt->direct_scf_cutoff)) {
-                        shls[0] = ish;
-                        shls[1] = jsh;
-                        shls[2] = ksh;
-                        shls[3] = lsh;
-                        empty = !cint2e_sph(buf, shls, atm, natm, bas, nbas, env, opt)
-                                && empty;
-                } else {
-                        memset(buf, 0, sizeof(double)*di*dj*dk*dl);
-                }
-                buf += di*dj*dk*dl;
-        } }
-        return !empty;
-}
-
-/*
+/* ***************************************************
  * calculate the lower triangle part (of Fortran order matrix)
  *   _  |-- jdiag_off -|
  *   |  [ . . . . . . . .     ]
@@ -153,8 +113,7 @@ static void dtrimm_o2(int m, int n, int k, int jdiag_off,
  * are transformed to MO representation
  */
 static void trans_e1_tri_o0(double *vout, double *eri, double *mo_coeff,
-                            int ksh, int lsh,
-                            struct _AO2MOEnvs *envs)
+                            int ksh, int lsh, struct _AO2MOEnvs *envs)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -208,8 +167,7 @@ static void trans_e1_tri_o0(double *vout, double *eri, double *mo_coeff,
         free(cvc);
 }
 static void trans_e1_tri_o1(double *vout, double *eri, double *mo_coeff,
-                            int ksh, int lsh,
-                            struct _AO2MOEnvs *envs)
+                            int ksh, int lsh, struct _AO2MOEnvs *envs)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -272,8 +230,7 @@ static void trans_e1_tri_o1(double *vout, double *eri, double *mo_coeff,
         free(cvc);
 }
 static void trans_e1_tri_o2(double *vout, double *eri, double *mo_coeff,
-                            int ksh, int lsh,
-                            struct _AO2MOEnvs *envs)
+                            int ksh, int lsh, struct _AO2MOEnvs *envs)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -339,17 +296,18 @@ static void trans_e1_tri_o2(double *vout, double *eri, double *mo_coeff,
         free(cvc);
 }
 
-static void transform_kl(double *meri, double *mo_coeff,
-                         int ksh, int lsh,
+static void transform_kl(double *meri, double *mo_coeff, int ksh, int lsh,
                          struct _AO2MOEnvs *envs, CINTOpt *opt, CVHFOpt *vhfopt,
-                         int (*fgen_eri)(), void (*ftrans_e1)())
+                         void (*ftrans_e1)())
 {
         const int nao = envs->nao;
-        int dk = CINTcgto_spheric(ksh, envs->bas);
-        int dl = CINTcgto_spheric(lsh, envs->bas);
+        const int dk = CINTcgto_spheric(ksh, envs->bas);
+        const int dl = CINTcgto_spheric(lsh, envs->bas);
         double *eribuf = (double *)malloc(sizeof(double)*dk*dl*nao*nao);
 
-        if ((*fgen_eri)(eribuf, ksh, lsh, envs, opt, vhfopt)) {
+        if (CVHFnr8fold_eri_o2(eribuf, ksh, lsh, envs->nbas,
+                               envs->atm, envs->natm, envs->bas, envs->nbas,
+                               envs->env, opt, vhfopt)) {
                 (*ftrans_e1)(meri, eribuf, mo_coeff, ksh, lsh, envs);
         } else {
                 const int i_start = envs->i_start;
@@ -411,7 +369,7 @@ void nr_e1_ao2mo_o0(double *eri, double *mo_coeff,
                 k = ij2i[kl];
                 l = kl - k*(k+1)/2;
                 transform_kl(eri, mo_coeff, k, l, &envs, opt, NULL,
-                             nr8fold_eri_o2, trans_e1_tri_o0);
+                             trans_e1_tri_o0);
         }
 
         free(idx_tri);
@@ -566,7 +524,6 @@ void nr_e2_ao2mo_o0(const int nrow, double *vout, double *vin,
         }
 }
 
-
 /*
  * ************************************************
  * i_count > j_count is more efficient
@@ -593,6 +550,7 @@ void nr_e1_ao2mo_o1(double *eri, double *mo_coeff,
         cint2e_optimizer(&opt, atm, natm, bas, nbas, env);
         CVHFOpt *vhfopt;
         CVHFnr_optimizer(&vhfopt, atm, natm, bas, nbas, env);
+        vhfopt->fprescreen = &CVHFnr_schwarz_cond;
 
         int k, l, kl;
 #pragma omp parallel default(none) \
@@ -603,7 +561,7 @@ void nr_e1_ao2mo_o1(double *eri, double *mo_coeff,
                 k = ij2i[kl];
                 l = kl - k*(k+1)/2;
                 transform_kl(eri, mo_coeff, k, l, &envs, opt, vhfopt,
-                             nr8fold_eri_o2, trans_e1_tri_o1);
+                             trans_e1_tri_o1);
         }
 
         free(idx_tri);
@@ -660,6 +618,7 @@ void nr_e1_ao2mo_o2(double *eri, double *mo_coeff,
         cint2e_optimizer(&opt, atm, natm, bas, nbas, env);
         CVHFOpt *vhfopt;
         CVHFnr_optimizer(&vhfopt, atm, natm, bas, nbas, env);
+        vhfopt->fprescreen = &CVHFnr_schwarz_cond;
 
         int k, l, kl;
 #pragma omp parallel default(none) \
@@ -670,7 +629,7 @@ void nr_e1_ao2mo_o2(double *eri, double *mo_coeff,
                 k = ij2i[kl];
                 l = kl - k*(k+1)/2;
                 transform_kl(eri, mo_coeff, k, l, &envs, opt, vhfopt,
-                             nr8fold_eri_o2, trans_e1_tri_o2);
+                             trans_e1_tri_o2);
         }
 
         free(idx_tri);

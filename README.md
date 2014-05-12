@@ -5,7 +5,7 @@ Python module for quantum chemistry SCF
 
 version 0.2
 
-2014-05-03
+2014-05-08
 
 
 Installation
@@ -38,6 +38,13 @@ Installation
 * Use Intel MKL as BLAS library.  cmake with options -DBLA_VENDOR=Intel10_64lp
 
     BLA_VENDOR=Intel10_64lp cmake ..
+
+  If cmake still cannot find MKL, just define BLAS_LIBRARIES CMakeLists.txt
+
+    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
+    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
+    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
+    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
 * If cmake complains "Could NOT find libcint" or "Could NOT find libxc",
   set CMAKE_PREFIX_PATH to the directories where libcint and libxc are

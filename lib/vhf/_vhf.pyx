@@ -1,8 +1,26 @@
 #cython: boundscheck=False
 #cython: wraparound=False
+#cython: overflowcheck.fold=False
 import numpy
 cimport numpy
 cimport cython
+
+cdef extern int CINTtot_cgto_spheric(const int *bas, const int nbas)
+
+cdef extern void int2e_sph_o5(double *eri, int *atm, int natm,
+                              int *bas, int nbas, double *env)
+
+def int2e_sph_8fold(atm, bas, env):
+    cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
+    cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
+    cdef numpy.ndarray[double] c_env = numpy.array(env)
+    cdef int natm = c_atm.shape[0]
+    cdef int nbas = c_bas.shape[0]
+    nao = CINTtot_cgto_spheric(&c_bas[0,0], nbas)
+    nao_pair = nao*(nao+1)/2
+    cdef numpy.ndarray[double,ndim=1] eri = numpy.empty((nao_pair*(nao_pair+1)/2))
+    int2e_sph_o5(&eri[0], &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    return eri
 
 def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):
     cdef numpy.ndarray[double, ndim=1, mode='c'] eri_full = numpy.empty((nao*nao*nao*nao))
@@ -37,6 +55,8 @@ def restore_full_eri(numpy.ndarray[double, ndim=1, mode='c'] eri, int nao):
                         eri_full[plkji] = eri[ijkl]
     return eri_full.reshape(nao,nao,nao,nao)
 
+
+#######################################
 
 cdef extern from "cvhf.h":
     ctypedef struct CVHFOpt:

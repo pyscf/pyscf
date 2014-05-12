@@ -27,9 +27,7 @@ import lib
 import lib.parameters as param
 import lib.pycint as pycint
 import hf
-
-alib = '/'.join((os.environ['HOME'], 'code/lib/libvhf.so'))
-_cint = ctypes.cdll.LoadLibrary(alib)
+import lib._vhf as _vhf
 
 
 def dump_mo_coeff(mol, mo_coeff, e_ir_idx, argsort, title='   '):
@@ -309,7 +307,6 @@ class RHF(hf.RHF):
         return dm_change < scf_threshold*1e2
 
     def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
-        import _vhf
         t0 = time.clock()
         nirrep = mol.symm_orb.__len__()
         nao = mol.symm_orb[0].shape[0]
@@ -347,14 +344,14 @@ class RHF(hf.RHF):
         elif self.direct_scf:
             if dm[0].ndim == 2:
                 vj, vk = _vhf.vhf_jk_direct_o2(dm_so2ao_diff(), mol._atm, \
-                                                  mol._bas, mol._env, self.opt)
+                                               mol._bas, mol._env, self.opt)
             else:
                 vj, vk = hf.get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm_so2ao_diff())
             vhf = vhf_ao2so_diff(vj-vk*.5)
         else:
             if dm[0].ndim == 2:
                 vj, vk = _vhf.vhf_jk_direct_o2(dm_so2ao(), mol._atm, \
-                                                  mol._bas, mol._env)
+                                               mol._bas, mol._env)
             else:
                 vj, vk = hf.get_vj_vk(pycint.nr_vhf_o3, mol, dm_so2ao())
             vhf = vhf_ao2so(vj-vk*.5)
@@ -769,7 +766,6 @@ class UHF(hf.UHF):
         return dm_change < scf_threshold*1e2
 
     def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
-        import _vhf
         t0 = time.clock()
         nirrep = mol.symm_orb.__len__()
         nao = mol.symm_orb[0].shape[0]

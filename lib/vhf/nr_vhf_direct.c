@@ -9,7 +9,6 @@
 #include <omp.h>
 #include "cint.h"
 #include "misc.h"
-#include "fblas.h"
 #include "optimizer.h"
 #include "nr_vhf_incore.h"
 
@@ -47,7 +46,7 @@ void CVHFindex_blocks2tri(int *idx, int *ao_loc,
 int CVHFnr_vhf_prescreen(int *shls, CVHFOpt *opt)
 {
         if (!opt) {
-                return 1; // not screen
+                return 1; // no screen
         }
         int i = shls[0];
         int j = shls[1];
@@ -70,10 +69,10 @@ int CVHFnr_vhf_prescreen(int *shls, CVHFOpt *opt)
         return dm_max*qijkl > opt->direct_scf_cutoff;
 }
 
-int CVHFnr8fold_eri_o1(double *eri, int ish, int jsh,
-                       CVHFOpt *vhfopt, const int *atm, const int natm,
+int CVHFnr8fold_eri_o2(double *eri, int ish, int jsh, int ksh_lim,
+                       const int *atm, const int natm,
                        const int *bas, const int nbas, const double *env,
-                       CINTOpt *opt)
+                       CINTOpt *opt, CVHFOpt *vhfopt)
 {
         const int di = CINTcgto_spheric(ish, bas);
         const int dj = CINTcgto_spheric(jsh, bas);
@@ -81,7 +80,7 @@ int CVHFnr8fold_eri_o1(double *eri, int ish, int jsh,
         int shls[4];
         double *buf = eri;
         int empty = 1;
-        for (ksh = 0; ksh <= ish; ksh++) {
+        for (ksh = 0; ksh < ksh_lim; ksh++) {
         for (lsh = 0; lsh <= ksh; lsh++) {
                 dk = CINTcgto_spheric(ksh, bas);
                 dl = CINTcgto_spheric(lsh, bas);
@@ -89,33 +88,8 @@ int CVHFnr8fold_eri_o1(double *eri, int ish, int jsh,
                 shls[1] = jsh;
                 shls[2] = ksh;
                 shls[3] = lsh;
-                empty = !cint2e_sph(buf, shls, atm, natm, bas, nbas, env, opt)
-                        && empty;
-                buf += di*dj*dk*dl;
-        } }
-        return !empty;
-}
-
-int CVHFnr8fold_eri_o2(double *eri, int ish, int jsh,
-                       CVHFOpt *vhfopt, const int *atm, const int natm,
-                       const int *bas, const int nbas, const double *env,
-                       CINTOpt *opt)
-{
-        const int di = CINTcgto_spheric(ish, bas);
-        const int dj = CINTcgto_spheric(jsh, bas);
-        int ksh, lsh, dk, dl;
-        int shls[4];
-        double *buf = eri;
-        int empty = 1;
-        for (ksh = 0; ksh <= ish; ksh++) {
-        for (lsh = 0; lsh <= ksh; lsh++) {
-                dk = CINTcgto_spheric(ksh, bas);
-                dl = CINTcgto_spheric(lsh, bas);
-                shls[0] = ish;
-                shls[1] = jsh;
-                shls[2] = ksh;
-                shls[3] = lsh;
-                if (CVHFnr_vhf_prescreen(shls, vhfopt)) {
+                if (!vhfopt ||
+                    (*vhfopt->fprescreen)(shls, vhfopt)) {
                         empty = !cint2e_sph(buf, shls, atm, natm, bas, nbas, env, opt)
                                 && empty;
                 } else {
@@ -214,8 +188,8 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
                       CVHFOpt *vhfopt, const int *atm, const int natm,
                       const int *bas, const int nbas, const double *env)
 {
-        int nao = CINTtot_cgto_spheric(bas, nbas);
-        int npair = nao*(nao+1)/2;
+        const int nao = CINTtot_cgto_spheric(bas, nbas);
+        const int npair = nao*(nao+1)/2;
         double *tri_dm = malloc(sizeof(double)*npair*nset);
         double *tri_vj = malloc(sizeof(double)*npair*nset);
         double *vj_priv, *vk_priv;
@@ -242,7 +216,7 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
         }
 
 #pragma omp parallel default(none) \
-        shared(tri_dm, dm, tri_vj, vk, ij2i, nao, npair, ao_loc, idx_tri, \
+        shared(tri_dm, dm, tri_vj, vk, ij2i, ao_loc, idx_tri, \
                atm, bas, env, opt, vhfopt) \
         private(ij, i, j, di, dj, vj_priv, vk_priv, eribuf)
         {
@@ -257,10 +231,11 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
                         di = CINTcgto_spheric(i, bas);
                         dj = CINTcgto_spheric(j, bas);
                         eribuf = (double *)malloc(sizeof(double)*di*dj*nao*nao);
-                        //CVHFnr8fold_eri_o1(eribuf, i, j, vhfopt, atm, natm, bas, nbas, env, opt);
-                        if (CVHFnr8fold_eri_o2(eribuf, i, j, vhfopt,
-                                               atm, natm, bas, nbas, env, opt)) {
-                                CVHFnr8fold_jk_o3(nset, vj_priv, vk_priv, tri_dm, dm, eribuf,
+                        if (CVHFnr8fold_eri_o2(eribuf, i, j, i+1,
+                                               atm, natm, bas, nbas, env,
+                                               opt, vhfopt)) {
+                                CVHFnr8fold_jk_o3(nset, vj_priv, vk_priv,
+                                                  tri_dm, dm, eribuf,
                                                   i, j, ao_loc, idx_tri, bas, nbas);
                         }
                         free(eribuf);
@@ -305,6 +280,7 @@ void CVHFnr_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
                       const int *bas, const int nbas, const double *env)
 {
         CVHFinit_optimizer(vhfopt, atm, natm, bas, nbas, env);
+        (*vhfopt)->fprescreen = &CVHFnr_vhf_prescreen;
         CVHFset_direct_scf(*vhfopt, atm, natm, bas, nbas, env);
 }
 

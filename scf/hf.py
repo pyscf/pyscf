@@ -25,7 +25,6 @@ import lib
 import lib.logger as log
 import lib.parameters as param
 import lib.pycint as pycint
-import lib._ao2mo as _ao2mo
 import lib._vhf as _vhf
 
 alib = '/'.join((os.environ['HOME'], 'code/lib/libvhf.so'))
@@ -577,7 +576,7 @@ class RHF(SCF):
         t0 = time.clock()
         if self.eri_in_memory:
             if self._eri is None:
-                self._eri = _ao2mo.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
+                self._eri = _vhf.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm)
             vhf = vj - vk * .5
         else:
@@ -948,7 +947,7 @@ class UHF(SCF):
         t0 = time.clock()
         if self.eri_in_memory:
             if self._eri is None:
-                self._eri = _ao2mo.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
+                self._eri = _vhf.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
             vj0, vk0 = dot_eri_dm(self._eri, dm[0])
             vj1, vk1 = dot_eri_dm(self._eri, dm[1])
             v_a = vj0 + vj1 - vk0
@@ -1155,12 +1154,11 @@ def spin_square(mol, occ_mo_a, occ_mo_b):
 
 
 if __name__ == '__main__':
-    import gto.basis as basis
     mol = gto.Mole()
     mol.verbose = 1
     mol.output = 'out_hf'
 
-    mol.atom.extend([['He', (0.,0.,0.)], ])
+    mol.atom = [['He', (0.,0.,0.)], ]
     mol.basis = {
         'He': 'ccpvdz'}
     mol.build()
@@ -1169,4 +1167,5 @@ if __name__ == '__main__':
 # SCF result
     method = RHF(mol)
     method.init_guess('1e')
-    energy = method.scf() #=-2.38146942866
+    energy = method.scf()
+    print energy
