@@ -133,7 +133,7 @@ static void trans_e1_tri_o0(double *vout, double *eri, double *mo_coeff,
         const int *idx_tri = envs->idx_tri;
         const int *ao_loc = envs->ao_loc;
         int i, j, k, l, k0, l0, j1, ij, kl;
-        int npair = nao*(nao+1)/2;
+        const int npair = nao*(nao+1)/2;
 
         for (l0 = ao_loc[lsh], l = 0; l < dl; l++, l0++) {
         for (k0 = ao_loc[ksh], k = 0; k < dk; k++, k0++) {
@@ -315,7 +315,7 @@ static void transform_kl(double *meri, double *mo_coeff, int ksh, int lsh,
                 const int j_start = envs->j_start;
                 const int j_count = envs->j_count;
                 const int *ao_loc = envs->ao_loc;
-                int npair = nao*(nao+1)/2;
+                const int npair = nao*(nao+1)/2;
                 int i, j, k, l, j1, ij, kl;
                 for (k = ao_loc[ksh]; k < ao_loc[ksh]+dk; k++) {
                 for (l = ao_loc[lsh]; l < MIN(ao_loc[lsh]+dl,k+1); l++) {
@@ -513,7 +513,7 @@ void nr_e2_ao2mo_o0(const int nrow, double *vout, double *vin,
         const unsigned long npair = (unsigned long)nao*(nao+1)/2;
 
         int i;
-        const int nij = count_ij(i_start, i_count, j_start, j_count);
+        const unsigned long nij = count_ij(i_start, i_count, j_start, j_count);
 #pragma omp parallel default(none) \
         shared(vout, vin, mo_coeff, i_start, i_count, j_start, j_count) \
         private(i)
@@ -580,7 +580,7 @@ void nr_e2_ao2mo_o1(const int nrow, double *vout, double *vin,
         const unsigned long npair = (unsigned long)nao*(nao+1)/2;
 
         int i;
-        const int nij = count_ij(i_start, i_count, j_start, j_count);
+        const unsigned long nij = count_ij(i_start, i_count, j_start, j_count);
 #pragma omp parallel default(none) \
         shared(vout, vin, mo_coeff, i_start, i_count, j_start, j_count) \
         private(i)
@@ -648,7 +648,7 @@ void nr_e2_ao2mo_o2(const int nrow, double *vout, double *vin,
         const unsigned long npair = (unsigned long)nao*(nao+1)/2;
 
         int i;
-        const int nij = count_ij(i_start, i_count, j_start, j_count);
+        const unsigned long nij = count_ij(i_start, i_count, j_start, j_count);
 #pragma omp parallel default(none) \
         shared(vout, vin, mo_coeff, i_start, i_count, j_start, j_count) \
         private(i)

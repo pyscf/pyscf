@@ -459,13 +459,13 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
 }
 void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
 {
-        int npair = n*(n+1)/2;
+        const int npair = n*(n+1)/2;
         double *tri_dm = malloc(sizeof(double)*npair);
         double *tri_vj = malloc(sizeof(double)*npair);
         double *vj_priv, *vk_priv;
-        int i, j, ij;
+        int i, j;
         int *ij2i = malloc(sizeof(int)*npair);
-        unsigned long off;
+        unsigned long ij, off;
 
         CVHFcompress_nr_dm(tri_dm, dm, n);
         CVHFset_ij2i(ij2i, n);

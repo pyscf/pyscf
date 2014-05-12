@@ -63,7 +63,7 @@ void ao2mo_half_trans_o3(int nao, int nmo, int pair_id,
         const FINT lao = nao;
         const FINT lmo = nmo;
         int i, j;
-        int nao_pair = nao * (nao+1) / 2;
+        const int nao_pair = nao * (nao+1) / 2;
         double *row = malloc(sizeof(double)*nao_pair);
         double *tmp1 = malloc(sizeof(double)*nao*nao);
         double *tmp2 = malloc(sizeof(double)*nao*nmo);

@@ -36,7 +36,8 @@ static void store_ij(double *eri, int ish, int jsh, struct _VHFEnvs *envs,
         double *eribuf = (double *)malloc(sizeof(double)*di*dj*nao*nao);
         const int *ao_loc = envs->ao_loc;
         const int *idx_tri = envs->idx_tri;
-        int i, j, i0, j0, ij, ij0, kl0;
+        int i, j, i0, j0, ij, kl0;
+        unsigned long ij0;
         double *peri;
 
         if (CVHFnr8fold_eri_o2(eribuf, ish, jsh, ish+1,
