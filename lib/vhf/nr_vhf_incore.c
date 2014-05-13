@@ -473,7 +473,7 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, tri_dm, dm, tri_vj, vk, ij2i, n, npair) \
+        shared(eri, tri_dm, dm, tri_vj, vk, ij2i, n) \
         private(ij, i, j, off, vj_priv, vk_priv)
         {
                 vj_priv = malloc(sizeof(double)*npair);
