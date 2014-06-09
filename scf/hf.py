@@ -27,7 +27,7 @@ import lib.parameters as param
 import lib.pycint as pycint
 import lib._vhf as _vhf
 
-alib = '/'.join((os.environ['HOME'], 'code/lib/libvhf.so'))
+alib = '../lib/pycint.so'
 _cint = ctypes.cdll.LoadLibrary(alib)
 
 

@@ -9,7 +9,7 @@ import numpy
 import ctypes
 
 import lib
-alib = '/'.join((os.environ['HOME'], 'code/lib/libcint.so'))
+alib = '../lib/_vhf.so'
 _cint = ctypes.cdll.LoadLibrary(alib)
 _cint.CINTcgtos_cart.restype = ctypes.c_int
 _cint.CINTcgtos_spheric.restype = ctypes.c_int
