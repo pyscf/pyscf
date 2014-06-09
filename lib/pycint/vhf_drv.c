@@ -76,7 +76,8 @@ static int nr_vhf_drv_sph(const FPtr* filter,
                           const int *atm, const int natm,
                           const int *bas, const int nbas, const double *env)
 {
-        const int INC1;
+        const int INC1 = 1;
+        const double D1 = 1;
         const int len = ndim * ndim * nset * nset_dm;
         int idx;
         int *const ao_loc = malloc(sizeof(int) * nbas);
@@ -112,8 +113,8 @@ static int nr_vhf_drv_sph(const FPtr* filter,
                 }
 #pragma omp critical
                 {
-                        daxpy_(&len, &INC1, vj_priv, &INC1, vj, &INC1);
-                        daxpy_(&len, &INC1, vk_priv, &INC1, vk, &INC1);
+                        daxpy_(&len, &D1, vj_priv, &INC1, vj, &INC1);
+                        daxpy_(&len, &D1, vk_priv, &INC1, vk, &INC1);
                 }
                 free(vj_priv);
                 free(vk_priv);
@@ -153,7 +154,8 @@ int r_vhf_drv(const FPtr* filter,
               const int *atm, const int natm,
               const int *bas, const int nbas, const double *env)
 {
-        const int INC1;
+        const int INC1 = 1;
+        const double D1 = 1;
         const int len = ndim * ndim * nset * nset_dm * OF_CMPLX;
         int idx;
         int *const ao_loc = malloc(sizeof(int) * (nbas + ndim));
@@ -192,8 +194,8 @@ int r_vhf_drv(const FPtr* filter,
                 }
 #pragma omp critical
                 {
-                        daxpy_(&len, &INC1, vj_priv, &INC1, vj, &INC1);
-                        daxpy_(&len, &INC1, vk_priv, &INC1, vk, &INC1);
+                        daxpy_(&len, &D1, vj_priv, &INC1, vj, &INC1);
+                        daxpy_(&len, &D1, vk_priv, &INC1, vk, &INC1);
                 }
                 free(vj_priv);
                 free(vk_priv);
