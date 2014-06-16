@@ -188,6 +188,7 @@ class SCF(object):
         log.info(self, 'chkfile to save SCF result = %s', self.chkfile)
 
 
+    @classmethod
     def eig(self, h, s):
         c, e, info = lapack.dsygv(h, s)
         return e, c, info
@@ -265,7 +266,7 @@ class SCF(object):
             mol = self.mol
         try:
             return init_guess_by_minao(self, mol)
-        except:
+        except KeyError:
             log.warn(self, 'Fail in generating initial guess from MINAO. ' \
                      'Use 1e initial guess')
             return self._init_guess_by_1e(mol)
@@ -451,7 +452,7 @@ class SCF(object):
             vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
             return vj - vk * .5
 
-    @lib.omnimethod
+    @classmethod
     def solve_1e(self, mol):
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
@@ -563,11 +564,11 @@ class RHF(SCF):
             self.opt = _vhf.VHFOpt()
             self.opt.init_nr_vhf_direct(mol._atm, mol._bas, mol._env)
             self.opt.direct_scf_threshold = self.direct_scf_threshold
-            SCF.init_direct_scf(self, mol)
-
-    def del_direct_scf(self):
-        if not self.eri_in_memory and self.direct_scf:
-            SCF.del_direct_scf(self)
+#            SCF.init_direct_scf(self, mol)
+#
+#    def del_direct_scf(self):
+#        if not self.eri_in_memory and self.direct_scf:
+#            SCF.del_direct_scf(self)
 
     def release_eri(self):
         self._eri = None
@@ -933,11 +934,11 @@ class UHF(SCF):
             self.opt = _vhf.VHFOpt()
             self.opt.init_nr_vhf_direct(mol._atm, mol._bas, mol._env)
             self.opt.direct_scf_threshold = self.direct_scf_threshold
-            SCF.init_direct_scf(self, mol)
-
-    def del_direct_scf(self):
-        if not self.eri_in_memory and self.direct_scf:
-            SCF.del_direct_scf(self)
+#            SCF.init_direct_scf(self, mol)
+#
+#    def del_direct_scf(self):
+#        if not self.eri_in_memory and self.direct_scf:
+#            SCF.del_direct_scf(self)
 
     def release_eri(self):
         self._eri = None

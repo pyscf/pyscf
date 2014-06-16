@@ -69,10 +69,7 @@ def mole_intor(mol, intor_name, dim3, symmetric):
         for i in range(nbf):
             for j in range(i):
                 mat[:,i,j] = -mat[:,j,i].conj()
-    if dim3 == 1:
-        return mat.reshape(nbf,nbf).transpose()
-    else:
-        return mat.transpose((0,2,1))
+    return f2c_order(mat, dim3)
 
 def intor_cross(mol, intor_name, bras, kets, dim3):
     assert(max(bras) < mol.nbas)
@@ -117,7 +114,12 @@ def intor_cross(mol, intor_name, bras, kets, dim3):
 
             jp += dj
         ip += di
+    return f2c_order(mat, dim3)
+
+# fortran order to C order
+def f2c_order(mat, dim3):
     if dim3 == 1:
-        return mat.reshape(nket,nbra).transpose()
+        _, n, m = mat.shape
+        return mat.reshape(n,m).transpose()
     else:
         return mat.transpose((0,2,1))
