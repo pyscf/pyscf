@@ -117,7 +117,7 @@ class Mole(object):
         self._gauge_method = param.MI_GAUGE_GIAO
 
         self._built = False
-        self.fout = None
+        self.fout = sys.stdout
         self.pgname = 'C1'
         self.symm_orb = None
         self.irrep_name = None
@@ -179,14 +179,14 @@ class Mole(object):
             if opts.output:
                 self.output = opts.output
 
-            if self.output is not None:
-                if os.path.isfile(self.output):
-                    os.remove(self.output)
-                    if self.verbose > log.QUITE:
-                        print 'overwrite output file: %s' % self.output
-                else:
-                    if self.verbose > log.QUITE:
-                        print 'output file: %s' % self.output
+        if self.output is not None:
+            if os.path.isfile(self.output):
+                #os.remove(self.output)
+                if self.verbose > log.QUITE:
+                    print 'overwrite output file: %s' % self.output
+            else:
+                if self.verbose > log.QUITE:
+                    print 'output file: %s' % self.output
 
 
     def format_atom(self):
@@ -364,22 +364,20 @@ class Mole(object):
 
     def build_moleinfo(self, dump_input=True):
         self.build(dump_input)
-    def build(self, dump_input=True):
+    def build(self, dump_input=True, parse_arg=True):
         # Ipython shell conflicts with optparse
         try:
             __IPYTHON__ is not None
         except:
-            self.update_from_cmdargs()
+            if parse_arg:
+                self.update_from_cmdargs()
         else:
             print 'Warn: Ipython shell catchs sys.args'
 
-        try:
-            if self.fout is None \
-               or self.fout.name != self.output:
-                # avoid to open output file twice
-                self.fout = open(self.output, 'w')
-        except:
-            self.fout = sys.stdout
+        # avoid to open output file twice
+        if parse_arg and self.output is not None \
+           and self.fout.name != self.output:
+            self.fout = open(self.output, 'w')
 
         self._built = True
 
@@ -636,15 +634,21 @@ class Mole(object):
                       range(self.nbas), 0)
 
     def num_NR_function(self):
+        return self.num_NR_cgto()
+    def num_NR_cgto(self):
         ''' total number of contracted GTOs'''
         return reduce(lambda n, b: n + (self.angular_of_bas(b) * 2 + 1) \
                                     * self.nctr_of_bas(b),
                       range(self.nbas), 0)
 
     def num_4C_function(self):
+        return self.num_4C_cgto()
+    def num_4C_cgto(self):
         return self.num_2C_function() * 2
 
     def num_2C_function(self):
+        return self.num_2C_cgto()
+    def num_2C_cgto(self):
         ''' total number of spinors'''
         return reduce(lambda n, b: n + self.len_spinor_of_bas(b) \
                                     * self.nctr_of_bas(b),

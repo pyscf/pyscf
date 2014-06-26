@@ -23,6 +23,7 @@ import lib.parameters as param
 import lib.pycint as pycint
 import hf
 import dhf
+import chkfile
 
 _cint = hf._cint
 
@@ -108,12 +109,11 @@ class UHF(dhf.UHF):
         return numpy.linalg.solve(s1e, prd)
 
     def _init_guess_by_chkfile(self, mol):
-        chkfile = self.chkfile
         try:
-            chk_mol, scf_rec = hf.read_scf_from_chkfile(chkfile)
+            chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
         except IOError:
             log.warn(mol, 'Fail in reading from %s. Use RKB initial guess', \
-                     chkfile)
+                     self.chkfile)
             return self._init_guess_from_rkb(mol)
 
         if not mol.is_same_mol(chk_mol):
@@ -126,13 +126,13 @@ class UHF(dhf.UHF):
         mo_coeff = scf_rec['mo_coeff']
         mo_energy = scf_rec['mo_energy']
         hf_energy = scf_rec['hf_energy']
-        mo_occ = self.set_mo_occ(mo_energy)
+        mo_occ = self.set_mo_occ(mo_energy, mo_coeff)
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return hf_energy, dm
 
     def _init_guess_by_rkb_chkfile(self, mol):
         try:
-            chk_mol, scf_rec = hf.read_scf_from_chkfile(self.rkb_chkfile)
+            chk_mol, scf_rec = chkfile.read_scf(self.rkb_chkfile)
         except IOError:
             log.warn(mol, 'Fail in reading RKB chkfile from %s. ' \
                      'Use RKB initial guess' \
@@ -198,13 +198,13 @@ class UHF(dhf.UHF):
         _cint.del_dkb_direct_scf_()
 
 
-    def get_coulomb_vj_vk(self, mol, dm, coulomb_type):
+    def get_coulomb_vj_vk(self, mol, dm, coulomb_allow):
         log.info(self, 'DKB Coulomb integral')
         vj, vk = hf.get_vj_vk(pycint.dkb_vhf_coul, self.dkb_mol, dm)
         #vj, vk = hf.get_vj_vk(pycint.dkb_vhf_coul_o02, self.dkb_mol, dm)
         return vj, vk
 
-    def get_coulomb_vj_vk_screen(self, mol, dm, coulomb_type):
+    def get_coulomb_vj_vk_screen(self, mol, dm, coulomb_allow):
         log.info(self, 'DKB Coulomb integral')
         vj, vk = hf.get_vj_vk(pycint.dkb_vhf_coul_direct, self.dkb_mol, dm)
         return vj, vk

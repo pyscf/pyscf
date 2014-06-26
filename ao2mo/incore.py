@@ -22,7 +22,7 @@ def gen_int2e_from_full_eri(full_eri, nao=None):
     return int2e
 
 def get_int2e_from_partial_eri(eri_ao, mo_coeff):
-    full(eri_ao, mo_coeff)
+    return full(eri_ao, mo_coeff)
 
 def full(eri_ao, mo_coeff):
     if mo_coeff.flags.c_contiguous:
@@ -34,13 +34,13 @@ def full(eri_ao, mo_coeff):
 
 
 # It consumes two times of the memory needed by MO integrals
-def general(eri_ao, mo_coeffs):
+def general(eri_ao, mo_coeffs, compact=True):
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
                 or (mo1.shape==mo2.shape and abs(mo1-mo2).sum()<1e-12)
 
-    ijsame = iden_coeffs(mo_coeffs[0], mo_coeffs[1])
-    klsame = iden_coeffs(mo_coeffs[2], mo_coeffs[3])
+    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
+    klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]

@@ -123,14 +123,14 @@ class RHF(hf.RHF):
         if factor < 1e-3:
             return f
         else:
-            return [hf.RHF.damping(self, s[ir], d[ir], f[ir], factor) \
+            return [hf.damping(self, s[ir], d[ir], f[ir], factor) \
                     for ir in range(self.mol.symm_orb.__len__())]
 
     def level_shift(self, s, d, f, factor):
         if factor < 1e-3:
             return f
         else:
-            return [hf.RHF.level_shift(self, s[ir], d[ir], f[ir], factor) \
+            return [hf.level_shift(self, s[ir], d[ir], f[ir], factor) \
                     for ir in range(self.mol.symm_orb.__len__())]
 
     def init_diis(self):
@@ -224,7 +224,7 @@ class RHF(hf.RHF):
             dm = self.symmetrize_den_mat(dm)
         return e, dm
 
-    def set_mo_occ(self, mo_energy):
+    def set_mo_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
         nirrep = mol.symm_orb.__len__()
         mo_e_plain = []
@@ -342,18 +342,12 @@ class RHF(hf.RHF):
             vj, vk = hf.dot_eri_dm(self._eri, dm_so2ao())
             vhf = vhf_ao2so(vj-vk*.5)
         elif self.direct_scf:
-            if dm[0].ndim == 2:
-                vj, vk = _vhf.vhf_jk_direct_o2(dm_so2ao_diff(), mol._atm, \
-                                               mol._bas, mol._env, self.opt)
-            else:
-                vj, vk = hf.get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm_so2ao_diff())
+            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao_diff(), mol._atm, \
+                                           mol._bas, mol._env, self.opt)
             vhf = vhf_ao2so_diff(vj-vk*.5)
         else:
-            if dm[0].ndim == 2:
-                vj, vk = _vhf.vhf_jk_direct_o2(dm_so2ao(), mol._atm, \
-                                               mol._bas, mol._env)
-            else:
-                vj, vk = hf.get_vj_vk(pycint.nr_vhf_o3, mol, dm_so2ao())
+            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao(), mol._atm, \
+                                           mol._bas, mol._env, self.opt)
             vhf = vhf_ao2so(vj-vk*.5)
         log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
         return vhf
@@ -500,14 +494,14 @@ class UHF(hf.UHF):
         if factor < 1e-3:
             return f
         else:
-            return [hf.UHF.damping(self, s[ir], d[ir], f[ir], factor) \
+            return [hf.damping(self, s[ir], d[ir], f[ir], factor) \
                     for ir in range(self.mol.symm_orb.__len__())]
 
     def level_shift(self, s, d, f, factor):
         if factor < 1e-3:
             return f
         else:
-            return [hf.UHF.level_shift(self, s[ir], d[ir], f[ir], factor) \
+            return [hf.level_shift(self, s[ir], d[ir], f[ir], factor) \
                     for ir in range(self.mol.symm_orb.__len__())]
 
     def init_diis(self):
@@ -628,7 +622,7 @@ class UHF(hf.UHF):
             dm = self.symmetrize_den_mat(dm)
         return e, dm
 
-    def set_mo_occ(self, mo_energy):
+    def set_mo_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
         nirrep = mol.symm_orb.__len__()
         mo_e_plain = [[],[]]
@@ -805,11 +799,13 @@ class UHF(hf.UHF):
             vj1, vk1 = hf.dot_eri_dm(self._eri, dm_ao[1])
             vhf = (vhf_ao2so(vj0+vj1-vk0), vhf_ao2so(vj0+vj1-vk1))
         elif self.direct_scf:
-            vj, vk = hf.get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm_so2ao_diff())
+            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao_diff(), mol._atm, \
+                                           mol._bas, mol._env, self.opt)
             vhf = (vhf_ao2so_diff(vj[0]+vj[1]-vk[0]), \
                    vhf_ao2so_diff(vj[0]+vj[1]-vk[1]))
         else:
-            vj, vk = hf.get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm_so2ao_diff())
+            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao(), mol._atm, \
+                                           mol._bas, mol._env, self.opt)
             vhf = (vhf_ao2so(vj[0]+vj[1]-vk[0]), vhf_ao2so(vj[0]+vj[1]-vk[1]))
         log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
         return vhf
@@ -938,9 +934,9 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.direct_scf_threshold  = rhf.direct_scf_threshold
 
     uhf.chkfile               = rhf.chkfile
-    self.fout                 = rhf.fout
-    self.scf_threshold        = rhf.scf_threshold
-    self.max_scf_cycle        = rhf.max_scf_cycle
+    uhf.fout                  = rhf.fout
+    uhf.scf_threshold         = rhf.scf_threshold
+    uhf.max_scf_cycle         = rhf.max_scf_cycle
     return uhf
 
 def spin_square(mol, mo_a, mo_b):
@@ -960,3 +956,4 @@ def spin_square(mol, mo_a, mo_b):
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
+

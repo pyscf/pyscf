@@ -25,6 +25,7 @@ import lib
 import lib.logger as log
 import lib.parameters as param
 import lib.pycint as pycint
+import chkfile
 import lib._vhf as _vhf
 
 alib = os.path.join(os.path.dirname(lib.__file__), 'pycint.so')
@@ -43,36 +44,6 @@ self.max_scf_cycle = 50
 self.init_guess(method)         # method = one of 'atom', '1e', 'chkfile', 'minao'
 '''
 
-def read_scf_from_chkfile(chkfile):
-    try:
-        ftmp = open(chkfile, 'r')
-        rec = pickle.load(ftmp)
-        ftmp.close()
-
-        mol = gto.Mole()
-        mol.verbose = 0
-        mol.output = '/dev/null'
-        mol.atom     = rec['mol']['atom']
-        mol.basis    = rec['mol']['basis']
-        mol.etb      = rec['mol']['etb']
-        mol.build(False)
-
-        return mol, rec['scf']
-    except:
-        raise IOError('Fail in reading from %s' % chkfile)
-
-def dump_scf_to_chkfile(mol, chkfile, hf_energy, mo_energy,
-                        mo_occ, mo_coeff):
-    '''save temporary results'''
-    rec = {}
-    rec['mol'] = mol.pack()
-    rec['scf'] = {'hf_energy': hf_energy, \
-                  'mo_energy': mo_energy, \
-                  'mo_occ'   : mo_occ, \
-                  'mo_coeff' : mo_coeff, }
-    ftmp = open(chkfile, 'w')
-    pickle.dump(rec, ftmp, pickle.HIGHEST_PROTOCOL)
-    ftmp.close()
 
 def dump_orbital_coeff(mol, mo):
     label = mol.labels_of_spheric_GTO()
@@ -111,12 +82,13 @@ def scf_cycle(mol, scf, scf_threshold=1e-10, dump_chk=True, init_dm=None):
         dm_last = dm
         last_hf_e = hf_energy
         mo_energy, mo_coeff, err = scf.eig(fock, s1e)
-        mo_occ = scf.set_mo_occ(mo_energy)
+        mo_occ = scf.set_mo_occ(mo_energy, mo_coeff)
         dm = scf.calc_den_mat(mo_coeff, mo_occ)
         hf_energy = scf.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)[0]
 
-        log.info(scf, 'cycle= %d E=%.15g delta_E= %g', \
-                 cycle+1, hf_energy, hf_energy-last_hf_e)
+        log.info(scf, 'cycle= %d E=%.15g (+nuc=%.5f), delta_E= %g', \
+                 cycle+1, hf_energy, hf_energy+mol.nuclear_repulsion(), \
+                 hf_energy-last_hf_e)
 
         if abs((hf_energy-last_hf_e)/hf_energy) < scf_threshold \
            and scf.check_dm_converge(dm, dm_last, scf_threshold):
@@ -132,7 +104,7 @@ def scf_cycle(mol, scf, scf_threshold=1e-10, dump_chk=True, init_dm=None):
     vhf = scf.get_eff_potential(mol, dm)
     fock = scf.make_fock(h1e, vhf)
     mo_energy, mo_coeff, err = scf.eig(fock, s1e)
-    mo_occ = scf.set_mo_occ(mo_energy)
+    mo_occ = scf.set_mo_occ(mo_energy, mo_coeff)
     dm = scf.calc_den_mat(mo_coeff, mo_occ)
     hf_energy = scf.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)[0]
     if dump_chk:
@@ -193,36 +165,6 @@ class SCF(object):
         c, e, info = lapack.dsygv(h, s)
         return e, c, info
 
-    def level_shift(self, s, d, f, factor):
-        if factor < 1e-3:
-            return f
-        else:
-            dm_vir = s - reduce(numpy.dot, (s,d*.5,s))
-            return f + dm_vir * factor
-
-# maybe need to save old fock matrix
-# check diis.DIISDamping
-#def damping(self, s, d, f, mo_coeff, mo_occ):
-#    if self.damp_factor < 1e-3:
-#        return f
-#    else:
-#        mo = mo_coeff[:,mo_occ<1e-12]
-#        dm_vir = numpy.dot(mo, mo.T.conj())
-#        f0 = reduce(numpy.dot, (s, dm_vir, f, d, s))
-#        f0 = (f0+f0.T.conj()) * (self.damp_factor/(self.damp_factor+1))
-#        return f - f0
-    def damping(self, s, d, f, factor):
-        if factor < 1e-3:
-            return f
-        else:
-            #dm_vir = s - reduce(numpy.dot, (s,d*.5,s))
-            #sinv = numpy.linalg.inv(s)
-            #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
-            dm_vir = numpy.eye(s.shape[0])-numpy.dot(s,d*.5)
-            f0 = reduce(numpy.dot, (dm_vir, f, d, s))
-            f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
-            return f - f0
-
     def init_diis(self):
         diis_a = diis.SCF_DIIS(self)
         diis_a.diis_space = self.diis_space
@@ -231,12 +173,12 @@ class SCF(object):
             if cycle >= self.diis_start_cycle:
                 f = diis_a.update(s, d, f)
             if cycle < self.diis_start_cycle-1:
-                f = self.damping(s, d, f, self.damp_factor)
-                f = self.level_shift(s, d, f, self.level_shift_factor)
+                f = damping(s, d*.5, f, self.damp_factor)
+                f = level_shift(s, d*.5, f, self.level_shift_factor)
             else:
                 fac = self.level_shift_factor \
                         * numpy.exp(self.diis_start_cycle-cycle-1)
-                f = self.level_shift(s, d, f, fac)
+                f = level_shift(s, d*.5, f, fac)
             return f
         return scf_diis
 
@@ -258,7 +200,7 @@ class SCF(object):
         return h1e + vhf
 
     def dump_scf_to_chkfile(self, *args):
-        dump_scf_to_chkfile(self.mol, self.chkfile, *args)
+        chkfile.dump_scf(self.mol, self.chkfile, *args)
 
     def _init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -280,7 +222,7 @@ class SCF(object):
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
         mo_energy, mo_coeff, err = self.eig(h1e, s1e)
-        mo_occ = self.set_mo_occ(mo_energy)
+        mo_occ = self.set_mo_occ(mo_energy, mo_coeff)
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return 0, dm
 
@@ -288,12 +230,11 @@ class SCF(object):
         '''Read initial guess from chkfile.'''
         if mol is None:
             mol = self.mol
-        chkfile = self.chkfile
         try:
-            chk_mol, scf_rec = read_scf_from_chkfile(chkfile)
+            chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
         except IOError:
             log.warn(self, 'Fail in reading from %s. Use MINAO initial guess', \
-                     chkfile)
+                     self.chkfile)
             return self._init_guess_by_minao(mol)
 
         if not mol.is_same_mol(chk_mol):
@@ -302,7 +243,7 @@ class SCF(object):
             #log.warn(self, 'Use MINAO initial guess')
             #return self._init_guess_by_minao(mol)
 
-        log.info(self, 'Read initial guess from file %s.', chkfile)
+        log.info(self, 'Read initial guess from file %s.', self.chkfile)
 
         chk_mol._atm, chk_mol._bas, chk_mol._env = \
                 gto.mole.env_concatenate(chk_mol._atm, chk_mol._bas, \
@@ -314,7 +255,7 @@ class SCF(object):
         ovlp = chk_mol.intor_cross('cint1e_ovlp_sph', bras, kets)
         proj = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp_sph'), ovlp)
 
-        if isinstance(scf_rec['mo_coeff'],tuple):
+        if chk_scf_type(scf_rec['mo_coeff']) == 'NR-UHF':
             # read from UHF results
             mo_coeff = numpy.dot(proj, scf_rec['mo_coeff'][0])
             mo_occ = scf_rec['mo_occ'][0]
@@ -366,17 +307,15 @@ class SCF(object):
     def set_direct_scf_threshold(self, threshold):
         _cint.set_direct_scf_cutoff_(lib.c_double_p(ctypes.c_double(threshold)))
 
-    def set_mo_occ(self, mo_energy=None):
-        if mo_energy is None:
-            mo_energy = self.mo_energy
+    def set_mo_occ(self, mo_energy, mo_coeff=None):
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = self.mol.nelectron / 2
         mo_occ[:nocc] = 2
         if nocc < mo_occ.size:
-            log.debug(self, 'HOMO = %.12g, LUMO = %.12g,', \
+            log.info(self, 'HOMO = %.12g, LUMO = %.12g,', \
                       mo_energy[nocc-1], mo_energy[nocc])
         else:
-            log.debug(self, 'HOMO = %.12g,', mo_energy[nocc-1])
+            log.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
         log.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
@@ -531,6 +470,37 @@ def init_guess_by_minao(dev, mol):
     dm = numpy.dot(c*occ,c.T)
     return 0, dm
 
+# eigenvalue of d is 1
+def level_shift(s, d, f, factor):
+    if factor < 1e-3:
+        return f
+    else:
+        dm_vir = s - reduce(numpy.dot, (s,d,s))
+        return f + dm_vir * factor
+
+# maybe need to save old fock matrix
+# check diis.DIISDamping
+#def damping(self, s, d, f, mo_coeff, mo_occ):
+#    if self.damp_factor < 1e-3:
+#        return f
+#    else:
+#        mo = mo_coeff[:,mo_occ<1e-12]
+#        dm_vir = numpy.dot(mo, mo.T.conj())
+#        f0 = reduce(numpy.dot, (s, dm_vir, f, d, s))
+#        f0 = (f0+f0.T.conj()) * (self.damp_factor/(self.damp_factor+1))
+#        return f - f0
+def damping(s, d, f, factor):
+    if factor < 1e-3:
+        return f
+    else:
+        #dm_vir = s - reduce(numpy.dot, (s,d,s))
+        #sinv = numpy.linalg.inv(s)
+        #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
+        dm_vir = numpy.eye(s.shape[0])-numpy.dot(s,d)
+        f0 = reduce(numpy.dot, (dm_vir, f, d, s))
+        f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
+        return f - f0
+
 
 
 ################################################
@@ -564,16 +534,12 @@ class RHF(SCF):
             self.opt = _vhf.VHFOpt()
             self.opt.init_nr_vhf_direct(mol._atm, mol._bas, mol._env)
             self.opt.direct_scf_threshold = self.direct_scf_threshold
-#            SCF.init_direct_scf(self, mol)
-#
-#    def del_direct_scf(self):
-#        if not self.eri_in_memory and self.direct_scf:
-#            SCF.del_direct_scf(self)
 
     def release_eri(self):
         self._eri = None
 
     def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
+        '''NR RHF Coulomb repulsion'''
         t0 = time.clock()
         if self.eri_in_memory:
             if self._eri is None:
@@ -605,54 +571,67 @@ class RHF(SCF):
         self.mulliken_pop(mol, dm, self.get_ovlp(mol))
 
     def mulliken_pop(self, mol, dm, s):
-        '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
-        m = dm * s
-        pop = numpy.array(map(sum, m))
-        label = mol.labels_of_spheric_GTO()
-
-        log.info(self, ' ** Mulliken pop (on non-orthogonal input basis)  **')
-        for i, s in enumerate(label):
-            log.info(self, 'pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
-
-        log.info(self, ' ** Mulliken atomic charges  **')
-        chg = numpy.zeros(mol.natm)
-        for i, s in enumerate(label):
-            chg[s[0]] += pop[i]
-        for ia in range(mol.natm):
-            symb = mol.symbol_of_atm(ia)
-            nuc = mol.charge_of_atm(ia)
-            chg[ia] = nuc - chg[ia]
-            log.info(self, 'charge of  %d%s =   %10.5f', \
-                     ia, symb, chg[ia])
-        return pop, chg
+        mol_verbose_bak = mol.verbose
+        mol.verbose = self.verbose
+        res = rhf_mulliken_pop(mol, dm, s)
+        mol.verbose = mol_verbose_bak
+        return res
 
     def mulliken_pop_with_meta_lowdin_ao(self, mol, dm_ao):
-        '''divede ao into core, valence and Rydberg sets,
-        orthonalizing within each set'''
-        import dmet
-        c = dmet.hf.pre_orth_ao_atm_scf(mol)
-        orth_coeff = dmet.hf.orthogonalize_ao(mol, self, c, 'meta_lowdin')
-        c_inv = numpy.linalg.inv(orth_coeff)
-        dm = reduce(numpy.dot, (c_inv, dm_ao, c_inv.T.conj()))
+        mol_verbose_bak = mol.verbose
+        mol.verbose = self.verbose
+        res = rhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao)
+        mol.verbose = mol_verbose_bak
+        return res
 
-        pop = dm.diagonal()
-        label = mol.labels_of_spheric_GTO()
 
-        log.info(self, ' ** Mulliken pop (on meta-lowdin orthogonal AOs)  **')
-        for i, s in enumerate(label):
-            log.info(self, 'pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
+def rhf_mulliken_pop(mol, dm, s):
+    '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
+    m = dm * s
+    pop = numpy.array(map(sum, m))
+    label = mol.labels_of_spheric_GTO()
 
-        log.info(self, ' ** Mulliken atomic charges  **')
-        chg = numpy.zeros(mol.natm)
-        for i, s in enumerate(label):
-            chg[s[0]] += pop[i]
-        for ia in range(mol.natm):
-            symb = mol.symbol_of_atm(ia)
-            nuc = mol.charge_of_atm(ia)
-            chg[ia] = nuc - chg[ia]
-            log.info(self, 'charge of  %d%s =   %10.5f', \
-                     ia, symb, chg[ia])
-        return pop, chg
+    log.info(mol, ' ** Mulliken pop (on non-orthogonal input basis)  **')
+    for i, s in enumerate(label):
+        log.info(mol, 'pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
+
+    log.info(mol, ' ** Mulliken atomic charges  **')
+    chg = numpy.zeros(mol.natm)
+    for i, s in enumerate(label):
+        chg[s[0]] += pop[i]
+    for ia in range(mol.natm):
+        symb = mol.symbol_of_atm(ia)
+        nuc = mol.charge_of_atm(ia)
+        chg[ia] = nuc - chg[ia]
+        log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+    return pop, chg
+
+def rhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
+    '''divede ao into core, valence and Rydberg sets,
+    orthonalizing within each set'''
+    import dmet
+    c = dmet.hf.pre_orth_ao_atm_scf(mol)
+    orth_coeff = dmet.hf.orthogonalize_ao(mol, None, c, 'meta_lowdin')
+    c_inv = numpy.linalg.inv(orth_coeff)
+    dm = reduce(numpy.dot, (c_inv, dm_ao, c_inv.T.conj()))
+
+    pop = dm.diagonal()
+    label = mol.labels_of_spheric_GTO()
+
+    log.info(mol, ' ** Mulliken pop (on meta-lowdin orthogonal AOs)  **')
+    for i, s in enumerate(label):
+        log.info(mol, 'pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
+
+    log.info(mol, ' ** Mulliken atomic charges  **')
+    chg = numpy.zeros(mol.natm)
+    for i, s in enumerate(label):
+        chg[s[0]] += pop[i]
+    for ia in range(mol.natm):
+        symb = mol.symbol_of_atm(ia)
+        nuc = mol.charge_of_atm(ia)
+        chg[ia] = nuc - chg[ia]
+        log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+    return pop, chg
 
 
 
@@ -689,23 +668,6 @@ class UHF(SCF):
         c_b, e_b, info = lapack.dsygv(fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b), info
 
-    def level_shift(self, s, d, f, factor):
-        if factor < 1e-3:
-            return f
-        else:
-            dm_vir = s - reduce(numpy.dot, (s,d,s))
-            return f + dm_vir * factor
-
-    def damping(self, s, d, f, factor):
-        if factor < 1e-3:
-            return f
-        else:
-            dm_vir = s - reduce(numpy.dot, (s,d,s))
-            sinv = numpy.linalg.inv(s)
-            f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
-            f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
-            return f - f0
-
     def init_diis(self):
         udiis = diis.SCF_DIIS(self)
         udiis.diis_space = self.diis_space
@@ -723,15 +685,15 @@ class UHF(SCF):
                     udiis.err_vec_stack.pop(0)
                 f = diis.DIIS.update(udiis, f)
             if cycle < self.diis_start_cycle-1:
-                f = (self.damping(s, d[0], f[0], self.damp_factor), \
-                     self.damping(s, d[1], f[1], self.damp_factor))
-                f = (self.level_shift(s,d[0],f[0],self.level_shift_factor), \
-                     self.level_shift(s,d[1],f[1],self.level_shift_factor))
+                f = (damping(s, d[0], f[0], self.damp_factor), \
+                     damping(s, d[1], f[1], self.damp_factor))
+                f = (level_shift(s, d[0], f[0],self.level_shift_factor), \
+                     level_shift(s, d[1], f[1],self.level_shift_factor))
             else:
                 fac = self.level_shift_factor \
                         * numpy.exp(self.diis_start_cycle-cycle-1)
-                f = (self.level_shift(s, d[0], f[0], fac), \
-                     self.level_shift(s, d[1], f[1], fac))
+                f = (level_shift(s, d[0], f[0], fac), \
+                     level_shift(s, d[1], f[1], fac))
             return numpy.array(f)
         return scf_diis
 
@@ -742,9 +704,7 @@ class UHF(SCF):
         hcore = SCF.get_hcore(mol)
         return numpy.array((hcore,hcore))
 
-    def set_mo_occ(self, mo_energy=None):
-        if mo_energy is None:
-            mo_energy = self.mo_energy
+    def set_mo_occ(self, mo_energy, mo_coeff=None):
         if self.fix_nelectron_alpha > 0:
             n_a = self.nelectron_alpha = self.fix_nelectron_alpha
             n_b = self.mol.nelectron - n_a
@@ -763,14 +723,14 @@ class UHF(SCF):
         mo_occ[0][:n_a] = 1
         mo_occ[1][:n_b] = 1
         if n_a < mo_energy[0].size:
-            log.debug(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
-                      n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
+            log.info(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
+                     n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
         else:
-            log.debug(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,', \
-                      n_a, mo_energy[0][n_a-1])
+            log.info(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,', \
+                     n_a, mo_energy[0][n_a-1])
         log.debug(self, '  mo_energy = %s', mo_energy[0])
-        log.debug(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
-                  n_b, mo_energy[0][n_b-1], mo_energy[0][n_b])
+        log.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
+                 n_b, mo_energy[0][n_b-1], mo_energy[0][n_b])
         log.debug(self, '  mo_energy = %s', mo_energy[1])
         return mo_occ
 
@@ -832,50 +792,16 @@ class UHF(SCF):
         mo_energy, mo_coeff, err = self.eig(h1e, s1e)
         mo_coeff = self.break_spin_sym(mol, mo_coeff)
 
-        mo_occ = self.set_mo_occ(mo_energy)
+        mo_occ = self.set_mo_occ(mo_energy, mo_coeff)
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return 0, dm
 
-    def _init_minao_uhf_dm(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        def filter_alpha(x):
-            if x > 1:
-                return 1
-            else:
-                return x
-        def filter_beta(x):
-            if x > 1:
-                return x-1
-            else:
-                return 0
-        import copy
-        pmol = mol.copy()
-        occa = []
-        occb = []
-        for ia in range(mol.natm):
-            symb = mol.symbol_of_atm(ia)
-            occ0 = gto.mole.get_minao_occ(symb)
-            minao = gto.basis.minao[gto.mole._rm_digit(symb)]
-            occa.append(map(filter_alpha,occ0))
-            occb.append(map(filter_beta ,occ0))
-            pmol._bas.extend(pmol.make_bas_env_by_atm_id(ia, minao))
-        pmol.nbas = pmol._bas.__len__()
-
-        kets = range(mol.nbas, pmol.nbas)
-        bras = range(mol.nbas)
-        ovlp = pmol.intor_cross('cint1e_ovlp_sph', bras, kets)
-        c = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp_sph'), \
-                               ovlp)
-        dm = (numpy.dot(c*numpy.hstack(occa),c.T), \
-              numpy.dot(c*numpy.hstack(occb),c.T))
-        return numpy.array(dm)
     def _init_guess_by_minao(self, mol=None):
         if mol is None:
             mol = self.mol
         log.info(self, 'initial guess from MINAO')
         try:
-            return 0, self._init_minao_uhf_dm(mol)
+            return 0, init_minao_uhf_dm(mol)
         except:
             log.warn(self, 'Fail in generating initial guess from MINAO.' \
                      'Use 1e initial guess')
@@ -891,12 +817,11 @@ class UHF(SCF):
         '''Read initial guess from chkfile.'''
         if mol is None:
             mol = self.mol
-        chkfile = self.chkfile
         try:
-            chk_mol, scf_rec = read_scf_from_chkfile(chkfile)
+            chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
         except IOError:
             log.warn(self, 'Fail in reading from %s. Use MINAO initial guess', \
-                     chkfile)
+                     self.chkfile)
             return self._init_guess_by_minao(mol)
 
         if not mol.is_same_mol(chk_mol):
@@ -905,7 +830,7 @@ class UHF(SCF):
             #log.warn(self, 'Use MINAO initial guess')
             #return self._init_guess_by_minao(mol)
 
-        log.info(self, 'Read initial guess from file %s.', chkfile)
+        log.info(self, 'Read initial guess from file %s.', self.chkfile)
 
         chk_mol._atm, chk_mol._bas, chk_mol._env = \
                 gto.mole.env_concatenate(chk_mol._atm, chk_mol._bas, \
@@ -919,7 +844,7 @@ class UHF(SCF):
 
         mo_coeff = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
-        if not isinstance(scf_rec['mo_coeff'],tuple):
+        if chk_scf_type(scf_rec['mo_coeff']) == 'NR-RHF':
             # read from RHF results
             mo_coeff = self.break_spin_sym(mol,[mo_coeff,numpy.copy(mo_coeff)])
             mo_occ = (mo_occ,mo_occ)
@@ -934,17 +859,12 @@ class UHF(SCF):
             self.opt = _vhf.VHFOpt()
             self.opt.init_nr_vhf_direct(mol._atm, mol._bas, mol._env)
             self.opt.direct_scf_threshold = self.direct_scf_threshold
-#            SCF.init_direct_scf(self, mol)
-#
-#    def del_direct_scf(self):
-#        if not self.eri_in_memory and self.direct_scf:
-#            SCF.del_direct_scf(self)
 
     def release_eri(self):
         self._eri = None
 
     def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
-        '''NR HF Coulomb repulsion'''
+        '''NR UHF Coulomb repulsion'''
         t0 = time.clock()
         if self.eri_in_memory:
             if self._eri is None:
@@ -1047,58 +967,62 @@ class UHF(SCF):
         self.mulliken_pop(mol, dm, self.get_ovlp(mol))
 
     def mulliken_pop(self, mol, dm, s):
-        '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
-        m_a = dm[0] * s
-        m_b = dm[1] * s
-        pop_a = numpy.array(map(sum, m_a))
-        pop_b = numpy.array(map(sum, m_b))
-        label = mol.labels_of_spheric_GTO()
-
-        log.info(self, ' ** Mulliken pop alpha/beta (on non-orthogonal basis) **')
-        for i, s in enumerate(label):
-            log.info(self, 'pop of  %s %10.5f  / %10.5f', \
-                     '%d%s %s%4s'%s, pop_a[i], pop_b[i])
-
-        log.info(self, ' ** Mulliken atomic charges  **')
-        chg = numpy.zeros(mol.natm)
-        for i, s in enumerate(label):
-            chg[s[0]] += pop_a[i] + pop_b[i]
-        for ia in range(mol.natm):
-            symb = mol.symbol_of_atm(ia)
-            nuc = mol.charge_of_atm(ia)
-            chg[ia] = nuc - chg[ia]
-            log.info(self, 'charge of  %d%s =   %10.5f', \
-                     ia, symb, chg[ia])
-        return (pop_a,pop_b), chg
+        mol_verbose_bak = mol.verbose
+        mol.verbose = self.verbose
+        res = uhf_mulliken_pop(mol, dm, s)
+        mol.verbose = mol_verbose_bak
+        return res
 
     def mulliken_pop_with_meta_lowdin_ao(self, mol, dm_ao):
-        import dmet
-        c = dmet.hf.pre_orth_ao_atm_scf(mol)
-        orth_coeff = dmet.hf.orthogonalize_ao(mol, self, c, 'meta_lowdin')
-        c_inv = numpy.linalg.inv(orth_coeff)
-        dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
-        dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
+        mol_verbose_bak = mol.verbose
+        mol.verbose = self.verbose
+        res = uhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao)
+        mol.verbose = mol_verbose_bak
+        return res
 
-        pop_a = dm_a.diagonal()
-        pop_b = dm_b.diagonal()
-        label = mol.labels_of_spheric_GTO()
 
-        log.info(self, ' ** Mulliken pop alpha/beta (on meta-lowdin orthogonal AOs) **')
-        for i, s in enumerate(label):
-            log.info(self, 'pop of  %s %10.5f  / %10.5f', \
-                     '%d%s %s%4s'%s, pop_a[i], pop_b[i])
 
-        log.info(self, ' ** Mulliken atomic charges  **')
-        chg = numpy.zeros(mol.natm)
-        for i, s in enumerate(label):
-            chg[s[0]] += pop_a[i] + pop_b[i]
-        for ia in range(mol.natm):
-            symb = mol.symbol_of_atm(ia)
-            nuc = mol.charge_of_atm(ia)
-            chg[ia] = nuc - chg[ia]
-            log.info(self, 'charge of  %d%s =   %10.5f', \
-                     ia, symb, chg[ia])
-        return (pop_a,pop_b), chg
+def chk_scf_type(mo_coeff):
+    if mo_coeff[0].ndim == 2:
+        return 'NR-UHF'
+    elif isinstance(mo_coeff[0,0], complex):
+        return 'R-DHF'
+    else:
+        return 'NR-RHF'
+
+def init_minao_uhf_dm(mol):
+    def filter_alpha(x):
+        if x > 1:
+            return 1
+        else:
+            return x
+    def filter_beta(x):
+        if x > 1:
+            return x-1
+        else:
+            return 0
+    import copy
+    pmol = mol.copy()
+    occa = []
+    occb = []
+    for ia in range(mol.natm):
+        symb = mol.symbol_of_atm(ia)
+        occ0 = gto.mole.get_minao_occ(symb)
+        minao = gto.basis.minao[gto.mole._rm_digit(symb)]
+        occa.append(map(filter_alpha,occ0))
+        occb.append(map(filter_beta ,occ0))
+        pmol._bas.extend(pmol.make_bas_env_by_atm_id(ia, minao))
+    pmol.nbas = pmol._bas.__len__()
+
+    kets = range(mol.nbas, pmol.nbas)
+    bras = range(mol.nbas)
+    ovlp = pmol.intor_cross('cint1e_ovlp_sph', bras, kets)
+    c = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp_sph'), \
+                           ovlp)
+    dm = (numpy.dot(c*numpy.hstack(occa),c.T), \
+          numpy.dot(c*numpy.hstack(occb),c.T))
+    return numpy.array(dm)
+
 
 def map_rhf_to_uhf(mol, rhf):
     assert(isinstance(rhf, RHF))
@@ -1117,9 +1041,9 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.direct_scf_threshold  = rhf.direct_scf_threshold
 
     uhf.chkfile               = rhf.chkfile
-    self.fout                 = rhf.fout
-    self.scf_threshold        = rhf.scf_threshold
-    self.max_scf_cycle        = rhf.max_scf_cycle
+    uhf.fout                  = rhf.fout
+    uhf.scf_threshold         = rhf.scf_threshold
+    uhf.max_scf_cycle         = rhf.max_scf_cycle
     return uhf
 
 def spin_square(mol, occ_mo_a, occ_mo_b):
@@ -1139,6 +1063,59 @@ def spin_square(mol, occ_mo_a, occ_mo_b):
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
+
+def uhf_mulliken_pop(mol, dm, s):
+    '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
+    m_a = dm[0] * s
+    m_b = dm[1] * s
+    pop_a = numpy.array(map(sum, m_a))
+    pop_b = numpy.array(map(sum, m_b))
+    label = mol.labels_of_spheric_GTO()
+
+    log.info(mol, ' ** Mulliken pop alpha/beta (on non-orthogonal basis) **')
+    for i, s in enumerate(label):
+        log.info(mol, 'pop of  %s %10.5f  / %10.5f', \
+                 '%d%s %s%4s'%s, pop_a[i], pop_b[i])
+
+    log.info(mol, ' ** Mulliken atomic charges  **')
+    chg = numpy.zeros(mol.natm)
+    for i, s in enumerate(label):
+        chg[s[0]] += pop_a[i] + pop_b[i]
+    for ia in range(mol.natm):
+        symb = mol.symbol_of_atm(ia)
+        nuc = mol.charge_of_atm(ia)
+        chg[ia] = nuc - chg[ia]
+        log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+    return (pop_a,pop_b), chg
+
+def uhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
+    import dmet
+    c = dmet.hf.pre_orth_ao_atm_scf(mol)
+    orth_coeff = dmet.hf.orthogonalize_ao(mol, None, c, 'meta_lowdin')
+    c_inv = numpy.linalg.inv(orth_coeff)
+    dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
+    dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
+
+    pop_a = dm_a.diagonal()
+    pop_b = dm_b.diagonal()
+    label = mol.labels_of_spheric_GTO()
+
+    log.info(mol, ' ** Mulliken pop alpha/beta (on meta-lowdin orthogonal AOs) **')
+    for i, s in enumerate(label):
+        log.info(mol, 'pop of  %s %10.5f  / %10.5f', \
+                 '%d%s %s%4s'%s, pop_a[i], pop_b[i])
+
+    log.info(mol, ' ** Mulliken atomic charges  **')
+    chg = numpy.zeros(mol.natm)
+    for i, s in enumerate(label):
+        chg[s[0]] += pop_a[i] + pop_b[i]
+    for ia in range(mol.natm):
+        symb = mol.symbol_of_atm(ia)
+        nuc = mol.charge_of_atm(ia)
+        chg[ia] = nuc - chg[ia]
+        log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+    return (pop_a,pop_b), chg
+
 
 #TODO:class ROHF(SCF):
 #TODO:    __doc__ = 'ROHF'

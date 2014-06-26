@@ -166,7 +166,7 @@ def gen_int2e_ao2mo(mol, mo_coeff):
 # file uses the name given by dataname
 #
 def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
-            dataname='eri_mo', verbose=None):
+            dataname='eri_mo', verbose=None, compact=True):
     wall0 = time.time()
     tcpu0 = time.clock()
 
@@ -178,8 +178,8 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         return (id(mo1) == id(mo2)) \
                 or (mo1.shape==mo2.shape and abs(mo1-mo2).sum()<1e-12)
 
-    ijsame = iden_coeffs(mo_coeffs[0], mo_coeffs[1])
-    klsame = iden_coeffs(mo_coeffs[2], mo_coeffs[3])
+    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
+    klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]

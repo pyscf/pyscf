@@ -73,15 +73,15 @@ class DIIS:
                                    numpy.array(dtj).flatten())
                 H[j,i] = H[i,j].conj()
 
-        ## solve  H*x = G
-        #try:
-        #    c = numpy.linalg.solve(H, G)
-        #except numpy.linalg.linalg.LinAlgError:
-        #    # damp diagonal elements to prevent singular
-        #    for i in range(H.shape[0]):
-        #        H[i,i] = H[i,i] + 1e-8
-        #    c = numpy.linalg.solve(H, G)
-        c_GH = lib.solve_lineq_by_SVD(H, G)
+        # solve  H*x = G
+        try:
+            c_GH = numpy.linalg.solve(H, G)
+        except numpy.linalg.linalg.LinAlgError:
+            # damp diagonal elements to prevent singular
+            for i in range(H.shape[0]):
+                H[i,i] = H[i,i] + 1e-8
+            c_GH = numpy.linalg.solve(H, G)
+        #c_GH = lib.solve_lineq_by_SVD(H, G)
         log.debug(self, 'diis-c %s', c_GH)
 
         x = numpy.zeros_like(x)

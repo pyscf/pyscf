@@ -6,7 +6,7 @@
 
 '''Wigner rotation D-matrix for real spherical harmonics'''
 
-from math import *
+from math import sqrt, factorial
 import numpy
 
 def dmatrix(l, alpha, beta, gamma):
