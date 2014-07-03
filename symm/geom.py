@@ -4,8 +4,8 @@
 #
 
 import numpy
-import gto
-import lib
+from pyscf import gto
+from pyscf import lib
 
 GEOM_THRESHOLD = 1e-5
 

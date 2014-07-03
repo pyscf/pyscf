@@ -16,11 +16,11 @@ import ctypes
 import numpy
 import copy
 #import scipy.linalg.flapack as lapack
-import gto
-import lib.logger as log
-import lib
-import lib.parameters as param
-import lib.pycint as pycint
+from pyscf import gto
+from pyscf import lib
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
+from pyscf.lib import pycint
 import hf
 import dhf
 import chkfile
@@ -215,7 +215,7 @@ class UHF(dhf.UHF):
 
 
 if __name__ == '__main__':
-    import gto.basis as basis
+    from pyscf.gto import basis
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf_dkb'

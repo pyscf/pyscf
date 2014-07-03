@@ -4,9 +4,9 @@
 #
 
 import unittest
-import gto
-import lib
-from scf.dft import *
+from pyscf import gto
+from pyscf import lib
+from pyscf.scf.dft import *
 
 h2o = gto.Mole()
 h2o.verbose = 0
@@ -28,25 +28,25 @@ class KnowValues(unittest.TestCase):
         with lib.quite_run():
             method = RKS(h2o)
         method.xc_func(XC_LDA_X,XC_LDA_C_VWN_RPA)
-        self.assertAlmostEqual(method.scf(), -76.013394314311597, 9)
+        self.assertAlmostEqual(method.scf(), -76.013394313527513, 9)
 
     def test_nr_b88p86(self):
         with lib.quite_run():
             method = RKS(h2o)
         method.xc_func(XC_GGA_X_B88,XC_GGA_C_P86)
-        self.assertAlmostEqual(method.scf(), -76.385101833802537, 9)
+        self.assertAlmostEqual(method.scf(), -76.385101845247448, 9)
 
     def test_nr_xlyp(self):
         with lib.quite_run():
             method = RKS(h2o)
         method.xc_func(XC_GGA_XC_XLYP)
-        self.assertAlmostEqual(method.scf(), -76.417563864361369, 9)
+        self.assertAlmostEqual(method.scf(), -76.417563856650304, 9)
 
     def test_nr_b3lyp(self):
         with lib.quite_run():
             method = RKS(h2o)
         method.xc_func(XC_HYB_GGA_XC_B3LYP)
-        self.assertAlmostEqual(method.scf(), -76.384995400609824, 9)
+        self.assertAlmostEqual(method.scf(), -76.384995437718899, 9)
 
 
 if __name__ == "__main__":

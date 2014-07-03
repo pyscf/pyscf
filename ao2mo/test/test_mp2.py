@@ -6,8 +6,8 @@ import tempfile
 import numpy
 import time
 
-import lib
-import ao2mo
+from pyscf import lib
+from pyscf import ao2mo
 
 
 # the MO integral for MP2 is (ov|ov). The most efficient integral
@@ -85,8 +85,8 @@ def rmp2_energy(mol, mo_coeff, mo_energy, nocc, verbose=None):
 
 
 if __name__ == '__main__':
-    import scf
-    import gto
+    from pyscf import scf
+    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
     mol.max_memory = 100
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     print rmp2_energy(mol, rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2)
     print rmp2_energy_incore(rhf)
 
-    import lib._vhf as _vhf
+    from pyscf import lib._vhf as _vhf
     mo_coeff, mo_energy, nocc = rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2
     n = mo_energy.size
     g = _vhf.restore_full_eri(rhf._eri, n)

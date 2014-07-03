@@ -5,8 +5,8 @@
 
 import unittest
 import numpy
-import gto
-import symm
+from pyscf import gto
+from pyscf import symm
 
 h2o = gto.Mole()
 h2o.verbose = 0

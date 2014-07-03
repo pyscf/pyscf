@@ -5,9 +5,9 @@
 
 import numpy
 import scipy.linalg.flapack as lapack
-import lib.parameters as param
-import gto
-import lib.logger as log
+from pyscf import gto
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
 import hf
 
 class AtomSphericAverageRHF(hf.RHF):
@@ -72,7 +72,7 @@ class AtomSphericAverageRHF(hf.RHF):
                     idx += 1
         return mo_e, mo_c, 0
 
-    def set_mo_occ(self, mo_energy):
+    def set_mo_occ(self, mo_energy, mo_coeff):
         return self._occ
 
     def calc_den_mat(self, mo_coeff, mo_occ):

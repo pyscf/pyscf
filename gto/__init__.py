@@ -5,8 +5,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import mole
 from mole import Mole
-import cmd_args
+#import cmd_args
 
-import basis
+#import basis
 import Dmatrix

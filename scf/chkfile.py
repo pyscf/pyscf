@@ -4,7 +4,7 @@
 #
 
 import cPickle as pickle
-import gto
+import pyscf.gto
 
 def load_chkfile_key(chkfile, key):
     ftmp = open(chkfile, "r")
@@ -35,7 +35,7 @@ def read_scf(chkfile):
     rec = pickle.load(ftmp)
     ftmp.close()
 
-    mol = gto.Mole()
+    mol = pyscf.gto.Mole()
     mol.verbose = 0
     mol.output = '/dev/null'
     mol.atom     = rec['mol']['atom']

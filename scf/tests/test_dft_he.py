@@ -5,9 +5,9 @@
 
 import unittest
 import numpy
-import gto
-import lib
-from scf.dft import *
+from pyscf import gto
+from pyscf import lib
+from pyscf.scf.dft import *
 
 # for cgto
 mol = gto.Mole()

@@ -19,15 +19,15 @@ import time
 
 import numpy
 import scipy.linalg.flapack as lapack
-import gto
-import lib.logger as log
-import symm
+
+from pyscf import symm
+from pyscf import lib
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
+from pyscf.lib import pycint
+from pyscf.lib import _vhf
 import diis
-import lib
-import lib.parameters as param
-import lib.pycint as pycint
 import hf
-import lib._vhf as _vhf
 
 
 def dump_mo_coeff(mol, mo_coeff, e_ir_idx, argsort, title='   '):

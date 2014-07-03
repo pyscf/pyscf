@@ -8,7 +8,7 @@ import os
 import numpy
 import ctypes
 
-import lib
+from pyscf import lib
 alib = os.path.join(os.path.dirname(lib.__file__), '_vhf.so')
 _cint = ctypes.cdll.LoadLibrary(alib)
 _cint.CINTcgtos_cart.restype = ctypes.c_int

@@ -14,8 +14,8 @@ import cPickle as pickle
 import tempfile
 
 import numpy
-import lib
-import lib.logger as log
+import pyscf.lib
+import pyscf.lib.logger as log
 
 __author__ = "Qiming Sun <osirpt.sun@gmail.com>"
 __version__ = "$ 0.1 $"
@@ -81,7 +81,7 @@ class DIIS:
             for i in range(H.shape[0]):
                 H[i,i] = H[i,i] + 1e-8
             c_GH = numpy.linalg.solve(H, G)
-        #c_GH = lib.solve_lineq_by_SVD(H, G)
+        #c_GH = pyscf.lib.solve_lineq_by_SVD(H, G)
         log.debug(self, 'diis-c %s', c_GH)
 
         x = numpy.zeros_like(x)

@@ -4,9 +4,9 @@
 #
 
 import unittest
-import gto
-import lib
-from scf.rdft import *
+from pyscf import gto
+from pyscf import lib
+from pyscf.scf.rdft import *
 
 h2o = gto.Mole()
 h2o.verbose = 0

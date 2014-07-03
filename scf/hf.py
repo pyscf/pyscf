@@ -13,20 +13,19 @@ __author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
 
 import os, sys
 import tempfile
-import cPickle as pickle
 import ctypes
 import time
 
 import numpy
 import scipy.linalg.flapack as lapack
-import gto
+import pyscf.gto as gto
+from pyscf import lib
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
+from pyscf.lib import pycint
+from pyscf.lib import _vhf
 import diis
-import lib
-import lib.logger as log
-import lib.parameters as param
-import lib.pycint as pycint
 import chkfile
-import lib._vhf as _vhf
 
 alib = os.path.join(os.path.dirname(lib.__file__), 'pycint.so')
 _cint = ctypes.cdll.LoadLibrary(alib)

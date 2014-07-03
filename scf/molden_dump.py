@@ -7,7 +7,7 @@
 # MOLDEN format:
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
-import lib.parameters as param
+import pyscf.lib.parameters as param
 import numpy
 
 
@@ -100,8 +100,8 @@ def dump_scf(scf, filename):
                           ene=scf.mo_energy, occ=scf.mo_occ)
 
 if __name__ == '__main__':
-    import gto
-    import scf
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = None#'out_gho'

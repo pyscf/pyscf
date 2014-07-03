@@ -1,5 +1,5 @@
-import gto
-import scf
+from pyscf import gto
+from pyscf import scf
 
 mol = gto.Mole()
 mol.verbose = 5
@@ -21,9 +21,9 @@ mol.atom = [
 
 
 mol.basis = {"H": 'cc-pvtz',
-             "C": 'cc-pvtz',} # -230.776763774
+             "C": 'cc-pvtz',} # -230.776765415
 #mol.basis = {"H": '6-31g',
-#             "C": '6-31g',}  # E=-230.621312905
+#             "C": '6-31g',}  # E=-230.621312769
 
 mol.build()
 

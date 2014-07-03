@@ -5,9 +5,9 @@
 
 import copy
 import unittest
-import scf
-import scf.dhf as dhf
-import gto
+from pyscf import scf
+from pyscf import scf.dhf as dhf
+from pyscf import gto
 
 mol = gto.Mole()
 mol.verbose = 0

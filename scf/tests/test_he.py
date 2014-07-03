@@ -5,9 +5,9 @@
 
 import unittest
 import numpy
-import scf
-import gto
-import lib
+from pyscf import scf
+from pyscf import gto
+from pyscf import lib
 
 # for cgto
 mol = gto.Mole()
@@ -31,7 +31,7 @@ class KnowValues_NR(unittest.TestCase):
         rhf = scf.RHF(mol)
         with lib.quite_run():
             e = rhf._init_guess_by_atom(mol)[0]
-        self.assertAlmostEqual(e * .5, -1.4275802386182492, 12)
+        self.assertAlmostEqual(e * .5, -1.4275802386213701, 12)
 
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)

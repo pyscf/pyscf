@@ -7,12 +7,12 @@ import diis
 import hf, hf_symm
 from hf import SCF
 from chkfile import dump_chkfile_key, load_chkfile_key
-import dhf
-import dft
-import rdft
+#import dhf
+#import dft
+#import rdft
 
-import dhf_dkb
-import atom_hf
+#import dhf_dkb
+#import atom_hf
 import molden_dump
 
 

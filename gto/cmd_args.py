@@ -5,7 +5,7 @@
 
 import os
 import optparse
-import lib.logger as log
+import pyscf.lib.logger as log
 
 def cmd_args():
     '''

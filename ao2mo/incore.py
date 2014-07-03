@@ -3,7 +3,7 @@
 # -*- coding: utf-8
 
 import numpy
-import lib._ao2mo as _ao2mo
+import pyscf.lib._ao2mo as _ao2mo
 
 # full_eri in Mulliken notation
 def gen_int2e_from_full_eri(full_eri, nao=None):
@@ -81,8 +81,8 @@ def general(eri_ao, mo_coeffs, compact=True):
     return buf
 
 if __name__ == '__main__':
-    import scf
-    import gto
+    from pyscf import scf
+    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_h2o'

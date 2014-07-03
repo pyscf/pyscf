@@ -3,9 +3,9 @@
 # /path/to/pyscf  must be added to environment variable PYTHONPATH.
 
 # import gto to setup molecule
-import gto
+from pyscf import gto
 # import scf to run RHF,UHF etc
-import scf
+from pyscf import scf
 
 mol = gto.Mole()
 # gto.Mole is a class to hold molecule informations.

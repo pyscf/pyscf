@@ -5,9 +5,9 @@
 
 import unittest
 import numpy
-import gto
-import symm
-import basis
+from pyscf import gto
+from pyscf import symm
+from pyscf import gto.basis
 
 def get_so(atoms, basis):
     gpname, atoms = symm.detect_symm(atoms)

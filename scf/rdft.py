@@ -13,11 +13,11 @@ __author__ = "Qiming Sun <osirpt.sun@gmail.com>"
 __version__ = "$ 0.2 $"
 
 import numpy
-import gto
-import lib.logger as log
-import lib.pyvxc as pyvxc
-import lib.pycint as pycint
-import lib
+from pyscf import gto
+from pyscf import lib
+import pyscf.lib.logger as log
+from pyscf.lib import pyvxc
+from pyscf.lib import pycint
 import dhf
 import dft
 from dft import *
@@ -92,7 +92,7 @@ class RKS(UKS, dhf.RHF):
 
 
 if __name__ == "__main__":
-    import gto.basis as basis
+    from pyscf.gto import basis
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = "out_default"

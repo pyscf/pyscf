@@ -3,10 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 import numpy
-import lib
-import gto
-import param
+from pyscf import lib
+from pyscf import gto
 import geom
+import param
 
 OP_TEST = {
     'E'  : lambda x,y:True,

@@ -4,11 +4,12 @@
 
 import os
 import numpy
-import lib.parameters as param
-import lib.logger
-import lib._ao2mo as _ao2mo
 import h5py
 import time
+
+import pyscf.lib
+import pyscf.lib.parameters as param
+import pyscf.lib._ao2mo as _ao2mo
 
 # default max_memory (MB) is lib.parameters.MEMORY_MAX
 # default ioblk_size is 512 MB
@@ -20,7 +21,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.fout, verbose)
+    log = pyscf.lib.logger.Logger(mol.fout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -109,7 +110,7 @@ def full_iofree(mol, mo_coeff, verbose=None):
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.fout, verbose)
+    log = pyscf.lib.logger.Logger(mol.fout, verbose)
 
     mo_coeff = numpy.array(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
@@ -172,7 +173,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.fout, verbose)
+    log = pyscf.lib.logger.Logger(mol.fout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
@@ -298,7 +299,7 @@ def general_iofree(mol, mo_coeffs, verbose=None):
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.fout, verbose)
+    log = pyscf.lib.logger.Logger(mol.fout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
@@ -363,8 +364,8 @@ def general_iofree(mol, mo_coeffs, verbose=None):
     return buf
 
 if __name__ == '__main__':
-    import scf
-    import gto
+    from pyscf import scf
+    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_h2o'
@@ -382,7 +383,7 @@ if __name__ == '__main__':
     print time.clock()
     full(mol, rhf.mo_coeff, 'h2oeri.h5', 10, 5)
     print time.clock()
-    import incore
+    from pyscf import incore
     eri0 = incore.full(rhf._eri, rhf.mo_coeff)
     feri = h5py.File('h2oeri.h5', 'r')
     print 'full', abs(eri0-feri['eri_mo']).sum()

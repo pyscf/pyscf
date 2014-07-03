@@ -15,8 +15,8 @@ import tempfile
 import time
 import math
 import numpy
-import lib.parameters as param
-import lib.logger as log
+import pyscf.lib.parameters as param
+import pyscf.lib.logger as log
 import cmd_args
 import basis
 import moleintor
@@ -196,7 +196,7 @@ class Mole(object):
         if not self.symmetry:
             inp_atoms = self.atom
         else:
-            import symm
+            from pyscf import symm
             #if self.symmetry in symm.param.POINTGROUP
             #    self.pgname = self.symmetry
             #    #todo: symm.check_given_symm(self.symmetric, self.atom)
@@ -386,7 +386,7 @@ class Mole(object):
         self.basis = self.format_basis(self.basis)
         self.basis = self.merge_etb(self.etb, self.basis)
         if self.symmetry:
-            import symm
+            from pyscf import symm
             eql_atoms = symm.symm_identical_atoms(self.pgname, self.atom)
             symm_orb = symm.symm_adapted_basis(self.pgname, eql_atoms,\
                                                self.atom, self.basis)

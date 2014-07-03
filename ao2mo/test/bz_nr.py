@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-import scf
-import gto
+from pyscf import scf
+from pyscf import gto
 
 mol = gto.Mole()
 mol.verbose = 5
@@ -38,7 +38,7 @@ import os
 import tempfile
 import numpy
 import h5py
-import ao2mo
+from pyscf import ao2mo
 f, eritmp = tempfile.mkstemp()
 os.close(f)
 

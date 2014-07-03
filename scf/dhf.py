@@ -15,12 +15,14 @@ __version__ = '$ 0.1 $'
 import ctypes
 import numpy
 import scipy.linalg.flapack as lapack
-import gto
-import lib.logger as log
-import lib
-import lib.parameters as param
-import lib.pycint as pycint
+from pyscf import gto
+from pyscf import lib
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
+from pyscf.lib import pycint
+import diis
 import hf
+import chkfile
 
 _cint = hf._cint
 
@@ -102,7 +104,7 @@ class UHF(hf.SCF):
             dm = numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
             self._coulomb_now = 'SSSS'
         else:
-            import symm
+            from pyscf import symm
             log.debug(self, 'Convert NR MO coeff from  %s', self.chkfile)
             if hf.chk_scf_type(scf_rec['mo_coeff']) == 'NR-RHF':
                 c = scf_rec['mo_coeff']
@@ -144,7 +146,7 @@ class UHF(hf.SCF):
 
     def _init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
-        import symm
+        from pyscf import symm
         if mol is None:
             mol = self.mol
         try:
@@ -173,8 +175,8 @@ class UHF(hf.SCF):
 
     def eig(self, h, s):
         try:
-            import lib.jacobi
-            return lib.jacobi.zgeeigen(h, s)
+            import pyscf.lib.jacobi
+            return pyscf.lib.jacobi.zgeeigen(h, s)
         except ImportError:
             c, e, info = lapack.zhegv(h, s)
             print e
@@ -188,7 +190,7 @@ class UHF(hf.SCF):
             if cycle >= self.diis_start_cycle:
                 f = diis_a.update(s, d, f)
             if cycle < self.diis_start_cycle-1:
-                f = damping(s, d, f, self.damp_factor)
+                f = hf.damping(s, d, f, self.damp_factor)
                 f = hf.level_shift(s, d, f, self.level_shift_factor)
             else:
                 fac = self.level_shift_factor \
@@ -579,7 +581,7 @@ class RHF(UHF):
 
 
 if __name__ == '__main__':
-    import gto.basis as basis
+    from pyscf.gto import basis
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf'

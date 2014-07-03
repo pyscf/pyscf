@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry SCF
 
-version 0.2
+version 0.3
 
-2014-05-08
+2014-07-03
 
 
 Installation
@@ -33,7 +33,7 @@ Installation
 * To make python be able to find pyscf, edit environment variable
   PYTHONPATH, e.g.  pyscf is installed in /opt/pyscf
 
-    echo 'export PYTHONPATH=/opt/pyscf:$PYTHONPATH' >> ~/.bashrc
+    export PYTHONPATH=/opt:$PYTHONPATH
 
 * Use Intel MKL as BLAS library.  cmake with options -DBLA_VENDOR=Intel10_64lp
 
@@ -54,6 +54,20 @@ Installation
     CMAKE_PREFIX_PATH=/opt/libcint:/opt/libxc:$CMAKE_PREFIX_PATH cmake ..
 
 
+Known problems
+--------------
+* Runtime Warning
+
+    .../scf/hf.py:26: RuntimeWarning: compiletime version 2.6 of module
+    '_vhf' does not match runtime version xxx
+
+  The program is not mattered for Python 2.7.  To get rid of this
+  warning message, you need install Cython and recompile
+
+    lib/vhf/_vhf.pyx
+    lib/ao2mo/_ao2mo.pyx.
+
+
 Bug report
 ----------
 Qiming Sun <osirpt.sun@gmail.com>
@@ -66,4 +80,7 @@ Version 0.1 (2014-05-03):
 
 Version 0.2 (2014-05-08):
   * AO to MO transformation
+
+Version 0.3 (2014-07-03):
+  * Change import layout
 
