@@ -10,6 +10,6 @@ __version__ = '0.3'
 import gto
 import lib
 import scf
-#import ao2mo
+import ao2mo
 #import symm
 

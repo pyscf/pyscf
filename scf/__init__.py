@@ -5,7 +5,7 @@
 import os, sys
 import diis
 import hf
-#import hf_symm
+import hf_symm
 from hf import SCF
 from chkfile import dump_chkfile_key, load_chkfile_key
 #import dhf
