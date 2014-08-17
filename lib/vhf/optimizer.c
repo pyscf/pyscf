@@ -73,6 +73,8 @@ int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt)
 void CVHFset_direct_scf(CVHFOpt *opt, const int *atm, const int natm,
                         const int *bas, const int nbas, const double *env)
 {
+        /* This memory is released in void CVHFdel_optimizer, Don't know
+         * why valgrind raises memory leak here */
         if (!opt->q_cond) {
                 opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
         }
@@ -137,7 +139,7 @@ void CVHFset_direct_scf_dm(CVHFOpt *opt, double *dm, const int nset,
                                         dmax = MAX(dmax, fabs(pdm[i*nao+j]));
                                 } }
                         }
-                        opt->dm_cond[ish*nbas+jsh] = dmax * .25l;
+                        opt->dm_cond[ish*nbas+jsh] = dmax;
                 }
         }
         free(ao_loc);

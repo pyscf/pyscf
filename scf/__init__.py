@@ -8,13 +8,11 @@ import hf
 import hf_symm
 from hf import SCF
 from chkfile import dump_chkfile_key, load_chkfile_key
-#import dhf
-#import dft
-#import rdft
+import dhf
 
 #import dhf_dkb
 #import atom_hf
-import molden_dump
+#import molden_dump
 
 
 def RHF(mol, *args):

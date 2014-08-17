@@ -57,8 +57,8 @@ rhf = scf.RHF(mol)
 # RHF.max_memory        copy from Mole.verbose. It canNOT be controled by
 #                       command line options directly
 # RHF.chkfile           file to store MO coefficients, orbital energies
-# RHF.scf_threshold     default is 1e-10
-# RHF.max_scf_cycle     default is 50
+# RHF.conv_threshold     default is 1e-10
+# RHF.max_cycle     default is 50
 # RHF.init_guess('name')  'name' is case-insensitivecan. It be one of
 #                       '1e': first density matrix from Hcore
 #                       'chkfile': read from RHF.chkfile
@@ -71,7 +71,7 @@ rhf = scf.RHF(mol)
 # RHF.direct_scf        default is True. Do direct-SCF whem RHF.max_memory
 #                       cannot hold the whole 2-e integrals
 # RHF.direct_scf_threshold  Matrix elements are ignored if less than me. Default 1e-13
-rhf.scf_threshold = 1e-8
+rhf.conv_threshold = 1e-8
 print "E=", rhf.scf()
 # after doing SCF, RHF.mo_coeff, RHF.mo_energy, RHF.mo_occ, RHF.hf_energy,
 # RHF.scf_conv (True/Flase, to see if SCF converged) will be held in RHF class.

@@ -28,5 +28,5 @@ mol.basis = {"H": 'cc-pvtz',
 mol.build()
 
 rhf = scf.RHF(mol)
-rhf.scf_threshold = 1e-8
+rhf.conv_threshold = 1e-8
 print "E=", rhf.scf()

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
 #
 # File: hf_symm.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
@@ -9,16 +8,13 @@
 Non-relativistic Hartree-Fock
 '''
 
-__author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
-__version__ = '$ 0.2 $'
-
 import os
 import cPickle as pickle
 import ctypes
 import time
 
 import numpy
-import scipy.linalg.flapack as lapack
+import scipy.linalg
 
 from pyscf import symm
 from pyscf import lib
@@ -114,10 +110,10 @@ class RHF(hf.RHF):
         cs = []
         es = []
         for ir in range(nirrep):
-            c, e, info = lapack.dsygv(h[ir], s[ir])
+            e, c = scipy.linalg.eigh(h, s)
             cs.append(c)
             es.append(e)
-        return es, cs, info
+        return es, cs
 
     def damping(self, s, d, f, factor):
         if factor < 1e-3:
@@ -292,7 +288,7 @@ class RHF(hf.RHF):
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
 
-    def check_dm_converge(self, dm, dm_last, scf_threshold):
+    def check_dm_converge(self, dm, dm_last, conv_threshold):
         if dm_last is 0:
             return False
         nirrep = self.mol.symm_orb.__len__()
@@ -304,10 +300,10 @@ class RHF(hf.RHF):
         dm_change = delta_dm/dm_tot
         log.info(self, '          sum(delta_dm)=%g (~ %g%%)\n', \
                  delta_dm, dm_change*100)
-        return dm_change < scf_threshold*1e2
+        return dm_change < conv_threshold*1e2
 
-    def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
-        t0 = time.clock()
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0):
+        t0 = (time.clock(), time.time())
         nirrep = mol.symm_orb.__len__()
         nao = mol.symm_orb[0].shape[0]
         def dm_so2ao():
@@ -336,42 +332,34 @@ class RHF(hf.RHF):
                 vhf.append(vhf_last[ir]+reduce(numpy.dot, (so.T, vhf_ao, so)))
             return vhf
 
-        if self.eri_in_memory:
+        if self._is_mem_enough():
             if self._eri is None:
                 self._eri = hf.gen_8fold_eri_sph(mol)
-            vj, vk = hf.dot_eri_dm(self._eri, dm_so2ao())
+            vj, vk = hf.dot_eri_dm(self._eri, dm_so2ao(), hermi=1)
             vhf = vhf_ao2so(vj-vk*.5)
         elif self.direct_scf:
-            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao_diff(), mol._atm, \
-                                           mol._bas, mol._env, self.opt)
+            vj, vk = _vhf.vhf_jk_direct(dm_so2ao_diff(), mol._atm, \
+                                        mol._bas, mol._env, self.opt, \
+                                        hermi=1)
             vhf = vhf_ao2so_diff(vj-vk*.5)
         else:
-            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao(), mol._atm, \
-                                           mol._bas, mol._env, self.opt)
+            vj, vk = _vhf.vhf_jk_direct(dm_so2ao(), mol._atm, mol._bas, \
+                                        mol._env, hermi=1)
             vhf = vhf_ao2so(vj-vk*.5)
-        log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
+            log.timer(self, 'vj and vk', *t0)
         return vhf
 
     def scf(self):
+        cput0 = (time.clock(), time.time())
         self.dump_scf_option()
         self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
-                = hf.scf_cycle(self.mol, self, self.scf_threshold)
+                = hf.scf_cycle(self.mol, self, self.conv_threshold)
         self.del_direct_scf()
 
-        log.info(self, 'CPU time: %12.2f', time.clock())
-        e_nuc = self.mol.nuclear_repulsion()
-        log.log(self, 'nuclear repulsion = %.15g', e_nuc)
-        if self.scf_conv:
-            log.log(self, 'converged electronic energy = %.15g', \
-                    self.hf_energy)
-        else:
-            log.log(self, 'SCF not converge.')
-            log.log(self, 'electronic energy = %.15g after %d cycles.', \
-                    self.hf_energy, self.max_scf_cycle)
-        log.log(self, 'total molecular energy = %.15g', \
-                self.hf_energy + e_nuc)
+        log.timer(self, 'SCF', *cput0)
+        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
         self.analyze_scf_result(self.mol, self.mo_energy, self.mo_occ, \
                                 self.mo_coeff)
 
@@ -389,7 +377,7 @@ class RHF(hf.RHF):
         nocc = int(self.mo_occ.sum()) / 2
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
-        return self.hf_energy + e_nuc
+        return etot
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
         nirrep = mol.symm_orb.__len__()
@@ -482,13 +470,13 @@ class UHF(hf.UHF):
         cs_b = []
         es_b = []
         for ir in range(nirrep):
-            c, e, info = lapack.dsygv(h[0][ir], s[ir])
+            e, c = scipy.linalg.eigh(h[0][ir], s[ir])
             cs_a.append(c)
             es_a.append(e)
-            c, e, info = lapack.dsygv(h[1][ir], s[ir])
+            e, c = scipy.linalg.eigh(h[1][ir], s[ir])
             cs_b.append(c)
             es_b.append(e)
-        return (es_a,es_b), (cs_a,cs_b), info
+        return (es_a,es_b), (cs_a,cs_b)
 
     def damping(self, s, d, f, factor):
         if factor < 1e-3:
@@ -744,7 +732,7 @@ class UHF(hf.UHF):
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
 
-    def check_dm_converge(self, dm, dm_last, scf_threshold):
+    def check_dm_converge(self, dm, dm_last, conv_threshold):
         if dm_last is 0:
             return False
         nirrep = self.mol.symm_orb.__len__()
@@ -757,10 +745,10 @@ class UHF(hf.UHF):
         dm_change = delta_dm/dm_tot
         log.info(self, '          sum(delta_dm)=%g (~ %g%%)\n', \
                  delta_dm, dm_change*100)
-        return dm_change < scf_threshold*1e2
+        return dm_change < conv_threshold*1e2
 
-    def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
-        t0 = time.clock()
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0):
+        t0 = (time.clock(), time.time())
         nirrep = mol.symm_orb.__len__()
         nao = mol.symm_orb[0].shape[0]
         def dm_so2ao():
@@ -791,23 +779,24 @@ class UHF(hf.UHF):
                 vhf.append(vhf_last[ir]+reduce(numpy.dot, (so.T, vhf_ao, so)))
             return vhf
 
-        if self.eri_in_memory:
+        if self._is_mem_enough():
             if self._eri is None:
                 self._eri = hf.gen_8fold_eri_sph(mol)
             dm_ao = dm_so2ao()
-            vj0, vk0 = hf.dot_eri_dm(self._eri, dm_ao[0])
-            vj1, vk1 = hf.dot_eri_dm(self._eri, dm_ao[1])
+            vj0, vk0 = hf.dot_eri_dm(self._eri, dm_ao[0], hermi=1)
+            vj1, vk1 = hf.dot_eri_dm(self._eri, dm_ao[1], hermi=1)
             vhf = (vhf_ao2so(vj0+vj1-vk0), vhf_ao2so(vj0+vj1-vk1))
         elif self.direct_scf:
-            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao_diff(), mol._atm, \
-                                           mol._bas, mol._env, self.opt)
+            vj, vk = _vhf.vhf_jk_direct(dm_so2ao_diff(), mol._atm, \
+                                       mol._bas, mol._env, self.opt, \
+                                       hermi=1)
             vhf = (vhf_ao2so_diff(vj[0]+vj[1]-vk[0]), \
                    vhf_ao2so_diff(vj[0]+vj[1]-vk[1]))
         else:
-            vj, vk = _vhf.vhf_jk_direct_o4(dm_so2ao(), mol._atm, \
-                                           mol._bas, mol._env, self.opt)
+            vj, vk = _vhf.vhf_jk_direct(dm_so2ao(), mol._atm, mol._bas, \
+                                        mol._env, hermi=1)
             vhf = (vhf_ao2so(vj[0]+vj[1]-vk[0]), vhf_ao2so(vj[0]+vj[1]-vk[1]))
-        log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
+            log.timer(self, 'vj and vk', *t0)
         return vhf
 
     def break_spin_sym(self, mol, mo_coeff):
@@ -816,29 +805,20 @@ class UHF(hf.UHF):
         return mo_coeff
 
     def scf(self):
+        cput0 = (time.clock(), time.time())
         self.dump_scf_option()
         self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
-                = hf.scf_cycle(self.mol, self, self.scf_threshold)
+                = hf.scf_cycle(self.mol, self, self.conv_threshold)
         self.del_direct_scf()
         if self.nelectron_alpha * 2 < self.mol.nelectron:
             self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
             self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
             self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
-        log.info(self, 'CPU time: %12.2f', time.clock())
-        e_nuc = self.mol.nuclear_repulsion()
-        log.log(self, 'nuclear repulsion = %.15g', e_nuc)
-        if self.scf_conv:
-            log.log(self, 'converged electronic energy = %.15g', \
-                    self.hf_energy)
-        else:
-            log.log(self, 'SCF not converge.')
-            log.log(self, 'electronic energy = %.15g after %d cycles.', \
-                    self.hf_energy, self.max_scf_cycle)
-        log.log(self, 'total molecular energy = %.15g', \
-                self.hf_energy + e_nuc)
+        log.timer(self, 'SCF', *cput0)
+        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
         self.analyze_scf_result(self.mol, self.mo_energy, self.mo_occ, \
                                 self.mo_coeff)
 
@@ -866,7 +846,7 @@ class UHF(hf.UHF):
         self.mo_occ[0][nocc_a:] = 0
         self.mo_occ[1][:nocc_b] = 1
         self.mo_occ[1][nocc_b:] = 0
-        return self.hf_energy + e_nuc
+        return etot
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
         nirrep = mol.symm_orb.__len__()
@@ -934,9 +914,9 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.direct_scf_threshold  = rhf.direct_scf_threshold
 
     uhf.chkfile               = rhf.chkfile
-    uhf.fout                  = rhf.fout
-    uhf.scf_threshold         = rhf.scf_threshold
-    uhf.max_scf_cycle         = rhf.max_scf_cycle
+    uhf.stdout                = rhf.stdout
+    uhf.conv_threshold         = rhf.conv_threshold
+    uhf.max_cycle         = rhf.max_cycle
     return uhf
 
 def spin_square(mol, mo_a, mo_b):

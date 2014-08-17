@@ -5,10 +5,10 @@ import numpy
 cimport numpy
 cimport cython
 
-cdef extern int CINTtot_cgto_spheric(const int *bas, const int nbas)
-
-cdef extern void int2e_sph_o5(double *eri, int *atm, int natm,
-                              int *bas, int nbas, double *env)
+cdef extern from "cvhf.h":
+    int CINTtot_cgto_spheric(int *bas, int nbas)
+    void int2e_sph_o5(double *eri, int *atm, int natm,
+                      int *bas, int nbas, double *env)
 
 def int2e_sph_8fold(atm, bas, env):
     cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
@@ -73,6 +73,11 @@ cdef extern from "cvhf.h":
                           int *atm, int natm, int *bas, int nbas, double *env)
     void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
     void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
+    void CVHFnr_incore(int n, double *eri, double *dm, double *vj, double *vk,
+                       int sym_code)
+    void CVHFnr_direct(double *dm, double *vj, double *vk, int nset,
+                       CVHFOpt *vhfopt, int sym_code,
+                       int *atm, int natm, int *bas, int nbas, double *env)
 
 cdef class VHFOpt:
     cdef CVHFOpt *_this
@@ -117,7 +122,7 @@ def vhf_jk_incore_o2(numpy.ndarray[double, ndim=2, mode='c'] eri, \
 
 def vhf_jk_incore_o4(numpy.ndarray[double, ndim=1, mode='c'] eri, \
                      numpy.ndarray[double, ndim=2, mode='c'] dm):
-    '''use 8-fold symmetry for eri'''
+    '''use 8-fold symmetry for eri. dm is symmetrix'''
     cdef int nao = dm.shape[0]
     cdef numpy.ndarray[double,ndim=2,mode='c'] vj = numpy.empty((nao,nao))
     cdef numpy.ndarray[double,ndim=2,mode='c'] vk = numpy.zeros((nao,nao))
@@ -127,6 +132,7 @@ def vhf_jk_incore_o4(numpy.ndarray[double, ndim=1, mode='c'] eri, \
 
 # deal with multiple components of dm
 def vhf_jk_direct_o4(numpy.ndarray dm, atm, bas, env, VHFOpt vhfopt=None):
+    '''dm is symmetrix'''
 
     cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
     cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
@@ -151,4 +157,48 @@ def vhf_jk_direct_o4(numpy.ndarray dm, atm, bas, env, VHFOpt vhfopt=None):
         CVHFnr_direct_o4(<double *>dm.data, <double *>vj.data, <double *>vk.data,
                          nset, vhfopt._this,
                          &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    return vj, vk
+
+
+#######################
+# for general DM
+# hermi = 0 : arbitary
+# hermi = 1 : Hermitian
+# hermi = 2 : anti-Hermitian
+#######################
+def vhf_jk_incore(numpy.ndarray[double, ndim=1, mode='c'] eri, \
+                  numpy.ndarray[double, ndim=2, mode='c'] dm, hermi=0):
+    '''use 8-fold symmetry for eri'''
+    cdef int nao = dm.shape[0]
+    cdef numpy.ndarray[double,ndim=2,mode='c'] vj = numpy.empty((nao,nao))
+    cdef numpy.ndarray[double,ndim=2,mode='c'] vk = numpy.zeros((nao,nao))
+    CVHFnr_incore(nao, &eri[0], &dm[0,0], &vj[0,0], &vk[0,0], hermi)
+    return vj, vk
+
+# deal with multiple components of dm
+def vhf_jk_direct(numpy.ndarray dm, atm, bas, env, VHFOpt vhfopt=None, hermi=0):
+
+    cdef numpy.ndarray[int,ndim=2] c_atm = numpy.array(atm, dtype=numpy.int32)
+    cdef numpy.ndarray[int,ndim=2] c_bas = numpy.array(bas, dtype=numpy.int32)
+    cdef numpy.ndarray[double] c_env = numpy.array(env)
+    cdef int natm = c_atm.shape[0]
+    cdef int nbas = c_bas.shape[0]
+    if dm.ndim == 2:
+        nset = 1
+        dm_shape = (dm.shape[0], dm.shape[1])
+    else:
+        nset = dm.shape[0]
+        dm_shape = (dm.shape[0], dm.shape[1], dm.shape[2])
+
+    cdef numpy.ndarray vj = numpy.empty(dm_shape)
+    cdef numpy.ndarray vk = numpy.empty(dm_shape)
+
+    if vhfopt is None:
+        CVHFnr_direct(<double *>dm.data, <double *>vj.data, <double *>vk.data,
+                      nset, NULL, hermi,
+                      &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
+    else:
+        CVHFnr_direct(<double *>dm.data, <double *>vj.data, <double *>vk.data,
+                      nset, vhfopt._this, hermi,
+                      &c_atm[0,0], natm, &c_bas[0,0], nbas, &c_env[0])
     return vj, vk

@@ -21,7 +21,7 @@ def header(mol, fout):
         coord = mol.coord_of_atm(ia)
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
     fout.write('[GTO]\n')
-    lbl = mol.labels_of_spheric_GTO()
+    lbl = mol.spheric_labels()
     for ia in range(mol.natm):
         fout.write('%d 0\n' %(ia+1))
         for b in mol.basis[mol.symbol_of_atm(ia)]:
@@ -116,6 +116,6 @@ if __name__ == '__main__':
     mol.build(dump_input=False)
     m = scf.RHF(mol)
     m.scf()
-    header(mol, mol.fout)
+    header(mol, mol.stdout)
     print order_ao_index(mol)
-    orbital_coeff(mol, mol.fout, m.mo_coeff)
+    orbital_coeff(mol, mol.stdout, m.mo_coeff)

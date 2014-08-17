@@ -6,7 +6,7 @@
 import copy
 import unittest
 from pyscf import scf
-from pyscf import scf.dhf as dhf
+from pyscf.scf import dhf
 from pyscf import gto
 
 mol = gto.Mole()
@@ -25,36 +25,36 @@ mol.build()
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
-        rhf.scf_threshold = 1e-11
+        rhf.conv_threshold = 1e-11
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
 
     def test_nr_uhf(self):
         uhf = scf.UHF(mol)
-        uhf.scf_threshold = 1e-11
+        uhf.conv_threshold = 1e-11
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_nr_rhf_no_mem(self):
         rhf = scf.RHF(mol)
-        rhf.scf_threshold = 1e-11
+        rhf.conv_threshold = 1e-11
         rhf.eri_in_memory = False
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
 
     def test_nr_uhf_no_mem(self):
         uhf = scf.UHF(mol)
-        uhf.scf_threshold = 1e-11
+        uhf.conv_threshold = 1e-11
         uhf.eri_in_memory = False
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_nr_rhf_no_direct(self):
         rhf = scf.RHF(mol)
-        rhf.scf_threshold = 1e-11
+        rhf.conv_threshold = 1e-11
         rhf.eri_in_memory = False
         rhf.direct_scf = False
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
 
     def test_nr_uhf_no_direct(self):
         uhf = scf.UHF(mol)
-        uhf.scf_threshold = 1e-11
+        uhf.conv_threshold = 1e-11
         uhf.eri_in_memory = False
         uhf.direct_scf = False
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
@@ -90,7 +90,7 @@ class KnowValues(unittest.TestCase):
         mol1.symmetry = 1
         mol1.build()
         rhf = scf.hf.RHF(mol1)
-        rhf.scf_threshold = 1e-11
+        rhf.conv_threshold = 1e-11
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
 
     def test_nr_uhf_symm(self):
@@ -98,7 +98,7 @@ class KnowValues(unittest.TestCase):
         mol1.symmetry = 1
         mol1.build()
         uhf = scf.hf.UHF(mol1)
-        uhf.scf_threshold = 1e-11
+        uhf.conv_threshold = 1e-11
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
 

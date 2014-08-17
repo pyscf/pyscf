@@ -4,6 +4,10 @@
 
 #include "cint.h"
 
+#define DM_PLAIN        0
+#define DM_HERMITIAN    1
+#define DM_ANTI         2
+
 #if !defined HAVE_DEFINED_CVHFOPT_H
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct CVHFOpt_struct {
@@ -14,6 +18,9 @@ typedef struct CVHFOpt_struct {
     int (*fprescreen)(int *shls, struct CVHFOpt_struct *opt);
 } CVHFOpt;
 #endif
+
+void int2e_sph_o5(double *eri, const int *atm, const int natm,
+                  const int *bas, const int nbas, const double *env);
 
 void CVHFinit_optimizer(CVHFOpt **opt, const int *atm, const int natm,
                         const int *bas, const int nbas, const double *env);
@@ -28,7 +35,7 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
                       CVHFOpt *vhfopt, const int *atm, const int natm,
                       const int *bas, const int nbas, const double *env);
 
-int CVHFnr8fold_eri_o2(double *eri, int ish, int jsh, int ksh_lim,
+int CVHFfill_nr_eri_o2(double *eri, int ish, int jsh, int ksh_lim,
                        const int *atm, const int natm,
                        const int *bas, const int nbas, const double *env,
                        CINTOpt *opt, CVHFOpt *vhfopt);
@@ -47,3 +54,10 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk);
 void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk);
 void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk);
 
+void CVHFnr_incore(int n, double *eri, double *dm, double *vj, double *vk,
+                   int hermi);
+
+void CVHFnr_direct(double *dm, double *vj, double *vk, const int nset,
+                   CVHFOpt *vhfopt, int hermi,
+                   const int *atm, const int natm,
+                   const int *bas, const int nbas, const double *env);

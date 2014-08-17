@@ -6,12 +6,7 @@
 #
 
 
-
-__author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
-__version__ = '$ 0.2 $'
-
 import os, sys
-import tempfile
 import time
 import math
 import numpy
@@ -114,10 +109,9 @@ class Mole(object):
         self.ptr_env = PTR_ENV_START
         self._env = [0] * self.ptr_env
         self._env[PTR_LIGHT_SPEED] = param.LIGHTSPEED
-        self._gauge_method = param.MI_GAUGE_GIAO
 
         self._built = False
-        self.fout = sys.stdout
+        self.stdout = sys.stdout
         self.pgname = 'C1'
         self.symm_orb = None
         self.irrep_name = None
@@ -244,18 +238,19 @@ class Mole(object):
 
         fmtbas = {}
         for atom in basis_tab.keys():
-            if not fmtbas.has_key(_symbol(atom)):
-                fmtbas[_symbol(atom)] = []
+            symb = _symbol(atom)
+            if not fmtbas.has_key(symb):
+                fmtbas[symb] = []
 
             if isinstance(basis_tab[atom], str):
                 name = basis_tab[atom].lower().replace(' ', '').replace('-', '').replace('_', '')
-                bset = basis.alias[name][_rm_digit(atom)]
+                bset = basis.alias[name][_rm_digit(symb)]
             else:
                 bset = basis_tab[atom]
 
             for b in bset:
         #ABORT        append_cgto(fmtbas[_symbol(atom)], b)
-                fmtbas[_symbol(atom)].append(b)
+                fmtbas[symb].append(b)
         return fmtbas
 
     def format_etb(self, etb):
@@ -376,8 +371,8 @@ class Mole(object):
 
         # avoid to open output file twice
         if parse_arg and self.output is not None \
-           and self.fout.name != self.output:
-            self.fout = open(self.output, 'w')
+           and self.stdout.name != self.output:
+            self.stdout = open(self.output, 'w')
 
         self._built = True
 
@@ -397,16 +392,12 @@ class Mole(object):
             self.symm_orb = [c for c in symm_orb if c.size > 0]
         self.make_env()
 
-        if dump_input and self.verbose > log.QUITE:
+        if dump_input and self.verbose >= log.NOTICE:
             self.dump_input()
 
-        log.debug(self, 'arg.atm = %s', self._atm)
-        log.debug(self, 'arg.bas = %s', self._bas)
-        log.debug(self, 'arg.env = %s', self._env)
-
-#ABORT        # transform cartesian GTO to real spheric or spinor GTO
-#ABORT        self.make_gto_cart2sph()
-#ABORT        self.make_gto_cart2j_l()
+        log.debug1(self, 'arg.atm = %s', self._atm)
+        log.debug1(self, 'arg.bas = %s', self._bas)
+        log.debug1(self, 'arg.env = %s', self._env)
 
 
     def dump_input(self):
@@ -418,51 +409,51 @@ class Mole(object):
             self.make_env()
 
         try:
-            filename = '%s/%s' % (os.getcwd(), sys.argv[0])
+            filename = os.path.join(os.getcwd(), sys.argv[0])
             finput = open(filename, 'r')
-            self.fout.write('\n')
-            self.fout.write('INFO: **** input file is %s ****\n' % filename)
-            self.fout.write(finput.read())
-            self.fout.write('INFO: ******************** input file end ********************\n')
-            self.fout.write('\n')
+            self.stdout.write('\n')
+            self.stdout.write('INFO: **** input file is %s ****\n' % filename)
+            self.stdout.write(finput.read())
+            self.stdout.write('INFO: ******************** input file end ********************\n')
+            self.stdout.write('\n')
         except:
-            print 'Warn: input file is not existed'
+            log.warn(self, 'input file does not exist')
 
-        self.fout.write('System: %s\n' % str(os.uname()))
-        self.fout.write('Date: %s\n' % time.ctime())
+        self.stdout.write('System: %s\n' % str(os.uname()))
+        self.stdout.write('Date: %s\n' % time.ctime())
         try:
             dn = os.path.dirname(os.path.realpath(__file__))
-            self.fout.write('GIT version: ')
+            self.stdout.write('GIT version: ')
             # or command(git log -1 --pretty=%H)
             for branch in 'dev', 'master':
                 fname = '/'.join((dn, "../.git/refs/heads", branch))
                 fin = open(fname, 'r')
                 d = fin.readline()
                 fin.close()
-                self.fout.write(' '.join((branch, d[:-1], '; ')))
-            self.fout.write('\n\n')
+                self.stdout.write(' '.join((branch, d[:-1], '; ')))
+            self.stdout.write('\n\n')
         except:
             pass
 
-        self.fout.write('[INPUT] VERBOSE %d\n' % self.verbose)
-        self.fout.write('[INPUT] light speed = %s\n' % self.light_speed)
-        self.fout.write('[INPUT] number of atoms = %d\n' % self.atom.__len__())
-        self.fout.write('[INPUT] num electrons = %d\n' % self.nelectron)
+        self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
+        self.stdout.write('[INPUT] light speed = %s\n' % self.light_speed)
+        self.stdout.write('[INPUT] number of atoms = %d\n' % self.atom.__len__())
+        self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
 
         nucmod = { param.MI_NUC_POINT:'point', \
                 param.MI_NUC_GAUSS:'Gaussian', }
         for a,atom in enumerate(self.atom):
-            self.fout.write('[INPUT] atom %d, %s,   %s nuclear model, ' \
-                            'mass %s, radial %s, angular %s\n' % \
-                            (a+1, _symbol(atom[0]), nucmod[atom[2]],
-                             atom[3], atom[4], atom[5]))
-            self.fout.write('[INPUT]      (%.15g, %.15g, %.15g) AA, ' \
-                            % tuple(atom[1]))
-            self.fout.write('(%.15g, %.15g, %.15g) Bohr\n' % \
-                            tuple(map(lambda x: x/param.BOHR, atom[1])))
+            self.stdout.write('[INPUT] atom %d, %s,   %s nuclear model, ' \
+                              'mass %s, radial %s, angular %s\n' % \
+                              (a+1, _symbol(atom[0]), nucmod[atom[2]],
+                               atom[3], atom[4], atom[5]))
+            self.stdout.write('[INPUT]      (%.15g, %.15g, %.15g) AA, ' \
+                              % tuple(atom[1]))
+            self.stdout.write('(%.15g, %.15g, %.15g) Bohr\n' % \
+                              tuple(map(lambda x: x/param.BOHR, atom[1])))
         log.info(self, 'nuclear repulsion = %.15g', self.nuclear_repulsion())
-        self.fout.write('[INPUT] basis = atom: (l, kappa, nprim/nctr)\n')
-        self.fout.write('[INPUT]               (expnt, c_1, c_2, ...)\n')
+        self.stdout.write('[INPUT] basis = atom: (l, kappa, nprim/nctr)\n')
+        self.stdout.write('[INPUT]               (expnt, c_1, c_2, ...)\n')
         for atom, basis in self.basis.items():
             for b in basis:
                 if isinstance(b[1], int):
@@ -471,25 +462,25 @@ class Mole(object):
                 else:
                     kappa = 0
                     b_coeff = b[1:]
-                self.fout.write('[INPUT] %s : l = %d, kappa = %d, [%d/%d]\n' \
-                                % (atom, b[0], kappa, b_coeff.__len__(), \
-                                   b_coeff[0].__len__()-1))
+                self.stdout.write('[INPUT] %s : l = %d, kappa = %d, [%d/%d]\n' \
+                                  % (atom, b[0], kappa, b_coeff.__len__(), \
+                                     b_coeff[0].__len__()-1))
                 for x in b_coeff:
-                    self.fout.write('[INPUT]    exp = %g, c = ' % x[0])
+                    self.stdout.write('[INPUT]    exp = %g, c = ' % x[0])
                     for c in x[1:]:
-                        self.fout.write('%g, ' % c)
-                    self.fout.write('\n')
+                        self.stdout.write('%g, ' % c)
+                    self.stdout.write('\n')
 
-        self.fout.write('[INPUT] %d set(s) of even-tempered basis\n' \
-                        % self.etb.keys().__len__())
+        self.stdout.write('[INPUT] %d set(s) of even-tempered basis\n' \
+                          % self.etb.keys().__len__())
         for atom,basis in self.etb.items():
             max_l = basis['max_l']
-            self.fout.write('[INPUT] etb for atom %s max_l = %d\n' \
-                            % (_symbol(atom), max_l))
+            self.stdout.write('[INPUT] etb for atom %s max_l = %d\n' \
+                              % (_symbol(atom), max_l))
             for l in range(max_l+1):
                 strl = param.ANGULAR[l]
-                self.fout.write('[INPUT]      l = %s; (n, alpha, beta) = %s\n'\
-                                % (strl, str(basis[strl])))
+                self.stdout.write('[INPUT]      l = %s; (n, alpha, beta) = %s\n'\
+                                  % (strl, str(basis[strl])))
         if self.symmetry:
             log.info(self, 'point group symmetry = %s', self.pgname)
             for ir in range(self.symm_orb.__len__()):
@@ -504,7 +495,7 @@ class Mole(object):
 
         log.info(self, 'CPU time: %12.2f', time.clock())
 
-    def set_common_gauge_origin(self, coord):
+    def set_common_origin(self, coord):
         if max(coord) < 1e3 and min(coord) > -1e3:
             for i in range(3):
                 self._env[PTR_COMMON_ORIG+i] = coord[i]
@@ -519,10 +510,10 @@ class Mole(object):
         self._env[PTR_RINV_ORIG+1] = coord[1]
         self._env[PTR_RINV_ORIG+2] = coord[2]
 
-    def set_shielding_nuc(self, nuc):
-        if nuc >= 0 and nuc <= self.atom.__len__():
+    def set_rinv_by_atm_id(self, atm_id):
+        if atm_id >= 0 and atm_id <= self.natm:
             self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = \
-                    self.coord_of_atm(nuc-1)[:]
+                    self.coord_of_atm(atm_id-1)[:]
         else:
             print 'incorrect center, set to first atom'
             self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = \
@@ -546,16 +537,7 @@ class Mole(object):
         self.set_light_speed(c)
 
 
-###############################################
-#ABORT    def num_of_atoms(self):
-#ABORT        return self.natm
-#ABORT
-#ABORT    def num_of_shells(self):
-#ABORT        return self.nbas
-#ABORT    def num_of_bas(self):
-#ABORT        return self.nbas
-
-# atm_id or bas_id start from 0
+#NOTE: atm_id or bas_id start from 0
     def symbol_of_atm(self, atm_id):
         # a molecule can contain different symbols (C1,C2,..) for same type of
         # atoms
@@ -627,6 +609,8 @@ class Mole(object):
         return (l + 1) * (l + 2) / 2
 
 
+    def pgto_nr(self):
+        return self.num_NR_pgto()
     def num_NR_pgto(self):
         ''' total number of primitive GTOs'''
         return reduce(lambda n, b: n + (self.angular_of_bas(b) * 2 + 1) \
@@ -640,11 +624,15 @@ class Mole(object):
         return reduce(lambda n, b: n + (self.angular_of_bas(b) * 2 + 1) \
                                     * self.nctr_of_bas(b),
                       range(self.nbas), 0)
+    def nao_nr(self):
+        return self.num_NR_cgto()
 
     def num_4C_function(self):
         return self.num_4C_cgto()
     def num_4C_cgto(self):
         return self.num_2C_function() * 2
+    def nao_4c(self):
+        return self.num_4C_cgto()
 
     def num_2C_function(self):
         return self.num_2C_cgto()
@@ -653,6 +641,8 @@ class Mole(object):
         return reduce(lambda n, b: n + self.len_spinor_of_bas(b) \
                                     * self.nctr_of_bas(b),
                       range(self.nbas), 0)
+    def nao_2c(self):
+        return self.num_2C_cgto()
 
     def time_reversal_spinor(self):
         '''tao = time_reversal_spinor(bas)
@@ -713,7 +703,16 @@ class Mole(object):
                 e += q1 * q2 / r
         return e
 
-    def labels_of_spheric_GTO(self):
+    def inter_distance(self):
+        rr = numpy.zeros((self.natm, self.natm))
+        for j in range(self.natm):
+            r2 = self.coord_of_atm(j)
+            for i in range(j):
+                r1 = self.coord_of_atm(i)
+                rr[i,j] = rr[j,i] = numpy.linalg.norm(r1-r2)
+        return rr
+
+    def spheric_labels(self):
         count = numpy.zeros((self.natm, 9), dtype=int)
         label = []
         i = 0
@@ -731,7 +730,37 @@ class Mole(object):
             count[ia,l] += nc
         return label
 
+    def search_bas_id(self, atm_id, l):
+        for ib in range(self.nbas):
+            ia = self.atom_of_bas(ib)
+            l1 = self.angular_of_bas(ib)
+            if ia == atm_id and l1 == l:
+                return ib
+
+    def search_spheric_id(self, atm_id, l, m, atmshell):
+        ibf = 0
+        for ib in range(self.nbas):
+            ia = self.atom_of_bas(ib)
+            l1 = self.angular_of_bas(ib)
+            nc = self.nctr_of_bas(ib)
+            if ia == atm_id and l1 == l:
+                return ibf + (atmshell-l)*(l*2+1) + (l+m)
+            ibf += (l*2+1) * nc
+
+#TODO:    def search_spinor_id(self, atm_id, l, m, kappa, atmshell):
+#TODO:        ibf = 0
+#TODO:        for ib in range(self.nbas):
+#TODO:            ia = self.atom_of_bas(ib)
+#TODO:            l1 = self.angular_of_bas(ib)
+#TODO:            nc = self.nctr_of_bas(ib)
+#TODO:            k = self.kappa_of_bas(bas_id)
+#TODO:            if ia == atm_id and l1 == l and k == kappa:
+#TODO:                return ibf + (atmshell-l)*(l*4+2) + (l+m)
+#TODO:            ibf += (l*4+2) * nc
+
 #TODO:    def labels_of_spinor_GTO(self):
+#TODO:        return self.spinor_labels(self):
+#TODO:    def spinor_labels(self):
 #TODO:        count = numpy.zeros((self.natm, 9), dtype=int)
 #TODO:        label = []
 #TODO:        i = 0
@@ -755,21 +784,22 @@ class Mole(object):
 #TODO:            count[ia,l] += nc
 #TODO:        return label
 
-    def is_same_mol(self, mol):
-        if self.atom.__len__() != mol.atom.__len__():
-            return False
-        for a1, a2 in zip(self.atom, mol.atom):
-            if a1[0] != a2[0] \
-               or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
-                return False
-        return True
-
 #TODO:
-    def _append_mol(self, mol):
+    def append_mol(self, mol):
         pass
 
-#TODO    def map_basis_nr2r(self):
-#TODO        pass
+#TODO:
+    def map_basis_nr2r(self):
+        pass
+
+def is_same_mol(mol1, mol2):
+    if mol1.atom.__len__() != mol2.atom.__len__():
+        return False
+    for a1, a2 in zip(mol1.atom, mol2.atom):
+        if a1[0] != a2[0] \
+           or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
+            return False
+    return True
 
 # concatenate two mol
 def env_concatenate(atm1, bas1, env1, atm2, bas2, env2):
@@ -795,50 +825,3 @@ def env_concatenate(atm1, bas1, env1, atm2, bas2, env2):
     cenv1.extend(env2)
     return catm1, cbas1, cenv1
 
-
-MINAO_OCC = (
-    (1.,),                  # H
-    (2.,),                  # He
-    (2.,1),                 # Li
-    (2.,2),                 # Be
-    (2.,2,1./3,1./3,1./3),  # B
-    (2.,2,2./3,2./3,2./3),  # C
-    (2.,2,1.  ,1.  ,1.  ),  # N
-    (2.,2,4./3,4./3,4./3),  # O
-    (2.,2,5./3,5./3,5./3),  # F
-    (2.,2,2.  ,2.  ,2.  ),  # Ne
-#    s  s s p p p p    p    p
-    (2.,2,1,2,2,2),                   # Na
-    (2.,2,2,2,2,2),                   # Mg
-    (2.,2,2,2,2,2,1./3,1./3,1./3),    # Al
-    (2.,2,2,2,2,2,2./3,2./3,2./3),    # Si
-    (2.,2,2,2,2,2,1.  ,1.  ,1.  ),    # P
-    (2.,2,2,2,2,2,4./3,4./3,4./3),    # S
-    (2.,2,2,2,2,2,5./3,5./3,5./3),    # Cl
-    (2.,2,2,2,2,2,2.  ,2.  ,2.  ),    # Ar
-#    s  s s s p p p p p p
-    (None                ),           # K
-    (2.,2,2,2,2,2,2,2,2,2),           # Ca
-#    s  s s s s p p p p p p p p p d  d  d  d  d
-    (2.,2,2,2,0,2,2,2,2,2,2,0,0,0,.2,.2,.2,.2,.2),         # Sc
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,.4,.4,.4,.4,.4),         # Ti
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,.6,.6,.6,.6,.6),         # V
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,.8,.8,.8,.8,.8),         # Cr
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.,1.,1.,1.,1.),         # Mn
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.2,1.2,1.2,1.2,1.2),    # Fe
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.4,1.4,1.4,1.4,1.4),    # Co
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.6,1.6,1.6,1.6,1.6),    # Ni
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.8,1.8,1.8,1.8,1.8),    # Cu
-    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,2. ,2. ,2. ,2. ,2. ),    # Zn
-#    s  s s s p p p p p p p    p    p    d d d d d
-    (2.,2,2,2,2,2,2,2,2,2,1./3,1./3,1./3,2,2,2,2,2),       # Ga
-    (2.,2,2,2,2,2,2,2,2,2,2./3,2./3,2./3,2,2,2,2,2),       # Ge
-    (2.,2,2,2,2,2,2,2,2,2,1.  ,1.  ,1.  ,2,2,2,2,2),       # As
-    (2.,2,2,2,2,2,2,2,2,2,4./3,4./3,4./3,2,2,2,2,2),       # Se
-    (2.,2,2,2,2,2,2,2,2,2,5./3,5./3,5./3,2,2,2,2,2),       # Br
-    (2.,2,2,2,2,2,2,2,2,2,2.  ,2.  ,2.  ,2,2,2,2,2),       # Kr
-)
-def get_minao_occ(symb):
-    nuc = _charge(symb)
-    assert(nuc <= 36)
-    return MINAO_OCC[nuc-1]

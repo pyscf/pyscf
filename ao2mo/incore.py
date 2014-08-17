@@ -28,13 +28,13 @@ def full(eri_ao, mo_coeff):
     if mo_coeff.flags.c_contiguous:
         mo_coeff = mo_coeff.copy('F')
     if eri_ao.ndim == 1:
-        return _ao2mo.partial_eri_ao2mo_o3(eri_ao, mo_coeff)
+        return _ao2mo.partial_eri_o3(eri_ao, mo_coeff)
     elif eri_ao.ndim == 2:
-        return _ao2mo.partial_eri_ao2mo_o2(eri_ao, mo_coeff)
+        return _ao2mo.partial_eri_o2(eri_ao, mo_coeff)
 
 
 # It consumes two times of the memory needed by MO integrals
-def general(eri_ao, mo_coeffs, compact=True):
+def general(eri_ao, mo_coeffs, verbose=None, compact=True):
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
                 or (mo1.shape==mo2.shape and abs(mo1-mo2).sum()<1e-12)
@@ -55,6 +55,9 @@ def general(eri_ao, mo_coeffs, compact=True):
         nkl_pair = nmok*(nmok+1) / 2
     else:
         nkl_pair = nmok*nmol
+    if nij_pair == 0 or nkl_pair == 0:
+        # 0 dimension sometimes causes blas' complaint
+        return numpy.zeros((nij_pair,nkl_pair))
 
     if nij_pair > nkl_pair:
         print 'low efficiency for AO to MO trans!'
@@ -63,21 +66,23 @@ def general(eri_ao, mo_coeffs, compact=True):
     nao_pair = nao*(nao+1) / 2
 
     if ijsame:
-        moji = numpy.array(mo_coeffs[0], order='F')
+        moji = numpy.array(mo_coeffs[0], order='F', copy=False)
         ijshape = (0, nmoi, 0, nmoi)
     else:
-        moji = numpy.array(numpy.hstack((mo_coeffs[1],mo_coeffs[0])), order='F')
+        moji = numpy.array(numpy.hstack((mo_coeffs[1],mo_coeffs[0])), \
+                           order='F', copy=False)
         ijshape = (nmoj, nmoi, 0, nmoj)
 
     if klsame:
-        molk = numpy.array(mo_coeffs[2], order='F')
+        molk = numpy.array(mo_coeffs[2], order='F', copy=False)
         klshape = (0, nmok, 0, nmok)
     else:
-        molk = numpy.array(numpy.hstack((mo_coeffs[3],mo_coeffs[2])), order='F')
+        molk = numpy.array(numpy.hstack((mo_coeffs[3],mo_coeffs[2])), \
+                           order='F', copy=False)
         klshape = (nmol, nmok, 0, nmol)
 
-    buf = _ao2mo.nr_e1_ao2mo_incore(eri_ao, moji, ijshape)
-    buf = _ao2mo.nr_e2_ao2mo(buf, molk, klshape)
+    buf = _ao2mo.nr_e1_incore(eri_ao, moji, ijshape)
+    buf = _ao2mo.nr_e2(buf, molk, klshape)
     return buf
 
 if __name__ == '__main__':

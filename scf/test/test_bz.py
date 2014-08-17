@@ -5,7 +5,7 @@
 
 import unittest
 from pyscf import scf
-from pyscf import scf.dhf as dhf
+from pyscf.scf import dhf
 from pyscf import gto
 
 mol = gto.Mole()
@@ -34,7 +34,7 @@ mol.build()
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
-        rhf.scf_threshold = 1e-11
+        rhf.conv_threshold = 1e-11
         self.assertAlmostEqual(rhf.scf(), -230.720825199, 9)
 
 

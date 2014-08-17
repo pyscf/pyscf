@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # File: misc.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
@@ -9,6 +10,7 @@ import shutil
 import ctypes
 import numpy
 import functools
+import math
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -59,44 +61,19 @@ def find_if(test, lst):
         if test(l):
             return l
 
+# for give n, generate [(m1,m2),...] that
+#       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
+def tril_equal_pace(n, base=0, npace=0, minimal=1):
+    if base == 0:
+        assert(npace > 0)
+        base = int(math.sqrt(n*(n+1)/npace)) + 1
+    m1 = 0
+    while m1 < n:
+        # m1*m1 + base*base < m1*(m1+1) + base*(base+1) - m2
+        m2 = int(max(math.sqrt(m1**2+base**2), m1+minimal))
+        yield m1, min(m2,n)
+        m1 = m2
 
-def trace_ab(a, b):
-    return (numpy.array(a).T*numpy.array(b)).sum()
-
-def pack_lowtri(mat, nd):
-    mat1d = numpy.empty(nd*(nd+1)/2)
-    n = 0
-    for i in range(nd):
-        for j in range(i+1):
-            mat1d[n] = mat[i,j]
-            n += 1
-    return mat1d
-def unpack_lowtri(mat1d, nd):
-    mat = numpy.empty((nd,nd))
-    n = 0
-    for i in range(nd):
-        for j in range(i+1):
-            mat[i,j] = mat1d[n]
-            mat[j,i] = mat1d[n].conj()
-            n += 1
-    return mat
-
-
-LINEAR_DEP_THRESHOLD = 1e-10
-def solve_lineq_by_SVD(a, b):
-    ''' a * x = b '''
-    t, w, vH = numpy.linalg.svd(a)
-    idx = []
-    for i,wi in enumerate(w):
-        if wi > LINEAR_DEP_THRESHOLD:
-            idx.append(i)
-    if idx:
-        idx = numpy.array(idx)
-        tb = numpy.dot(numpy.array(t[:,idx]).T.conj(), numpy.array(b))
-        x = numpy.dot(numpy.array(vH[idx,:]).T.conj(), tb / w[idx])
-    else:
-        x = numpy.zeros_like(b)
-    return x
 
 class ctypes_stdout:
     '''make c-printf output to string, but keep python print in /dev/pts/1.
@@ -189,6 +166,8 @@ class quite_run:
 
 # from pygeocoder
 # this decorator lets me use methods as both static and instance methods
+# In contrast to classmethod, when obj.function() is called, the first
+# argument is obj in omnimethod rather than obj.__class__ in classmethod
 class omnimethod(object):
     def __init__(self, func):
         self.func = func
@@ -196,3 +175,8 @@ class omnimethod(object):
     def __get__(self, instance, owner):
         return functools.partial(self.func, instance)
 
+if __name__ == '__main__':
+    for i,j in tril_equal_pace(90, 30):
+        print 'base=30', i, j, j*(j+1)/2-i*(i+1)/2
+    for i,j in tril_equal_pace(90, npace=5):
+        print 'npace=5', i, j, j*(j+1)/2-i*(i+1)/2

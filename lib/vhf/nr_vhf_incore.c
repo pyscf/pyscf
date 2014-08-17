@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <omp.h>
+#include "cvhf.h"
 #include "misc.h"
 #include "fblas.h"
 
@@ -380,11 +381,10 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                         vk[i*n+l] += eri[l] * dm[j*n+j];
                         vk[i*n+j] += eri[l] * dm[j*n+l];
                 }
-                eri += k;
                 // l = k = j
-                vk[j*n+j] += *eri *(dm[i*n+j] + dm[j*n+i]);
-                vk[i*n+j] += *eri * dm[j*n+j];
-                eri++;
+                vk[j*n+j] += eri[l] *(dm[i*n+j] + dm[j*n+i]);
+                vk[i*n+j] += eri[l] * dm[j*n+j];
+                eri += k + 1;
                 // k > j
                 for (k=j+1; k < i; k++) {
                         // l < j
@@ -395,23 +395,23 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                                 vk[k*n+j] += eri[l] * dm[l*n+i];
                         }
                         // l = j
-                        vk[j*n+j] += eri[j] *(dm[i*n+k] + dm[k*n+i]);
-                        vk[i*n+j] += eri[j] * dm[j*n+k];
-                        vk[i*n+k] += eri[j] * dm[j*n+j];
-                        vk[k*n+j] += eri[j] * dm[j*n+i];
-                        eri += j+1;
+                        vk[j*n+j] += eri[l] *(dm[i*n+k] + dm[k*n+i]);
+                        vk[i*n+j] += eri[l] * dm[j*n+k];
+                        vk[i*n+k] += eri[l] * dm[j*n+j];
+                        vk[k*n+j] += eri[l] * dm[j*n+i];
+                        //eri += j+1;
                         // l > j
-                        for (l = j+1; l < k; l++, eri++) {
-                                vk[i*n+l] += eri[0] * dm[j*n+k];
-                                vk[i*n+k] += eri[0] * dm[j*n+l];
-                                vk[l*n+j] += eri[0] * dm[k*n+i];
-                                vk[k*n+j] += eri[0] * dm[l*n+i];
+                        for (l = j+1; l < k; l++) {
+                                vk[i*n+l] += eri[l] * dm[j*n+k];
+                                vk[i*n+k] += eri[l] * dm[j*n+l];
+                                vk[l*n+j] += eri[l] * dm[k*n+i];
+                                vk[k*n+j] += eri[l] * dm[l*n+i];
                         }
                         // l = k
-                        vk[j*n+k] += eri[0] * dm[i*n+k];
-                        vk[i*n+k] += eri[0] * dm[j*n+k];
-                        vk[k*n+j] += eri[0] * dm[k*n+i];
-                        eri++;
+                        vk[j*n+k] += eri[l] * dm[i*n+k];
+                        vk[i*n+k] += eri[l] * dm[j*n+k];
+                        vk[k*n+j] += eri[l] * dm[k*n+i];
+                        eri += k + 1;
                 }
                 // k = i
                 for (l = 0; l < j; l++) {
@@ -420,11 +420,11 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                         vk[i*n+i] += eri[l] *(dm[j*n+l] + dm[l*n+j]);
                         vk[i*n+j] += eri[l] * dm[l*n+i];
                 }
-                eri += j;
                 // i = k, j = l;
-                vk[j*n+j] += *eri * dm[i*n+i];
-                vk[i*n+j] += *eri * dm[j*n+i];
-                vk[i*n+i] += *eri * dm[j*n+j];
+                vk[j*n+j] += eri[l] * dm[i*n+i];
+                vk[i*n+j] += eri[l] * dm[j*n+i];
+                vk[i*n+i] += eri[l] * dm[j*n+j];
+                eri += j + 1;
         } else { // i = j
                 for (k = 0; k < i-1; k+=2) {
                         for (l = 0; l < k; l++) {
@@ -452,11 +452,15 @@ void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                         vk[i*n+l] += eri[l] * dm[i*n+i];
                         vk[i*n+i] += eri[l] *(dm[i*n+l] + dm[l*n+i]);
                 }
-                eri += k;
                 // i = j = k = l
-                vk[i*n+i] += *eri * dm[i*n+i];
+                vk[i*n+i] += eri[l] * dm[i*n+i];
+                eri += k + 1;
         }
 }
+
+/**************************************************
+ * for symmetric density matrix
+ **************************************************/
 void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
 {
         const int npair = n*(n+1)/2;
@@ -513,3 +517,87 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
         free(tri_vj);
 }
 
+
+
+/**************************************************
+ * for general density matrix
+ **************************************************/
+static void CVHFnr_incore_sub(int n, double *eri, double *dm,
+                              double *vj, double *vk, void (*const fvk)())
+{
+        const int npair = n*(n+1)/2;
+        double *tri_dm = malloc(sizeof(double)*npair);
+        double *tri_vj = malloc(sizeof(double)*npair);
+        double *vj_priv, *vk_priv;
+        int i, j;
+        int *ij2i = malloc(sizeof(int)*npair);
+        unsigned long ij, off;
+
+        CVHFcompress_nr_dm(tri_dm, dm, n);
+        CVHFset_ij2i(ij2i, n);
+        memset(tri_vj, 0, sizeof(double)*npair);
+        memset(vk, 0, sizeof(double)*n*n);
+
+#pragma omp parallel default(none) \
+        shared(eri, tri_dm, dm, tri_vj, vk, ij2i, n) \
+        private(ij, i, j, off, vj_priv, vk_priv)
+        {
+                vj_priv = malloc(sizeof(double)*npair);
+                vk_priv = malloc(sizeof(double)*n*n);
+                memset(vj_priv, 0, sizeof(double)*npair);
+                memset(vk_priv, 0, sizeof(double)*n*n);
+#pragma omp for nowait schedule(guided, 4)
+                for (ij = 0; ij < npair; ij++) {
+                        i = ij2i[ij];
+                        j = ij - (i*(i+1)/2);
+                        off = ij*(ij+1)/2;
+                        CVHFnr_eri8fold_vj_o2(vj_priv, ij, eri+off, tri_dm);
+                        (*fvk)(vk_priv, i, j, n, eri+off, dm);
+                }
+#pragma omp critical
+                {
+                        for (i = 0; i < npair; i++) {
+                                tri_vj[i] += vj_priv[i];
+                        }
+                        for (i = 0; i < n*n; i++) {
+                                vk[i] += vk_priv[i];
+                        }
+                }
+                free(vj_priv);
+                free(vk_priv);
+        }
+
+        for (i = 0, ij = 0; i < n; i++) {
+                for (j = 0; j <= i; j++, ij++) {
+                        vj[i*n+j] = tri_vj[ij];
+                        vj[j*n+i] = tri_vj[ij];
+                }
+        }
+
+        free(ij2i);
+        free(tri_dm);
+        free(tri_vj);
+}
+
+void CVHFnr_incore(int n, double *eri, double *dm, double *vj, double *vk,
+                   int hermi)
+{
+        int i, j;
+        if (hermi == DM_HERMITIAN) {
+                CVHFnr_incore_sub(n, eri, dm, vj, vk, CVHFnr_eri8fold_vk_o4);
+                for (i = 0; i < n; i++) {
+                        for (j = 0; j <= i; j++) {
+                                vk[j*n+i] = vk[i*n+j];
+                        }
+                }
+        } else if (hermi == DM_ANTI) {
+                CVHFnr_incore_sub(n, eri, dm, vj, vk, CVHFnr_eri8fold_vk_o4);
+                for (i = 0; i < n; i++) {
+                        for (j = 0; j <= i; j++) {
+                                vk[j*n+i] = -vk[i*n+j];
+                        }
+                }
+        } else { // plain
+                CVHFnr_incore_sub(n, eri, dm, vj, vk, &CVHFnr_eri8fold_vk_o0);
+        }
+}

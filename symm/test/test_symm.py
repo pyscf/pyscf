@@ -18,7 +18,7 @@ h2o.atom.extend([
 
 h2o.basis = {"H": '6-31g',
              "O": '6-31g',}
-h2o.build_moleinfo()
+h2o.build()
 
 
 class KnowValues(unittest.TestCase):

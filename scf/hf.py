@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
 #
 # File: hf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
@@ -9,15 +8,14 @@
 Non-relativistic Hartree-Fock
 '''
 
-__author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
-
 import os, sys
 import tempfile
 import ctypes
+import copy
 import time
 
 import numpy
-import scipy.linalg.flapack as lapack
+import scipy.linalg
 import pyscf.gto as gto
 from pyscf import lib
 import pyscf.lib.logger as log
@@ -33,22 +31,22 @@ _cint = ctypes.cdll.LoadLibrary(alib)
 
 __doc__ = '''Options:
 self.chkfile = '/dev/shm/...'
-self.fout = '...'
+self.stdout = '...'
 self.diis_space = 6
 self.diis_start_cycle = 3
 self.damp_factor = 1
 self.level_shift_factor = 0
-self.scf_threshold = 1e-10
-self.max_scf_cycle = 50
+self.conv_threshold = 1e-10
+self.max_cycle = 50
 self.init_guess(method)         # method = one of 'atom', '1e', 'chkfile', 'minao'
 '''
 
 
 def dump_orbital_coeff(mol, mo):
-    label = mol.labels_of_spheric_GTO()
+    label = mol.spheric_labels()
     fmt = ' %10.5f'*mo.shape[1] + '\n'
     for i, c in enumerate(numpy.array(mo)):
-        mol.fout.write(('%d%3s %s%4s ' % label[i]) + (fmt % tuple(c)))
+        mol.stdout.write(('%d%3s %s%4s ' % label[i]) + (fmt % tuple(c)))
 
 
 
@@ -57,7 +55,8 @@ def get_vj_vk(vhfor, mol, dm):
 
 
 
-def scf_cycle(mol, scf, scf_threshold=1e-10, dump_chk=True, init_dm=None):
+def scf_cycle(mol, scf, conv_threshold=1e-10, dump_chk=True, init_dm=None):
+    cput0 = (time.clock(), time.time())
     if init_dm is None:
         hf_energy, dm = scf.init_guess_method(mol)
     else:
@@ -70,17 +69,18 @@ def scf_cycle(mol, scf, scf_threshold=1e-10, dump_chk=True, init_dm=None):
     h1e = scf.get_hcore(mol)
     s1e = scf.get_ovlp(mol)
 
+    cput1 = cput0
     vhf = 0
     dm_last = 0
     log.debug(scf, 'start scf_cycle')
-    while not scf_conv and cycle < max(1, scf.max_scf_cycle):
-        vhf = scf.get_eff_potential(mol, dm, dm_last=dm_last, vhf_last=vhf)
+    while not scf_conv and cycle < max(1, scf.max_cycle):
+        vhf = scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = scf.make_fock(h1e, vhf)
         fock = diis(cycle, s1e, dm, fock)
 
         dm_last = dm
         last_hf_e = hf_energy
-        mo_energy, mo_coeff, err = scf.eig(fock, s1e)
+        mo_energy, mo_coeff = scf.eig(fock, s1e)
         mo_occ = scf.set_mo_occ(mo_energy, mo_coeff)
         dm = scf.calc_den_mat(mo_coeff, mo_occ)
         hf_energy = scf.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)[0]
@@ -89,25 +89,26 @@ def scf_cycle(mol, scf, scf_threshold=1e-10, dump_chk=True, init_dm=None):
                  cycle+1, hf_energy, hf_energy+mol.nuclear_repulsion(), \
                  hf_energy-last_hf_e)
 
-        if abs((hf_energy-last_hf_e)/hf_energy) < scf_threshold \
-           and scf.check_dm_converge(dm, dm_last, scf_threshold):
+        if abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_threshold \
+           and scf.check_dm_converge(dm, dm_last, conv_threshold):
             scf_conv = True
 
         if dump_chk:
             scf.dump_scf_to_chkfile(hf_energy, mo_energy, mo_occ, mo_coeff)
-        log.debug(scf, 'CPU time: %12.2f', time.clock())
+        cput1 = log.timer(scf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
     # one extra cycle of SCF
     dm = scf.calc_den_mat(mo_coeff, mo_occ)
-    vhf = scf.get_eff_potential(mol, dm)
+    vhf = scf.get_veff(mol, dm)
     fock = scf.make_fock(h1e, vhf)
-    mo_energy, mo_coeff, err = scf.eig(fock, s1e)
+    mo_energy, mo_coeff = scf.eig(fock, s1e)
     mo_occ = scf.set_mo_occ(mo_energy, mo_coeff)
     dm = scf.calc_den_mat(mo_coeff, mo_occ)
     hf_energy = scf.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)[0]
     if dump_chk:
         scf.dump_scf_to_chkfile(hf_energy, mo_energy, mo_occ, mo_coeff)
+    log.timer(scf, 'scf_cycle', *cput0)
 
     return scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff
 
@@ -120,11 +121,12 @@ class SCF(object):
         self.mol = mol
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self.fout = mol.fout
+        self.stdout = mol.stdout
 
-        self.chkfile = tempfile.mktemp(dir='/dev/shm')
-        self.scf_threshold = 1e-10
-        self.max_scf_cycle = 50
+        _fd,self.chkfile = tempfile.mkstemp()
+        os.close(_fd)
+        self.conv_threshold = 1e-10
+        self.max_cycle = 50
         self.init_guess_method = self._init_guess_by_minao
         self.diis_space = 8
         self.diis_start_cycle = 3
@@ -145,14 +147,14 @@ class SCF(object):
         log.info(self, '\n')
         log.info(self, '******** SCF options ********')
         log.info(self, 'method = %s', self.__doc__)#self.__class__)
-        log.info(self, 'potential = %s', self.get_eff_potential.__doc__)
+        log.info(self, 'potential = %s', self.get_veff.__doc__)
         log.info(self, 'initial guess = %s', self.init_guess_method.__doc__)
         log.info(self, 'damping factor = %g', self.damp_factor)
         log.info(self, 'level shift factor = %g', self.level_shift_factor)
         log.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
         log.info(self, 'DIIS space = %d', self.diis_space)
-        log.info(self, 'SCF threshold = %g', self.scf_threshold)
-        log.info(self, 'max. SCF cycles = %d', self.max_scf_cycle)
+        log.info(self, 'SCF threshold = %g', self.conv_threshold)
+        log.info(self, 'max. SCF cycles = %d', self.max_cycle)
         if self.direct_scf:
             log.info(self, 'direct_scf_threshold = %g', \
                      self.direct_scf_threshold)
@@ -161,8 +163,8 @@ class SCF(object):
 
     @classmethod
     def eig(self, h, s):
-        c, e, info = lapack.dsygv(h, s)
-        return e, c, info
+        e, c = scipy.linalg.eigh(h, s)
+        return e, c
 
     def init_diis(self):
         diis_a = diis.SCF_DIIS(self)
@@ -220,7 +222,7 @@ class SCF(object):
         log.info(self, 'Initial guess from one electron system.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff, err = self.eig(h1e, s1e)
+        mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.set_mo_occ(mo_energy, mo_coeff)
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         return 0, dm
@@ -235,12 +237,6 @@ class SCF(object):
             log.warn(self, 'Fail in reading from %s. Use MINAO initial guess', \
                      self.chkfile)
             return self._init_guess_by_minao(mol)
-
-        if not mol.is_same_mol(chk_mol):
-            #raise RuntimeError('input moleinfo is incompatible with chkfile')
-            log.warn(self, 'input moleinfo is incompatible with chkfile.')
-            #log.warn(self, 'Use MINAO initial guess')
-            #return self._init_guess_by_minao(mol)
 
         log.info(self, 'Read initial guess from file %s.', self.chkfile)
 
@@ -340,14 +336,15 @@ class SCF(object):
     def scf_cycle(self, mol, *args, **keys):
         return scf_cycle(mol, self, *args, **keys)
 
-    def check_dm_converge(self, dm, dm_last, scf_threshold):
+    def check_dm_converge(self, dm, dm_last, conv_threshold):
         delta_dm = abs(dm-dm_last).sum()
         dm_change = delta_dm/abs(dm_last).sum()
         log.info(self, '          sum(delta_dm)=%g (~ %g%%)\n', \
                  delta_dm, dm_change*100)
-        return dm_change < scf_threshold*1e2
+        return dm_change < conv_threshold*1e2
 
     def scf(self):
+        cput0 = (time.clock(), time.time())
         self.dump_scf_option()
 
         if self.mol.nelectron == 1:
@@ -361,27 +358,17 @@ class SCF(object):
             # call self.scf_cycle because dhf redefine scf_cycle
             self.scf_conv, self.hf_energy, \
                     self.mo_energy, self.mo_occ, self.mo_coeff \
-                    = self.scf_cycle(self.mol, self.scf_threshold)
+                    = self.scf_cycle(self.mol, self.conv_threshold)
             self.del_direct_scf()
 
-        log.info(self, 'CPU time: %12.2f', time.clock())
-        e_nuc = self.mol.nuclear_repulsion()
-        log.log(self, 'nuclear repulsion = %.15g', e_nuc)
-        if self.scf_conv:
-            log.log(self, 'converged electronic energy = %.15g', \
-                    self.hf_energy)
-        else:
-            log.log(self, 'SCF not converge.')
-            log.log(self, 'electronic energy = %.15g after %d cycles.', \
-                    self.hf_energy, self.max_scf_cycle)
-        log.log(self, 'total molecular energy = %.15g', \
-                self.hf_energy + e_nuc)
+        log.timer(self, 'SCF', *cput0)
+        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
         if self.verbose >= param.VERBOSE_INFO:
             self.analyze_scf_result(self.mol, self.mo_energy, self.mo_occ, \
                                     self.mo_coeff)
-        return self.hf_energy + e_nuc
+        return etot
 
-    def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0):
         '''NR Hartree-Fock Coulomb repulsion'''
         if self.direct_scf:
             vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
@@ -394,9 +381,22 @@ class SCF(object):
     def solve_1e(self, mol):
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff, err = self.eig(h1e, s1e)
+        mo_energy, mo_coeff = self.eig(h1e, s1e)
         #log.info(self, '1 electron energy = %.15g.', mo_energy[0])
         return mo_energy, mo_coeff
+
+    def dump_final_energy(self, hf_energy, scf_conv):
+        e_nuc = self.mol.nuclear_repulsion()
+        if scf_conv:
+            log.log(self, 'converged electronic energy = %.15g, nuclear repulsion = %.15g', \
+                    hf_energy, e_nuc)
+        else:
+            log.log(self, 'SCF not converge.')
+            log.log(self, 'electronic energy = %.15g after %d cycles, nuclear repulsion = %.15g', \
+                    hf_energy, self.max_cycle, e_nuc)
+        log.log(self, 'total molecular energy = %.15g', \
+                hf_energy + e_nuc)
+        return hf_energy + e_nuc
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
         log.info(self, '**** MO energy ****')
@@ -445,7 +445,7 @@ def init_guess_by_atom(dev, mol):
 
 def init_guess_by_minao(dev, mol):
     '''Initial guess in terms of the overlap to minimal basis.'''
-    import copy
+    import atom_hf
     log.info(dev, 'initial guess from MINAO')
     #TODO: log.info(dev, 'initial guess from ANO')
     pmol = mol.copy()
@@ -456,7 +456,7 @@ def init_guess_by_minao(dev, mol):
         if symb != 'GHOST':
             basis_add = gto.basis.minao[gto.mole._rm_digit(symb)]
             #TODO: basis_add = gto.basis.ano[gto.mole._rm_digit(symb)]
-            occ.append(gto.mole.get_minao_occ(symb))
+            occ.append(atom_hf.get_minao_occ(symb))
             #TODO: occ.append(gto.mole.get_ano_occ(symb))
             pmol._bas.extend(pmol.make_bas_env_by_atm_id(ia, basis_add))
     pmol.nbas = pmol._bas.__len__()
@@ -503,17 +503,18 @@ def damping(s, d, f, factor):
 
 
 ################################################
-#
-#
+# for general DM
+# hermi = 0 : arbitary
+# hermi = 1 : hermitian
+# hermi = 2 : anti-hermitian
 ################################################
-
-def dot_eri_dm(eri, dm):
+def dot_eri_dm(eri, dm, hermi=0):
     if dm.ndim == 2:
-        vj, vk = _vhf.vhf_jk_incore_o4(eri, dm)
+        vj, vk = _vhf.vhf_jk_incore(eri, dm, hermi=hermi)
     else:
         vjk = []
         for dmi in dm:
-            vjk.append(_vhf.vhf_jk_incore_o4(eri, dmi))
+            vjk.append(_vhf.vhf_jk_incore(eri, dmi, hermi=hermi))
         vj = numpy.array([v[0] for v in vjk])
         vk = numpy.array([v[1] for v in vjk])
     return vj, vk
@@ -524,12 +525,10 @@ class RHF(SCF):
         if mol.nelectron != 1 and mol.nelectron.__mod__(2) is not 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
         SCF.__init__(self, mol)
-
-        self.eri_in_memory = self._is_mem_enough()
         self._eri = None
 
     def init_direct_scf(self, mol):
-        if not self.eri_in_memory and self.direct_scf:
+        if not self._is_mem_enough() and self.direct_scf:
             self.opt = _vhf.VHFOpt()
             self.opt.init_nr_vhf_direct(mol._atm, mol._bas, mol._env)
             self.opt.direct_scf_threshold = self.direct_scf_threshold
@@ -537,24 +536,26 @@ class RHF(SCF):
     def release_eri(self):
         self._eri = None
 
-    def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''NR RHF Coulomb repulsion'''
-        t0 = time.clock()
-        if self.eri_in_memory:
+        t0 = (time.clock(), time.time())
+        if self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
-            vj, vk = dot_eri_dm(self._eri, dm)
+            vj, vk = dot_eri_dm(self._eri, dm, hermi=hermi)
             vhf = vj - vk * .5
         else:
             if self.direct_scf:
                 #vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
-                vj, vk = _vhf.vhf_jk_direct_o4(dm-dm_last, mol._atm, \
-                                               mol._bas, mol._env, self.opt)
+                vj, vk = _vhf.vhf_jk_direct(dm-dm_last, mol._atm, \
+                                            mol._bas, mol._env, self.opt, \
+                                            hermi=hermi)
                 vhf = vhf_last + vj - vk * .5
             else:
-                vj, vk = _vhf.vhf_jk_direct_o4(dm, mol._atm, mol._bas, mol._env)
+                vj, vk = _vhf.vhf_jk_direct(dm, mol._atm, mol._bas, mol._env, \
+                                            hermi=hermi)
                 vhf = vj - vk * .5
-        log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
+        log.timer(self, 'vj and vk', *t0)
         return vhf
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
@@ -588,7 +589,7 @@ def rhf_mulliken_pop(mol, dm, s):
     '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
     m = dm * s
     pop = numpy.array(map(sum, m))
-    label = mol.labels_of_spheric_GTO()
+    label = mol.spheric_labels()
 
     log.info(mol, ' ** Mulliken pop (on non-orthogonal input basis)  **')
     for i, s in enumerate(label):
@@ -615,7 +616,7 @@ def rhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
     dm = reduce(numpy.dot, (c_inv, dm_ao, c_inv.T.conj()))
 
     pop = dm.diagonal()
-    label = mol.labels_of_spheric_GTO()
+    label = mol.spheric_labels()
 
     log.info(mol, ' ** Mulliken pop (on meta-lowdin orthogonal AOs)  **')
     for i, s in enumerate(label):
@@ -647,8 +648,6 @@ class UHF(SCF):
         # fix_nelectron_alpha=0 may lead high spin states
         self.fix_nelectron_alpha = 0
         self.break_symmetry = False
-
-        self.eri_in_memory = self._is_mem_enough()
         self._eri = None
 
     def dump_scf_option(self):
@@ -663,9 +662,9 @@ class UHF(SCF):
                      self.mol.nelectron-self.nelectron_alpha)
 
     def eig(self, fock, s):
-        c_a, e_a, info = lapack.dsygv(fock[0], s)
-        c_b, e_b, info = lapack.dsygv(fock[1], s)
-        return numpy.array((e_a,e_b)), (c_a,c_b), info
+        e_a, c_a = scipy.linalg.eigh(fock[0], s)
+        e_b, c_b = scipy.linalg.eigh(fock[1], s)
+        return numpy.array((e_a,e_b)), (c_a,c_b)
 
     def init_diis(self):
         udiis = diis.SCF_DIIS(self)
@@ -788,7 +787,7 @@ class UHF(SCF):
         log.info(self, 'Initial guess from one electron system.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff, err = self.eig(h1e, s1e)
+        mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_coeff = self.break_spin_sym(mol, mo_coeff)
 
         mo_occ = self.set_mo_occ(mo_energy, mo_coeff)
@@ -823,12 +822,6 @@ class UHF(SCF):
                      self.chkfile)
             return self._init_guess_by_minao(mol)
 
-        if not mol.is_same_mol(chk_mol):
-            #raise RuntimeError('input moleinfo is incompatible with chkfile')
-            log.warn(self, 'input moleinfo is incompatible with chkfile.')
-            #log.warn(self, 'Use MINAO initial guess')
-            #return self._init_guess_by_minao(mol)
-
         log.info(self, 'Read initial guess from file %s.', self.chkfile)
 
         chk_mol._atm, chk_mol._bas, chk_mol._env = \
@@ -854,7 +847,7 @@ class UHF(SCF):
         return scf_rec['hf_energy'], numpy.array(dm)
 
     def init_direct_scf(self, mol):
-        if not self.eri_in_memory and self.direct_scf:
+        if not self._is_mem_enough() and self.direct_scf:
             self.opt = _vhf.VHFOpt()
             self.opt.init_nr_vhf_direct(mol._atm, mol._bas, mol._env)
             self.opt.direct_scf_threshold = self.direct_scf_threshold
@@ -862,41 +855,43 @@ class UHF(SCF):
     def release_eri(self):
         self._eri = None
 
-    def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''NR UHF Coulomb repulsion'''
-        t0 = time.clock()
-        if self.eri_in_memory:
+        t0 = (time.clock(), time.time())
+        if self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph_8fold(mol._atm, mol._bas, mol._env)
-            vj0, vk0 = dot_eri_dm(self._eri, dm[0])
-            vj1, vk1 = dot_eri_dm(self._eri, dm[1])
+            vj0, vk0 = dot_eri_dm(self._eri, dm[0], hermi=hermi)
+            vj1, vk1 = dot_eri_dm(self._eri, dm[1], hermi=hermi)
             v_a = vj0 + vj1 - vk0
             v_b = vj0 + vj1 - vk1
             vhf = numpy.array((v_a,v_b))
         elif self.direct_scf:
             #vj, vk = get_vj_vk(pycint.nr_vhf_direct_o3, mol, dm-dm_last)
-            vj, vk = _vhf.vhf_jk_direct_o4(dm-dm_last, mol._atm, mol._bas, \
-                                              mol._env, self.opt)
+            vj, vk = _vhf.vhf_jk_direct(dm-dm_last, mol._atm, mol._bas, \
+                                        mol._env, self.opt, hermi=hermi)
             v_a = vj[0] + vj[1] - vk[0]
             v_b = vj[0] + vj[1] - vk[1]
             vhf = vhf_last + numpy.array((v_a,v_b))
         else:
             #vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
-            vj, vk = _vhf.vhf_jk_direct_o4(dm, mol._atm, mol._bas, mol._env)
+            vj, vk = _vhf.vhf_jk_direct(dm, mol._atm, mol._bas, mol._env, \
+                                        hermi=hermi)
             v_a = vj[0] + vj[1] - vk[0]
             v_b = vj[0] + vj[1] - vk[1]
             vhf = numpy.array((v_a,v_b))
-        log.debug(self, 'CPU time for vj and vk %.8g sec', (time.clock()-t0))
+        log.timer(self, 'vj and vk', *t0)
         return vhf
 
     def scf(self):
+        cput0 = (time.clock(), time.time())
         self.dump_scf_option()
 
         if self.mol.nelectron == 1:
             self.scf_conv = True
             h1e = self.get_hcore(self.mol)
             s1e = self.get_ovlp(self.mol)
-            self.mo_energy, self.mo_coeff, err = SCF.eig(self, h1e[0], s1e)
+            self.mo_energy, self.mo_coeff = SCF.eig(self, h1e[0], s1e)
             self.mo_occ = numpy.zeros_like(self.mo_energy)
             self.mo_occ[0] = 1
             self.hf_energy = self.mo_energy[0]
@@ -905,29 +900,19 @@ class UHF(SCF):
             self.init_direct_scf(self.mol)
             self.scf_conv, self.hf_energy, \
                     self.mo_energy, self.mo_occ, self.mo_coeff \
-                    = self.scf_cycle(self.mol, self.scf_threshold)
+                    = self.scf_cycle(self.mol, self.conv_threshold)
             self.del_direct_scf()
             if self.nelectron_alpha * 2 < self.mol.nelectron:
                 self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
                 self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
                 self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
-        log.info(self, 'CPU time: %12.2f', time.clock())
-        e_nuc = self.mol.nuclear_repulsion()
-        log.log(self, 'nuclear repulsion = %.15g', e_nuc)
-        if self.scf_conv:
-            log.log(self, 'converged electronic energy = %.15g', \
-                    self.hf_energy)
-        else:
-            log.log(self, 'SCF not converge.')
-            log.log(self, 'electronic energy = %.15g after %d cycles.', \
-                    self.hf_energy, self.max_scf_cycle)
-        log.log(self, 'total molecular energy = %.15g', \
-                self.hf_energy + e_nuc)
+        log.timer(self, 'SCF', *cput0)
+        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
         if self.verbose >= param.VERBOSE_INFO:
             self.analyze_scf_result(self.mol, self.mo_energy, self.mo_occ, \
                                     self.mo_coeff)
-        return self.hf_energy + e_nuc
+        return etot
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
         ss, s = spin_square(mol, mo_coeff[0][:,mo_occ[0]>0], \
@@ -990,6 +975,7 @@ def chk_scf_type(mo_coeff):
         return 'NR-RHF'
 
 def init_minao_uhf_dm(mol):
+    import atom_hf
     def filter_alpha(x):
         if x > 1:
             return 1
@@ -1000,13 +986,12 @@ def init_minao_uhf_dm(mol):
             return x-1
         else:
             return 0
-    import copy
     pmol = mol.copy()
     occa = []
     occb = []
     for ia in range(mol.natm):
         symb = mol.symbol_of_atm(ia)
-        occ0 = gto.mole.get_minao_occ(symb)
+        occ0 = atom_hf.get_minao_occ(symb)
         minao = gto.basis.minao[gto.mole._rm_digit(symb)]
         occa.append(map(filter_alpha,occ0))
         occb.append(map(filter_beta ,occ0))
@@ -1040,9 +1025,9 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.direct_scf_threshold  = rhf.direct_scf_threshold
 
     uhf.chkfile               = rhf.chkfile
-    uhf.fout                  = rhf.fout
-    uhf.scf_threshold         = rhf.scf_threshold
-    uhf.max_scf_cycle         = rhf.max_scf_cycle
+    uhf.stdout                = rhf.stdout
+    uhf.conv_threshold         = rhf.conv_threshold
+    uhf.max_cycle         = rhf.max_cycle
     return uhf
 
 def spin_square(mol, occ_mo_a, occ_mo_b):
@@ -1069,7 +1054,7 @@ def uhf_mulliken_pop(mol, dm, s):
     m_b = dm[1] * s
     pop_a = numpy.array(map(sum, m_a))
     pop_b = numpy.array(map(sum, m_b))
-    label = mol.labels_of_spheric_GTO()
+    label = mol.spheric_labels()
 
     log.info(mol, ' ** Mulliken pop alpha/beta (on non-orthogonal basis) **')
     for i, s in enumerate(label):
@@ -1097,7 +1082,7 @@ def uhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
 
     pop_a = dm_a.diagonal()
     pop_b = dm_b.diagonal()
-    label = mol.labels_of_spheric_GTO()
+    label = mol.spheric_labels()
 
     log.info(mol, ' ** Mulliken pop alpha/beta (on meta-lowdin orthogonal AOs) **')
     for i, s in enumerate(label):
@@ -1122,7 +1107,7 @@ def uhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
 #TODO:        SCF.__init__(self, mol)
 #TODO:        self.nelectron_alpha = (mol.nelectron + 1) / 2
 #TODO:
-#TODO:    def get_eff_potential(self, mol, dm):
+#TODO:    def get_veff(self, mol, dm):
 #TODO:        '''NR HF Coulomb repulsion'''
 #TODO:        vj, vk = get_vj_vk(pycint.nr_vhf_o3, mol, dm)
 #TODO:        v_1 = vj[0] + vj[1] - vk[0]

@@ -182,7 +182,6 @@ ELEMENTS = (
         ('E118' , 0   , ( 0, 0, 0, 0,))                #118
         )
 
-VERBOSE_NONE   = 9
 VERBOSE_DEBUG  = 5
 VERBOSE_INFO   = 4
 VERBOSE_NOTICE = 3

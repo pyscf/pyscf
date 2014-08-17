@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
 #
 # File: diis.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
@@ -17,9 +16,6 @@ import numpy
 import pyscf.lib
 import pyscf.lib.logger as log
 
-__author__ = "Qiming Sun <osirpt.sun@gmail.com>"
-__version__ = "$ 0.1 $"
-
 
 class DIIS:
 # J. Mol. Struct. 114, 31-34
@@ -30,7 +26,7 @@ class DIIS:
 # to make the error vector as small as possible.
     def __init__(self, dev):
         self.verbose = dev.verbose
-        self.fout = dev.fout
+        self.stdout = dev.stdout
         self.diis_vec_stack = []
         self.threshold = 1e-6
         self.diis_space = 6
@@ -94,7 +90,8 @@ class DIISLarge(DIIS):
         import h5py
         DIIS.__init__(self, dev)
         if filename is None:
-            tmp = tempfile.mktemp('.h5')
+            fd, tmp = tempfile.mkstemp('.h5')
+            os.close(fd)
         else:
             tmp = filename
         self.diistmpfile = h5py.File(tmp, 'w')

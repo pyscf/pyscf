@@ -1,13 +1,12 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: format_basis.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 '''download the basis sets TX93(optimized general contractions) from EMSL
     https://bse.pnl.gov/bse/portal
 and format them to the proper format'''
-
-__author__ = "Qiming Sun <osirpt.sun@gmail.com>"
-__version__ = "$ 0.2 $"
 
 import os, sys
 

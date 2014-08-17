@@ -1,23 +1,68 @@
+#!/usr/bin/env python
 #
 # File: atom_hf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
-import scipy.linalg.flapack as lapack
+import scipy.linalg
 from pyscf import gto
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import hf
 
+
+MINAO_OCC = (
+    (1.,),                  # H
+    (2.,),                  # He
+    (2.,1),                 # Li
+    (2.,2),                 # Be
+    (2.,2,1./3,1./3,1./3),  # B
+    (2.,2,2./3,2./3,2./3),  # C
+    (2.,2,1.  ,1.  ,1.  ),  # N
+    (2.,2,4./3,4./3,4./3),  # O
+    (2.,2,5./3,5./3,5./3),  # F
+    (2.,2,2.  ,2.  ,2.  ),  # Ne
+#    s  s s p p p p    p    p
+    (2.,2,1,2,2,2),                   # Na
+    (2.,2,2,2,2,2),                   # Mg
+    (2.,2,2,2,2,2,1./3,1./3,1./3),    # Al
+    (2.,2,2,2,2,2,2./3,2./3,2./3),    # Si
+    (2.,2,2,2,2,2,1.  ,1.  ,1.  ),    # P
+    (2.,2,2,2,2,2,4./3,4./3,4./3),    # S
+    (2.,2,2,2,2,2,5./3,5./3,5./3),    # Cl
+    (2.,2,2,2,2,2,2.  ,2.  ,2.  ),    # Ar
+#    s  s s s p p p p p p
+    (None                ),           # K
+    (2.,2,2,2,2,2,2,2,2,2),           # Ca
+#    s  s s s s p p p p p p p p p d  d  d  d  d
+    (2.,2,2,2,0,2,2,2,2,2,2,0,0,0,.2,.2,.2,.2,.2),         # Sc
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,.4,.4,.4,.4,.4),         # Ti
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,.6,.6,.6,.6,.6),         # V
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,.8,.8,.8,.8,.8),         # Cr
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.,1.,1.,1.,1.),         # Mn
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.2,1.2,1.2,1.2,1.2),    # Fe
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.4,1.4,1.4,1.4,1.4),    # Co
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.6,1.6,1.6,1.6,1.6),    # Ni
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,1.8,1.8,1.8,1.8,1.8),    # Cu
+    (2.,2,2,2,2,2,2,2,2,2,2,0,0,0,2. ,2. ,2. ,2. ,2. ),    # Zn
+#    s  s s s p p p p p p p    p    p    d d d d d
+    (2.,2,2,2,2,2,2,2,2,2,1./3,1./3,1./3,2,2,2,2,2),       # Ga
+    (2.,2,2,2,2,2,2,2,2,2,2./3,2./3,2./3,2,2,2,2,2),       # Ge
+    (2.,2,2,2,2,2,2,2,2,2,1.  ,1.  ,1.  ,2,2,2,2,2),       # As
+    (2.,2,2,2,2,2,2,2,2,2,4./3,4./3,4./3,2,2,2,2,2),       # Se
+    (2.,2,2,2,2,2,2,2,2,2,5./3,5./3,5./3,2,2,2,2,2),       # Br
+    (2.,2,2,2,2,2,2,2,2,2,2.  ,2.  ,2.  ,2,2,2,2,2),       # Kr
+)
+def get_minao_occ(symb):
+    nuc = gto.mole._charge(symb)
+    assert(nuc <= 36)
+    return MINAO_OCC[nuc-1]
+
+
 class AtomSphericAverageRHF(hf.RHF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-
-        if mol.num_NR_function() < 350:
-            self.eri_in_memory = True
-        else:
-            self.eri_in_memory = False
         self._eri = None
 
     def dump_scf_option(self):
@@ -58,7 +103,7 @@ class AtomSphericAverageRHF(hf.RHF):
                 idx = numpy.array(idx_by_l[l])
                 f1 = f[idx,:][:,idx]
                 s1 = s[idx,:][:,idx]
-                c, e, info = lapack.dsygv(f1, s1)
+                e, c = scipy.linalg.eigh(f1, s1)
                 for i, ei in enumerate(e):
                     log.debug(self, 'l = %d, e_%d = %.9g', l, i, ei)
 
@@ -70,7 +115,7 @@ class AtomSphericAverageRHF(hf.RHF):
                     for i,i1 in enumerate(idx):
                         mo_c[idx,i1] = c[:,i]
                     idx += 1
-        return mo_e, mo_c, 0
+        return mo_e, mo_c
 
     def set_mo_occ(self, mo_energy, mo_coeff):
         return self._occ
@@ -86,7 +131,7 @@ def get_atm_nrhf_result(mol):
     atm_scf_result = {}
     for a, b in mol.basis.items():
         atm = gto.Mole()
-        atm.fout = mol.fout
+        atm.stdout = mol.stdout
         atm.atom = [[a, (0, 0, 0)]]
         atm.basis = {a: b}
         atm.nelectron = gto.mole._charge(a)
@@ -94,8 +139,11 @@ def get_atm_nrhf_result(mol):
         atm_hf = AtomSphericAverageRHF(atm)
         atm_hf.verbose = 0
         atm_scf_result[a] = atm_hf.scf_cycle(atm)[1:]
-    mol.fout.flush()
+        atm_hf._eri = None
+    mol.stdout.flush()
     return atm_scf_result
+
+
 
 
 if __name__ == '__main__':

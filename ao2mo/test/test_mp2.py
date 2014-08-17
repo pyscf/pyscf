@@ -18,7 +18,7 @@ def rmp2_energy_incore(mf, verbose=None):
     mol = mf.mol
     if verbose is None:
         verbose = mf.verbose
-    log = lib.logger.Logger(mf.fout, verbose)
+    log = lib.logger.Logger(mf.stdout, verbose)
 
     tcpu0 = time.clock()
     log.debug('transform (ia|jb)')
@@ -53,7 +53,7 @@ def rmp2_energy_incore(mf, verbose=None):
 def rmp2_energy(mol, mo_coeff, mo_energy, nocc, verbose=None):
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.fout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     tcpu0 = time.clock()
     log.debug('transform (ia|jb)')
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     print rmp2_energy(mol, rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2)
     print rmp2_energy_incore(rhf)
 
-    from pyscf import lib._vhf as _vhf
+    from pyscf.lib import _vhf
     mo_coeff, mo_energy, nocc = rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2
     n = mo_energy.size
     g = _vhf.restore_full_eri(rhf._eri, n)

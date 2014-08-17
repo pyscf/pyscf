@@ -5,6 +5,7 @@
 
 import parameters
 from misc import *
+from numpy_helper import *
 import logger
 
 #import _vhf

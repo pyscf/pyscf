@@ -1,16 +1,10 @@
 #!/usr/bin/env python
+# $Id$
 # -*- coding: utf-8
-#
-# File: dhf_dkb.py
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#
 
 '''
 Dirac Hartree-Fock
 '''
-
-__author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
-__version__ = '$ 0.1 $'
 
 import ctypes
 import numpy
@@ -33,7 +27,7 @@ def cdouble_to_cmplx(arr):
 class UHF(dhf.UHF):
     def __init__(self, mol):
         dhf.UHF.__init__(self, mol)
-        self.scf_threshold = 1e-8
+        self.conv_threshold = 1e-8
         self.make_dkb_env(mol)
         self.init_guess_method = self._init_guess_from_rkb
         self.rkb_chkfile = None
@@ -70,7 +64,7 @@ class UHF(dhf.UHF):
             raise KeyError('Unknown init guess.')
 
     def _init_guess_from_rkb(self, mol):
-        mol.fout.flush()
+        mol.stdout.flush()
         log.debug(self, 'DKB use RKB as initial guess')
         mrkb = dhf.UHF(mol)
         if self.rkb_chkfile is not None:
@@ -81,7 +75,7 @@ class UHF(dhf.UHF):
         c = numpy.dot(self.project_rkb_to_dkb(mol), mo_coeff)
         dm = mrkb.calc_den_mat(c, mo_occ)
         log.debug(self, 'DKB initial guess with hf_energy = %.12g', hf_energy)
-        mol.fout.flush()
+        mol.stdout.flush()
         return hf_energy, dm
 
     def project_rkb_to_dkb(self, mol):
@@ -116,12 +110,6 @@ class UHF(dhf.UHF):
                      self.chkfile)
             return self._init_guess_from_rkb(mol)
 
-        if not mol.is_same_mol(chk_mol):
-            #raise RuntimeError('input moleinfo is incompatible with chkfile')
-            log.warn(mol, 'input moleinfo is incompatible with chkfile. ' \
-                     'Use 1e initial guess')
-            return self._init_guess_from_rkb(mol)
-
         #TODO the projection
         mo_coeff = scf_rec['mo_coeff']
         mo_energy = scf_rec['mo_energy']
@@ -137,12 +125,6 @@ class UHF(dhf.UHF):
             log.warn(mol, 'Fail in reading RKB chkfile from %s. ' \
                      'Use RKB initial guess' \
                      % self.rkb_chkfile)
-            return self._init_guess_from_rkb(mol)
-
-        if not mol.is_same_mol(chk_mol):
-            #raise RuntimeError('input moleinfo is incompatible with chkfile')
-            log.warn(mol, 'input moleinfo is incompatible with chkfile. ' \
-                     'Use 1e initial guess')
             return self._init_guess_from_rkb(mol)
 
         #TODO the projection
@@ -209,9 +191,9 @@ class UHF(dhf.UHF):
         vj, vk = hf.get_vj_vk(pycint.dkb_vhf_coul_direct, self.dkb_mol, dm)
         return vj, vk
 
-    def scf_cycle(self, mol, scf_threshold=1e-9, dump_chk=True):
+    def scf_cycle(self, mol, conv_threshold=1e-9, dump_chk=True):
         log.info(self, 'start scf_cycle for DKB')
-        return hf.SCF.scf_cycle(self, mol, scf_threshold, dump_chk)
+        return hf.SCF.scf_cycle(self, mol, conv_threshold, dump_chk)
 
 
 if __name__ == '__main__':

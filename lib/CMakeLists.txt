@@ -29,13 +29,13 @@ ELSE()
 ENDIF()
 
 ## find libxc
-#FIND_PATH(XC_INCLUDE_DIR xc.h)
-#FIND_LIBRARY(XC_LIBRARIES NAMES xc)
-#IF (XC_LIBRARIES AND XC_INCLUDE_DIR)
-#  MESSAGE(STATUS "Found libxc: ${XC_LIBRARIES}")
-#ELSE()
-#  MESSAGE(FATAL_ERROR "Could NOT find libxc")
-#ENDIF()
+FIND_PATH(XC_INCLUDE_DIR xc.h)
+FIND_LIBRARY(XC_LIBRARIES NAMES xc)
+IF (XC_LIBRARIES AND XC_INCLUDE_DIR)
+  MESSAGE(STATUS "Found libxc: ${XC_LIBRARIES}")
+ELSE()
+  MESSAGE(FATAL_ERROR "Could NOT find libxc")
+ENDIF()
 
 find_package(OpenMP)
 #if(OPENMP_FOUND)
@@ -55,4 +55,5 @@ configure_file(
 add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(pycint)
+add_subdirectory(dft)
 

@@ -40,7 +40,7 @@ static void store_ij(double *eri, int ish, int jsh, struct _VHFEnvs *envs,
         unsigned long ij0;
         double *peri;
 
-        if (CVHFnr8fold_eri_o2(eribuf, ish, jsh, ish+1,
+        if (CVHFfill_nr_eri_o2(eribuf, ish, jsh, ish+1,
                                envs->atm, envs->natm, envs->bas, envs->nbas,
                                envs->env, opt, vhfopt)) {
                 for (i0 = ao_loc[ish], i = 0; i < di; i++,i0++) {

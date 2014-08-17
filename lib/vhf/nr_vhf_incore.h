@@ -21,4 +21,6 @@ void CVHFnr_eri8fold_vk_o3(double *vk, int i, int j, int n,
 void CVHFnr_eri8fold_vk_o4(double *vk, int i, int j, int n,
                            const double *eri, const double *tri_dm);
 void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk);
+void CVHFnr_incore(int n, double *eri, double *dm, double *vj, double *vk,
+                   int hermi);
 

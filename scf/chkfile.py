@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # File: chkfile.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>

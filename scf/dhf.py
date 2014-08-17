@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
 #
 # File: dhf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
@@ -9,32 +8,30 @@
 Dirac Hartree-Fock
 '''
 
-__author__ = 'Qiming Sun <osirpt.sun@gmail.com>'
-__version__ = '$ 0.1 $'
-
 import ctypes
+import time
 import numpy
-import scipy.linalg.flapack as lapack
+import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 from pyscf.lib import pycint
-import diis
 import hf
+import diis
 import chkfile
 
 _cint = hf._cint
 
 __doc__ = '''Options:
 self.chkfile = '/dev/shm/...'
-self.fout = '...'
+self.stdout = '...'
 self.diis_space = 6
 self.diis_start_cycle = 1
 self.damp_factor = 1
 self.level_shift_factor = 0
-self.scf_threshold = 1e-10
-self.max_scf_cycle = 50
+self.conv_threshold = 1e-10
+self.max_cycle = 50
 self.oob = 0                    # operator oriented basis level
                                 # 1 sp|f> -> |f>
                                 # 2 sp|f> -> sr|f>
@@ -53,7 +50,7 @@ class UHF(hf.SCF):
     __doc__ = 'Dirac-UHF'
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self.scf_threshold = 1e-8
+        self.conv_threshold = 1e-8
         self.oob = 0
         self.with_ssss = True
         self.set_init_guess('1e')
@@ -69,12 +66,6 @@ class UHF(hf.SCF):
         #             self.chkfile)
         #    return self._init_guess_by_1e(mol)
         chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
-
-        if not mol.is_same_mol(chk_mol):
-            #raise RuntimeError('input moleinfo is incompatible with chkfile')
-            log.warn(mol, 'input moleinfo is incompatible with chkfile. ' \
-                     'Use 1e initial guess')
-            return self._init_guess_by_1e(mol)
 
         log.info(self, '\n')
         log.info(self, 'Read initial guess from file %s.', self.chkfile)
@@ -172,15 +163,6 @@ class UHF(hf.SCF):
     def dump_scf_option(self):
         hf.SCF.dump_scf_option(self)
         log.info(self, 'OOB = %d', self.oob)
-
-    def eig(self, h, s):
-        try:
-            import pyscf.lib.jacobi
-            return pyscf.lib.jacobi.zgeeigen(h, s)
-        except ImportError:
-            c, e, info = lapack.zhegv(h, s)
-            print e
-            return e, c, info
 
     def init_diis(self):
         diis_a = diis.SCF_DIIS(self)
@@ -452,15 +434,18 @@ class UHF(hf.SCF):
         vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
         return -vj, -vk
 
-    def get_eff_potential(self, mol, dm, dm_last=0, vhf_last=0):
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0):
         '''Dirac-Coulomb'''
+        t0 = (time.clock(), time.time())
         if self.direct_scf:
             vj, vk = self.get_coulomb_vj_vk_screen(mol, dm-dm_last, \
                                                    self._coulomb_now)
-            return vhf_last + vj - vk
+            vhf = vhf_last + vj - vk
         else:
             vj, vk = self.get_coulomb_vj_vk(mol, dm, self._coulomb_now)
-            return vj - vk
+            vhf = vj - vk
+            log.timer(self, 'vj and vk', *t0)
+        return vhf
 
     def get_vhf_with_gaunt(self, mol, dm, dm_last=0, vhf_last=0):
         if self.direct_scf:
@@ -477,10 +462,10 @@ class UHF(hf.SCF):
     def set_potential(self, v='coulomb', oob=0, ssss=1):
         if v.lower() == 'coulomb':
             if oob > 0:
-                self.get_eff_potential = self.coulomb_oob
+                self.get_veff = self.coulomb_oob
             else:
                 try:
-                    del(self.get_eff_potential)
+                    del(self.get_veff)
                 except:
                     pass
             #if 0 <= ssss <= 1:
@@ -497,7 +482,7 @@ class UHF(hf.SCF):
         else:
             raise KeyError('Incorrect OOB level.')
 
-    def scf_cycle(self, mol, scf_threshold=1e-9, dump_chk=True, init_dm=None):
+    def scf_cycle(self, mol, conv_threshold=1e-9, dump_chk=True, init_dm=None):
         if init_dm is None:
             hf_energy, dm = self.init_guess_method(mol)
         else:
@@ -505,7 +490,7 @@ class UHF(hf.SCF):
             dm = init_dm
 
         if self.oob > 0:
-            return hf.scf_cycle(mol, self, scf_threshold, dump_chk, \
+            return hf.scf_cycle(mol, self, conv_threshold, dump_chk, \
                                 init_dm=dm)
 
         if init_dm is None and self._coulomb_now.upper() is 'LLLL':
@@ -527,9 +512,9 @@ class UHF(hf.SCF):
             self._coulomb_now = 'SSLL'
 
         if self.with_gaunt:
-            self.get_eff_potential = self.get_vhf_with_gaunt
+            self.get_veff = self.get_vhf_with_gaunt
 
-        return hf.scf_cycle(mol, self, scf_threshold, dump_chk, init_dm=dm)
+        return hf.scf_cycle(mol, self, conv_threshold, dump_chk, init_dm=dm)
 
 
 def time_reversal_ao_idx(mol):
@@ -612,5 +597,5 @@ if __name__ == '__main__':
 #TODO:        method.init_guess('atom')
     method.set_potential('coulomb')
     #method.set_direct_scf_threshold(1e-18)
-    energy = method.scf(mol) #=-2.63133406544043
+    energy = method.scf() #=-2.63133406544043
     print energy
