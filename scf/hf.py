@@ -454,8 +454,8 @@ def init_guess_by_minao(dev, mol):
     for ia in range(mol.natm):
         symb = mol.symbol_of_atm(ia)
         if symb != 'GHOST':
-            basis_add = gto.basis.minao[gto.mole._rm_digit(symb)]
-            #TODO: basis_add = gto.basis.ano[gto.mole._rm_digit(symb)]
+            basis_add = gto.basis.importbas('minao', gto.mole._rm_digit(symb))
+            #basis_add = gto.basis.importbas('ano', gto.mole._rm_digit(symb))
             occ.append(atom_hf.get_minao_occ(symb))
             #TODO: occ.append(gto.mole.get_ano_occ(symb))
             pmol._bas.extend(pmol.make_bas_env_by_atm_id(ia, basis_add))

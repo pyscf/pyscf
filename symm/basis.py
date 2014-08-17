@@ -111,8 +111,8 @@ if __name__ == "__main__":
     h2o.atom = [['O' , (1. , 0.    , 0.   ,)],
                 [1   , (0. , -.757 , 0.587,)],
                 [1   , (0. , 0.757 , 0.587,)] ]
-    h2o.basis = {'H': gto.basis.p6_31g['H'],
-                 'O': gto.basis.p6_31g['O'],}
+    h2o.basis = {'H': '6_31g',
+                 'O': '6_31g',}
     gpname, atoms = geom.detect_symm(h2o.atom)
     print gpname
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)

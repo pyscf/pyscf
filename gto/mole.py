@@ -79,7 +79,8 @@ class Mole(object):
         self.symmetry = False
 
 # atom, etb, basis, nucmod, mass, grids to save inputs
-# self.atom = [(atom_type/nuc_charge, (coordinate(Angstrom):0.,0.,0.)), ]
+# self.atom = [(symb/nuc_charge, (coord(Angstrom):0.,0.,0.),
+#               nucmod, mass, rad, ang), ...]
         self.atom = []
 #    self.etb = [{
 #          'atom'      : 1           # atom_type/nuc_charge
@@ -244,7 +245,7 @@ class Mole(object):
 
             if isinstance(basis_tab[atom], str):
                 name = basis_tab[atom].lower().replace(' ', '').replace('-', '').replace('_', '')
-                bset = basis.alias[name][_rm_digit(symb)]
+                bset = basis.importbas(name, _rm_digit(symb))
             else:
                 bset = basis_tab[atom]
 

@@ -8,6 +8,7 @@
     https://bse.pnl.gov/bse/portal
 and format them to the proper format'''
 
+
 import os, sys
 
 def cmd_args():
@@ -16,7 +17,7 @@ def cmd_args():
     """
     import optparse
     usage = "Usage: %prog [options] arg1 arg2"
-    parser = optparse.OptionParser(usage=usage, version=__version__)
+    parser = optparse.OptionParser(usage=usage)
     parser.add_option("-v", "--verbose",
                       action="store_true", dest="verbose",
                       help="make lots of noise [default]")
@@ -66,7 +67,7 @@ def dump(fin, fout):
             l = fdin.readline()
         elif l[0:3] == 'FOR':
             elem = l.split()[1]
-            fdout.write('\'%s\':[' % elem)
+            fdout.write('%s = [' % elem)
             is_last_coeff = False
             l = fdin.readline()
             while l and l[0:3] != 'FOR':
@@ -82,7 +83,7 @@ def dump(fin, fout):
                     d = ', '.join(ls)
                 fdout.write('\n        (%s),' % d.replace('D', 'e'))
                 l = fdin.readline()
-            fdout.write(']],\n')
+            fdout.write(']]\n\n')
     fdin.close()
     fdout.close()
 
