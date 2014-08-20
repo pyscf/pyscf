@@ -3,7 +3,7 @@ pyscf
 =====
 '''
 
-__version__ = '0.3'
+__version__ = '0.5'
 
 # importing these things can slow down import pyscf
 

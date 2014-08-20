@@ -235,3 +235,141 @@ def nr_e1_incore(numpy.ndarray[double,ndim=1] eri_ao,
                                   i0, ic, j0, jc)
             free(buf)
     return lib.transpose(eri1)
+
+
+#######################################
+
+cdef extern void CVHFunpack(int n, double *vec, double* mat)
+
+def restore_8to1(numpy.ndarray eri, int norb, int blockdim):
+    cdef unsigned long npair = norb * (norb+1) / 2
+    cdef numpy.ndarray eri1 = numpy.empty((norb,norb,norb,norb))
+    cdef double *peri = <double *>eri.data
+    cdef double *peri1 = <double *>eri1.data
+    cdef double *peri2
+    cdef double *peri3
+    cdef unsigned long i, j, k, l, ij, kl
+    cdef unsigned long d1 = norb
+    cdef unsigned long d2 = norb * norb
+    cdef unsigned long d3 = norb * norb * norb
+    cdef double *buf = <double *>malloc(sizeof(double)*npair)
+    ij = 0
+    for i in range(norb):
+        for j in range(i+1):
+            extract_row_from_tri(buf, ij, npair, peri)
+            CVHFunpack(norb, buf, peri1+i*d3+j*d2);
+            if i > j:
+                peri2 = peri1 + i*d3+j*d2
+                peri3 = peri1 + j*d3+i*d2
+                for kl in range(norb*norb):
+                    peri3[kl] = peri2[kl]
+            ij += 1
+    free(buf)
+    return eri1
+
+def restore_8to4(numpy.ndarray eri, int norb, int blockdim):
+    cdef unsigned long npair = norb * (norb+1) / 2
+    cdef numpy.ndarray eri1 = numpy.empty((npair,npair))
+    cdef double *peri = <double *>eri.data
+    cdef double *peri1 = <double *>eri1.data
+    cdef unsigned long i, j, ij, i1, ic, ic1, jc, jc1
+    ij = 0
+    for ic in range(0, npair, blockdim):
+        ic1 = ic + blockdim
+        if ic1 > npair:
+            ic1 = npair
+        for i in range(ic, ic1):
+            for j in range(i+1):
+                peri1[i*npair+j] = peri[ij]
+                ij += 1
+
+            for jc in range(0, ic, blockdim):
+                jc1 = jc + blockdim
+                for i1 in range(ic, ic1):
+                    for j in range(jc, jc1):
+                        peri1[j*npair+i1] = peri1[i1*npair+j]
+            for j in range(ic, ic1):
+                peri1[j*npair+i] = peri1[i*npair+j]
+    return eri1
+
+
+def restore_4to1(numpy.ndarray eri, int norb, int blockdim):
+    cdef unsigned long npair = norb * (norb+1) / 2
+    cdef numpy.ndarray eri1 = numpy.empty((norb,norb,norb,norb))
+    cdef double *peri = <double *>eri.data
+    cdef double *peri1 = <double *>eri1.data
+    cdef double *peri2
+    cdef double *peri3
+    cdef unsigned long i, j, ij, kl
+    cdef unsigned long d1 = norb
+    cdef unsigned long d2 = norb * norb
+    cdef unsigned long d3 = norb * norb * norb
+    ij = 0
+    for i in range(norb):
+        for j in range(i+1):
+            CVHFunpack(norb, peri+ij*npair, peri1+i*d3+j*d2);
+            if i > j:
+                peri2 = peri1 + i*d3+j*d2
+                peri3 = peri1 + j*d3+i*d2
+                for kl in range(norb*norb):
+                    peri3[kl] = peri2[kl]
+            ij += 1
+    return eri1
+
+def restore_4to8(numpy.ndarray eri, int norb, int blockdim):
+    cdef unsigned long npair = norb * (norb+1) / 2
+    cdef numpy.ndarray eri1 = numpy.empty((npair*(npair+1)/2))
+    cdef double *peri = <double *>eri.data
+    cdef double *peri1 = <double *>eri1.data
+    cdef unsigned long i, j, ij
+    ij = 0
+    for i in range(npair):
+        for j in range(i+1):
+            peri1[ij] = peri[i*npair+j]
+            ij += 1
+    return eri1
+
+
+def restore_1to4(numpy.ndarray eri, int norb, int blockdim):
+    cdef unsigned long npair = norb * (norb+1) / 2
+    cdef numpy.ndarray eri1 = numpy.empty((npair,npair))
+    cdef double *peri = <double *>eri.data
+    cdef double *peri1 = <double *>eri1.data
+    cdef unsigned long i, j, k, l, ij, kl, ijkl
+    cdef unsigned long d1 = norb
+    cdef unsigned long d2 = norb * norb
+    cdef unsigned long d3 = norb * norb * norb
+    ij = 0
+    ijkl = 0
+    for i in range(norb):
+        for j in range(i+1):
+            kl = 0
+            for k in range(norb):
+                for l in range(k+1):
+                    peri1[ij*npair+kl] = peri[i*d3+j*d2+k*d1+l]
+                    kl += 1
+            ij += 1
+    return eri1
+
+def restore_1to8(numpy.ndarray eri, int norb, int blockdim):
+    cdef int npair = norb * (norb+1) / 2
+    cdef numpy.ndarray eri1 = numpy.empty((npair*(npair+1)/2))
+    cdef double *peri = <double *>eri.data
+    cdef double *peri1 = <double *>eri1.data
+    cdef unsigned long i, j, k, l, ij, kl, ijkl
+    cdef unsigned long d1 = norb
+    cdef unsigned long d2 = norb * norb
+    cdef unsigned long d3 = norb * norb * norb
+    ij = 0
+    ijkl = 0
+    for i in range(norb):
+        for j in range(i+1):
+            kl = 0
+            for k in range(i+1):
+                for l in range(k+1):
+                    if ij >= kl:
+                        peri1[ijkl] = peri[i*d3+j*d2+k*d1+l]
+                        ijkl += 1
+                    kl += 1
+            ij += 1
+    return eri1

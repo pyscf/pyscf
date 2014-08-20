@@ -192,9 +192,9 @@ class MSC(object):
 #        if not isinstance(scf_method, scf.hf.RHF):
 #            raise AttributeError('TODO: UHF')
 
-    def dump_option(self):
+    def dump_flags(self):
         log.info(self, '\n')
-        log.info(self, '******** MSC options ********')
+        log.info(self, '******** MSC flags ********')
         log.info(self, 'potential = %s', self.scf.get_veff.__doc__)
         log.info(self, 'gauge = %s', ('Common gauge','GIAO')[self.is_giao])
         log.info(self, 'MO10 eq. is %s', ('UCPSCF','CPSCF')[self.is_cpscf])
@@ -214,7 +214,7 @@ class MSC(object):
     def msc(self):
         cput0 = (time.clock(), time.time())
         if self.verbose >= param.VERBOSE_INFO:
-            self.dump_option()
+            self.dump_flags()
 
         if not self.is_giao:
             self.mol.set_common_origin(self.gauge_orig)

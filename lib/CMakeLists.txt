@@ -56,4 +56,5 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(pycint)
 add_subdirectory(dft)
+add_subdirectory(mcscf)
 

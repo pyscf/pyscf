@@ -160,8 +160,8 @@ class UHF(hf.SCF):
         dm[:n2c,:n2c] = (dm_ll + time_reversal_matrix(mol, dm_ll)) * .5
         return ehf, dm
 
-    def dump_scf_option(self):
-        hf.SCF.dump_scf_option(self)
+    def dump_flags(self):
+        hf.SCF.dump_flags(self)
         log.info(self, 'OOB = %d', self.oob)
 
     def init_diis(self):

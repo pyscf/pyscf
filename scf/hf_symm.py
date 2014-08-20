@@ -79,8 +79,8 @@ class RHF(hf.RHF):
         # number of electrons for each irreps
         self.irrep_nocc = {}
 
-    def dump_scf_option(self):
-        hf.RHF.dump_scf_option(self)
+    def dump_flags(self):
+        hf.RHF.dump_flags(self)
         log.info(self, 'RHF with symmetry adpated basis')
         float_ir = []
         fix_ne = 0
@@ -351,7 +351,7 @@ class RHF(hf.RHF):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
-        self.dump_scf_option()
+        self.dump_flags()
         self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
@@ -416,8 +416,8 @@ class UHF(hf.UHF):
         self.irrep_nocc_alpha = {}
         self.irrep_nocc_beta = {}
 
-    def dump_scf_option(self):
-        hf.SCF.dump_scf_option(self)
+    def dump_flags(self):
+        hf.SCF.dump_flags(self)
         log.info(self, 'UHF with symmetry adpated basis')
         float_ir = []
         fix_na = 0
@@ -806,7 +806,7 @@ class UHF(hf.UHF):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
-        self.dump_scf_option()
+        self.dump_flags()
         self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \

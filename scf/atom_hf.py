@@ -65,8 +65,8 @@ class AtomSphericAverageRHF(hf.RHF):
         hf.SCF.__init__(self, mol)
         self._eri = None
 
-    def dump_scf_option(self):
-        hf.RHF.dump_scf_option(self)
+    def dump_flags(self):
+        hf.RHF.dump_flags(self)
         log.debug(self.mol, 'occupation averaged SCF for atom  %s', \
                   self.mol.symbol_of_atm(0))
 

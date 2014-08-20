@@ -28,14 +28,14 @@ class MSC(hf.MSC):
         self.is_cpscf = True
         self.MB = self.rmb
 
-    def dump_option(self):
-        hf.MSC.dump_option(self)
+    def dump_flags(self):
+        hf.MSC.dump_flags(self)
         log.info(self, 'MB basis = %s', self.MB.__doc__)
 
     def msc(self):
         cput0 = (time.clock(), time.time())
         if self.verbose >= param.VERBOSE_INFO:
-            self.dump_option()
+            self.dump_flags()
 
         if not self.is_giao:
             self.mol.set_common_origin(self.gauge_orig)

@@ -27,8 +27,8 @@ class RKS(scf.hf.RHF):
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(mol)
 
-    def dump_scf_option(self):
-        scf.hf.RHF.dump_scf_option(self)
+    def dump_flags(self):
+        scf.hf.RHF.dump_flags(self)
         log.info(self, 'XC functionals = %s', self.xc)
         log.info(self, 'DFT grids: %s', self.grids.becke_scheme.__doc__)
         #TODO:for k,v in self.mol.grids.items():

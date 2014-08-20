@@ -36,7 +36,7 @@ void ao2mo_half_trans_o2(int nao, int nmo, double *eri, double *c,
         int i, j;
         double *tmp1 = malloc(sizeof(double)*nao*nao);
         double *tmp2 = malloc(sizeof(double)*nao*nmo);
-        ao2mo_unpack(nao, eri, tmp1);
+        CVHFunpack(nao, eri, tmp1);
         dgemm_(&TRANS_N, &TRANS_N, &lao, &lmo, &lao,
                &D1, tmp1, &lao, c, &lao, &D0, tmp2, &lao);
         dgemm_(&TRANS_T, &TRANS_N, &lmo, &lmo, &lao,
@@ -69,7 +69,7 @@ void ao2mo_half_trans_o3(int nao, int nmo, int pair_id,
         double *tmp2 = malloc(sizeof(double)*nao*nmo);
 
         extract_row_from_tri(row, pair_id, nao_pair, eri);
-        ao2mo_unpack(nao, row, tmp1);
+        CVHFunpack(nao, row, tmp1);
         dgemm_(&TRANS_N, &TRANS_N, &lao, &lmo, &lao,
                &D1, tmp1, &lao, c, &lao, &D0, tmp2, &lao);
         dgemm_(&TRANS_T, &TRANS_N, &lmo, &lmo, &lao,

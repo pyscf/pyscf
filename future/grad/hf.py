@@ -27,9 +27,9 @@ class RHF:
         self.restart = restart
         self.scf = redo_scf(self.mol, scf_method)
 
-    def dump_option(self):
+    def dump_flags(self):
         log.info(self, '\n')
-        log.info(self, '******** Gradients options ********')
+        log.info(self, '******** Gradients flags ********')
         log.info(self, 'potential = %s', self.get_coulomb_hf.__doc__)
         if self.restart:
             log.info(self, 'restart from chkfile  %s', self.chkfile)
@@ -119,7 +119,7 @@ class RHF:
     def grad(self):
         cput0 = (time.clock(), time.time())
         if self.verbose >= param.VERBOSE_INFO:
-            self.dump_option()
+            self.dump_flags()
         grads = self.grad_e(self.mol, self.scf) \
                 + self.grad_nuc(self.mol)
         for ia in range(self.mol.natm):

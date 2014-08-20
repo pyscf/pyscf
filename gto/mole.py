@@ -438,24 +438,26 @@ class Mole(object):
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
         self.stdout.write('[INPUT] light speed = %s\n' % self.light_speed)
-        self.stdout.write('[INPUT] number of atoms = %d\n' % self.atom.__len__())
+        self.stdout.write('[INPUT] num atoms = %d\n' % self.atom.__len__())
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
 
-        nucmod = { param.MI_NUC_POINT:'point', \
-                param.MI_NUC_GAUSS:'Gaussian', }
+        nucmod = {param.MI_NUC_POINT:'point', \
+                  param.MI_NUC_GAUSS:'Gaussian', }
         for a,atom in enumerate(self.atom):
-            self.stdout.write('[INPUT] atom %d, %s,   %s nuclear model, ' \
-                              'mass %s, radial %s, angular %s\n' % \
-                              (a+1, _symbol(atom[0]), nucmod[atom[2]],
-                               atom[3], atom[4], atom[5]))
-            self.stdout.write('[INPUT]      (%.15g, %.15g, %.15g) AA, ' \
-                              % tuple(atom[1]))
-            self.stdout.write('(%.15g, %.15g, %.15g) Bohr\n' % \
-                              tuple(map(lambda x: x/param.BOHR, atom[1])))
-        log.info(self, 'nuclear repulsion = %.15g', self.nuclear_repulsion())
-        self.stdout.write('[INPUT] basis = atom: (l, kappa, nprim/nctr)\n')
-        self.stdout.write('[INPUT]               (expnt, c_1, c_2, ...)\n')
+            if atom[2] == param.MI_NUC_GAUSS:
+                nucmod = ' Gaussian nuc-mod, mass %s' % atom[3]
+            else:
+                nucmod = ''
+            self.stdout.write('[INPUT] %d %s %s AA, '\
+                              '%s Bohr, (%d, %d) grids,%s\n' \
+                              % (a+1, _symbol(atom[0]), atom[1], \
+                                 map(lambda x: x/param.BOHR, atom[1]), \
+                                 atom[4], atom[5], nucmod))
+        self.stdout.write('[INPUT] basis\n')
+        self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
+                          'expnt,             c_1 c_2 ...\n')
         for atom, basis in self.basis.items():
+            self.stdout.write('[INPUT] %s\n' % atom)
             for b in basis:
                 if isinstance(b[1], int):
                     kappa = b[1]
@@ -463,13 +465,16 @@ class Mole(object):
                 else:
                     kappa = 0
                     b_coeff = b[1:]
-                self.stdout.write('[INPUT] %s : l = %d, kappa = %d, [%d/%d]\n' \
-                                  % (atom, b[0], kappa, b_coeff.__len__(), \
+                self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  ' \
+                                  % (b[0], kappa, b_coeff.__len__(), \
                                      b_coeff[0].__len__()-1))
-                for x in b_coeff:
-                    self.stdout.write('[INPUT]    exp = %g, c = ' % x[0])
+                for k, x in enumerate(b_coeff):
+                    if k == 0:
+                        self.stdout.write('%-15.12g  ' % x[0])
+                    else:
+                        self.stdout.write(' '*32+'%-15.12g  ' % x[0])
                     for c in x[1:]:
-                        self.stdout.write('%g, ' % c)
+                        self.stdout.write(' %4.12g' % c)
                     self.stdout.write('\n')
 
         self.stdout.write('[INPUT] %d set(s) of even-tempered basis\n' \
@@ -482,6 +487,7 @@ class Mole(object):
                 strl = param.ANGULAR[l]
                 self.stdout.write('[INPUT]      l = %s; (n, alpha, beta) = %s\n'\
                                   % (strl, str(basis[strl])))
+        log.info(self, 'nuclear repulsion = %.15g', self.nuclear_repulsion())
         if self.symmetry:
             log.info(self, 'point group symmetry = %s', self.pgname)
             for ir in range(self.symm_orb.__len__()):
@@ -490,9 +496,10 @@ class Mole(object):
         log.info(self, 'number of shells = %d', self.nbas)
         log.info(self, 'number of NR pGTOs = %d', self.num_NR_pgto())
         log.info(self, 'number of NR cGTOs = %d', self.num_NR_function())
-        for i in range(self.nbas):
-            exps = self.exps_of_bas(i)
-            log.info(self, 'bas %d, expnt(s) = %s', i, str(exps))
+        if self.verbose >= log.DEBUG1:
+            for i in range(self.nbas):
+                exps = self.exps_of_bas(i)
+                log.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
         log.info(self, 'CPU time: %12.2f', time.clock())
 

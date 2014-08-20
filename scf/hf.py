@@ -143,9 +143,9 @@ class SCF(object):
         self.scf_conv = False
 
 
-    def dump_scf_option(self):
+    def dump_flags(self):
         log.info(self, '\n')
-        log.info(self, '******** SCF options ********')
+        log.info(self, '******** SCF flags ********')
         log.info(self, 'method = %s', self.__doc__)#self.__class__)
         log.info(self, 'potential = %s', self.get_veff.__doc__)
         log.info(self, 'initial guess = %s', self.init_guess_method.__doc__)
@@ -345,7 +345,7 @@ class SCF(object):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
-        self.dump_scf_option()
+        self.dump_flags()
 
         if self.mol.nelectron == 1:
             self.scf_conv = True
@@ -650,8 +650,8 @@ class UHF(SCF):
         self.break_symmetry = False
         self._eri = None
 
-    def dump_scf_option(self):
-        SCF.dump_scf_option(self)
+    def dump_flags(self):
+        SCF.dump_flags(self)
         if self.fix_nelectron_alpha:
             log.info(self, 'number electrons alpha = %d, beta = %d', \
                      self.fix_nelectron_alpha,
@@ -885,7 +885,7 @@ class UHF(SCF):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
-        self.dump_scf_option()
+        self.dump_flags()
 
         if self.mol.nelectron == 1:
             self.scf_conv = True
