@@ -16,7 +16,8 @@ import cistring
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:
         link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
-    return _mcscf.contract_1e_spin0(f1e, fcivec, norb, link_index)
+    ci1 = _mcscf.contract_1e_spin0(f1e, fcivec, norb, link_index)
+    return lib.transpose_sum(ci1, inplace=True)
 
 def contract_2e(g2e, fcivec, norb, nelec, link_index=None):
     g2e = ao2mo.restore(4, g2e, norb)
@@ -27,7 +28,8 @@ def contract_2e(g2e, fcivec, norb, nelec, link_index=None):
 #FIXME: symmetrization is necessary, to reduce numerical error?
     na = link_index.shape[0]
     fcivec = lib.transpose_sum(fcivec.reshape(na,na)) * .5
-    return _mcscf.contract_2e_spin0_omp(g2e, fcivec, norb, link_index)
+    ci1 = _mcscf.contract_2e_spin0_omp(g2e, fcivec, norb, link_index)
+    return lib.transpose_sum(ci1, inplace=True)
 
 def make_hdiag(h1e, g2e, norb, nelec, link_index=None):
     g2e = ao2mo.restore(1, g2e, norb)

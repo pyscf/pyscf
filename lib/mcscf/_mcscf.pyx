@@ -4,7 +4,6 @@
 cimport numpy
 cimport cython
 import numpy
-import lib
 
 cdef extern void CVHFunpack(int n, double *vec, double *mat)
 
@@ -163,7 +162,7 @@ def contract_1e_spin0(numpy.ndarray[double,ndim=2] f1e,
     cdef int ntab = link_index.shape[1]
     cdef double[::1] f1e_tril = numpy.empty(nnorb)
     cdef numpy.ndarray[double,ndim=2] fcivec = ci0.reshape(na,na)
-    cdef numpy.ndarray[double,ndim=2] fcinew = numpy.zeros((na,na))
+    cdef numpy.ndarray[double,ndim=2] cipart = numpy.zeros((na,na))
     cdef double[:,::1] t1 = numpy.empty((nnorb,na))
     cdef double[::1] t2
     cdef int[:,::1] tab
@@ -174,7 +173,7 @@ def contract_1e_spin0(numpy.ndarray[double,ndim=2] f1e,
     cdef int *pindex = &link_new[0,0,0]
     cdef int *ptab
     cdef double *pci0 = &fcivec[0,0]
-    cdef double *pci1 = &fcinew[0,0]
+    cdef double *pci1 = &cipart[0,0]
     cdef double tmp
 
     ia = 0
@@ -195,8 +194,8 @@ def contract_1e_spin0(numpy.ndarray[double,ndim=2] f1e,
             for k in range(na):
                 pcp1[k] += tmp * pcp0[k]
 
-    lib.transpose_sum(fcinew, inplace=True)
-    return fcinew
+# contracted hc = cipart + cipart.T
+    return cipart
 
 cdef extern void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                                       int norb, int na, int nov, int *link_index,
@@ -206,13 +205,14 @@ def contract_2e_spin0_omp(numpy.ndarray eri, numpy.ndarray ci0,
                           int norb, int[:,:,::1] link_index, buf_size=1024):
     cdef int na = link_index.shape[0]
     cdef int ntab = link_index.shape[1]
-    cdef numpy.ndarray fcinew = numpy.zeros((na,na))
+    cdef numpy.ndarray cipart = numpy.zeros((na,na))
     cdef int[:,:,::1] link_new = reform_linkstr_index(link_index)
     FCIcontract_2e_spin0(<double *>eri.data, <double *>ci0.data,
-                         <double *>fcinew.data, norb, na, ntab,
+                         <double *>cipart.data, norb, na, ntab,
                          &link_new[0,0,0], buf_size)
 
-    return lib.transpose_sum(fcinew, inplace=True)
+# contracted hc = cipart + cipart.T
+    return cipart
 
 
 

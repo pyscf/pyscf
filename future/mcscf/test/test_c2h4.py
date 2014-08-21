@@ -27,41 +27,41 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_casci_4o4e(self):
         mc = mcscf.CASCI(mol, mf, 4, 4)
-        emc = mc.casci()[0]
+        emc = mc.casci()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -77.9734951776, 7)
 
     def test_casci_6o4e(self):
         mc = mcscf.CASCI(mol, mf, 6, 4)
-        emc = mc.casci()[0]
+        emc = mc.casci()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -77.9746683275, 7)
 
     def test_casci_6o6e(self):
         mc = mcscf.CASCI(mol, mf, 6, 6)
-        emc = mc.casci()[0]
+        emc = mc.casci()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -77.9804561351, 7)
 
     def test_mc2step_4o4e(self):
         mc = mcscf.CASSCF(mol, mf, 4, 4)
         mc.conv_threshold = 1e-8
-        emc = mc.mc2step()[0]
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -78.0103838390, 7)
 
     def test_mc2step_6o6e(self):
         mc = mcscf.CASSCF(mol, mf, 6, 6)
         mc.conv_threshold = 1e-8
-        emc = mc.mc2step()[0]
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -78.0390051207, 7)
 
     def test_mc1step_4o4e(self):
         mc = mcscf.CASSCF(mol, mf, 4, 4)
         mc.conv_threshold = 1e-8
-        emc = mc.mc1step()[0]
+        emc = mc.mc1step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -78.0103838390, 7)
 
     def test_mc1step_6o6e(self):
         mc = mcscf.CASSCF(mol, mf, 6, 6)
         mc.conv_threshold = 1e-8
-        emc = mc.mc1step()[0]
+        emc = mc.mc1step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -78.0390051207, 7)
 
 

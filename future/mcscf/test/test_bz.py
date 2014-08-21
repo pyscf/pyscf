@@ -35,48 +35,48 @@ mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
 class KnowValues(unittest.TestCase):
     def test_casci_4o4e(self):
         mc = mcscf.CASCI(mol, mf, 4, 4)
-        emc = mc.casci()[0]
+        emc = mc.casci()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.6573122151, 7)
 
     def test_casci_9o8e(self):
         mc = mcscf.CASCI(mol, mf, 9, 8)
-        emc = mc.casci()[0]
+        emc = mc.casci()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.6582147496, 7)
 
     def test_mc2step_4o4e(self):
         mc = mcscf.CASSCF(mol, mf, 4, 4)
         mc.conv_threshold = 1e-8
-        emc = mc.mc2step()[0]
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.6627383822, 7)
 
     def test_mc2step_9o8e(self):
         mc = mcscf.CASSCF(mol, mf, 9, 8)
         mc.conv_threshold = 1e-8
-        emc = mc.mc2step()[0]
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.7080651766, 7)
 
     def test_mc2step_9o8e_a(self):
         mc = mcscf.CASSCF(mol, mf, 9, 8)
         mc.conv_threshold = 1e-8
-        emc = mc.mc2step(mo)[0]
+        emc = mc.mc2step(mo)[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.722115252678, 7)
 
     def test_mc1step_4o4e(self):
         mc = mcscf.CASSCF(mol, mf, 4, 4)
         mc.conv_threshold = 1e-8
-        emc = mc.mc1step()[0]
+        emc = mc.mc1step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.6627383823, 7)
 
     def test_mc1step_9o8e(self):
         mc = mcscf.CASSCF(mol, mf, 9, 8)
         mc.conv_threshold = 1e-8
-        emc = mc.mc1step()[0]
+        emc = mc.mc1step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.7069839888, 7)
 
     def test_mc1step_9o8e_a(self):
         mc = mcscf.CASSCF(mol, mf, 9, 8)
         mc.conv_threshold = 1e-8
-        emc = mc.mc1step(mo)[0]
+        emc = mc.mc1step(mo)[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -230.722115252678, 7)
 
 
