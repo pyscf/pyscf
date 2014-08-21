@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: direct.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import os
 import time

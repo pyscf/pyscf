@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: mc1step.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import time
 import copy
@@ -18,10 +20,9 @@ from pyscf.lib import _mcscf
 def h1e_for_cas(mol, casscf, mo, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
-    mo_core, mo_cas, mo_vir = casci.extract_orbs(mol, mo, ncas, nelecas)
-    ncore = mo_core.shape[1]
+    ncore = casscf.ncore
     nocc = ncas + ncore
-    if mo_core.size == 0:
+    if ncore == 0:
         vhf_c = 0
     else:
         jc_aa = eris['jc_pp'][:,ncore:nocc,ncore:nocc]
@@ -45,8 +46,7 @@ def expmat(a):
 def gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris):
     nelecas = casscf.nelecas
     ncas = casscf.ncas
-    mo_core, mo_cas, mo_vir = casci.extract_orbs(mol, mo, ncas, nelecas)
-    ncore = mo_core.shape[1]
+    ncore = casscf.ncore
     nocc = ncas + ncore
     nmo = mo.shape[1]
 
@@ -78,7 +78,7 @@ def gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris):
     tmp = numpy.dot(tmp.reshape(ncas*ncas,-1), \
                     eris['appa'].transpose(0,3,1,2).reshape(-1,nmo*nmo))
     tmp = tmp.reshape(ncas,ncas,nmo,nmo)
-    hdm2 = numpy.array((hdm2+tmp).transpose(0,2,1,3))
+    hdm2 = numpy.array((hdm2+tmp).transpose(0,2,1,3), order='C')
 
     # part7
     h_diag = numpy.einsum('ii,jj->ij', eris['h1e_mo'], dm1) - eris['h1e_mo'] * dm1
@@ -158,14 +158,15 @@ def gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris):
 #        x2[ncore:nocc] += numpy.dot(casdm1, vhf3[ncore:nocc])
 #        x2[:ncore] += 2 * vhf3[:ncore] + vhf4
         #vhf3c = numpy.einsum('cpia,cp->ia', eris['cPCv'], x1[:ncore])
-        vhf3c = numpy.dot(x1[:ncore].reshape(-1), \
-                          eris['cPCv'].reshape(ncore*nmo,-1)).reshape(ncore,-1)
-        vhf3a = numpy.einsum('cpuq,cp->uq', eris['cPAp'], x1[:ncore])
-        cvap = eris['cPAp'][:,ncore:,:,:]
-        dm4 = numpy.dot(casdm1, x1[ncore:nocc])
-        vhf4 = numpy.einsum('cpuq,uq->cp', cvap, dm4)
-        x2[ncore:nocc] += numpy.dot(casdm1, vhf3a)
-        x2[:ncore,ncore:] += 2 * vhf3c + vhf4
+        if ncore > 0:
+            vhf3c = numpy.dot(x1[:ncore].reshape(-1), \
+                              eris['cPCv'].reshape(ncore*nmo,-1)).reshape(ncore,-1)
+            vhf3a = numpy.einsum('cpuq,cp->uq', eris['cPAp'], x1[:ncore])
+            cvap = eris['cPAp'][:,ncore:,:,:]
+            dm4 = numpy.dot(casdm1, x1[ncore:nocc])
+            vhf4 = numpy.einsum('cpuq,uq->cp', cvap, dm4)
+            x2[ncore:nocc] += numpy.dot(casdm1, vhf3a)
+            x2[:ncore,ncore:] += 2 * vhf3c + vhf4
 
         # part1
         x2[ncore:nocc] += numpy.einsum('upvr,vr->up', hdm2, x1[ncore:nocc])
@@ -239,10 +240,8 @@ def rotate_orb_ah(mol, casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
 def hessian_co(mol, casscf, mo, rmat, fcivec, e_ci, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
-    mo_core, mo_cas, mo_vir = casci.extract_orbs(mol, mo, ncas, nelecas)
+    ncore = casscf.ncore
     nmo = mo.shape[1]
-    ncore = mo_core.shape[1]
-    ncas = mo_cas.shape[1]
     nocc = ncore + ncas
     mocc = mo[:,:nocc]
 
@@ -272,10 +271,8 @@ def hessian_co(mol, casscf, mo, rmat, fcivec, e_ci, eris):
 def hessian_oc(mol, casscf, mo, dci, fcivec, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
-    mo_core, mo_cas, mo_vir = casci.extract_orbs(mol, mo, ncas, nelecas)
+    ncore = casscf.ncore
     nmo = mo.shape[1]
-    ncore = mo_core.shape[1]
-    ncas = mo_cas.shape[1]
     nocc = ncore + ncas
     mocc = mo[:,:nocc]
 
@@ -320,13 +317,13 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E(+nuc) = %.15g', e_tot)
+    log.info('CASCI E = %.15g', e_tot)
     elast = e_tot
     conv = False
     toloose = casscf.conv_threshold_grad
     totmicro = totinner = 0
 
-    t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
+    t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
         u, dx, g_orb, ninner = rotate_orb_ah(mol, casscf, mo, fcivec, e_ci, \
                                              eris, 0, verbose=verbose)
@@ -384,7 +381,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = log.timer('update eri', *t3m)
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d ah, %d micro), CASSCF E(+nuc) = %.15g, dE = %.8g,',
+        log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         norm_gorb = numpy.linalg.norm(g_orb)
         log.info('                        |grad[o]| = %6.5g, |grad[c]| = %6.5g',
@@ -413,8 +410,8 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
 
 class CASSCF(casci.CASCI):
-    def __init__(self, mol, mf, ncas, nelecas):
-        casci.CASCI.__init__(self, mol, mf, ncas, nelecas)
+    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
+        casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
 # the max orbital rotation and CI increment, prefer small step size
         self.max_orb_stepsize = .02
         self.max_ci_stepsize = .01
@@ -444,8 +441,7 @@ class CASSCF(casci.CASCI):
         log = lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASSCF flags ********')
-        assert(self.nelecas%2 == 0)
-        ncore = (self.mol.nelectron - self.nelecas) / 2
+        ncore = self.ncore
         nvir = self.mo_coeff.shape[1] - ncore - self.ncas
         log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas, self.ncas, ncore, nvir)
@@ -501,8 +497,7 @@ class CASSCF(casci.CASCI):
         return casci.kernel(self.mol, fcasci, mo, ci0=ci0, verbose=0)
 
     def pack_uniq_var(self, mat):
-        assert(self.nelecas%2 == 0)
-        ncore = (self.mol.nelectron - self.nelecas) / 2
+        ncore = self.ncore
         nocc = ncore + self.ncas
 
         v = []
@@ -517,8 +512,7 @@ class CASSCF(casci.CASCI):
 
     # to anti symmetric matrix
     def unpack_uniq_var(self, v):
-        assert(self.nelecas%2 == 0)
-        ncore = (self.mol.nelectron - self.nelecas) / 2
+        ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
         #TODO:if self.inner_rotation:
@@ -550,9 +544,8 @@ class CASSCF(casci.CASCI):
 
 class _ERIS(dict):
     def __init__(self, casscf, mo):
-        assert(casscf.nelecas%2 == 0)
         mol = casscf.mol
-        self.ncore = (mol.nelectron - casscf.nelecas) / 2
+        self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         self.nmo = mo.shape[1]
         nocc = self.ncore + self.ncas
@@ -562,15 +555,18 @@ class _ERIS(dict):
         self._erifile = None
 
         if casscf._scf._eri is not None:
+            nao = mo.shape[0]
+            npair = nao*(nao+1)/2
+            assert(casscf._scf._eri.size == npair*(npair+1)/2)
             eri = ao2mo.incore.general(casscf._scf._eri, (mocc, mo, mo, mo), \
                                        verbose=casscf.verbose)
             self.eri_in_memory = True
         elif nocc*nmo*nmo*nmo*2/1e6 > casscf.max_memory:
             ftmp = tempfile.NamedTemporaryFile()
-            ao2mo.outcore.general(mol, (mocc, mo, mo, mo), ftmp.name, \
-                                  verbose=casscf.verbose)
-            #ao2mo.direct.general(mol, (mocc, mo, mo, mo), ftmp.name, \
-            #                     max_memory=self.max_memory, verbose=self.verbose)
+            #ao2mo.outcore.general(mol, (mocc, mo, mo, mo), ftmp.name, \
+            #                      verbose=casscf.verbose)
+            ao2mo.direct.general(mol, (mocc, mo, mo, mo), ftmp.name, \
+                                 max_memory=self.max_memory, verbose=self.verbose)
             eri = numpy.array(h5py.File(ftmp.name, 'r')['eri_mo'])
         else:
             eri = ao2mo.direct.general_iofree(mol, (mocc, mo, mo, mo), \
@@ -662,7 +658,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(mol, CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0]
+    emc = kernel(mol, CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
     print ehf, emc, emc-ehf
     print emc - -3.22013929407
 
@@ -679,7 +675,7 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASSCF(mol, m, 6, 4)
     mc.verbose = 4
-    emc = mc.mc1step()[0]
+    emc = mc.mc1step()[0] + mol.nuclear_repulsion()
     print ehf, emc, emc-ehf
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print emc - -76.0873923174, emc - -76.0926176464

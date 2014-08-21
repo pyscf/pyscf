@@ -10,7 +10,6 @@ Non-relativistic Hartree-Fock
 
 import os
 import cPickle as pickle
-import ctypes
 import time
 
 import numpy

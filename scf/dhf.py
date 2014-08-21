@@ -218,14 +218,18 @@ class UHF(hf.SCF):
             atm = lib.c_int_arr(mol._atm)
             bas = lib.c_int_arr(mol._bas)
             env = lib.c_double_arr(mol._env)
+            _cint.init_rkb_direct_scf_.restype = ctypes.c_void_p
             _cint.init_rkb_direct_scf_(atm, natm, bas, nbas, env)
             if self.with_gaunt:
+                _cint.init_rkb_gaunt_direct_scf_.restype = ctypes.c_void_p
                 _cint.init_rkb_gaunt_direct_scf_(atm, natm, bas, nbas, env)
             self.set_direct_scf_threshold(self.direct_scf_threshold)
         else:
+            _cint.turnoff_direct_scf_.restype = ctypes.c_void_p
             _cint.turnoff_direct_scf_()
 
     def del_direct_scf(self):
+        _cint.del_rkb_direct_scf_.restype = ctypes.c_void_p
         _cint.del_rkb_direct_scf_()
 
     def set_mo_occ(self, mo_energy, mo_coeff=None):

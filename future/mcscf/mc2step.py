@@ -1,13 +1,15 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: mc2step.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import time
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import ao2mo
-import mc1step as mc1step
+import mc1step
 
 def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None):
@@ -24,7 +26,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     mo = mo_coeff
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E(+nuc) = %.15g', e_tot)
+    log.info('CASCI E = %.15g', e_tot)
     elast = e_tot
     conv = False
     toloose = casscf.conv_threshold_grad
@@ -59,7 +61,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totmicro += imicro+1
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d ah, %d micro), CASSCF E(+nuc) = %.15g, dE = %.8g,',
+        log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         norm_gorb = numpy.linalg.norm(g_orb)
         log.info('                        |grad[o]| = %6.5g',
@@ -110,7 +112,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(mol, mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0]
+    emc = kernel(mol, mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
     print ehf, emc, emc-ehf
     print emc - -3.22013929407
 
@@ -127,7 +129,7 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = mc1step.CASSCF(mol, m, 6, 4)
     mc.verbose = 4
-    emc = mc.mc2step()[0]
+    emc = mc.mc2step()[0] + mol.nuclear_repulsion()
     print ehf, emc, emc-ehf
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print emc - -76.0873923174, emc - -76.0926176464

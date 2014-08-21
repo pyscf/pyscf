@@ -7,7 +7,7 @@ cimport cython
 from cython.parallel import parallel, prange
 from libc.stdlib cimport malloc, free
 
-import lib
+from pyscf import lib
 
 cdef extern void AO2MOnr_e1_o1(double *eri, double *mo_coeff,
                                int i_start, int i_count, int j_start, int j_count,

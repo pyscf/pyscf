@@ -171,12 +171,15 @@ class UHF(dhf.UHF):
             atm = lib.c_int_arr(self.dkb_mol._atm)
             bas = lib.c_int_arr(self.dkb_mol._bas)
             env = lib.c_double_arr(self.dkb_mol._env)
+            _cint.init_dkb_direct_scf_.restype = ctypes.c_void_p
             _cint.init_dkb_direct_scf_(atm, natm, bas, nbas, env)
             self.set_direct_scf_threshold(self.direct_scf_threshold)
         else:
+            _cint.turnoff_direct_scf_.restype = ctypes.c_void_p
             _cint.turnoff_direct_scf_()
 
     def del_direct_scf(self):
+        _cint.del_dkb_direct_scf_.restype = ctypes.c_void_p
         _cint.del_dkb_direct_scf_()
 
 

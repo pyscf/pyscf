@@ -252,6 +252,43 @@ def reform_linkstr_index_dm(int[:,:,::1] link_index):
         link_new[k,0,3] = j1
     return link_new
 
+def make_rdm1_spin0_o3(fcivec, int norb, int[:,:,::1] link_index):
+    cdef int na = link_index.shape[0]
+    cdef int ntab = link_index.shape[1]
+    cdef int i, a, ia, j, k, str0, str1, sign
+    cdef int *pindex = &link_index[0,0,0]
+    cdef int *ptab
+    cdef double[:,::1] ci0 = fcivec.reshape(na,na)
+    cdef double *pci0
+    cdef double *pci1
+    cdef double ctmp
+    cdef numpy.ndarray[double,ndim=2,mode='c'] rdm1 = numpy.zeros((norb,norb))
+    cdef double *pdm1 = &rdm1[0,0]
+    for str0 in range(na):
+        ptab = pindex + str0 * ntab*4
+        pci0 = &ci0[str0,0]
+        for j in range(ntab):
+            a = ptab[j*4+0]
+            i = ptab[j*4+1]
+            str1 = ptab[j*4+2]
+            sign = ptab[j*4+3]
+            pci1 = &ci0[str1,0]
+            if str1 > str0:
+                if sign > 0:
+                    for k in range(na):
+                        pdm1[a*norb+i] += pci0[k]*pci1[k]*2
+                else:
+                    for k in range(na):
+                        pdm1[a*norb+i] -= pci0[k]*pci1[k]*2
+            elif str1 == str0:
+                if sign > 0:
+                    for k in range(na):
+                        pdm1[a*norb+i] += pci0[k]*pci1[k]
+                else:
+                    for k in range(na):
+                        pdm1[a*norb+i] -= pci0[k]*pci1[k]
+    return rdm1 + rdm1.T
+
 cdef extern void FCImake_rdm12_spin0_o3(double *rdm1, double *rdm2, double *ci0,
                                         int norb, int na, int nov, int *link_index)
 
@@ -264,7 +301,7 @@ def make_rdm12_spin0_omp(numpy.ndarray fcivec, int norb, int[:,:,::1] link_index
                            <double *>fcivec.data, norb, na, ntab,
                            &link_index[0,0,0])
 
-    rdm2 = numpy.array(rdm2.transpose(1,0,2,3))
+    rdm2 = numpy.array(rdm2.transpose(1,0,2,3), order='C')
     return reorder_rdm(rdm1, rdm2)
 
 
@@ -320,6 +357,6 @@ def trans_rdm12_spin0_omp(numpy.ndarray cibra, numpy.ndarray ciket,
                             <double *>cibra.data, <double *>ciket.data,
                             norb, na, ntab, &link_index[0,0,0])
 
-    rdm2 = numpy.array(rdm2.transpose(1,0,2,3))
+    rdm2 = numpy.array(rdm2.transpose(1,0,2,3), order='C')
     return reorder_rdm(rdm1, rdm2)
 

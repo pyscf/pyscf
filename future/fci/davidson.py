@@ -1,57 +1,120 @@
 #!/usr/bin/env python
+#
+# File: davidson.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
+import tempfile
 import numpy
 import scipy.linalg
+import h5py
 
-def dsyev(a, x0, precond, tol=1e-8, maxiter=20, eig_pick=None, dot=numpy.dot,
-          verbose=0):
-    lindep = tol**2
-    #x0 = x0/numpy.linalg.norm(x0)
-    xs = []
-    ax = []
+# default max_memory 2000 MB
+
+def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
+          max_memory=2000, eig_pick=None, dot=numpy.dot, verbose=0):
+
+    toloose = numpy.sqrt(tol)
+
+    xs = _TrialXs(x0.nbytes, maxspace, max_memory)
+    ax = _TrialXs(x0.nbytes, maxspace, max_memory)
     if eig_pick is None:
         eig_pick = lambda w, v: 0
 
-    heff = numpy.zeros((maxiter,maxiter))
-    ovlp = numpy.zeros((maxiter,maxiter))
+    heff = numpy.zeros((maxiter+1,maxiter+1))
+    ovlp = numpy.zeros((maxiter+1,maxiter+1))
     e = 0
     for istep in range(min(maxiter,x0.size)):
-        ax0 = a(x0)
-        xs.append(x0)
-        ax.append(ax0)
-        for i in range(istep):
-            heff[istep,i] = heff[i,istep] = dot(xs[istep], ax[i])
-            ovlp[istep,i] = ovlp[i,istep] = dot(xs[istep], xs[i])
-        heff[istep,istep] = dot(x0, ax0)
-        ovlp[istep,istep] = dot(x0, x0)
-        s0 = scipy.linalg.eigh(ovlp[:istep+1,:istep+1])[0][0]
-        if s0 < lindep:
-            break
+        subspace = len(xs)
+        if subspace == 0:
+            ax0 = dx = None
+            xt = x0
+        else:
+            ax0 = None
+            xt = precond(dx, e)
+            dx = None
+        axt = a(xt)
+        for i in range(subspace):
+            heff[subspace,i] = heff[i,subspace] = dot(xt, ax[i])
+            ovlp[subspace,i] = ovlp[i,subspace] = dot(xt, xs[i])
+        heff[subspace,subspace] = dot(xt, axt)
+        ovlp[subspace,subspace] = dot(xt, xt)
 
-        w, v = scipy.linalg.eigh(heff[:istep+1,:istep+1], \
-                                 ovlp[:istep+1,:istep+1])
+        seig = scipy.linalg.eigh(ovlp[:subspace+1,:subspace+1])[0]
+        if seig[0] < lindep:
+            break
+        w, v = scipy.linalg.eigh(heff[:subspace+1,:subspace+1], \
+                                 ovlp[:subspace+1,:subspace+1])
         index = eig_pick(w, v)
+        de = w[index] - e
         e = w[index]
 
-        xtrial = v[istep,index] * xs[istep]
-        x1     = v[istep,index] * ax[istep]
-        for i in reversed(range(istep)):
-            xtrial += v[i,index] * xs[i]
-            x1     += v[i,index] * ax[i]
+        x0  = xt  * v[subspace,index]
+        ax0 = axt * v[subspace,index]
+        for i in reversed(range(subspace)):
+            x0  += v[i,index] * xs[i]
+            ax0 += v[i,index] * ax[i]
 
-        dx = x1
-        dx += (-e) * xtrial
+        if subspace < maxspace \
+           or (subspace<maxspace+2 and seig[0] > toloose):
+# floating size of subspace, prevent the new intital guess going too bad
+            xs.append(xt)
+            ax.append(axt)
+        else:
+# After several updates of the trial vectors, the trial vectors are highly
+# linear dependent which seems reducing the accuracy. Removing all trial
+# vectors and restarting iteration with better initial guess gives better
+# accuracy, though more iterations are required.
+            xs = _TrialXs(x0.nbytes, maxspace, max_memory)
+            ax = _TrialXs(x0.nbytes, maxspace, max_memory)
+
+        dx = ax0 - e * x0
         rr = numpy.linalg.norm(dx)
         if verbose:
-            print 'davidson', istep, rr, e
-        if rr < tol:
+            print 'davidson', istep, subspace, rr, e, seig[0]
+
+        if rr < toloose or abs(de) < tol or seig[0] < lindep:
             break
-        x0 = precond(dx, e)
 
     if verbose:
         print 'final step', istep
 
-    return e, xtrial
+    return e, x0
+
+
+class _TrialXs(list):
+    def __init__(self, xbytes, maxspace, max_memory):
+        if xbytes*maxspace*2 > max_memory*1e6:
+            _fd = tempfile.NamedTemporaryFile()
+            self.scr_h5 = h5py.File(_fd.name, 'w')
+        else:
+            self.scr_h5 = None
+
+    def __getitem__(self, n):
+        if self.scr_h5 is None:
+            return list.__getitem__(self, n)
+        else:
+            return self.scr_h5[str(n)]
+
+    def append(self, x):
+        if self.scr_h5 is None:
+            list.append(self, x)
+        else:
+            n = len(self.scr_h5)
+            self.scr_h5[str(n)] = x
+
+    def __setitem__(self, n, x):
+        if self.scr_h5 is None:
+            list.__setitem__(self, n, x)
+        else:
+            self.scr_h5[str(n)] = x
+
+    def __len__(self):
+        if self.scr_h5 is None:
+            return list.__len__(self)
+        else:
+            return len(self.scr_h5)
+
 
 if __name__ == '__main__':
     n = 100
@@ -62,7 +125,7 @@ if __name__ == '__main__':
 
     e,u = numpy.linalg.eigh(a)
     #a = numpy.dot(u[:,:15]*e[:15], u[:,:15].T)
-    print e[0]
+    print e[0], u[0,0]
 
     def aop(x):
         return numpy.dot(a, x)
@@ -73,4 +136,6 @@ if __name__ == '__main__':
     x0 = a[0]/numpy.linalg.norm(a[0])
     #x0 = (u[:,0]+.01)/numpy.linalg.norm(u[:,0]+.01)
     #print dsyev(aop, x0, precond, eig_pick=lambda w,y: numpy.argmax(abs(w)<1e-4))[0]
-    print dsyev(aop, x0, precond)[0] - -42.8144765196
+    #print dsyev(aop, x0, precond)[0] - -42.8144765196
+    e0,x0 = dsyev(aop, x0, precond, maxiter=30, maxspace=6, max_memory=.0001, verbose=9)
+    print e0 - e[0]

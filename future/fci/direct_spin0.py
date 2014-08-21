@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: direct_spin0.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import math
 import numpy
@@ -45,7 +47,7 @@ def absorb_h1e(h1e, g2e, norb, nelec):
         h2e[:,:,k,k] += f1e
     return h2e
 
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=0):
+def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=1e-8):
     link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
     na = link_index.shape[0]
     h2e = absorb_h1e(h1e, g2e, norb, nelec) * .5
@@ -59,13 +61,14 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=0):
 
     if ci0 is None:
         # we need better initial guess
-        ci0 = numpy.zeros((na,na))
-        ci0[0,0] = 1
-        ci0 = hop(ci0.reshape(-1))
+        # single determinant initial guess may cause precond diverge
+        ci0 = numpy.zeros(na*na)
+        ci0[0] = 1
+        ci0[-1] = -1e-3
     else:
         ci0 = ci0.reshape(-1)
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=1e-5)
+    e, c = davidson.dsyev(hop, ci0, precond, tol=1e-9)
     return e, lib.transpose_sum(c.reshape(na,na)) * .5
 
 # dm_pq = <|p^+ q|>

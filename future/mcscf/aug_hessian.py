@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+#
+# File: aug_hessian.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import numpy
 import scipy.linalg

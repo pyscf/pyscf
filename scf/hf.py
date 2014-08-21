@@ -26,7 +26,7 @@ import diis
 import chkfile
 
 alib = os.path.join(os.path.dirname(lib.__file__), 'pycint.so')
-_cint = ctypes.cdll.LoadLibrary(alib)
+_cint = ctypes.CDLL(alib)
 
 
 __doc__ = '''Options:
@@ -289,17 +289,21 @@ class SCF(object):
             atm = lib.c_int_arr(mol._atm)
             bas = lib.c_int_arr(mol._bas)
             env = lib.c_double_arr(mol._env)
+            _cint.init_nr_direct_scf_.restype = ctypes.c_void_p
             _cint.init_nr_direct_scf_(atm, natm, bas, nbas, env)
             self.set_direct_scf_threshold(self.direct_scf_threshold)
         else:
+            _cint.turnoff_direct_scf_.restype = ctypes.c_void_p
             _cint.turnoff_direct_scf_()
 
     # don't use me
     def del_direct_scf(self):
+        _cint.del_nr_direct_scf_.restype = ctypes.c_void_p
         _cint.del_nr_direct_scf_()
 
     # don't use me
     def set_direct_scf_threshold(self, threshold):
+        _cint.set_direct_scf_cutoff_.restype = ctypes.c_void_p
         _cint.set_direct_scf_cutoff_(lib.c_double_p(ctypes.c_double(threshold)))
 
     def set_mo_occ(self, mo_energy, mo_coeff=None):

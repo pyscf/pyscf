@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: incore.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import numpy
 import pyscf.lib._ao2mo as _ao2mo

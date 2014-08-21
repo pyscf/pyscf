@@ -10,7 +10,7 @@ import ctypes
 
 from pyscf import lib
 alib = os.path.join(os.path.dirname(lib.__file__), '_vhf.so')
-_cint = ctypes.cdll.LoadLibrary(alib)
+_cint = ctypes.CDLL(alib)
 _cint.CINTcgtos_cart.restype = ctypes.c_int
 _cint.CINTcgtos_spheric.restype = ctypes.c_int
 _cint.CINTcgtos_spinor.restype = ctypes.c_int
@@ -46,6 +46,7 @@ def mole_intor(mol, intor_name, dim3, symmetric):
     mat = numpy.empty((dim3,nbf,nbf), dtype)
 
     c_intor = getattr(_cint, intor_name)
+    c_intor.restype = ctypes.c_void_p
     ip = 0
     for i in range(mol.nbas):
         di = bas_dim[i]
@@ -99,6 +100,7 @@ def intor_cross(mol, intor_name, bras, kets, dim3):
     mat = numpy.empty((dim3,nket,nbra), dtype)
 
     c_intor = getattr(_cint, intor_name)
+    c_intor.restype = ctypes.c_void_p
     ip = 0
     for i in bras:
         di = num_cgtos_of(i)

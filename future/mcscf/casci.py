@@ -1,7 +1,8 @@
-
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# File: casci.py
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import tempfile
 import time
@@ -13,9 +14,9 @@ from pyscf.future import fci
 import pyscf.future.fci.direct_spin0 as fci_direct
 
 
-def extract_orbs(mol, mo_coeff, ncas, nelecas):
-    assert(nelecas%2 == 0)
-    ncore = (mol.nelectron - nelecas) / 2
+def extract_orbs(mol, mo_coeff, ncas, nelecas, ncore=None):
+    if ncore is None:
+        ncore = (mol.nelectron-nelecas)/2
     nocc = ncore + ncas
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
@@ -31,7 +32,8 @@ def kernel(mol, casci, mo_coeff, ci0=None, verbose=None):
 
     ncas = casci.ncas
     nelecas = casci.nelecas
-    mo_core, mo_cas, mo_vir = extract_orbs(mol, mo_coeff, ncas, nelecas)
+    ncore = casci.ncore
+    mo_core, mo_cas, mo_vir = extract_orbs(mol, mo_coeff, ncas, nelecas, ncore)
 
     # 1e
     hcore = casci.get_hcore(mol)
@@ -54,14 +56,15 @@ def kernel(mol, casci, mo_coeff, ci0=None, verbose=None):
     e_cas, fcivec = fci_direct.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0)
 
     t1 = log.timer('FCI solver', *t1)
-    e_tot = e_cas + energy_core + mol.nuclear_repulsion()
-    log.info('CASCI E(+nuc) = %.15g', e_tot)
+    e_tot = e_cas + energy_core
+    log.info('CASCI E = %.15g', e_tot)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
 
 class CASCI(object):
-    def __init__(self, mol, mf, ncas, nelecas):
+    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
+        assert(nelecas%2 == 0)
         self.mol = mol
         self._scf = mf
         self.verbose = mol.verbose
@@ -69,6 +72,10 @@ class CASCI(object):
         self.max_memory = mf.max_memory
         self.ncas = ncas
         self.nelecas = nelecas
+        if ncore is None:
+            self.ncore = (mol.nelectron - nelecas) / 2
+        else:
+            self.ncore = ncore
         #TODO: for FCI solver
         self.ci_lindep = 1e-14
         self.ci_max_cycle = 30
@@ -82,8 +89,7 @@ class CASCI(object):
         log = lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASSCF flags ********')
-        assert(self.nelecas%2 == 0)
-        ncore = (self.mol.nelectron - self.nelecas) / 2
+        ncore = self.ncore
         nvir = self.mo_coeff.shape[1] - ncore - self.ncas
         log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas, self.ncas, ncore, nvir)
@@ -143,7 +149,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
-    emc = mc.casci()[0]
+    emc = mc.casci()[0] + mol.nuclear_repulsion()
     print ehf, emc, emc-ehf
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print emc+75.9624554777
@@ -172,6 +178,6 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 9, 8)
-    emc = mc.casci()[0]
+    emc = mc.casci()[0] + mol.nuclear_repulsion()
     print ehf, emc, emc-ehf
     print emc - -227.948912536
