@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry
 
-version 0.4
+version 0.5
 
-2014-08-17
+2014-10-01
 
 Pyscf is an open-source suite of quantum chemistry program.  The program
 aims to provide a simple, light-weight and efficient platform for quantum
@@ -89,7 +89,7 @@ Version 0.4 (2014-08-17):
   * One-line command to run QC calculation with pyscf
   * Fix bug of AO to MO transformation in OpenMP environment
 
-Version 0.5 (2014-09-?):
+Version 0.5 (2014-10-01):
   * Change basis format
   * Remove Cython dependence
   * Upgrade dft to use libxc-2.0.0
