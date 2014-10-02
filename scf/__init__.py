@@ -2,17 +2,13 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
-import os, sys
-import diis
 import hf
 import hf_symm
 from hf import SCF
-from chkfile import dump_chkfile_key, load_chkfile_key
 import dhf
+import chkfile
+import addons
 
-#import dhf_dkb
-#import atom_hf
-#import molden_dump
 
 
 def RHF(mol, *args):

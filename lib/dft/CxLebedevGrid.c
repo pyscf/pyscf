@@ -1,5 +1,4 @@
 /*
- * File: CxLebedevGrid.c
  *      Modified from CxLebedevGrid.cpp
  */
 #include <math.h> // for sqrt.

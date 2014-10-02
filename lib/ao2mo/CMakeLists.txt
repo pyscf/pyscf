@@ -1,12 +1,12 @@
 include_directories(${CINT_INCLUDE_DIR})
 
-add_library(_ao2mo SHARED
-  nr_ao2mo_O3.c misc.c ao2mo_helper.c _ao2mo.c)
+add_library(ao2mo SHARED
+  restore_eri.c
+  nr_ao2mo_o3.c nr_ao2mo_o4.c nr_outcore.c nr_incore.c)
 
-
-set_target_properties(_ao2mo PROPERTIES PREFIX ""
+set_target_properties(ao2mo PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(_ao2mo _vhf ${CINT_LIBRARIES} ${BLAS_LIBRARIES} ${OpenMP_C_FLAGS})
+target_link_libraries(ao2mo cvhf ${CINT_LIBRARIES} ${BLAS_LIBRARIES} ${OpenMP_C_FLAGS})
 

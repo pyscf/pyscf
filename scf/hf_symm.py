@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: hf_symm.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -9,33 +8,26 @@ Non-relativistic Hartree-Fock
 '''
 
 import os
-import cPickle as pickle
 import time
-
 import numpy
 import scipy.linalg
-
 from pyscf import symm
 from pyscf import lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.lib import pycint
-from pyscf.lib import _vhf
+from pyscf.future.tools import dump_mat
 import diis
 import hf
+import _vhf
 
 
-def dump_mo_coeff(mol, mo_coeff, e_ir_idx, argsort, title='   '):
-    log.debug(mol, ' **** %s MO coefficients ****', title)
-    nmo = mo_coeff.shape[1]
-    mo_coeff = mo_coeff[:,argsort]
-    for k in range(0, nmo, 5):
-        lbl = []
-        for i1 in range(k, min(k+5,nmo)):
-            e,ir,i = e_ir_idx[argsort[i1]]
-            lbl.append('#%d(%s %d)' % (i1+1, mol.irrep_name[ir], i+1))
-        log.debug(mol, ('%s MO_id+1 ' % title) + ' '.join(lbl))
-        hf.dump_orbital_coeff(mol, mo_coeff[:,k:k+5])
+def dump_mo_coeff(mol, mo_coeff, e_ir_idx, argsort):
+    label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
+    label2 = []
+    for k in range(nmo):
+        e,ir,i = e_ir_idx[argsort[k]]
+        label2.append('#%-4d(%s %d)' % (k+1, mol.irrep_name[ir], i+1))
+    dump_mat.dump_rec(mol.stdout, mo_coeff, label, label2, start=1)
 
 def dump_mo_energy(mol, mo_energy, nocc, ehomo, elumo, title=''):
     nirrep = mol.symm_orb.__len__()
@@ -85,7 +77,7 @@ class RHF(hf.RHF):
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
             irname = self.mol.irrep_name[ir]
-            if self.irrep_nocc.has_key(irname):
+            if irname in self.irrep_nocc:
                 fix_ne += self.irrep_nocc[irname]
             else:
                 float_ir.append(irname)
@@ -109,7 +101,7 @@ class RHF(hf.RHF):
         cs = []
         es = []
         for ir in range(nirrep):
-            e, c = scipy.linalg.eigh(h, s)
+            e, c = scipy.linalg.eigh(h[ir], s[ir])
             cs.append(c)
             es.append(e)
         return es, cs
@@ -227,7 +219,7 @@ class RHF(hf.RHF):
         nocc_fix = 0
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
-            if self.irrep_nocc.has_key(irname):
+            if irname in self.irrep_nocc:
                 n = self.irrep_nocc[irname] / 2
                 nocc.append(n)
                 nocc_fix += n
@@ -350,12 +342,12 @@ class RHF(hf.RHF):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
+        self.build()
         self.dump_flags()
         self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
-        self.del_direct_scf()
 
         log.timer(self, 'SCF', *cput0)
         etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
@@ -423,11 +415,11 @@ class UHF(hf.UHF):
         fix_nb = 0
         for ir in range(self.mol.symm_orb.__len__()):
             irname = self.mol.irrep_name[ir]
-            if self.irrep_nocc_alpha.has_key(irname):
+            if irname in self.irrep_nocc_alpha:
                 fix_na += self.irrep_nocc_alpha[irname]
             else:
                 float_ir.append(irname)
-            if self.irrep_nocc_beta.has_key(irname):
+            if irname in self.irrep_nocc_beta:
                 fix_nb += self.irrep_nocc_beta[irname]
             else:
                 float_ir.append(irname)
@@ -617,14 +609,14 @@ class UHF(hf.UHF):
         nocc_fix = [0,0]
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
-            if self.irrep_nocc_alpha.has_key(irname):
+            if irname in self.irrep_nocc_alpha:
                 n = self.irrep_nocc_alpha[irname]
                 nocc[0].append(n)
                 nocc_fix[0] += n
             else:
                 nocc[0].append(-1)
                 mo_e_plain[0].append(mo_energy[0][ir])
-            if self.irrep_nocc_beta.has_key(irname):
+            if irname in self.irrep_nocc_beta:
                 n = self.irrep_nocc_beta[irname]
                 nocc[1].append(n)
                 nocc_fix[1] += n
@@ -805,12 +797,12 @@ class UHF(hf.UHF):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
+        self.build()
         self.dump_flags()
         self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
-        self.del_direct_scf()
         if self.nelectron_alpha * 2 < self.mol.nelectron:
             self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
             self.mo_occ = (self.mo_occ[1], self.mo_occ[0])

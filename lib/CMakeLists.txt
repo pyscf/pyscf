@@ -25,16 +25,7 @@ FIND_LIBRARY(CINT_LIBRARIES cint)
 IF (CINT_LIBRARIES AND CINT_INCLUDE_DIR)
   MESSAGE(STATUS "Found libcint: ${CINT_LIBRARIES}")
 ELSE()
-  MESSAGE(FATAL_ERROR "Could NOT find libcint")
-ENDIF()
-
-## find libxc
-FIND_PATH(XC_INCLUDE_DIR xc.h)
-FIND_LIBRARY(XC_LIBRARIES NAMES xc)
-IF (XC_LIBRARIES AND XC_INCLUDE_DIR)
-  MESSAGE(STATUS "Found libxc: ${XC_LIBRARIES}")
-ELSE()
-  MESSAGE(FATAL_ERROR "Could NOT find libxc")
+  MESSAGE(FATAL_ERROR "libcint NOT found")
 ENDIF()
 
 find_package(OpenMP)
@@ -52,9 +43,18 @@ configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
   "${PROJECT_BINARY_DIR}/config.h")
 
+add_subdirectory(np_helper)
 add_subdirectory(vhf)
 add_subdirectory(ao2mo)
-add_subdirectory(pycint)
-add_subdirectory(dft)
 add_subdirectory(mcscf)
+
+## find libxc
+FIND_PATH(XC_INCLUDE_DIR xc.h)
+FIND_LIBRARY(XC_LIBRARIES NAMES xc)
+IF (XC_LIBRARIES AND XC_INCLUDE_DIR)
+  MESSAGE(STATUS "Found libxc: ${XC_LIBRARIES}")
+  add_subdirectory(dft)
+ELSE()
+  MESSAGE(SEND_ERROR "libxc NOT found")
+ENDIF()
 

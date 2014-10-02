@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: davidson.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -11,10 +10,17 @@ import h5py
 
 # default max_memory 2000 MB
 
+def eigh(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
+          max_memory=2000, eig_pick=None, dot=numpy.dot, verbose=0):
+    return dsyev(a, x0, precond, tol, maxiter, maxspace, lindep, max_memory,
+                 eig_pick, dot, verbose)
+
 def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
           max_memory=2000, eig_pick=None, dot=numpy.dot, verbose=0):
 
     toloose = numpy.sqrt(tol)
+    # if trial vectors are held in memory, store as many as possible
+    maxspace = max(int((max_memory-1e3)*1e6/x0.nbytes/2), maxspace)
 
     xs = _TrialXs(x0.nbytes, maxspace, max_memory)
     ax = _TrialXs(x0.nbytes, maxspace, max_memory)
@@ -23,6 +29,7 @@ def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
 
     heff = numpy.zeros((maxiter+1,maxiter+1))
     ovlp = numpy.zeros((maxiter+1,maxiter+1))
+    v_prev = numpy.eye(1)
     e = 0
     for istep in range(min(maxiter,x0.size)):
         subspace = len(xs)
@@ -31,7 +38,7 @@ def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
             xt = x0
         else:
             ax0 = None
-            xt = precond(dx, e)
+            xt = precond(dx, e, x0)
             dx = None
         axt = a(xt)
         for i in range(subspace):
@@ -55,9 +62,14 @@ def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
             x0  += v[i,index] * xs[i]
             ax0 += v[i,index] * ax[i]
 
+        dx = ax0 - e * x0
+        rr = numpy.linalg.norm(dx)
+        if verbose:
+            print('davidson', istep, subspace, rr, e, seig[0])
+
+# floating size of subspace, prevent the new intital guess going too bad
         if subspace < maxspace \
            or (subspace<maxspace+2 and seig[0] > toloose):
-# floating size of subspace, prevent the new intital guess going too bad
             xs.append(xt)
             ax.append(axt)
         else:
@@ -67,17 +79,15 @@ def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
 # accuracy, though more iterations are required.
             xs = _TrialXs(x0.nbytes, maxspace, max_memory)
             ax = _TrialXs(x0.nbytes, maxspace, max_memory)
+            e = 0
+        v_prev = v[:,index]
 
-        dx = ax0 - e * x0
-        rr = numpy.linalg.norm(dx)
-        if verbose:
-            print 'davidson', istep, subspace, rr, e, seig[0]
 
         if rr < toloose or abs(de) < tol or seig[0] < lindep:
             break
 
     if verbose:
-        print 'final step', istep
+        print('final step', istep)
 
     return e, x0
 
@@ -117,6 +127,7 @@ class _TrialXs(list):
 
 
 if __name__ == '__main__':
+    numpy.random.seed(12)
     n = 100
     #a = numpy.random.random((n,n))
     a = numpy.arange(n*n).reshape(n,n)
@@ -125,17 +136,17 @@ if __name__ == '__main__':
 
     e,u = numpy.linalg.eigh(a)
     #a = numpy.dot(u[:,:15]*e[:15], u[:,:15].T)
-    print e[0], u[0,0]
+    print(e[0], u[0,0])
 
     def aop(x):
         return numpy.dot(a, x)
 
-    def precond(x, e0):
+    def precond(x, e0, x0):
         return x / (a.diagonal() - e0)
 
     x0 = a[0]/numpy.linalg.norm(a[0])
     #x0 = (u[:,0]+.01)/numpy.linalg.norm(u[:,0]+.01)
-    #print dsyev(aop, x0, precond, eig_pick=lambda w,y: numpy.argmax(abs(w)<1e-4))[0]
-    #print dsyev(aop, x0, precond)[0] - -42.8144765196
+    #print(dsyev(aop, x0, precond, eig_pick=lambda w,y: numpy.argmax(abs(w)<1e-4))[0])
+    #print(dsyev(aop, x0, precond)[0] - -42.8144765196)
     e0,x0 = dsyev(aop, x0, precond, maxiter=30, maxspace=6, max_memory=.0001, verbose=9)
-    print e0 - e[0]
+    print(e0 - e[0])

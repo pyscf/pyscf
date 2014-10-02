@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: molden_dump.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -87,17 +86,17 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
         for i,j in enumerate(aoidx):
             fout.write(' %3d    %18.14g\n' % (i, mo_coeff[j,imo]))
 
-def dump_scf(scf, filename):
+def dump_scf(mf, filename):
     with open(filename, 'w') as f:
-        header(scf.mol, f)
-        if isinstance(scf, scf.hf.UHF):
-            orbital_coeff(scf.mol, f, scf.mo_coeff[0], spin='Alpha', \
-                          ene=scf.mo_energy[0], occ=scf.mo_occ[0])
-            orbital_coeff(scf.mol, f, scf.mo_coeff[1], spin='Beta', \
-                          ene=scf.mo_energy[1], occ=scf.mo_occ[1])
+        header(mf.mol, f)
+        if 'UHF' in str(mf.__class__):
+            orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha', \
+                          ene=mf.mo_energy[0], occ=mf.mo_occ[0])
+            orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta', \
+                          ene=mf.mo_energy[1], occ=mf.mo_occ[1])
         else:
-            orbital_coeff(scf.mol, f, scf.mo_coeff, \
-                          ene=scf.mo_energy, occ=scf.mo_occ)
+            orbital_coeff(mf.mol, f, mf.mo_coeff, \
+                          ene=mf.mo_energy, occ=mf.mo_occ)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -117,5 +116,5 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.scf()
     header(mol, mol.stdout)
-    print order_ao_index(mol)
+    print(order_ao_index(mol))
     orbital_coeff(mol, mol.stdout, m.mo_coeff)

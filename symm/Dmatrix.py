@@ -1,5 +1,4 @@
 #
-# File: Dmatrix.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -83,6 +82,6 @@ def small_dmatrix(l, beta):
     return mat
 
 if __name__ == '__main__':
-    #print small_dmatrix(1, .4)
-    #print small_dmatrix(2, .4)
-    print dmatrix(1, .1, .1, .1)
+    #print(small_dmatrix(1, .4))
+    #print(small_dmatrix(2, .4))
+    print(dmatrix(1, .1, .1, .1))

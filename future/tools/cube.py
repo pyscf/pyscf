@@ -27,4 +27,4 @@ def make110():
 
 if __name__ == '__main__':
     for i,a in enumerate(make111(1, (1.1,2,3.0), (.6,.6,.6))):
-        print i, a
+        print(i, a)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: direct.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -9,9 +8,9 @@ import time
 import numpy
 import h5py
 
-import pyscf.lib
+import pyscf.lib.logger as logger
 import pyscf.lib.parameters as param
-import pyscf.lib._ao2mo as _ao2mo
+import _ao2mo
 
 # default max_memory (MB) is lib.parameters.MEMORY_MAX
 # default ioblk_size is 512 MB
@@ -22,7 +21,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = pyscf.lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -76,7 +75,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
             tc2 = (time.clock(), time.time())
             log.debug('          step 2.(%d/%d) trans CPU: %5.2f, ' \
                       'dumping CPU: %5.2f, I/O: %5.2f', \
-                      ih+1, (nrow+1)/ioblklen, tc1[0]-tc0[0], \
+                      ih+1, nrow/ioblklen+1, tc1[0]-tc0[0], \
                       tc2[0]-tc1[0], tc2[1]-tc1[1])
             tioi += tc2[1]-tc1[1]
             tc0 = tc2
@@ -98,7 +97,7 @@ def full_iofree(mol, mo_coeff, verbose=None):
 
     if verbose is None:
         verbose = mol.verbose
-    log = pyscf.lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -130,16 +129,6 @@ def _extract_pair_by_id(n):
 def _int_ceiling(n, m):
     return (n-1)/m + 1
 
-#def gen_int2e_ao2mo(mol, mo_coeff):
-#    eritmpfile = tempfile.mktemp('.h5')
-#    full(mol, mo_coeff, eritmpfile, dataname='eri_mo', verbose=0)
-#    feri = h5py.File(eritmpfile)
-#    eri_mo = numpy.array(feri['eri_mo'])
-#    os.remove(eritmpfile)
-#    return eri_mo
-def gen_int2e_ao2mo(mol, mo_coeff):
-    return full_iofree(mol, mo_coeff, verbose=0)
-
 #############################
 # general AO to MO transformation takes four MO coefficients
 # mo_coeffs = [i-mo,j-mo,k-mo,l-mo]
@@ -156,7 +145,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = pyscf.lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
@@ -252,7 +241,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
             tc2 = (time.clock(), time.time())
             log.debug('          step 2.(%d/%d) trans CPU: %5.2f, ' \
                       'dumping CPU: %5.2f, I/O: %5.2f', \
-                      ih+1, (nrow+1)/ioblklen, tc1[0]-tc0[0], \
+                      ih+1, nrow/ioblklen+1, tc1[0]-tc0[0], \
                       tc2[0]-tc1[0], tc2[1]-tc1[1])
             tioi += tc2[1]-tc1[1]
             tc0 = tc2
@@ -274,7 +263,7 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
 
     if verbose is None:
         verbose = mol.verbose
-    log = pyscf.lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
@@ -340,7 +329,7 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
     return buf
 
 def _memory_and_ioblk_size(max_memory, ioblk_size, nij_pair, nkl_pair):
-    nthreads = _get_num_threads()
+    nthreads = _ao2mo._get_num_threads()
 
     if max_memory is None:
         mem_words = param.MEMORY_MAX * 1e6 / 8
@@ -353,18 +342,6 @@ def _memory_and_ioblk_size(max_memory, ioblk_size, nij_pair, nkl_pair):
 
     ioblk_words = min(ioblk_words, mem_words)
     return mem_words, ioblk_words
-
-def _get_num_threads():
-    import ctypes
-    #libao2mo = ctypes.CDLL(os.path.join(os.path.dirname(lib.__file__), '_ao2mo.so'))
-    libao2mo = ctypes.CDLL(os.path.join(os.path.dirname(__file__), '_ao2mo.so'))
-    libao2mo.omp_get_num_threads.restype = ctypes.c_int
-    #try:
-    #    nthreads = int(os.environ['OMP_NUM_THREADS'])
-    #except:
-    #    nthreads = 1
-    nthreads = libao2mo.omp_get_num_threads()
-    return nthreads
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -383,38 +360,38 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf()
     import time
-    print time.clock()
+    print(time.clock())
     full(mol, rhf.mo_coeff, 'h2oeri.h5', 10, 5)
-    print time.clock()
+    print(time.clock())
     import incore
     eri0 = incore.full(rhf._eri, rhf.mo_coeff)
     feri = h5py.File('h2oeri.h5', 'r')
-    print 'full', abs(eri0-feri['eri_mo']).sum()
+    print('full', abs(eri0-feri['eri_mo']).sum())
     feri.close()
 
-    print time.clock()
+    print(time.clock())
     c = rhf.mo_coeff
     general(mol, (c,c,c,c), 'h2oeri.h5', 10, 5)
-    print time.clock()
+    print(time.clock())
     feri = h5py.File('h2oeri.h5', 'r')
-    print 'general', abs(eri0-feri['eri_mo']).sum()
+    print('general', abs(eri0-feri['eri_mo']).sum())
     feri.close()
 
-    print time.clock()
+    print(time.clock())
     eri1 = full_iofree(mol, rhf.mo_coeff)
-    print time.clock()
-    print 'full_iofree', abs(eri0-eri1).sum()
+    print(time.clock())
+    print('full_iofree', abs(eri0-eri1).sum())
 
-    print time.clock()
+    print(time.clock())
     eri1 = general_iofree(mol, (c,c,c,c))
-    print time.clock()
-    print 'general_iofree', abs(eri0-eri1).sum()
+    print(time.clock())
+    print('general_iofree', abs(eri0-eri1).sum())
 
     # set ijsame and klsame to False, then check
     c = rhf.mo_coeff
     n = c.shape[1]
     eri1 = general_iofree(mol, (c,c,c,c), compact=False)
     eri1 = eri1.reshape(n,n,n,n)
-    import incore
-    eri1 = incore.gen_int2e_from_full_eri(eri1)
-    print 'general_iofree', abs(eri0-eri1).sum()
+    import addons
+    eri1 = addons.restore(4, eri1, n)
+    print('general_iofree', abs(eri0-eri1).sum())

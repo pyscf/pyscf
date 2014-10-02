@@ -14,7 +14,7 @@ the principle of
 * Easy to install, to use, to extend and to be embedded;
 * Minimal requirements on libraries (No Boost, MPI) and computing
   resources (perhaps losing efficiency to reduce I/O);
-* 90/10 Python/C, only computational hot spot was written in C;
+* 90/10 Python/C, only computational hot spots were written in C;
 * 90/10 functional/OOP, unless performance critical, functions are pure.
 
 
@@ -28,10 +28,9 @@ Installation
     - Scipy 0.11 or higher
     - HDF5 1.8.4 or higher
     - h5py 1.3.0 or higher
-    - Cython 0.20 or higher (optional)
     - Libcint 2.0.4 or higher
         https://github.com/sunqm/libcint
-    - Libxc 1.2.0 or higher
+    - Libxc 2.0.0 or higher (optional for DFT)
         http://www.tddft.org/programs/octopus/wiki/index.php/Libxc
 
 * Compile core module
@@ -67,16 +66,6 @@ Installation
 
 Known problems
 --------------
-* Runtime Warning
-
-    .../scf/hf.py:26: RuntimeWarning: compiletime version 2.6 of module
-    '_vhf' does not match runtime version xxx
-
-  It is save to ignore this warning message.  To get rid of it, you need
-  install Cython and recompile
-
-    lib/vhf/_vhf.pyx
-    lib/ao2mo/_ao2mo.pyx.
 
 
 Bug report
@@ -96,6 +85,12 @@ Version 0.3 (2014-07-03):
   * Change import layout
 
 Version 0.4 (2014-08-17):
-  * module "future" for upcoming functions
-  * one-line command to run QC calculation with pyscf
-  * fix bug of AO to MO transformation in OpenMP environment
+  * Module "future" for upcoming functions
+  * One-line command to run QC calculation with pyscf
+  * Fix bug of AO to MO transformation in OpenMP environment
+
+Version 0.5 (2014-09-?):
+  * Change basis format
+  * Remove Cython dependence
+  * Upgrade dft to use libxc-2.0.0
+  * Add DFT, FCI, CASSCF, HF-gradients (NR and R), HF-NMR (NR and R)

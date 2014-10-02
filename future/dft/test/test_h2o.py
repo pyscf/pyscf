@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_b3lyp(self):
         method.xc = 'b3lyp'
-        self.assertAlmostEqual(method.scf(), -76.384948371890346, 9)
+        self.assertAlmostEqual(method.scf(), -76.384948370970577, 9)
 
 
 if __name__ == "__main__":

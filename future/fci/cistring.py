@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 #
-# File: cistring.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import os
+import ctypes
 import math
 import numpy
-from pyscf.lib import _mcscf
+from pyscf import lib
+
+_alib = os.path.join(os.path.dirname(lib.__file__), 'libmcscf.so')
+libfci = ctypes.CDLL(_alib)
 
 # refer to ci.rdm3.gen_strings
 def gen_strings4orblist(orb_list, nelec, ordering=True):
@@ -39,33 +43,44 @@ def num_strings(n, m):
 
 # index[str0] is [a(:vir),i(:occ),str1,sign]
 # starting from str0, annihilating i, creating a, to get str1
-#def gen_linkstr_index(orb_list, nelec, strs=None):
-#    if strs is None:
-#        strs = gen_strings4orblist(orb_list, nelec)
-#    strdic = dict(zip(strs,range(strs.__len__())))
-#    def pump1e(str0):
-#        occ = []
-#        vir = []
-#        for i in orb_list:
-#            if str0 & (1<<i):
-#                occ.append(i)
-#            else:
-#                vir.append(i)
-#        pumpmap = []
-#        for i in occ:
-#            pumpmap.append((i, i, strdic[str0], 1))
-#        for i in occ:
-#            for a in vir:
-#                str1 = str0 ^ (1<<i) | (1<<a)
-#                pumpmap.append((a, i, strdic[str1], parity(str0,str1)))
-#        return pumpmap
-#
-#    t = [pump1e(s) for s in strs]
-#    return numpy.array(t, dtype=numpy.int32)
-def gen_linkstr_index(orb_list, nelec, strs=None):
+def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nelec)
-    return _mcscf.gen_linkstr_index(orb_list, nelec, strs)
+    strdic = dict(zip(strs,range(strs.__len__())))
+    def pump1e(str0):
+        occ = []
+        vir = []
+        for i in orb_list:
+            if str0 & (1<<i):
+                occ.append(i)
+            else:
+                vir.append(i)
+        pumpmap = []
+        for i in occ:
+            pumpmap.append((i, i, strdic[str0], 1))
+        for i in occ:
+            for a in vir:
+                str1 = str0 ^ (1<<i) | (1<<a)
+                pumpmap.append((a, i, strdic[str1], parity(str0,str1)))
+        return pumpmap
+
+    t = [pump1e(s) for s in strs]
+    return numpy.array(t, dtype=numpy.int32)
+
+def gen_linkstr_index(orb_list, nocc, strs=None):
+    if strs is None:
+        strs = gen_strings4orblist(orb_list, nocc)
+    strs = numpy.array(strs)
+    norb = len(orb_list)
+    nvir = norb - nocc
+    na = num_strings(norb, nocc)
+    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
+    libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(norb), ctypes.c_int(na),
+                            ctypes.c_int(nocc),
+                            strs.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(0))
+    return link_index
 
 # compress the a, i index, to fit the symmetry of integrals
 def reform_linkstr_index(link_index):
@@ -78,6 +93,22 @@ def reform_linkstr_index(link_index):
                 ai = i*(i+1)/2+a
             link_new[k,j] = (ai,str1,sign,0)
     return link_new
+
+# p^+ q|0> where p > q, link_index [pq, *, str1, sign] 
+def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
+    if strs is None:
+        strs = gen_strings4orblist(orb_list, nocc)
+    strs = numpy.array(strs)
+    norb = len(orb_list)
+    nvir = norb - nocc
+    na = num_strings(norb, nocc)
+    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
+    libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(norb), ctypes.c_int(na),
+                            ctypes.c_int(nocc),
+                            strs.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(1))
+    return link_index
 
 def parity(string0, string1):
     ss = string1 - string0
@@ -92,3 +123,74 @@ def parity(string0, string1):
     else:
         return (-1) ** (count_bit1(string0&(-ss)))
 
+def addr2str_o0(norb, nelec, addr):
+    assert(num_strings(norb, nelec) > addr)
+    if addr == 0:
+        return (1<<nelec) - 1   # ..0011..11
+    else:
+        for i in reversed(range(norb)):
+            addrcum = num_strings(i, nelec)
+            if addrcum <= addr:
+                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
+def addr2str_o1(norb, nelec, addr):
+    assert(num_strings(norb, nelec) > addr)
+    str1 = 0
+    nelec_left = nelec
+    for norb_left in reversed(range(norb)):
+        addrcum = num_strings(norb_left, nelec_left)
+        if nelec_left == 0:
+            break
+        elif addr == 0:
+            str1 |= (1<<nelec_left) - 1
+            break
+        elif addrcum <= addr:
+            str1 |= 1<<norb_left
+            addr -= addrcum
+            nelec_left -= 1
+    return str1
+def addr2str(norb, nelec, addr):
+    return addr2str_o1(norb, nelec, addr)
+
+def str2addr_o0(norb, nelec, string):
+    if norb <= nelec or nelec == 0:
+        return 0
+    elif (1<<(norb-1)) & string:  # remove the first bit
+        return num_strings(norb-1, nelec) \
+                + str2addr_o0(norb-1, nelec-1, string^(1<<(norb-1)))
+    else:
+        return str2addr_o0(norb-1, nelec, string)
+def str2addr_o1(norb, nelec, string):
+    #TODO: assert norb > first-bit-in-string, nelec == num-1-in-string
+    addr = 0
+    nelec_left = nelec
+    for norb_left in reversed(range(norb)):
+        if nelec_left == 0 or norb_left < nelec_left:
+            break
+        elif (1<<norb_left) & string:
+            addr += num_strings(norb_left, nelec_left)
+            nelec_left -= 1
+    return addr
+def str2addr(norb, nelec, string):
+    if isinstance(string, str):
+        string = int(string, 2)
+    libfci.FCIstr2addr.restype = ctypes.c_int
+    return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
+                              ctypes.c_ulong(string))
+
+if __name__ == '__main__':
+    #print(gen_strings4orblist(range(4), 2))
+    #print(gen_linkstr_index(range(6), 3))
+#    index = gen_linkstr_index(range(8), 4)
+#    idx16 = index[:16]
+#    print(idx16[:,:,2])
+    tab1 = gen_linkstr_index_o0(range(8), 4)
+    tab2 = gen_linkstr_index(range(8), 4)
+    print(abs(tab1 - tab2).sum())
+
+    print(addr2str_o0(6, 3, 7) - addr2str(6, 3, 7))
+    print(addr2str_o0(6, 3, 8) - addr2str(6, 3, 8))
+    print(addr2str_o0(7, 4, 9) - addr2str(7, 4, 9))
+
+    print(str2addr(6, 3, addr2str(6, 3, 7)) - 7)
+    print(str2addr(6, 3, addr2str(6, 3, 8)) - 8)
+    print(str2addr(7, 4, addr2str(7, 4, 9)) - 9)

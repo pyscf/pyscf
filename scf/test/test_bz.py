@@ -1,5 +1,4 @@
 #
-# File: test_bz.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 

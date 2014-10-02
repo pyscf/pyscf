@@ -1,5 +1,4 @@
 #
-# File: test_symm.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 

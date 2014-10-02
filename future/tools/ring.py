@@ -10,5 +10,5 @@ def make(nat, b=1.):
 
 if __name__ == '__main__':
     for c in make(6):
-        print c
+        print(c)
 

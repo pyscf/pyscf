@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: mc2step.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -8,7 +7,7 @@ import time
 import numpy
 import scipy.linalg
 from pyscf import lib
-from pyscf import ao2mo
+from pyscf import scf
 import mc1step
 
 def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
@@ -44,6 +43,8 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)
+            scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
+
             eris = None # to avoid using too much memory
             eris = casscf.update_ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
@@ -66,10 +67,9 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         norm_gorb = numpy.linalg.norm(g_orb)
         log.info('                        |grad[o]| = %6.5g',
                  numpy.linalg.norm(g_orb))
-        log.timer('CASCI solver', *t2m)
+        log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
-        #print e_tot, e_tot - elast
         if abs(elast - e_tot) < tol and norm_gorb < toloose:
             conv = True
             break
@@ -113,8 +113,8 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     emc = kernel(mol, mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
-    print ehf, emc, emc-ehf
-    print emc - -3.22013929407
+    print(ehf, emc, emc-ehf)
+    print(emc - -3.22013929407)
 
 
     mol.atom = [
@@ -129,9 +129,11 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = mc1step.CASSCF(mol, m, 6, 4)
     mc.verbose = 4
-    emc = mc.mc2step()[0] + mol.nuclear_repulsion()
-    print ehf, emc, emc-ehf
+    mo = m.mo_coeff.copy()
+    mo[:,2:5] = m.mo_coeff[:,[4,2,3]]
+    emc = mc.mc2step(mo)[0] + mol.nuclear_repulsion()
+    print(ehf, emc, emc-ehf)
     #-76.0267656731 -76.0873922924 -0.0606266193028
-    print emc - -76.0873923174, emc - -76.0926176464
+    print(emc - -76.0873923174, emc - -76.0926176464)
 
 

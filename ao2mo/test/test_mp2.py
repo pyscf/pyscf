@@ -105,10 +105,9 @@ if __name__ == '__main__':
     print rmp2_energy(mol, rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2)
     print rmp2_energy_incore(rhf)
 
-    from pyscf.lib import _vhf
     mo_coeff, mo_energy, nocc = rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2
     n = mo_energy.size
-    g = _vhf.restore_full_eri(rhf._eri, n)
+    g = ao2mo.restore(1, rhf._eri, n)
     g = numpy.dot(g.reshape(n*n*n,n),mo_coeff)
     g = numpy.dot(mo_coeff.T,g.reshape(n,n*n*n))
     g = numpy.transpose(g.reshape(n,n,n,n), (2,3,0,1))

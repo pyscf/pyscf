@@ -1,11 +1,10 @@
 #
-# File: cmd_args.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os
 import optparse
-import pyscf.lib.logger as log
+import pyscf.lib.logger
 
 def cmd_args():
     '''
@@ -27,10 +26,10 @@ def cmd_args():
     (opts, args_left) = parser.parse_args()
 
     if opts.quite:
-        opts.verbose = log.QUITE
+        opts.verbose = pyscf.lig.logger.QUITE
 
     if opts.verbose:
-        opts.verbose = log.DEBUG
+        opts.verbose = pyscf.lig.logger.DEBUG
 
     if opts.max_memory:
         opts.max_memory = float(opts.max_memory)
@@ -39,4 +38,4 @@ def cmd_args():
 
 if __name__ == '__main__':
     opts = cmd_args()
-    print opts.verbose, opts.output, opts.max_memory
+    print(opts.verbose, opts.output, opts.max_memory)

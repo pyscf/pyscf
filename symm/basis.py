@@ -1,7 +1,7 @@
 #
-# File: basis.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
+
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -54,6 +54,7 @@ def basis_offset_for_atoms(atoms, basis_tab):
     return n, basoff
 
 def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
+    atoms = [(a[0], numpy.array(a[1])) for a in atoms]
     ops = param.OPERATOR_TABLE[gpname]
     chartab = param.CHARACTER_TABLE[gpname]
     nirrep = chartab.__len__()
@@ -64,7 +65,7 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
         at0 = atoms[atom_ids[0]]
         symb = gto.mole._symbol(at0[0])
         def op_test(x):
-            return OP_TEST[op](at0,atoms[x])
+            return OP_TEST[op](at0, atoms[x])
         op_relate_atoms = [lib.find_if(op_test, atom_ids) for op in ops]
 
         ib = 0
@@ -113,7 +114,8 @@ if __name__ == "__main__":
                 [1   , (0. , 0.757 , 0.587,)] ]
     h2o.basis = {'H': '6_31g',
                  'O': '6_31g',}
-    gpname, atoms = geom.detect_symm(h2o.atom)
-    print gpname
+    gpname, origin, axes = symm.detect_symm(h2o.atom)
+    atoms = gto.mole.format_atom(atoms, origin, axes)
+    print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
-    print symm_adapted_basis(gpname, eql_atoms, atoms, h2o.basis)
+    print(symm_adapted_basis(gpname, eql_atoms, atoms, h2o.basis))

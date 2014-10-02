@@ -2,19 +2,13 @@
 # $Id$
 # -*- coding: utf-8
 
-'''
-Dirac Hartree-Fock
-'''
-
 import ctypes
 import numpy
 import copy
-#import scipy.linalg.flapack as lapack
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.lib import pycint
 import hf
 import dhf
 import chkfile
@@ -104,7 +98,7 @@ class UHF(dhf.UHF):
 
     def _init_guess_by_chkfile(self, mol):
         try:
-            chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
+            chk_mol, scf_rec = chkfile.load_scf(self.chkfile)
         except IOError:
             log.warn(mol, 'Fail in reading from %s. Use RKB initial guess', \
                      self.chkfile)
@@ -120,7 +114,7 @@ class UHF(dhf.UHF):
 
     def _init_guess_by_rkb_chkfile(self, mol):
         try:
-            chk_mol, scf_rec = chkfile.read_scf(self.rkb_chkfile)
+            chk_mol, scf_rec = chkfile.load_scf(self.rkb_chkfile)
         except IOError:
             log.warn(mol, 'Fail in reading RKB chkfile from %s. ' \
                      'Use RKB initial guess' \
@@ -205,24 +199,13 @@ if __name__ == '__main__':
     mol.verbose = 5
     mol.output = 'out_dhf_dkb'
 
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-# input even-tempered basis
-    mol.etb = {
-        'He': { 'max_l' : 1           # for even-tempered basis
-              , 's'     : (4, 1, 1.8) # for etb:(num_basis, alpha, beta)
-              , 'p'     : (1, 1, 1.8) # for etb: eta = alpha*beta**i
-              , 'd'     : (0, 1, 1.8) #           for i in range num_basis
-              , 'f'     : (0,0,0)
-              , 'g'     : (0,0,0)}, }
-# or input basis information directly
-#    mol.basis = {
-#        'He': [(0, 0, (1, 1)),
-#               (0, 0, (3, 1)),
-#               (1, 0, (1, 1)), ]}
+    mol.atom = [['He', (0.,0.,0.)], ]
+    mol.basis = {
+        'He': [(0, (1, 1)),
+               (0, (3, 1)),
+               (1, (1, 1)), ]}
     mol.build()
 
-##############
-# SCF result
     method = UHF(mol)
     energy = method.scf(mol)
-    print energy
+    print(energy)

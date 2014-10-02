@@ -1,5 +1,4 @@
 #
-# File: param.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 

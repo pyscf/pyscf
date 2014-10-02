@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: radi.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -103,27 +102,10 @@ def gauss_chebeshev(n): #rgd_nkcheb
     return r[::-1], w[::-1]
 
 
-#!--> gauss-chebeshev quadrature of the second kind(used by becke)
-#  call rgd_Chebeshev(n,ra(i),rr(1,i),wr(1,i) )
-#!--> gauss-legendre quadrature(delley)
-#  call rgd_legendre(n,xgl,wgl,ra(i),rr0,wr0,rr(1,i),wr(1,i))
-#!--> sective gauss-legendre quadrature
-#  !nrg(i)=nsb(1,i)+nsb(2,i)+nsb(3,i)   
-#  !--> this should be done before this subroutine
-#  if(ipr.gt.0)write(6,29) i,nsb(1,i),nsb(2,i),nsb(3,i),nrg(i)
-#   format(5x,'ndat nsb1,nsb2,nsb3,nrg  ',5i5)
-#   call rgd_seclegendre(nsb(1,i),ra(i),rcv1,xgl,wgl
-#  ,rr0,wr0,rr(1,i),wr(1,i) )
-#!--> generalized gauss-laguerre integrarion
-#  call rgd_glaguerre(n,ssb(i),rr0,wr0,rr(1,i),wr(1,i))
-#!--> equally spaced points: murray,handy,laming, mol. phys. 78,997(1993)
-#  call rgd_mhl(n,ra(i),rr(1,i),wr(1,i) )
-
-
 
 if __name__ == '__main__':
-    #print delley(10)
-    #print mura_knowles(10)
-    #print gauss_chebeshev(10)
+    #print(delley(10))
+    #print(mura_knowles(10))
+    #print(gauss_chebeshev(10))
     for i in range(1,60,3):
-        print i, (0.75 + (3-1)*0.2) * 14.  * (i+2.)**(1/3.)
+        print(i, (0.75 + (3-1)*0.2) * 14.  * (i+2.)**(1/3.))

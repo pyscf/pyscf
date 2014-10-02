@@ -9,26 +9,28 @@ from pyscf import scf
 
 mol = gto.Mole()
 # gto.Mole is a class to hold molecule informations.
-# Mole.verbose          print level, (1..5), big num gives more details.
-#                       It can be overwritten by command line options "-v" or "-q".
-# Mole.output           name of output file.
-#                       It can be overwritten by command line options "-o <filename>"
-# Mole.max_memory       max. memories allowed to use. Default is lib.parameters.MEMORY_MAX
-#                       It can be overwritten by command line options "-m size"
-# Mole.charge           = 0 by default.
-# Mole.spin             2 * S_z, n_alpha - n_beta. Default is 0.
-# Mole.symmetry         detect and use symmetry (up to D2h) or not. Default is
-#                       False which implies C1 symmetry.
-mol.verbose = 5
-mol.output = 'out_h2o'
-# Mole.atom = [(atom_type/nuc_charge, (coordinates:0.,0.,0.)),
+# verbose       print level, (1..5), big num gives more details.
+#               It can be overwritten by command line options "-v" or "-q".
+# output        name of output file.
+#               It can be overwritten by command line options "-o <filename>"
+# max_memory    max. memories allowed to use. Default is lib.parameters.MEMORY_MAX
+#               It can be overwritten by command line options "-m size"
+# charge        = 0 by default.
+# spin          2 * S_z, n_alpha - n_beta. Default is 0.
+# symmetry      detect and use symmetry (up to D2h) or not. Default is
+#               False which implies C1 symmetry.
+# MUST 'build' the molecule before doing any other things
+mol.build(
+    verbose = 5,
+    output = 'out_h2o',
+# atom = [(atom_type/nuc_charge, (coordinates:0.,0.,0.)),
 #              ... ]   Coordinates are in Angstrom
-mol.atom = [
+    atom = [
     ['O' , (0. , 0.    , 0.  )],
     ['H' , (0. , -.757 , .587)],
-    [1   , (0. , .757  , .587)]]
-# Mole.basis = {atom_type/nuc_charge: 'name of basis sets'}
-mol.basis = {'O': '6-31g',
+    [1   , (0. , .757  , .587)]],
+# basis = {atom_type/nuc_charge: 'name of basis sets'}
+    basis = {'O': '6-31g',
 # or directly input the basis
 #                 [[angular-1,
 #                   (expnt1,    contraction-coeffs-for-expnt1),
@@ -41,14 +43,9 @@ mol.basis = {'O': '6-31g',
                     (0.8245470, 0.9046910),],
                    [0,
                     (0.1831920, 1.0000000),]],
-            }
-# Mole.grids affects the DFT numerical integration
-# Mole.grids = {atom_type/nuc_charge: [num_grid_radial, num_grid_angular]}
-mol.grids = {'O': (50, 86),
-             'H': (50, 50),}
-# MUST 'build' the molecule before doing any other things
-mol.build()
-# For more detail of class Mole, see pyscf/gto/mole.py
+            },
+)
+# For more details, see pyscf/gto/mole.py
 
 rhf = scf.RHF(mol)
 # scf.RHF or scf.UHF is a class to do SCF. Taking RHF as an example

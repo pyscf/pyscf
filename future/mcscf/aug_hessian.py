@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: aug_hessian.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -77,6 +76,46 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7, max_cycle=10, max_stepsize=.6,
               istep+1, numpy.linalg.norm(g), norm_x, numpy.max(abs(xtrial)), w_t)
     return w_t, xtrial
 
+def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
+                max_cycle=10, max_stepsize=.6,
+                lindep=1e-14, pick_mode=pick_large_mode, dot=numpy.dot):
+
+    # the first trial vector is (1,0,0,...), which is not included in xs
+    x0 = x0/numpy.linalg.norm(x0)
+    xs = []
+    ax = []
+
+    heff = numpy.zeros((max_cycle+1,max_cycle+1))
+    ovlp = numpy.eye(max_cycle+1)
+    for istep in range(min(max_cycle,x0.size)):
+        xs.append(x0)
+        ax.append(h_op(x0))
+        g = g_op()
+        for i in range(istep+1):
+            heff[i+1,0] = heff[0,i+1] = dot(xs[i], g)
+            heff[istep+1,i+1] = heff[i+1,istep+1] = dot(xs[istep], ax[i])
+            ovlp[istep+1,i+1] = ovlp[i+1,istep+1] = dot(xs[istep], xs[i])
+        nvec = len(xs) + 1
+        xtrial, w_t, v_t, index = \
+                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, pick_mode)
+        if index == -1:
+            break
+        hx = _dgemv(v_t[1:], ax)
+        # note g*v_t[0], as the first trial vector is (1,0,0,...)
+        dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
+        norm_dx = numpy.linalg.norm(dx)
+        if norm_dx < toloose:
+            yield istep, w_t, xtrial
+        s0 = numpy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+        log.debug1('AH step %d, index=%d, |dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
+                   istep+1, index, norm_dx, w_t, v_t[0], s0)
+        if norm_dx < tol or s0 < lindep:
+            break
+        x0 = precond(dx, w_t)
+
+        #yield w_t, xtrial
+    yield istep+1, w_t, xtrial
+
 # As did in orz, optimize the stepsize by searching the best lambda
 def _opt_step_as_orz_lambda(heff, ovlp, xs, pick_mode, lambda0,
                             max_stepsize=.2, lambda_tries=6):
@@ -133,4 +172,5 @@ if __name__ == '__main__':
     seff = numpy.eye(5)
     xs = numpy.random.random((4,20))
     seff[1:,1:] = numpy.dot(xs, xs.T)
-    print _opt_step_as_orz_lambda(heff, seff, xs, pick_large_mode, 1, max_stepsize=.9)
+    print(_opt_step_as_orz_lambda(heff, seff, xs, pick_large_mode, 1,
+                                  max_stepsize=.9))

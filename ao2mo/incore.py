@@ -1,39 +1,13 @@
 #!/usr/bin/env python
 #
-# File: incore.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
-import pyscf.lib._ao2mo as _ao2mo
+import _ao2mo
 
-# full_eri in Mulliken notation
-def gen_int2e_from_full_eri(full_eri, nao=None):
-    if nao is None:
-        nao = full_eri.shape[0]
-    else:
-        full_eri = full_eri.reshape(nao,nao,nao,nao)
-    int2e = numpy.empty((nao*(nao+1)/2,nao*(nao+1)/2))
-    for i in range(nao):
-        for j in range(i+1):
-            ij = i*(i+1)/2 + j
-            for k in range(nao):
-                for l in range(k+1):
-                    kl = k*(k+1)/2 + l
-                    int2e[ij,kl] = full_eri[i,j,k,l]
-    return int2e
-
-def get_int2e_from_partial_eri(eri_ao, mo_coeff):
-    return full(eri_ao, mo_coeff)
-
-def full(eri_ao, mo_coeff):
-    if mo_coeff.flags.c_contiguous:
-        mo_coeff = mo_coeff.copy('F')
-    if eri_ao.ndim == 1:
-        return _ao2mo.partial_eri_o3(eri_ao, mo_coeff)
-    elif eri_ao.ndim == 2:
-        return _ao2mo.partial_eri_o2(eri_ao, mo_coeff)
-
+def full(eri_ao, mo_coeff, verbose=None, compact=True):
+    return general(eri_ao, (mo_coeff,)*4, verbose, compact)
 
 # It consumes two times of the memory needed by MO integrals
 def general(eri_ao, mo_coeffs, verbose=None, compact=True):
@@ -62,10 +36,7 @@ def general(eri_ao, mo_coeffs, verbose=None, compact=True):
         return numpy.zeros((nij_pair,nkl_pair))
 
     if nij_pair > nkl_pair:
-        print 'low efficiency for AO to MO trans!'
-
-    nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1) / 2
+        print('low efficiency for AO to MO trans!')
 
     if ijsame:
         moji = numpy.array(mo_coeffs[0], order='F', copy=False)
@@ -104,8 +75,10 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf()
     import time
-    print time.clock()
+    print(time.clock())
     eri0 = full(rhf._eri, rhf.mo_coeff)
-    print abs(eri0).sum()-5384.460843787659 # should = 0
-    print time.clock()
+    print(abs(eri0).sum()-5384.460843787659) # should = 0
+    eri0 = general(rhf._eri, (rhf.mo_coeff,)*4)
+    print(abs(eri0).sum()-5384.460843787659)
+    print(time.clock())
 

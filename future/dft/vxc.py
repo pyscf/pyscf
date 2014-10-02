@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: vxc.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -8,9 +7,14 @@
 XC functional
 '''
 
+import os
+import ctypes
 import re
 import numpy
-from pyscf.lib import _dft
+from pyscf import lib
+
+_alib = os.path.join(os.path.dirname(lib.__file__), 'libdft.so')
+libdft = ctypes.CDLL(_alib)
 
 # xc_code from libxc
 XC_CODES = {
@@ -42,6 +46,23 @@ XC_CODES = {
 'XC_LDA_C_PW_RPA':       25,  # Perdew & Wang fit of the RPA
 'XC_LDA_K_TF':           50,  # Thomas-Fermi kinetic energy functional
 'XC_LDA_K_LP':           51,  # Lee and Parr Gaussian ansatz
+#'XC_GGA_C_OP_XALPHA':    84,  # one-parameter progressive functional (G96 version)
+#'XC_GGA_C_OP_G96':       85,  # one-parameter progressive functional (G96 version)
+#'XC_GGA_C_OP_PBE':       86,  # one-parameter progressive functional (PBE version)
+#'XC_GGA_C_OP_B88':       87,  # one-parameter progressive functional (B88 version)
+#'XC_GGA_C_FT97':         88,  # Filatov & Thiel correlation
+#'XC_GGA_C_SPBE':         89,  # PBE correlation to be used with the SSB exchange
+#'XC_GGA_X_SSB_SW':       90,  # Swarta, Sola and Bickelhaupt correction to PBE
+#'XC_GGA_X_SSB':          91,  # Swarta, Sola and Bickelhaupt
+#'XC_GGA_X_SSB_D':        92,  # Swarta, Sola and Bickelhaupt dispersion
+#'XC_GGA_XC_HCTH_407P':   93,  # HCTH/407+
+#'XC_GGA_XC_HCTH_P76':    94,  # HCTH p=7/6
+#'XC_GGA_XC_HCTH_P14':    95,  # HCTH p=1/4
+#'XC_GGA_XC_B97_GGA1':    96,  # Becke 97 GGA-1
+#'XC_GGA_XC_HCTH_A':      97,  # HCTH-A
+#'XC_GGA_X_BPCCAC':       98,  # BPCCAC (GRAC for the energy)
+#'XC_GGA_C_REVTCA':       99,  # Tognetti, Cortona, Adamo (revised)
+#'XC_GGA_C_TCA':         100,  # Tognetti, Cortona, Adamo
 'XC_GGA_X_PBE':         101,  # Perdew, Burke & Ernzerhof exchange
 'XC_GGA_X_PBE_R':       102,  # Perdew, Burke & Ernzerhof exchange (revised)
 'XC_GGA_X_B86':         103,  # Becke 86 Xalfa,beta,gamma
@@ -148,6 +169,7 @@ XC_CODES = {
 'XC_GGA_XC_TH_FC':      197,  # Tozer and Handy v. FC
 'XC_GGA_XC_TH_FCFO':    198,  # Tozer and Handy v. FCFO
 'XC_GGA_XC_TH_FCO':     199,  # Tozer and Handy v. FCO
+#'XC_GGA_C_OPTC':        200,  # Optimized correlation functional of Cohen and Handy
 'XC_GGA_K_VW':          500,  # von Weiszaecker functional
 'XC_GGA_K_GE2':         501,  # Second-order gradient expansion (l = 1/9)
 'XC_GGA_K_GOLDEN':      502,  # TF-lambda-vW form by Golden (l = 13/45)
@@ -172,6 +194,12 @@ XC_CODES = {
 'XC_GGA_K_LC94':        521,  # Lembarki & Chermette
 'XC_GGA_K_LLP':         522,  # Lee, Lee & Parr
 'XC_GGA_K_THAKKAR':     523,  # Thakkar 1992
+'XC_GGA_X_WPBEH':       524,  # short-range version of the PBE
+'XC_GGA_X_HJS_PBE':     525,  # HJS screened exchange PBE version
+'XC_GGA_X_HJS_PBE_SOL': 526,  # HJS screened exchange PBE_SOL version
+'XC_GGA_X_HJS_B88':     527,  # HJS screened exchange B88 version
+'XC_GGA_X_HJS_B97X':    528,  # HJS screened exchange B97x version
+'XC_GGA_X_ITYH':        529,  # short-range recipe for exchange GGA functionals
 'XC_HYB_GGA_XC_B3PW91': 401,  # The original hybrid proposed by Becke
 'XC_HYB_GGA_XC_B3LYP':  402,  # The (in)famous B3LYP
 'XC_HYB_GGA_XC_B3P86':  403,  # Perdew 86 hybrid similar to B3PW91
@@ -207,6 +235,17 @@ XC_CODES = {
 'XC_HYB_GGA_XC_SB98_2B': 424,  # Schmider-Becke 98 parameterization 2b
 'XC_HYB_GGA_XC_SB98_2C': 425,  # Schmider-Becke 98 parameterization 2c
 'XC_HYB_GGA_X_SOGGA11_X': 426, # Hybrid based on SOGGA11 form
+#'XC_HYB_GGA_XC_HSE03':           427, # the 2003 version of the screened hybrid HSE
+#'XC_HYB_GGA_XC_HSE06':           428, # the 2006 version of the screened hybrid HSE
+#'XC_HYB_GGA_XC_HJS_PBE':         429, # HJS hybrid screened exchange PBE version
+#'XC_HYB_GGA_XC_HJS_PBE_SOL':     430, # HJS hybrid screened exchange PBE_SOL version
+#'XC_HYB_GGA_XC_HJS_B88':         431, # HJS hybrid screened exchange B88 version
+#'XC_HYB_GGA_XC_HJS_B97X':        432, # HJS hybrid screened exchange B97x version
+#'XC_HYB_GGA_XC_CAM_B3LYP':       433, # CAM version of B3LYP
+#'XC_HYB_GGA_XC_TUNED_CAM_B3LYP': 434, # CAM version of B3LYP tunes for excitations
+#'XC_HYB_GGA_XC_BHANDH':          435, # Becke half-and-half
+#'XC_HYB_GGA_XC_BHANDHLYP':       436, # Becke half-and-half with B88 exchange
+#'XC_HYB_GGA_XC_MB3LYP_RC04':     437, # B3LYP with RC04 LDA
 'XC_MGGA_X_LTA':        201,   # Local tau approximation of Ernzerhof & Scuseria
 'XC_MGGA_X_TPSS':       202,   # Perdew, Tao, Staroverov & Scuseria exchange
 'XC_MGGA_X_M06L':       203,   # Zhao, Truhlar exchange
@@ -218,8 +257,38 @@ XC_CODES = {
 'XC_MGGA_X_RPP09':      209,   # Rasanen, Pittalis, and Proetto correction to Becke & Johnson
 'XC_MGGA_X_2D_PRHG07':  210,   # Pittalis, Rasanen, Helbig, Gross Exchange Functional
 'XC_MGGA_X_2D_PRHG07_PRP10': 211,# PRGH07 with PRP10 correction
-'XC_MGGA_C_TPSS':       231,    # Perdew, Tao, Staroverov & Scuseria correlation
-'XC_MGGA_C_VSXC':       232,    # VSxc from Van Voorhis and Scuseria (correlation part)
+#'XC_MGGA_X_REVTPSS':    212, # revised Perdew, Tao, Staroverov & Scuseria exchange
+#'XC_MGGA_X_PKZB':       213, # Perdew, Kurth, Zupan, and Blaha
+#'XC_MGGA_X_M05':        214, # M05 functional of Minnesota
+#'XC_MGGA_X_M05_2X':     215, # M05-2X functional of Minnesota
+#'XC_MGGA_X_M06_HF':     216, # M06-HF functional of Minnesota
+#'XC_MGGA_X_M06':        217, # M06 functional of Minnesota
+#'XC_MGGA_X_M06_2X':     218, # M06-2X functional of Minnesota
+#'XC_MGGA_X_M08_HX':     219, # M08-HX functional of Minnesota
+#'XC_MGGA_X_M08_SO':     220, # M08-SO functional of Minnesota
+'XC_MGGA_C_TPSS':       231, # Perdew, Tao, Staroverov & Scuseria correlation
+'XC_MGGA_C_VSXC':       232, # VSxc from Van Voorhis and Scuseria (correlation part)
+#'XC_MGGA_C_M06_L':      233, # M06-Local functional of Minnesota
+#'XC_MGGA_C_M06_HF':     234, # M06-HF functional of Minnesota
+#'XC_MGGA_C_M06':        235, # M06 functional of Minnesota
+#'XC_MGGA_C_M06_2X':     236, # M06-2X functional of Minnesota
+#'XC_MGGA_C_M05':        237, # M05 functional of Minnesota
+#'XC_MGGA_C_M05_2X':     238, # M05-2X functional of Minnesota
+#'XC_MGGA_C_PKZB':       239, # Perdew, Kurth, Zupan, and Blaha
+#'XC_MGGA_C_BC95':       240, # Becke correlation 95
+#'XC_HYB_MGGA_XC_M05':    438, # M05 functional of Minnesota
+#'XC_HYB_MGGA_XC_M05_2X': 439, # M05-2X functional of Minnesota
+#'XC_HYB_MGGA_XC_B88B95': 440, # Mixture of B88 with BC95 (B1B95)
+#'XC_HYB_MGGA_XC_B86B95': 441, # Mixture of B86 with BC95
+#'XC_HYB_MGGA_XC_PW86B95':442, # Mixture of PW86 with BC95
+#'XC_HYB_MGGA_XC_BB1K':   443, # Mixture of B88 with BC95 from Zhao and Truhlar
+#'XC_HYB_MGGA_XC_M06_HF': 444, # M06-HF functional of Minnesota
+#'XC_HYB_MGGA_XC_MPW1B95':445, # Mixture of mPW91 with BC95 from Zhao and Truhlar
+#'XC_HYB_MGGA_XC_MPWB1K': 446, # Mixture of mPW91 with BC95 for kinetics
+#'XC_HYB_MGGA_XC_X1B95':  447, # Mixture of X with BC95
+#'XC_HYB_MGGA_XC_XB1K':   448, # Mixture of X with BC95 for kinetics
+#'XC_HYB_MGGA_XC_M06':    449, # M06 functional of Minnesota
+#'XC_HYB_MGGA_XC_M06_2X': 450, # M06-2X functional of Minnesota
 }
 
 def _is_hybrid_xc(xc_code):
@@ -332,7 +401,8 @@ def parse_xc_name(xc_name='LDA,VWN'):
 
 def hybrid_coeff(xc_code, spin=1):
     if _is_hybrid_xc(xc_code):
-        return _dft.hybrid_coeff(xc_code, spin)
+        libdft.VXChybrid_coeff.restype = ctypes.c_double
+        return libdft.VXChybrid_coeff(ctypes.c_int(xc_code), ctypes.c_int(spin))
     else:
         return 0
 
@@ -340,10 +410,35 @@ def hybrid_coeff(xc_code, spin=1):
 #####################
 
 # spin = 1, unpolarized; spin = 2, polarized
-def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, verbose=None):
-    n,e,v = _dft.nr_vxc(x_id, c_id, spin, relativity, dm, \
-                        grids.coords, grids.weights, \
-                        mol._atm, mol._bas, mol._env)
-    return n,e,v
+def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, hermi=1,
+           verbose=None):
+    c_atm = numpy.array(mol._atm, dtype=numpy.int32)
+    c_bas = numpy.array(mol._bas, dtype=numpy.int32)
+    c_env = numpy.array(mol._env)
+    natm = ctypes.c_int(c_atm.shape[0])
+    nbas = ctypes.c_int(c_bas.shape[0])
+    exc = ctypes.c_double(0)
+    if not dm.flags.f_contiguous:
+        dm = dm.copy(order='F')
+    # data will write to triu in F-ordered array, which is tril of C-array
+    v = numpy.empty_like(dm, order='C')
+
+    libdft.VXCnr_vxc.restype = ctypes.c_double
+    nelec = libdft.VXCnr_vxc(ctypes.c_int(x_id), ctypes.c_int(c_id),
+                             ctypes.c_int(spin), ctypes.c_int(relativity),
+                             dm.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.byref(exc),
+                             v.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(grids.weights.size),
+                             grids.coords.ctypes.data_as(ctypes.c_void_p),
+                             grids.weights.ctypes.data_as(ctypes.c_void_p),
+                             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                             c_env.ctypes.data_as(ctypes.c_void_p))
+    if hermi == 1:
+        v = lib.hermi_triu(v, inplace=True)
+    else:
+        raise('anti-Hermitian is not supported')
+    return nelec, exc.value, v
 
 

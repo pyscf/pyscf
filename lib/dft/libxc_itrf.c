@@ -1,5 +1,4 @@
 /*
- * File: libxc_itrf.c
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  *
  * libxc from
@@ -22,7 +21,7 @@ double VXChybrid_coeff(int xc_id, int spin)
         {
                 case XC_FAMILY_HYB_GGA:
                 case XC_FAMILY_HYB_MGGA:
-                        factor = xc_hyb_gga_exx_coef(func.gga);
+                        factor = xc_hyb_exx_coef(&func);
                         break;
                 default:
                         factor = 0;
@@ -35,6 +34,12 @@ double VXChybrid_coeff(int xc_id, int spin)
 int VXCinit_libxc(xc_func_type *func_x, xc_func_type *func_c,
                   int x_id, int c_id, int spin, int relativity)
 {
+        if (!func_x) {
+                func_x->info = NULL;
+        }
+        if (!func_c) {
+                func_c->info = NULL;
+        }
         if (xc_func_init(func_x, x_id, spin) != 0) {
                 fprintf(stderr, "X functional %d not found\n", x_id);
                 exit(1);

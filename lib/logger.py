@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 #
-# File: logger.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 

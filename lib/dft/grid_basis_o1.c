@@ -1,5 +1,4 @@
 /*
- * File: grid_basis.c
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 

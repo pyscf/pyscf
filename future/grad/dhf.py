@@ -1,19 +1,17 @@
 #!/usr/bin/env python
-#
-# File: dhf.py
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#
+# $Id$
+# -*- coding: utf-8
 
-'''
-Relativistic
-'''
+"""
+Relativistic Dirac-Hartree-Fock
+"""
+
 
 import numpy
-import scipy.linalg.flapack as lapack
 from pyscf import lib
 from pyscf.lib import logger as log
-from pyscf.lib import pycint as pycint
 from pyscf import scf
+from pyscf.scf import _vhf
 import hf
 
 WITH_LLLL = 1
@@ -77,7 +75,8 @@ class UHF(hf.RHF):
         '''Dirac-Hartree-Fock Coulomb repulsion'''
         if self.vhf_level == WITH_LLLL:
             log.info(mol, 'Compute Gradients: (LL|LL)')
-            vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_ll_o1, mol, dm)
+            #vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_ll_o1, mol, dm)
+            vj, vk = _call_vhf1_llll(mol, dm)
         elif self.vhf_level == WITH_LS2L:
             log.info(mol, 'Compute Gradients: (LL|LL) + (SS|dLL)')
             vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_ls2l_o1, mol, dm)
@@ -89,7 +88,8 @@ class UHF(hf.RHF):
             vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_xss_o1, mol, dm)
         else:
             log.info(mol, 'Compute Gradients: (LL|LL) + (SS|LL) + (SS|SS)')
-            vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_o1, mol, dm)
+            #vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_o1, mol, dm)
+            vj, vk = _call_vhf1(mol, dm)
         return vj - vk
 
     def atom_of_aos(self, mol):
@@ -109,9 +109,49 @@ class UHF(hf.RHF):
         return v
 
 
-class RHF(UHF):
-    def __init__(self, mol, scf):
-        UHF.__init__(self, mol, scf)
+def _call_vhf1_llll(mol, dm):
+    c1 = .5/mol.light_speed
+    n2c = dm.shape[0] / 2
+    dmll = dm[:n2c,:n2c].copy()
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
+            _vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
+                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                               dmll, 3, mol._atm, mol._bas, mol._env)
+    return vj, vk
+
+def _call_vhf1(mol, dm):
+    c1 = .5/mol.light_speed
+    n2c = dm.shape[0] / 2
+    dmll = dm[:n2c,:n2c].copy()
+    dmls = dm[:n2c,n2c:].copy()
+    dmsl = dm[n2c:,:n2c].copy()
+    dmss = dm[n2c:,n2c:].copy()
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
+            _vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
+                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                               dmll, 3, mol._atm, mol._bas, mol._env)
+    vj[:,n2c:,n2c:], vk[:,n2c:,n2c:] = \
+            _vhf.rdirect_mapdm('cint2e_ipspsp1spsp2', 'CVHFdot_rs2kl',
+                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                               dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    vx = _vhf.rdirect_bindm('cint2e_ipspsp1', 'CVHFdot_rs2kl',
+                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                            (dmll, dmsl), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
+    vj[:,n2c:,n2c:] += vx[0]
+    vk[:,n2c:,:n2c] += vx[1]
+    vx = _vhf.rdirect_bindm('cint2e_ip1spsp2', 'CVHFdot_rs2kl',
+                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                            (dmss, dmls), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
+    vj[:,:n2c,:n2c] += vx[0]
+    vk[:,:n2c,n2c:] += vx[1]
+    return vj, vk
+
 
 
 if __name__ == "__main__":
@@ -128,6 +168,10 @@ if __name__ == "__main__":
                  "O": '6-31g',}
     h2o.build()
     method = dhf.UHF(h2o)
-    print method.scf()
+    print(method.scf())
     g = UHF(method)
-    print g.grad()
+    print(g.grad())
+#[[ 0   0                0             ]
+# [ 0  -4.27565134e-03  -1.20060029e-02]
+# [ 0   4.27565134e-03  -1.20060029e-02]]
+

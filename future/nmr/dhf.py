@@ -1,24 +1,21 @@
 #!/usr/bin/env python
 #
-# File: dhf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
-NMR shielding for Dirac Hartree-Fock
+NMR shielding of Dirac Hartree-Fock
 '''
 
-import cPickle as pickle
 import time
-
 import numpy
 from pyscf import gto
 from pyscf.lib import logger as log
 from pyscf.lib import parameters as param
-from pyscf.lib import pycint
 from pyscf import lib
 from pyscf import scf
 import hf
+from pyscf.scf import _vhf
 
 class MSC(hf.MSC):
     __doc__ = 'magnetic shielding constants'
@@ -155,11 +152,6 @@ class MSC(hf.MSC):
             mo1_ao = numpy.dot(mo0, mo1[i])
             tmp = numpy.dot(mo1_ao, m.T.conj())
             dm1.append(tmp + tmp.T.conj())
-        #print 'dd',abs(dm1[0].diagonal()).sum(),dm1[0].sum()
-        #print abs(dm1[0] + dm1[1]*1j).sum()
-        #numpy.set_printoptions(3)
-        #print dm1
-        #print mo1[0]
         return numpy.array(dm1)
 
     def get_h10_s10(self, mol, scf0):
@@ -190,16 +182,16 @@ class MSC(hf.MSC):
 
         s1 = numpy.zeros((3, n4c, n4c), complex)
         if self.restart:
-            h1 = scf.load_chkfile_key(self.scf.chkfile, 'vhf_GIAO')
+            h1 = scf.chkfile.load(self.scf.chkfile, 'vhf_GIAO')
             log.info(self, 'restore vhf_GIAO from chkfile')
         else:
             dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
-            vj, vk = scf.hf.get_vj_vk(pycint.rkb_giao_vhf_coul, mol, dm0)
+            vj, vk = _call_giao_vhf1(mol, dm0)
             h1 = vj - vk
             if self.scf.with_gaunt:
                 vj, vk = scf.hf.get_vj_vk(pycint.rkb_giao_vhf_gaunt, mol, dm0)
                 h1 += vj - vk
-            scf.dump_chkfile_key(self.scf.chkfile, 'vhf_GIAO', h1)
+            scf.chkfile.dump(self.scf.chkfile, 'vhf_GIAO', h1)
 
         for i in range(3):
             h1[i,:n2c,:n2c] += vg[i]
@@ -245,23 +237,23 @@ class MSC(hf.MSC):
 
         s1 = numpy.zeros((3, n4c, n4c), complex)
         if self.restart:
-            h1 = scf.load_chkfile_key(self.scf.chkfile, 'vhf_RMB')
+            h1 = scf.chkfile.load(self.scf.chkfile, 'vhf_RMB')
             log.info(self, 'restore vhf_RMB from chkfile')
         else:
             dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
             if self.is_giao:
-                vj, vk = scf.hf.get_vj_vk(pycint.rmb4giao_vhf_coul, mol, dm0)
+                vj, vk = _call_rmb_vhf1(mol, dm0, 'giao')
                 h1 = vj - vk
                 if self.scf.with_gaunt:
                     vj, vk = scf.hf.get_vj_vk(pycint.rmb4giao_vhf_gaunt, mol, dm0)
                     h1 += vj - vk
             else:
-                vj,vk = scf.hf.get_vj_vk(pycint.rmb4cg_vhf_coul, mol, dm0)
+                vj, vk = _call_rmb_vhf1(mol, dm0, 'cg')
                 h1 = vj - vk
                 if self.scf.with_gaunt:
                     vj, vk = scf.hf.get_vj_vk(pycint.rmb4cg_vhf_gaunt, mol, dm0)
                     h1 += vj - vk
-            scf.dump_chkfile_key(self.scf.chkfile, 'vhf_RMB', h1)
+            scf.chkfile.dump(self.scf.chkfile, 'vhf_RMB', h1)
 
         for i in range(3):
             t1cc = t1[i] + t1[i].conj().T
@@ -281,30 +273,94 @@ class MSC(hf.MSC):
         v_ao = self.scf.get_veff(mol, dm1)
         return self._mat_ao2mo(v_ao, scf0.mo_coeff, scf0.mo_occ)
 
+def _call_rmb_vhf1(mol, dm, key='giao'):
+    c1 = .5/mol.light_speed
+    n2c = dm.shape[0] / 2
+    dmll = dm[:n2c,:n2c].copy()
+    dmls = dm[:n2c,n2c:].copy()
+    dmsl = dm[n2c:,:n2c].copy()
+    dmss = dm[n2c:,n2c:].copy()
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vx = _vhf.rdirect_mapdm('cint2e_'+key+'_sa10sp1spsp2', 'CVHFdot_rs2kl',
+                            ('CVHFrs2kl_ji_s2kl', 'CVHFrs2kl_lk_s1ij',
+                             'CVHFrs2kl_jk_s1il', 'CVHFrs2kl_li_s1kj'),
+                            dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    for i in range(3):
+        vx[0,i] = lib.hermi_triu(vx[0,i], 2)
+    vj[:,n2c:,n2c:] = vx[0] + vx[1]
+    vk[:,n2c:,n2c:] = vx[2] + vx[3]
+
+    vx = _vhf.rdirect_bindm('cint2e_'+key+'_sa10sp1', 'CVHFdot_rs2kl',
+                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_ji_s2kl',
+                             'CVHFrs2kl_jk_s1il', 'CVHFrs2kl_li_s1kj'),
+                            (dmll,dmss,dmsl,dmls), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
+    for i in range(3):
+        vx[1,i] = lib.hermi_triu(vx[1,i], 2)
+    vj[:,n2c:,n2c:] += vx[0]
+    vj[:,:n2c,:n2c] += vx[1]
+    vk[:,n2c:,:n2c] += vx[2]
+    vk[:,:n2c,n2c:] += vx[3]
+    for i in range(3):
+        vj[i] = vj[i] + vj[i].T.conj()
+        vk[i] = vk[i] + vk[i].T.conj()
+    return vj, vk
+
+def _call_giao_vhf1(mol, dm):
+    c1 = .5/mol.light_speed
+    n2c = dm.shape[0] / 2
+    dmll = dm[:n2c,:n2c].copy()
+    dmls = dm[:n2c,n2c:].copy()
+    dmsl = dm[n2c:,:n2c].copy()
+    dmss = dm[n2c:,n2c:].copy()
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vx = _vhf.rdirect_mapdm('cint2e_g1', 'CVHFdot_rs4',
+                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                            dmll, 3, mol._atm, mol._bas, mol._env)
+    vj[:,:n2c,:n2c] = vx[0]
+    vk[:,:n2c,:n2c] = vx[1]
+    vx = _vhf.rdirect_mapdm('cint2e_spgsp1spsp2', 'CVHFdot_rs4',
+                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                            dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    vj[:,n2c:,n2c:] = vx[0]
+    vk[:,n2c:,n2c:] = vx[1]
+    vx = _vhf.rdirect_bindm('cint2e_g1spsp2', 'CVHFdot_rs4',
+                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                            (dmss,dmls), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
+    vj[:,:n2c,:n2c] += vx[0]
+    vk[:,:n2c,n2c:] += vx[1]
+    vx = _vhf.rdirect_bindm('cint2e_spgsp1', 'CVHFdot_rs4',
+                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                            (dmll,dmsl), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
+    vj[:,n2c:,n2c:] += vx[0]
+    vk[:,n2c:,:n2c] += vx[1]
+    for i in range(3):
+        vj[i] = lib.hermi_triu(vj[i], 1)
+        vk[i] = vk[i] + vk[i].T.conj()
+    return vj, vk
+
 
 if __name__ == '__main__':
+    from pyscf.scf import dhf
     mol = gto.Mole()
-    mol.verbose = 1
-    mol.output = None#'out_dhf'
+    mol.verbose = 5
+    mol.output = 'out_dhf'
 
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.etb = {
-        'He': { 'max_l' : 0
-              , 's'     : (2, 2, 1.8)
-              , 'p'     : (0, 1, 1.8)
-              , 'd'     : (0, 1, 1.8)
-              , 'f'     : (0,0,0)
-              , 'g'     : (0,0,0)}, }
+    mol.atom = [['He', (0.,0.,0.)], ]
     mol.basis = {
         'He': [(0, 0, (1., 1.)),
                (0, 0, (3., 1.)),
                (1, 0, (1., 1.)), ]}
     mol.build()
 
-    from pyscf.scf import dhf
     mf = dhf.UHF(mol)
     mf.scf()
     nmr = MSC(mf)
     nmr.MB = nmr.rmb
     nmr.is_cpscf = True
-    msc = nmr.msc() # 63.0196725
+    msc = nmr.msc()
+    print(msc) # 64.4318104

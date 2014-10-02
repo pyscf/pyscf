@@ -1,5 +1,4 @@
 /*
- * File: misc.h
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  *
  * basic functions

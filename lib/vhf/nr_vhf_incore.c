@@ -7,7 +7,7 @@
 #include <math.h>
 #include <omp.h>
 #include "cvhf.h"
-#include "misc.h"
+#include "np_helper/np_helper.h"
 #include "fblas.h"
 
 void CVHFcompress_nr_dm(double *tri_dm, double *dm, int nao)
@@ -34,7 +34,7 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk)
         int l1, l2;
         for (i = 0; i < n; i++) {
                 for (j = 0; j < i; j++, eri += nao_pair) {
-                        CVHFunpack(n, eri, tmp);
+                        NPdunpack_tril(n, eri, tmp);
                         l1 = j + 1;
                         l2 = i + 1;
                         dgemv_(&TRANS_T, &ln, &l1, &D1, tmp, &ln, dm+i*n, &INC1,
@@ -42,7 +42,7 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk)
                         dgemv_(&TRANS_T, &ln, &l2, &D1, tmp, &ln, dm+j*n, &INC1,
                                &D1, vk+i*n, &INC1);
                 }
-                CVHFunpack(n, eri, tmp);
+                NPdunpack_tril(n, eri, tmp);
                 l1 = i + 1;
                 dgemv_(&TRANS_T, &ln, &l1, &D1, tmp, &ln, dm+i*n, &INC1,
                        &D1, vk+i*n, &INC1);
@@ -51,7 +51,7 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk)
         free(tmp);
 }
 
-/* eri uses 8-fold symmetry: i>=j,k>=ln,ij>=kl */
+/* eri uses 8-fold symmetry: i>=j,k>=l,ij>=kl */
 void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
 {
         const int INC1 = 1;
@@ -77,8 +77,8 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
         ij = 0;
         for (i = 0; i < n; i++) {
                 for (j = 0; j < i; j++, ij++) {
-                        extract_row_from_tri(row, ij, nao_pair, eri);
-                        CVHFunpack(n, row, tmp);
+                        NPdunpack_row(nao_pair, ij, eri, row);
+                        NPdunpack_tril(n, row, tmp);
                         l1 = j + 1;
                         l2 = i + 1;
                         vj[i*n+j] = ddot_(&nao_pair, row, &INC1, tri_dm, &INC1);
@@ -88,8 +88,8 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
                         dgemv_(&TRANS_T, &ln, &l2, &D1, tmp, &ln, dm+j*n, &INC1,
                                &D1, vk+i*n, &INC1);
                 }
-                extract_row_from_tri(row, ij, nao_pair, eri);
-                CVHFunpack(n, row, tmp);
+                NPdunpack_row(nao_pair, ij, eri, row);
+                NPdunpack_tril(n, row, tmp);
                 vj[i*n+i] = ddot_(&nao_pair, row, &INC1, tri_dm, &INC1);
 
                 l1 = i + 1;
@@ -103,7 +103,7 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
 }
 
 /*************************************************
- * eri uses 8-fold symmetry: i>=j,k>=ln,ij>=kl
+ * eri uses 8-fold symmetry: i>=j,k>=l,ij>=kl
  * eri is the address of the first element for pair ij
  * i.e. ~ &eri_ao[ij*(ij+1)/2] */
 void CVHFnr_eri8fold_vj_o2(double *tri_vj, const int ij,
@@ -247,8 +247,8 @@ void CVHFnr_eri8fold_vk_o2(double *vk, int i, int j, int n,
                 for (k = 0; k < j; k++) {
                         for (l = 0; l < k; l++, eri++) {
                                 vk[j*n+l] += *eri * dm[i*n+k];
-                                vk[i*n+l] += *eri * dm[j*n+k];
                                 vk[j*n+k] += *eri * dm[i*n+l];
+                                vk[i*n+l] += *eri * dm[j*n+k];
                                 vk[i*n+k] += *eri * dm[j*n+l];
                         }
                         // l = k
@@ -468,16 +468,14 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
         double *tri_vj = malloc(sizeof(double)*npair);
         double *vj_priv, *vk_priv;
         int i, j;
-        int *ij2i = malloc(sizeof(int)*npair);
         unsigned long ij, off;
 
         CVHFcompress_nr_dm(tri_dm, dm, n);
-        CVHFset_ij2i(ij2i, n);
         memset(tri_vj, 0, sizeof(double)*npair);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, tri_dm, dm, tri_vj, vk, ij2i, n) \
+        shared(eri, tri_dm, dm, tri_vj, vk, n) \
         private(ij, i, j, off, vj_priv, vk_priv)
         {
                 vj_priv = malloc(sizeof(double)*npair);
@@ -486,8 +484,8 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
                 memset(vk_priv, 0, sizeof(double)*n*n);
 #pragma omp for nowait schedule(guided, 4)
                 for (ij = 0; ij < npair; ij++) {
-                        i = ij2i[ij];
-                        j = ij - (i*(i+1)/2);
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                        j = ij - i*(i+1)/2;
                         off = ij*(ij+1)/2;
                         CVHFnr_eri8fold_vj_o2(vj_priv, ij, eri+off, tri_dm);
                         CVHFnr_eri8fold_vk_o4(vk_priv, i, j, n, eri+off, dm);
@@ -512,7 +510,6 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
                         vk[j*n+i] = vk[i*n+j];
                 }
         }
-        free(ij2i);
         free(tri_dm);
         free(tri_vj);
 }
@@ -530,16 +527,14 @@ static void CVHFnr_incore_sub(int n, double *eri, double *dm,
         double *tri_vj = malloc(sizeof(double)*npair);
         double *vj_priv, *vk_priv;
         int i, j;
-        int *ij2i = malloc(sizeof(int)*npair);
         unsigned long ij, off;
 
         CVHFcompress_nr_dm(tri_dm, dm, n);
-        CVHFset_ij2i(ij2i, n);
         memset(tri_vj, 0, sizeof(double)*npair);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, tri_dm, dm, tri_vj, vk, ij2i, n) \
+        shared(eri, tri_dm, dm, tri_vj, vk, n) \
         private(ij, i, j, off, vj_priv, vk_priv)
         {
                 vj_priv = malloc(sizeof(double)*npair);
@@ -548,8 +543,8 @@ static void CVHFnr_incore_sub(int n, double *eri, double *dm,
                 memset(vk_priv, 0, sizeof(double)*n*n);
 #pragma omp for nowait schedule(guided, 4)
                 for (ij = 0; ij < npair; ij++) {
-                        i = ij2i[ij];
-                        j = ij - (i*(i+1)/2);
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                        j = ij - i*(i+1)/2;
                         off = ij*(ij+1)/2;
                         CVHFnr_eri8fold_vj_o2(vj_priv, ij, eri+off, tri_dm);
                         (*fvk)(vk_priv, i, j, n, eri+off, dm);
@@ -574,7 +569,6 @@ static void CVHFnr_incore_sub(int n, double *eri, double *dm,
                 }
         }
 
-        free(ij2i);
         free(tri_dm);
         free(tri_vj);
 }

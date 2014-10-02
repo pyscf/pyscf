@@ -66,7 +66,7 @@ class KnowValues(unittest.TestCase):
         m.gauge_orig = (1,1,1)
         m.is_giao = False
         msc = m.msc()
-        self.assertAlmostEqual(finger(msc), 1642.1875087918286, 7)
+        self.assertAlmostEqual(finger(msc), 1642.1875087918286, 8)
 
     def test_r_common_gauge_cpscf(self):
         m = nmr.dhf.MSC(rhf)
@@ -74,21 +74,21 @@ class KnowValues(unittest.TestCase):
         m.gauge_orig = (1,1,1)
         m.is_giao = False
         msc = m.msc()
-        self.assertAlmostEqual(finger(msc), 1569.0406406569753, 7)
+        self.assertAlmostEqual(finger(msc), 1569.0827923237671, 8)
 
     def test_r_giao_ucpscf(self):
         m = nmr.dhf.MSC(rhf)
         m.is_cpscf = False
         m.is_giao = True
         msc = m.msc()
-        self.assertAlmostEqual(finger(msc), 1493.7232146398119, 7)
+        self.assertAlmostEqual(finger(msc), 1493.7232146398119, 8)
 
     def test_r_giao_cpscf(self):
         m = nmr.dhf.MSC(rhf)
         m.is_cpscf = True
         m.is_giao = True
         msc = m.msc()
-        self.assertAlmostEqual(finger(msc), 1365.4686193737755, 7)
+        self.assertAlmostEqual(finger(msc), 1365.5050692814252, 8)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 /*
- * File: nr_numint_o0.c
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -116,8 +115,11 @@ static int _xc_has_gga(xc_func_type *func_x, xc_func_type *func_c)
            #define XC_FAMILY_OEP          16
            #define XC_FAMILY_HYB_GGA      32
            #define XC_FAMILY_HYB_MGGA     64 */
-        return (func_x->info->family | func_c->info->family)
-                & (~XC_FAMILY_LDA); // screen the LDA bit
+        int code = func_x->info->family & (~XC_FAMILY_LDA); // screen the LDA bit
+        if (!func_c->info) {
+                code |= func_c->info->family & (~XC_FAMILY_LDA);
+        }
+        return code;
 }
 
 static void nr_rho_sf(int id, int np, struct _VXCEnvs *envs, double *dm,

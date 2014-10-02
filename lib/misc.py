@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 #
-# File: misc.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os, sys
 import tempfile
 import shutil
+import functools
 import ctypes
 import numpy
-import functools
 import math
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
@@ -81,7 +80,7 @@ class ctypes_stdout:
     Usage:
         with ctypes_stdout() as stdout:
             ...
-        print stdout.read()'''
+        print(stdout.read())'''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -114,7 +113,7 @@ class capture_stdout:
     Usage:
         with capture_stdout() as stdout:
             ...
-        print stdout.read()'''
+        print(stdout.read())'''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -177,6 +176,6 @@ class omnimethod(object):
 
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):
-        print 'base=30', i, j, j*(j+1)/2-i*(i+1)/2
+        print('base=30', i, j, j*(j+1)/2-i*(i+1)/2)
     for i,j in tril_equal_pace(90, npace=5):
-        print 'npace=5', i, j, j*(j+1)/2-i*(i+1)/2
+        print('npace=5', i, j, j*(j+1)/2-i*(i+1)/2)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: dhf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -16,12 +15,11 @@ from pyscf import gto
 from pyscf import lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.lib import pycint
 import hf
+import addons
 import diis
 import chkfile
-
-_cint = hf._cint
+import _vhf
 
 __doc__ = '''Options:
 self.chkfile = '/dev/shm/...'
@@ -53,19 +51,17 @@ class UHF(hf.SCF):
         self.conv_threshold = 1e-8
         self.oob = 0
         self.with_ssss = True
-        self.set_init_guess('1e')
+        self.set_init_guess('minao')
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
 
+        self.opt_llll = None
+        self.opt_ssll = None
+        self.opt_ssss = None
+
     def _init_guess_by_chkfile(self, mol):
         '''Read initial guess from chkfile.'''
-        #try:
-        #    chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
-        #except IOError:
-        #    log.warn(mol, 'Fail in reading from %s. Use 1e initial guess', \
-        #             self.chkfile)
-        #    return self._init_guess_by_1e(mol)
-        chk_mol, scf_rec = chkfile.read_scf(self.chkfile)
+        chk_mol, scf_rec = chkfile.load_scf(self.chkfile)
 
         log.info(self, '\n')
         log.info(self, 'Read initial guess from file %s.', self.chkfile)
@@ -75,9 +71,9 @@ class UHF(hf.SCF):
         c = mol.light_speed
 
         nbas_chk = chk_mol.nbas
-        for ia in range(mol.natm):
-            basis_add = mol.basis[mol.symbol_of_atm(ia)]
-            chk_mol._bas.extend(chk_mol.make_bas_env_by_atm_id(ia, basis_add))
+        chk_mol._atm, chk_mol._bas, chk_mol._env = \
+                gto.mole.conc_env(chk_mol._atm, chk_mol._bas, chk_mol._env, \
+                                  mol._atm, mol._bas, mol._env)
         chk_mol.nbas = chk_mol._bas.__len__()
         bras = range(nbas_chk, chk_mol.nbas)
         kets = range(nbas_chk)
@@ -140,22 +136,13 @@ class UHF(hf.SCF):
         from pyscf import symm
         if mol is None:
             mol = self.mol
-        try:
-            ehf, dm0 = hf.init_guess_by_minao(self, mol)
-        except KeyError:
-            log.warn(self, 'Fail in generating initial guess from MINAO. ' \
-                     'Use 1e initial guess')
-            return self._init_guess_by_1e(mol)
+        ehf, dm0 = hf.init_guess_by_minao(self, mol)
+        proj = addons.project_mo_nr2r(mol, 1, mol)
 
-        s0 = mol.intor_symmetric('cint1e_ovlp_sph')
-        ua, ub = symm.cg.real2spinor_whole(mol)
-        s = numpy.dot(ua.T.conj(), s0) + numpy.dot(ub.T.conj(), s0) # (*)
-        proj = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp'), s)
-
-        n2c = ua.shape[1]
+        n2c = proj.shape[0]
         n4c = n2c * 2
         dm = numpy.zeros((n4c,n4c), dtype=complex)
-        # *.5 because alpha and beta are summed in Eq. (*)
+        # *.5 because alpha and beta are summed in project_mo_nr2r
         dm_ll = reduce(numpy.dot, (proj, dm0*.5, proj.T.conj()))
         dm[:n2c,:n2c] = (dm_ll + time_reversal_matrix(mol, dm_ll)) * .5
         return ehf, dm
@@ -191,7 +178,7 @@ class UHF(hf.SCF):
         t  = mol.intor_symmetric('cint1e_spsp') * .5
         vn = mol.intor_symmetric('cint1e_nuc')
         wn = mol.intor_symmetric('cint1e_spnucsp')
-        h1e = numpy.zeros((n4c, n4c), numpy.complex)
+        h1e = numpy.empty((n4c, n4c), numpy.complex)
         h1e[:n2c,:n2c] = vn
         h1e[n2c:,:n2c] = t
         h1e[:n2c,n2c:] = t
@@ -213,24 +200,20 @@ class UHF(hf.SCF):
 
     def init_direct_scf(self, mol):
         if self.direct_scf:
-            natm = lib.c_int_p(ctypes.c_int(mol._atm.__len__()))
-            nbas = lib.c_int_p(ctypes.c_int(mol._bas.__len__()))
-            atm = lib.c_int_arr(mol._atm)
-            bas = lib.c_int_arr(mol._bas)
-            env = lib.c_double_arr(mol._env)
-            _cint.init_rkb_direct_scf_.restype = ctypes.c_void_p
-            _cint.init_rkb_direct_scf_(atm, natm, bas, nbas, env)
-            if self.with_gaunt:
-                _cint.init_rkb_gaunt_direct_scf_.restype = ctypes.c_void_p
-                _cint.init_rkb_gaunt_direct_scf_(atm, natm, bas, nbas, env)
-            self.set_direct_scf_threshold(self.direct_scf_threshold)
-        else:
-            _cint.turnoff_direct_scf_.restype = ctypes.c_void_p
-            _cint.turnoff_direct_scf_()
-
-    def del_direct_scf(self):
-        _cint.del_rkb_direct_scf_.restype = ctypes.c_void_p
-        _cint.del_rkb_direct_scf_()
+            self.opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
+                                        'CVHFrkbllll_direct_scf',
+                                        'CVHFrkbllll_direct_scf_dm')
+            self.opt_llll.direct_scf_threshold = self.direct_scf_threshold
+            self.opt_ssss = _vhf.VHFOpt(mol, 'cint2e_spsp1spsp2',
+                                        'CVHFrkbllll_prescreen',
+                                        'CVHFrkbssss_direct_scf',
+                                        'CVHFrkbssss_direct_scf_dm')
+            self.opt_ssss.direct_scf_threshold = self.direct_scf_threshold
+            self.opt_ssll = _vhf.VHFOpt(mol, 'cint2e_spsp1',
+                                        'CVHFrkbssll_prescreen',
+                                        'CVHFrkbssll_direct_scf',
+                                        'CVHFrkbssll_direct_scf_dm')
+            self.opt_ssll.direct_scf_threshold = self.direct_scf_threshold
 
     def set_mo_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
@@ -269,161 +252,34 @@ class UHF(hf.SCF):
         e_tmp = hf.SCF.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)
         return e_tmp
 
-    def coulomb_oob(self, mol, dm, dm_last=0, vhf_last=0):
-        if self.direct_scf:
-            dm = dm - dm_last
 
-        n2c = mol.num_2C_function()
-        n4c = n2c * 2
-        c = mol.light_speed
-        vhf = numpy.zeros((n4c, n4c), numpy.complex)
-
-        if self.oob == 1:
-            log.info(self, 'Coulomb integral: OOB, |sp f> = |f> C')
-
-            s = mol.intor_symmetric('cint1e_ovlp')
-            p = mol.intor_symmetric('cint1e_sp') * (.5/c)
-            u = numpy.dot(numpy.linalg.inv(s), p)
-            dmll = dm[:n2c,:n2c]
-            dmsl = numpy.dot(u, dm[n2c:,:n2c])
-            dmss = reduce(numpy.dot, (u, dm[n2c:,n2c:], u.T.conj()))
-            dmjk = numpy.rollaxis(numpy.array((dmll, dmsl, dmss)), 0, 3)
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_direct_o3, mol, dmjk)
-
-            vhf[:n2c,:n2c] += vj[0] + vj[2]
-            vhf[n2c:,n2c:] += reduce(numpy.dot, (u.T.conj(), vj[0]+vj[2], u))
-            vhf[:n2c,:n2c] -= vk[0]
-            vhf[n2c:,:n2c] -= numpy.dot(u.T.conj(), vk[1])
-            vhf[n2c:,n2c:] -= reduce(numpy.dot, (u.T.conj(), vk[2], u))
-            vhf[:n2c,n2c:] = vhf[n2c:,:n2c].T.conj()
-        elif self.oob == 2:
-# rp = 1/2c <sr|sp>
-# rr = <sr|sr>
-# rr_rp = rr^{-1} rp
-# (SS|LL) = (pr_rr.LL.rp|LL) + (pr.LL.rr_rp|LL)
-# (SS|SS) = (pr_rr.LL.rp|pr_rr.LL.rp) + (pr.LL.rr_rp|pr_rr.LL.rp)
-#         + (pr_rr.LL.rp|pr.LL.rr_rp) + (pr.LL.rr_rp|pr.LL.rr_rp)
-# =>
-#       JLL = (LL|LL) * dmLL -> JSS = (SS|LL) * dmLL, 2 type J
-#       JLL = (SS|LL) * dmSS, 2 type dm -> JSS = (SS|SS) * dmSS, 2 type J
-#       KLL = (LL|LL) * dmLL
-#       KSL = (SS|LL) * dmSL, 2 type dm
-#       KSS = (SS|SS) * dmSS, 4 type dm
-            log.info(self, 'Coulomb integral: OOB, |sp f> = |sr f> C')
-
-            s  = mol.intor_symmetric('cint1e_ovlp')
-            rr = mol.intor_symmetric('cint1e_srsr')
-            rp = mol.intor('cint1e_srsp') * (.5/c)
-            s_rp = numpy.dot(numpy.linalg.inv(s), rp)
-            rr_rp = numpy.dot(numpy.linalg.inv(rr), rp)
-            dmll = dm[:n2c,:n2c]
-            dmrl = numpy.dot(rr_rp, dm[n2c:,:n2c])
-            dmsl = numpy.dot(s_rp, dm[n2c:,:n2c])
-            dmss = reduce(numpy.dot, (s_rp, dm[n2c:,n2c:], s_rp.T.conj()))
-            dmsr = reduce(numpy.dot, (s_rp, dm[n2c:,n2c:], rr_rp.T.conj()))
-            dmrs = reduce(numpy.dot, (rr_rp, dm[n2c:,n2c:], s_rp.T.conj()))
-            dmrr = reduce(numpy.dot, (rr_rp, dm[n2c:,n2c:], rr_rp.T.conj()))
-            #dmjk = numpy.rollaxis(numpy.array((dmll, dmsl, dmrl,
-            #                                   dmss, dmsr, dmrs, dmrr)), 0, 3)
-            #vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_direct_o3, mol, dmjk)
-
-            #jll = vj[0] + (vj[4] + vj[5]) * .5
-            #jss = (rr_rp.H * jll * s_rp + s_rp.H * jll * rr_rp) * .5
-            #ksl = (rr_rp.H * vk[1] + s_rp.H * vk[2]) * .5
-            #kss = (rr_rp.H * vk[3] * rr_rp + rr_rp.H * vk[4] * s_rp \
-            #       + s_rp.H * vk[5] * rr_rp + s_rp.H * vk[6] * s_rp) * .25
-#            dmjk = numpy.rollaxis(numpy.array((dmll, dmsl, dmrl,
-#                                               dmss, dmsr, dmrr)), 0, 3)
-#            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_direct_o3, mol, dmjk)
-
-#            jll = vj[0] + vj[4]
-#            tmp = rr_rp.H * jll * s_rp
-#            jss = (tmp + tmp.H) * .5
-#            ksl = (rr_rp.H * vk[1] + s_rp.H * vk[2]) * .5
-#            tmp = rr_rp.H * vk[4] * s_rp
-#            kss = (rr_rp.H * vk[3] * rr_rp + tmp + tmp.T.conj() \
-#                   + s_rp.H * vk[5] * s_rp) * .25
-            dmjk = numpy.rollaxis(numpy.array((dmll, dmsl, dmrl,
-                                               dmss, dmsr, dmrr)), 0, 3)
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_direct_o3, mol, dmjk)
-
-            jll = vj[0] + vj[4]
-            tmp = reduce(numpy.dot, (rr_rp.T.conj(), jll, s_rp))
-            jss = (tmp + tmp.T.conj()) * .5
-            ksl = (numpy.dot(rr_rp.T.conj(), vk[1]) \
-                   + numpy.dot(s_rp.T.conj(), vk[2])) * .5
-            tmp = reduce(numpy.dot, (rr_rp.T.conj(), vk[4], s_rp))
-            kss = (reduce(numpy.dot, (rr_rp.T.conj(), vk[3], rr_rp)) \
-                   + tmp + tmp.T.conj() \
-                   + reduce(numpy.dot, (s_rp.T.conj(), vk[5], s_rp))) * .25
-
-            vhf[:n2c,:n2c] += jll
-            vhf[n2c:,n2c:] += jss
-            vhf[:n2c,:n2c] -= vk[0]
-            vhf[n2c:,:n2c] -= ksl
-            vhf[n2c:,n2c:] -= kss
-            vhf[:n2c,n2c:] = vhf[n2c:,:n2c].T.conj()
-#ABORT        elif self.oob == 10:
-# test sp r_{12}^{-1} sp ~= spsp r_{12}^{-1}
-#ABORT            log.info(self, 'Coulomb integral: approx. of p 1/r12 ~= 1/r12 p')
-#ABORT
-#ABORT            s  = mol.intor_symmetric('cint1e_ovlp')
-#ABORT            pp = mol.intor_symmetric('cint1e_spsp') * (.5/c)
-#ABORT            s_pp = numpy.mat(s).I * pp
-#ABORT            dmll = dm[:n2c,:n2c]
-#ABORT            dmsl = (.5/c) * dm[n2c:,:n2c]
-#ABORT            dmtl = s_pp * dm[n2c:,:n2c]
-#ABORT            dmtt = s_pp * dm[n2c:,n2c:] * s_pp.H
-#ABORT            dmts = s_pp * dm[n2c:,n2c:] * (.5/c)
-#ABORT            dmst = (.5/c) * dm[n2c:,n2c:] * s_pp.H
-#ABORT            dmss = (.5/c) * dm[n2c:,n2c:] * (.5/c)
-#ABORT            dmjk = numpy.rollaxis(numpy.array((dmll, dmsl, dmtl,
-#ABORT                                               dmtt, dmts, dmst, dmss)), 0, 3)
-#ABORT            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_o3, mol, dmjk)
-#ABORT
-#ABORT            jll = vj[0] + (vj[4] + vj[5]) * .5
-#ABORT            jss = ((.5/c) * jll * s_pp + s_pp.H * jll * (.5/c)) * .5
-#ABORT            ksl = ((.5/c) * vk[1] + s_pp.H * vk[2]) * .5
-#ABORT            kss = ((.5/c) * vk[3] * (.5/c) + (.5/c) * vk[4] * s_pp \
-#ABORT                   + s_pp.H * vk[5] * (.5/c) + s_pp.H * vk[6] * s_pp) * .25
-#ABORT            vhf[:n2c,:n2c] += jll
-#ABORT            vhf[n2c:,n2c:] += jss
-#ABORT            vhf[:n2c,:n2c] -= vk[0]
-#ABORT            vhf[n2c:,:n2c] -= ksl
-#ABORT            vhf[n2c:,n2c:] -= kss
-#ABORT            vhf[:n2c,n2c:] = vhf[n2c:,:n2c].T.conj()
-        if self.direct_scf:
-            vhf = vhf_last + vhf
-        return vhf
-
-    def gaunt_oob(self, mol, dm):
-        pass
-        #return vhf
-
-    def get_coulomb_vj_vk(self, mol, dm, coulomb_allow='SSSS'):
+    def get_coulomb_vj_vk(self, mol, dm, coulomb_allow='SSSS', hermi=1):
         if coulomb_allow.upper() == 'LLLL':
             log.info(self, 'Coulomb integral: (LL|LL)')
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_o3, mol, dm)
+            j1, k1 = _call_veff_llll(self, dm, hermi)
+            n2c = j1.shape[1]
+            vj = numpy.zeros_like(dm)
+            vk = numpy.zeros_like(dm)
+            vj[...,:n2c,:n2c] = j1
+            vk[...,:n2c,:n2c] = k1
         elif coulomb_allow.upper() == 'SSLL' \
           or coulomb_allow.upper() == 'LLSS':
             log.info(self, 'Coulomb integral: (LL|LL) + (SS|LL)')
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_sl_o3, mol, dm)
+            vj, vk = _call_veff_ssll(self, dm, hermi)
+            j1, k1 = _call_veff_llll(self, dm, hermi)
+            n2c = j1.shape[1]
+            vj[...,:n2c,:n2c] += j1
+            vk[...,:n2c,:n2c] += k1
         else: # coulomb_allow == 'SSSS'
             log.info(self, 'Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_coul_o3, mol, dm)
-        return vj, vk
-
-    def get_coulomb_vj_vk_screen(self, mol, dm, coulomb_allow='SSSS'):
-        if coulomb_allow.upper() == 'LLLL':
-            log.info(self, 'Coulomb integral: (LL|LL)')
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_ll_direct_o3, mol, dm)
-        elif coulomb_allow.upper() == 'SSLL' \
-          or coulomb_allow.upper() == 'LLSS':
-            log.info(self, 'Coulomb integral: (LL|LL) + (SS|LL)')
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_sl_direct_o3, mol, dm)
-        else: # coulomb_allow == 'SSSS'
-            log.info(self, 'Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
-            vj, vk = hf.get_vj_vk(pycint.rkb_vhf_coul_direct_o3, mol, dm)
+            vj, vk = _call_veff_ssll(self, dm, hermi)
+            j1, k1 = _call_veff_llll(self, dm, hermi)
+            n2c = j1.shape[1]
+            vj[...,:n2c,:n2c] += j1
+            vk[...,:n2c,:n2c] += k1
+            j1, k1 = _call_veff_ssss(self, dm, hermi)
+            vj[...,n2c:,n2c:] += j1
+            vk[...,n2c:,n2c:] += k1
         return vj, vk
 
     def get_gaunt_vj_vk(self, mol, dm):
@@ -438,28 +294,27 @@ class UHF(hf.SCF):
         vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
         return -vj, -vk
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0):
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''Dirac-Coulomb'''
         t0 = (time.clock(), time.time())
         if self.direct_scf:
-            vj, vk = self.get_coulomb_vj_vk_screen(mol, dm-dm_last, \
-                                                   self._coulomb_now)
+            ddm = dm - dm_last
+            vj, vk = self.get_coulomb_vj_vk(mol, ddm, self._coulomb_now)
             vhf = vhf_last + vj - vk
         else:
             vj, vk = self.get_coulomb_vj_vk(mol, dm, self._coulomb_now)
             vhf = vj - vk
-            log.timer(self, 'vj and vk', *t0)
+        log.timer(self, 'vj and vk', *t0)
         return vhf
 
     def get_vhf_with_gaunt(self, mol, dm, dm_last=0, vhf_last=0):
         if self.direct_scf:
             ddm = dm - dm_last
-            vj0, vk0 = self.get_coulomb_vj_vk_screen(mol, ddm, \
-                                                     self._coulomb_now)
+            vj, vk = self.get_coulomb_vj_vk(mol, ddm, self._coulomb_now)
             vj1, vk1 = self.get_gaunt_vj_vk_screen(mol, ddm)
             return vhf_last + vj0 + vj1 - vk0 - vk1
         else:
-            vj0, vk0 = self.get_coulomb_vj_vk(mol, dm, self._coulomb_now)
+            vj, vk = self.get_coulomb_vj_vk(mol, dm, self._coulomb_now)
             vj1, vk1 = self.get_gaunt_vj_vk(mol, dm)
             return vj0 + vj1 - vk0 - vk1
 
@@ -497,14 +352,14 @@ class UHF(hf.SCF):
             return hf.scf_cycle(mol, self, conv_threshold, dump_chk, \
                                 init_dm=dm)
 
-        if init_dm is None and self._coulomb_now.upper() is 'LLLL':
+        if init_dm is None and self._coulomb_now.upper() == 'LLLL':
             scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
                     = hf.scf_cycle(mol, self, 4e-3, dump_chk, init_dm=dm)
             dm = self.calc_den_mat(mo_coeff, mo_occ)
             self._coulomb_now = 'SSLL'
 
-        if init_dm is None and self._coulomb_now.upper() is 'SSLL' \
-                            or self._coulomb_now.upper() is 'LLSS':
+        if init_dm is None and self._coulomb_now.upper() == 'SSLL' \
+                            or self._coulomb_now.upper() == 'LLSS':
             scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
                     = hf.scf_cycle(mol, self, 4e-4, dump_chk, init_dm=dm)
             dm = self.calc_den_mat(mo_coeff, mo_occ)
@@ -521,9 +376,95 @@ class UHF(hf.SCF):
         return hf.scf_cycle(mol, self, conv_threshold, dump_chk, init_dm=dm)
 
 
+def _jk_triu_(vj, vk, hermi):
+    if hermi == 0:
+        if vj.ndim == 2:
+            vj = lib.hermi_triu(vj, 1)
+        else:
+            for i in range(vj.shape[0]):
+                vj[i] = lib.hermi_triu(vj[i], 1)
+    else:
+        if vj.ndim == 2:
+            vj = lib.hermi_triu(vj, hermi)
+            vk = lib.hermi_triu(vk, hermi)
+        else:
+            for i in range(vj.shape[0]):
+                vj[i] = lib.hermi_triu(vj[i], hermi)
+                vk[i] = lib.hermi_triu(vk[i], hermi)
+    return vj, vk
+
+
+def _call_veff_llll(mf, dm, hermi=1):
+    mol = mf.mol
+    n2c = mol.nao_2c()
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        n2c = dm.shape[0] / 2
+        dms = dm[:n2c,:n2c].copy()
+    else:
+        n2c = dm[0].shape[0] / 2
+        dms = []
+        for dmi in dm:
+            dms.append(dmi[:n2c,:n2c].copy())
+    vj, vk = _vhf.rdirect_mapdm('cint2e', 'CVHFdot_rs8',
+                                ('CVHFrs8_ji_s2kl', 'CVHFrs8_jk_s1il'), dms, 1,
+                                mol._atm, mol._bas, mol._env, mf.opt_llll)
+    return _jk_triu_(vj, vk, hermi)
+
+def _call_veff_ssll(mf, dm, hermi=1):
+    mol = mf.mol
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        n_dm = 1
+        n2c = dm.shape[0] / 2
+        dmll = dm[:n2c,:n2c].copy()
+        dmsl = dm[n2c:,:n2c].copy()
+        dmss = dm[n2c:,n2c:].copy()
+        dms = (dmll, dmss, dmsl)
+    else:
+        n_dm = len(dm)
+        n2c = dm[0].shape[0] / 2
+        dms = []
+        for dmi in dm:
+            dms.append(dmi[:n2c,:n2c].copy())
+        for dmi in dm:
+            dms.append(dmi[n2c:,n2c:].copy())
+        for dmi in dm:
+            dms.append(dmi[n2c:,:n2c].copy())
+    jks = ('CVHFrs4_lk_s2ij', 'CVHFrs4_ji_s2kl', 'CVHFrs4_jk_s1il') * n_dm
+    c1 = .5/mol.light_speed
+    vx = _vhf.rdirect_bindm('cint2e_spsp1', 'CVHFdot_rs4', jks, dms, 1,
+                            mol._atm, mol._bas, mol._env,
+                            mf.opt_ssll) * c1**2
+    vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
+    vj[:,n2c:,n2c:] = vx[      :n_dm  ,:,:]
+    vj[:,:n2c,:n2c] = vx[n_dm  :n_dm*2,:,:]
+    vk[:,n2c:,:n2c] = vx[n_dm*2:      ,:,:]
+    if n_dm == 1:
+        vj = vj.reshape(vj.shape[1:])
+        vk = vk.reshape(vk.shape[1:])
+    return _jk_triu_(vj, vk, hermi)
+
+def _call_veff_ssss(mf, dm, hermi=1):
+    mol = mf.mol
+    c1 = .5/mol.light_speed
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        n2c = dm.shape[0] / 2
+        dms = dm[n2c:,n2c:].copy()
+    else:
+        n2c = dm[0].shape[0] / 2
+        dms = []
+        for dmi in dm:
+            dms.append(dmi[n2c:,n2c:].copy())
+    vj, vk = _vhf.rdirect_mapdm('cint2e_spsp1spsp2', 'CVHFdot_rs8',
+                                ('CVHFrs8_ji_s2kl', 'CVHFrs8_jk_s1il'), dms, 1,
+                                mol._atm, mol._bas, mol._env,
+                                mf.opt_ssss) * c1**4
+    return _jk_triu_(vj, vk, hermi)
+
+
 def time_reversal_ao_idx(mol):
     n2c = mol.num_2C_function()
-    tao = mol.time_reversal_spinor()
+    tao = mol.time_reversal_map()
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
     taoL = numpy.array(map(lambda x: abs(x)-1, tao)) # -1 to fit C-array
@@ -570,36 +511,20 @@ class RHF(UHF):
 
 
 if __name__ == '__main__':
-    from pyscf.gto import basis
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf'
 
     mol.atom.extend([['He', (0.,0.,0.)], ])
-# input even-tempered basis
-    mol.etb = {
-        'He': { 'max_l' : 1           # for even-tempered basis
-              , 's'     : (4, 1, 1.8) # for etb:(num_basis, alpha, beta)
-              , 'p'     : (1, 1, 1.8) # for etb: eta = alpha*beta**i
-              , 'd'     : (0, 1, 1.8) #           for i in range num_basis
-              , 'f'     : (0,0,0)
-              , 'g'     : (0,0,0)}, }
-# or input basis information directly
-#    mol.basis = {
-#        'He': [(0, 0, (1, 1)),
-#               (0, 0, (3, 1)),
-#               (1, 0, (1, 1)), ]}
+    mol.basis = {
+        'He': [(0, 0, (1, 1)),
+               (0, 0, (3, 1)),
+               (1, 0, (1, 1)), ]}
     mol.build()
 
 ##############
 # SCF result
     method = UHF(mol)
-    method.init_guess('1e')
-#TODO:    if restart:
-#TODO:        method.init_guess('chkfile')
-#TODO:    if by_atom:
-#TODO:        method.init_guess('atom')
-    method.set_potential('coulomb')
     #method.set_direct_scf_threshold(1e-18)
-    energy = method.scf() #=-2.63133406544043
-    print energy
+    energy = method.scf() #-2.38146942868
+    print(energy)

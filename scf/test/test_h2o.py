@@ -1,9 +1,7 @@
 #
-# File: test_h2o.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import unittest
 from pyscf import scf
 from pyscf.scf import dhf
@@ -36,37 +34,37 @@ class KnowValues(unittest.TestCase):
     def test_nr_rhf_no_mem(self):
         rhf = scf.RHF(mol)
         rhf.conv_threshold = 1e-11
-        rhf.eri_in_memory = False
+        rhf.max_memory = 0
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
 
     def test_nr_uhf_no_mem(self):
         uhf = scf.UHF(mol)
         uhf.conv_threshold = 1e-11
-        uhf.eri_in_memory = False
+        uhf.max_memory = 0
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_nr_rhf_no_direct(self):
         rhf = scf.RHF(mol)
         rhf.conv_threshold = 1e-11
-        rhf.eri_in_memory = False
+        rhf.max_memory = 0
         rhf.direct_scf = False
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
 
     def test_nr_uhf_no_direct(self):
         uhf = scf.UHF(mol)
         uhf.conv_threshold = 1e-11
-        uhf.eri_in_memory = False
+        uhf.max_memory = 0
         uhf.direct_scf = False
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
-#    def test_r_uhf(self):
-#        uhf = dhf.UHF(mol)
-#        self.assertAlmostEqual(uhf.scf(), -76.03852219027, 9)
-#
-#    def test_r_rhf(self):
-#        uhf = dhf.RHF(mol)
-#        self.assertAlmostEqual(uhf.scf(), -76.03852219016, 9)
-#
+    def test_r_uhf(self):
+        uhf = dhf.UHF(mol)
+        self.assertAlmostEqual(uhf.scf(), -76.038520456532581, 9)
+
+    def test_r_rhf(self):
+        uhf = dhf.RHF(mol)
+        self.assertAlmostEqual(uhf.scf(), -76.038520456484662, 9)
+
 #    def test_r_dhf_dkb(self):
 #        dkb = scf.dhf_dkb.UHF(mol)
 #        self.assertAlmostEqual(dkb.scf(), -76.03856379177, 9)

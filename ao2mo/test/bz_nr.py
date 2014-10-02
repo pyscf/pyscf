@@ -5,7 +5,7 @@ from pyscf import gto
 
 mol = gto.Mole()
 mol.verbose = 5
-mol.output = 'out_bz'
+mol.output = None#"out_bz"
 
 mol.atom.extend([
     ["C", (-0.65830719,  0.61123287, -0.00800148)],

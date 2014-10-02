@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 #
-# File: mole.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-
 
 import os, sys
 import time
 import math
+import itertools
 import numpy
 import pyscf.lib.parameters as param
 import pyscf.lib.logger as log
@@ -39,13 +38,59 @@ def _charge(symb_or_chg):
         return symb_or_chg
     else:
         return param.ELEMENTS_PROTON[_rm_digit(symb_or_chg)]
+
 def _symbol(symb_or_chg):
-    if isinstance(symb_or_chg, str):
-        return symb_or_chg
-    else:
+    if isinstance(symb_or_chg, int):
         return param.ELEMENTS[symb_or_chg][0]
+    else:
+        return symb_or_chg
+
+def format_atom(atoms, origin=0, axes=1):
+    '''
+    change nuclear charge to atom symbol, rotate and shift molecule
+    '''
+    elementdic = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
+    fmt_atoms = []
+    for atom in atoms:
+        if isinstance(atom[0], int):
+            symb = param.ELEMENTS[atom[0]][0]
+        else:
+            rawsymb = _rm_digit(atom[0])
+            stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
+            symb = atom[0].replace(rawsymb, stdsymb)
+        c = numpy.array(atom[1]) - origin
+        fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
+    return fmt_atoms
+
+#TODO: sort exponents
+def format_basis(basis_tab):
+    '''
+    transform the basis to standard format
+    { atom: (l, kappa, ((-exp, c_1, c_2, ..), ..)), ... }
+    '''
+    fmt_basis = {}
+    for atom in basis_tab.keys():
+        symb = _symbol(atom)
+
+        if isinstance(basis_tab[atom], str):
+            name = basis_tab[atom].lower().replace(' ', '').replace('-', '').replace('_', '')
+            fmt_basis[symb] = basis.load(name, _rm_digit(symb))
+        else:
+            fmt_basis[symb] = basis_tab[atom]
+    return fmt_basis
+
+# transform etb to basis format
+def expand_etb(l, n, alpha, beta):
+    '''
+    expand even-tempered basis, alpha*beta**i, for i = 0..n
+    '''
+    return [[l, [alpha*beta**i, 1]] for i in reversed(range(n))]
+def expand_etbs(etbs):
+    basis = [expand_etb(*etb) for etb in etbs]
+    return list(itertools.chain.from_iterable(basis))
 
 
+# for _atm, _bas, _env
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
@@ -65,6 +110,7 @@ PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_ENV_START   = 20
 
+
 class Mole(object):
     ''' moleinfo for contracted GTO '''
     def __init__(self):
@@ -82,15 +128,6 @@ class Mole(object):
 # self.atom = [(symb/nuc_charge, (coord(Angstrom):0.,0.,0.),
 #               nucmod, mass, rad, ang), ...]
         self.atom = []
-#    self.etb = [{
-#          'atom'      : 1           # atom_type/nuc_charge
-#        , 'max_l'     : 0           # for even-tempered basis
-#        , 's'         : (2, 2, 1.8) # for etb:(num_basis, alpha, beta)
-#        , 'p'         : (0, 1, 1.8) # for etb: eta = alpha*beta**i
-#        , 'd'         : (0, 1, 1.8) #           for i in range num_basis
-#        , 'f'         : (0,0,0)
-#        , 'g'         : (0,0,0)}, ]
-        self.etb = {}
 # self.basis = {atom_type/nuc_charge: [l, kappa, (expnt, c_1, c_2,..),..]}
         self.basis = {}
 # self.nucmod = {atom#: nuclear_model, }, atom# is atom index, 1-based
@@ -107,9 +144,7 @@ class Mole(object):
         self.natm = 0
         self._bas = []
         self.nbas = 0
-        self.ptr_env = PTR_ENV_START
-        self._env = [0] * self.ptr_env
-        self._env[PTR_LIGHT_SPEED] = param.LIGHTSPEED
+        self._env = [0] * PTR_ENV_START
 
         self._built = False
         self.stdout = sys.stdout
@@ -131,7 +166,6 @@ class Mole(object):
         newmol._bas = copy.deepcopy(self._bas)
         newmol._env = copy.deepcopy(self._env)
         newmol.atom    = copy.deepcopy(self.atom)
-        newmol.etb     = copy.deepcopy(self.etb)
         newmol.basis   = copy.deepcopy(self.basis)
         return newmol
 
@@ -139,7 +173,6 @@ class Mole(object):
     #def __getstate__(self):
     #    return {'atom'    : self.atom, \
     #            'basis'   : self.basis, \
-    #            'etb'     : self.etb, \
     #            'charge'  : self.charge, \
     #            'spin'    : self.spin, \
     #            'symmetry': self.symmetry, \
@@ -149,20 +182,29 @@ class Mole(object):
     #def __setstate__(self, moldic):
     #    self.__dict__.update(moldic)
     def pack(self):
-        return {'atom'    : self.atom, \
-                'basis'   : self.basis, \
-                'etb'     : self.etb, \
-                'charge'  : self.charge, \
-                'spin'    : self.spin, \
-                'symmetry': self.symmetry, \
-                'nucmod'  : self.nucmod, \
-                'mass'    : self.mass, \
-                'grids'   : self.grids }
+        return {'atom'    : self.atom,
+                'basis'   : self.basis,
+                'charge'  : self.charge,
+                'spin'    : self.spin,
+                'symmetry': self.symmetry,
+                'nucmod'  : self.nucmod,
+                'mass'    : self.mass,
+                'grids'   : self.grids,
+                'light_speed': self.light_speed}
     def unpack(self, moldic):
         self.__dict__.update(moldic)
 
 
     def update_from_cmdargs(self):
+        # Ipython shell conflicts with optparse
+        # pass sys.args when using ipython
+        try:
+            __IPYTHON__
+            print('Warn: Ipython shell catchs sys.args')
+            return None
+        except:
+            pass
+
         if not self._built: # parse cmdline args only once
             opts = cmd_args.cmd_args()
 
@@ -178,197 +220,34 @@ class Mole(object):
             if os.path.isfile(self.output):
                 #os.remove(self.output)
                 if self.verbose > log.QUITE:
-                    print 'overwrite output file: %s' % self.output
+                    print('overwrite output file: %s' % self.output)
             else:
                 if self.verbose > log.QUITE:
-                    print 'output file: %s' % self.output
+                    print('output file: %s' % self.output)
 
 
-    def format_atom(self):
-        '''
-        change nuclear charge to atom symbol
-        '''
-        if not self.symmetry:
-            inp_atoms = self.atom
-        else:
-            from pyscf import symm
-            #if self.symmetry in symm.param.POINTGROUP
-            #    self.pgname = self.symmetry
-            #    #todo: symm.check_given_symm(self.symmetric, self.atom)
-            #    pass
-            #else:
-            #    self.pgname, inp_atoms = symm.detect_symm(self.atom)
-            self.pgname, inp_atoms = symm.detect_symm(self.atom)
-        atoms = []
-        for i,atom in enumerate(inp_atoms):
-            symb = _symbol(atom[0])
-            # atom index = i+1 since atom# is 1-based and _atm is 0-based
-            if self.nucmod.has_key(i+1):
-                nucmod = self.nucmod[i+1]
-            elif self.nucmod.has_key(symb):
-                nucmod = self.nucmod[symb]
-            else:
-                nucmod = param.MI_NUC_POINT
-            if self.mass.has_key(i+1):
-                mass = self.mass[i+1]
-            elif self.mass.has_key(symb):
-                mass = self.mass[symb]
-            else:
-                mass = param.ELEMENTS[_charge(symb)][1]
-            if self.grids.has_key(symb):
-                rad,ang = self.grids[symb]
-            else:
-                rad,ang = 80,110
-            atoms.append((symb, numpy.array(atom[1]), nucmod, mass, rad, ang))
-        return atoms
+    def build(self, *args, **kwargs):
+        return self.build_(*args, **kwargs)
+    def build_(self, dump_input=True, parse_arg=True, \
+               verbose=None, output=None, max_memory=None, \
+               atom=None, basis=None, nucmod=None, mass=None, grids=None, \
+               charge=None, spin=None, symmetry=None, light_speed=None):
 
+        if verbose is not None: self.verbose = verbose
+        if output is not None: self.output = output
+        if max_memory is not None: self.max_memory = max_memory
+        if atom is not None: self.atom = atom
+        if basis is not None: self.basis = basis
+        if nucmod is not None: self.nucmod = nucmod
+        if mass is not None: self.mass = mass
+        if grids is not None: self.grids = grids
+        if charge is not None: self.charge = charge
+        if spin is not None: self.spin = spin
+        if symmetry is not None: self.symmetry = symmetry
+        if light_speed is not None: self.light_speed = light_speed
 
-    def format_basis(self, basis_tab):
-        '''
-        transform the basis to the contracted format:
-        { atom: (l, kappa, ((-exp, c_1, c_2, ..), ..)), ... }
-        '''
-        #ABORT def append_cgto(blist, b):
-        #ABORT     if b[2].__class__ is types.IntType \
-        #ABORT        or b[2].__class__ is types.FloatType:
-        #ABORT         # append uncontracted GTO: (l, kappa, expnt)
-        #ABORT         blist.append((b[0], b[1], (abs(b[2]), 1)))
-        #ABORT     else:
-        #ABORT         # append cGTO: (l, kappa, (expnt, c_1, c_2,..), ..)
-        #ABORT         blist.append(b)
-
-        fmtbas = {}
-        for atom in basis_tab.keys():
-            symb = _symbol(atom)
-            if not fmtbas.has_key(symb):
-                fmtbas[symb] = []
-
-            if isinstance(basis_tab[atom], str):
-                name = basis_tab[atom].lower().replace(' ', '').replace('-', '').replace('_', '')
-                bset = basis.importbas(name, _rm_digit(symb))
-            else:
-                bset = basis_tab[atom]
-
-            for b in bset:
-        #ABORT        append_cgto(fmtbas[_symbol(atom)], b)
-                fmtbas[symb].append(b)
-        return fmtbas
-
-    def format_etb(self, etb):
-        '''
-        expand the even-tempered basis
-        basis = { atom: (l, kappa, ((-exp, c_1, c_2, ..), ..)), ... }
-        '''
-        bases = {}
-        for atom,b in etb.items():
-            bases[_symbol(atom)] = []
-            max_l = b['max_l']
-            for l in range(max_l+1):
-                strl = param.ANGULAR[l]
-                try:
-                    num_basis, alpha, beta = b[strl]
-                except:
-                    raise KeyError('unkown angular %s' % strl)
-                for i in range(num_basis):
-                    bases[_symbol(atom)].append((l, 0, (abs(alpha*beta**i), 1)))
-        return bases
-
-    def merge_etb(self, etb, basis):
-        '''
-        merge even-tempered basis
-        '''
-        #basis = self.format_basis(basis)
-        etb = self.format_etb(etb)
-        for atom in set(basis.keys() + etb.keys()):
-            if basis.has_key(atom):
-                if etb.has_key(atom):
-                    basis[atom].extend(etb[atom])
-            else:
-                basis[atom] = etb[atom]
-
-        for atom in self.atom:
-            symb = _symbol(atom[0])
-            if not basis.has_key(symb) \
-               and not basis.has_key(_rm_digit(symb)):
-                raise KeyError('no basis for %s' % atom[0])
-        return basis
-
-    def make_env(self):
-        ''' env: arguments of integrals '''
-        # clear env
-        self._atm = []
-        self._bas = []
-        del(self._env[self.ptr_env:])
-
-        self._env[PTR_LIGHT_SPEED] = self.light_speed
-
-        ptr_env = self.ptr_env
-        self.natm = self.atom.__len__()
-        for i in range(self.natm):
-            self._atm.append(self.make_atm_env_by_atm_id(i))
-            symb = self.atom[i][0]
-            if self.basis.has_key(symb):
-                basis_add = self.basis[symb]
-            else:
-                basis_add = self.basis[_rm_digit(symb)]
-            self._bas.extend(self.make_bas_env_by_atm_id(i, basis_add))
-        self.nbas = self._bas.__len__()
-
-    def make_atm_env_by_atm_id(self, atom_id):
-        a = self.atom[atom_id]
-        # append (charge, pointer to coordinates, nuc_mod) to _atm
-        self._env.extend([x/param.BOHR for x in a[1]])
-        _atm = [_charge(a[0]), self.ptr_env]
-        _atm.extend(a[2:])
-        self.ptr_env += 3
-        return _atm
-
-    def make_bas_env_by_atm_id(self, atom_id, basis_add):
-        _bas = []
-        # append (atom, l, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0) to bas
-        for b in basis_add:
-            angl = b[0]
-            if isinstance(b[1], int):
-                kappa = b[1]
-                b_coeff = numpy.array(b[2:])
-            else:
-                kappa = 0
-                b_coeff = numpy.array(b[1:])
-            es = b_coeff[:,0]
-            cs = b_coeff[:,1:]
-            nprim = cs.shape[0]
-            nctr = cs.shape[1]
-            self._env.extend(es)
-            norm = [gto_norm(angl, e) for e in es]
-            # absorb normalization into contraction
-            self._env.extend((cs.T * norm).flatten())
-            ptr_exp = self.ptr_env
-            self.ptr_env += nprim
-            ptr_coeff = self.ptr_env
-            self.ptr_env += nprim * nctr
-            _bas.append([atom_id, angl, nprim, nctr, kappa, \
-                         ptr_exp, ptr_coeff, 0])
-        return _bas
-
-
-    def tot_electrons(self):
-        nelectron = -self.charge
-        for atom in self.atom:
-            nelectron += _charge(atom[0])
-        return nelectron
-
-
-    def build_moleinfo(self, dump_input=True):
-        self.build(dump_input)
-    def build(self, dump_input=True, parse_arg=True):
-        # Ipython shell conflicts with optparse
-        try:
-            __IPYTHON__ is not None
-        except:
-            if parse_arg:
-                self.update_from_cmdargs()
-        else:
-            print 'Warn: Ipython shell catchs sys.args'
+        if parse_arg:
+            self.update_from_cmdargs()
 
         # avoid to open output file twice
         if parse_arg and self.output is not None \
@@ -377,12 +256,30 @@ class Mole(object):
 
         self._built = True
 
-        self.nelectron = self.tot_electrons()
-        self.atom = self.format_atom()
+        if not self.symmetry:
+            self.atom = self.format_atom(self.atom)
+        else:
+            import symm
+            #if self.symmetry in symm.param.POINTGROUP
+            #    self.pgname = self.symmetry
+            #    #todo: symm.check_given_symm(self.symmetric, self.atom)
+            #    pass
+            #else:
+            #    self.pgname, inp_atoms = symm.detect_symm(self.atom)
+            self.pgname, origin, axes = symm.detect_symm(self.atom)
+            self.atom = self.format_atom(self.atom, origin, axes)
         self.basis = self.format_basis(self.basis)
-        self.basis = self.merge_etb(self.etb, self.basis)
+
+        self._env[PTR_LIGHT_SPEED] = self.light_speed
+        self._atm, self._bas, self._env = \
+                self.make_env(self.atom, self.basis, self._env, \
+                              self.nucmod, self.mass)
+        self.natm = self._atm.__len__()
+        self.nbas = self._bas.__len__()
+        self.nelectron = self.tot_electrons()
+
         if self.symmetry:
-            from pyscf import symm
+            import symm
             eql_atoms = symm.symm_identical_atoms(self.pgname, self.atom)
             symm_orb = symm.symm_adapted_basis(self.pgname, eql_atoms,\
                                                self.atom, self.basis)
@@ -391,7 +288,6 @@ class Mole(object):
             self.irrep_name = [symm.irrep_name(self.pgname,ir) \
                                for ir in self.irrep_id]
             self.symm_orb = [c for c in symm_orb if c.size > 0]
-        self.make_env()
 
         if dump_input and self.verbose >= log.NOTICE:
             self.dump_input()
@@ -399,15 +295,125 @@ class Mole(object):
         log.debug1(self, 'arg.atm = %s', self._atm)
         log.debug1(self, 'arg.bas = %s', self._bas)
         log.debug1(self, 'arg.env = %s', self._env)
+        return self._atm, self._bas, self._env
+
+    @classmethod
+    def format_atom(self, atom, origin=0, axes=1):
+        return format_atom(atom, origin, axes)
+
+    @classmethod
+    def format_basis(self, basis_tab):
+        return format_basis(basis_tab)
+
+    @classmethod
+    def expand_etb(self, l, n, alpha, beta):
+        return expand_etb(l, n, alpha, beta)
+
+    @classmethod
+    def expand_etbs(self, etbs):
+        return expand_etbs(etbs)
+
+    @classmethod
+    def shift_ptr(self, atm, bas, off):
+        return shift_ptr(atm, bas, off)
+
+    @classmethod
+    def make_env(self, atoms, basis, pre_env=[], nucmod={}, mass={}):
+        ''' generate arguments for integrals '''
+
+        _atm = []
+        _bas = []
+        _env = []
+        ptr_env = len(pre_env)
+
+        for ia, atom in enumerate(atoms):
+            symb = atom[0]
+            atm0, env0 = self.make_atm_env(atom, ptr_env)
+            ptr_env = ptr_env + len(env0)
+            if ia in nucmod:
+                atm0[NUC_MOD_OF] = nucmod[ia]
+            elif symb in nucmod:
+                atm0[NUC_MOD_OF] = nucmod[symb]
+            if ia in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0.append(mass[ia])
+                ptr_env = ptr_env + 1
+            elif symb in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0.append(mass[symb])
+                ptr_env = ptr_env + 1
+            _atm.append(atm0)
+            _env.append(env0)
+
+        _basdic = {}
+        for symb, basis_add in basis.items():
+            bas0, env0 = self.make_bas_env(basis_add, 0, ptr_env)
+            ptr_env = ptr_env + len(env0)
+            _basdic[symb] = bas0
+            _env.append(env0)
+
+        for ia, atom in enumerate(atoms):
+            symb = atom[0]
+            if symb in _basdic:
+                bas0 = _basdic[symb]
+            else:
+                bas0 = _basdic[_rm_digit(symb)]
+            _bas.append([[ia] + b[1:] for b in bas0])
+
+        _bas = list(itertools.chain.from_iterable(_bas))
+        _env = list(itertools.chain.from_iterable(_env))
+        return _atm, _bas, pre_env+_env
+
+# append (charge, pointer to coordinates, nuc_mod) to _atm
+    @classmethod
+    def make_atm_env(self, atom, ptr=0):
+        _atm = [0] * 6
+        _env = [x/param.BOHR for x in atom[1]]
+        _env.append(param.ELEMENTS[_atm[CHARGE_OF]][1])
+        _atm[CHARGE_OF] = _charge(atom[0])
+        _atm[PTR_COORD] = ptr
+        _atm[NUC_MOD_OF] = param.MI_NUC_POINT
+        _atm[PTR_MASS ] = ptr + 3
+        return _atm, _env
+
+# append (atom, l, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0) to bas
+# absorb normalization into GTO contraction coefficients
+    @classmethod
+    def make_bas_env(self, basis_add, atom_id=0, ptr=0):
+        _bas = []
+        _env = []
+        for b in basis_add:
+            angl = b[0]
+            assert(angl < 8)
+            if angl in [6, 7]:
+                print 'libcint may have large error for ERI of i function'
+            if isinstance(b[1], int):
+                kappa = b[1]
+                b_coeff = numpy.array(b[2:])
+            else:
+                kappa = 0
+                b_coeff = numpy.array(b[1:])
+            es = b_coeff[:,0]
+            cs = b_coeff[:,1:]
+            nprim, nctr = cs.shape
+            cs = numpy.array([cs[i] * gto_norm(angl, es[i]) \
+                              for i in range(nprim)], order='F')
+            _env.append(es)
+            _env.append(cs.ravel(order='K'))
+            ptr_exp = ptr
+            ptr_coeff = ptr_exp + nprim
+            ptr = ptr_coeff + nprim * nctr
+            _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
+        _env = list(itertools.chain.from_iterable(_env)) # flatten nested lists
+        return _bas, _env
+
+    def tot_electrons(self):
+        return tot_electrons(self)
 
 
     def dump_input(self):
-        # initialize moleinfo first
-        if self._bas is []:
-            self.nelectron = self.tot_electrons()
-            self.atom = self.format_atom()
-            self.basis = self.format_basis()
-            self.make_env()
+        if not self._built:
+            self.build()
 
         try:
             filename = os.path.join(os.getcwd(), sys.argv[0])
@@ -438,21 +444,31 @@ class Mole(object):
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
         self.stdout.write('[INPUT] light speed = %s\n' % self.light_speed)
-        self.stdout.write('[INPUT] num atoms = %d\n' % self.atom.__len__())
+        self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
 
-        nucmod = {param.MI_NUC_POINT:'point', \
-                  param.MI_NUC_GAUSS:'Gaussian', }
-        for a,atom in enumerate(self.atom):
-            if atom[2] == param.MI_NUC_GAUSS:
-                nucmod = ' Gaussian nuc-mod, mass %s' % atom[3]
+        for nuc,(rad,ang) in self.grids.items():
+            self.stdout.write('[INPUT] %s (%d, %d)\n' % (nuc, rad, ang))
+
+        for ia,atom in enumerate(self.atom):
+            if ia in self.nucmod \
+                and self.nucmod[ia] == param.MI_NUC_GAUSS:
+                symb = atom[0]
+                if ia in self.mass:
+                    mass = self.mass[ia]
+                elif symb in self.mass:
+                    mass = self.mass[symb]
+                else:
+                    mass = param.ELEMENTS[_charge(symb)][1]
+                nucmod = ', Gaussian nuc-mod, mass %s' % mass
             else:
                 nucmod = ''
             self.stdout.write('[INPUT] %d %s %s AA, '\
-                              '%s Bohr, (%d, %d) grids,%s\n' \
-                              % (a+1, _symbol(atom[0]), atom[1], \
+                              '%s Bohr%s\n' \
+                              % (ia+1, _symbol(atom[0]), atom[1], \
                                  map(lambda x: x/param.BOHR, atom[1]), \
-                                 atom[4], atom[5], nucmod))
+                                 nucmod))
+
         self.stdout.write('[INPUT] basis\n')
         self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
                           'expnt,             c_1 c_2 ...\n')
@@ -477,16 +493,6 @@ class Mole(object):
                         self.stdout.write(' %4.12g' % c)
                     self.stdout.write('\n')
 
-        self.stdout.write('[INPUT] %d set(s) of even-tempered basis\n' \
-                          % self.etb.keys().__len__())
-        for atom,basis in self.etb.items():
-            max_l = basis['max_l']
-            self.stdout.write('[INPUT] etb for atom %s max_l = %d\n' \
-                              % (_symbol(atom), max_l))
-            for l in range(max_l+1):
-                strl = param.ANGULAR[l]
-                self.stdout.write('[INPUT]      l = %s; (n, alpha, beta) = %s\n'\
-                                  % (strl, str(basis[strl])))
         log.info(self, 'nuclear repulsion = %.15g', self.nuclear_repulsion())
         if self.symmetry:
             log.info(self, 'point group symmetry = %s', self.pgname)
@@ -494,8 +500,8 @@ class Mole(object):
                 log.info(self, 'num. orbitals of %s = %d', \
                          self.irrep_name[ir], self.symm_orb[ir].shape[1])
         log.info(self, 'number of shells = %d', self.nbas)
-        log.info(self, 'number of NR pGTOs = %d', self.num_NR_pgto())
-        log.info(self, 'number of NR cGTOs = %d', self.num_NR_function())
+        log.info(self, 'number of NR pGTOs = %d', self.pgto_nr())
+        log.info(self, 'number of NR cGTOs = %d', self.nao_nr())
         if self.verbose >= log.DEBUG1:
             for i in range(self.nbas):
                 exps = self.exps_of_bas(i)
@@ -508,42 +514,21 @@ class Mole(object):
             for i in range(3):
                 self._env[PTR_COMMON_ORIG+i] = coord[i]
         else:
-            print 'incorrect gauge origin, set common gauge (0,0,0)'
-            for i in range(3):
-                self._env[PTR_COMMON_ORIG+i] = 0
+            log.warn(self, 'incorrect gauge origin, set common gauge (0,0,0)')
+            self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = (0,0,0)
 
     def set_rinv_orig(self, coord):
         # unit of input coord BOHR
-        self._env[PTR_RINV_ORIG  ] = coord[0]
-        self._env[PTR_RINV_ORIG+1] = coord[1]
-        self._env[PTR_RINV_ORIG+2] = coord[2]
+        self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
 
     def set_rinv_by_atm_id(self, atm_id):
         if atm_id >= 0 and atm_id <= self.natm:
             self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = \
                     self.coord_of_atm(atm_id-1)[:]
         else:
-            print 'incorrect center, set to first atom'
+            log.warn(self, 'incorrect center, set to first atom')
             self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = \
                     self.coord_of_atm(0)[:]
-
-    def get_light_speed(self):
-        return self._env[PTR_LIGHT_SPEED]
-    def set_light_speed(self, c):
-        if c > 0:
-            self._env[PTR_LIGHT_SPEED] = c
-            self.light_speed = c
-        else:
-            print 'Light speed should be > 0. Set light speed to', \
-                    param.LIGHTSPEED
-
-    @property
-    def lightspeed(self):
-        return self.get_light_speed()
-    @lightspeed.setter
-    def lightspeed(self, c):
-        self.set_light_speed(c)
-
 
 #NOTE: atm_id or bas_id start from 0
     def symbol_of_atm(self, atm_id):
@@ -553,7 +538,7 @@ class Mole(object):
 
     def pure_symbol_of_atm(self, atm_id):
         # symbol without index, so (C1,C2,...) just return the same symbol 'C'
-        return _symbol(_charge(self.atom[atm_id][0]))
+        return _symbol(self.charge_of_atm(atm_id))
 
     def charge_of_atm(self, atm_id):
         return self._atm[atm_id][CHARGE_OF]
@@ -563,7 +548,7 @@ class Mole(object):
         return numpy.array(self._env[ptr:ptr+3])
 
     def coord_of_bas(self, bas_id):
-        atm_id = self.atom_of_bas[bas_id] - 1
+        atm_id = self.atom_of_bas(bas_id) - 1
         ptr = self._atm[atm_id][PTR_COORD]
         return numpy.array(self._env[ptr:ptr+3])
 
@@ -629,11 +614,17 @@ class Mole(object):
         return self.num_NR_cgto()
     def num_NR_cgto(self):
         ''' total number of contracted GTOs'''
-        return reduce(lambda n, b: n + (self.angular_of_bas(b) * 2 + 1) \
-                                    * self.nctr_of_bas(b),
-                      range(self.nbas), 0)
+        return sum([(self.angular_of_bas(b) * 2 + 1) * self.nctr_of_bas(b) \
+                    for b in range(self.nbas)])
     def nao_nr(self):
         return self.num_NR_cgto()
+# nao_id0:nao_id1 corresponding to bas_id0:bas_id1
+    def nao_nr_range(self, bas_id0, bas_id1):
+        nao_id0 = sum([(self.angular_of_bas(b) * 2 + 1) * self.nctr_of_bas(b) \
+                       for b in range(bas_id0)])
+        n = sum([(self.angular_of_bas(b) * 2 + 1) * self.nctr_of_bas(b) \
+                 for b in range(bas_id0, bas_id1)])
+        return nao_id0, nao_id0+n
 
     def num_4C_function(self):
         return self.num_4C_cgto()
@@ -646,14 +637,38 @@ class Mole(object):
         return self.num_2C_cgto()
     def num_2C_cgto(self):
         ''' total number of spinors'''
-        return reduce(lambda n, b: n + self.len_spinor_of_bas(b) \
-                                    * self.nctr_of_bas(b),
-                      range(self.nbas), 0)
+        return sum([self.len_spinor_of_bas(b) * self.nctr_of_bas(b) \
+                    for b in range(self.nbas)])
     def nao_2c(self):
         return self.num_2C_cgto()
+# nao_id0:nao_id1 corresponding to bas_id0:bas_id1
+    def nao_2c_range(self, bas_id0, bas_id1):
+        nao_id0 = sum([self.len_spinor_of_bas(b) * self.nctr_of_bas(b) \
+                       for b in range(bas_id0)])
+        n = sum([self.len_spinor_of_bas(b) * self.nctr_of_bas(b) \
+                 for b in range(bas_id0, bas_id1)])
+        return nao_id0, nao_id0+n
 
-    def time_reversal_spinor(self):
-        '''tao = time_reversal_spinor(bas)
+    def ao_loc_nr(self):
+        off = 0
+        ao_loc = []
+        for i in range(self.nbas):
+            ao_loc.append(off)
+            off += (self.angular_of_bas(i) * 2 + 1) * self.nctr_of_bas(i)
+        ao_loc.append(off)
+        return ao_loc
+
+    def ao_loc_2c(self):
+        off = 0
+        ao_loc = []
+        for i in range(self.nbas):
+            ao_loc.append(off)
+            off += self.len_spinor_of_bas(i) * self.nctr_of_bas(i)
+        ao_loc.append(off)
+        return ao_loc
+
+    def time_reversal_map(self):
+        '''tao = time_reversal_map(bas)
         tao(i) = -j  means  T(f_i) = -f_j
         tao(i) =  j  means  T(f_i) =  f_j'''
         tao = []
@@ -682,31 +697,37 @@ class Mole(object):
                         i += dj
         return tao
 
-    def intor(self, intor, dim3=1, symmetric=0):
+    def intor(self, intor, dim3=1, hermi=0):
         '''non-relativitic and relativitic integral generator.
-        symmetric=1 : hermitian, symmetric=2 : anti-hermitian'''
-        return moleintor.mole_intor(self, intor, dim3, symmetric)
+        hermi=1 : hermitian, hermi=2 : anti-hermitian'''
+        return moleintor.getints(intor, self._atm, self._bas, self._env,
+                                 dim3=dim3, hermi=hermi)
 
     def intor_symmetric(self, intor, dim3=1):
-        '''symmetric integral generator.'''
+        '''hermi integral generator.'''
         return self.intor(intor, dim3, 1)
 
     def intor_asymmetric(self, intor, dim3=1):
-        '''anti-symmetric integral generator.'''
+        '''anti-hermi integral generator.'''
         return self.intor(intor, dim3, 2)
 
     def intor_cross(self, intor, bras, kets, dim3=1):
         '''bras: shell lists of bras, kets: shell lists of kets'''
-        return moleintor.intor_cross(self, intor, bras, kets, dim3)
+        return moleintor.getints(intor, self._atm, self._bas, self._env,
+                                 bras, kets, dim3, 0)
 
+    def get_enuc(self):
+        return nuclear_repulsion()
     def nuclear_repulsion(self):
         e = 0
+        chargs = [self.charge_of_atm(i) for i in range(self.natm)]
+        coords = [self.coord_of_atm(i) for i in range(self.natm)]
         for j in range(self.natm):
-            q2 = self.charge_of_atm(j)
-            r2 = self.coord_of_atm(j)
+            q2 = chargs[j]
+            r2 = coords[j]
             for i in range(j):
-                q1 = self.charge_of_atm(i)
-                r1 = self.coord_of_atm(i)
+                q1 = chargs[i]
+                r1 = coords[i]
                 r = numpy.linalg.norm(r1-r2)
                 e += q1 * q2 / r
         return e
@@ -792,13 +813,6 @@ class Mole(object):
 #TODO:            count[ia,l] += nc
 #TODO:        return label
 
-#TODO:
-    def append_mol(self, mol):
-        pass
-
-#TODO:
-    def map_basis_nr2r(self):
-        pass
 
 def is_same_mol(mol1, mol2):
     if mol1.atom.__len__() != mol2.atom.__len__():
@@ -809,27 +823,24 @@ def is_same_mol(mol1, mol2):
             return False
     return True
 
+def shift_ptr(atm, bas, off):
+    atm0 = numpy.array(atm)
+    bas0 = numpy.array(bas)
+    atm0[:,PTR_COORD] += off
+    atm0[:,PTR_MASS ] += off
+    bas0[:,PTR_EXP  ] += off
+    bas0[:,PTR_COEFF] += off
+    return atm0.tolist(), bas0.tolist()
+
 # concatenate two mol
-def env_concatenate(atm1, bas1, env1, atm2, bas2, env2):
-    import copy
-    catm1 = copy.deepcopy(atm1)
-    cbas1 = copy.deepcopy(bas1)
-    cenv1 = copy.deepcopy(env1)
-    natm1 = atm1.__len__()
-    ptr_env1 = env1.__len__()
+def conc_env(atm1, bas1, env1, atm2, bas2, env2):
+    atm2, bas2 = shift_ptr(atm2, bas2, len(env1))
+    return atm1+atm2, bas1+bas2, env1+env2
 
-    catm2 = copy.deepcopy(atm2)
-    cbas2 = copy.deepcopy(bas2)
 
-    for a in catm2:
-        a[PTR_COORD] += ptr_env1
-        a[PTR_MASS]  += ptr_env1
-    for b in cbas2:
-        b[ATOM_OF] += natm1
-        b[PTR_EXP] += ptr_env1
-        b[PTR_COEFF] += ptr_env1
-    catm1.extend(catm2)
-    cbas1.extend(cbas2)
-    cenv1.extend(env2)
-    return catm1, cbas1, cenv1
+def tot_electrons(mol):
+    nelectron = -mol.charge
+    for ia in range(mol.natm):
+        nelectron += mol.charge_of_atm(ia)
+    return nelectron
 

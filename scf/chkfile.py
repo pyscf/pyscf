@@ -1,59 +1,62 @@
 #!/usr/bin/env python
 #
-# File: chkfile.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import cPickle as pickle
+import numpy
+import h5py
 import pyscf.gto
 
 def load_chkfile_key(chkfile, key):
-    ftmp = open(chkfile, "r")
-    rec = pickle.load(ftmp)
-    ftmp.close()
-    if rec.has_key(key):
-        return rec[key]
-    else:
-        raise KeyError("No key %s are found in chkfile %s" \
-                       % (key, chkfile))
+    return load(chkfile, key)
+def load(chkfile, key):
+    fh5 = h5py.File(chkfile, 'r')
+    val = fh5[key].value
+    fh5.close()
+    return val
 
 def dump_chkfile_key(chkfile, key, value):
-    ftmp = open(chkfile, "r")
-    rec = pickle.load(ftmp)
-    ftmp.close()
-    ftmp = open(chkfile, "w")
-    if not rec.has_key(key):
-        rec[key] = {}
-    rec[key] = value
-    pickle.dump(rec, ftmp, pickle.HIGHEST_PROTOCOL)
-    ftmp.close()
-
+    dump(chkfile, key, value)
+def dump(chkfile, key, value):
+    if h5py.is_hdf5(chkfile):
+        fh5 = h5py.File(chkfile)
+        if key in fh5:
+            del(fh5[key])
+    else:
+        fh5 = h5py.File(chkfile, 'w')
+    fh5[key] = value
+    fh5.close()
 
 
 ###########################################
-def read_scf(chkfile):
-    ftmp = open(chkfile, 'r')
-    rec = pickle.load(ftmp)
-    ftmp.close()
-
+def load_scf(chkfile):
+    fh5 = h5py.File(chkfile, 'r')
     mol = pyscf.gto.Mole()
     mol.verbose = 0
     mol.output = '/dev/null'
-    mol.atom     = rec['mol']['atom']
-    mol.basis    = rec['mol']['basis']
-    mol.etb      = rec['mol']['etb']
-    mol.build(False, False)
-
-    return mol, rec['scf']
+    moldic = eval(fh5['mol'].value)
+    mol.build(False, False, **moldic)
+    scf_rec = {
+        'hf_energy': fh5['scf/hf_energy'].value,
+        'mo_energy': fh5['scf/mo_energy'].value,
+        'mo_occ'   : fh5['scf/mo_occ'   ].value,
+        'mo_coeff' : fh5['scf/mo_coeff' ].value,
+    }
+    fh5.close()
+    return mol, scf_rec
 
 def dump_scf(mol, chkfile, hf_energy, mo_energy, mo_occ, mo_coeff):
     '''save temporary results'''
-    rec = {}
-    rec['mol'] = mol.pack()
-    rec['scf'] = {'hf_energy': hf_energy, \
-                  'mo_energy': mo_energy, \
-                  'mo_occ'   : mo_occ, \
-                  'mo_coeff' : mo_coeff, }
-    ftmp = open(chkfile, 'w')
-    pickle.dump(rec, ftmp, pickle.HIGHEST_PROTOCOL)
-    ftmp.close()
+    if h5py.is_hdf5(chkfile):
+        fh5 = h5py.File(chkfile)
+        if 'scf' in fh5:
+            del(fh5['scf'])
+    else:
+        fh5 = h5py.File(chkfile, 'w')
+    fh5['scf/hf_energy'] = hf_energy
+    fh5['scf/mo_energy'] = mo_energy
+    fh5['scf/mo_occ'   ] = mo_occ
+    fh5['scf/mo_coeff' ] = mo_coeff
+    fh5.close()
+
+

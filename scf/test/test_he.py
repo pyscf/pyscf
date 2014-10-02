@@ -1,5 +1,4 @@
 #
-# File: test_he.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -35,7 +34,7 @@ class KnowValues_NR(unittest.TestCase):
 
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
-        rhf.conv_threshold = 1e-11
+        rhf.conv_threshold = 1e-10
         self.assertAlmostEqual(rhf.scf(), -2.8551604772427379, 10)
 
     def test_nr_uhf(self):

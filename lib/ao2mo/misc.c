@@ -1,5 +1,4 @@
 /*
- * File: misc.c
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  *
  */

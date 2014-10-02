@@ -12,36 +12,50 @@ import ao2mo
 
 
 def write_head(fout, nmo, nelec):
-    fout.write(' &FCI NORB= %3d,NELEC=%2d,MS2= 0,\n' % (nmo, nelec))
+    fout.write(' &FCI NORB=%4d,NELEC=%2d,MS2= 0,\n' % (nmo, nelec))
     fout.write('  ORBSYM=%s\n' % ('1,' * nmo))
     fout.write('  ISYM=1,\n')
     fout.write(' &END\n')
 
 # 4-fold symmetry
 def write_eri(fout, eri, nmo):
-    # eri = ao2mo.format_eri(eri, '->4')
-    ij = 0
-    for i in range(nmo):
-        for j in range(0, i+1):
-            kl = 0
-            for k in range(0, i+1):
-                for l in range(0, k+1):
-                    if ij >= kl:
-                        fout.write(' %.16g%3d%3d%3d%3d\n' \
+    npair = nmo*(nmo+1)/2
+    if eri.size == npair**2: # 4-fold symmetry
+        ij = 0
+        for i in range(nmo):
+            for j in range(0, i+1):
+                kl = 0
+                for k in range(0, nmo):
+                    for l in range(0, k+1):
+                        fout.write(' %.16g %4d %4d %4d %4d\n' \
                                    % (eri[ij,kl], i+1, j+1, k+1, l+1))
-                    kl += 1
-            ij += 1
+                        kl += 1
+                ij += 1
+    else:
+        ij = 0
+        ijkl = 0
+        for i in range(nmo):
+            for j in range(0, i+1):
+                kl = 0
+                for k in range(0, i+1):
+                    for l in range(0, k+1):
+                        if ij >= kl:
+                            fout.write(' %.16g %4d %4d %4d %4d\n' \
+                                       % (eri[ijkl], i+1, j+1, k+1, l+1))
+                            ijkl += 1
+                        kl += 1
+                ij += 1
 
 def write_hcore(fout, h, nmo):
     h = h.reshape(nmo,nmo)
     for i in range(nmo):
         for j in range(0, i+1):
-            fout.write(' %.16g%3d%3d  0  0\n' % (h[i,j], i+1, j+1))
+            fout.write(' %.16g %4d %4d  0  0\n' % (h[i,j], i+1, j+1))
 
 
 def from_chkfile(output, chkfile):
     with open(output, 'w') as fout:
-        mol, scf_rec = scf.chkfile.read_scf(chkfile)
+        mol, scf_rec = scf.chkfile.load_scf(chkfile)
         nmo = scf_rec['mo_coeff'].shape[1]
         write_head(fout, nmo, mol.nelectron)
 

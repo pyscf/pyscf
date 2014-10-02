@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: casci.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -10,8 +9,7 @@ import numpy
 import h5py
 from pyscf import lib
 from pyscf import ao2mo
-from pyscf.future import fci
-import pyscf.future.fci.direct_spin0 as fci_direct
+import pyscf.future.fci.direct_spin0
 
 
 def extract_orbs(mol, mo_coeff, ncas, nelecas, ncore=None):
@@ -53,7 +51,7 @@ def kernel(mol, casci, mo_coeff, ci0=None, verbose=None):
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
-    e_cas, fcivec = fci_direct.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0)
+    e_cas, fcivec = casci.fci_mod.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0)
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core
@@ -80,6 +78,7 @@ class CASCI(object):
         self.ci_lindep = 1e-14
         self.ci_max_cycle = 30
         self.ci_conv_threshold = 1e-8
+        self.fci_mod = pyscf.future.fci.direct_spin0
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
@@ -150,9 +149,9 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
-    print ehf, emc, emc-ehf
+    print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
-    print emc+75.9624554777
+    print(emc+75.9624554777)
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -179,5 +178,5 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASCI(mol, m, 9, 8)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
-    print ehf, emc, emc-ehf
-    print emc - -227.948912536
+    print(ehf, emc, emc-ehf)
+    print(emc - -227.948912536)

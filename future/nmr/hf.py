@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: hf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -9,17 +8,15 @@ Non-relativistic NMR shielding tensor
 '''
 
 
-import cPickle as pickle
 import time
 import numpy
-
 from pyscf import gto
 from pyscf.lib import logger as log
 from pyscf.lib import parameters as param
-from pyscf.lib import pycint
 from pyscf import lib
 from pyscf import scf
 from pyscf.future import grad
+from pyscf.scf import _vhf
 
 CPSCF_MAX_CYCLE = 20
 CPSCF_THRESHOLD = 1e-9
@@ -38,7 +35,7 @@ class CPSCF:
     def init_guess(self, b, chkfile=None):
         if 0 and self.restart:
             try:
-                grp_x, grp_ox = scf.load_chkfile_key(chkfile, 'CPSCF')
+                grp_x, grp_ox = scf.chkfile.load(chkfile, 'CPSCF')
                 for x, ox in grp_x, grp_ox:
                     while x.__len__() <= ox.__len__():
                         ox.pop()
@@ -107,7 +104,7 @@ class CPSCF:
                 log.info(self, 'cycle=%d, norm(residue(vec x_%d))=%g;', \
                          cycle+1, i, abs(r[-1,-1]))
             cycle += 1
-            #scf.dump_chkfile_key('CPSCF', (grp_x, grp_ox))
+            #scf.chkfile.dump('CPSCF', (grp_x, grp_ox))
 
         for i in range(3):
             grp_x[i].pop()
@@ -348,11 +345,23 @@ class MSC(object):
         log.info(self, 'First-order Fock matrix / GIAOs\n')
 
         if False and self.restart:
-            h1 = scf.load_chkfile_key(self.scf.chkfile, 'vhf_GIAO')
+            h1 = scf.chkfile.load(self.scf.chkfile, 'vhf_GIAO')
             log.info(self, 'Restore vhf_GIAO from chkfile\n')
         else:
             dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
-            vj, vk = scf.hf.get_vj_vk(pycint.nr_vhf_igiao_o2, mol, dm0)
+            vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
+                                           'CVHFfill_dot_nrs4', # ip1_sph has k>=l,
+# fill ij, ip1_sph has anti-symm between i and j
+                                           'CVHFunpack_nrblock2trilu_anti',
+# funpack fill the entire 2D array for ij, then transpose to kl, fjk ~ nr2sij_...
+                                           ('CVHFnrs2ij_ij_s1kl', 'CVHFnrs2ij_il_s1jk'),
+                                           dm0, 3, # xyz, 3 components
+                                           mol._atm, mol._bas, mol._env)
+# J = i[(i i|\mu g\nu) + (i gi|\mu \nu)]
+# K = i[(\mu gi|i \nu) + (\mu i|i g\nu)]
+#   = (\mu g i|i \nu) - h.c.
+# vk ~ vk_{jk} ~ {l, nabla i}, but vj ~ {nabla i, j}
+            vk = vk.transpose(0,2,1) - vk
             h1 = vj - .5 * vk
             #scf.dump_chkfile_key(self.scf.chkfile, 'vhf_GIAO', h1)
 
@@ -378,8 +387,8 @@ if __name__ == '__main__':
         [1   , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ])
     #mol.nucmod = {'F':2, 'H':2}
-    mol.basis = {'H': '6_31g',
-                 'F': '6_31g',}
+    mol.basis = {'H': '6-31g',
+                 'F': '6-31g',}
     mol.build()
 
     rhf = scf.RHF(mol)
@@ -389,4 +398,5 @@ if __name__ == '__main__':
     #nmr.gauge_orig = (0,0,0)
     nmr.is_giao = True
     msc = nmr.msc() # _xx,_yy = 375.232781, _zz = 483.002149
-    print msc
+    print(msc)
+

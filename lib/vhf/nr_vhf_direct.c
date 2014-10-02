@@ -9,7 +9,6 @@
 #include <omp.h>
 #include "cint.h"
 #include "cvhf.h"
-#include "misc.h"
 #include "optimizer.h"
 #include "nr_vhf_incore.h"
 
@@ -44,35 +43,8 @@ void CVHFindex_blocks2tri(int *idx, int *ao_loc,
         }
 }
 
-int CVHFnr_vhf_prescreen(int *shls, CVHFOpt *opt)
-{
-        if (!opt) {
-                return 1; // no screen
-        }
-        int i = shls[0];
-        int j = shls[1];
-        int k = shls[2];
-        int l = shls[3];
-        int n = opt->nbas;
-        assert(opt->q_cond);
-        assert(opt->dm_cond);
-        assert(i < n);
-        assert(j < n);
-        assert(k < n);
-        assert(l < n);
-        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
-        double dm_max =     4*opt->dm_cond[j*n+i];
-        dm_max = MAX(dm_max,4*opt->dm_cond[l*n+k]);
-        dm_max = MAX(dm_max,  opt->dm_cond[j*n+k]);
-        dm_max = MAX(dm_max,  opt->dm_cond[j*n+l]);
-        dm_max = MAX(dm_max,  opt->dm_cond[i*n+k]);
-        dm_max = MAX(dm_max,  opt->dm_cond[i*n+l]);
-        return dm_max*qijkl > opt->direct_scf_cutoff;
-}
-
 int CVHFfill_nr_eri_o2(double *eri, int ish, int jsh, int ksh_lim,
-                       const int *atm, const int natm,
-                       const int *bas, const int nbas, const double *env,
+                       int *atm, int natm, int *bas, int nbas, double *env,
                        CINTOpt *opt, CVHFOpt *vhfopt)
 {
         const int di = CINTcgto_spheric(ish, bas);
@@ -90,7 +62,7 @@ int CVHFfill_nr_eri_o2(double *eri, int ish, int jsh, int ksh_lim,
                 shls[2] = ksh;
                 shls[3] = lsh;
                 if (!vhfopt ||
-                    (*vhfopt->fprescreen)(shls, vhfopt)) {
+                    (*vhfopt->fprescreen)(shls, vhfopt, atm, bas, env)) {
                         empty = !cint2e_sph(buf, shls, atm, natm, bas, nbas, env, opt)
                                 && empty;
                 } else {
@@ -225,8 +197,8 @@ void CVHFnr8fold_jk_o3(int nset, double *vj, double *vk, double *tri_dm, double 
  * for symmetric density matrix
  **************************************************/
 void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
-                      CVHFOpt *vhfopt, const int *atm, const int natm,
-                      const int *bas, const int nbas, const double *env)
+                      CVHFOpt *vhfopt,
+                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nao = CINTtot_cgto_spheric(bas, nbas);
         const int npair = nao*(nao+1)/2;
@@ -234,7 +206,6 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
         double *tri_vj = malloc(sizeof(double)*npair*nset);
         double *vj_priv, *vk_priv;
         int i, j, ij;
-        int *ij2i = malloc(sizeof(int)*nbas*nbas);
         int *idx_tri = malloc(sizeof(int)*nao*nao);
         int *ao_loc = malloc(sizeof(int)*nbas);
         int di, dj;
@@ -243,7 +214,6 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
         for (i = 0; i < nset; i++) {
                 CVHFcompress_nr_dm(tri_dm+npair*i, dm+nao*nao*i, nao);
         }
-        CVHFset_ij2i(ij2i, nbas);
         memset(tri_vj, 0, sizeof(double)*npair*nset);
         memset(vk, 0, sizeof(double)*nao*nao*nset);
         CINTshells_spheric_offset(ao_loc, bas, nbas);
@@ -252,12 +222,12 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
         CINTOpt *opt;
         cint2e_optimizer(&opt, atm, natm, bas, nbas, env);
         if (vhfopt) {
-                CVHFset_direct_scf_dm(vhfopt, dm, nset, atm, natm, bas, nbas, env);
+                CVHFsetnr_direct_scf_dm(vhfopt, dm, nset, atm, natm, bas, nbas, env);
         }
 
 #pragma omp parallel default(none) \
-        shared(tri_dm, dm, tri_vj, vk, ij2i, ao_loc, idx_tri, \
-               atm, bas, env, opt, vhfopt) \
+        shared(tri_dm, dm, tri_vj, vk, ao_loc, idx_tri, \
+               atm, natm, bas, nbas, env, opt, vhfopt) \
         private(ij, i, j, di, dj, vj_priv, vk_priv, eribuf)
         {
                 vj_priv = malloc(sizeof(double)*npair*nset);
@@ -266,7 +236,7 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
                 memset(vk_priv, 0, sizeof(double)*nao*nao*nset);
 #pragma omp for nowait schedule(guided)
                 for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
-                        i = ij2i[ij];
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - (i*(i+1)/2);
                         di = CINTcgto_spheric(i, bas);
                         dj = CINTcgto_spheric(j, bas);
@@ -308,20 +278,10 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
                 vk += nao*nao;
         }
         CINTdel_optimizer(&opt);
-        free(ij2i);
         free(idx_tri);
         free(ao_loc);
         free(tri_dm);
         free(tri_vj);
-}
-
-
-void CVHFnr_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
-                      const int *bas, const int nbas, const double *env)
-{
-        CVHFinit_optimizer(vhfopt, atm, natm, bas, nbas, env);
-        (*vhfopt)->fprescreen = &CVHFnr_vhf_prescreen;
-        CVHFset_direct_scf(*vhfopt, atm, natm, bas, nbas, env);
 }
 
 
@@ -331,9 +291,7 @@ void CVHFnr_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
  **************************************************/
 static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset,
                               CVHFOpt *vhfopt, void (*const fvk)(),
-                              const int *atm, const int natm,
-                              const int *bas, const int nbas,
-                              const double *env)
+                              int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nao = CINTtot_cgto_spheric(bas, nbas);
         const int npair = nao*(nao+1)/2;
@@ -341,7 +299,6 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
         double *tri_vj = malloc(sizeof(double)*npair*nset);
         double *vj_priv, *vk_priv;
         int i, j, ij;
-        int *ij2i = malloc(sizeof(int)*nbas*nbas);
         int *idx_tri = malloc(sizeof(int)*nao*nao);
         int *ao_loc = malloc(sizeof(int)*nbas);
         int di, dj;
@@ -350,7 +307,6 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
         for (i = 0; i < nset; i++) {
                 CVHFcompress_nr_dm(tri_dm+npair*i, dm+nao*nao*i, nao);
         }
-        CVHFset_ij2i(ij2i, nbas);
         memset(tri_vj, 0, sizeof(double)*npair*nset);
         memset(vk, 0, sizeof(double)*nao*nao*nset);
         CINTshells_spheric_offset(ao_loc, bas, nbas);
@@ -359,12 +315,12 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
         CINTOpt *opt;
         cint2e_optimizer(&opt, atm, natm, bas, nbas, env);
         if (vhfopt) {
-                CVHFset_direct_scf_dm(vhfopt, dm, nset, atm, natm, bas, nbas, env);
+                CVHFsetnr_direct_scf_dm(vhfopt, dm, nset, atm, natm, bas, nbas, env);
         }
 
 #pragma omp parallel default(none) \
-        shared(tri_dm, dm, tri_vj, vk, ij2i, ao_loc, idx_tri, \
-               atm, bas, env, opt, vhfopt) \
+        shared(tri_dm, dm, tri_vj, vk, ao_loc, idx_tri, \
+               atm, natm, bas, nbas, env, opt, vhfopt) \
         private(ij, i, j, di, dj, vj_priv, vk_priv, eribuf)
         {
                 vj_priv = malloc(sizeof(double)*npair*nset);
@@ -373,7 +329,7 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
                 memset(vk_priv, 0, sizeof(double)*nao*nao*nset);
 #pragma omp for nowait schedule(guided)
                 for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
-                        i = ij2i[ij];
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - (i*(i+1)/2);
                         di = CINTcgto_spheric(i, bas);
                         dj = CINTcgto_spheric(j, bas);
@@ -414,7 +370,6 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
                 vk += nao*nao;
         }
         CINTdel_optimizer(&opt);
-        free(ij2i);
         free(idx_tri);
         free(ao_loc);
         free(tri_dm);
@@ -423,8 +378,7 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
 
 void CVHFnr_direct(double *dm, double *vj, double *vk, const int nset,
                    CVHFOpt *vhfopt, int hermi,
-                   const int *atm, const int natm,
-                   const int *bas, const int nbas, const double *env)
+                   int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nao = CINTtot_cgto_spheric(bas, nbas);
         int i, j, iset;

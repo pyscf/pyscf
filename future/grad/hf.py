@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: hf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -14,8 +13,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import parameters as param
 from pyscf.lib import logger as log
-from pyscf.lib import pycint
-from pyscf import scf
+from pyscf.scf import _vhf
 
 class RHF:
     '''Non-relativistic restricted Hartree-Fock gradients'''
@@ -48,7 +46,15 @@ class RHF:
     def get_coulomb_hf(self, mol, dm):
         '''NR Hartree-Fock Coulomb repulsion'''
         log.info(self,'Compute Gradients of NR Hartree-Fock Coulomb repulsion')
-        vj, vk = scf.hf.get_vj_vk(pycint.nr_vhf_grad_o1, mol, dm)
+        vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
+                                       'CVHFfill_dot_nrs2kl', # ip1_sph has k>=l,
+# fill ij, ip1_sph has no-symm between i and j
+                                       'CVHFunpack_nrblock2rect',
+# funpack transposes (ij|kl) to (kl|ij), thus fvj,fvk ~ nr2sij_...
+                                       ('CVHFnrs2ij_ij_s1kl', 'CVHFnrs2ij_il_s1jk'),
+                                       dm, 3, # xyz, 3 components
+                                       mol._atm, mol._bas, mol._env)
+        vk = vk.transpose(0,2,1) # vk ~ vk_{jk} ~ {l, nabla i}, but vj ~ {nabla i, j}
         return vj - vk*.5
 
     @lib.omnimethod
@@ -145,11 +151,8 @@ def redo_scf(mol, mf):
     return mf
 
 
-class UHF(RHF):
-    def __init__(self, mol, scf):
-        pass
-
 if __name__ == '__main__':
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -158,7 +161,7 @@ if __name__ == '__main__':
     mol.build()
     method = scf.RHF(mol)
     g = RHF(method)
-    print g.grad()
+    print(g.grad())
 
     h2o = gto.Mole()
     h2o.verbose = 0
@@ -172,4 +175,8 @@ if __name__ == '__main__':
     h2o.build()
     rhf = scf.RHF(h2o)
     g = RHF(rhf)
-    print g.grad()
+    print(g.grad())
+#[[ 0   0                0             ]
+# [ 0  -4.39690522e-03  -1.20567128e-02]
+# [ 0   4.39690522e-03  -1.20567128e-02]]
+

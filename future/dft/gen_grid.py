@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#
 # File: gen_grid.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -9,10 +8,14 @@ Generate DFT grids and weights, based on the code provided by Gerald Knizia <>
 '''
 
 
+import os
+import ctypes
 import numpy
 import radi
-from pyscf.lib import _dft
+from pyscf import lib
 
+_alib = os.path.join(os.path.dirname(lib.__file__), 'libdft.so')
+libdft = ctypes.CDLL(_alib)
 
 #TODO: OPTIMIZE ME ACCORDING TO JCP 102, 346
 
@@ -48,7 +51,7 @@ class Grids(object):
     def gen_atomic_grids(self, mol):
         atom_grids_tab = {}
         for atm in mol.basis.keys():
-            if mol.grids.has_key(atm):
+            if atm in mol.grids:
                 n_rad, n_ang = mol.grids[atm]
             else:
                 chg = gto.mole._charge(atm)
@@ -62,7 +65,10 @@ class Grids(object):
 
             #TODO: reduce grid size for inner shells, i.e. for inner most
             # radial points, use smaller n_ang
-            ang, ang_weight = _dft.make_angular_grid(n_ang)
+            grid = numpy.empty((n_ang,4))
+            libdft.MakeAngularGrid(grid.ctypes.data_as(ctypes.c_void_p),
+                                   ctypes.c_int(n_ang))
+            ang, ang_weight = grid[:,:3], grid[:,3]
             atom_grids_tab[atm] = (rad, rad_weight, ang, ang_weight)
         return atom_grids_tab
 
@@ -225,7 +231,7 @@ def original_becke(g):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
+    import gto
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None#"out_h2o"
@@ -243,5 +249,5 @@ if __name__ == '__main__':
     t0 = time.clock()
     g = Grids(h2o)
     g.setup_grids()
-    print g.coords.shape
-    print time.clock() - t0
+    print(g.coords.shape)
+    print(time.clock() - t0)

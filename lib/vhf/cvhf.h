@@ -12,52 +12,27 @@
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct CVHFOpt_struct {
     int nbas;
+    int _padding;
     double direct_scf_cutoff;
     double *q_cond;
     double *dm_cond;
-    int (*fprescreen)(int *shls, struct CVHFOpt_struct *opt);
+    int (*fprescreen)(int *shls, struct CVHFOpt_struct *opt,
+                      int *atm, int *bas, double *env);
 } CVHFOpt;
 #endif
 
-void int2e_sph_o5(double *eri, const int *atm, const int natm,
-                  const int *bas, const int nbas, const double *env);
+void int2e_sph_o5(double *eri, int *atm, int natm, int *bas, int nbas, double *env);
 
-void CVHFinit_optimizer(CVHFOpt **opt, const int *atm, const int natm,
-                        const int *bas, const int nbas, const double *env);
+void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
+                        int *bas, int nbas, double *env);
 
 void CVHFdel_optimizer(CVHFOpt **opt);
 
 
-void CVHFnr_optimizer(CVHFOpt **vhfopt, const int *atm, const int natm,
-                      const int *bas, const int nbas, const double *env);
+int CVHFnoscreen(int *shls, CVHFOpt *opt,
+                  int *atm, int *bas, double *env);
+int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
+                        int *atm, int *bas, double *env);
+int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
+                       int *atm, int *bas, double *env);
 
-void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
-                      CVHFOpt *vhfopt, const int *atm, const int natm,
-                      const int *bas, const int nbas, const double *env);
-
-int CVHFfill_nr_eri_o2(double *eri, int ish, int jsh, int ksh_lim,
-                       const int *atm, const int natm,
-                       const int *bas, const int nbas, const double *env,
-                       CINTOpt *opt, CVHFOpt *vhfopt);
-
-int CVHFno_screen(int *shls, CVHFOpt *opt);
-int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt);
-int CVHFnr_vhf_prescreen(int *shls, CVHFOpt *opt);
-
-void CVHFindex_blocks2tri(int *idx, int *ao_loc,
-                          const int *bas, const int nbas);
-void CVHFset_ij2i(int *ij2i, int n);
-void CVHFunpack(int n, double *vec, double *mat);
-void extract_row_from_tri(double *row, int row_id, int ndim, double *tri);
-
-void CVHFnr_k(int n, double *eri, double *dm, double *vk);
-void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk);
-void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk);
-
-void CVHFnr_incore(int n, double *eri, double *dm, double *vj, double *vk,
-                   int hermi);
-
-void CVHFnr_direct(double *dm, double *vj, double *vk, const int nset,
-                   CVHFOpt *vhfopt, int hermi,
-                   const int *atm, const int natm,
-                   const int *bas, const int nbas, const double *env);

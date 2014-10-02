@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# File: diis.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -9,11 +8,8 @@ DIIS
 """
 
 import os
-import cPickle as pickle
 import tempfile
-
 import numpy
-import pyscf.lib
 import pyscf.lib.logger as log
 
 
@@ -58,31 +54,35 @@ class DIIS:
             return x
 
         H = numpy.ones((nd+1,nd+1), x.dtype)
-        H[-1,-1] = 0
+        H[0,0] = 0
         G = numpy.zeros(nd+1, x.dtype)
-        G[-1] = 1
-        for i in range(nd):
-            dti = self.get_err_vec(i)
-            for j in range(i+1):
-                dtj = self.get_err_vec(j)
+        G[0] = 1
+        for i in range(1,nd+1):
+            dti = self.get_err_vec(i-1)
+            for j in range(1,i+1):
+                dtj = self.get_err_vec(j-1)
                 H[i,j] = numpy.dot(numpy.array(dti).flatten(), \
                                    numpy.array(dtj).flatten())
                 H[j,i] = H[i,j].conj()
 
-        # solve  H*x = G
         try:
-            c_GH = numpy.linalg.solve(H, G)
+            c = numpy.linalg.solve(H, G)
         except numpy.linalg.linalg.LinAlgError:
-            # damp diagonal elements to prevent singular
-            for i in range(H.shape[0]):
-                H[i,i] = H[i,i] + 1e-8
-            c_GH = numpy.linalg.solve(H, G)
-        #c_GH = pyscf.lib.solve_lineq_by_SVD(H, G)
-        log.debug(self, 'diis-c %s', c_GH)
+            log.warn(self, 'singularity in scf diis')
+            #c = pyscf.lib.solve_lineq_by_SVD(H, G)
+            ## damp diagonal elements to avoid singularity
+            #for i in range(H.shape[0]):
+            #    H[i,i] = H[i,i] + 1e-9
+            #c = numpy.linalg.solve(H, G)
+            for i in range(1,nd):
+                H[i,i] = H[i,i] + 1e-11
+            c = numpy.linalg.solve(H, G)
+            #c = numpy.linalg.solve(H[:nd,:nd], G[:nd])
+        log.debug(self, 'diis-c %s', c)
 
         x = numpy.zeros_like(x)
-        for i, c in enumerate(c_GH[:-1]):
-            x += self.get_vec(i) * c
+        for i, ci in enumerate(c[1:]):
+            x += self.get_vec(i) * ci
         return x
 
 class DIISLarge(DIIS):

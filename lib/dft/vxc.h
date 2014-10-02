@@ -1,5 +1,4 @@
 /*
- * File: vxc.h
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 

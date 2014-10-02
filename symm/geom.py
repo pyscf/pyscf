@@ -1,5 +1,4 @@
 #
-# File: geom.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -59,13 +58,6 @@ def gen_new_axis(axisz, axisx=None, axisy=None):
                             axisz/numpy.linalg.norm(axisz)))
     return new_axis
 
-def shift_coords(atoms, new_axis, chg_center):
-    new_atoms = []
-    for atm in atoms:
-        c = numpy.array(atm[1]) - chg_center
-        new_atoms.append((atm[0], numpy.dot(new_axis, c)))
-    return new_atoms
-
 def normalize(v):
     rr = numpy.linalg.norm(v)
     if rr > 1e-12:
@@ -76,7 +68,7 @@ def normalize(v):
 def same_vectors(v1, v2):
     return numpy.linalg.norm(v1-v2) < GEOM_THRESHOLD
 def parallel_vectors(v1, v2):
-    v3 = numpy.cross(v1,v2)
+    v3 = numpy.cross(v1, v2)
     return numpy.linalg.norm(v3) < GEOM_THRESHOLD
 
 def vector_perp_to_vector(v1):
@@ -104,7 +96,7 @@ def related_by_C2(c2axis, atm1, atm2):
         return False
     r1 = atm1[1]
     r2 = atm2[1]
-    if all(r1==r2):
+    if numpy.allclose(r1, r2):
         # atm1 atm2 are same and on the plain
         return parallel_vectors(r1, c2axis)
     elif abs(numpy.linalg.norm(r1+r2)) < GEOM_THRESHOLD:
@@ -121,7 +113,7 @@ def related_by_mirror(mir_vec, atm1, atm2):
         return False
     r1 = atm1[1]
     r2 = atm2[1]
-    if all(r1==r2):
+    if numpy.allclose(r1, r2):
         # atm1 atm2 are same and on the plain
         return abs(numpy.dot(atm1[1],mir_vec)) < GEOM_THRESHOLD
     else:
@@ -129,11 +121,12 @@ def related_by_mirror(mir_vec, atm1, atm2):
 
 class SymmOperator(object):
     def __init__(self, atoms):
+        atoms = [(a[0], numpy.array(a[1])) for a in atoms]
         self.charge_center = get_charge_center(atoms)
         self.mass_center = get_mass_center(atoms)
         self.atoms = []
         for atm in atoms:
-            r = numpy.array(atm[1]) - self.charge_center
+            r = atm[1] - self.charge_center
             self.atoms.append((atm[0], r, numpy.linalg.norm(r)))
 
     def group_atoms_by_distance(self):
@@ -285,11 +278,10 @@ def detect_symm(atoms):
     elif atoms.__len__() == 2:
         rchg = get_charge_center(atoms)
         new_axis = gen_new_axis(numpy.array(atoms[0][1])-rchg, axisx=(1,0,0))
-        new_atoms = shift_coords(atoms, new_axis, rchg)
         if atoms[0][0] == atoms[1][0]:
-            return 'D2h', new_atoms
+            return 'D2h', rchg, new_axis
         else:
-            return 'C2v', new_atoms
+            return 'C2v', rchg, new_axis
     else:
         rchg = get_charge_center(atoms)
         ops = SymmOperator(atoms)
@@ -298,34 +290,27 @@ def detect_symm(atoms):
         c2_xyz = find_axis(c2_axis)
         if icenter:
             if not c2_axis:
-                new_atoms = [(a[0], a[1]-rchg) for a in atoms]
-                return 'Ci', new_atoms
+                return 'Ci', rchg, numpy.eye(3)
             elif c2_axis.__len__() >= 3 and c2_xyz is not None:
-                new_atoms = shift_coords(atoms, c2_xyz, rchg)
-                return 'D2h', new_atoms
+                return 'D2h', rchg, c2_xyz
             else:
                 new_axis = gen_new_axis(c2_axis[0])
-                new_atoms = shift_coords(atoms, new_axis, rchg)
-                return 'C2h', new_atoms
+                return 'C2h', rchg, new_axis
         else:
             mirror = ops.detect_mirror()
             if c2_axis.__len__() >= 3 and c2_xyz is not None:
-                new_atoms = shift_coords(atoms, c2_xyz, rchg)
-                return 'D2', new_atoms
+                return 'D2', rchg, c2_xyz
             elif c2_axis and mirror:
                 new_axis = gen_new_axis(c2_axis[0], axisy=mirror[0])
-                new_atoms = shift_coords(atoms, new_axis, rchg)
-                return 'C2v', new_atoms
+                return 'C2v', rchg, new_axis
             elif c2_axis:
                 new_axis = gen_new_axis(c2_axis[0])
-                new_atoms = shift_coords(atoms, new_axis, rchg)
-                return 'C2', new_atoms
+                return 'C2', rchg, new_axis
             elif mirror:
                 new_axis = gen_new_axis(mirror[0])
-                new_atoms = shift_coords(atoms, new_axis, rchg)
-                return 'Cs', new_atoms
+                return 'Cs', rchg, new_axis
             else:
-                return 'C1', shift_coords(atoms, numpy.eye(3), rchg)
+                return 'C1', rchg, numpy.eye(3)
 
 def symm_identical_atoms(gpname, atoms):
     natoms = atoms.__len__()
@@ -389,6 +374,6 @@ if __name__ == "__main__":
     h2o.atom = [["O" , (1. , 0.    , 0.   ,)],
                 [1   , (0. , -.757 , 0.587,)],
                 [1   , (0. , 0.757 , 0.587,)] ]
-    gpname, atoms = detect_symm(h2o.atom)
-    print gpname
-    print symm_identical_atoms(gpname, atoms)
+    gpname, orig, axes = detect_symm(h2o.atom)
+    print(gpname)
+    print(symm_identical_atoms(gpname, h2o.atom))
