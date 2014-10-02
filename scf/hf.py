@@ -17,7 +17,8 @@ from pyscf import gto
 from pyscf import lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.future.tools import dump_mat
+from pyscf.future import tools
+import pyscf.future.tools.dump_mat
 import diis
 import chkfile
 import addons
@@ -569,7 +570,7 @@ class RHF(SCF):
         if self.verbose >= param.VERBOSE_DEBUG:
             log.debug(self, ' ** MO coefficients **')
             label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-            dump_mat.dump_rec(self.stdout, mo_coeff, label, start=1)
+            tools.dump_mat.dump_rec(self.stdout, mo_coeff, label, start=1)
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp(mol))
 
@@ -948,9 +949,9 @@ class UHF(SCF):
         if self.verbose >= param.VERBOSE_DEBUG:
             log.debug(self, ' ** MO coefficients for alpha spin **')
             label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-            dump_mat.dump_rec(self.stdout, mo_coeff[0], label, start=1)
+            tools.dump_mat.dump_rec(self.stdout, mo_coeff[0], label, start=1)
             log.debug(self, ' ** MO coefficients for beta spin **')
-            dump_mat.dump_rec(self.stdout, mo_coeff[1], label, start=1)
+            tools.dump_mat.dump_rec(self.stdout, mo_coeff[1], label, start=1)
 
         dm = self.calc_den_mat(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp(mol))

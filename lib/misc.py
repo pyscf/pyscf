@@ -7,9 +7,9 @@ import os, sys
 import tempfile
 import shutil
 import functools
+import math
 import ctypes
 import numpy
-import math
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)

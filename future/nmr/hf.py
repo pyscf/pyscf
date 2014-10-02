@@ -16,7 +16,7 @@ from pyscf.lib import parameters as param
 from pyscf import lib
 from pyscf import scf
 from pyscf.future import grad
-from pyscf.scf import _vhf
+import pyscf.scf._vhf
 
 CPSCF_MAX_CYCLE = 20
 CPSCF_THRESHOLD = 1e-9
@@ -141,14 +141,14 @@ def solve_cpscf(mol, scf0, f_ind_pot, h1, s1, \
 # brute force solver
 #    mo1 = numpy.copy(mo10)
 #    for i in range(10):
-#        v_mo = f_ind_pot(mol, mo1)
+#        v_mo = f_ind_pot(scf0, mo1)
 #        # only update the v-o block
 #        mo1[:,occ==0,:] = mo10[:,occ==0,:]-v_mo[:,occ==0,:] * e_ai
 
     def vind_vo(mo1):
         '''update vir-occ block of induced potential'''
         mo1 = numpy.array(mo1).reshape(mo10.shape)
-        v_mo = f_ind_pot(mol, mo1)
+        v_mo = f_ind_pot(scf0, mo1)
         v_mo[:,occ==0,:] = -v_mo[:,occ==0,:] * e_ai
         v_mo[:,occ>0,:] = 0
         return v_mo.reshape((3,-1))
@@ -159,7 +159,7 @@ def solve_cpscf(mol, scf0, f_ind_pot, h1, s1, \
     mo1 = cpscf.solve(vind_vo, mo10.reshape((3,-1)))
 
     # extra iteration to get mo1 and e1
-    v_mo = f_ind_pot(mol, numpy.array(mo1).reshape(mo10.shape))
+    v_mo = f_ind_pot(scf0, numpy.array(mo1).reshape(mo10.shape))
     mo_e10 += -v_mo[:,occ>0,:]
     mo10[:,occ==0,:] += -v_mo[:,occ==0,:] * e_ai
     return mo_e10, mo10
@@ -282,9 +282,11 @@ class MSC(object):
         h1, s1 = self.get_h10_s10(mol, scf0)
         t0 = log.timer(self, 'h10', *t0)
         if self.is_cpscf:
+            direct_scf_bak, scf0.direct_scf = scf0.direct_scf, False
             self.mo_e10, self.mo10 = solve_cpscf(mol, scf0, self.v_ind, h1,
                                                  s1, self.max_cycle,
                                                  self.threshold)
+            scf0.direct_scf = direct_scf_bak
         else:
             self.mo_e10, self.mo10 = solve_ucpscf(mol, scf0, h1, s1)
         t0 = log.timer(self, 'solving CPSCF/UCPSCF', *t0)
@@ -349,7 +351,7 @@ class MSC(object):
             log.info(self, 'Restore vhf_GIAO from chkfile\n')
         else:
             dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
-            vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
+            vj, vk = scf._vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
                                            'CVHFfill_dot_nrs4', # ip1_sph has k>=l,
 # fill ij, ip1_sph has anti-symm between i and j
                                            'CVHFunpack_nrblock2trilu_anti',
@@ -363,16 +365,16 @@ class MSC(object):
 # vk ~ vk_{jk} ~ {l, nabla i}, but vj ~ {nabla i, j}
             vk = vk.transpose(0,2,1) - vk
             h1 = vj - .5 * vk
-            #scf.dump_chkfile_key(self.scf.chkfile, 'vhf_GIAO', h1)
+            #scf.chkfile.dump(self.scf.chkfile, 'vhf_GIAO', h1)
 
         h1 += mol.intor_asymmetric('cint1e_ignuc_sph', 3)
         h1 += mol.intor('cint1e_igkin_sph', 3)
         s1 = mol.intor_asymmetric('cint1e_igovlp_sph', 3)
         return h1, s1
 
-    def v_ind(self, mol, mo1):
+    def v_ind(self, scf0, mo1):
         '''Induced potential'''
-        scf0 = self.scf
+        mol = scf0.mol
         dm1 = self.calc_den_mat_1(mo1, scf0.mo_coeff, scf0.mo_occ)
         v_ao = self.scf.get_veff(mol, dm1, hermi=2)
         return self._mat_ao2mo(v_ao, scf0.mo_coeff, scf0.mo_occ)

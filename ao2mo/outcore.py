@@ -9,7 +9,7 @@ import numpy
 import h5py
 from pyscf import lib
 import pyscf.lib.parameters as param
-import pyscf.lib.logger as logger
+import pyscf.lib.logger
 import _ao2mo
 import direct
 
@@ -22,7 +22,7 @@ def full(mol, mo_coeff, erifile, max_memory=1500, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = logger.Logger(mol.stdout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     mo_coeff = numpy.array(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
@@ -121,7 +121,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = logger.Logger(mol.stdout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \

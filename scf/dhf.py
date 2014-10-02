@@ -358,8 +358,8 @@ class UHF(hf.SCF):
             dm = self.calc_den_mat(mo_coeff, mo_occ)
             self._coulomb_now = 'SSLL'
 
-        if init_dm is None and self._coulomb_now.upper() == 'SSLL' \
-                            or self._coulomb_now.upper() == 'LLSS':
+        if init_dm is None and (self._coulomb_now.upper() == 'SSLL' \
+                             or self._coulomb_now.upper() == 'LLSS'):
             scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
                     = hf.scf_cycle(mol, self, 4e-4, dump_chk, init_dm=dm)
             dm = self.calc_den_mat(mo_coeff, mo_occ)
@@ -405,9 +405,13 @@ def _call_veff_llll(mf, dm, hermi=1):
         dms = []
         for dmi in dm:
             dms.append(dmi[:n2c,:n2c].copy())
+    if mf.direct_scf:
+        opt = mf.opt_llll
+    else:
+        opt = None
     vj, vk = _vhf.rdirect_mapdm('cint2e', 'CVHFdot_rs8',
                                 ('CVHFrs8_ji_s2kl', 'CVHFrs8_jk_s1il'), dms, 1,
-                                mol._atm, mol._bas, mol._env, mf.opt_llll)
+                                mol._atm, mol._bas, mol._env, opt)
     return _jk_triu_(vj, vk, hermi)
 
 def _call_veff_ssll(mf, dm, hermi=1):
@@ -429,11 +433,16 @@ def _call_veff_ssll(mf, dm, hermi=1):
             dms.append(dmi[n2c:,n2c:].copy())
         for dmi in dm:
             dms.append(dmi[n2c:,:n2c].copy())
-    jks = ('CVHFrs4_lk_s2ij', 'CVHFrs4_ji_s2kl', 'CVHFrs4_jk_s1il') * n_dm
+    jks = ('CVHFrs4_lk_s2ij',) * n_dm \
+        + ('CVHFrs4_ji_s2kl',) * n_dm \
+        + ('CVHFrs4_jk_s1il',) * n_dm
+    if mf.direct_scf:
+        opt = mf.opt_ssll
+    else:
+        opt = None
     c1 = .5/mol.light_speed
     vx = _vhf.rdirect_bindm('cint2e_spsp1', 'CVHFdot_rs4', jks, dms, 1,
-                            mol._atm, mol._bas, mol._env,
-                            mf.opt_ssll) * c1**2
+                            mol._atm, mol._bas, mol._env, opt) * c1**2
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,n2c:,n2c:] = vx[      :n_dm  ,:,:]
@@ -455,10 +464,13 @@ def _call_veff_ssss(mf, dm, hermi=1):
         dms = []
         for dmi in dm:
             dms.append(dmi[n2c:,n2c:].copy())
+    if mf.direct_scf:
+        opt = mf.opt_ssss
+    else:
+        opt = None
     vj, vk = _vhf.rdirect_mapdm('cint2e_spsp1spsp2', 'CVHFdot_rs8',
                                 ('CVHFrs8_ji_s2kl', 'CVHFrs8_jk_s1il'), dms, 1,
-                                mol._atm, mol._bas, mol._env,
-                                mf.opt_ssss) * c1**4
+                                mol._atm, mol._bas, mol._env, opt) * c1**4
     return _jk_triu_(vj, vk, hermi)
 
 

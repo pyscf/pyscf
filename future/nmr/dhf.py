@@ -10,12 +10,12 @@ NMR shielding of Dirac Hartree-Fock
 import time
 import numpy
 from pyscf import gto
+from pyscf import lib
 from pyscf.lib import logger as log
 from pyscf.lib import parameters as param
-from pyscf import lib
-from pyscf import scf
 import hf
-from pyscf.scf import _vhf
+from pyscf import scf
+import pyscf.scf._vhf
 
 class MSC(hf.MSC):
     __doc__ = 'magnetic shielding constants'
@@ -114,9 +114,11 @@ class MSC(hf.MSC):
         h1, s1 = self.get_h10_s10(mol, scf0)
         t0 = log.timer(self, 'h10', *t0)
         if self.is_cpscf:
+            direct_scf_bak, scf0.direct_scf = scf0.direct_scf, False
             self.mo_e10, self.mo10 = hf.solve_cpscf(mol, scf0, self.v_ind, h1,
                                                     s1, self.max_cycle,
                                                     self.threshold)
+            scf0.direct_scf = direct_scf_bak
         else:
             self.mo_e10, self.mo10 = hf.solve_ucpscf(mol, scf0, h1, s1)
         t0 = log.timer(self, 'solving CPSCF/UCPSCF', *t0)
@@ -266,9 +268,9 @@ class MSC(hf.MSC):
 
     # cannot use NR-HF v_ind.  NR-HF anti-symmetrize v_ao. But v_ao of DHF is
     # time-reversal anti-symmetric
-    def v_ind(self, mol, mo1):
+    def v_ind(self, scf0, mo1):
         '''Induced potential'''
-        scf0 = self.scf
+        mol = scf0.mol
         dm1 = self.calc_den_mat_1(mo1, scf0.mo_coeff, scf0.mo_occ)
         v_ao = self.scf.get_veff(mol, dm1)
         return self._mat_ao2mo(v_ao, scf0.mo_coeff, scf0.mo_occ)
@@ -282,20 +284,20 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
     dmss = dm[n2c:,n2c:].copy()
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vx = _vhf.rdirect_mapdm('cint2e_'+key+'_sa10sp1spsp2', 'CVHFdot_rs2kl',
-                            ('CVHFrs2kl_ji_s2kl', 'CVHFrs2kl_lk_s1ij',
-                             'CVHFrs2kl_jk_s1il', 'CVHFrs2kl_li_s1kj'),
-                            dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    vx = scf._vhf.rdirect_mapdm('cint2e_'+key+'_sa10sp1spsp2', 'CVHFdot_rs2kl',
+                                ('CVHFrs2kl_ji_s2kl', 'CVHFrs2kl_lk_s1ij',
+                                 'CVHFrs2kl_jk_s1il', 'CVHFrs2kl_li_s1kj'),
+                                dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
     for i in range(3):
         vx[0,i] = lib.hermi_triu(vx[0,i], 2)
     vj[:,n2c:,n2c:] = vx[0] + vx[1]
     vk[:,n2c:,n2c:] = vx[2] + vx[3]
 
-    vx = _vhf.rdirect_bindm('cint2e_'+key+'_sa10sp1', 'CVHFdot_rs2kl',
-                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_ji_s2kl',
-                             'CVHFrs2kl_jk_s1il', 'CVHFrs2kl_li_s1kj'),
-                            (dmll,dmss,dmsl,dmls), 3,
-                            mol._atm, mol._bas, mol._env) * c1**2
+    vx = scf._vhf.rdirect_bindm('cint2e_'+key+'_sa10sp1', 'CVHFdot_rs2kl',
+                                ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_ji_s2kl',
+                                 'CVHFrs2kl_jk_s1il', 'CVHFrs2kl_li_s1kj'),
+                                (dmll,dmss,dmsl,dmls), 3,
+                                mol._atm, mol._bas, mol._env) * c1**2
     for i in range(3):
         vx[1,i] = lib.hermi_triu(vx[1,i], 2)
     vj[:,n2c:,n2c:] += vx[0]
@@ -316,26 +318,26 @@ def _call_giao_vhf1(mol, dm):
     dmss = dm[n2c:,n2c:].copy()
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vx = _vhf.rdirect_mapdm('cint2e_g1', 'CVHFdot_rs4',
-                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
-                            dmll, 3, mol._atm, mol._bas, mol._env)
+    vx = scf._vhf.rdirect_mapdm('cint2e_g1', 'CVHFdot_rs4',
+                                ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                                dmll, 3, mol._atm, mol._bas, mol._env)
     vj[:,:n2c,:n2c] = vx[0]
     vk[:,:n2c,:n2c] = vx[1]
-    vx = _vhf.rdirect_mapdm('cint2e_spgsp1spsp2', 'CVHFdot_rs4',
-                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
-                            dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    vx = scf._vhf.rdirect_mapdm('cint2e_spgsp1spsp2', 'CVHFdot_rs4',
+                                ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                                dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
     vj[:,n2c:,n2c:] = vx[0]
     vk[:,n2c:,n2c:] = vx[1]
-    vx = _vhf.rdirect_bindm('cint2e_g1spsp2', 'CVHFdot_rs4',
-                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
-                            (dmss,dmls), 3,
-                            mol._atm, mol._bas, mol._env) * c1**2
+    vx = scf._vhf.rdirect_bindm('cint2e_g1spsp2', 'CVHFdot_rs4',
+                                ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                                (dmss,dmls), 3,
+                                mol._atm, mol._bas, mol._env) * c1**2
     vj[:,:n2c,:n2c] += vx[0]
     vk[:,:n2c,n2c:] += vx[1]
-    vx = _vhf.rdirect_bindm('cint2e_spgsp1', 'CVHFdot_rs4',
-                            ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
-                            (dmll,dmsl), 3,
-                            mol._atm, mol._bas, mol._env) * c1**2
+    vx = scf._vhf.rdirect_bindm('cint2e_spgsp1', 'CVHFdot_rs4',
+                                ('CVHFrah4_lk_s2ij', 'CVHFrah4_jk_s1il'),
+                                (dmll,dmsl), 3,
+                                mol._atm, mol._bas, mol._env) * c1**2
     vj[:,n2c:,n2c:] += vx[0]
     vk[:,n2c:,:n2c] += vx[1]
     for i in range(3):
@@ -345,7 +347,6 @@ def _call_giao_vhf1(mol, dm):
 
 
 if __name__ == '__main__':
-    from pyscf.scf import dhf
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf'
@@ -357,7 +358,7 @@ if __name__ == '__main__':
                (1, 0, (1., 1.)), ]}
     mol.build()
 
-    mf = dhf.UHF(mol)
+    mf = scf.dhf.UHF(mol)
     mf.scf()
     nmr = MSC(mf)
     nmr.MB = nmr.rmb

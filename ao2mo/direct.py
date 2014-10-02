@@ -7,8 +7,8 @@ import os
 import time
 import numpy
 import h5py
-
-import pyscf.lib.logger as logger
+from pyscf import lib
+import pyscf.lib.logger
 import pyscf.lib.parameters as param
 import _ao2mo
 
@@ -21,7 +21,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = logger.Logger(mol.stdout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -97,7 +97,7 @@ def full_iofree(mol, mo_coeff, verbose=None):
 
     if verbose is None:
         verbose = mol.verbose
-    log = logger.Logger(mol.stdout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -145,7 +145,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = logger.Logger(mol.stdout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
@@ -263,7 +263,7 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
 
     if verbose is None:
         verbose = mol.verbose
-    log = logger.Logger(mol.stdout, verbose)
+    log = lib.logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \

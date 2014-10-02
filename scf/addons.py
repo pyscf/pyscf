@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 import numpy
-from pyscf import gto
-from pyscf import symm
-import pyscf.gto.moleintor
 import pyscf.lib.logger as log
+from pyscf import gto
+import pyscf.gto.moleintor
+from pyscf import symm
 import chkfile
 
 def frac_occ(scf, tol=1e-3):
@@ -60,12 +60,12 @@ def project_mo_nr2nr(mol1, mo1, mol2):
     atm, bas, env = gto.mole.conc_env(mol2._atm, mol2._bas, mol2._env, \
                                       mol1._atm, mol1._bas, mol1._env)
     bras = kets = range(nbas2)
-    s22 = pyscf.gto.moleintor.getints('cint1e_ovlp_sph', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=1)
+    s22 = gto.moleintor.getints('cint1e_ovlp_sph', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=1)
     bras = range(nbas2)
     kets = range(nbas2, nbas1+nbas2)
-    s21 = pyscf.gto.moleintor.getints('cint1e_ovlp_sph', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=0)
+    s21 = gto.moleintor.getints('cint1e_ovlp_sph', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=0)
     return numpy.linalg.solve(s22, numpy.dot(s21, mo1))
 
 def project_mo_nr2r(mol1, mo1, mol2):
@@ -74,12 +74,12 @@ def project_mo_nr2r(mol1, mo1, mol2):
     atm, bas, env = gto.mole.conc_env(mol2._atm, mol2._bas, mol2._env, \
                                       mol1._atm, mol1._bas, mol1._env)
     bras = kets = range(nbas2)
-    s22 = pyscf.gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=1)
+    s22 = gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=1)
     bras = range(nbas2)
     kets = range(nbas2, nbas1+nbas2)
-    s21 = pyscf.gto.moleintor.getints('cint1e_ovlp_sph', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=0)
+    s21 = gto.moleintor.getints('cint1e_ovlp_sph', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=0)
 
     ua, ub = symm.cg.real2spinor_whole(mol2)
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
@@ -94,16 +94,16 @@ def project_mo_r2r(mol1, mo1, mol2):
     atm, bas, env = gto.mole.conc_env(mol2._atm, mol2._bas, mol2._env, \
                                       mol1._atm, mol1._bas, mol1._env)
     bras = kets = range(nbas2)
-    s22 = pyscf.gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=1)
-    t22 = pyscf.gto.moleintor.getints('cint1e_spsp', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=1)
+    s22 = gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=1)
+    t22 = gto.moleintor.getints('cint1e_spsp', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=1)
     bras = range(nbas2)
     kets = range(nbas2, nbas1+nbas2)
-    s21 = pyscf.gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=0)
-    t21 = pyscf.gto.moleintor.getints('cint1e_spsp', atm, bas, env, \
-                                      bras, kets, dim3=1, hermi=0)
+    s21 = gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=0)
+    t21 = gto.moleintor.getints('cint1e_spsp', atm, bas, env, \
+                                bras, kets, dim3=1, hermi=0)
     n2c = s22.shape[0]
     pl = numpy.linalg.solve(s22, s21)
     ps = numpy.linalg.solve(t22, t21)

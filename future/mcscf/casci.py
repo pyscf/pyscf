@@ -9,6 +9,7 @@ import numpy
 import h5py
 from pyscf import lib
 from pyscf import ao2mo
+from pyscf.future import fci
 import pyscf.future.fci.direct_spin0
 
 
@@ -78,7 +79,7 @@ class CASCI(object):
         self.ci_lindep = 1e-14
         self.ci_max_cycle = 30
         self.ci_conv_threshold = 1e-8
-        self.fci_mod = pyscf.future.fci.direct_spin0
+        self.fci_mod = fci.direct_spin0
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None

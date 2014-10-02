@@ -4,6 +4,7 @@
 
 import os
 import optparse
+from pyscf import lib
 import pyscf.lib.logger
 
 def cmd_args():
@@ -26,10 +27,10 @@ def cmd_args():
     (opts, args_left) = parser.parse_args()
 
     if opts.quite:
-        opts.verbose = pyscf.lig.logger.QUITE
+        opts.verbose = lib.logger.QUITE
 
     if opts.verbose:
-        opts.verbose = pyscf.lig.logger.DEBUG
+        opts.verbose = lib.logger.DEBUG
 
     if opts.max_memory:
         opts.max_memory = float(opts.max_memory)

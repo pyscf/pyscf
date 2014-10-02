@@ -13,7 +13,8 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import parameters as param
 from pyscf.lib import logger as log
-from pyscf.scf import _vhf
+from pyscf import scf
+import pyscf.scf._vhf
 
 class RHF:
     '''Non-relativistic restricted Hartree-Fock gradients'''
@@ -46,7 +47,7 @@ class RHF:
     def get_coulomb_hf(self, mol, dm):
         '''NR Hartree-Fock Coulomb repulsion'''
         log.info(self,'Compute Gradients of NR Hartree-Fock Coulomb repulsion')
-        vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
+        vj, vk = scf._vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
                                        'CVHFfill_dot_nrs2kl', # ip1_sph has k>=l,
 # fill ij, ip1_sph has no-symm between i and j
                                        'CVHFunpack_nrblock2rect',
@@ -152,7 +153,6 @@ def redo_scf(mol, mf):
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

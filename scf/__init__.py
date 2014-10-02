@@ -4,7 +4,6 @@
 
 import hf
 import hf_symm
-from hf import SCF
 import dhf
 import chkfile
 import addons

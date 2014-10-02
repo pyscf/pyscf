@@ -15,7 +15,8 @@ from pyscf import symm
 from pyscf import lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.future.tools import dump_mat
+from pyscf.future import tools
+import pyscf.future.tools.dump_mat
 import diis
 import hf
 import _vhf
@@ -27,7 +28,7 @@ def dump_mo_coeff(mol, mo_coeff, e_ir_idx, argsort):
     for k in range(nmo):
         e,ir,i = e_ir_idx[argsort[k]]
         label2.append('#%-4d(%s %d)' % (k+1, mol.irrep_name[ir], i+1))
-    dump_mat.dump_rec(mol.stdout, mo_coeff, label, label2, start=1)
+    tools.dump_mat.dump_rec(mol.stdout, mo_coeff, label, label2, start=1)
 
 def dump_mo_energy(mol, mo_energy, nocc, ehomo, elumo, title=''):
     nirrep = mol.symm_orb.__len__()

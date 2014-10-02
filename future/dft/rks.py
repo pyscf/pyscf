@@ -14,7 +14,7 @@ from pyscf import lib
 from pyscf import scf
 import vxc
 import gen_grid
-from pyscf.scf import _vhf
+import pyscf.scf._vhf
 
 
 class RKS(scf.hf.RHF):
@@ -48,16 +48,16 @@ class RKS(scf.hf.RHF):
 
         if self._is_mem_enough():
             if self._eri is None:
-                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+                self._eri = scf._vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = scf.hf.dot_eri_dm(self._eri, dm, hermi=hermi)
         else:
             if self.direct_scf:
-                vj, vk = _vhf.direct(dm-dm_last, mol._atm, \
-                                     mol._bas, mol._env, self.opt, \
-                                     hermi=hermi)
+                vj, vk = scf._vhf.direct(dm-dm_last, mol._atm, \
+                                         mol._bas, mol._env, self.opt, \
+                                         hermi=hermi)
             else:
-                vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env, \
-                                     hermi=hermi)
+                vj, vk = scf._vhf.direct(dm, mol._atm, mol._bas, mol._env, \
+                                         hermi=hermi)
         log.timer(self, 'vj and vk', *t0)
         self._ecoul = lib.trace_ab(dm, vj) * .5
 
@@ -94,4 +94,4 @@ if __name__ == '__main__':
     m = RKS(mol)
     m.xc = 'LDA,VWN_RPA'
     #m.init_guess('1e')
-    print m.scf() #-2.8519879
+    print(m.scf()) #-2.8519879

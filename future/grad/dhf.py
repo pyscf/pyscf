@@ -11,7 +11,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger as log
 from pyscf import scf
-from pyscf.scf import _vhf
+import pyscf.scf._vhf
 import hf
 
 WITH_LLLL = 1
@@ -116,9 +116,9 @@ def _call_vhf1_llll(mol, dm):
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
-            _vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
-                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                               dmll, 3, mol._atm, mol._bas, mol._env)
+            scf._vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
+                                   ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                                   dmll, 3, mol._atm, mol._bas, mol._env)
     return vj, vk
 
 def _call_vhf1(mol, dm):
@@ -131,23 +131,23 @@ def _call_vhf1(mol, dm):
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
-            _vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
-                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                               dmll, 3, mol._atm, mol._bas, mol._env)
+            scf._vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
+                                   ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                                   dmll, 3, mol._atm, mol._bas, mol._env)
     vj[:,n2c:,n2c:], vk[:,n2c:,n2c:] = \
-            _vhf.rdirect_mapdm('cint2e_ipspsp1spsp2', 'CVHFdot_rs2kl',
-                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                               dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
-    vx = _vhf.rdirect_bindm('cint2e_ipspsp1', 'CVHFdot_rs2kl',
-                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                            (dmll, dmsl), 3,
-                            mol._atm, mol._bas, mol._env) * c1**2
+            scf._vhf.rdirect_mapdm('cint2e_ipspsp1spsp2', 'CVHFdot_rs2kl',
+                                   ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                                   dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    vx = scf._vhf.rdirect_bindm('cint2e_ipspsp1', 'CVHFdot_rs2kl',
+                                ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                                (dmll, dmsl), 3,
+                                mol._atm, mol._bas, mol._env) * c1**2
     vj[:,n2c:,n2c:] += vx[0]
     vk[:,n2c:,:n2c] += vx[1]
-    vx = _vhf.rdirect_bindm('cint2e_ip1spsp2', 'CVHFdot_rs2kl',
-                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                            (dmss, dmls), 3,
-                            mol._atm, mol._bas, mol._env) * c1**2
+    vx = scf._vhf.rdirect_bindm('cint2e_ip1spsp2', 'CVHFdot_rs2kl',
+                                ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                                (dmss, dmls), 3,
+                                mol._atm, mol._bas, mol._env) * c1**2
     vj[:,:n2c,:n2c] += vx[0]
     vk[:,:n2c,n2c:] += vx[1]
     return vj, vk
@@ -155,7 +155,6 @@ def _call_vhf1(mol, dm):
 
 
 if __name__ == "__main__":
-    from pyscf.scf import dhf
     from pyscf import gto
     h2o = gto.Mole()
     h2o.verbose = 0
@@ -167,7 +166,7 @@ if __name__ == "__main__":
     h2o.basis = {"H": '6-31g',
                  "O": '6-31g',}
     h2o.build()
-    method = dhf.UHF(h2o)
+    method = scf.dhf.UHF(h2o)
     print(method.scf())
     g = UHF(method)
     print(g.grad())
