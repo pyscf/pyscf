@@ -30,28 +30,28 @@ execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print numpy.get_i
 include_directories(${PROJECT_SOURCE_DIR} ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
 include(ExternalProject)
-if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+if (EXISTS "${PROJECT_BINARY_DIR}/deps/include/cint.h")
 else()
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_BINARY_DIR}/deps
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
   )
 endif()
-if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
+if (EXISTS "${PROJECT_BINARY_DIR}/deps/include/xc.h")
 else()
   ExternalProject_Add(libxc
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.0.tar.gz
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_BINARY_DIR}/deps
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
           --enable-shared LIBS=-lm
   )
 endif()
-include_directories(${PROJECT_SOURCE_DIR}/deps/include)
-link_directories(${PROJECT_SOURCE_DIR}/deps/lib)
+include_directories(${PROJECT_BINARY_DIR}/deps/include)
+link_directories(${PROJECT_BINARY_DIR}/deps/lib)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
