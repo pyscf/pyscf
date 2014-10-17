@@ -42,8 +42,8 @@ endif()
 if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
 else()
   ExternalProject_Add(libxc
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.0.tar.gz
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.0.tar.gz
+    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
