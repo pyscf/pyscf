@@ -249,7 +249,7 @@ class UHF(hf.SCF):
         log.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
 
     def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
-        e_tmp = hf.SCF.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)
+        e_tmp = hf.SCF.calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ)
         return e_tmp
 
 

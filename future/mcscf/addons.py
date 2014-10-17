@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy
+from pyscf import lib
 from pyscf import ao2mo
 
 def sort_mo(casscf, mo, caslst, base=0):
@@ -117,12 +118,38 @@ def make_fock(casscf, fcivec=None, mo=None):
     fock = h1 + vj - vk * .5
     return fock
 
+def restore_cas_natorb(casscf, fcivec=None, mo=None):
+    log = lib.logger.Logger(casscf.stdout, casscf.verbose)
+    if fcivec is None:
+        fcivec = casscf.ci
+    if mo is None:
+        mo = casscf.mo_coeff
+    ncore = casscf.ncore
+    ncas = casscf.ncas
+    nelecas = casscf.nelecas
+    nocc = ncore + ncas
+    nmo = mo.shape[1]
+    casdm1 = casscf.fci_mod.make_rdm1(fcivec, ncas, nelecas)
+    occ, ucas = numpy.linalg.eigh(-casdm1)
+    occ = -occ
+    log.info('Natural occs')
+    log.info(str(occ))
+    # restore phase
+    for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
+        if ucas[k,i] < 0:
+            ucas[:,i] *= -1
+    mo = mo.copy()
+    mo[:,ncore:nocc] = numpy.dot(mo[:,ncore:nocc], ucas)
+    fcivec = casscf.casci(mo, fcivec)[2]
+    return fcivec, mo
+
 
 if __name__ == '__main__':
-    import scf
-    import gto
+    from pyscf import scf
+    from pyscf import gto
     import mc1step
-    import tools.ring
+    from pyscf import tools
+    import pyscf.tools.ring
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -141,6 +168,11 @@ if __name__ == '__main__':
     print(ehf, emc, emc-ehf)
     print(emc - -3.272089958)
 
-    rdm1 = make_rdm1(mol, mc, fcivec, mo)
-    rdm1, rdm2 = make_rdm12(mol, mc, fcivec, mo)
+    rdm1 = make_rdm1(mc, fcivec, mo)
+    rdm1, rdm2 = make_rdm12(mc, fcivec, mo)
     print(rdm1)
+
+    mo1 = restore_cas_natorb(mc)[1]
+    numpy.set_printoptions(2)
+    print(reduce(numpy.dot, (mo1[:,:6].T, mol.intor('cint1e_ovlp_sph'),
+                             mo[:,:6])))

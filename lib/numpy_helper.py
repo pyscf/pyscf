@@ -10,7 +10,7 @@ import numpy
 _alib = os.path.join(os.path.dirname(__file__), 'libnp_helper.so')
 _np_helper = ctypes.CDLL(_alib)
 
-BLOCK_DIM = 120
+BLOCK_DIM = 192
 HERMITIAN = 1
 ANTIHERMI = 2
 
@@ -33,7 +33,7 @@ def pack_tril(mat):
     return tril
 
 # 1d -> 2d, write hermitian lower triangle to upper triangle
-def unpack_tril(tril):
+def unpack_tril(tril, filltriu=HERMITIAN):
     nd = int(numpy.sqrt(tril.size*2))
     mat = numpy.empty((nd,nd), tril.dtype)
     if numpy.iscomplexobj(tril):
@@ -42,7 +42,8 @@ def unpack_tril(tril):
         fn = _np_helper.NPdunpack_tril
     fn.restype = ctypes.c_void_p
     fn(ctypes.c_int(nd), tril.ctypes.data_as(ctypes.c_void_p),
-       mat.ctypes.data_as(ctypes.c_void_p))
+       mat.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(filltriu))
     return mat
 
 # extract a row from a tril-packed matrix
@@ -94,11 +95,11 @@ def solve_lineq_by_SVD(a, b):
 
 def transpose(a, inplace=False):
     arow, acol = a.shape
-    nrblk = (arow-1) / BLOCK_DIM + 1
-    ncblk = (acol-1) / BLOCK_DIM + 1
     if inplace:
         assert(arow == acol)
-        tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM))
+        nrblk = (arow-1) / BLOCK_DIM + 1
+        ncblk = (acol-1) / BLOCK_DIM + 1
+        tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM), a.dtype)
         for j in range(ncblk):
             c0 = j * BLOCK_DIM
             c1 = c0 + BLOCK_DIM
@@ -120,19 +121,32 @@ def transpose(a, inplace=False):
             a[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
         return a
     else:
-        anew = numpy.empty((acol,arow))
-        # asigning might be slower than accessing
-        for j in range(ncblk):
-            c0 = j * BLOCK_DIM
-            c1 = c0 + BLOCK_DIM
-            if c1 > acol:
-                c1 = acol
-            for i in range(nrblk):
-                r0 = i * BLOCK_DIM
+        anew = numpy.empty((acol,arow), a.dtype)
+# C code is ~5% faster for acol=arow=10000
+# Note: when the input a is a submatrix of another array, cannot call NPd(z)transpose
+# since NPd(z)transpose assumes data continuity
+        if a.flags.c_contiguous:
+            if numpy.iscomplexobj(a):
+                fn = _np_helper.NPztranspose
+            else:
+                fn = _np_helper.NPdtranspose
+            fn.restype = ctypes.c_void_p
+            fn(ctypes.c_int(arow), ctypes.c_int(acol),
+               a.ctypes.data_as(ctypes.c_void_p),
+               anew.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(BLOCK_DIM))
+        else:
+            r1 = c1 = 0
+            for c0 in range(0, acol-BLOCK_DIM, BLOCK_DIM):
+                c1 = c0 + BLOCK_DIM
+                for r0 in range(0, arow-BLOCK_DIM, BLOCK_DIM):
+                    r1 = r0 + BLOCK_DIM
+                    anew[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
+                anew[c0:c1,r1:arow] = a[r1:arow,c0:c1].T
+            for r0 in range(0, arow-BLOCK_DIM, BLOCK_DIM):
                 r1 = r0 + BLOCK_DIM
-                if r1 > arow:
-                    r1 = arow
-                anew[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
+                anew[c1:acol,r0:r1] = a[r0:r1,c1:acol].T
+            anew[c1:acol,r1:arow] = a[r1:arow,c1:acol].T
         return anew
 
 def transpose_sum(a, inplace=False):
@@ -158,37 +172,6 @@ def transpose_sum(a, inplace=False):
         anew[i0:i1,i0:i1] = tmp
     return anew
 
-def _np_helper_dot(dotname, a, b, c, alpha=1, beta=0):
-    assert(a.flags.c_contiguous)
-    assert(b.flags.c_contiguous)
-    fn = getattr(_np_helper, dotname)
-    fn.restype = ctypes.c_void_p
-    fn(a.ctypes.data_as(ctypes.c_void_p), (ctypes.c_int*a.ndim)(*a.shape), \
-       b.ctypes.data_as(ctypes.c_void_p), (ctypes.c_int*b.ndim)(*b.shape), \
-       ctypes.c_double(alpha), ctypes.c_double(beta), \
-       c.ctypes.data_as(ctypes.c_void_p))
-    return c
-
-def dot_aibj_cidj(a, b):
-    c = numpy.empty((a.shape[0],a.shape[2],b.shape[0],b.shape[2]))
-    return _np_helper_dot('NPdot_aibj_cidj', a, b, c)
-
-def dot_aijb_cijd(a, b):
-    c = numpy.empty((a.shape[0],a.shape[3],b.shape[0],b.shape[3]))
-    return _np_helper_dot('NPdot_aijb_cijd', a, b, c)
-
-def dot_aibj_cijd(a, b):
-    c = numpy.empty((a.shape[0],a.shape[2],b.shape[0],b.shape[3]))
-    return _np_helper_dot('NPdot_aibj_cijd', a, b, c)
-
-def dot_aibj_icjd(a, b):
-    c = numpy.empty((a.shape[0],a.shape[2],b.shape[1],b.shape[3]))
-    return _np_helper_dot('NPdot_aibj_icjd', a, b, c)
-
-def dot_aijb_icjd(a, b):
-    c = numpy.empty((a.shape[0],a.shape[3],b.shape[1],b.shape[3]))
-    return _np_helper_dot('NPdot_aijb_icjd', a, b, c)
-
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))
@@ -212,24 +195,3 @@ if __name__ == '__main__':
     x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
 
-    a = numpy.random.random((20,20,20,20))
-    b = numpy.random.random((20,20,20,20))
-    c1 = numpy.einsum('aibj,cidj->abcd', a, b)
-    c2 = dot_aibj_cidj(a,b)
-    print(abs(c1 - c2).sum())
-
-    c1 = numpy.einsum('aijb,cijd->abcd', a, b)
-    c2 = dot_aijb_cijd(a,b)
-    print(abs(c1 - c2).sum())
-
-    c1 = numpy.einsum('aibj,cijd->abcd', a, b)
-    c2 = dot_aibj_cijd(a,b)
-    print(abs(c1 - c2).sum())
-
-    c1 = numpy.einsum('aibj,icjd->abcd', a, b)
-    c2 = dot_aibj_icjd(a,b)
-    print(abs(c1 - c2).sum())
-
-    c1 = numpy.einsum('aijb,icjd->abcd', a, b)
-    c2 = dot_aijb_icjd(a,b)
-    print(abs(c1 - c2).sum())

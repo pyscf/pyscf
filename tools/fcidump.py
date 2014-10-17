@@ -3,12 +3,10 @@
 import os, sys
 import tempfile
 import ctypes
-import cPickle as pickle
 import numpy
-import gto
-import pycint
-import scf
-import ao2mo
+from pyscf import gto
+from pyscf import scf
+from pyscf import ao2mo
 
 
 def write_head(fout, nmo, nelec):

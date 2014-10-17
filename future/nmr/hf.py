@@ -10,12 +10,12 @@ Non-relativistic NMR shielding tensor
 
 import time
 import numpy
-from pyscf import gto
-from pyscf.lib import logger as log
-from pyscf.lib import parameters as param
 from pyscf import lib
+from pyscf import gto
 from pyscf import scf
 from pyscf.future import grad
+from pyscf.lib import logger as log
+from pyscf.lib import parameters as param
 import pyscf.scf._vhf
 
 CPSCF_MAX_CYCLE = 20

@@ -623,7 +623,7 @@ void CVHFnrs8_incore_drv(double *eri, double *dmj, double *vj,
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*n*n);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - i*(i+1)/2;
@@ -663,7 +663,7 @@ void CVHFnrs4_incore_drv(double *eri, double *dmj, double *vj,
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*n*n);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - i*(i+1)/2;
@@ -703,7 +703,7 @@ void CVHFnrs2ij_incore_drv(double *eri, double *dmj, double *vj,
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*n*n);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - i*(i+1)/2;
@@ -743,7 +743,7 @@ void CVHFnrs2kl_incore_drv(double *eri, double *dmj, double *vj,
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*n*n);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < n*n; ij++) {
                         i = ij / n;
                         j = ij - i * n;
@@ -782,7 +782,7 @@ void CVHFnrs1_incore_drv(double *eri, double *dmj, double *vj,
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*n*n);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < n*n; ij++) {
                         i = ij / n;
                         j = ij - i * n;

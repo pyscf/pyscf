@@ -234,7 +234,7 @@ void CVHFnr_direct_o4(double *dm, double *vj, double *vk, const int nset,
                 vk_priv = malloc(sizeof(double)*nao*nao*nset);
                 memset(vj_priv, 0, sizeof(double)*npair*nset);
                 memset(vk_priv, 0, sizeof(double)*nao*nao*nset);
-#pragma omp for nowait schedule(guided)
+#pragma omp for nowait schedule(dynamic, 2)
                 for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - (i*(i+1)/2);
@@ -327,7 +327,7 @@ static void CVHFnr_direct_sub(double *dm, double *vj, double *vk, const int nset
                 vk_priv = malloc(sizeof(double)*nao*nao*nset);
                 memset(vj_priv, 0, sizeof(double)*npair*nset);
                 memset(vk_priv, 0, sizeof(double)*nao*nao*nset);
-#pragma omp for nowait schedule(guided)
+#pragma omp for nowait schedule(dynamic, 2)
                 for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - (i*(i+1)/2);

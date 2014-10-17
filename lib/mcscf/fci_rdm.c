@@ -57,7 +57,7 @@ static double rdm2_o3iter(double *t1, double *ci0, int strk,
                         }
                 }
                 if (k < na) {
-                        pt1[k*nnorb] -= pci[k];
+                        pt1[k*nnorb] += sign * pci[k];
                         csum += fabs(pci[k]);
                 }
         }
@@ -402,7 +402,7 @@ void FCImake_rdm1b_o3(double *rdm1, double *cibra, double *ciket,
 {
         int i, a, j, k, str0, str1, sign;
         int *tab;
-        double *pci0, *pci1;
+        double *pci0;
         double *ci0 = ciket;
         double tmp;
 
@@ -418,7 +418,6 @@ void FCImake_rdm1b_o3(double *rdm1, double *cibra, double *ciket,
                                 i = tab[j*4+1];
                                 str1 = tab[j*4+2];
                                 sign = tab[j*4+3];
-                                pci1 = ci0 + str1 * na;
                                 if (a >= i) {
                                         if (sign > 0) {
                                                 rdm1[a*norb+i] += pci0[str1]*tmp;

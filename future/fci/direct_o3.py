@@ -74,6 +74,7 @@ def absorb_h1e(h1e, g2e, norb, nelec):
     return h2e
 
 def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
+    g2e = ao2mo.restore(1, g2e, norb)
     na = cistring.num_strings(norb, nelec/2)
     addr = numpy.argsort(hdiag)[:np]
 # symmetrize addra/addrb

@@ -15,10 +15,10 @@ import numpy
 import scipy.linalg
 from pyscf import gto
 from pyscf import lib
+from pyscf import tools
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.future import tools
-import pyscf.future.tools.dump_mat
+import pyscf.tools.dump_mat
 import diis
 import chkfile
 import addons
@@ -115,8 +115,7 @@ class SCF(object):
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
 
-        _fd,self.chkfile = tempfile.mkstemp(dir='/dev/shm')
-        os.close(_fd)
+        self.chkfile = tempfile.NamedTemporaryFile(dir='/dev/shm').name
         self.conv_threshold = 1e-10
         self.max_cycle = 50
         self.init_guess_method = self._init_guess_by_minao
@@ -161,7 +160,8 @@ class SCF(object):
         if self.direct_scf:
             log.info(self, 'direct_scf_threshold = %g', \
                      self.direct_scf_threshold)
-        log.info(self, 'chkfile to save SCF result = %s', self.chkfile)
+        if self.chkfile:
+            log.info(self, 'chkfile to save SCF result = %s', self.chkfile)
 
 
     @classmethod
@@ -314,17 +314,16 @@ class SCF(object):
     def calc_den_mat(self, mo_coeff=None, mo_occ=None):
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    @lib.omnimethod
     def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
         sum_mo_energy = numpy.dot(mo_energy, mo_occ)
         # trace (D*V_HF)
         coul_dup = lib.trace_ab(dm, vhf)
-        #log.debug(self, 'E_coul = %.15g', (coul_dup.real * .5))
+        log.debug1(self, 'E_coul = %.15g', (coul_dup.real * .5))
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
 
-    def scf_cycle(self, mol, *args, **keys):
-        return scf_cycle(mol, self, *args, **keys)
+    def scf_cycle(self, mol, *args, **kwargs):
+        return scf_cycle(mol, self, *args, **kwargs)
 
     def check_dm_converge(self, dm, dm_last, conv_threshold):
         delta_dm = abs(dm-dm_last).sum()
@@ -335,8 +334,8 @@ class SCF(object):
 
     def scf(self):
         cput0 = (time.clock(), time.time())
-        self.build()
         self.dump_flags()
+        self.build()
 
         if self.mol.nelectron == 1:
             self.scf_conv = True
@@ -349,7 +348,8 @@ class SCF(object):
             # call self.scf_cycle because dhf redefine scf_cycle
             self.scf_conv, self.hf_energy, \
                     self.mo_energy, self.mo_occ, self.mo_coeff \
-                    = self.scf_cycle(self.mol, self.conv_threshold)
+                    = self.scf_cycle(self.mol, self.conv_threshold,
+                                     dump_chk=self.chkfile)
 
         log.timer(self, 'SCF', *cput0)
         etot = self.dump_final_energy(self.hf_energy, self.scf_conv)

@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry
 
-version 0.5
+version 0.6
 
-2014-10-01
+2014-10-17
 
 Pyscf is an open-source suite of quantum chemistry program.  The program
 aims to provide a simple, light-weight and efficient platform for quantum
@@ -24,14 +24,10 @@ Installation
 * Prerequisites
     - Cmake 2.8 or higher
     - Python 2.6 or higher
-    - Numpy 1.6 or higher
-    - Scipy 0.11 or higher
+    - Numpy 1.6.2 or higher (1.6.1 has bug in einsum)
+    - Scipy 0.10 or higher
     - HDF5 1.8.4 or higher
     - h5py 1.3.0 or higher
-    - Libcint 2.0.4 or higher
-        https://github.com/sunqm/libcint
-    - Libxc 2.0.0 or higher (optional for DFT)
-        http://www.tddft.org/programs/octopus/wiki/index.php/Libxc
 
 * Compile core module
 
@@ -55,13 +51,6 @@ Installation
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
-
-* If cmake complains "Could NOT find libcint" or "Could NOT find libxc",
-  set CMAKE_PREFIX_PATH to the directories where libcint and libxc are
-  installed.  E.g. if libcint is installed in /opt/libcint, libxc is
-  installed in /opt/libxc,
-
-    CMAKE_PREFIX_PATH=/opt/libcint:/opt/libxc:$CMAKE_PREFIX_PATH cmake ..
 
 
 Known problems
@@ -94,3 +83,7 @@ Version 0.5 (2014-10-01):
   * Remove Cython dependence
   * Upgrade dft to use libxc-2.0.0
   * Add DFT, FCI, CASSCF, HF-gradients (NR and R), HF-NMR (NR and R)
+
+Version 0.6 (2014-10-17):
+  * Fix bug in dhf
+  * add future/lo for localized orbital

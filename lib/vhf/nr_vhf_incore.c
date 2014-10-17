@@ -34,7 +34,7 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk)
         int l1, l2;
         for (i = 0; i < n; i++) {
                 for (j = 0; j < i; j++, eri += nao_pair) {
-                        NPdunpack_tril(n, eri, tmp);
+                        NPdunpack_tril(n, eri, tmp, HERMITIAN);
                         l1 = j + 1;
                         l2 = i + 1;
                         dgemv_(&TRANS_T, &ln, &l1, &D1, tmp, &ln, dm+i*n, &INC1,
@@ -42,7 +42,7 @@ void CVHFnr_k(int n, double *eri, double *dm, double *vk)
                         dgemv_(&TRANS_T, &ln, &l2, &D1, tmp, &ln, dm+j*n, &INC1,
                                &D1, vk+i*n, &INC1);
                 }
-                NPdunpack_tril(n, eri, tmp);
+                NPdunpack_tril(n, eri, tmp, HERMITIAN);
                 l1 = i + 1;
                 dgemv_(&TRANS_T, &ln, &l1, &D1, tmp, &ln, dm+i*n, &INC1,
                        &D1, vk+i*n, &INC1);
@@ -78,7 +78,7 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
         for (i = 0; i < n; i++) {
                 for (j = 0; j < i; j++, ij++) {
                         NPdunpack_row(nao_pair, ij, eri, row);
-                        NPdunpack_tril(n, row, tmp);
+                        NPdunpack_tril(n, row, tmp, HERMITIAN);
                         l1 = j + 1;
                         l2 = i + 1;
                         vj[i*n+j] = ddot_(&nao_pair, row, &INC1, tri_dm, &INC1);
@@ -89,7 +89,7 @@ void CVHFnr_incore_o3(int n, double *eri, double *dm, double *vj, double *vk)
                                &D1, vk+i*n, &INC1);
                 }
                 NPdunpack_row(nao_pair, ij, eri, row);
-                NPdunpack_tril(n, row, tmp);
+                NPdunpack_tril(n, row, tmp, HERMITIAN);
                 vj[i*n+i] = ddot_(&nao_pair, row, &INC1, tri_dm, &INC1);
 
                 l1 = i + 1;
@@ -482,7 +482,7 @@ void CVHFnr_incore_o4(int n, double *eri, double *dm, double *vj, double *vk)
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*npair);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - i*(i+1)/2;
@@ -541,7 +541,7 @@ static void CVHFnr_incore_sub(int n, double *eri, double *dm,
                 vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*npair);
                 memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(guided, 4)
+#pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - i*(i+1)/2;

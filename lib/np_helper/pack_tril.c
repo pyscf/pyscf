@@ -95,7 +95,7 @@ void NPzhermi_triu(int n, double complex *mat, int hermi)
 }
 
 
-void NPdunpack_tril(int n, double *tril, double *mat)
+void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 {
         long i, j, ij;
 
@@ -104,7 +104,9 @@ void NPdunpack_tril(int n, double *tril, double *mat)
                         mat[i*n+j] = tril[ij];
                 }
         }
-        NPdsymm_triu(n, mat, HERMITIAN);
+        if (hermi) {
+                NPdsymm_triu(n, mat, hermi);
+        }
 }
 
 // unpack one row from the compact matrix-tril coefficients
@@ -119,7 +121,8 @@ void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
         }
 }
 
-void NPzunpack_tril(int n, double complex *tril, double complex *mat)
+void NPzunpack_tril(int n, double complex *tril, double complex *mat,
+                    int hermi)
 {
         long i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
@@ -127,7 +130,9 @@ void NPzunpack_tril(int n, double complex *tril, double complex *mat)
                         mat[i*n+j] = tril[ij];
                 }
         }
-        NPzhermi_triu(n, mat, HERMITIAN);
+        if (hermi) {
+                NPzhermi_triu(n, mat, hermi);
+        }
 }
 
 void NPdpack_tril(int n, double *tril, double *mat)

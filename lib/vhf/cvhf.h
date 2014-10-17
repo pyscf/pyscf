@@ -8,7 +8,7 @@
 #define DM_HERMITIAN    1
 #define DM_ANTI         2
 
-#if !defined HAVE_DEFINED_CVHFOPT_H
+#if !defined(HAVE_DEFINED_CVHFOPT_H)
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct CVHFOpt_struct {
     int nbas;

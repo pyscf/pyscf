@@ -9,12 +9,12 @@ NMR shielding of Dirac Hartree-Fock
 
 import time
 import numpy
-from pyscf import gto
 from pyscf import lib
+from pyscf import gto
+from pyscf import scf
 from pyscf.lib import logger as log
 from pyscf.lib import parameters as param
 import hf
-from pyscf import scf
 import pyscf.scf._vhf
 
 class MSC(hf.MSC):

@@ -54,7 +54,9 @@ def load(basis_name, symb):
         'def2tzvpp'  : 'def2-tzvpp.dat' ,
         'def2tzvp'   : 'def2-tzvp.dat'  ,
     }
-    basmod = alias[basis_name]
+    name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    basmod = alias[name]
+    symb = ''.join(i for i in symb if not i.isdigit())
     if 'dat' in basmod:
         b = parse_nwchem.parse(os.path.join(os.path.dirname(__file__), basmod), symb)
     else:

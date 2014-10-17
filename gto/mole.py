@@ -73,8 +73,7 @@ def format_basis(basis_tab):
         symb = _symbol(atom)
 
         if isinstance(basis_tab[atom], str):
-            name = basis_tab[atom].lower().replace(' ', '').replace('-', '').replace('_', '')
-            fmt_basis[symb] = basis.load(name, _rm_digit(symb))
+            fmt_basis[symb] = basis.load(basis_tab[atom], _rm_digit(symb))
         else:
             fmt_basis[symb] = basis_tab[atom]
     return fmt_basis
@@ -119,7 +118,6 @@ class Mole(object):
         self.max_memory = param.MEMORY_MAX
 
         self.light_speed = param.LIGHTSPEED
-        self.nelectron = 0
         self.charge = 0
         self.spin = 0
         self.symmetry = False
@@ -146,11 +144,20 @@ class Mole(object):
         self.nbas = 0
         self._env = [0] * PTR_ENV_START
 
-        self._built = False
         self.stdout = sys.stdout
         self.pgname = 'C1'
+        self.nelectron = 0
         self.symm_orb = None
         self.irrep_name = None
+        self._built = False
+        self._keys = set(self.__dict__.keys() + ['_keys'])
+
+    def check_sanity(self, obj):
+        if self.verbose > log.QUITE:
+            keysub = set(obj.__dict__.keys()) - obj._keys
+            if keysub:
+                print('%s has no attributes %s' %
+                      (str(obj.__class__), ' '.join(keysub)))
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -253,6 +260,8 @@ class Mole(object):
         if parse_arg and self.output is not None \
            and self.stdout.name != self.output:
             self.stdout = open(self.output, 'w')
+
+        self.check_sanity(self)
 
         self._built = True
 
@@ -500,10 +509,10 @@ class Mole(object):
                 log.info(self, 'num. orbitals of %s = %d', \
                          self.irrep_name[ir], self.symm_orb[ir].shape[1])
         log.info(self, 'number of shells = %d', self.nbas)
-        log.info(self, 'number of NR pGTOs = %d', self.pgto_nr())
+        log.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
         log.info(self, 'number of NR cGTOs = %d', self.nao_nr())
         if self.verbose >= log.DEBUG1:
-            for i in range(self.nbas):
+            for i in range(len(self._bas)):
                 exps = self.exps_of_bas(i)
                 log.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
@@ -557,7 +566,7 @@ class Mole(object):
         return self.basis[symb].__len__()
 
     def basids_of_atm(self, atm_id):
-        return [ib for ib in range(self.nbas) \
+        return [ib for ib in range(len(self._bas)) \
                 if self.atom_of_bas(ib) == atm_id]
 
     def atom_of_bas(self, bas_id):
@@ -602,22 +611,22 @@ class Mole(object):
         return (l + 1) * (l + 2) / 2
 
 
-    def pgto_nr(self):
-        return self.num_NR_pgto()
     def num_NR_pgto(self):
+        return self.npgto_nr()
+    def npgto_nr(self):
         ''' total number of primitive GTOs'''
         return reduce(lambda n, b: n + (self.angular_of_bas(b) * 2 + 1) \
                                     * self.nprim_of_bas(b),
-                      range(self.nbas), 0)
+                      range(len(self._bas)), 0)
 
     def num_NR_function(self):
         return self.num_NR_cgto()
-    def num_NR_cgto(self):
+    def nao_nr(self):
         ''' total number of contracted GTOs'''
         return sum([(self.angular_of_bas(b) * 2 + 1) * self.nctr_of_bas(b) \
-                    for b in range(self.nbas)])
-    def nao_nr(self):
-        return self.num_NR_cgto()
+                    for b in range(len(self._bas))])
+    def num_NR_cgto(self):
+        return self.nao_nr()
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
     def nao_nr_range(self, bas_id0, bas_id1):
         nao_id0 = sum([(self.angular_of_bas(b) * 2 + 1) * self.nctr_of_bas(b) \
@@ -634,13 +643,13 @@ class Mole(object):
         return self.num_4C_cgto()
 
     def num_2C_function(self):
-        return self.num_2C_cgto()
-    def num_2C_cgto(self):
+        return self.nao_2c()
+    def nao_2c(self):
         ''' total number of spinors'''
         return sum([self.len_spinor_of_bas(b) * self.nctr_of_bas(b) \
-                    for b in range(self.nbas)])
-    def nao_2c(self):
-        return self.num_2C_cgto()
+                    for b in range(len(self._bas))])
+    def num_2C_cgto(self):
+        return self.nao_2c()
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
     def nao_2c_range(self, bas_id0, bas_id1):
         nao_id0 = sum([self.len_spinor_of_bas(b) * self.nctr_of_bas(b) \
@@ -652,7 +661,7 @@ class Mole(object):
     def ao_loc_nr(self):
         off = 0
         ao_loc = []
-        for i in range(self.nbas):
+        for i in range(len(self._bas)):
             ao_loc.append(off)
             off += (self.angular_of_bas(i) * 2 + 1) * self.nctr_of_bas(i)
         ao_loc.append(off)
@@ -661,7 +670,7 @@ class Mole(object):
     def ao_loc_2c(self):
         off = 0
         ao_loc = []
-        for i in range(self.nbas):
+        for i in range(len(self._bas)):
             ao_loc.append(off)
             off += self.len_spinor_of_bas(i) * self.nctr_of_bas(i)
         ao_loc.append(off)
@@ -720,9 +729,9 @@ class Mole(object):
         return nuclear_repulsion()
     def nuclear_repulsion(self):
         e = 0
-        chargs = [self.charge_of_atm(i) for i in range(self.natm)]
-        coords = [self.coord_of_atm(i) for i in range(self.natm)]
-        for j in range(self.natm):
+        chargs = [self.charge_of_atm(i) for i in range(len(self._atm))]
+        coords = [self.coord_of_atm(i) for i in range(len(self._atm))]
+        for j in range(len(self._atm)):
             q2 = chargs[j]
             r2 = coords[j]
             for i in range(j):
@@ -734,7 +743,7 @@ class Mole(object):
 
     def inter_distance(self):
         rr = numpy.zeros((self.natm, self.natm))
-        for j in range(self.natm):
+        for j in range(len(self._atm)):
             r2 = self.coord_of_atm(j)
             for i in range(j):
                 r1 = self.coord_of_atm(i)
@@ -745,7 +754,7 @@ class Mole(object):
         count = numpy.zeros((self.natm, 9), dtype=int)
         label = []
         i = 0
-        for ib in range(self.nbas):
+        for ib in range(len(self._bas)):
             ia = self.atom_of_bas(ib)
             l = self.angular_of_bas(ib)
             strl = param.ANGULAR[l]
@@ -760,7 +769,7 @@ class Mole(object):
         return label
 
     def search_bas_id(self, atm_id, l):
-        for ib in range(self.nbas):
+        for ib in range(len(self._bas)):
             ia = self.atom_of_bas(ib)
             l1 = self.angular_of_bas(ib)
             if ia == atm_id and l1 == l:
@@ -768,7 +777,7 @@ class Mole(object):
 
     def search_spheric_id(self, atm_id, l, m, atmshell):
         ibf = 0
-        for ib in range(self.nbas):
+        for ib in range(len(self._bas)):
             ia = self.atom_of_bas(ib)
             l1 = self.angular_of_bas(ib)
             nc = self.nctr_of_bas(ib)
@@ -778,7 +787,7 @@ class Mole(object):
 
 #TODO:    def search_spinor_id(self, atm_id, l, m, kappa, atmshell):
 #TODO:        ibf = 0
-#TODO:        for ib in range(self.nbas):
+#TODO:        for ib in range(len(self._bas)):
 #TODO:            ia = self.atom_of_bas(ib)
 #TODO:            l1 = self.angular_of_bas(ib)
 #TODO:            nc = self.nctr_of_bas(ib)
@@ -793,7 +802,7 @@ class Mole(object):
 #TODO:        count = numpy.zeros((self.natm, 9), dtype=int)
 #TODO:        label = []
 #TODO:        i = 0
-#TODO:        for ib in range(self.nbas):
+#TODO:        for ib in range(len(self._bas)):
 #TODO:            ia = self.atom_of_bas(ib)
 #TODO:            l = self.angular_of_bas(ib)
 #TODO:            degen = mol.len_spinor_of_bas(ib)

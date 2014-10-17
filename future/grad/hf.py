@@ -9,11 +9,11 @@ Non-relativistic
 
 import time
 import numpy
-from pyscf import gto
 from pyscf import lib
-from pyscf.lib import parameters as param
-from pyscf.lib import logger as log
+from pyscf import gto
 from pyscf import scf
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
 import pyscf.scf._vhf
 
 class RHF:

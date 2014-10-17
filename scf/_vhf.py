@@ -64,7 +64,7 @@ class VHFOpt(object):
             n_dm = 1
         else:
             n_dm = len(dm)
-            dm = numpy.array(dm, copy=False)
+            dm = numpy.array(dm)
         fsetdm = getattr(libcvhf, self._dmcondname)
         fsetdm(self._this,
                dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
@@ -207,19 +207,20 @@ def direct_mapdm(cintor, cfdot, cunpack, namefjk,
     else:
         njk = len(namefjk)
 
-    intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
-    cintopt = ctypes.c_void_p()
-    foptinit = getattr(libcvhf, cintor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-             c_env.ctypes.data_as(ctypes.c_void_p))
-
     if vhfopt is None:
+        intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
+        cintopt = ctypes.c_void_p()
+        foptinit = getattr(libcvhf, cintor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
+        cintopt = vhfopt._cintopt
+        intor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     fdot = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cfdot))
@@ -242,7 +243,8 @@ def direct_mapdm(cintor, cfdot, cunpack, namefjk,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
+    if vhfopt is None:
+        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if n_dm * ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
@@ -272,19 +274,20 @@ def direct_bindm(cintor, cfdot, cunpack, namefjk,
         njk = len(namefjk)
     assert(njk == n_dm)
 
-    intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
-    cintopt = ctypes.c_void_p()
-    foptinit = getattr(libcvhf, cintor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-             c_env.ctypes.data_as(ctypes.c_void_p))
-
     if vhfopt is None:
+        intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
+        cintopt = ctypes.c_void_p()
+        foptinit = getattr(libcvhf, cintor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
+        cintopt = vhfopt._cintopt
+        intor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     fdot = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cfdot))
@@ -306,7 +309,8 @@ def direct_bindm(cintor, cfdot, cunpack, namefjk,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
+    if vhfopt is None:
+        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
@@ -373,19 +377,20 @@ def rdirect_mapdm(cintor, cfdot, namefjk,
     else:
         njk = len(namefjk)
 
-    intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
-    cintopt = ctypes.c_void_p()
-    foptinit = getattr(libcvhf, cintor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-             c_env.ctypes.data_as(ctypes.c_void_p))
-
     if vhfopt is None:
+        intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
+        cintopt = ctypes.c_void_p()
+        foptinit = getattr(libcvhf, cintor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
+        cintopt = vhfopt._cintopt
+        intor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     fdot = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cfdot))
@@ -407,7 +412,8 @@ def rdirect_mapdm(cintor, cfdot, namefjk,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
+    if vhfopt is None:
+        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if n_dm * ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
@@ -437,19 +443,20 @@ def rdirect_bindm(cintor, cfdot, namefjk,
         njk = len(namefjk)
     assert(njk == n_dm)
 
-    intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
-    cintopt = ctypes.c_void_p()
-    foptinit = getattr(libcvhf, cintor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-             c_env.ctypes.data_as(ctypes.c_void_p))
-
     if vhfopt is None:
+        intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cintor))
+        cintopt = ctypes.c_void_p()
+        foptinit = getattr(libcvhf, cintor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
+        cintopt = vhfopt._cintopt
+        intor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     fdot = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, cfdot))
@@ -470,7 +477,8 @@ def rdirect_bindm(cintor, cfdot, namefjk,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
+    if vhfopt is None:
+        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)

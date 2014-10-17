@@ -11,12 +11,12 @@ import os
 import time
 import numpy
 import scipy.linalg
-from pyscf import symm
 from pyscf import lib
+from pyscf import symm
+from pyscf import tools
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-from pyscf.future import tools
-import pyscf.future.tools.dump_mat
+import pyscf.tools.dump_mat
 import diis
 import hf
 import _vhf

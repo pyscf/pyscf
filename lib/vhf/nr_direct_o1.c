@@ -506,7 +506,7 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), void (*funpack)(),
         {
                 v_priv = malloc(sizeof(double)*nao*nao*n_dm*ncomp);
                 memset(v_priv, 0, sizeof(double)*nao*nao*n_dm*ncomp);
-#pragma omp for nowait schedule(guided)
+#pragma omp for nowait schedule(dynamic, 2)
                 for (kl = 0; kl < nbas*nbas; kl++) {
                         k = kl / nbas;
                         l = kl - k * nbas;

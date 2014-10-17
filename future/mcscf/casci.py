@@ -13,16 +13,14 @@ from pyscf.future import fci
 import pyscf.future.fci.direct_spin0
 
 
-def extract_orbs(mol, mo_coeff, ncas, nelecas, ncore=None):
-    if ncore is None:
-        ncore = (mol.nelectron-nelecas)/2
+def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     nocc = ncore + ncas
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
 
-def kernel(mol, casci, mo_coeff, ci0=None, verbose=None):
+def kernel(casci, mo_coeff, ci0=None, verbose=None):
     if verbose is None:
         verbose = casci.verbose
     log = lib.logger.Logger(casci.stdout, verbose)
@@ -32,16 +30,16 @@ def kernel(mol, casci, mo_coeff, ci0=None, verbose=None):
     ncas = casci.ncas
     nelecas = casci.nelecas
     ncore = casci.ncore
-    mo_core, mo_cas, mo_vir = extract_orbs(mol, mo_coeff, ncas, nelecas, ncore)
+    mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    hcore = casci.get_hcore(mol)
+    hcore = casci.get_hcore()
     if mo_core.size == 0:
         corevhf = 0
         energy_core = 0
     else:
         core_dm = numpy.dot(mo_core, mo_core.T) * 2
-        corevhf = casci.get_veff(mol, core_dm)
+        corevhf = casci.get_veff(core_dm)
         energy_core = lib.trace_ab(core_dm, hcore) \
                 + lib.trace_ab(core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
@@ -102,8 +100,8 @@ class CASCI(object):
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
 
-    def get_veff(self, mol, dm):
-        return self._scf.get_veff(mol, dm)
+    def get_veff(self, dm):
+        return self._scf.get_veff(self.mol, dm)
 
     def ao2mo(self, mo):
         nao, nmo = mo.shape
@@ -126,7 +124,7 @@ class CASCI(object):
             ci0 = self.ci
         self.dump_flags()
         self.e_tot, e_cas, self.ci = \
-                kernel(self.mol, self, mo, ci0=ci0, verbose=self.verbose)
+                kernel(self, mo, ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
 

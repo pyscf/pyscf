@@ -6,8 +6,8 @@
 # MOLDEN format:
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
-import pyscf.lib.parameters as param
 import numpy
+import pyscf.lib.parameters as param
 
 
 def header(mol, fout):

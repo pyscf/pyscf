@@ -67,51 +67,6 @@ void CVHFtimerev_map(int *tao, int *bas, int nbas)
  * time reverse mat_{i,j} to block_{Tj,Ti}
  *      mat[istart:iend,jstart:jend] -> block[:dj,:di]
  */
-static void timerev_block_o0(double complex *block, double complex *mat, int *tao,
-                             int istart, int iend, int jstart, int jend, int nao)
-{
-        const int di = iend - istart;
-        const int dj = jend - jstart;
-        int i, j, i0, j0, i1, j1;
-        double complex *pblock, *pmat;
-
-BeginTimeRevLoop(i, j);
-        pblock = block + (j0-jstart)*di + (i0-istart);
-        pmat = mat + (i1-1)*nao + (j1-1);
-        for (i = 0; i < i1-i0; i++) {
-        for (j = 0; j < j1-j0; j++) {
-                pblock[i*dj+j] = pmat[-i*nao-j];
-        } }
-EndTimeRevLoop(i, j);
-
-        if (tao[jstart] < 0) {
-                for (i = 0; i < di; i++) {
-                        for (j = 1; j < dj; j+=2) {
-                                block[i*dj+j] = -block[i*dj+j];
-                        }
-                }
-        } else {
-                for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj; j+=2) {
-                                block[i*dj+j] = -block[i*dj+j];
-                        }
-                }
-        }
-        if (tao[istart] < 0) {
-                for (i = 1; i < di; i+=2) {
-                        for (j = 0; j < dj; j++) {
-                                block[i*dj+j] = -block[i*dj+j];
-                        }
-                }
-        } else {
-                for (i = 0; i < di; i+=2) {
-                        for (j = 0; j < dj; j++) {
-                                block[i*dj+j] = -block[i*dj+j];
-                        }
-                }
-        }
-}
-
 static void timerev_block_o1(double complex *block, double complex *mat, int *tao,
                              int istart, int iend, int jstart, int jend, int nao)
 {
@@ -158,6 +113,46 @@ void CVHFtimerev_block(double complex *block, double complex *mat, int *tao,
         timerev_block_o1(block, mat, tao, istart, iend, jstart, jend, nao);
 }
 
+void CVHFtimerev_blockT(double complex *block, double complex *mat, int *tao,
+                        int istart, int iend, int jstart, int jend, int nao)
+{
+        const int di = iend - istart;
+        //const int dj = jend - jstart;
+        int i, j, i0, j0, i1, j1;
+        double complex *pblock, *pmat;
+        double complex *pblock1, *pmat1;
+
+        if ((tao[jstart]<0) == (tao[istart]<0)) {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart) + (j0-jstart)*di;
+                pblock1 = pblock + di;
+                pmat = mat + (i1-1)*nao + (j1-1);
+                pmat1 = pmat - nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pblock [j*di+i  ] = pmat [-i*nao-j  ];
+                        pblock1[j*di+i  ] =-pmat [-i*nao-j-1];
+                        pblock [j*di+i+1] =-pmat1[-i*nao-j  ];
+                        pblock1[j*di+i+1] = pmat1[-i*nao-j-1];
+                } }
+EndTimeRevLoop(i, j);
+        } else {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart) + (j0-jstart)*di;
+                pblock1 = pblock + di;
+                pmat = mat + (i1-1)*nao + (j1-1);
+                pmat1 = pmat - nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pblock [j*di+i  ] =-pmat [-i*nao-j  ];
+                        pblock1[j*di+i  ] = pmat [-i*nao-j-1];
+                        pblock [j*di+i+1] = pmat1[-i*nao-j  ];
+                        pblock1[j*di+i+1] =-pmat1[-i*nao-j-1];
+                } }
+EndTimeRevLoop(i, j);
+        }
+}
+
 
 void CVHFtimerev_i(double complex *block, double complex *mat, int *tao,
                    int istart, int iend, int jstart, int jend, int nao)
@@ -194,6 +189,38 @@ BeginTimeRevLoop(i, j);
 EndTimeRevLoop(i, j);
         }
 }
+void CVHFtimerev_iT(double complex *block, double complex *mat, int *tao,
+                    int istart, int iend, int jstart, int jend, int nao)
+{
+        const int di = iend - istart;
+        //const int dj = jend - jstart;
+        int i, j, i0, j0, i1, j1;
+        double complex *pblock, *pmat, *pmat1;
+
+        if (tao[istart] < 0) {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart)+(j0-jstart)*di;
+                pmat = mat + (i1-1)*nao+j0;
+                pmat1 = pmat - nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j++) {
+                        pblock[j*di+i  ] = pmat [-i*nao+j];
+                        pblock[j*di+i+1] =-pmat1[-i*nao+j];
+                } }
+EndTimeRevLoop(i, j);
+        } else {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart)+(j0-jstart)*di;
+                pmat = mat + (i1-1)*nao+j0;
+                pmat1 = pmat - nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j++) {
+                        pblock[j*di+i  ] =-pmat [-i*nao+j];
+                        pblock[j*di+i+1] = pmat1[-i*nao+j];
+                } }
+EndTimeRevLoop(i, j);
+        }
+}
 void CVHFtimerev_j(double complex *block, double complex *mat, int *tao,
                    int istart, int iend, int jstart, int jend, int nao)
 {
@@ -224,6 +251,39 @@ BeginTimeRevLoop(i, j);
 EndTimeRevLoop(i, j);
         }
 }
+void CVHFtimerev_jT(double complex *block, double complex *mat, int *tao,
+                    int istart, int iend, int jstart, int jend, int nao)
+{
+        const int di = iend - istart;
+        //const int dj = jend - jstart;
+        int i, j, i0, j0, i1, j1;
+        double complex *pblock, *pblock1, *pmat;
+
+        if (tao[jstart] < 0) {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart)+(j0-jstart)*di;
+                pblock1 = pblock + di;
+                pmat = mat + i0*nao+(j1-1);
+                for (i = 0; i < i1-i0; i++) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pblock [j*di+i] = pmat[i*nao-j  ];
+                        pblock1[j*di+i] =-pmat[i*nao-j-1];
+                } }
+EndTimeRevLoop(i, j);
+        } else {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart)+(j0-jstart)*di;
+                pblock1 = pblock + di;
+                pmat = mat + i0*nao+(j1-1);
+                for (i = 0; i < i1-i0; i++) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pblock [j*di+i] =-pmat[i*nao-j  ];
+                        pblock1[j*di+i] = pmat[i*nao-j-1];
+                } }
+EndTimeRevLoop(i, j);
+        }
+}
+
 /*
  * mat_{i,j} += mat_{Tj,Ti}
  */
@@ -356,6 +416,45 @@ BeginTimeRevLoop(i, j);
 EndTimeRevLoop(i, j);
         }
 }
+void CVHFtimerev_adbak_blockT(double complex *block, double complex *mat, int *tao,
+                              int istart, int iend, int jstart, int jend, int nao)
+{
+        const int di = iend - istart;
+        //const int dj = jend - jstart;
+        int i, j, i0, j0, i1, j1;
+        double complex *pblock, *pmat;
+        double complex *pblock1, *pmat1;
+
+        if ((tao[jstart]<0) == (tao[istart]<0)) {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i1-istart-1) + (j1-jstart-1)*di;
+                pblock1 = pblock - di;
+                pmat = mat + i0*nao + j0;
+                pmat1 = pmat + nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pmat [i*nao+j  ] += pblock [-j*di-i  ];
+                        pmat [i*nao+j+1] -= pblock1[-j*di-i  ];
+                        pmat1[i*nao+j  ] -= pblock [-j*di-i-1];
+                        pmat1[i*nao+j+1] += pblock1[-j*di-i-1];
+                } }
+EndTimeRevLoop(i, j);
+        } else {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i1-istart-1) + (j1-jstart-1)*di;
+                pblock1 = pblock - di;
+                pmat = mat + i0*nao + j0;
+                pmat1 = pmat + nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pmat [i*nao+j  ] -= pblock [-j*di-i  ];
+                        pmat [i*nao+j+1] += pblock1[-j*di-i  ];
+                        pmat1[i*nao+j  ] += pblock [-j*di-i-1];
+                        pmat1[i*nao+j+1] -= pblock1[-j*di-i-1];
+                } }
+EndTimeRevLoop(i, j);
+        }
+}
 
 
 void CVHFtimerev_adbak_i(double complex *block, double complex *mat, int *tao,
@@ -393,6 +492,38 @@ BeginTimeRevLoop(i, j);
 EndTimeRevLoop(i, j);
         }
 }
+void CVHFtimerev_adbak_iT(double complex *block, double complex *mat, int *tao,
+                          int istart, int iend, int jstart, int jend, int nao)
+{
+        const int di = iend - istart;
+        //const int dj = jend - jstart;
+        int i, j, i0, j0, i1, j1;
+        double complex *pblock, *pmat, *pmat1;
+
+        if (tao[istart] < 0) {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i1-istart-1)+(j0-jstart)*di;
+                pmat = mat + i0*nao + j0;
+                pmat1 = pmat + nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j++) {
+                        pmat [i*nao+j] -= pblock[j*di-i  ];
+                        pmat1[i*nao+j] += pblock[j*di-i-1];
+                } }
+EndTimeRevLoop(i, j);
+        } else {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i1-istart-1)+(j0-jstart)*di;
+                pmat = mat + i0*nao + j0;
+                pmat1 = pmat + nao;
+                for (i = 0; i < i1-i0; i+=2) {
+                for (j = 0; j < j1-j0; j++) {
+                        pmat [i*nao+j] += pblock[j*di-i  ];
+                        pmat1[i*nao+j] -= pblock[j*di-i-1];
+                } }
+EndTimeRevLoop(i, j);
+        }
+}
 void CVHFtimerev_adbak_j(double complex *block, double complex *mat, int *tao,
                          int istart, int iend, int jstart, int jend, int nao)
 {
@@ -419,6 +550,38 @@ BeginTimeRevLoop(i, j);
                 for (j = 0; j < j1-j0; j+=2) {
                         pmat[i*nao+j  ] += pblock[i*dj-j  ];
                         pmat[i*nao+j+1] -= pblock[i*dj-j-1];
+                } }
+EndTimeRevLoop(i, j);
+        }
+}
+void CVHFtimerev_adbak_jT(double complex *block, double complex *mat, int *tao,
+                          int istart, int iend, int jstart, int jend, int nao)
+{
+        const int di = iend - istart;
+        //const int dj = jend - jstart;
+        int i, j, i0, j0, i1, j1;
+        double complex *pblock, *pblock1, *pmat;
+
+        if (tao[jstart] < 0) {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart)+(j1-jstart-1)*di;
+                pblock1 = pblock - di;
+                pmat = mat + i0*nao + j0;
+                for (i = 0; i < i1-i0; i++) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pmat[i*nao+j  ] -= pblock [i-j*di];
+                        pmat[i*nao+j+1] += pblock1[i-j*di];
+                } }
+EndTimeRevLoop(i, j);
+        } else {
+BeginTimeRevLoop(i, j);
+                pblock = block + (i0-istart)+(j1-jstart-1)*di;
+                pblock1 = pblock - di;
+                pmat = mat + i0*nao + j0;
+                for (i = 0; i < i1-i0; i++) {
+                for (j = 0; j < j1-j0; j+=2) {
+                        pmat[i*nao+j  ] += pblock [i-j*di];
+                        pmat[i*nao+j+1] -= pblock1[i-j*di];
                 } }
 EndTimeRevLoop(i, j);
         }

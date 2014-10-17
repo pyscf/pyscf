@@ -14,6 +14,31 @@
 #include "time_rev.h"
 
 
+static void transpose01324(double complex *a, double complex *at,
+                           int di, int dj, int dk, int dl, int ncomp)
+{
+        int i, j, k, l, m, ic;
+        int dij = di * dj;
+        int dijk = dij * dk;
+        double complex *pa;
+
+        m = 0;
+        for (ic = 0; ic < ncomp; ic++) {
+                for (l = 0; l < dl; l++) {
+                        for (j = 0; j < dj; j++) {
+                                pa = a + j*di;
+                                for (k = 0; k < dk; k++) {
+                                        for (i = 0; i < di; i++) {
+                                                at[m] = pa[i];
+                                                m++;
+                                        }
+                                        pa += dij;
+                                }
+                        }
+                        a += dijk;
+                }
+        }
+}
 /*
  * for given ksh, lsh, loop all ish, jsh
  */
@@ -29,9 +54,9 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         int idm;
-        int ksh, lsh, dk, dl;
+        int ksh, lsh, dk, dl, dijkl;
         int shls[4];
-        double complex *buf = malloc(sizeof(double complex) * nao2*di*dj*ncomp);
+        double complex *buf;
         double complex *pv;
         double complex *dm;
         void (*pf)();
@@ -54,21 +79,27 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
                 shls[2] = ksh;
                 shls[3] = lsh;
                 if ((*fprescreen)(shls, vhfopt,
-                                  envs->atm, envs->bas, envs->env)
-                    & (*intor)(buf, shls, envs->atm, envs->natm,
-                               envs->bas, envs->nbas, envs->env,
-                               cintopt)) {
-                        pv = vjk;
-                        for (idm = 0; idm < n_dm; idm++) {
-                                pf = fjk[idm];
-                                dm = dms[idm];
-                                (*pf)(buf, dm, pv, nao, ncomp, shls, ao_loc, tao);
-                                pv += nao2 * ncomp;
+                                  envs->atm, envs->bas, envs->env)) {
+// append buf.transpose(0,2,1,3) to eris, to reduce the cost of r_direct_dot
+                        dijkl = di * dj * dk * dl;
+                        buf = malloc(sizeof(double complex) * dijkl*ncomp*2);
+                        if ((*intor)(buf, shls, envs->atm, envs->natm,
+                                     envs->bas, envs->nbas, envs->env,
+                                     cintopt)) {
+                                transpose01324(buf, buf+dijkl*ncomp,
+                                               di, dj, dk, dl, ncomp);
+                                pv = vjk;
+                                for (idm = 0; idm < n_dm; idm++) {
+                                        pf = fjk[idm];
+                                        dm = dms[idm];
+                                        (*pf)(buf, dm, pv, nao, ncomp,
+                                              shls, ao_loc, tao);
+                                        pv += nao2 * ncomp;
+                                }
                         }
+                        free(buf);
                 }
         } }
-
-        free(buf);
 }
 
 /*
@@ -87,9 +118,9 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         int idm;
-        int ksh, lsh, dk, dl;
+        int ksh, lsh, dk, dl, dijkl;
         int shls[4];
-        double complex *buf = malloc(sizeof(double complex) * nao2*di*dj*ncomp);
+        double complex *buf;
         double complex *pv;
         double complex *dm;
         void (*pf)();
@@ -111,21 +142,26 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
                 shls[2] = ksh;
                 shls[3] = lsh;
                 if ((*fprescreen)(shls, vhfopt,
-                                  envs->atm, envs->bas, envs->env)
-                    & (*intor)(buf, shls, envs->atm, envs->natm,
-                               envs->bas, envs->nbas, envs->env,
-                               cintopt)) {
-                        pv = vjk;
-                        for (idm = 0; idm < n_dm; idm++) {
-                                pf = fjk[idm];
-                                dm = dms[idm];
-                                (*pf)(buf, dm, pv, nao, ncomp, shls, ao_loc, tao);
-                                pv += nao2 * ncomp;
+                                  envs->atm, envs->bas, envs->env)) {
+                        dijkl = di * dj * dk * dl;
+                        buf = malloc(sizeof(double complex) * dijkl*ncomp*2);
+                        if ((*intor)(buf, shls, envs->atm, envs->natm,
+                                     envs->bas, envs->nbas, envs->env,
+                                     cintopt)) {
+                                transpose01324(buf, buf+dijkl*ncomp,
+                                               di, dj, dk, dl, ncomp);
+                                pv = vjk;
+                                for (idm = 0; idm < n_dm; idm++) {
+                                        pf = fjk[idm];
+                                        dm = dms[idm];
+                                        (*pf)(buf, dm, pv, nao, ncomp,
+                                              shls, ao_loc, tao);
+                                        pv += nao2 * ncomp;
+                                }
                         }
+                        free(buf);
                 }
         } }
-
-        free(buf);
 }
 
 void CVHFdot_rs2ij(int (*intor)(), void (**fjk)(),
@@ -174,9 +210,9 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         int idm;
-        int ksh, lsh, dk, dl;
+        int ksh, lsh, dk, dl, dijkl;
         int shls[4];
-        double complex *buf = malloc(sizeof(double complex) * nao2*di*dj*ncomp);
+        double complex *buf;
         double complex *pv;
         double complex *dm;
         void (*pf)();
@@ -206,21 +242,26 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
                 shls[2] = ksh;
                 shls[3] = lsh;
                 if ((*fprescreen)(shls, vhfopt,
-                                  envs->atm, envs->bas, envs->env)
-                    & (*intor)(buf, shls, envs->atm, envs->natm,
-                               envs->bas, envs->nbas, envs->env,
-                               cintopt)) {
-                        pv = vjk;
-                        for (idm = 0; idm < n_dm; idm++) {
-                                pf = fjk[idm];
-                                dm = dms[idm];
-                                (*pf)(buf, dm, pv, nao, ncomp, shls, ao_loc, tao);
-                                pv += nao2 * ncomp;
+                                  envs->atm, envs->bas, envs->env)) {
+                        dijkl = di * dj * dk * dl;
+                        buf = malloc(sizeof(double complex) * dijkl*ncomp*2);
+                        if ((*intor)(buf, shls, envs->atm, envs->natm,
+                                     envs->bas, envs->nbas, envs->env,
+                                     cintopt)) {
+                                transpose01324(buf, buf+dijkl*ncomp,
+                                               di, dj, dk, dl, ncomp);
+                                pv = vjk;
+                                for (idm = 0; idm < n_dm; idm++) {
+                                        pf = fjk[idm];
+                                        dm = dms[idm];
+                                        (*pf)(buf, dm, pv, nao, ncomp,
+                                              shls, ao_loc, tao);
+                                        pv += nao2 * ncomp;
+                                }
                         }
+                        free(buf);
                 }
         } }
-
-        free(buf);
 }
 
 /*
@@ -256,7 +297,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         {
                 v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
                 memset(v_priv, 0, sizeof(double complex)*nao*nao*n_dm*ncomp);
-#pragma omp for nowait schedule(guided)
+#pragma omp for nowait schedule(dynamic)
                 for (ij = 0; ij < nbas*nbas; ij++) {
                         i = ij / nbas;
                         j = ij - i * nbas;

@@ -40,14 +40,13 @@ int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
         assert(k < n);
         assert(l < n);
         double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
-        // return dm_cond*qijkl > direct_scf_cutoff, direct_scf_cutoff
-        // has been divided and put into dm_cond
-        return (opt->dm_cond[j*n+i] > qijkl)
-             | (opt->dm_cond[l*n+k] > qijkl)
-             | (opt->dm_cond[j*n+k] > qijkl)
-             | (opt->dm_cond[j*n+l] > qijkl)
-             | (opt->dm_cond[i*n+k] > qijkl)
-             | (opt->dm_cond[i*n+l] > qijkl);
+        double dmin = opt->direct_scf_cutoff * qijkl;
+        return (opt->dm_cond[j*n+i] > dmin)
+             | (opt->dm_cond[l*n+k] > dmin)
+             | (opt->dm_cond[j*n+k] > dmin)
+             | (opt->dm_cond[j*n+l] > dmin)
+             | (opt->dm_cond[i*n+k] > dmin)
+             | (opt->dm_cond[i*n+l] > dmin);
 }
 
 int CVHFrkbssll_prescreen(int *shls, CVHFOpt *opt,
@@ -69,14 +68,13 @@ int CVHFrkbssll_prescreen(int *shls, CVHFOpt *opt,
         assert(l < n);
         double *dmsl = opt->dm_cond + n*n*SL;
         double qijkl = opt->q_cond[n*n*SS+i*n+j] * opt->q_cond[k*n+l];
-        // return dm_cond*qijkl > direct_scf_cutoff, direct_scf_cutoff
-        // has been divided and put into dm_cond
-        return (opt->dm_cond[n*n*SS+j*n+i] > qijkl)
-             | (opt->dm_cond[l*n+k] > qijkl)
-             | (dmsl[j*n+k] > qijkl)
-             | (dmsl[j*n+l] > qijkl)
-             | (dmsl[i*n+k] > qijkl)
-             | (dmsl[i*n+l] > qijkl);
+        double dmin = opt->direct_scf_cutoff * qijkl;
+        return (opt->dm_cond[n*n*SS+j*n+i] > dmin)
+             | (opt->dm_cond[l*n+k] > dmin)
+             | (dmsl[j*n+k] > dmin)
+             | (dmsl[j*n+l] > dmin)
+             | (dmsl[i*n+k] > dmin)
+             | (dmsl[i*n+l] > dmin);
 }
 
 
@@ -191,7 +189,7 @@ static void set_dmcond(double *dmcond, double complex *dm,
                                 dmax = MAX(dmax, cabs(pdm[i*nao+j]));
                         } }
                 }
-                dmcond[ish*nbas+jsh] = dmax/direct_scf_cutoff;
+                dmcond[ish*nbas+jsh] = dmax;
         } }
         free(ao_loc);
 }
@@ -221,10 +219,11 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
         double *dmcondss = opt->dm_cond + nbas*nbas*SS;
         double *dmcondsl = opt->dm_cond + nbas*nbas*SL;
         //double *dmcondls = opt->dm_cond + nbas*nbas*LS;
-        double complex *dmll = dm + n2c*n2c*LL;
-        double complex *dmss = dm + n2c*n2c*SS;
-        double complex *dmsl = dm + n2c*n2c*SL;
-        //double complex *dmls = dm + n2c*n2c*LS;
+        nset = nset / 3;
+        double complex *dmll = dm + n2c*n2c*LL*nset;
+        double complex *dmss = dm + n2c*n2c*SS*nset;
+        double complex *dmsl = dm + n2c*n2c*SL*nset;
+        //double complex *dmls = dm + n2c*n2c*LS*nset;
 
         set_dmcond(dmcondll, dmll, opt->direct_scf_cutoff, nset,
                    atm, natm, bas, nbas, env);

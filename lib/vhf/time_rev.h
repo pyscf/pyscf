@@ -11,11 +11,17 @@ void CVHFtimerev_map(int *tao, int *bas, int nbas);
 
 void CVHFtimerev_block(double complex *block, double complex *mat, int *tao,
                        int istart, int iend, int jstart, int jend, int nao);
+void CVHFtimerev_blockT(double complex *block, double complex *mat, int *tao,
+                        int istart, int iend, int jstart, int jend, int nao);
 
 void CVHFtimerev_i(double complex *block, double complex *mat, int *tao,
                    int istart, int iend, int jstart, int jend, int nao);
+void CVHFtimerev_iT(double complex *block, double complex *mat, int *tao,
+                    int istart, int iend, int jstart, int jend, int nao);
 void CVHFtimerev_j(double complex *block, double complex *mat, int *tao,
                    int istart, int iend, int jstart, int jend, int nao);
+void CVHFtimerev_jT(double complex *block, double complex *mat, int *tao,
+                    int istart, int iend, int jstart, int jend, int nao);
 void CVHFtimerev_ijplus(double complex *block, double complex *mat, int *tao,
                         int istart, int iend, int jstart, int jend, int nao);
 void CVHFtimerev_ijminus(double complex *block, double complex *mat, int *tao,
@@ -23,10 +29,16 @@ void CVHFtimerev_ijminus(double complex *block, double complex *mat, int *tao,
 
 void CVHFtimerev_adbak_block(double complex *block, double complex *mat, int *tao,
                              int istart, int iend, int jstart, int jend, int nao);
+void CVHFtimerev_adbak_blockT(double complex *block, double complex *mat, int *tao,
+                              int istart, int iend, int jstart, int jend, int nao);
 void CVHFtimerev_adbak_i(double complex *block, double complex *mat, int *tao,
                          int istart, int iend, int jstart, int jend, int nao);
+void CVHFtimerev_adbak_iT(double complex *block, double complex *mat, int *tao,
+                          int istart, int iend, int jstart, int jend, int nao);
 void CVHFtimerev_adbak_j(double complex *block, double complex *mat, int *tao,
                          int istart, int iend, int jstart, int jend, int nao);
+void CVHFtimerev_adbak_jT(double complex *block, double complex *mat, int *tao,
+                          int istart, int iend, int jstart, int jend, int nao);
 
 void CVHFreblock_mat(double complex *a, double complex *b,
                      int *bloc, int nbloc, int nao);

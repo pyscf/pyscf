@@ -60,7 +60,7 @@ void int2e_sph_o5(double *eri, int *atm, int natm, int *bas, int nbas, double *e
 #pragma omp parallel default(none) \
         shared(eri, nbas, envs, cintopt, vhfopt) \
         private(ij, i, j)
-#pragma omp for nowait schedule(guided)
+#pragma omp for nowait schedule(dynamic, 2)
         for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                 i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                 j = ij - (i*(i+1)/2);

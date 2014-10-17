@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <math.h>
 #include <complex.h>
+#include "fblas.h"
 #include "time_rev.h"
 #include "r_direct_dot.h"
 
@@ -30,6 +31,21 @@ const int dj = jend - jstart; \
 const int dk = kend - kstart; \
 const int dl = lend - lstart;
 
+
+// T = transpose
+static void adbak_blockT(double complex *a, double complex *blk,
+                         int n, int istart, int iend, int jstart, int jend)
+{
+        int i, j, i1, j1;
+        int m = iend - istart;
+        a = a + istart * n;
+        for (i = istart, i1 = 0; i < iend; i++, i1++) {
+                for (j = jstart, j1 = 0; j < jend; j++, j1++) {
+                        a[j] += blk[j1*m+i1];
+                }
+                a += n;
+        }
+}
 
 void CVHFrah1_ji_s1kl(double complex *eri,
                       double complex *dm, double complex *vj,
@@ -94,23 +110,23 @@ void CVHFrah2ij_ji_s1kl(double complex *eri,
                 return;
         }
         LOCIJKL;
-        int k, l, ij, ic;
-        double complex sdm[dj*di];
-        double complex *pvj;
-        double complex *vj_ij;
+        int INC1 = 1;
+        char TRANST = 'T';
+        int dij = di * dj;
+        int dkl = dk * dl;
+        double complex Z0 = 0;
+        double complex Z1 = 1;
+        double complex sdm[dij];
+        double complex svj[dkl];
+        int ic;
 
         CVHFtimerev_ijminus(sdm, dm, tao, jstart, jend, istart, iend, nao);
-
         for (ic = 0; ic < ncomp; ic++) {
-                pvj = vj + kstart*nao+lstart;
-                for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        vj_ij = pvj + k*nao+l;
-                        for (ij = 0; ij < di*dj; ij++) {
-                                *vj_ij += eri[ij] * sdm[ij];
-                        }
-                        eri += di * dj;
-                } }
+                memset(svj, 0, sizeof(double complex)*dkl);
+                zgemv_(&TRANST, &dij, &dkl, &Z1, eri, &dij,
+                       sdm, &INC1, &Z0, svj, &INC1);
+                adbak_blockT(vj, svj, nao, kstart, kend, lstart, lend);
+                eri += dij*dkl;
                 vj += nao*nao;
         }
 }
@@ -134,23 +150,26 @@ void CVHFrah2ij_jk_s1il(double complex *eri,
         }
 
         LOCIJKL;
-        int i, j, k, l, ij, ic;
-        double complex sdm[di*dk];
-        double complex svk[dj*dl];
+        int INC1 = 1;
+        char TRANST = 'T';
+        int dik = di * dk;
+        int djl = dj * dl;
+        double complex Z1 = 1;
+        double complex Z_1 = -1;
+        double complex sdm[dik];
+        double complex svk[djl];
+        double complex *p0213 = eri + dik*djl*ncomp;
+        int ic;
 
-        CVHFtimerev_i(sdm, dm, tao, istart, iend, kstart, kend, nao);
+        CVHFtimerev_iT(sdm, dm, tao, istart, iend, kstart, kend, nao);
 
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dl*dj);
-                for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        for (j = 0, ij = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                svk[j*dl+l] -= eri[ij] * sdm[i*dk+k];
-                        } }
-                        eri += di * dj;
-                } }
-                CVHFtimerev_adbak_i(svk, vk, tao, jstart, jend, lstart, lend, nao);
+                memset(svk, 0, sizeof(double complex)*djl);
+                zgemv_(&TRANST, &dik, &djl, &Z_1, p0213, &dik,
+                       sdm, &INC1, &Z1, svk, &INC1);
+                CVHFtimerev_adbak_iT(svk, vk, tao, jstart, jend, lstart, lend, nao);
+                eri += dik*djl;
+                p0213 += dik*djl;
                 vk += nao*nao;
         }
 }
@@ -166,23 +185,25 @@ void CVHFrah2ij_li_s1kj(double complex *eri,
         }
 
         LOCIJKL;
-        int i, j, k, l, ij, ic;
-        double complex sdm[dj*dl];
-        double complex svk[di*dk];
+        int INC1 = 1;
+        char TRANSN = 'N';
+        int dik = di * dk;
+        int djl = dj * dl;
+        double complex Z1 = 1;
+        double complex Z_1 = -1;
+        double complex sdm[djl];
+        double complex svk[dik];
+        double complex *p0213 = eri + dik*djl*ncomp;
+        int ic;
 
         CVHFtimerev_j(sdm, dm, tao, lstart, lend, jstart, jend, nao);
-
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dk*di);
-                for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        for (j = 0, ij = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                svk[k*di+i] -= eri[ij] * sdm[l*dj+j];
-                        } }
-                        eri += di * dj;
-                } }
+                memset(svk, 0, sizeof(double complex)*dik);
+                zgemv_(&TRANSN, &dik, &djl, &Z_1, p0213, &dik,
+                       sdm, &INC1, &Z1, svk, &INC1);
                 CVHFtimerev_adbak_j(svk, vk, tao, kstart, kend, istart, iend, nao);
+                eri += dik*djl;
+                p0213 += dik*djl;
                 vk += nao*nao;
         }
 }
@@ -217,26 +238,31 @@ void CVHFrah4_jk_s1il(double complex *eri,
         }
 
         LOCIJKL;
-        int i, j, k, l, ij, ic;
+        int INC1 = 1;
+        char TRANST = 'T';
+        int djk = dj * dk;
+        int dik = di * dk;
+        int djl = dj * dl;
+        int dijk = dik * dj;
         int n = (di+dj)*(dk+dl);
+        double complex Z1 = 1;
+        double complex Z_1 = -1;
         double complex sdm[n];
         double complex svk[n];
         double complex *peri = eri;
         double complex *pvk = vk;
+        double complex *p0213 = eri + dik*djl*ncomp;
+        int l, ic;
 
         // tjtikl
-        CVHFtimerev_i(sdm, dm, tao, istart, iend, kstart, kend, nao);
+        CVHFtimerev_iT(sdm, dm, tao, istart, iend, kstart, kend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dl*dj);
-                for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        for (j = 0, ij = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                svk[j*dl+l] -= peri[ij] * sdm[i*dk+k];
-                        } }
-                        peri += di * dj;
-                } }
-                CVHFtimerev_adbak_i(svk, pvk, tao, jstart, jend, lstart, lend, nao);
+                memset(svk, 0, sizeof(double complex)*djl);
+                zgemv_(&TRANST, &dik, &djl, &Z_1, p0213, &dik,
+                       sdm, &INC1, &Z1, svk, &INC1);
+                CVHFtimerev_adbak_iT(svk, pvk, tao, jstart, jend, lstart, lend, nao);
+                peri += dik*djl;
+                p0213 += dik*djl;
                 pvk += nao*nao;
         }
         if (shls[2] == shls[3]) {
@@ -244,18 +270,15 @@ void CVHFrah4_jk_s1il(double complex *eri,
         }
 
         // tjtitltk
-        CVHFtimerev_block(sdm, dm, tao, istart, iend, lstart, lend, nao);
+        CVHFtimerev_blockT(sdm, dm, tao, istart, iend, lstart, lend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dk*dj);
+                memset(svk, 0, sizeof(double complex)*djk);
                 for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        for (j = 0, ij = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                svk[j*dk+k] -= eri[ij] * sdm[i*dl+l];
-                        } }
-                        eri += di * dj;
-                } }
-                CVHFtimerev_adbak_block(svk, vk, tao, jstart, jend, kstart, kend, nao);
+                        zgemv_(&TRANST, &di, &djk, &Z_1, eri, &di,
+                               sdm+l*di, &INC1, &Z1, svk, &INC1);
+                        eri += dijk;
+                }
+                CVHFtimerev_adbak_blockT(svk, vk, tao, jstart, jend, kstart, kend, nao);
                 vk += nao*nao;
         }
 }
@@ -273,26 +296,32 @@ void CVHFrah4_li_s1kj(double complex *eri,
         }
 
         LOCIJKL;
-        int i, j, k, l, ij, ic;
+        int INC1 = 1;
+        char TRANSN = 'N';
+        int dil = di * dl;
+        int djk = dj * dk;
+        int dik = di * dk;
+        int djl = dj * dl;
+        int dijk = dik * dj;
         int n = (di+dj)*(dk+dl);
+        double complex Z1 = 1;
+        double complex Z_1 = -1;
         double complex sdm[n];
         double complex svk[n];
         double complex *peri = eri;
         double complex *pvk = vk;
+        double complex *p0213 = eri + dik*djl*ncomp;
+        int l, ic;
 
         // tjtikl
         CVHFtimerev_j(sdm, dm, tao, lstart, lend, jstart, jend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dk*di);
-                for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        for (j = 0, ij = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                svk[k*di+i] -= peri[ij] * sdm[l*dj+j];
-                        } }
-                        peri += di * dj;
-                } }
+                memset(svk, 0, sizeof(double complex)*dik);
+                zgemv_(&TRANSN, &dik, &djl, &Z_1, p0213, &dik,
+                       sdm, &INC1, &Z1, svk, &INC1);
                 CVHFtimerev_adbak_j(svk, pvk, tao, kstart, kend, istart, iend, nao);
+                peri += dik*djl;
+                p0213 += dik*djl;
                 pvk += nao*nao;
         }
         if (shls[2] == shls[3]) {
@@ -302,15 +331,12 @@ void CVHFrah4_li_s1kj(double complex *eri,
         // tjtitltk
         CVHFtimerev_block(sdm, dm, tao, kstart, kend, jstart, jend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dl*di);
+                memset(svk, 0, sizeof(double complex)*dil);
                 for (l = 0; l < dl; l++) {
-                for (k = 0; k < dk; k++) {
-                        for (j = 0, ij = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                svk[l*di+i] -= eri[ij] * sdm[k*dj+j];
-                        } }
-                        eri += di * dj;
-                } }
+                        zgemv_(&TRANSN, &di, &djk, &Z_1, eri, &di,
+                               sdm, &INC1, &Z1, svk+l*di, &INC1);
+                        eri += dijk;
+                }
                 CVHFtimerev_adbak_block(svk, vk, tao, lstart, lend, istart, iend, nao);
                 vk += nao*nao;
         }

@@ -2,9 +2,9 @@
 
 import unittest
 import numpy
-import scf
-import nmr
-import gto
+from pyscf import gto
+from pyscf import scf
+from pyscf import nmr
 
 mol = gto.Mole()
 mol.verbose = 0

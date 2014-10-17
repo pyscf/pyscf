@@ -9,9 +9,9 @@ Non-relativistic Kohn-Sham
 
 import time
 import numpy
-from pyscf.lib import logger as log
 from pyscf import lib
 from pyscf import scf
+import pyscf.lib.logger as log
 import vxc
 import gen_grid
 import pyscf.scf._vhf

@@ -17,7 +17,7 @@ import mc_ao2mo
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
-def h1e_for_cas(mol, casscf, mo, eris):
+def h1e_for_cas(casscf, mo, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
     ncore = casscf.ncore
@@ -44,7 +44,7 @@ def expmat(a):
     return numpy.dot(u,vh)
 
 # gradients, hessian operator and hessian diagonal
-def gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris):
+def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
@@ -145,19 +145,10 @@ def gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris):
         x2[ncore:nocc] += reduce(numpy.dot, (casdm1, x_av, vhf_c[nocc:])) \
                         + reduce(numpy.dot, (casdm1, x_ac, vhf_c[:ncore]))
         # part4, part5, part6
-        # J3 = eri_popc * pc + eri_cppo * cp
-        # K3 = eri_ppco * pc + eri_pcpo * cp
-        # J4 = eri_pcpa * pa + eri_appc * ap
-        # K4 = eri_ppac * pa + eri_papc * ap
         if ncore > 0:
-            vhf3c = numpy.dot(eris.CvcP.reshape(-1,ncore*nmo),
-                              x1[:ncore].reshape(-1)).reshape(ncore,-1)
-            vhf3a = numpy.einsum('uqcp,cp->uq', eris.ApcP, x1[:ncore])
-            apcv = eris.ApcP[:,:,:,ncore:]
-            dm4 = numpy.dot(casdm1, x1[ncore:nocc])
-            vhf4 = numpy.einsum('uqcp,uq->cp', apcv, dm4)
-            x2[ncore:nocc] += numpy.dot(casdm1, vhf3a)
-            x2[:ncore,ncore:] += 2 * vhf3c + vhf4
+            va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
+            x2[ncore:nocc] += va
+            x2[:ncore,ncore:] += vc
 
         # part1
         x2[ncore:nocc] += numpy.einsum('upvr,vr->up', hdm2, x1[ncore:nocc])
@@ -167,7 +158,7 @@ def gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris):
     return g_orb, h_op, h_diag
 
 
-def rotate_orb_ah(mol, casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
+def rotate_orb_ah(casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
     log = lib.logger.Logger(casscf.stdout, verbose)
@@ -178,7 +169,7 @@ def rotate_orb_ah(mol, casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
 
     t2m = (time.clock(), time.time())
     casdm1, casdm2 = casscf.fci_mod.make_rdm12(fcivec, ncas, nelecas)
-    g_orb0, h_op, h_diag = gen_g_hop(mol, casscf, mo, casdm1, casdm2, eris)
+    g_orb0, h_op, h_diag = gen_g_hop(casscf, mo, casdm1, casdm2, eris)
     t3m = log.timer('gen h_op', *t2m)
 
     precond = lambda x, e: x/(h_diag-(e-casscf.ah_level_shift))
@@ -226,7 +217,7 @@ def rotate_orb_ah(mol, casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
     return u, dx, g_orb, imic+ihop
 
 # dc = h_{co} * dr
-def hessian_co(mol, casscf, mo, rmat, fcivec, e_ci, eris):
+def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
     ncore = casscf.ncore
@@ -264,7 +255,7 @@ def hessian_co(mol, casscf, mo, rmat, fcivec, e_ci, eris):
     return hc
 
 # dr = h_{oc} * dc
-def hessian_oc(mol, casscf, mo, dci, fcivec, eris):
+def hessian_oc(casscf, mo, dci, fcivec, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
     ncore = casscf.ncore
@@ -299,7 +290,7 @@ def hessian_oc(mol, casscf, mo, dci, fcivec, eris):
     return casscf.pack_uniq_var(g - g.transpose())
 
 
-def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
+def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
@@ -325,7 +316,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
-        u, dx, g_orb, ninner = rotate_orb_ah(mol, casscf, mo, fcivec, e_ci, \
+        u, dx, g_orb, ninner = rotate_orb_ah(casscf, mo, fcivec, e_ci, \
                                              eris, 0, verbose=verbose)
         norm_gorb = numpy.linalg.norm(g_orb)
         t3m = log.timer('orbital rotation', *t2m)
@@ -335,7 +326,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 # approximate newton step, fcivec is not updated during micro iters
             #dr = casscf.unpack_uniq_var(dx)
             dr = u - numpy.eye(nmo)
-            gci = hessian_co(mol, casscf, mo, dr, fcivec, e_ci, eris)
+            gci = hessian_co(casscf, mo, dr, fcivec, e_ci, eris)
             t3m = log.timer('ci gradient', *t3m)
 
 # Perturbation updating   gci/(e_ci-hci_diag), gci = H^1 ci^0  is the way
@@ -367,7 +358,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             ovlp_ci = numpy.dot(ci1.reshape(-1), fcivec.reshape(-1))
             norm_gci = numpy.linalg.norm(gci)
 
-            u1, dx, g_orb, nin = rotate_orb_ah(mol, casscf, mo, ci1, e_ci, \
+            u1, dx, g_orb, nin = rotate_orb_ah(casscf, mo, ci1, e_ci, \
                                                eris, dx, verbose=verbose)
             ci1 = None
             u = numpy.dot(u, u1)
@@ -484,7 +475,7 @@ class CASSCF(casci.CASCI):
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                kernel(self.mol, self, mo, \
+                kernel(self, mo, \
                        tol=self.conv_threshold, macro=macro, micro=micro, \
                        ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
@@ -503,17 +494,18 @@ class CASSCF(casci.CASCI):
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
-               mc2step.kernel(self.mol, self, mo, \
+               mc2step.kernel(self, mo, \
                               tol=self.conv_threshold, macro=macro, micro=micro, \
                               ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def casci(self, mo, ci0=None, eris=None):
         if eris is None:
-            fcasci = self
+            fcasci = casci.CASCI(self.mol, self._scf, self.ncas, self.nelecas,
+                                 self.ncore)
         else:
             fcasci = _fake_h_for_fast_casci(self, mo, eris)
-        return casci.kernel(self.mol, fcasci, mo, ci0=ci0, verbose=0)
+        return casci.kernel(fcasci, mo, ci0=ci0, verbose=0)
 
     def pack_uniq_var(self, mat):
         ncore = self.ncore
@@ -560,8 +552,24 @@ class CASSCF(casci.CASCI):
     def update_ao2mo(self, mo):
         return mc_ao2mo._ERIS(self, mo)
 
-    #TODO:def update_jk_in_ah(self, mo, dm):
-    #TODO:    pass
+    def update_jk_in_ah(self, mo, r, casdm1, eris):
+# J3 = eri_popc * pc + eri_cppo * cp
+# K3 = eri_ppco * pc + eri_pcpo * cp
+# J4 = eri_pcpa * pa + eri_appc * ap
+# K4 = eri_ppac * pa + eri_papc * ap
+        ncore = self.ncore
+        ncas = self.ncas
+        nocc = ncore + ncas
+        nmo = mo.shape[1]
+        vhf3c = numpy.dot(eris.CvcP.reshape(-1,ncore*nmo),
+                          r[:ncore].reshape(-1)).reshape(ncore,-1)
+        vhf3a = numpy.einsum('uqcp,cp->uq', eris.ApcP, r[:ncore])
+        apcv = eris.ApcP[:,:,:,ncore:]
+        dm4 = numpy.dot(casdm1, r[ncore:nocc])
+        vhf4 = numpy.einsum('uqcp,uq->cp', apcv, dm4)
+        va = numpy.dot(casdm1, vhf3a)
+        vc = 2 * vhf3c + vhf4
+        return va, vc
 
 
 # to avoid calculating AO integrals
@@ -606,7 +614,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(mol, CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
+    emc = kernel(CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 

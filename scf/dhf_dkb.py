@@ -2,6 +2,10 @@
 # $Id$
 # -*- coding: utf-8
 
+'''
+Dirac Hartree-Fock
+'''
+
 import ctypes
 import numpy
 import copy
@@ -194,7 +198,6 @@ class UHF(dhf.UHF):
 
 
 if __name__ == '__main__':
-    from pyscf.gto import basis
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf_dkb'

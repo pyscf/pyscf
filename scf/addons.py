@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 import numpy
-import pyscf.lib.logger as log
 from pyscf import gto
-import pyscf.gto.moleintor
 from pyscf import symm
+import pyscf.lib.logger as log
+import pyscf.gto.moleintor
 import chkfile
 
 def frac_occ(scf, tol=1e-3):

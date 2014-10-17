@@ -10,7 +10,7 @@ from pyscf import lib
 from pyscf import scf
 import mc1step
 
-def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
+def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
@@ -37,7 +37,7 @@ def kernel(mol, casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = t2m
         for imicro in range(micro):
 
-            u, dx, g_orb, nin = mc1step.rotate_orb_ah(mol, casscf, mo, \
+            u, dx, g_orb, nin = mc1step.rotate_orb_ah(casscf, mo, \
                                                       fcivec, e_ci, eris, 0, \
                                                       verbose=verbose)
             t3m = log.timer('orbital rotation', *t3m)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(mol, mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
+    emc = kernel(mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 

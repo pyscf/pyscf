@@ -6,8 +6,8 @@ import tempfile
 import numpy
 import h5py
 from pyscf import lib
-import pyscf.lib.numpy_helper
 from pyscf import ao2mo
+import pyscf.lib.numpy_helper
 import pyscf.ao2mo._ao2mo
 
 _alib = os.path.join(os.path.dirname(lib.__file__), 'libmcscf.so')
@@ -49,7 +49,7 @@ def trans_e1_incore(casscf, mo):
     for i in range(ncas):
         for j in range(nmo):
             funpack(c_nmo, buf[ij].ctypes.data_as(ctypes.c_void_p),
-                    appp[i,j].ctypes.data_as(ctypes.c_void_p))
+                    appp[i,j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
             ij += 1
         libmcscf.MCSCFinplace_apcp(japcp[i].ctypes.data_as(ctypes.c_void_p),
                                    appp[i].ctypes.data_as(ctypes.c_void_p),
@@ -78,7 +78,7 @@ def trans_e1_incore(casscf, mo):
 #        buf = ao2mo._ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
 #        for j in range(ncore):
 #            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-#                    cpp[j].ctypes.data_as(ctypes.c_void_p))
+#                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
 #        jc_pp[i] = cpp[i]
 #        kc_pp[i,:ncore] = cpp[:,i]
 #        jcvcp[i] -= cpp[:,ncore:].transpose(1,0,2)
@@ -95,7 +95,7 @@ def trans_e1_incore(casscf, mo):
         buf = ao2mo._ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
         for j in range(ncore):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    cpp[j].ctypes.data_as(ctypes.c_void_p))
+                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
         jc_pp[i] = cpp[i]
         kc_pp[i,:ncore] = cpp[:,i]
 
@@ -179,7 +179,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
         buf = ao2mo._ao2mo.nr_e2(load_buf(ncore+i), moji, klshape)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    ppp[j].ctypes.data_as(ctypes.c_void_p))
+                    ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
         buf = None
         aapp[i] = ppp[ncore:nocc]
         appa[i] = ppp[:,:,ncore:nocc]
@@ -203,7 +203,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
         ao2mo._ao2mo.nr_e2(buf[:ncore], moji, klshape, buf[:ncore])
         for j in range(ncore):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    cpp[j].ctypes.data_as(ctypes.c_void_p))
+                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
         jc_pp[i] = cpp[i]
         kc_pp[i,:ncore] = cpp[:,i]
 
@@ -278,13 +278,49 @@ if __name__ == '__main__':
     mc = mc1step.CASSCF(mol, m, 6, 4)
     mc.verbose = 4
     mo = m.mo_coeff.copy()
+
     eris0 = _ERIS(mc, mo, 'incore')
     eris1 = _ERIS(mc, mo, 'outcore')
-    print(numpy.allclose(eris0.jc_pp, eris1.jc_pp))
-    print(numpy.allclose(eris0.kc_pp, eris1.kc_pp))
-    print(numpy.allclose(eris0.aapp , eris1.aapp ))
-    print(numpy.allclose(eris0.appa , eris1.appa ))
-    print(numpy.allclose(eris0.aaaa , eris1.aaaa ))
-    print(numpy.allclose(eris0.ApcP , eris1.ApcP ))
-    print(numpy.allclose(eris0.CvcP , eris1.CvcP ))
+    print('jc_pp', numpy.allclose(eris0.jc_pp, eris1.jc_pp))
+    print('kc_pp', numpy.allclose(eris0.kc_pp, eris1.kc_pp))
+    print('aapp ', numpy.allclose(eris0.aapp , eris1.aapp ))
+    print('appa ', numpy.allclose(eris0.appa , eris1.appa ))
+    print('aaaa ', numpy.allclose(eris0.aaaa , eris1.aaaa ))
+    print('ApcP ', numpy.allclose(eris0.ApcP , eris1.ApcP ))
+    print('CvcP ', numpy.allclose(eris0.CvcP , eris1.CvcP ))
 
+    ncore = mc.ncore
+    ncas = mc.ncas
+    nocc = ncore + ncas
+    nmo = mo.shape[1]
+    eri = ao2mo.incore.full(m._eri, mo, compact=False).reshape(nmo,nmo,nmo,nmo)
+    aaap = numpy.array(eri[ncore:nocc,ncore:nocc,ncore:nocc,:])
+    aacp = numpy.array(eri[ncore:nocc,ncore:nocc,:ncore,:])
+    acap = numpy.array(eri[ncore:nocc,:ncore,ncore:nocc,:])
+    jc_pp = numpy.einsum('iipq->ipq', eri[:ncore,:ncore,:,:])
+    kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])
+    aaaa = numpy.array(aaap[:,:,:,ncore:nocc])
+    aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
+    for i in range(ncas):
+        print i,aapp[i].sum()
+    appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
+    capp = eri[:ncore,ncore:nocc,:,:]
+    cpap = eri[:ncore,:,ncore:nocc,:]
+    ccvp = eri[:ncore,:ncore,ncore:,:]
+    cpcv = eri[:ncore,:,:ncore,ncore:]
+    cvcp = eri[:ncore,ncore:,:ncore,:]
+
+    cPAp = cpap * 4 \
+         - capp.transpose(0,3,1,2) \
+         - cpap.transpose(0,3,2,1)
+    cPCv = cpcv * 4 \
+         - ccvp.transpose(0,3,1,2) \
+         - cvcp.transpose(0,3,2,1)
+
+    print('jc_pp', numpy.allclose(jc_pp, eris0.jc_pp))
+    print('kc_pp', numpy.allclose(kc_pp, eris0.kc_pp))
+    print('aapp ', numpy.allclose(aapp , eris0.aapp ))
+    print('appa ', numpy.allclose(appa , eris0.appa ))
+    print('aaaa ', numpy.allclose(aaaa , eris0.aaaa ))
+    print('ApcP ', numpy.allclose(cPAp.transpose(2,3,0,1), eris1.ApcP ))
+    print('CvcP ', numpy.allclose(cPCv.transpose(2,3,0,1), eris1.CvcP ))
