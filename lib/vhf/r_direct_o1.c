@@ -14,7 +14,8 @@
 #include "time_rev.h"
 
 
-static void transpose01324(double complex *a, double complex *at,
+static void transpose01324(double complex * __restrict__ a,
+                           double complex * __restrict__ at,
                            int di, int dj, int dk, int dl, int ncomp)
 {
         int i, j, k, l, m, ic;
@@ -58,14 +59,18 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
         int shls[4];
         double complex *buf;
         double complex *pv;
-        double complex *dm;
+        double *dms_cond[n_dm];
+        double dm_atleast;
         void (*pf)();
         int (*fprescreen)();
+        int (*r_vkscreen)();
 
         if (vhfopt) {
                 fprescreen = vhfopt->fprescreen;
+                r_vkscreen = vhfopt->r_vkscreen;
         } else {
                 fprescreen = CVHFnoscreen;
+                r_vkscreen = CVHFr_vknoscreen;
         }
 
 // to make fjk compatible to C-contiguous dm array, put ksh, lsh inner loop
@@ -86,14 +91,18 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
                         if ((*intor)(buf, shls, envs->atm, envs->natm,
                                      envs->bas, envs->nbas, envs->env,
                                      cintopt)) {
-                                transpose01324(buf, buf+dijkl*ncomp,
-                                               di, dj, dk, dl, ncomp);
+                                if ((*r_vkscreen)(shls, vhfopt,
+                                                  dms_cond, n_dm, &dm_atleast,
+                                                  envs->atm, envs->bas, envs->env)) {
+                                        transpose01324(buf, buf+dijkl*ncomp,
+                                                       di, dj, dk, dl, ncomp);
+                                }
                                 pv = vjk;
                                 for (idm = 0; idm < n_dm; idm++) {
                                         pf = fjk[idm];
-                                        dm = dms[idm];
-                                        (*pf)(buf, dm, pv, nao, ncomp,
-                                              shls, ao_loc, tao);
+                                        (*pf)(buf, dms[idm], pv, nao, ncomp,
+                                              shls, ao_loc, tao,
+                                              dms_cond[idm], envs->nbas, dm_atleast);
                                         pv += nao2 * ncomp;
                                 }
                         }
@@ -122,14 +131,18 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
         int shls[4];
         double complex *buf;
         double complex *pv;
-        double complex *dm;
+        double *dms_cond[n_dm];
+        double dm_atleast;
         void (*pf)();
         int (*fprescreen)();
+        int (*r_vkscreen)();
 
         if (vhfopt) {
                 fprescreen = vhfopt->fprescreen;
+                r_vkscreen = vhfopt->r_vkscreen;
         } else {
                 fprescreen = CVHFnoscreen;
+                r_vkscreen = CVHFr_vknoscreen;
         }
 
         shls[0] = ish;
@@ -148,14 +161,18 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
                         if ((*intor)(buf, shls, envs->atm, envs->natm,
                                      envs->bas, envs->nbas, envs->env,
                                      cintopt)) {
-                                transpose01324(buf, buf+dijkl*ncomp,
-                                               di, dj, dk, dl, ncomp);
+                                if ((*r_vkscreen)(shls, vhfopt,
+                                                  dms_cond, n_dm, &dm_atleast,
+                                                  envs->atm, envs->bas, envs->env)) {
+                                        transpose01324(buf, buf+dijkl*ncomp,
+                                                       di, dj, dk, dl, ncomp);
+                                }
                                 pv = vjk;
                                 for (idm = 0; idm < n_dm; idm++) {
                                         pf = fjk[idm];
-                                        dm = dms[idm];
-                                        (*pf)(buf, dm, pv, nao, ncomp,
-                                              shls, ao_loc, tao);
+                                        (*pf)(buf, dms[idm], pv, nao, ncomp,
+                                              shls, ao_loc, tao,
+                                              dms_cond[idm], envs->nbas, dm_atleast);
                                         pv += nao2 * ncomp;
                                 }
                         }
@@ -214,14 +231,18 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
         int shls[4];
         double complex *buf;
         double complex *pv;
-        double complex *dm;
+        double *dms_cond[n_dm];
+        double dm_atleast;
         void (*pf)();
         int (*fprescreen)();
+        int (*r_vkscreen)();
 
         if (vhfopt) {
                 fprescreen = vhfopt->fprescreen;
+                r_vkscreen = vhfopt->r_vkscreen;
         } else {
                 fprescreen = CVHFnoscreen;
+                r_vkscreen = CVHFr_vknoscreen;
         }
 
 // to make fjk compatible to C-contiguous dm array, put ksh, lsh inner loop
@@ -248,14 +269,18 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
                         if ((*intor)(buf, shls, envs->atm, envs->natm,
                                      envs->bas, envs->nbas, envs->env,
                                      cintopt)) {
-                                transpose01324(buf, buf+dijkl*ncomp,
-                                               di, dj, dk, dl, ncomp);
+                                if ((*r_vkscreen)(shls, vhfopt,
+                                                  dms_cond, n_dm, &dm_atleast,
+                                                  envs->atm, envs->bas, envs->env)) {
+                                        transpose01324(buf, buf+dijkl*ncomp,
+                                                       di, dj, dk, dl, ncomp);
+                                }
                                 pv = vjk;
                                 for (idm = 0; idm < n_dm; idm++) {
                                         pf = fjk[idm];
-                                        dm = dms[idm];
-                                        (*pf)(buf, dm, pv, nao, ncomp,
-                                              shls, ao_loc, tao);
+                                        (*pf)(buf, dms[idm], pv, nao, ncomp,
+                                              shls, ao_loc, tao,
+                                              dms_cond[idm], envs->nbas, dm_atleast);
                                         pv += nao2 * ncomp;
                                 }
                         }

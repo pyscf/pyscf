@@ -18,6 +18,9 @@ typedef struct CVHFOpt_struct {
     double *dm_cond;
     int (*fprescreen)(int *shls, struct CVHFOpt_struct *opt,
                       int *atm, int *bas, double *env);
+    int (*r_vkscreen)(int *shls, struct CVHFOpt_struct *opt,
+                      double **dms_cond, int n_dm, double *dm_at_least,
+                      int *atm, int *bas, double *env);
 } CVHFOpt;
 #endif
 

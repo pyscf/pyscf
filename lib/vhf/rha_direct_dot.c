@@ -47,71 +47,91 @@ static void adbak_blockT(double complex *a, double complex *blk,
 }
 void CVHFrha1_ji_s1kl(double complex *eri,
                       double complex *dm, double complex *vj,
-                      int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                      double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs1_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
 }
 
 void CVHFrha1_lk_s1ij(double complex *eri,
                       double complex *dm, double complex *vj,
-                      int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                      double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs1_lk_s1ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_lk_s1ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
 }
 
 void CVHFrha1_jk_s1il(double complex *eri,
                       double complex *dm, double complex *vk,
-                      int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                      double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs1_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
 }
 void CVHFrha1_li_s1kj(double complex *eri,
                       double complex *dm, double complex *vk,
-                      int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                      double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs1_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
 }
 
 void CVHFrha2ij_ji_s1kl(double complex *eri,
                         double complex *dm, double complex *vj,
-                        int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                        int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                        double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs2ij_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs2ij_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                          dm_cond, nbas, dm_atleast);
 }
 void CVHFrha2ij_lk_s2ij(double complex *eri,
                         double complex *dm, double complex *vj,
-                        int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                        int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                        double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs2ij_lk_s2ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs2ij_lk_s2ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                          dm_cond, nbas, dm_atleast);
 }
 
 void CVHFrha2ij_jk_s1il(double complex *eri,
                         double complex *dm, double complex *vk,
-                        int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                        int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                        double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs2ij_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs2ij_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                          dm_cond, nbas, dm_atleast);
 }
 void CVHFrha2ij_li_s1kj(double complex *eri,
                         double complex *dm, double complex *vk,
-                        int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                        int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                        double *dm_cond, int nbas, double dm_atleast)
 {
-        CVHFrs2ij_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs2ij_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                          dm_cond, nbas, dm_atleast);
 }
 
 void CVHFrha2kl_ji_s2kl(double complex *eri,
                         double complex *dm, double complex *vj,
-                        int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                        int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                        double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[2] >= shls[3]);
-        CVHFrs1_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
 }
 void CVHFrha2kl_lk_s1ij(double complex *eri,
                         double complex *dm, double complex *vj,
-                        int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                        int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                        double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[2] >= shls[3]);
         if (shls[2] == shls[3]) {
-                CVHFrs1_lk_s1ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+                CVHFrs1_lk_s1ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                                dm_cond, nbas, dm_atleast);
                 return;
         }
         LOCIJKL;
@@ -138,11 +158,13 @@ void CVHFrha2kl_lk_s1ij(double complex *eri,
 
 void CVHFrha2kl_jk_s1il(double complex *eri,
                        double complex *dm, double complex *vk,
-                       int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                       int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                       double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[2] >= shls[3]);
 
-        CVHFrs1_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
         if (shls[2] == shls[3]) {
                 return;
         }
@@ -172,11 +194,13 @@ void CVHFrha2kl_jk_s1il(double complex *eri,
 }
 void CVHFrha2kl_li_s1kj(double complex *eri,
                        double complex *dm, double complex *vk,
-                       int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                       int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                       double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[2] >= shls[3]);
 
-        CVHFrs1_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs1_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                        dm_cond, nbas, dm_atleast);
         if (shls[2] == shls[3]) {
                 return;
         }
@@ -207,29 +231,35 @@ void CVHFrha2kl_li_s1kj(double complex *eri,
 
 void CVHFrha4_ji_s2kl(double complex *eri,
                      double complex *dm, double complex *vj,
-                     int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                     int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                     double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[0] >= shls[1]);
         assert(shls[2] >= shls[3]);
-        CVHFrs2ij_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrs2ij_ji_s1kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                          dm_cond, nbas, dm_atleast);
 }
 void CVHFrha4_lk_s2ij(double complex *eri,
                      double complex *dm, double complex *vj,
-                     int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                     int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                     double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[0] >= shls[1]);
         assert(shls[2] >= shls[3]);
-        CVHFrha2kl_lk_s1ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao);
+        CVHFrha2kl_lk_s1ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
+                           dm_cond, nbas, dm_atleast);
 }
 
 void CVHFrha4_jk_s1il(double complex *eri,
                      double complex *dm, double complex *vk,
-                     int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                     int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                     double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[0] >= shls[1]);
         assert(shls[2] >= shls[3]);
 
-        CVHFrha2kl_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrha2kl_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                           dm_cond, nbas, dm_atleast);
         if (shls[0] == shls[1]) {
                 return;
         }
@@ -282,12 +312,14 @@ void CVHFrha4_jk_s1il(double complex *eri,
 // should be identical to CVHFrs4_jk_s1il
 void CVHFrha4_li_s1kj(double complex *eri,
                      double complex *dm, double complex *vk,
-                     int nao, int ncomp, int *shls, int *ao_loc, int *tao)
+                     int nao, int ncomp, int *shls, int *ao_loc, int *tao,
+                     double *dm_cond, int nbas, double dm_atleast)
 {
         assert(shls[0] >= shls[1]);
         assert(shls[2] >= shls[3]);
 
-        CVHFrha2kl_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao);
+        CVHFrha2kl_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
+                           dm_cond, nbas, dm_atleast);
         if (shls[0] == shls[1]) {
                 return;
         }

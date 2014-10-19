@@ -152,7 +152,8 @@ def _regular_step(heff, ovlp, xs, pick_mode):
     w, v = scipy.linalg.eigh(heff, ovlp)
     index = pick_mode(w, v)
     if index == -1:
-        return 0, 0, v[:,0], index
+        #return 0, 0, v[:,0], index
+        raise ValueError('aug_hess-pick_mode fail')
     else:
         w_t = w[index]
         xtrial = _dgemv(v[1:,index]/v[0,index], xs)

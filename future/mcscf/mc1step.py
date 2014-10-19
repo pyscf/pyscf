@@ -321,6 +321,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         norm_gorb = numpy.linalg.norm(g_orb)
         t3m = log.timer('orbital rotation', *t2m)
         totmicro += 1
+# dynamic ci_stepsize
+# ci graidents may change the CI vector too much, which causes oscillation in
+# macro iterations
+        max_ci_stepsize = min(norm_gorb*50, casscf.max_ci_stepsize)
+
         for imicro in range(micro):
 
 # approximate newton step, fcivec is not updated during micro iters
@@ -338,9 +343,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             dc = gci.reshape(-1)
             dcmax = numpy.max(abs(dc))
 
-# dynamic ci_stepsize
-# ci graidents may change the CI vector too much, which causes oscillation in
-# macro iterations
             #norm_dc = numpy.linalg.norm(dc)
             #if norm_dc > casscf.max_ci_stepsize:
             #    dc = dc * (casscf.max_ci_stepsize/norm_dc)
@@ -348,7 +350,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             #    ci1 = fcivec.reshape(-1) - dc * (casscf.max_ci_stepsize/dcmax)
             #else:
             #    ci1 = fcivec.reshape(-1) - dc
-            max_ci_stepsize = min(norm_gorb*10, casscf.max_ci_stepsize)
             if dcmax > max_ci_stepsize:
                 ci1 = fcivec.reshape(-1) - dc * (max_ci_stepsize/dcmax)
             else:

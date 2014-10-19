@@ -22,6 +22,7 @@ void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
         opt0->q_cond = NULL;
         opt0->dm_cond = NULL;
         opt0->fprescreen = &CVHFnoscreen;
+        opt0->r_vkscreen = &CVHFr_vknoscreen;
         *opt = opt0;
 }
 
@@ -96,6 +97,19 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
              | (  opt->dm_cond[j*n+l] > dmin)
              | (  opt->dm_cond[i*n+k] > dmin)
              | (  opt->dm_cond[i*n+l] > dmin);
+}
+
+// return flag to decide whether transpose01324
+int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
+                     double **dms_cond, int n_dm, double *dm_atleast,
+                     int *atm, int *bas, double *env)
+{
+        int idm;
+        for (idm = 0; idm < n_dm; idm++) {
+                dms_cond[idm] = NULL;
+        }
+        *dm_atleast = 0;
+        return 1;
 }
 
 void CVHFset_direct_scf_cutoff(CVHFOpt *opt, double cutoff)

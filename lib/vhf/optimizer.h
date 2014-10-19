@@ -12,6 +12,9 @@ typedef struct CVHFOpt_struct {
     double *dm_cond;
     int (*fprescreen)(int *shls, struct CVHFOpt_struct *opt,
                       int *atm, int *bas, double *env);
+    int (*r_vkscreen)(int *shls, struct CVHFOpt_struct *opt,
+                      double **dms_cond, int n_dm, double *dm_atleast,
+                      int *atm, int *bas, double *env);
 } CVHFOpt;
 #endif
 
@@ -26,6 +29,10 @@ int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
                         int *atm, int *bas, double *env);
 int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
                        int *atm, int *bas, double *env);
+
+int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
+                     double **dms_cond, int n_dm, double *dm_atleast,
+                     int *atm, int *bas, double *env);
 
 void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
                           int *bas, int nbas, double *env);
