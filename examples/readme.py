@@ -56,7 +56,7 @@ rhf = scf.RHF(mol)
 # RHF.chkfile           file to store MO coefficients, orbital energies
 # RHF.conv_threshold     default is 1e-10
 # RHF.max_cycle     default is 50
-# RHF.init_guess('name')  'name' is case-insensitivecan. It be one of
+# RHF.init_guess = 'name'  'name' is case-insensitivecan. It be one of
 #                       '1e': first density matrix from Hcore
 #                       'chkfile': read from RHF.chkfile
 #                       'atom': superposition of occ-averaged atomic HF density
@@ -69,12 +69,12 @@ rhf = scf.RHF(mol)
 #                       cannot hold the whole 2-e integrals
 # RHF.direct_scf_threshold  Matrix elements are ignored if less than me. Default 1e-13
 rhf.conv_threshold = 1e-8
-print "E=", rhf.scf()
+print('E=%.15g' % rhf.scf())
 # after doing SCF, RHF.mo_coeff, RHF.mo_energy, RHF.mo_occ, RHF.hf_energy,
 # RHF.scf_conv (True/Flase, to see if SCF converged) will be held in RHF class.
-print rhf.mo_coeff.shape
-print rhf.mo_energy
-print rhf.mo_occ
-print rhf.hf_energy
-print rhf.scf_conv
+print(rhf.mo_coeff.shape)
+print(rhf.mo_energy)
+print(rhf.mo_occ)
+print(rhf.hf_energy)
+print(rhf.scf_conv)
 # For more detail of class RHF or UHF, see pyscf/scf/hf.py

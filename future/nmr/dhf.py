@@ -12,8 +12,8 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
-from pyscf.lib import logger as log
-from pyscf.lib import parameters as param
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
 import hf
 import pyscf.scf._vhf
 
@@ -82,7 +82,7 @@ class MSC(hf.MSC):
         n4c = mol.num_4C_function()
         n2c = n4c / 2
         msc_dia = []
-        dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
+        dm0 = scf0.make_rdm1(scf0.mo_coeff, scf0.mo_occ)
         for n, nuc in enumerate(self.shielding_nuc):
             mol.set_rinv_by_atm_id(nuc)
             if self.MB == self.rmb and self.is_giao:
@@ -147,7 +147,7 @@ class MSC(hf.MSC):
         return msc_para, para_pos, para_neg, para_occ
 
     @lib.omnimethod
-    def calc_den_mat_1(self, mo1, mo0, occ):
+    def make_rdm1_1(self, mo1, mo0, occ):
         m = mo0[:,occ>0]
         dm1 = []
         for i in range(3):
@@ -187,7 +187,7 @@ class MSC(hf.MSC):
             h1 = scf.chkfile.load(self.scf.chkfile, 'vhf_GIAO')
             log.info(self, 'restore vhf_GIAO from chkfile')
         else:
-            dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
+            dm0 = scf0.make_rdm1(scf0.mo_coeff, scf0.mo_occ)
             vj, vk = _call_giao_vhf1(mol, dm0)
             h1 = vj - vk
             if self.scf.with_gaunt:
@@ -242,7 +242,7 @@ class MSC(hf.MSC):
             h1 = scf.chkfile.load(self.scf.chkfile, 'vhf_RMB')
             log.info(self, 'restore vhf_RMB from chkfile')
         else:
-            dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
+            dm0 = scf0.make_rdm1(scf0.mo_coeff, scf0.mo_occ)
             if self.is_giao:
                 vj, vk = _call_rmb_vhf1(mol, dm0, 'giao')
                 h1 = vj - vk
@@ -271,7 +271,7 @@ class MSC(hf.MSC):
     def v_ind(self, scf0, mo1):
         '''Induced potential'''
         mol = scf0.mol
-        dm1 = self.calc_den_mat_1(mo1, scf0.mo_coeff, scf0.mo_occ)
+        dm1 = self.make_rdm1_1(mo1, scf0.mo_coeff, scf0.mo_occ)
         v_ao = self.scf.get_veff(mol, dm1)
         return self._mat_ao2mo(v_ao, scf0.mo_coeff, scf0.mo_occ)
 

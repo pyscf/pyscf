@@ -5,6 +5,7 @@
 #
 
 import os, sys
+import gc
 import time
 import math
 import itertools
@@ -239,6 +240,8 @@ class Mole(object):
                verbose=None, output=None, max_memory=None, \
                atom=None, basis=None, nucmod=None, mass=None, grids=None, \
                charge=None, spin=None, symmetry=None, light_speed=None):
+# release circular referred objs
+        gc.collect()
 
         if verbose is not None: self.verbose = verbose
         if output is not None: self.output = output
@@ -395,7 +398,7 @@ class Mole(object):
             angl = b[0]
             assert(angl < 8)
             if angl in [6, 7]:
-                print 'libcint may have large error for ERI of i function'
+                print('libcint may have large error for ERI of i function')
             if isinstance(b[1], int):
                 kappa = b[1]
                 b_coeff = numpy.array(b[2:])
@@ -728,17 +731,15 @@ class Mole(object):
     def get_enuc(self):
         return nuclear_repulsion()
     def nuclear_repulsion(self):
-        e = 0
-        chargs = [self.charge_of_atm(i) for i in range(len(self._atm))]
-        coords = [self.coord_of_atm(i) for i in range(len(self._atm))]
-        for j in range(len(self._atm)):
-            q2 = chargs[j]
-            r2 = coords[j]
-            for i in range(j):
-                q1 = chargs[i]
-                r1 = coords[i]
-                r = numpy.linalg.norm(r1-r2)
-                e += q1 * q2 / r
+        chargs = numpy.array([self.charge_of_atm(i) for i in range(len(self._atm))])
+        coords = numpy.array([self.coord_of_atm(i) for i in range(len(self._atm))])
+        xx = coords[:,0].reshape(-1,1) - coords[:,0]
+        yy = coords[:,1].reshape(-1,1) - coords[:,1]
+        zz = coords[:,2].reshape(-1,1) - coords[:,2]
+        r = numpy.sqrt(xx**2 + yy**2 + zz**2 + 1e-60)
+        qq = chargs[:,None] * chargs[None,:]
+        qq[numpy.diag_indices(len(self._atm))] = 0
+        e = (qq/r).sum() * .5
         return e
 
     def inter_distance(self):

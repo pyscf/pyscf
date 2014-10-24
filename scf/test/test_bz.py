@@ -38,5 +38,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for c6h6"
+    print("Full Tests for c6h6")
     unittest.main()

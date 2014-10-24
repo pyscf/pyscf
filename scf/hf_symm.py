@@ -212,7 +212,7 @@ class RHF(hf.RHF):
             dm = self.symmetrize_den_mat(dm)
         return e, dm
 
-    def set_mo_occ(self, mo_energy, mo_coeff=None):
+    def set_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
         nirrep = mol.symm_orb.__len__()
         mo_e_plain = []
@@ -260,7 +260,7 @@ class RHF(hf.RHF):
         return mo_occ
 
     # full density matrix
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def make_rdm1(self, mo_coeff, mo_occ):
         nirrep = self.mol.symm_orb.__len__()
         dm = []
         for ir in range(nirrep):
@@ -345,7 +345,6 @@ class RHF(hf.RHF):
         cput0 = (time.clock(), time.time())
         self.build()
         self.dump_flags()
-        self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
@@ -396,7 +395,7 @@ class RHF(hf.RHF):
         c = so2ao_mo_coeff(mol.symm_orb, self.mo_coeff)
         if self.verbose >= param.VERBOSE_DEBUG:
             dump_mo_coeff(mol, c, e_ir_idx, argsort)
-        dm = hf.RHF.calc_den_mat(c, numpy.hstack(self.mo_occ))
+        dm = hf.RHF.make_rdm1(c, numpy.hstack(self.mo_occ))
         self.mulliken_pop(mol, dm, mol.intor_symmetric('cint1e_ovlp_sph'))
 
 
@@ -602,7 +601,7 @@ class UHF(hf.UHF):
             dm = self.symmetrize_den_mat(dm)
         return e, dm
 
-    def set_mo_occ(self, mo_energy, mo_coeff=None):
+    def set_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
         nirrep = mol.symm_orb.__len__()
         mo_e_plain = [[],[]]
@@ -697,7 +696,7 @@ class UHF(hf.UHF):
         return (occa, occb)
 
     # full density matrix for RHF
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def make_rdm1(self, mo_coeff, mo_occ):
         nirrep = self.mol.symm_orb.__len__()
         nao = self.mol.symm_orb[0].shape[0]
         dm_a = []
@@ -800,7 +799,6 @@ class UHF(hf.UHF):
         cput0 = (time.clock(), time.time())
         self.build()
         self.dump_flags()
-        self.init_direct_scf(self.mol)
         self.scf_conv, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
@@ -886,7 +884,7 @@ class UHF(hf.UHF):
             dump_mo_coeff(mol, ca, e_ir_a, sorta, 'alpha')
             dump_mo_coeff(mol, cb, e_ir_b, sortb, 'beta')
 
-        dm = hf.UHF.calc_den_mat((ca,cb), (occa, occb))
+        dm = hf.UHF.make_rdm1((ca,cb), (occa, occb))
         self.mulliken_pop(mol, dm, mol.intor_symmetric('cint1e_ovlp_sph'))
 
 def map_rhf_to_uhf(mol, rhf):

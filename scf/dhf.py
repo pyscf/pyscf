@@ -35,7 +35,7 @@ self.oob = 0                    # operator oriented basis level
                                 # 2 sp|f> -> sr|f>
 
 
-self.init_guess(method)         # method = one of 'atom', '1e', 'chkfile'
+self.init_guess = method        # method = one of 'atom', '1e', 'chkfile'
 self.set_potential(method, oob) # method = one of 'coulomb', 'gaunt'
                                 # oob = operator oriented basis level
                                 #       1 sp|f> -> |f>
@@ -51,66 +51,14 @@ class UHF(hf.SCF):
         self.conv_threshold = 1e-8
         self.oob = 0
         self.with_ssss = True
-        self.set_init_guess('minao')
+        self.init_guess = 'minao'
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
 
         self.opt_llll = None
         self.opt_ssll = None
         self.opt_ssss = None
-
-    def _init_guess_by_chkfile(self, mol):
-        '''Read initial guess from chkfile.'''
-        chk_mol, scf_rec = chkfile.load_scf(self.chkfile)
-
-        log.info(self, '\n')
-        log.info(self, 'Read initial guess from file %s.', self.chkfile)
-
-        n2c = mol.num_2C_function()
-        n4c = n2c * 2
-        c = mol.light_speed
-
-        nbas_chk = chk_mol.nbas
-        chk_mol._atm, chk_mol._bas, chk_mol._env = \
-                gto.mole.conc_env(chk_mol._atm, chk_mol._bas, chk_mol._env, \
-                                  mol._atm, mol._bas, mol._env)
-        chk_mol.nbas = chk_mol._bas.__len__()
-        bras = range(nbas_chk, chk_mol.nbas)
-        kets = range(nbas_chk)
-
-        if hf.chk_scf_type(scf_rec['mo_coeff'])[0] == 'R':
-            s = chk_mol.intor_cross('cint1e_ovlp', bras, kets)
-            t = chk_mol.intor_cross('cint1e_spsp', bras, kets)
-            n1 = s.shape[1]
-            proj = numpy.zeros((n4c, n1*2), numpy.complex)
-            proj[:n2c,:n1] = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp'),s)
-            proj[n2c:,n1:] = numpy.linalg.solve(mol.intor_symmetric('cint1e_spsp'),t)
-
-            mo_coeff = numpy.dot(proj, scf_rec['mo_coeff'])
-            mo_occ = scf_rec['mo_occ']
-            dm = numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
-            self._coulomb_now = 'SSSS'
-        else:
-            from pyscf import symm
-            log.debug(self, 'Convert NR MO coeff from  %s', self.chkfile)
-            if hf.chk_scf_type(scf_rec['mo_coeff']) == 'NR-RHF':
-                c = scf_rec['mo_coeff']
-            else:
-                c = scf_rec['mo_coeff'][0]
-            s0 = chk_mol.intor_cross('cint1e_ovlp_sph', bras, kets)
-            ua, ub = symm.cg.real2spinor_whole(mol)
-            s = numpy.dot(ua.T.conj(), s0) + numpy.dot(ub.T.conj(), s0) # (*)
-            proj = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp'), s)
-
-            # alpha, beta are summed in Eq. (*)
-            nocc = mol.nelectron / 2
-            mo_coeff = numpy.dot(proj, c)[:,:nocc]
-            dm = numpy.zeros((n4c,n4c), dtype=complex)
-            dm_ll = numpy.dot(mo_coeff, mo_coeff.T.conj())
-            # NR alpha and beta MO does not have time reversal symmetry
-            dm[:n2c,:n2c] = (dm_ll + time_reversal_matrix(mol, dm_ll)) * .5
-            self._coulomb_now = 'LLLL'
-        return scf_rec['hf_energy'], dm
+        self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def _init_guess_by_atom(self, mol=None):
         '''Initial guess from occupancy-averaged atomic NR-RHF'''
@@ -198,24 +146,36 @@ class UHF(hf.SCF):
         s1e[n2c:,n2c:] = t * (.5/c**2)
         return s1e
 
-    def init_direct_scf(self, mol):
+    def build(self, mol=None):
+        self.build_(mol)
+    def build_(self, mol=None):
+        if mol is None:
+            mol = self.mol
+        mol.check_sanity(self)
+
         if self.direct_scf:
+            def set_vkscreen(opt, name):
+                opt._this.contents.r_vkscreen = \
+                    ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
             self.opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
                                         'CVHFrkbllll_direct_scf',
                                         'CVHFrkbllll_direct_scf_dm')
             self.opt_llll.direct_scf_threshold = self.direct_scf_threshold
+            set_vkscreen(self.opt_llll, 'CVHFrkbllll_vkscreen')
             self.opt_ssss = _vhf.VHFOpt(mol, 'cint2e_spsp1spsp2',
                                         'CVHFrkbllll_prescreen',
                                         'CVHFrkbssss_direct_scf',
                                         'CVHFrkbssss_direct_scf_dm')
             self.opt_ssss.direct_scf_threshold = self.direct_scf_threshold
+            set_vkscreen(self.opt_ssss, 'CVHFrkbllll_vkscreen')
             self.opt_ssll = _vhf.VHFOpt(mol, 'cint2e_spsp1',
                                         'CVHFrkbssll_prescreen',
                                         'CVHFrkbssll_direct_scf',
                                         'CVHFrkbssll_direct_scf_dm')
             self.opt_ssll.direct_scf_threshold = self.direct_scf_threshold
+            set_vkscreen(self.opt_ssll, 'CVHFrkbssll_vkscreen')
 
-    def set_mo_occ(self, mo_energy, mo_coeff=None):
+    def set_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
         n4c = mo_energy.size
         n2c = n4c / 2
@@ -235,7 +195,7 @@ class UHF(hf.SCF):
 
     # full density matrix for UHF
     @lib.omnimethod
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def make_rdm1(self, mo_coeff, mo_occ):
         mo = mo_coeff[:,mo_occ>0]
         return numpy.dot(mo*mo_occ[mo_occ>0], mo.T.conj())
 
@@ -343,7 +303,7 @@ class UHF(hf.SCF):
 
     def scf_cycle(self, mol, conv_threshold=1e-9, dump_chk=True, init_dm=None):
         if init_dm is None:
-            hf_energy, dm = self.init_guess_method(mol)
+            hf_energy, dm = self.make_init_guess(mol)
         else:
             hf_energy = 0
             dm = init_dm
@@ -355,14 +315,14 @@ class UHF(hf.SCF):
         if init_dm is None and self._coulomb_now.upper() == 'LLLL':
             scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
                     = hf.scf_cycle(mol, self, 4e-3, dump_chk, init_dm=dm)
-            dm = self.calc_den_mat(mo_coeff, mo_occ)
+            dm = self.make_rdm1(mo_coeff, mo_occ)
             self._coulomb_now = 'SSLL'
 
         if init_dm is None and (self._coulomb_now.upper() == 'SSLL' \
                              or self._coulomb_now.upper() == 'LLSS'):
             scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
                     = hf.scf_cycle(mol, self, 4e-4, dump_chk, init_dm=dm)
-            dm = self.calc_den_mat(mo_coeff, mo_occ)
+            dm = self.make_rdm1(mo_coeff, mo_occ)
             self._coulomb_now = 'SSSS'
 
         if self.with_ssss:
@@ -502,13 +462,13 @@ class RHF(UHF):
 
     # full density matrix for RHF
     @lib.omnimethod
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def make_rdm1(self, mo_coeff, mo_occ):
         '''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
         D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
         RHF average the density of spin up and spin down:
         D(RHF) = (D(UHF) + T[D(UHF)])/2
         '''
-        dm = UHF.calc_den_mat(mo_coeff, mo_occ)
+        dm = UHF.make_rdm1(mo_coeff, mo_occ)
         return (dm + time_reversal_matrix(self.mol, dm)) * .5
 
     def dump_occ(self, mol, mo_occ, mo_energy):
@@ -537,6 +497,5 @@ if __name__ == '__main__':
 ##############
 # SCF result
     method = UHF(mol)
-    #method.set_direct_scf_threshold(1e-18)
     energy = method.scf() #-2.38146942868
     print(energy)

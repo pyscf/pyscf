@@ -8,7 +8,7 @@ import pyscf.gto.moleintor
 import chkfile
 
 def frac_occ(scf, tol=1e-3):
-    def set_mo_occ(mo_energy, mo_coeff=None):
+    def set_occ(mo_energy, mo_coeff=None):
         mol = scf.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = mol.nelectron / 2
@@ -27,10 +27,10 @@ def frac_occ(scf, tol=1e-3):
             log.info(scf, 'HOMO = %.12g,', mo_energy[nocc-1])
         log.debug(scf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return set_mo_occ
+    return set_occ
 
 def dynamic_occ(scf, tol=1e-3):
-    def set_mo_occ(mo_energy, mo_coeff=None):
+    def set_occ(mo_energy, mo_coeff=None):
         mol = scf.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = mol.nelectron / 2
@@ -38,7 +38,7 @@ def dynamic_occ(scf, tol=1e-3):
         if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
             lst = abs(mo_energy - mo_energy[nocc-1]) < tol
             ndocc = nocc - int(lst[:nocc].sum())
-            mo_occ[ndocc:ndocc+nsocc] = 0
+            mo_occ[ndocc:nocc] = 0
             log.warn(scf, 'set charge = %d', (nocc-ndocc)*2)
         if nocc < mo_occ.size:
             log.info(scf, 'HOMO = %.12g, LUMO = %.12g,', \
@@ -47,7 +47,7 @@ def dynamic_occ(scf, tol=1e-3):
             log.info(scf, 'HOMO = %.12g,', mo_energy[nocc-1])
         log.debug(scf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return set_mo_occ
+    return set_occ
 
 def follow_state():
     pass
@@ -111,13 +111,14 @@ def project_mo_r2r(mol1, mo1, mol2):
                          numpy.dot(ps, mo1[n2c:])))
 
 def init_guess_by_chkfile(mf, chkfile_name, projection=True):
+    import hf
+    import dhf
     mol = mf.mol
     chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
 
     fproj = lambda mo: mo
     fdm = lambda: numpy.dot(mo*mo_occ, mo.T.conj())
-    if 'dhf' in str(mf.__class__):
-        tag = 'R-UHF'
+    if isinstance(mf, dhf.UHF) or 'dhf' in str(mf.__class__):
         if numpy.iscomplexobj(scf_rec['mo_coeff']):
             mo = scf_rec['mo_coeff']
             mo_occ = scf_rec['mo_occ']
@@ -129,14 +130,12 @@ def init_guess_by_chkfile(mf, chkfile_name, projection=True):
             else: # nr-UHF
                 mo = project_mo_nr2r(chk_mol, scf_rec['mo_coeff'][0], mol)
                 mo_occ = scf_rec['mo_occ'][0]
-            import dhf
             n2c = mo.shape[0]
             dm = numpy.zeros((n2c*2,n2c*2), dtype=complex)
             dm_ll = numpy.dot(mo*mo_occ, mo.T.conj())
             dm[:n2c,:n2c] = (dm_ll + dhf.time_reversal_matrix(mol, dm_ll)) * .5
             fdm = lambda: dm
-    elif 'RHF' in str(mf.__class__): # nr-RHF
-        tag = 'NR-RHF'
+    elif isinstance(mf, hf.RHF) or 'RHF' in str(mf.__class__): # nr-RHF
         if scf_rec['mo_coeff'].ndim == 2:
             mo = scf_rec['mo_coeff']
             mo_occ = scf_rec['mo_occ']
@@ -145,7 +144,6 @@ def init_guess_by_chkfile(mf, chkfile_name, projection=True):
             mo_occ = scf_rec['mo_occ'][0]
         fproj = lambda mo: project_mo_nr2nr(chk_mol, mo, mol)
     else: # nr-UHF
-        tag = 'NR-UHF'
         if scf_rec['mo_coeff'].ndim == 2:
             mo = (scf_rec['mo_coeff'],)*2
             mo_occ = (scf_rec['mo_occ'],)*2

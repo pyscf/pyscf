@@ -3,7 +3,7 @@ from pyscf import scf
 
 mol = gto.Mole()
 mol.build(
-    verbose = 5,
+    verbose = 4,
     output = "out_bz",
 
     atom = [
@@ -21,9 +21,36 @@ mol.build(
     ["H", (-2.45529319,  1.81939187, -0.00886348)],],
 
     basis = {"H": 'cc-pvtz',
-             "C": 'cc-pvtz',}, # -230.776765415
+             "C": 'cc-pvtz',},
 )
 
-rhf = scf.RHF(mol)
-rhf.conv_threshold = 1e-8
-print "E=", rhf.scf()
+mf = scf.RHF(mol)
+mf.conv_threshold = 1e-8
+e = mf.scf()
+print('E = %.15g, ref -230.776765415' % e)
+
+import tempfile
+import numpy
+import h5py
+from pyscf import ao2mo
+_eritmp = tempfile.NamedTemporaryFile()
+eritmp = _eritmp.name
+nocc = mol.nelectron / 2
+nvir = len(mf.mo_energy) - nocc
+co = mf.mo_coeff[:,:nocc]
+cv = mf.mo_coeff[:,nocc:]
+ao2mo.outcore.general(mol, (co,cv,co,cv), eritmp, max_memory=500, dataname='mp2_bz')
+
+eia = mf.mo_energy[:nocc,None] - mf.mo_energy[None,nocc:]
+f = h5py.File(eritmp, 'r')
+eri = f['mp2_bz']
+emp2 = 0
+for i in range(nocc):
+    dajb = (eia[i].reshape(-1,1) + eia.reshape(1,-1)).ravel()
+    gi = numpy.array(eri[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
+    t2 = (gi.ravel()/dajb).reshape(nvir,nocc,nvir)
+    theta = gi.ravel()*2 - gi.transpose(2,1,0).ravel()
+    emp2 += numpy.dot(t2.ravel(), theta)
+
+print('E_MP2 = %.15g, ref = -1.0435476768' % emp2)
+f.close()

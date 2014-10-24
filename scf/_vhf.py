@@ -78,7 +78,8 @@ class _CVHFOpt(ctypes.Structure):
                 ('direct_scf_cutoff', ctypes.c_double),
                 ('q_cond', ctypes.c_void_p),
                 ('dm_cond', ctypes.c_void_p),
-                ('fprescreen', ctypes.c_void_p)]
+                ('fprescreen', ctypes.c_void_p),
+                ('r_vkscreen', ctypes.c_void_p)]
 
 ################################################
 # for general DM

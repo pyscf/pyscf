@@ -129,7 +129,7 @@ if __name__ == "__main__":
                  'O': 'cc-pvtz',}
     mol.build()
     c = simple_preiao(mol, 0)
-    #print c
+    #print(c)
 
 #    mf = scf.RHF(mol)
 #    mf.scf()

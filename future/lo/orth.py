@@ -62,9 +62,9 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.scf()
 
-    c0 = nao.prenao(mol, mf.calc_den_mat())
+    c0 = nao.prenao(mol, mf.make_rdm1())
     c = orth_ao(mol, c0, 'meta_lowdin')
 
     s = mol.intor_symmetric('cint1e_ovlp_sph')
-    p = reduce(numpy.dot, (s, mf.calc_den_mat(), s))
-    print reduce(numpy.dot, (c.T, p, c)).diagonal()
+    p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
+    print(reduce(numpy.dot, (c.T, p, c)).diagonal())

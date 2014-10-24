@@ -14,8 +14,8 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf.future import grad
-from pyscf.lib import logger as log
-from pyscf.lib import parameters as param
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
 import pyscf.scf._vhf
 
 CPSCF_MAX_CYCLE = 20
@@ -255,7 +255,7 @@ class MSC(object):
     def dia(self, mol, scf0):
         '''Dia-magnetic'''
         msc_dia = []
-        dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
+        dm0 = scf0.make_rdm1(scf0.mo_coeff, scf0.mo_occ)
         for n, nuc in enumerate(self.shielding_nuc):
             mol.set_rinv_by_atm_id(nuc)
             if self.is_giao:
@@ -310,7 +310,7 @@ class MSC(object):
         return msc_para, para_vir, para_occ
 
     @lib.omnimethod
-    def calc_den_mat_1(self, mo1, mo0, occ):
+    def make_rdm1_1(self, mo1, mo0, occ):
         ''' i * DM^1'''
         m = mo0[:,occ>0] * occ[occ>0]
         dm1 = []
@@ -350,7 +350,7 @@ class MSC(object):
             h1 = scf.chkfile.load(self.scf.chkfile, 'vhf_GIAO')
             log.info(self, 'Restore vhf_GIAO from chkfile\n')
         else:
-            dm0 = scf0.calc_den_mat(scf0.mo_coeff, scf0.mo_occ)
+            dm0 = scf0.make_rdm1(scf0.mo_coeff, scf0.mo_occ)
             vj, vk = scf._vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
                                            'CVHFfill_dot_nrs4', # ip1_sph has k>=l,
 # fill ij, ip1_sph has anti-symm between i and j
@@ -375,7 +375,7 @@ class MSC(object):
     def v_ind(self, scf0, mo1):
         '''Induced potential'''
         mol = scf0.mol
-        dm1 = self.calc_den_mat_1(mo1, scf0.mo_coeff, scf0.mo_occ)
+        dm1 = self.make_rdm1_1(mo1, scf0.mo_coeff, scf0.mo_occ)
         v_ao = self.scf.get_veff(mol, dm1, hermi=2)
         return self._mat_ao2mo(v_ao, scf0.mo_coeff, scf0.mo_occ)
 

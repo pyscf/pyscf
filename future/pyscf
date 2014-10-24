@@ -101,9 +101,9 @@ fci.fci(m)
 '''
         else:
             raise KeyError('Unknown method %s' % w['method'])
-    print '**** input script ****'
-    print inp
-    print '**** input script end ****'
+    print('**** input script ****')
+    print(inp)
+    print('**** input script end ****')
     exec(inp)
 
 

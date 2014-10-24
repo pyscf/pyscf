@@ -68,7 +68,6 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     hdm2 = numpy.dot(casdm2.reshape(ncas*ncas,-1), \
                      eris.aapp.reshape(ncas*ncas,-1)).reshape(ncas,ncas,nmo,nmo)
 
-
     h1e_mo = reduce(numpy.dot, (mo.T, casscf.get_hcore(), mo))
     g = numpy.dot(h1e_mo, dm1)
     g[:,:ncore] += vhf_ca[:,:ncore] * 2
@@ -245,13 +244,13 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     aaaa = aaaa + aaaa.transpose(0,1,3,2)
     aaaa = aaaa + aaaa.transpose(2,3,0,1)
     h2eff = casscf.fci_mod.absorb_h1e(h1cas, aaaa, ncas, nelecas) * .5
-    hc = casscf.fci_mod.contract_2e(h2eff, fcivec, ncas, nelecas).reshape(-1)
+    hc = casscf.fci_mod.contract_2e(h2eff, fcivec, ncas, nelecas).ravel()
 
     # pure core response
     ecore = h1eff[:ncore,:ncore].trace()*2 \
           + numpy.einsum('ijp,pj->', eris.jc_pp[:,:ncore], rmat[:,:ncore])*8 \
           - numpy.einsum('ijp,pj->', eris.kc_pp[:,:ncore], rmat[:,:ncore])*4
-    hc += ecore * fcivec.reshape(-1)
+    hc += ecore * fcivec.ravel()
     return hc
 
 # dr = h_{oc} * dc
@@ -340,23 +339,23 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 # * Restorsing the davidson.dsyev hessian from previous FCI solver as the
 #   approx CI hessian then solving  (H-E*1)dc = g or aug-hessian or H dc = g
 #   has not obvious advantage than simple gradeint.
-            dc = gci.reshape(-1)
+            dc = gci.ravel()
             dcmax = numpy.max(abs(dc))
 
             #norm_dc = numpy.linalg.norm(dc)
             #if norm_dc > casscf.max_ci_stepsize:
             #    dc = dc * (casscf.max_ci_stepsize/norm_dc)
             #if dcmax > casscf.max_ci_stepsize:
-            #    ci1 = fcivec.reshape(-1) - dc * (casscf.max_ci_stepsize/dcmax)
+            #    ci1 = fcivec.ravel() - dc * (casscf.max_ci_stepsize/dcmax)
             #else:
-            #    ci1 = fcivec.reshape(-1) - dc
+            #    ci1 = fcivec.ravel() - dc
             if dcmax > max_ci_stepsize:
-                ci1 = fcivec.reshape(-1) - dc * (max_ci_stepsize/dcmax)
+                ci1 = fcivec.ravel() - dc * (max_ci_stepsize/dcmax)
             else:
-                ci1 = fcivec.reshape(-1) - dc
+                ci1 = fcivec.ravel() - dc
             ci1 *= 1/numpy.linalg.norm(ci1)
 
-            ovlp_ci = numpy.dot(ci1.reshape(-1), fcivec.reshape(-1))
+            ovlp_ci = numpy.dot(ci1.ravel(), fcivec.ravel())
             norm_gci = numpy.linalg.norm(gci)
 
             u1, dx, g_orb, nin = rotate_orb_ah(casscf, mo, ci1, e_ci, \
@@ -442,6 +441,8 @@ class CASSCF(casci.CASCI):
         self._hcore = None
         self.chkfile = mf.chkfile
 
+        self._keys = set(self.__dict__.keys() + ['_keys'])
+
     def dump_flags(self):
         log = lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
@@ -473,6 +474,8 @@ class CASSCF(casci.CASCI):
         if micro is None:
             micro = self.max_cycle_micro
 
+        self.mol.check_sanity(self)
+
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
@@ -491,6 +494,8 @@ class CASSCF(casci.CASCI):
             macro = self.max_cycle_macro
         if micro is None:
             micro = self.max_cycle_micro
+
+        self.mol.check_sanity(self)
 
         self.dump_flags()
 
@@ -514,12 +519,12 @@ class CASSCF(casci.CASCI):
 
         v = []
         # active-core
-        v.append(mat[ncore:nocc,:ncore].reshape(-1))
+        v.append(mat[ncore:nocc,:ncore].ravel())
         #TODO:if self.inner_rotation:
         #TODO:    # active-active
-        #TODO:    v.append(mat[ncore:nocc,ncore:nocc].reshape(-1))
+        #TODO:    v.append(mat[ncore:nocc,ncore:nocc].ravel())
         # virtual-core, virtual-active
-        v.append(mat[nocc:,:nocc].reshape(-1))
+        v.append(mat[nocc:,:nocc].ravel())
         return numpy.hstack(v)
 
     # to anti symmetric matrix
@@ -563,7 +568,7 @@ class CASSCF(casci.CASCI):
         nocc = ncore + ncas
         nmo = mo.shape[1]
         vhf3c = numpy.dot(eris.CvcP.reshape(-1,ncore*nmo),
-                          r[:ncore].reshape(-1)).reshape(ncore,-1)
+                          r[:ncore].ravel()).reshape(ncore,-1)
         vhf3a = numpy.einsum('uqcp,cp->uq', eris.ApcP, r[:ncore])
         apcv = eris.ApcP[:,:,:,ncore:]
         dm4 = numpy.dot(casdm1, r[ncore:nocc])

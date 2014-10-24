@@ -97,12 +97,6 @@ class DIISLarge(DIIS):
         self.diistmpfile = h5py.File(tmp, 'w')
         self._is_tmpfile_reused = False
 
-    def __del__(self):
-        try:
-            self.diistmpfile.close()
-        except:
-            pass
-
     def push_vec(self, x):
         try:
             self.diistmpfile['/diis_vec/x%d' % self._head] = x

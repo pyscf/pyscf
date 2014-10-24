@@ -87,3 +87,7 @@ Version 0.5 (2014-10-01):
 Version 0.6 (2014-10-17):
   * Fix bug in dhf
   * add future/lo for localized orbital
+
+Version 0.7 (2014-?):
+  * Fix memory leaks
+  * Runtime keywords checking

@@ -118,5 +118,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests geom"
+    print("Full Tests geom")
     unittest.main()

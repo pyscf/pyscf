@@ -98,10 +98,12 @@ void NPzhermi_triu(int n, double complex *mat, int hermi)
 void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 {
         long i, j, ij;
+        double *pmat;
 
         for (ij = 0, i = 0; i < n; i++) {
+                pmat = mat + i * n;
                 for (j = 0; j <= i; j++, ij++) {
-                        mat[i*n+j] = tril[ij];
+                        pmat[j] = tril[ij];
                 }
         }
         if (hermi) {

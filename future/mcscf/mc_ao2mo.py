@@ -253,12 +253,12 @@ def _mem_usage(ncore, ncas, nmo):
     outcore = (ncore**2*(nmo-ncore)*nmo + ncas**2*nmo**2*2 + nmo**3) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
     if outcore > 10000:
-        print 'Be careful with the virtual memorty address space `ulimit -v`'
+        print('Be careful with the virtual memorty address space `ulimit -v`')
     return incore, outcore
 
 if __name__ == '__main__':
-    import scf
-    import gto
+    from pyscf import scf
+    from pyscf import gto
     import mc1step
 
     mol = gto.Mole()
@@ -301,8 +301,6 @@ if __name__ == '__main__':
     kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])
     aaaa = numpy.array(aaap[:,:,:,ncore:nocc])
     aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
-    for i in range(ncas):
-        print i,aapp[i].sum()
     appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
     capp = eri[:ncore,ncore:nocc,:,:]
     cpap = eri[:ncore,:,ncore:nocc,:]

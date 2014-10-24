@@ -11,7 +11,7 @@ import numpy
 from pyscf import lib
 from pyscf import scf
 import pyscf.scf._vhf
-from pyscf.lib import logger as log
+import pyscf.lib.logger as log
 import hf
 
 WITH_LLLL = 1

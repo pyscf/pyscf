@@ -67,11 +67,11 @@ class UHF(dhf.UHF):
         mrkb = dhf.UHF(mol)
         if self.rkb_chkfile is not None:
             mrkb.chkfile = self.rkb_chkfile
-            mrkb.set_init_guess('chkfile')
+            mrkb.init_guess = 'chkfile'
         scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
                 = mrkb.scf_cycle(mol, 1e-5, False)
         c = numpy.dot(self.project_rkb_to_dkb(mol), mo_coeff)
-        dm = mrkb.calc_den_mat(c, mo_occ)
+        dm = mrkb.make_rdm1(c, mo_occ)
         log.debug(self, 'DKB initial guess with hf_energy = %.12g', hf_energy)
         mol.stdout.flush()
         return hf_energy, dm
@@ -112,8 +112,8 @@ class UHF(dhf.UHF):
         mo_coeff = scf_rec['mo_coeff']
         mo_energy = scf_rec['mo_energy']
         hf_energy = scf_rec['hf_energy']
-        mo_occ = self.set_mo_occ(mo_energy, mo_coeff)
-        dm = self.calc_den_mat(mo_coeff, mo_occ)
+        mo_occ = self.set_occ(mo_energy, mo_coeff)
+        dm = self.make_rdm1(mo_coeff, mo_occ)
         return hf_energy, dm
 
     def _init_guess_by_rkb_chkfile(self, mol):
@@ -161,6 +161,9 @@ class UHF(dhf.UHF):
         s1e[:n2c,:n2c] = s[:n2c,:n2c] + t[:n2c,:n2c] * (.5/c**2)
         s1e[n2c:,n2c:] = s[n2c:,n2c:] + t[n2c:,n2c:] * (.5/c**2)
         return s1e
+
+    def build(self, mol):
+        self.init_direct_scf(mol)
 
     def init_direct_scf(self, mol):
         if self.direct_scf:

@@ -60,6 +60,6 @@ class KnowValues_NR(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for He"
+    print("Full Tests for He")
     unittest.main()
 

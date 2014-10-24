@@ -67,15 +67,15 @@ class AtomSphericAverageRHF(hf.RHF):
                     idx += 1
         return mo_e, mo_c
 
-    def set_mo_occ(self, mo_energy, mo_coeff):
+    def set_occ(self, mo_energy, mo_coeff):
         return self._occ
 
-    def calc_den_mat(self, mo_coeff, mo_occ):
+    def make_rdm1(self, mo_coeff, mo_occ):
         mo = mo_coeff[:,mo_occ>0]
         return numpy.dot(mo*mo_occ[mo_occ>0], mo.T)
 
     def scf_cycle(self, mol, *args, **keys):
-        self.init_direct_scf(self.mol)
+        self.build()
         res = hf.scf_cycle(mol, self, *args, dump_chk=False, **keys)
         return res
 

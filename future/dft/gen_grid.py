@@ -128,7 +128,7 @@ class Grids(object):
             rad, rad_weight, ang, ang_weight = atom_grids_tab[symb]
             coords = numpy.einsum('i,jk->ijk',rad,ang).reshape(-1,3) \
                     + self._atm_coords[ia]
-            vol = numpy.einsum('i,j->ij', rad_weight, ang_weight).reshape(-1)
+            vol = numpy.einsum('i,j->ij', rad_weight, ang_weight).ravel()
             pbecke = self.gen_grid_partition(mol, coords, fn_adjust)
             weights = vol * pbecke[ia] / pbecke.sum(axis=0)
             coords_all.append(coords)

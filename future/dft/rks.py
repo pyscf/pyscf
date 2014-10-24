@@ -25,6 +25,7 @@ class RKS(scf.hf.RHF):
         self._exc = 0
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(mol)
+        self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def dump_flags(self):
         scf.hf.RHF.dump_flags(self)
@@ -93,5 +94,5 @@ if __name__ == '__main__':
 # SCF result
     m = RKS(mol)
     m.xc = 'LDA,VWN_RPA'
-    #m.init_guess('1e')
+    #m.init_guess = '1e'
     print(m.scf()) #-2.8519879

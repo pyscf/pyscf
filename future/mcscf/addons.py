@@ -4,7 +4,7 @@ import numpy
 from pyscf import lib
 from pyscf import ao2mo
 
-def sort_mo(casscf, mo, caslst, base=0):
+def sort_mo(casscf, mo, caslst, base=1):
     assert(casscf.ncas == len(caslst))
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas
@@ -142,6 +142,15 @@ def restore_cas_natorb(casscf, fcivec=None, mo=None):
     mo[:,ncore:nocc] = numpy.dot(mo[:,ncore:nocc], ucas)
     fcivec = casscf.casci(mo, fcivec)[2]
     return fcivec, mo
+
+def map2hf(casscf, base=1, threshold=.5):
+    s = casscf.mol.intor_symmetric('cint1e_ovlp_sph')
+    s = reduce(numpy.dot, (casscf.mo_coeff.T, s, casscf._scf.mo_coeff))
+    idx = numpy.argwhere(abs(s) > threshold)
+    for i,j in idx:
+        casscf.stdout.write('<mo-mcscf|mo-hf>  %d  %d  %12.8f\n'
+                            % (i+base,j+base,s[i,j]))
+    casscf.stdout.flush()
 
 
 if __name__ == '__main__':

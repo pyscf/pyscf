@@ -83,6 +83,8 @@ class CASCI(object):
         self.ci = None
         self.e_tot = 0
 
+        self._keys = set(self.__dict__.keys() + ['_keys'])
+
     def dump_flags(self):
         log = lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
@@ -122,7 +124,11 @@ class CASCI(object):
             mo = self.mo_coeff
         if ci0 is None:
             ci0 = self.ci
+
+        self.mol.check_sanity(self)
+
         self.dump_flags()
+
         self.e_tot, e_cas, self.ci = \
                 kernel(self, mo, ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci

@@ -77,9 +77,9 @@ if __name__ == '__main__':
             assert(numpy.allclose(rmat,
                                   rotatesub1(s[i0:i1,j0:j1], i0, j0, tao)))
             if dd > 1e-12:
-                print ish, jsh, dd
+                print(ish, jsh, dd)
                 assert(0)
-    print 'pass'
+    print('pass')
 
     nao = mol.nao_2c()
     j = 0
@@ -94,4 +94,4 @@ if __name__ == '__main__':
         j += 1
         idx1.append(abs(tao[idx1[-1]]))
 
-    print all(numpy.array(idx0[:j-1]) == numpy.array(idx1[:j-1]))
+    print(all(numpy.array(idx0[:j-1]) == numpy.array(idx1[:j-1])))

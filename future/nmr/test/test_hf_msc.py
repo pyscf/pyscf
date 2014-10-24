@@ -92,5 +92,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests of RHF-MSC DHF-MSC for HF"
+    print("Full Tests of RHF-MSC DHF-MSC for HF")
     unittest.main()

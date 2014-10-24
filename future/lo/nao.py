@@ -65,7 +65,7 @@ def _spheric_average_mat(mat, l, lst):
 
 
 def nao(mol, mf, restore=True):
-    dm = mf.calc_den_mat()
+    dm = mf.make_rdm1()
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     p = reduce(numpy.dot, (s, dm, s))
     pre_occ, pre_nao = _prenao_sub(mol, p, s)
@@ -144,11 +144,11 @@ if __name__ == "__main__":
     mf.scf()
 
     s = mol.intor_symmetric('cint1e_ovlp_sph')
-    p = reduce(numpy.dot, (s, mf.calc_den_mat(), s))
+    p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
     o0, c0 = _prenao_sub(mol, p, s)
-    print o0
-    print abs(c0).sum() - 21.848915907988854
+    print(o0)
+    print(abs(c0).sum() - 21.848915907988854)
 
     c = nao(mol, mf)
-    print reduce(numpy.dot, (c.T, p, c)).diagonal()
-    print core_val_ryd_list(mol)
+    print(reduce(numpy.dot, (c.T, p, c)).diagonal())
+    print(core_val_ryd_list(mol))

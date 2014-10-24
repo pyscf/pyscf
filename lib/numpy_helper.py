@@ -172,6 +172,54 @@ def transpose_sum(a, inplace=False):
         anew[i0:i1,i0:i1] = tmp
     return anew
 
+# numpy.dot might not call optimized blas
+def dot(a, b, alpha=1, c=None, beta=0):
+    m = a.shape[0]
+    k = a.shape[1]
+    n = b.shape[1]
+    if a.flags.c_contiguous:
+        trans_a = 'N'
+    elif a.flags.f_contiguous:
+        trans_a = 'T'
+        a = a.T
+    else:
+        raise ValueError('a.flags: %s' % str(a.flags))
+
+    assert(k == b.shape[0])
+    if b.flags.c_contiguous:
+        trans_b = 'N'
+    elif b.flags.f_contiguous:
+        trans_b = 'T'
+        b = b.T
+    else:
+        raise ValueError('b.flags: %s' % str(b.flags))
+
+    if c is None:
+        c = numpy.empty((m,n))
+        beta = 0
+    else:
+        assert(c.flags.c_contiguous)
+
+    return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
+
+# a, b, c in C-order
+def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
+           offseta=0, offsetb=0, offsetc=0):
+    assert(a.flags.c_contiguous)
+    assert(b.flags.c_contiguous)
+    assert(c.flags.c_contiguous)
+
+    _np_helper.NPdgemm(ctypes.c_char(trans_b), ctypes.c_char(trans_a),
+                       ctypes.c_int(n), ctypes.c_int(m), ctypes.c_int(k),
+                       ctypes.c_int(b.shape[1]), ctypes.c_int(a.shape[1]),
+                       ctypes.c_int(c.shape[1]),
+                       ctypes.c_int(offsetb), ctypes.c_int(offseta),
+                       ctypes.c_int(offsetc),
+                       b.ctypes.data_as(ctypes.c_void_p),
+                       a.ctypes.data_as(ctypes.c_void_p),
+                       c.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_double(alpha), ctypes.c_double(beta))
+    return c
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))
@@ -195,3 +243,22 @@ if __name__ == '__main__':
     x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
 
+    a = numpy.random.random((400,400))
+    b = numpy.random.random((400,400))
+    print abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum()
+    print abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum()
+    print abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum()
+    print abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum()
+
+    a = numpy.random.random((400,40))
+    b = numpy.random.random((40,400))
+    print abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum()
+    print abs(dot(b  ,a  )-numpy.dot(b  ,a  )).sum()
+    print abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum()
+    print abs(dot(b.T,a.T)-numpy.dot(b.T,a.T)).sum()
+    a = numpy.random.random((400,40))
+    b = numpy.random.random((400,40))
+    print abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum()
+    print abs(dot(b  ,a.T)-numpy.dot(b  ,a.T)).sum()
+    print abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum()
+    print abs(dot(b.T,a  )-numpy.dot(b.T,a  )).sum()

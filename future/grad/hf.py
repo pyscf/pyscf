@@ -59,7 +59,7 @@ class RHF:
         return vj - vk*.5
 
     @lib.omnimethod
-    def calc_den_mat_e(self, scf_method):
+    def make_rdm1e(self, scf_method):
         '''Energy weighted density matrix'''
         occ = scf_method.mo_occ
         mo0 = scf_method.mo_coeff[:,occ>0]
@@ -87,11 +87,11 @@ class RHF:
         t0 = (time.clock(), time.time())
         h1 = self.get_hcore(mol)
         s1 = self.get_ovlp(mol)
-        dm0 = mf.calc_den_mat(mf.mo_coeff, mf.mo_occ)
+        dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
         vhf = self.get_coulomb_hf(mol, dm0)
         log.timer(self, 'gradients of 2e part', *t0)
         f1 = h1 + vhf
-        dme0 = self.calc_den_mat_e(mf)
+        dme0 = self.make_rdm1e(mf)
         gs = []
         for ia in range(mol.natm):
             f = self.frac_atoms(mol, ia, f1) + self._grad_rinv(mol, ia)
@@ -138,11 +138,10 @@ class RHF:
 def redo_scf(mol, mf):
     #if self.restart:
     #    log.info(self, 'Restart. Read HF results from chkfile.')
-    #    mf.init_guess_by_chkfile(mol)
     if not mf.scf_conv:
         log.info(mf, 'SCF again before Gradients.')
         if mf.mo_coeff is not None:
-            dm = mf.calc_den_mat(mf.mo_coeff, mf.mo_occ)
+            dm = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
             scf_conv, hf_energy, mf.mo_energy, mf.mo_occ, mf.mo_coeff \
                     = mf.scf_cycle(mol, mf.conv_threshold*1e2, \
                                    init_dm=dm)
