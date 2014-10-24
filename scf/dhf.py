@@ -8,6 +8,7 @@ Dirac Hartree-Fock
 '''
 
 import ctypes
+import _ctypes
 import time
 import numpy
 import scipy.linalg
