@@ -14,4 +14,5 @@ mol.build()
 
 mf = scf.RHF(mol)
 mf.chkfile = 'c60tz.chkfile'
-print(mf.scf())
+mf.conv_threshold = 1e-8
+print(mf.scf() - -2272.4201163243)

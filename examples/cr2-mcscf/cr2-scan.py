@@ -25,6 +25,7 @@ def run(b, caslst):
     m.init_guess = 'chkfile'
     m.level_shift_factor = .5
     m.set_mo_occ = scf.addons.frac_occ(m)
+    m.diis_space = 25
     m.max_cycle = 100
     m.conv_threshold = 1e-9
     ehf.append(m.scf())

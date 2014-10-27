@@ -271,7 +271,7 @@ class Mole(object):
         if not self.symmetry:
             self.atom = self.format_atom(self.atom)
         else:
-            import symm
+            from pyscf import symm
             #if self.symmetry in symm.param.POINTGROUP
             #    self.pgname = self.symmetry
             #    #todo: symm.check_given_symm(self.symmetric, self.atom)
@@ -291,7 +291,7 @@ class Mole(object):
         self.nelectron = self.tot_electrons()
 
         if self.symmetry:
-            import symm
+            from pyscf import symm
             eql_atoms = symm.symm_identical_atoms(self.pgname, self.atom)
             symm_orb = symm.symm_adapted_basis(self.pgname, eql_atoms,\
                                                self.atom, self.basis)

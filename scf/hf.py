@@ -251,7 +251,7 @@ class SCF(object):
                 fn = addons.init_guess_by_chkfile(self, self.chkfile)
                 return fn(mol)
             except:
-                log.warn(self, 'Fail in reading from %s. Use MINAO initial guess', \
+                log.warn(self, 'Fail in reading %s. Use MINAO initial guess', \
                          self.chkfile)
                 return self._init_guess_by_minao(mol)
         else:

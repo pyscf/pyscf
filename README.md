@@ -45,7 +45,7 @@ Installation
 
     BLA_VENDOR=Intel10_64lp cmake ..
 
-  If cmake still cannot find MKL, just define BLAS_LIBRARIES in CMakeLists.txt
+  If cmake is still not able to find MKL, just define BLAS_LIBRARIES in CMakeLists.txt
 
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
