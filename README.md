@@ -53,6 +53,20 @@ Installation
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
 
+Adding new features
+-------------------
+For developrs who has interests to add new features in this program,
+there are few rules should be followed.
+
+* New features first being placed in pyscf/future.
+* Code at least should work under python-2.7, gcc-4.8.
+* Not enforced, it's preferred
+  - compatibile with 2.5 - 3.3 for Python code;
+  - following C89 standard for C code;
+  - using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
+  - avoid using other program language if possible, to keep package light-weight
+
+
 Known problems
 --------------
 
