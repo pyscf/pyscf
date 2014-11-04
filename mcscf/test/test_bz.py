@@ -2,7 +2,7 @@
 import unittest
 from pyscf import scf
 from pyscf import gto
-from pyscf.future import mcscf
+from pyscf import mcscf
 
 mol = gto.Mole()
 mol.verbose = 0

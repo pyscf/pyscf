@@ -105,3 +105,4 @@ Version 0.6 (2014-10-17):
 Version 0.7 (2014-?):
   * Fix memory leaks
   * Runtime keywords checking
+  * add MP2 density matrix

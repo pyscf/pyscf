@@ -2,9 +2,9 @@
 import numpy
 from pyscf import scf
 from pyscf import gto
-from pyscf.future import mcscf
-import pyscf.future.mcscf.mc1step
-import pyscf.future.mcscf.addons
+from pyscf import mcscf
+import pyscf.mcscf.mc1step
+import pyscf.mcscf.addons
 
 ehf = []
 emc = []

@@ -4,7 +4,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
-from pyscf.future import mcscf
+from pyscf import mcscf
 
 b = 1.4
 mol = gto.Mole()

@@ -3,7 +3,7 @@ import numpy
 import numpy
 from pyscf import gto
 from pyscf import scf
-from pyscf.future import mcscf
+from pyscf import mcscf
 from pyscf.tools import dump_mat
 
 ehf = []
