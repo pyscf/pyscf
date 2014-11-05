@@ -15,6 +15,30 @@ MAPSPDF = {'S': 0,
            'I': 6,
            'J': 7}
 
+def parse_str(string):
+    bastxt = [x for x in string.split('\n') \
+              if x.strip() and 'END' not in x and '#BASIS SET' not in x]
+
+    basis_add = []
+    for dat in bastxt:
+        key = dat.split()[1].upper()
+        if key == 'SP':
+            basis_add.append([0])
+            basis_add.append([1])
+        elif key in MAPSPDF:
+            basis_add.append([MAPSPDF[key]])
+        else:
+            line = map(float, dat.replace('D','e').split())
+            if key == 'SP':
+                basis_add[-2].append([line[0], line[1]])
+                basis_add[-1].append([line[0], line[2]])
+            else:
+                basis_add[-1].append(line)
+    bsort = []
+    for l in range(MAXL):
+        bsort.extend([b for b in basis_add if b[0] == l])
+    return bsort
+
 def parse(basisfile, symb):
     basis_add = []
     for dat in search_seg(basisfile, symb):

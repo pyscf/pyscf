@@ -505,7 +505,7 @@ class RHF(SCF):
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''NR RHF Coulomb repulsion'''
         t0 = (time.clock(), time.time())
-        if self._is_mem_enough():
+        if self._is_mem_enough() or self._eri is not None:
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm, hermi=hermi)
@@ -777,7 +777,7 @@ class UHF(SCF):
         t0 = (time.clock(), time.time())
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
-        if self._is_mem_enough():
+        if self._is_mem_enough() or self._eri is not None:
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj0, vk0 = dot_eri_dm(self._eri, dm[0], hermi=hermi)

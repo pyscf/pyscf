@@ -50,12 +50,7 @@ def pre_atm_scf_ao(mol):
 
 def preiao(mol, mocc, minao='minao'):
     pmol = minao_mol(mol, minao)
-    naomin = pmol.nao_nr()
-    pmol._atm, pmol._bas, pmol._env = \
-            gto.mole.conc_env(pmol._atm, pmol._bas, pmol._env, \
-                              mol._atm, mol._bas, mol._env)
-    s12 = pmol.intor_cross('cint1e_ovlp_sph', range(pmol.nbas),
-                           range(pmol.nbas, pmol.nbas+mol.nbas))
+    s12 = gto.mole.intor_cross('cint1e_ovlp_sph', pmol, mol)
     sblock_inv = numpy.linalg.inv(sblock_minao(mol, minao))
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     sinv = numpy.linalg.inv(s)

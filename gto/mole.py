@@ -241,6 +241,7 @@ class Mole(object):
                atom=None, basis=None, nucmod=None, mass=None, grids=None, \
                charge=None, spin=None, symmetry=None, light_speed=None):
 # release circular referred objs
+# Note obj.x = obj.member_function causes circular referrence
         gc.collect()
 
         if verbose is not None: self.verbose = verbose
@@ -565,7 +566,7 @@ class Mole(object):
         return numpy.array(self._env[ptr:ptr+3])
 
     def nbas_of_atm(self, atm_id):
-        symb = self.symbol_of_atm[atm_id]
+        symb = self.symbol_of_atm(atm_id)
         return self.basis[symb].__len__()
 
     def basids_of_atm(self, atm_id):
@@ -731,6 +732,8 @@ class Mole(object):
     def get_enuc(self):
         return nuclear_repulsion()
     def nuclear_repulsion(self):
+        if self.natm == 0:
+            return 0
         chargs = numpy.array([self.charge_of_atm(i) for i in range(len(self._atm))])
         coords = numpy.array([self.coord_of_atm(i) for i in range(len(self._atm))])
         xx = coords[:,0].reshape(-1,1) - coords[:,0]
@@ -847,6 +850,15 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     atm2, bas2 = shift_ptr(atm2, bas2, len(env1))
     return atm1+atm2, bas1+bas2, env1+env2
 
+# <bas-of-mol1|intor|bas-of-mol2>
+def intor_cross(intor, mol1, mol2, dim3=1):
+    nbas1 = len(mol1._bas)
+    nbas2 = len(mol2._bas)
+    atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env, \
+                                mol2._atm, mol2._bas, mol2._env)
+    bras = range(nbas1)
+    kets = range(nbas1, nbas+nbas2)
+    return moleintor.getints(intor, atmc, basc, envc, bras, kets, dim3, 0)
 
 def tot_electrons(mol):
     nelectron = -mol.charge

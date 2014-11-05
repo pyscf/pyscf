@@ -7,10 +7,10 @@ version 0.6
 
 2014-10-17
 
-Pyscf is an open-source suite of quantum chemistry program.  The program
-aims to provide a simple, light-weight and efficient platform for quantum
-chemistry code developing and calculation.  The program is developed in
-the principle of
+Pyscf is a python module for quantum chemistry program.  The module
+aims to provide a simple, light-weight and efficient platform for
+quantum chemistry code developing and calculation.  The program is
+developed in the principle of
 * Easy to install, to use, to extend and to be embedded;
 * Minimal requirements on libraries (No Boost, MPI) and computing
   resources (perhaps losing efficiency to reduce I/O);
@@ -56,7 +56,7 @@ Installation
 Adding new features
 -------------------
 For developrs who has interests to add new features in this program,
-there are few rules should be followed.
+there are few rules to follow
 
 * New features first being placed in pyscf/future.
 * Code at least should work under python-2.7, gcc-4.8.
@@ -76,8 +76,8 @@ Bug report
 Qiming Sun <osirpt.sun@gmail.com>
 
 
-Changes
--------
+Changes log
+-----------
 Version 0.1 (2014-05-03):
   * Setup pyscf
 
