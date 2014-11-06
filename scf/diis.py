@@ -78,7 +78,7 @@ class DIIS:
                 H[i,i] = H[i,i] + 1e-11
             c = numpy.linalg.solve(H, G)
             #c = numpy.linalg.solve(H[:nd,:nd], G[:nd])
-        log.debug(self, 'diis-c %s', c)
+        log.debug1(self, 'diis-c %s', c)
 
         x = numpy.zeros_like(x)
         for i, ci in enumerate(c[1:]):
@@ -144,7 +144,7 @@ class SCF_DIIS(DIIS):
     def push_err_vec(self, s, d, f):
         sdf = reduce(numpy.dot, (s,d,f))
         errvec = sdf.T.conj() - sdf
-        log.debug(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
+        log.debug1(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
 
         self.err_vec_stack.append(errvec)
         if self.err_vec_stack.__len__() > self.diis_space:

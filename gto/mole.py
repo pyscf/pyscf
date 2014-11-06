@@ -857,7 +857,7 @@ def intor_cross(intor, mol1, mol2, dim3=1):
     atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env, \
                                 mol2._atm, mol2._bas, mol2._env)
     bras = range(nbas1)
-    kets = range(nbas1, nbas+nbas2)
+    kets = range(nbas1, nbas1+nbas2)
     return moleintor.getints(intor, atmc, basc, envc, bras, kets, dim3, 0)
 
 def tot_electrons(mol):
