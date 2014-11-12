@@ -49,7 +49,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None):
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
-    e_cas, fcivec = casci.fci_mod.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0)
+    e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0)
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core
@@ -76,7 +76,7 @@ class CASCI(object):
         self.ci_lindep = 1e-14
         self.ci_max_cycle = 30
         self.ci_conv_threshold = 1e-8
-        self.fci_mod = pyscf.fci.direct_spin0
+        self.fcisolver = pyscf.fci.direct_spin0
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None

@@ -35,7 +35,7 @@ def make_rdm1(casscf, fcivec=None, mo=None):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nmo = mo.shape[1]
-    casdm1 = casscf.fci_mod.make_rdm1(fcivec, ncas, nelecas)
+    casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
     rdm1 = _make_rdm1_on_mo(casdm1, ncore, ncas, nmo)
     rdm1 = reduce(numpy.dot, (mo, rdm1, mo.T))
     return rdm1
@@ -50,7 +50,7 @@ def make_rdm1s(casscf, fcivec=None, mo=None):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nmo = mo.shape[1]
-    rdm1a, rdm1b = casscf.fci_mod.make_rdm1s(fcivec, ncas, nelecas)
+    rdm1a, rdm1b = casscf.fcisolver.make_rdm1s(fcivec, ncas, nelecas)
     rdm1a = _make_rdm1_on_mo(rdm1a, ncore, ncas, nmo, False)
     rdm1b = _make_rdm1_on_mo(rdm1b, ncore, ncas, nmo, False)
     rdm1a = reduce(numpy.dot, (mo, rdm1a, mo.T))
@@ -84,7 +84,7 @@ def make_rdm12(casscf, fcivec=None, mo=None):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nmo = mo.shape[1]
-    casdm1, casdm2 = casscf.fci_mod.make_rdm12(fcivec, ncas, nelecas)
+    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas)
     rdm1, rdm2 = _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo)
     rdm1 = reduce(numpy.dot, (mo, rdm1, mo.T))
     rdm2 = numpy.dot(mo, rdm2.reshape(nmo,-1))
@@ -107,7 +107,7 @@ def make_fock(casscf, fcivec=None, mo=None):
     nmo = mo.shape[1]
     mocc = mo[:,:nocc]
 
-    casdm1 = casscf.fci_mod.make_rdm1(fcivec, ncas, nelecas)
+    casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
     eris = casscf.update_ao2mo(mo)
     vj = numpy.einsum('ipq->pq', eris['jc_pp']) * 2 \
        + numpy.einsum('ij,ijpq->pq', casdm1, eris['aapp'])
@@ -129,7 +129,7 @@ def restore_cas_natorb(casscf, fcivec=None, mo=None):
     nelecas = casscf.nelecas
     nocc = ncore + ncas
     nmo = mo.shape[1]
-    casdm1 = casscf.fci_mod.make_rdm1(fcivec, ncas, nelecas)
+    casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
     occ, ucas = numpy.linalg.eigh(-casdm1)
     occ = -occ
     log.info('Natural occs')

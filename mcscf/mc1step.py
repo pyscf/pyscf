@@ -166,7 +166,7 @@ def rotate_orb_ah(casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
     nmo = mo.shape[1]
 
     t2m = (time.clock(), time.time())
-    casdm1, casdm2 = casscf.fci_mod.make_rdm12(fcivec, ncas, nelecas)
+    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas)
     g_orb0, h_op, h_diag = gen_g_hop(casscf, mo, casdm1, casdm2, eris)
     t3m = log.timer('gen h_op', *t2m)
 
@@ -242,8 +242,8 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     aaaa = numpy.einsum('tuvp,pw->tuvw', aaap, rmat[:,ncore:nocc])
     aaaa = aaaa + aaaa.transpose(0,1,3,2)
     aaaa = aaaa + aaaa.transpose(2,3,0,1)
-    h2eff = casscf.fci_mod.absorb_h1e(h1cas, aaaa, ncas, nelecas) * .5
-    hc = casscf.fci_mod.contract_2e(h2eff, fcivec, ncas, nelecas).ravel()
+    h2eff = casscf.fcisolver.absorb_h1e(h1cas, aaaa, ncas, nelecas) * .5
+    hc = casscf.fcisolver.contract_2e(h2eff, fcivec, ncas, nelecas).ravel()
 
     # pure core response
     ecore = h1eff[:ncore,:ncore].trace()*2 \
@@ -261,7 +261,7 @@ def hessian_oc(casscf, mo, dci, fcivec, eris):
     nocc = ncore + ncas
     mocc = mo[:,:nocc]
 
-    tdm1, tdm2 = casscf.fci_mod.trans_rdm12(dci, fcivec, ncas, nelecas)
+    tdm1, tdm2 = casscf.fcisolver.trans_rdm12(dci, fcivec, ncas, nelecas)
     tdm1 = (tdm1 + tdm1.T)
     tdm2 = (tdm2 + tdm2.transpose(1,0,3,2))
 
