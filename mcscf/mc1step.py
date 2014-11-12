@@ -377,7 +377,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
 
         mo = numpy.dot(mo, u)
-        pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
+        #pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
+        casscf.save_mo_coeff(mo, imacro, imicro)
 
         eris = None # to avoid using too much memory
         eris = casscf.update_ao2mo(mo)
@@ -576,6 +577,9 @@ class CASSCF(casci.CASCI):
         va = numpy.dot(casdm1, vhf3a)
         vc = 2 * vhf3c + vhf4
         return va, vc
+
+    def save_mo_coeff(self, mo_coeff, *args):
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo)
 
 
 # to avoid calculating AO integrals

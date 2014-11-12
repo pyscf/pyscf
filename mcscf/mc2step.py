@@ -7,7 +7,7 @@ import time
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
-import pyscf.scf as scf
+import pyscf.scf
 import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
@@ -41,7 +41,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)
-            scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
+            #pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
+            casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None # to avoid using too much memory
             eris = casscf.update_ao2mo(mo)
