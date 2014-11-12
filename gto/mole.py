@@ -730,7 +730,7 @@ class Mole(object):
                                  bras, kets, dim3, 0)
 
     def get_enuc(self):
-        return nuclear_repulsion()
+        return self.nuclear_repulsion()
     def nuclear_repulsion(self):
         if self.natm == 0:
             return 0

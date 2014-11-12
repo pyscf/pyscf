@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 import numpy
-from pyscf import gto
-from pyscf import symm
+import pyscf.gto.mole as mole
+import pyscf.gto.moleintor as moleintor
 import pyscf.lib.logger as log
-import pyscf.gto.moleintor
+import pyscf.symm
 import chkfile
 
 def frac_occ(scf, tol=1e-3):
@@ -56,14 +56,14 @@ def follow_state():
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('cint1e_ovlp_sph')
-    s21 = gto.mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
+    s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
     return numpy.linalg.solve(s22, numpy.dot(s21, mo1))
 
 def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('cint1e_ovlp')
-    s21 = gto.mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
+    s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
 
-    ua, ub = symm.cg.real2spinor_whole(mol2)
+    ua, ub = pyscf.symm.cg.real2spinor_whole(mol2)
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
@@ -73,19 +73,19 @@ def project_mo_nr2r(mol1, mo1, mol2):
 def project_mo_r2r(mol1, mo1, mol2):
     nbas1 = len(mol1._bas)
     nbas2 = len(mol2._bas)
-    atm, bas, env = gto.mole.conc_env(mol2._atm, mol2._bas, mol2._env, \
-                                      mol1._atm, mol1._bas, mol1._env)
+    atm, bas, env = mole.conc_env(mol2._atm, mol2._bas, mol2._env,
+                                  mol1._atm, mol1._bas, mol1._env)
     bras = kets = range(nbas2)
-    s22 = gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
-                                bras, kets, dim3=1, hermi=1)
-    t22 = gto.moleintor.getints('cint1e_spsp', atm, bas, env, \
-                                bras, kets, dim3=1, hermi=1)
+    s22 = moleintor.getints('cint1e_ovlp', atm, bas, env,
+                            bras, kets, dim3=1, hermi=1)
+    t22 = moleintor.getints('cint1e_spsp', atm, bas, env,
+                            bras, kets, dim3=1, hermi=1)
     bras = range(nbas2)
     kets = range(nbas2, nbas1+nbas2)
-    s21 = gto.moleintor.getints('cint1e_ovlp', atm, bas, env, \
-                                bras, kets, dim3=1, hermi=0)
-    t21 = gto.moleintor.getints('cint1e_spsp', atm, bas, env, \
-                                bras, kets, dim3=1, hermi=0)
+    s21 = moleintor.getints('cint1e_ovlp', atm, bas, env,
+                            bras, kets, dim3=1, hermi=0)
+    t21 = moleintor.getints('cint1e_spsp', atm, bas, env,
+                            bras, kets, dim3=1, hermi=0)
     n2c = s21.shape[1]
     pl = numpy.linalg.solve(s22, s21)
     ps = numpy.linalg.solve(t22, t21)
@@ -134,8 +134,8 @@ def init_guess_by_chkfile(mf, chkfile_name, projection=True):
             mo_occ = (scf_rec['mo_occ'][0], scf_rec['mo_occ'][1])
         fproj = lambda mo: (project_mo_nr2nr(chk_mol, mo[0], mol),
                             project_mo_nr2nr(chk_mol, mo[1], mol))
-        fdm = lambda: numpy.array(numpy.dot(mo[0]*mo_occ[0], mo[0].T), \
-                                  numpy.dot(mo[1]*mo_occ[1], mo[1].T))
+        fdm = lambda: numpy.array((numpy.dot(mo[0]*mo_occ[0], mo[0].T), \
+                                   numpy.dot(mo[1]*mo_occ[1], mo[1].T)))
 
     if projection:
         mo = fproj(mo)

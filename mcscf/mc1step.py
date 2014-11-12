@@ -8,9 +8,8 @@ import copy
 import tempfile
 import numpy
 import scipy.linalg
-import h5py
-from pyscf import lib
-from pyscf import scf
+import pyscf.lib.logger as logger
+import pyscf.scf
 import casci
 import aug_hessian
 import mc_ao2mo
@@ -160,7 +159,7 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
 def rotate_orb_ah(casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
-    log = lib.logger.Logger(casscf.stdout, verbose)
+    log = logger.Logger(casscf.stdout, verbose)
 
     ncas = casscf.ncas
     nelecas = casscf.nelecas
@@ -293,7 +292,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
-    log = lib.logger.Logger(casscf.stdout, verbose)
+    log = logger.Logger(casscf.stdout, verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 1-step CASSCF')
 
@@ -315,8 +314,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
-        u, dx, g_orb, ninner = rotate_orb_ah(casscf, mo, fcivec, e_ci, \
-                                             eris, 0, verbose=verbose)
+        u, dx, g_orb, ninner = casscf.rotate_orb(mo, fcivec, e_ci, eris, 0)
         norm_gorb = numpy.linalg.norm(g_orb)
         t3m = log.timer('orbital rotation', *t2m)
         totmicro += 1
@@ -358,8 +356,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             ovlp_ci = numpy.dot(ci1.ravel(), fcivec.ravel())
             norm_gci = numpy.linalg.norm(gci)
 
-            u1, dx, g_orb, nin = rotate_orb_ah(casscf, mo, ci1, e_ci, \
-                                               eris, dx, verbose=verbose)
+            u1, dx, g_orb, nin = casscf.rotate_orb(mo, ci1, e_ci, eris, dx)
             ci1 = None
             u = numpy.dot(u, u1)
             ninner += nin
@@ -380,7 +377,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
 
         mo = numpy.dot(mo, u)
-        scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
+        pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
 
         eris = None # to avoid using too much memory
         eris = casscf.update_ao2mo(mo)
@@ -444,7 +441,7 @@ class CASSCF(casci.CASCI):
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def dump_flags(self):
-        log = lib.logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASSCF flags ********')
         ncore = self.ncore
@@ -548,6 +545,9 @@ class CASSCF(casci.CASCI):
         mat[nocc:,:nocc] = v[-nvir*nocc:].reshape(nvir,-1)
         mat[:nocc,nocc:] = -mat[nocc:,:nocc].T
         return mat
+
+    def rotate_orb(self, mo, fcivec, e_ci, eris, dx=0):
+        return rotate_orb_ah(self, mo, fcivec, e_ci, eris, dx, self.verbose)
 
     # optimize me: mole.moleintor too slow
     def get_hcore(self, mol=None):

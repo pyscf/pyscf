@@ -7,13 +7,15 @@ import os
 import ctypes
 import math
 import numpy
-from pyscf import lib
+import pyscf.lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libmcscf.so')
+_alib = os.path.join(os.path.dirname(pyscf.lib.__file__), 'libmcscf.so')
 libfci = ctypes.CDLL(_alib)
 
 # refer to ci.rdm3.gen_strings
 def gen_strings4orblist(orb_list, nelec, ordering=True):
+    if nelec == 0:
+        return []
     def gen_str_iter(orb_list, nelec):
         if nelec == 1:
             res = [(1<<i) for i in orb_list]
@@ -41,8 +43,12 @@ def num_strings(n, m):
     return math.factorial(n) \
             / (math.factorial(n-m)*math.factorial(m))
 
-# index[str0] is [a(:vir),i(:occ),str1,sign]
-# starting from str0, annihilating i, creating a, to get str1
+# Return an mapping-index for each string
+# For given string str0, index[str0] is (nocc+nocc*nvir) x 4 array.
+# The first nocc rows [i(:occ),i(:occ),str0,sign] are occupied-occupied
+# excitations, which do not change the string. The next nocc*nvir rows
+# [a(:vir),i(:occ),str1,sign] are occupied-virtual exciations, starting from
+# str0, annihilating i, creating a, to get str1.
 def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nelec)

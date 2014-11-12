@@ -26,6 +26,13 @@ def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
     ax = _TrialXs(x0.nbytes, maxspace, max_memory)
     if eig_pick is None:
         eig_pick = lambda w, v: 0
+    #e0_hist = []
+    #def eig_pick(w, v):
+    #    idx = 0
+    #    if len(e0_hist) > 3:
+    #        idx = numpy.argmin([abs(e0_hist[-1]-ei) for ei in w])
+    #    e0_hist.append(w[idx])
+    #    return idx
 
     heff = numpy.zeros((maxiter+1,maxiter+1))
     ovlp = numpy.zeros((maxiter+1,maxiter+1))
@@ -55,6 +62,16 @@ def dsyev(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
         index = eig_pick(w, v)
         de = w[index] - e
         e = w[index]
+
+## Seldomly, precond may produce unacceptable basis, which leads eigvalue collapse.
+## clear basis and start the iteration again
+#        nprev = len(v_prev)
+#        sim = reduce(numpy.dot,(v_prev, ovlp[:nprev,:subspace+1],v[:,index]))
+#        if abs(sim) < .8:
+#            xs = _TrialXs(x0.nbytes, maxspace, max_memory)
+#            ax = _TrialXs(x0.nbytes, maxspace, max_memory)
+#            e = 0
+#            continue
 
         x0  = xt  * v[subspace,index]
         ax0 = axt * v[subspace,index]

@@ -6,13 +6,13 @@
 import os
 import ctypes
 import numpy
-from pyscf import lib
-from pyscf import ao2mo
+import pyscf.lib
+import pyscf.ao2mo
 import davidson
 import cistring
 import rdm
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libmcscf.so')
+_alib = os.path.join(os.path.dirname(pyscf.lib.__file__), 'libmcscf.so')
 libfci = ctypes.CDLL(_alib)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
@@ -20,18 +20,18 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
         link_index = cistring.gen_linkstr_index_trilidx(range(norb), nelec/2)
     na,nlink,_ = link_index.shape
     ci1 = numpy.empty((na,na))
-    f1e_tril = lib.pack_tril(f1e)
+    f1e_tril = pyscf.lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                                 fcivec.ctypes.data_as(ctypes.c_void_p),
                                 ci1.ctypes.data_as(ctypes.c_void_p),
                                 ctypes.c_int(norb), ctypes.c_int(na),
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
-    return lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 # the input fcivec should be symmetrized
 def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
-    g2e = ao2mo.restore(4, g2e, norb)
+    g2e = pyscf.ao2mo.restore(4, g2e, norb)
     if not g2e.flags.c_contiguous:
         g2e = g2e.copy()
     if link_index is None:
@@ -46,10 +46,10 @@ def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p),
                                 ctypes.c_int(bufsize))
-    return lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 def make_hdiag(h1e, g2e, norb, nelec):
-    g2e = ao2mo.restore(1, g2e, norb)
+    g2e = pyscf.ao2mo.restore(1, g2e, norb)
     link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
     na = link_index.shape[0]
     nocc = nelec / 2
@@ -65,22 +65,22 @@ def make_hdiag(h1e, g2e, norb, nelec):
                          ctypes.c_int(nocc),
                          occslist.ctypes.data_as(ctypes.c_void_p))
 # symmetrize hdiag to reduce numerical error
-    hdiag = lib.transpose_sum(hdiag, inplace=True) * .5
-    return hdiag.reshape(-1)
+    hdiag = pyscf.lib.transpose_sum(hdiag, inplace=True) * .5
+    return hdiag.ravel()
 
 def absorb_h1e(h1e, g2e, norb, nelec):
-    h2e = ao2mo.restore(1, g2e, norb).copy()
+    h2e = pyscf.ao2mo.restore(1, g2e, norb).copy()
     f1e = h1e - numpy.einsum('...,jiik->jk', .5, h2e)
     f1e = f1e * (1./nelec)
     for k in range(norb):
         h2e[k,k,:,:] += f1e
         h2e[:,:,k,k] += f1e
-    return h2e
+    return pyscf.ao2mo.restore(4, h2e, norb)
 
 
 # pspace Hamiltonian matrix, CPL, 169, 463
 def pspace_o2(h1e, g2e, norb, nelec, hdiag, np=400):
-    g2e = ao2mo.restore(1, g2e, norb)
+    g2e = pyscf.ao2mo.restore(1, g2e, norb)
     na = cistring.num_strings(norb, nelec/2)
     addr = numpy.argsort(hdiag)[:np]
 # symmetrize addra/addrb
@@ -105,13 +105,13 @@ def pspace_o2(h1e, g2e, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = lib.hermi_triu(h0)
+    h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
 def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
     return pspace_o2(h1e, g2e, norb, nelec, hdiag, np)
 
 
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1):
+def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, tol=1e-8):
     link_index = cistring.gen_linkstr_index_trilidx(range(norb), nelec/2)
     na = link_index.shape[0]
     h2e = absorb_h1e(h1e, g2e, norb, nelec) * .5
@@ -119,10 +119,10 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1):
 
     addr, h0 = pspace(h1e, g2e, norb, nelec, hdiag)
     pw, pv = numpy.linalg.eigh(h0)
-    if len(addr) == na:
+    if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]
-        return pw[0], lib.transpose_sum(ci0.reshape(na,na),True)*.5
+        return pw[0], pyscf.lib.transpose_sum(ci0.reshape(na,na),True)*.5
 
     def precond(r, e0, x0, *args):
         #h0e0 = h0 - numpy.eye(len(addr))*(e0-eshift)
@@ -143,10 +143,10 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1):
         return x1
     #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
 
-    h2e = ao2mo.restore(4, h2e, norb)
+    h2e = pyscf.ao2mo.restore(4, h2e, norb)
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec, link_index)
-        return hc.reshape(-1)
+        return hc.ravel()
 
     if ci0 is None:
         ci0 = numpy.zeros(na*na)
@@ -154,41 +154,41 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1):
 # symmetrize the initial guess, otherwise got strange numerical noise after
 # couple of davidson iterations
 #        ci0[addr] = pv[:,1]
-#        ci0 = lib.transpose_sum(ci0.reshape(na,na),True).reshape(-1)*.5
+#        ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na),True).ravel()*.5
 #TODO: optimize initial guess.  Using pspace vector as initial guess may have
 # spin problems.  The 'ground state' of psapce vector may have different spin
 # state to the true ground state.
         ci0[0] = 1
     else:
-        ci0 = ci0.reshape(-1)
+        ci0 = ci0.ravel()
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=1e-8, lindep=1e-8)
-    return e, lib.transpose_sum(c.reshape(na,na)) * .5
+    e, c = davidson.dsyev(hop, ci0, precond, tol=tol, lindep=1e-8)
+    return e, pyscf.lib.transpose_sum(c.reshape(na,na)) * .5
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
-    rdm1 = rdm.make_rdm1('FCImake_rdm1a_o3', fcivec, fcivec,
+    rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
     return rdm1 * 2
 
 # alpha and beta 1pdm
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    rdm1 = rdm.make_rdm1('FCImake_rdm1a_o3', fcivec, fcivec,
+    rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
     return (rdm1, rdm1)
 
 # dm_pq,rs = <|p^+ q r^+ s|>
 def make_rdm12(fcivec, norb, nelec, link_index=None):
-    return rdm.make_rdm12('FCImake_rdm12_spin0_o3', fcivec, fcivec,
+    return rdm.make_rdm12('FCImake_rdm12_spin0', fcivec, fcivec,
                           norb, nelec, link_index)
 
 # dm_pq = <I|p^+ q|J>
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
         link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
-    rdm1a = rdm.make_rdm1('FCItrans_rdm1a_o3', cibra, ciket,
+    rdm1a = rdm.make_rdm1('FCItrans_rdm1a', cibra, ciket,
                           norb, nelec, link_index)
-    rdm1b = rdm.make_rdm1('FCItrans_rdm1b_o3', cibra, ciket,
+    rdm1b = rdm.make_rdm1('FCItrans_rdm1b', cibra, ciket,
                           norb, nelec, link_index)
     return rdm1a, rdm1b
 
@@ -198,13 +198,13 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
 
 # dm_pq,rs = <I|p^+ q r^+ s|J>
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
-    return rdm.make_rdm12('FCItrans_rdm12_spin0_o3', cibra, ciket,
+    return rdm.make_rdm12('FCItrans_rdm12_spin0', cibra, ciket,
                           norb, nelec, link_index)
 
 def energy(h1e, g2e, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, g2e, norb, nelec) * .5
-    ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index=None)
-    return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+    ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
+    return numpy.dot(fcivec.ravel(), ci1.ravel())
 
 
 

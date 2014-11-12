@@ -13,12 +13,10 @@ import ctypes
 import time
 import numpy
 import scipy.linalg
-from pyscf import gto
-from pyscf import lib
-from pyscf import tools
+import pyscf.gto as gto
+import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import pyscf.tools.dump_mat
 import diis
 import chkfile
 import addons
@@ -190,7 +188,7 @@ class SCF(object):
             return f
         return scf_diis
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_hcore(self, mol=None):
         if mol is None:
             mol = self.mol
@@ -198,7 +196,7 @@ class SCF(object):
                 + mol.intor_symmetric('cint1e_nuc_sph')
         return h
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_ovlp(self, mol=None):
         if mol is None:
             mol = self.mol
@@ -270,7 +268,7 @@ class SCF(object):
         return mo_occ
 
     # full density matrix for RHF
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -279,14 +277,14 @@ class SCF(object):
         mo = mo_coeff[:,mo_occ>0]
         return numpy.dot(mo*mo_occ[mo_occ>0], mo.T.conj())
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def calc_den_mat(self, mo_coeff=None, mo_occ=None):
         return self.make_rdm1(mo_coeff, mo_occ)
 
     def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
         sum_mo_energy = numpy.dot(mo_energy, mo_occ)
         # trace (D*V_HF)
-        coul_dup = lib.trace_ab(dm, vhf)
+        coul_dup = pyscf.lib.trace_ab(dm, vhf)
         log.debug1(self, 'E_coul = %.15g', (coul_dup.real * .5))
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
@@ -523,11 +521,12 @@ class RHF(SCF):
         return vhf
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
+        import pyscf.tools.dump_mat as dump_mat
         SCF.analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff)
         if self.verbose >= param.VERBOSE_DEBUG:
             log.debug(self, ' ** MO coefficients **')
             label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-            tools.dump_mat.dump_rec(self.stdout, mo_coeff, label, start=1)
+            dump_mat.dump_rec(self.stdout, mo_coeff, label, start=1)
         dm = self.make_rdm1(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp(mol))
 
@@ -604,10 +603,12 @@ class UHF(SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
-        #self.ms = 0
-        self.nelectron_alpha = (mol.nelectron + 1) / 2
+        self.nelectron_alpha = (mol.nelectron + mol.spin) / 2
         # fix_nelectron_alpha=0 may lead high spin states
-        self.fix_nelectron_alpha = 0
+        if mol.spin > 0:
+            self.fix_nelectron_alpha = self.nelectron_alpha
+        else:
+            self.fix_nelectron_alpha = 0
         self.break_symmetry = False
         self._eri = None
         self._keys = set(self.__dict__.keys() + ['_keys'])
@@ -657,7 +658,7 @@ class UHF(SCF):
             return numpy.array(f)
         return scf_diis
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_hcore(self, mol=None):
         if mol is None:
             mol = self.mol
@@ -698,7 +699,7 @@ class UHF(SCF):
             log.debug(self, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
         return mo_occ
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -712,13 +713,13 @@ class UHF(SCF):
         dm_b = numpy.dot(mo_b*occ_b, mo_b.T.conj())
         return numpy.array((dm_a,dm_b))
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
         sum_mo_energy = numpy.dot(mo_energy[0], mo_occ[0]) \
                 + numpy.dot(mo_energy[1], mo_occ[1])
         # trace (D*V_HF)
-        coul_dup = lib.trace_ab(dm[0], vhf[0]) \
-                + lib.trace_ab(dm[1], vhf[1])
+        coul_dup = pyscf.lib.trace_ab(dm[0], vhf[0]) \
+                + pyscf.lib.trace_ab(dm[1], vhf[1])
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
 
@@ -831,6 +832,7 @@ class UHF(SCF):
         return etot
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
+        import pyscf.tools.dump_mat as dump_mat
         ss, s = spin_square(mol, mo_coeff[0][:,mo_occ[0]>0], \
                                  mo_coeff[1][:,mo_occ[1]>0])
         log.info(self, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
@@ -853,9 +855,9 @@ class UHF(SCF):
         if self.verbose >= param.VERBOSE_DEBUG:
             log.debug(self, ' ** MO coefficients for alpha spin **')
             label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-            tools.dump_mat.dump_rec(self.stdout, mo_coeff[0], label, start=1)
+            dump_mat.dump_rec(self.stdout, mo_coeff[0], label, start=1)
             log.debug(self, ' ** MO coefficients for beta spin **')
-            tools.dump_mat.dump_rec(self.stdout, mo_coeff[1], label, start=1)
+            dump_mat.dump_rec(self.stdout, mo_coeff[1], label, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp(mol))

@@ -7,7 +7,6 @@
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
 import numpy
-from pyscf import scf
 import pyscf.lib.parameters as param
 
 
@@ -88,6 +87,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
             fout.write(' %3d    %18.14g\n' % (i, mo_coeff[j,imo]))
 
 def dump_scf(mf, filename):
+    from pyscf import scf
     with open(filename, 'w') as f:
         header(mf.mol, f)
         if isinstance(mf, scf.hf.UHF) or 'UHF' in str(mf.__class__):

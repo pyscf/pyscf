@@ -6,15 +6,15 @@
 import time
 import numpy
 import scipy.linalg
-from pyscf import lib
-from pyscf import scf
+import pyscf.lib.logger as logger
+import pyscf.scf as scf
 import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
-    log = lib.logger.Logger(casscf.stdout, verbose)
+    log = logger.Logger(casscf.stdout, verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 2-step CASSCF')
 
@@ -37,9 +37,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = t2m
         for imicro in range(micro):
 
-            u, dx, g_orb, nin = mc1step.rotate_orb_ah(casscf, mo, \
-                                                      fcivec, e_ci, eris, 0, \
-                                                      verbose=verbose)
+            u, dx, g_orb, nin = casscf.rotate_orb(mo, fcivec, e_ci, eris, 0)
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)

@@ -5,7 +5,7 @@
 
 import numpy
 import scipy.linalg
-from pyscf import gto
+import pyscf.gto as gto
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import hf

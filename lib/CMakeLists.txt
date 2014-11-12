@@ -62,4 +62,5 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(dft)
+add_subdirectory(cc)
 

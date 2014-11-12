@@ -12,8 +12,7 @@ import _ctypes
 import time
 import numpy
 import scipy.linalg
-from pyscf import gto
-from pyscf import lib
+import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import hf
@@ -117,7 +116,7 @@ class UHF(hf.SCF):
             return f
         return scf_diis
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_hcore(self, mol):
         n4c = mol.num_4C_function()
         n2c = n4c / 2
@@ -134,7 +133,7 @@ class UHF(hf.SCF):
         h1e[n2c:,n2c:] = wn * (.25/c**2) - t
         return h1e
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_ovlp(self, mol):
         n4c = mol.num_4C_function()
         n2c = n4c / 2
@@ -195,7 +194,7 @@ class UHF(hf.SCF):
         return mo_occ
 
     # full density matrix for UHF
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def make_rdm1(self, mo_coeff, mo_occ):
         mo = mo_coeff[:,mo_occ>0]
         return numpy.dot(mo*mo_occ[mo_occ>0], mo.T.conj())
@@ -340,18 +339,18 @@ class UHF(hf.SCF):
 def _jk_triu_(vj, vk, hermi):
     if hermi == 0:
         if vj.ndim == 2:
-            vj = lib.hermi_triu(vj, 1)
+            vj = pyscf.lib.hermi_triu(vj, 1)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = lib.hermi_triu(vj[i], 1)
+                vj[i] = pyscf.lib.hermi_triu(vj[i], 1)
     else:
         if vj.ndim == 2:
-            vj = lib.hermi_triu(vj, hermi)
-            vk = lib.hermi_triu(vk, hermi)
+            vj = pyscf.lib.hermi_triu(vj, hermi)
+            vk = pyscf.lib.hermi_triu(vk, hermi)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = lib.hermi_triu(vj[i], hermi)
-                vk[i] = lib.hermi_triu(vk[i], hermi)
+                vj[i] = pyscf.lib.hermi_triu(vj[i], hermi)
+                vk[i] = pyscf.lib.hermi_triu(vk[i], hermi)
     return vj, vk
 
 
@@ -462,7 +461,7 @@ class RHF(UHF):
         UHF.__init__(self, mol)
 
     # full density matrix for RHF
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def make_rdm1(self, mo_coeff, mo_occ):
         '''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
         D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
@@ -484,7 +483,8 @@ class RHF(UHF):
 
 
 if __name__ == '__main__':
-    mol = gto.Mole()
+    import pyscf.gto
+    mol = pyscf.gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf'
 

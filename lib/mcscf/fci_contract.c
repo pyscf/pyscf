@@ -10,71 +10,75 @@
 #include "vhf/fblas.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
+#define CSUMTHR         1e-14
 
 
-void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
-                   int norb, int na, int nocc, int *occslist)
-{
-        int ia, ib, j, j0, k0, jk, jk0;
-        double e1, e2;
-        int *paocc, *pbocc;
-        for (ia = 0; ia < na; ia++) {
-                paocc = occslist + ia * nocc;
-                for (ib = 0; ib < na; ib++) {
-                        e1 = 0;
-                        e2 = 0;
-                        pbocc = occslist + ib * nocc;
-                        for (j0 = 0; j0 < nocc; j0++) {
-                                j = paocc[j0];
-                                jk0 = j * norb;
-                                e1 += h1e[j*norb+j];
-                                for (k0 = 0; k0 < nocc; k0++) { // (alpha|alpha)
-                                        jk = jk0 + paocc[k0];
-                                        e2 += jdiag[jk] - kdiag[jk];
-                                }
-                                for (k0 = 0; k0 < nocc; k0++) { // (alpha|beta)
-                                        jk = jk0 + pbocc[k0];
-                                        e2 += jdiag[jk] *2;
-                                }
-                        }
-                        for (j0 = 0; j0 < nocc; j0++) {
-                                j = pbocc[j0];
-                                jk0 = j * norb;
-                                e1 += h1e[j*norb+j];
-                                for (k0 = 0; k0 < nocc; k0++) { // (beta|beta)
-                                        jk = jk0 + pbocc[k0];
-                                        e2 += jdiag[jk] - kdiag[jk];
-                                }
-                        }
-                        hdiag[ia*na+ib] = e1 + e2 * .5;
-                }
-        }
-}
-
-/* strcnt control the number of beta strings to be calculated.
+/* 
+ * For given stra_id, spread alpah-strings (which can propagate to stra_id)
+ * into t1[:nstrb,nnorb] 
+ *    str1-of-alpha -> create/annihilate -> str0-of-alpha
+ * ci0[:nstra,:nstrb] is contiguous in beta-strings
+ * fillcnt control the number of beta strings to be calculated.
  * for spin=0 system, only lower triangle of the intermediate ci vector
- * needs to be calculated */
-static void contract_2e_o3iter(double *eri, double *ci0, double *ci1,
-                               double *t2, int ldt2, int strcnt, int strk,
-                               int norb, int na, int nlink, int *link_index)
+ * needs to be calculated
+ */
+static double prog_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+                        int norb, int nstrb, int nlinka, int *link_indexa)
 {
-        const char TRANS_T = 'T';
-        const char TRANS_N = 'N';
-        const double D0 = 0;
-        const double D1 = 1;
         const int nnorb = norb * (norb+1)/2;
-        int j, k, ia, str0, str1, sign;
-        const int *tab;
+        int j, k, ia, str1, sign;
+        const int *tab = link_indexa + stra_id * nlinka * 4;
         double *pt1, *pci;
-        double *t1 = malloc(sizeof(double) * nnorb*strcnt);
         double csum = 0;
 
-        memset(t1, 0, sizeof(double)*nnorb*strcnt);
-        pci = ci0 + strk*na;
-        for (str0 = 0; str0 < strcnt; str0++) {
-                tab = link_index + str0 * nlink * 4;
+        for (j = 0; j < nlinka; j++) {
+                ia   = tab[j*4+0];
+                str1 = tab[j*4+2];
+                sign = tab[j*4+3];
+                pci = ci0 + str1*nstrb;
+                pt1 = t1 + ia;
+                if (sign > 0) {
+                        for (k = 0; k < fillcnt-1; k+=2) {
+                                pt1[k*nnorb] += pci[k];
+                                pt1[k*nnorb+nnorb] += pci[k+1];
+                                csum += fabs(pci[k]) + fabs(pci[k+1]);
+                        }
+                } else {
+                        for (k = 0; k < fillcnt-1; k+=2) {
+                                pt1[k*nnorb] -= pci[k];
+                                pt1[k*nnorb+nnorb] -= pci[k+1];
+                                csum += fabs(pci[k]) + fabs(pci[k+1]);
+                        }
+                }
+                if (k < fillcnt) {
+                        pt1[k*nnorb] += sign * pci[k];
+                        csum += fabs(pci[k]);
+                }
+        }
+        return csum;
+}
+/* 
+ * For given stra_id, spread all beta-strings into t1[:nstrb,nnorb] 
+ *    all str0-of-beta -> create/annihilate -> str1-of-beta
+ * ci0[:nstra,:nstrb] is contiguous in beta-strings
+ * fillcnt control the number of beta strings to be calculated.
+ * for spin=0 system, only lower triangle of the intermediate ci vector
+ * needs to be calculated
+ */
+static double prog_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+                        int norb, int nstrb, int nlinkb, int *link_indexb)
+{
+        const int nnorb = norb * (norb+1)/2;
+        int j, ia, str0, str1, sign;
+        const int *tab;
+        double *pt1, *pci;
+        double csum = 0;
+
+        pci = ci0 + stra_id*nstrb;
+        for (str0 = 0; str0 < fillcnt; str0++) {
+                tab = link_indexb + str0 * nlinkb * 4;
                 pt1 = t1 + str0*nnorb;
-                for (j = 0; j < nlink; j++) {
+                for (j = 0; j < nlinkb; j++) {
                         ia   = tab[j*4+0];
                         str1 = tab[j*4+2];
                         sign = tab[j*4+3];
@@ -82,152 +86,105 @@ static void contract_2e_o3iter(double *eri, double *ci0, double *ci1,
                         csum += fabs(pci[str1]);
                 }
         }
-        tab = link_index + strk * nlink * 4;
-        for (j = 0; j < nlink; j++) {
+        return csum;
+}
+
+/*
+ * spread t1 into ci1
+ */
+static void spread_a_t1(double *ci1, double *t1, int fillcnt, int stra_id,
+                        int norb, int nstrb, int nlinka, int *link_indexa)
+{
+        const int nnorb = norb * (norb+1)/2;
+        int j, k, ia, str1, sign;
+        int *tab = link_indexa + stra_id * nlinka * 4;
+        double *cp0, *cp1;
+
+        for (j = 0; j < nlinka; j++) {
                 ia   = tab[j*4+0];
                 str1 = tab[j*4+2];
                 sign = tab[j*4+3];
-                pci = ci0 + str1*na;
-                pt1 = t1 + ia;
+                cp0 = t1 + ia;
+                cp1 = ci1 + str1*nstrb;
                 if (sign > 0) {
-                        for (k = 0; k < strcnt-1; k+=2) {
-                                pt1[k*nnorb] += pci[k];
-                                pt1[k*nnorb+nnorb] += pci[k+1];
-                                csum += fabs(pci[k]) + fabs(pci[k+1]);
+                        for (k = 0; k < fillcnt; k++) {
+                                cp1[k] += cp0[k*nnorb];
                         }
                 } else {
-                        for (k = 0; k < strcnt-1; k+=2) {
-                                pt1[k*nnorb] -= pci[k];
-                                pt1[k*nnorb+nnorb] -= pci[k+1];
-                                csum += fabs(pci[k]) + fabs(pci[k+1]);
+                        for (k = 0; k < fillcnt; k++) {
+                                cp1[k] -= cp0[k*nnorb];
                         }
                 }
-                if (k < strcnt) {
-                        pt1[k*nnorb] += sign * pci[k];
-                        csum += fabs(pci[k]);
-                }
         }
-        if (csum < 1e-14) {
-                memset(t2, 0, sizeof(double)*nnorb*strcnt);
-                goto end;
-        }
+}
 
-        dgemm_(&TRANS_T, &TRANS_N, &strcnt, &nnorb, &nnorb,
-               &D1, t1, &nnorb, eri, &nnorb, &D0, t2, &ldt2);
+static void spread_b_t1(double *ci1, double *t1, int fillcnt, int stra_id,
+                        int norb, int nstrb, int nlinkb, int *link_indexb)
+{
+        const int nnorb = norb * (norb+1)/2;
+        int j, ia, str0, str1, sign;
+        const int *tab;
+        double *pt1, *pci;
 
-        pci = ci1 + strk*na;
-        for (str0 = 0; str0 < strcnt; str0++) {
-                tab = link_index + str0 * nlink * 4;
-                for (j = 0; j < nlink; j++) {
+        pci = ci1 + stra_id * nstrb;
+        for (str0 = 0; str0 < fillcnt; str0++) {
+                tab = link_indexb + str0 * nlinkb * 4;
+                pt1 = t1 + str0 * nnorb;
+                for (j = 0; j < nlinkb; j++) {
                         ia   = tab[j*4+0];
                         str1 = tab[j*4+2];
                         sign = tab[j*4+3];
-                        pci[str1] += sign * t2[ia*ldt2+str0];
-                }
-        }
-end:
-        free(t1);
-}
-
-static void contract_critical(double *eri, double *ci0, double *ci1,
-                              double *t2, int ldt2, int strcnt, int strk,
-                              int norb, int na, int nlink, int *link_index)
-{
-        int j, k, ia, str1, sign;
-        int *tab = link_index + strk * nlink * 4;
-        double *cp0, *cp1;
-        for (j = 0; j < nlink; j++) {
-                ia   = tab[j*4+0];
-                str1 = tab[j*4+2];
-                sign = tab[j*4+3];
-                cp0 = t2 + ia*ldt2;
-                cp1 = ci1 + str1*na;
-                if (sign > 0) {
-                        for (k = 0; k < strcnt-1; k+=2) {
-                                cp1[k] += cp0[k];
-                                cp1[k+1] += cp0[k+1];
-                        }
-                } else {
-                        for (k = 0; k < strcnt-1; k+=2) {
-                                cp1[k] -= cp0[k];
-                                cp1[k+1] -= cp0[k+1];
-                        }
-                }
-                if (k < strcnt) {
-                        cp1[k] += sign * cp0[k];
+                        pci[str1] += sign * pt1[ia];
                 }
         }
 }
 
 /*
- * nlink = nocc*nvir, num. all possible strings that a string can link to
- * link_index[str0] == linking map between str0 and other strings
- * link_index[str0][ith-linking-string] ==
- *     [creation_op,annihilation_op,linking-string-id,sign]
- * buf_size in MB
+ * f1e_tril is the 1e hamiltonian for spin alpha
  */
-void FCIcontract_2e_o3(double *eri, double *ci0, double *ci1,
-                       int norb, int na, int nlink, int *link_index,
-                       int buf_size)
+void FCIcontract_a_1e(double *f1e_tril, double *ci0, double *ci1,
+                      int norb, int nstra, int nstrb, int nlinka, int nlinkb,
+                      int *link_indexa, int *link_indexb)
 {
-        const int nnorb = norb * (norb+1)/2;
-        int len_blk;
-#pragma omp parallel shared(len_blk)
-        len_blk = omp_get_num_threads();
+        int j, k, ia, str0, str1, sign;
+        int *tab;
+        double *pci0, *pci1;
+        double tmp;
 
-        int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/na, len_blk);
-        len_blk = (int)(max_buflen/len_blk) * len_blk;
-        len_blk = MIN(len_blk, na);
-        double *buf = (double *)malloc(sizeof(double) * len_blk*nnorb*na);
-
-        int ic, strk0, strk;
-        double *pbuf;
-
-        memset(ci1, 0, sizeof(double)*na*na);
-        for (strk0 = 0; strk0 < na; strk0 += len_blk) {
-#pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nlink, link_index, \
-               buf, strk0, len_blk), \
-        private(strk, ic)
-#pragma omp for schedule(static)
-                for (ic = 0; ic < MIN(na-strk0,len_blk); ic++) {
-                        strk = strk0 + ic;
-                        contract_2e_o3iter(eri, ci0, ci1, buf+ic*nnorb*na,
-                                           na, na, strk,
-                                           norb, na, nlink, link_index);
-                }
-
-                for (ic = 0; ic < MIN(na-strk0,len_blk); ic++) {
-                        strk = strk0 + ic;
-                        pbuf = buf + ic * nnorb * na;
-                        contract_critical(eri, ci0, ci1, pbuf, na, na, strk,
-                                          norb, na, nlink, link_index);
+        for (str0 = 0; str0 < nstra; str0++) {
+                tab = link_indexa + str0 * nlinka * 4;
+                for (j = 0; j < nlinka; j++) {
+                        ia   = tab[j*4+0];
+                        str1 = tab[j*4+2];
+                        sign = tab[j*4+3];
+                        pci0 = ci0 + str0 * nstrb;
+                        pci1 = ci1 + str1 * nstrb;
+                        tmp  = sign * f1e_tril[ia];
+                        for (k = 0; k < nstrb; k++) {
+                                pci1[k] += tmp * pci0[k];
+                        }
                 }
         }
-        free(buf);
 }
 
-void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
-                          int norb, int na, int nlink, int *link_index);
-void FCIcontract_1e_o3(double *f1e_tril, double *ci0, double *ci1,
-                       int norb, int na, int nlink, int *link_index)
+/*
+ * f1e_tril is the 1e hamiltonian for spin beta
+ */
+void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
+                      int norb, int nstra, int nstrb, int nlinka, int nlinkb,
+                      int *link_indexa, int *link_indexb)
 {
-        FCIcontract_1e_spin0(f1e_tril, ci0, ci1, norb, na, nlink, link_index);
-
         int j, k, ia, str0, str1, sign;
         int *tab;
         double *pci1;
         double tmp;
-        int nnorb = norb*(norb+1)/2;
-        double *t1 = malloc(sizeof(double) * nnorb*na);
 
-        for (str0 = 0; str0 < na; str0++) {
-                memset(t1, 0, sizeof(double)*nnorb*na);
-                pci1 = ci1 + str0 * na;
-                for (k = 0; k < na; k++) {
-                        tab = link_index + k * nlink * 4;
-                        tmp = ci0[str0*na+k];
-                        for (j = 0; j < nlink; j++) {
+        for (str0 = 0; str0 < nstra; str0++) {
+                pci1 = ci1 + str0 * nstrb;
+                for (k = 0; k < nstrb; k++) {
+                        tab = link_indexb + k * nlinkb * 4;
+                        tmp = ci0[str0*nstrb+k];
+                        for (j = 0; j < nlinkb; j++) {
                                 ia   = tab[j*4+0];
                                 str1 = tab[j*4+2];
                                 sign = tab[j*4+3];
@@ -239,10 +196,53 @@ void FCIcontract_1e_o3(double *f1e_tril, double *ci0, double *ci1,
                         }
                 }
         }
-
-        free(t1);
 }
 
+void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
+                          int norb, int na, int nlink, int *link_index)
+{
+        memset(ci1, 0, sizeof(double)*na*na);
+        FCIcontract_a_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
+                         link_index, link_index);
+}
+
+void FCIcontract_1e_ms0(double *f1e_tril, double *ci0, double *ci1,
+                        int norb, int na, int nlink, int *link_index)
+{
+        memset(ci1, 0, sizeof(double)*na*na);
+        FCIcontract_a_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
+                         link_index, link_index);
+        FCIcontract_b_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
+                         link_index, link_index);
+}
+
+static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
+                           int fillcnt, int stra_id, int norb, int na, int nb,
+                           int nlinka, int nlinkb,
+                           int *link_indexa, int *link_indexb)
+{
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        const int nnorb = norb * (norb+1)/2;
+        double *t1 = malloc(sizeof(double) * nnorb*fillcnt);
+        double csum;
+
+        memset(t1, 0, sizeof(double)*nnorb*fillcnt);
+        csum = prog_a_t1(ci0, t1, fillcnt, stra_id, norb, nb, nlinka, link_indexa)
+             + prog_b_t1(ci0, t1, fillcnt, stra_id, norb, nb, nlinkb, link_indexb);
+
+        if (csum > CSUMTHR) {
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
+                       &D1, eri, &nnorb, t1, &nnorb, &D0, tbuf, &nnorb);
+                spread_b_t1(ci1, tbuf, fillcnt, stra_id, norb, nb, nlinkb,
+                            link_indexb);
+        } else {
+                memset(tbuf, 0, sizeof(double)*nnorb*fillcnt);
+        }
+        free(t1);
+}
 
 /*
  * for give n, m*(m+1)/2 - n*(n+1)/2 ~= base*(base+1)/2
@@ -255,6 +255,10 @@ static int _square_pace(int n, int base, int minimal)
 }
 
 /*
+ * nlink = nocc*nvir, num. all possible strings that a string can link to
+ * link_index[str0] == linking map between str0 and other strings
+ * link_index[str0][ith-linking-string] ==
+ *     [tril(creation_op,annihilation_op),0,linking-string-id,sign]
  * buf_size in MB
  */
 void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
@@ -263,8 +267,8 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
 {
         const int nnorb = norb * (norb+1)/2;
         int nthreads = 16;
-//#pragma omp parallel shared(nthreads)
-//        nthreads = omp_get_num_threads();
+#pragma omp parallel shared(nthreads)
+        nthreads = omp_get_num_threads();
 
         int strk0, strk1, strk;
         long blk_base = MAX(sqrt((((long)buf_size)<<20)/8/nnorb*2), nthreads);
@@ -286,46 +290,214 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                         //pbuf = buf; ; pbuf += nnorb*(strk+1);
                         off = ((long)(strk-strk0))*(strk+strk0+1)/2;
                         pbuf = buf + off*nnorb;
-                        contract_2e_o3iter(eri, ci0, ci1, pbuf,
-                                           strk+1, strk+1, strk,
-                                           norb, na, nlink, link_index);
+                        ctr_rhf2e_kern(eri, ci0, ci1, pbuf,
+                                       strk+1, strk, norb, na, na, nlink, nlink,
+                                       link_index, link_index);
                 }
 
+/* Note: the fillcnt diffs in ctr_rhf2e_kern and spread_a_t1.
+ * ctr_rhf2e_kern needs strk+1 beta-strings, spread_a_t1 takes strk
+ * beta-strings */
                 for (strk = strk0; strk < strk1; strk++) {
                         off = ((long)(strk-strk0))*(strk+strk0+1)/2;
                         pbuf = buf + off*nnorb;
-                        contract_critical(eri, ci0, ci1, pbuf,
-                                          strk+1, strk, strk,
-                                          norb, na, nlink, link_index);
+                        spread_a_t1(ci1, pbuf, strk, strk, norb, na, nlink,
+                                    link_index);
                 }
         }
         free(buf);
 }
 
-void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
-                          int norb, int na, int nlink, int *link_index)
+
+void FCIcontract_rhf2e_spin1(double *eri, double *ci0, double *ci1,
+                             int norb, int na, int nb, int nlinka, int nlinkb,
+                             int *link_indexa, int *link_indexb, int buf_size)
 {
-        int j, k, ia, str0, str1, sign;
-        int *tab;
-        double *pci0, *pci1;
-        double tmp;
+        const int nnorb = norb * (norb+1)/2;
+        int len_blk;
+#pragma omp parallel shared(len_blk)
+        len_blk = omp_get_num_threads();
 
-        memset(ci1, 0, sizeof(double)*na*na);
+        int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/nb, len_blk);
+        len_blk = (int)(max_buflen/len_blk) * len_blk;
+        len_blk = MIN(len_blk, na);
+        double *buf = (double *)malloc(sizeof(double) * len_blk*nnorb*nb);
+        double *pbuf;
 
-        for (str0 = 0; str0 < na; str0++) {
-                tab = link_index + str0 * nlink * 4;
-                for (j = 0; j < nlink; j++) {
-                        ia   = tab[j*4+0];
-                        str1 = tab[j*4+2];
-                        sign = tab[j*4+3];
-                        pci0 = ci0 + str0 * na;
-                        pci1 = ci1 + str1 * na;
-                        tmp  = sign * f1e_tril[ia];
-                        for (k = 0; k < na; k++) {
-                                pci1[k] += tmp * pci0[k];
-                        }
+        int ic, ic1, strk0, strk;
+
+        memset(ci1, 0, sizeof(double)*na*nb);
+        for (strk0 = 0; strk0 < na; strk0 += len_blk) {
+                ic1 = MIN(na-strk0, len_blk);
+#pragma omp parallel default(none) \
+        shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
+               link_indexa, link_indexb, buf, strk0, ic1), \
+        private(strk, ic)
+#pragma omp for schedule(static)
+                for (ic = 0; ic < ic1; ic++) {
+                        strk = strk0 + ic;
+                        ctr_rhf2e_kern(eri, ci0, ci1, buf+ic*nnorb*nb,
+                                       nb, strk, norb, na, nb, nlinka, nlinkb,
+                                       link_indexa, link_indexb);
+                }
+// spread alpha-strings in serial mode
+                for (ic = 0; ic < ic1; ic++) {
+                        strk = strk0 + ic;
+                        pbuf = buf + ic * nnorb * nb;
+                        spread_a_t1(ci1, pbuf, nb, strk, norb, nb, nlinka,
+                                    link_indexa);
                 }
         }
+        free(buf);
+}
+
+void FCIcontract_2e_ms0(double *eri, double *ci0, double *ci1,
+                        int norb, int na, int nlink, int *link_index,
+                        int buf_size)
+{
+        FCIcontract_rhf2e_spin1(eri, ci0, ci1, norb, na, na, nlink, nlink,
+                                link_index, link_index, buf_size);
+}
+
+
+/*
+ * eri_ab is mixed integrals (alpha,alpha|beta,beta), |beta,beta) in small strides
+ */
+static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
+                           double *ci0, double *ci1, double *tbuf,
+                           int stra_id, int norb, int na, int nb,
+                           int nlinka, int nlinkb,
+                           int *link_indexa, int *link_indexb)
+{
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        const int nnorb = norb * (norb+1)/2;
+        double *t1a = malloc(sizeof(double) * nnorb*nb*3);
+        double *t1b = t1a + nnorb*nb;
+        double *tmp = t1b + nnorb*nb;
+        double csum;
+
+        memset(t1a, 0, sizeof(double)*nnorb*nb*2);
+        csum = prog_a_t1(ci0, t1a, nb, stra_id, norb, nb, nlinka, link_indexa)
+             + prog_b_t1(ci0, t1b, nb, stra_id, norb, nb, nlinkb, link_indexb);
+
+        if (csum > CSUMTHR) {
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nb, &nnorb,
+                       &D1, eri_aa, &nnorb, t1a, &nnorb, &D0, tbuf, &nnorb);
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nb, &nnorb,
+                       &D1, eri_ab, &nnorb, t1b, &nnorb, &D1, tbuf, &nnorb);
+
+                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &nb, &nnorb,
+                       &D1, eri_ab, &nnorb, t1a, &nnorb, &D0, tmp, &nnorb);
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nb, &nnorb,
+                       &D1, eri_bb, &nnorb, t1b, &nnorb, &D1, tmp, &nnorb);
+                spread_b_t1(ci1, tmp, nb, stra_id, norb, nb, nlinkb,
+                            link_indexb);
+        } else {
+                memset(tbuf, 0, sizeof(double)*nnorb*nb);
+        }
+        free(t1a);
+}
+
+void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
+                       double *ci0, double *ci1,
+                       int norb, int na, int nb, int nlinka, int nlinkb,
+                       int *link_indexa, int *link_indexb, int buf_size)
+{
+        const int nnorb = norb * (norb+1)/2;
+        int len_blk;
+#pragma omp parallel shared(len_blk)
+        len_blk = omp_get_num_threads();
+
+        int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/nb, len_blk);
+        len_blk = (int)(max_buflen/len_blk) * len_blk;
+        len_blk = MIN(len_blk, na);
+        double *buf = (double *)malloc(sizeof(double) * len_blk*nnorb*nb);
+        double *pbuf;
+
+        int ic, ic1, strk0, strk;
+
+        memset(ci1, 0, sizeof(double)*na*nb);
+        for (strk0 = 0; strk0 < na; strk0 += len_blk) {
+                ic1 = MIN(na-strk0, len_blk);
+#pragma omp parallel default(none) \
+        shared(eri_aa, eri_ab, eri_bb, ci0, ci1, norb, na, nb, nlinka, nlinkb,\
+               link_indexa, link_indexb, buf, strk0, ic1), \
+        private(strk, ic)
+#pragma omp for schedule(static)
+                for (ic = 0; ic < ic1; ic++) {
+                        strk = strk0 + ic;
+                        ctr_uhf2e_kern(eri_aa, eri_ab, eri_bb,
+                                       ci0, ci1, buf+ic*nnorb*nb,
+                                       strk, norb, na, nb, nlinka, nlinkb,
+                                       link_indexa, link_indexb);
+                }
+// spread alpha-strings in serial mode
+                for (ic = 0; ic < ic1; ic++) {
+                        strk = strk0 + ic;
+                        pbuf = buf + ic * nnorb * nb;
+                        spread_a_t1(ci1, pbuf, nb, strk, norb, nb, nlinka,
+                                    link_indexa);
+                }
+        }
+        free(buf);
+}
+
+
+
+/*************************************************
+ * hdiag
+ *************************************************/
+
+void FCImake_hdiag_uhf(double *hdiag, double *h1e_a, double *h1e_b,
+                       double *jdiag_aa, double *jdiag_ab, double *jdiag_bb,
+                       double *kdiag_aa, double *kdiag_bb,
+                       int norb, int nstra, int nstrb, int nocca, int noccb,
+                       int *occslista, int *occslistb)
+{
+        int ia, ib, j, j0, k0, jk, jk0;
+        double e1, e2;
+        int *paocc, *pbocc;
+        for (ia = 0; ia < nstra; ia++) {
+                paocc = occslista + ia * nocca;
+                for (ib = 0; ib < nstrb; ib++) {
+                        e1 = 0;
+                        e2 = 0;
+                        pbocc = occslistb + ib * noccb;
+                        for (j0 = 0; j0 < nocca; j0++) {
+                                j = paocc[j0];
+                                jk0 = j * norb;
+                                e1 += h1e_a[j*norb+j];
+                                for (k0 = 0; k0 < nocca; k0++) { // (alpha|alpha)
+                                        jk = jk0 + paocc[k0];
+                                        e2 += jdiag_aa[jk] - kdiag_aa[jk];
+                                }
+                                for (k0 = 0; k0 < noccb; k0++) { // (alpha|beta)
+                                        jk = jk0 + pbocc[k0];
+                                        e2 += jdiag_ab[jk] * 2;
+                                }
+                        }
+                        for (j0 = 0; j0 < noccb; j0++) {
+                                j = pbocc[j0];
+                                jk0 = j * norb;
+                                e1 += h1e_b[j*norb+j];
+                                for (k0 = 0; k0 < noccb; k0++) { // (beta|beta)
+                                        jk = jk0 + pbocc[k0];
+                                        e2 += jdiag_bb[jk] - kdiag_bb[jk];
+                                }
+                        }
+                        hdiag[ia*nstrb+ib] = e1 + e2 * .5;
+                }
+        }
+}
+
+void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
+                   int norb, int na, int nocc, int *occslist)
+{
+        FCImake_hdiag_uhf(hdiag, h1e, h1e, jdiag, jdiag, jdiag, kdiag, kdiag,
+                          norb, na, na, nocc, nocc, occslist, occslist);
 }
 
 
@@ -341,6 +513,119 @@ static int first1(unsigned long r)
         return n-1;
 }
 
+
+/*************************************************
+ * pspace Hamiltonian, ref CPL, 169, 463
+ *************************************************/
+/*
+ * sub-space Hamiltonian (tril part) of the determinants (stra,strb)
+ */
+
+void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
+                          double *g2e_aa, double *g2e_ab, double *g2e_bb,
+                          unsigned long *stra, unsigned long *strb,
+                          int norb, int np)
+{
+        int i, j, k, pi, pj, pk, pl;
+        int n1da, n1db;
+        int d2 = norb * norb;
+        int d3 = norb * norb * norb;
+        unsigned long da, db, str1;
+        double tmp;
+
+        for (i = 0; i < np; i++) {
+        for (j = 0; j < i; j++) {
+                da = stra[i] ^ stra[j];
+                db = strb[i] ^ strb[j];
+                n1da = FCIpopcount_4(da);
+                n1db = FCIpopcount_4(db);
+                switch (n1da) {
+                case 0: switch (n1db) {
+                        case 2:
+                        pi = first1(db & strb[i]);
+                        pj = first1(db & strb[j]);
+                        tmp = h1e_b[pi*norb+pj];
+                        for (k = 0; k < norb; k++) {
+                                if (stra[i] & (1<<k)) {
+                                        tmp += g2e_ab[pi*norb+pj+k*d3+k*d2];
+                                }
+                                if (strb[i] & (1<<k)) {
+                                        tmp += g2e_bb[pi*d3+pj*d2+k*norb+k]
+                                             - g2e_bb[pi*d3+k*d2+k*norb+pj];
+                                }
+                        }
+                        if (FCIparity(strb[j], strb[i]) > 0) {
+                                h0[i*np+j] = tmp;
+                        } else {
+                                h0[i*np+j] = -tmp;
+                        } break;
+
+                        case 4:
+                        pi = first1(db & strb[i]);
+                        pj = first1(db & strb[j]);
+                        pk = first1((db & strb[i]) ^ (1<<pi));
+                        pl = first1((db & strb[j]) ^ (1<<pj));
+                        str1 = strb[j] ^ (1<<pi) ^ (1<<pj);
+                        if (FCIparity(strb[j], str1)
+                           *FCIparity(str1, strb[i]) > 0) {
+                                h0[i*np+j] = g2e_bb[pi*d3+pj*d2+pk*norb+pl]
+                                           - g2e_bb[pi*d3+pl*d2+pk*norb+pj];
+                        } else {
+                                h0[i*np+j] =-g2e_bb[pi*d3+pj*d2+pk*norb+pl]
+                                           + g2e_bb[pi*d3+pl*d2+pk*norb+pj];
+                        } } break;
+                case 2: switch (n1db) {
+                        case 0:
+                        pi = first1(da & stra[i]);
+                        pj = first1(da & stra[j]);
+                        tmp = h1e_a[pi*norb+pj];
+                        for (k = 0; k < norb; k++) {
+                                if (strb[i] & (1<<k)) {
+                                        tmp += g2e_ab[pi*d3+pj*d2+k*norb+k];
+                                }
+                                if (stra[i] & (1<<k)) {
+                                        tmp += g2e_aa[pi*d3+pj*d2+k*norb+k]
+                                             - g2e_aa[pi*d3+k*d2+k*norb+pj];
+                                }
+                        }
+                        if (FCIparity(stra[j], stra[i]) > 0) {
+                                h0[i*np+j] = tmp;
+                        } else {
+                                h0[i*np+j] = -tmp;
+                        } break;
+
+                        case 2:
+                        pi = first1(da & stra[i]);
+                        pj = first1(da & stra[j]);
+                        pk = first1(db & strb[i]);
+                        pl = first1(db & strb[j]);
+                        if (FCIparity(stra[j], stra[i])
+                           *FCIparity(strb[j], strb[i]) > 0) {
+                                h0[i*np+j] = g2e_ab[pi*d3+pj*d2+pk*norb+pl];
+                        } else {
+                                h0[i*np+j] =-g2e_ab[pi*d3+pj*d2+pk*norb+pl];
+                        } } break;
+                case 4: switch (n1db) {
+                        case 0:
+                        pi = first1(da & stra[i]);
+                        pj = first1(da & stra[j]);
+                        pk = first1((da & stra[i]) ^ (1<<pi));
+                        pl = first1((da & stra[j]) ^ (1<<pj));
+                        str1 = stra[j] ^ (1<<pi) ^ (1<<pj);
+                        if (FCIparity(stra[j], str1)
+                           *FCIparity(str1, stra[i]) > 0) {
+                                h0[i*np+j] = g2e_aa[pi*d3+pj*d2+pk*norb+pl]
+                                           - g2e_aa[pi*d3+pl*d2+pk*norb+pj];
+                        } else {
+                                h0[i*np+j] =-g2e_aa[pi*d3+pj*d2+pk*norb+pl]
+                                           + g2e_aa[pi*d3+pl*d2+pk*norb+pj];
+                        }
+                        } break;
+                }
+        } }
+}
+
+/*
 void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
                       unsigned long *stra, unsigned long *strb,
                       int norb, int np)
@@ -443,4 +728,11 @@ void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
                 }
         } }
 }
+*/
 
+void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
+                      unsigned long *stra, unsigned long *strb,
+                      int norb, int np)
+{
+        FCIpspace_h0tril_uhf(h0, h1e, h1e, g2e, g2e, g2e, stra, strb, norb, np);
+}

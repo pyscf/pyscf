@@ -61,10 +61,12 @@ there are few rules to follow
 * New features first being placed in pyscf/future.
 * Code at least should work under python-2.7, gcc-4.8.
 * Not enforced, it's preferred
-  - compatibile with 2.5 - 3.3 for Python code;
-  - following C89 standard for C code;
-  - using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
-  - avoid using other program language if possible, to keep package light-weight
+  - Compatibile with 2.5 - 3.3 for Python code;
+  - Following C89 standard for C code;
+  - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
+  - Avoid using other program language if possible, to keep package light-weight
+* Loose-coupling principle
+  - Reinventing-wheel is encouraged if it reduces the coupling to the rest of the package.
 
 
 Known problems
@@ -102,7 +104,11 @@ Version 0.6 (2014-10-17):
   * Fix bug in dhf
   * add future/lo for localized orbital
 
-Version 0.7 (2014-?):
+Version 0.7 (2014-11-12):
   * Fix memory leaks
   * Runtime keywords checking
-  * add MP2 density matrix
+  * Add MP2 density matrix
+  * Add FCI based on uhf integrals
+  * Add CCSD in future module
+  * Move FCI from future module to regular dir
+  * Move MCSCF from future module to regular dir

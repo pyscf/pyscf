@@ -11,24 +11,23 @@ import os
 import time
 import numpy
 import scipy.linalg
-from pyscf import lib
-from pyscf import symm
-from pyscf import tools
+import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import pyscf.tools.dump_mat
+import pyscf.symm
 import diis
 import hf
 import _vhf
 
 
 def dump_mo_coeff(mol, mo_coeff, e_ir_idx, argsort):
+    import pyscf.tools.dump_mat as dump_mat
     label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
     label2 = []
     for k in range(nmo):
         e,ir,i = e_ir_idx[argsort[k]]
         label2.append('#%-4d(%s %d)' % (k+1, mol.irrep_name[ir], i+1))
-    tools.dump_mat.dump_rec(mol.stdout, mo_coeff, label, label2, start=1)
+    dump_mat.dump_rec(mol.stdout, mo_coeff, label, label2, start=1)
 
 def dump_mo_energy(mol, mo_energy, nocc, ehomo, elumo, title=''):
     nirrep = mol.symm_orb.__len__()
@@ -156,16 +155,16 @@ class RHF(hf.RHF):
             return f
         return scf_diis
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_hcore(self, mol):
         h = mol.intor_symmetric('cint1e_kin_sph') \
                 + mol.intor_symmetric('cint1e_nuc_sph')
-        return symm.symmetrize_matrix(h, mol.symm_orb)
+        return pyscf.symm.symmetrize_matrix(h, mol.symm_orb)
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_ovlp(self, mol):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
-        return symm.symmetrize_matrix(s, mol.symm_orb)
+        return pyscf.symm.symmetrize_matrix(s, mol.symm_orb)
 
     def make_fock(self, h1e, vhf):
         f = []
@@ -182,7 +181,7 @@ class RHF(hf.RHF):
 
     def symmetrize_den_mat(self, dm_ao):
         s0 = self.mol.intor_symmetric('cint1e_ovlp_sph')
-        s = symm.symmetrize_matrix(s0, self.mol.symm_orb)
+        s = pyscf.symm.symmetrize_matrix(s0, self.mol.symm_orb)
         nirrep = self.mol.symm_orb.__len__()
         dm = []
         for ir in range(nirrep):
@@ -275,7 +274,7 @@ class RHF(hf.RHF):
         coul_dup = 0
         for ir in range(nirrep):
             sum_mo_energy += numpy.dot(mo_energy[ir], mo_occ[ir])
-            coul_dup += lib.trace_ab(dm[ir], vhf[ir])
+            coul_dup += pyscf.lib.trace_ab(dm[ir], vhf[ir])
         log.debug(self, 'E_coul = %.15g', (coul_dup.real * .5))
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
@@ -314,7 +313,7 @@ class RHF(hf.RHF):
             return dm_ao
 
         def vhf_ao2so(vhf_ao):
-            return symm.symmetrize_matrix(vhf_ao, mol.symm_orb)
+            return pyscf.symm.symmetrize_matrix(vhf_ao, mol.symm_orb)
         def vhf_ao2so_diff(vhf_ao):
             if vhf_last is 0:
                 return vhf_ao2so(vhf_ao)
@@ -378,7 +377,7 @@ class RHF(hf.RHF):
                 if int(mo_occ[ir].sum()) % 2:
                     s ^= mol.irrep_id[ir]
             log.info(self, 'total symmetry = %s', \
-                     symm.irrep_name(mol.pgname,s))
+                     pyscf.symm.irrep_name(mol.pgname,s))
             log.info(self, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
                      *mol.irrep_name)
             noccs = [mo_occ[ir].sum() for ir in range(nirrep)]
@@ -539,12 +538,12 @@ class UHF(hf.UHF):
     def get_hcore(self, mol):
         h = mol.intor_symmetric('cint1e_kin_sph') \
                 + mol.intor_symmetric('cint1e_nuc_sph')
-        h = symm.symmetrize_matrix(h, mol.symm_orb)
+        h = pyscf.symm.symmetrize_matrix(h, mol.symm_orb)
         return (h,h)
 
     def get_ovlp(self, mol):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
-        return symm.symmetrize_matrix(s, mol.symm_orb)
+        return pyscf.symm.symmetrize_matrix(s, mol.symm_orb)
 
     def make_fock(self, h1e, vhf):
         f_a = []
@@ -568,7 +567,7 @@ class UHF(hf.UHF):
 
     def symmetrize_den_mat(self, dm_ao):
         s0 = self.mol.intor_symmetric('cint1e_ovlp_sph')
-        s = symm.symmetrize_matrix(s0, self.mol.symm_orb)
+        s = pyscf.symm.symmetrize_matrix(s0, self.mol.symm_orb)
         nirrep = self.mol.symm_orb.__len__()
         dm_a = []
         dm_b = []
@@ -717,8 +716,8 @@ class UHF(hf.UHF):
         for ir in range(nirrep):
             sum_mo_energy += numpy.dot(mo_energy[0][ir], mo_occ[0][ir])
             sum_mo_energy += numpy.dot(mo_energy[1][ir], mo_occ[1][ir])
-            coul_dup += lib.trace_ab(dm[0][ir], vhf[0][ir]) \
-                      + lib.trace_ab(dm[1][ir], vhf[1][ir])
+            coul_dup += pyscf.lib.trace_ab(dm[0][ir], vhf[0][ir]) \
+                      + pyscf.lib.trace_ab(dm[1][ir], vhf[1][ir])
         log.debug(self, 'E_coul = %.15g', (coul_dup.real * .5))
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
@@ -760,7 +759,7 @@ class UHF(hf.UHF):
             return dm_ao
 
         def vhf_ao2so(vhf_ao):
-            return symm.symmetrize_matrix(vhf_ao, mol.symm_orb)
+            return pyscf.symm.symmetrize_matrix(vhf_ao, mol.symm_orb)
         def vhf_ao2so_diff(vhf_ao):
             if vhf_last is 0:
                 return vhf_ao2so(vhf_ao)
@@ -846,7 +845,7 @@ class UHF(hf.UHF):
                 if int(mo_occ[0][ir].sum()+mo_occ[1][ir].sum()) % 2:
                     s ^= mol.irrep_id[ir]
             log.info(self, 'total symmetry = %s', \
-                     symm.irrep_name(mol.pgname,s))
+                     pyscf.symm.irrep_name(mol.pgname,s))
             log.info(self, 'alpha occupancy for each irrep:  '+(' %4s'*nirrep), \
                      *mol.irrep_name)
             noccs = [self.mo_occ[0][ir].sum() for ir in range(nirrep)]

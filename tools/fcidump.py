@@ -2,15 +2,11 @@
 
 import os, sys
 import tempfile
-import ctypes
 import numpy
-from pyscf import gto
-from pyscf import scf
-from pyscf import ao2mo
 
 
-def write_head(fout, nmo, nelec):
-    fout.write(' &FCI NORB=%4d,NELEC=%2d,MS2= 0,\n' % (nmo, nelec))
+def write_head(fout, nmo, nelec, ms=0):
+    fout.write(' &FCI NORB=%4d,NELEC=%2d,MS2=%d,\n' % (nmo, nelec, ms))
     fout.write('  ORBSYM=%s\n' % ('1,' * nmo))
     fout.write('  ISYM=1,\n')
     fout.write(' &END\n')
@@ -52,13 +48,16 @@ def write_hcore(fout, h, nmo):
 
 
 def from_chkfile(output, chkfile):
+    from pyscf import scf
+    from pyscf import ao2mo
     with open(output, 'w') as fout:
         mol, scf_rec = scf.chkfile.load_scf(chkfile)
-        nmo = scf_rec['mo_coeff'].shape[1]
-        write_head(fout, nmo, mol.nelectron)
+        mo_coeff = scf_rec['mo_coeff']
+        nmo = mo_coeff.shape[1]
+        write_head(fout, nmo, mol.nelectron, mol.spin)
 
         eri = ao2mo.direct.full_iofree(mol, mo_coeff, verbose=0)
-        write_eri(fout, eri, nmo)
+        write_eri(fout, ao2mo.restore(8, eri, nmo), nmo)
 
         t = mol.intor_symmetric('cint1e_kin_sph')
         v = mol.intor_symmetric('cint1e_nuc_sph')
@@ -66,9 +65,9 @@ def from_chkfile(output, chkfile):
         write_hcore(fout, h, nmo)
         fout.write(' %.16g  0  0  0  0\n' % mol.nuclear_repulsion())
 
-def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0):
+def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0):
     with open(output, 'w') as fout:
-        write_head(fout, nmo, nelec)
+        write_head(fout, nmo, nelec, ms)
         write_eri(fout, h2e, nmo)
         write_hcore(fout, h1e, nmo)
         fout.write(' %.16g  0  0  0  0\n' % nuc)

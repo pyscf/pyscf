@@ -7,10 +7,9 @@ import tempfile
 import time
 import numpy
 import h5py
-from pyscf import lib
-from pyscf import ao2mo
-from pyscf.future import fci
-import pyscf.future.fci.direct_spin0
+import pyscf.lib
+import pyscf.ao2mo
+import pyscf.fci.direct_spin0
 
 
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
@@ -23,7 +22,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
 def kernel(casci, mo_coeff, ci0=None, verbose=None):
     if verbose is None:
         verbose = casci.verbose
-    log = lib.logger.Logger(casci.stdout, verbose)
+    log = pyscf.lib.logger.Logger(casci.stdout, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start CASCI')
 
@@ -40,8 +39,8 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None):
     else:
         core_dm = numpy.dot(mo_core, mo_core.T) * 2
         corevhf = casci.get_veff(core_dm)
-        energy_core = lib.trace_ab(core_dm, hcore) \
-                + lib.trace_ab(core_dm, corevhf) * .5
+        energy_core = pyscf.lib.trace_ab(core_dm, hcore) \
+                + pyscf.lib.trace_ab(core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     t1 = log.timer('effective h1e in CAS space', *t0)
 
@@ -77,7 +76,7 @@ class CASCI(object):
         self.ci_lindep = 1e-14
         self.ci_max_cycle = 30
         self.ci_conv_threshold = 1e-8
-        self.fci_mod = fci.direct_spin0
+        self.fci_mod = pyscf.fci.direct_spin0
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
@@ -86,7 +85,7 @@ class CASCI(object):
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def dump_flags(self):
-        log = lib.logger.Logger(self.stdout, self.verbose)
+        log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASSCF flags ********')
         ncore = self.ncore
@@ -108,15 +107,18 @@ class CASCI(object):
     def ao2mo(self, mo):
         nao, nmo = mo.shape
         if self._scf._eri is not None:
-            eri = ao2mo.incore.full(self._scf._eri, mo)
+            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo)
         elif nao*nao*nmo*nmo/4*8/1e6 > self.max_memory:
             ftmp = tempfile.NamedTemporaryFile()
-            ao2mo.outcore.full(self.mol, mo, ftmp.name, verbose=self.verbose)
-            #ao2mo.direct.full(self.mol, mo, ftmp.name, \
-            #                  max_memory=self.max_memory, verbose=self.verbose)
-            eri = numpy.array(h5py.File(ftmp.name, 'r')['eri_mo'])
+            pyscf.ao2mo.outcore.full(self.mol, mo, ftmp.name,
+                                     verbose=self.verbose)
+            #pyscf.ao2mo.direct.full(self.mol, mo, ftmp.name, \
+            #                        max_memory=self.max_memory, verbose=self.verbose)
+            with h5py.File(ftmp.name, 'r') as feri:
+                eri = numpy.array(feri['eri_mo'])
         else:
-            eri = ao2mo.direct.full_iofree(self.mol, mo, verbose=self.verbose)
+            eri = pyscf.ao2mo.direct.full_iofree(self.mol, mo,
+                                                 verbose=self.verbose)
         return eri
 
     def casci(self, mo=None, ci0=None):
