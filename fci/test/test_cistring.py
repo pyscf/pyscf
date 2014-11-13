@@ -2,7 +2,7 @@
 
 import unittest
 import numpy
-import fci
+from pyscf import fci
 
 
 class KnowValues(unittest.TestCase):

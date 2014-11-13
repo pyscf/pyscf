@@ -2,10 +2,10 @@
 
 import unittest
 import numpy
-import gto
-import scf
-import ao2mo
-import fci
+from pyscf import gto
+from pyscf import scf
+from pyscf import ao2mo
+from pyscf import fci
 
 mol = gto.Mole()
 mol.verbose = 0

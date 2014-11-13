@@ -580,7 +580,7 @@ class CASSCF(casci.CASCI):
         return va, vc
 
     def save_mo_coeff(self, mo_coeff, *args):
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo)
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo_coeff)
 
 
 # to avoid calculating AO integrals
