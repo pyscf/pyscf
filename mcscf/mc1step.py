@@ -509,6 +509,7 @@ class CASSCF(casci.CASCI):
                                  self.ncore)
         else:
             fcasci = _fake_h_for_fast_casci(self, mo, eris)
+        fcasci.fcisolver = self.fcisolver
         return casci.kernel(fcasci, mo, ci0=ci0, verbose=0)
 
     def pack_uniq_var(self, mat):
