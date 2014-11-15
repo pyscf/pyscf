@@ -60,16 +60,21 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None):
 
 class CASCI(object):
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-        assert(nelecas%2 == 0)
         self.mol = mol
         self._scf = mf
         self.verbose = mol.verbose
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
         self.ncas = ncas
-        self.nelecas = nelecas
+        if isinstance(nelecas, int):
+            assert(nelecas%2 == 0)
+            self.nelecas = (nelecas/2,nelecas/2)
+        else:
+            self.nelecas = (nelecas[0],nelecas[1])
         if ncore is None:
-            self.ncore = (mol.nelectron - nelecas) / 2
+            ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
+            assert(ncorelec % 2 == 0)
+            self.ncore = ncorelec / 2
         else:
             self.ncore = ncore
         #TODO: for FCI solver
@@ -88,10 +93,9 @@ class CASCI(object):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASSCF flags ********')
-        ncore = self.ncore
-        nvir = self.mo_coeff.shape[1] - ncore - self.ncas
-        log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas, self.ncas, ncore, nvir)
+        nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+                 self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
         log.info('CI max. cycles = %d', self.ci_max_cycle)
         log.info('CI conv_threshold = %g', self.ci_conv_threshold)
         log.info('CI linear dependence = %g', self.ci_lindep)
@@ -160,6 +164,11 @@ if __name__ == '__main__':
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
+    mc = CASCI(mol, m, 4, (3,1))
+    mc.fcisolver = pyscf.fci.direct_spin1
+    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    print(emc - -75.439016172976)
+
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = "out_casci"
@@ -187,3 +196,8 @@ if __name__ == '__main__':
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)
+
+    mc = CASCI(mol, m, 9, (5,3))
+    mc.fcisolver = pyscf.fci.direct_spin1
+    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    print(emc - -227.7674519720)

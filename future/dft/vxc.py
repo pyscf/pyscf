@@ -11,10 +11,10 @@ import os
 import ctypes
 import re
 import numpy
-from pyscf import lib
+import pyscf.lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libdft.so')
-libdft = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libdft = numpy.ctypeslib.load_library('libdft', _loaderpath)
 
 # xc_code from libxc
 XC_CODES = {
@@ -436,7 +436,7 @@ def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, hermi=1,
                              c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                              c_env.ctypes.data_as(ctypes.c_void_p))
     if hermi == 1:
-        v = lib.hermi_triu(v, inplace=True)
+        v = pyscf.lib.hermi_triu(v, inplace=True)
     else:
         raise('anti-Hermitian is not supported')
     return nelec, exc.value, v

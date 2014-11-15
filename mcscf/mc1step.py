@@ -18,7 +18,6 @@ import mc_ao2mo
 
 def h1e_for_cas(casscf, mo, eris):
     ncas = casscf.ncas
-    nelecas = casscf.nelecas
     ncore = casscf.ncore
     nocc = ncas + ncore
     if ncore == 0:
@@ -44,7 +43,6 @@ def expmat(a):
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
-    nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncas + ncore
@@ -296,10 +294,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     cput0 = (time.clock(), time.time())
     log.debug('Start 1-step CASSCF')
 
-    ncas = casscf.ncas
-    nelecas = casscf.nelecas
     nmo = mo_coeff.shape[1]
-
     mo = mo_coeff
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.update_ao2mo(mo)
@@ -445,10 +440,9 @@ class CASSCF(casci.CASCI):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASSCF flags ********')
-        ncore = self.ncore
-        nvir = self.mo_coeff.shape[1] - ncore - self.ncas
-        log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas, self.ncas, ncore, nvir)
+        nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+                 self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
         log.info('max. macro cycles = %d', self.max_cycle_macro)
         log.info('max. micro cycles = %d', self.max_cycle_micro)
         log.info('conv_threshold = %g, (%g for gradients)', \
@@ -498,18 +492,16 @@ class CASSCF(casci.CASCI):
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
-               mc2step.kernel(self, mo, \
-                              tol=self.conv_threshold, macro=macro, micro=micro, \
-                              ci0=ci0, verbose=self.verbose)
+                mc2step.kernel(self, mo, \
+                               tol=self.conv_threshold, macro=macro, micro=micro, \
+                               ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def casci(self, mo, ci0=None, eris=None):
         if eris is None:
-            fcasci = casci.CASCI(self.mol, self._scf, self.ncas, self.nelecas,
-                                 self.ncore)
+            fcasci = self
         else:
             fcasci = _fake_h_for_fast_casci(self, mo, eris)
-        fcasci.fcisolver = self.fcisolver
         return casci.kernel(fcasci, mo, ci0=ci0, verbose=0)
 
     def pack_uniq_var(self, mat):
@@ -550,12 +542,6 @@ class CASSCF(casci.CASCI):
 
     def rotate_orb(self, mo, fcivec, e_ci, eris, dx=0):
         return rotate_orb_ah(self, mo, fcivec, e_ci, eris, dx, self.verbose)
-
-    # optimize me: mole.moleintor too slow
-    def get_hcore(self, mol=None):
-        if self._hcore is None:
-            self._hcore = self._scf.get_hcore(mol)
-        return self._hcore
 
     def update_ao2mo(self, mo):
         return mc_ao2mo._ERIS(self, mo)
@@ -604,6 +590,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
+    import pyscf.fci
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -629,6 +616,12 @@ if __name__ == '__main__':
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 
+    mc = CASSCF(mol, m, 4, (3,1))
+    mc.verbose = 0
+    mc.fcisolver = pyscf.fci.direct_spin1
+    emc = kernel(mc, m.mo_coeff, verbose=4)[0]
+    print(emc - -15.950852049859)
+
 
     mol.atom = [
         ['O', ( 0., 0.    , 0.   )],
@@ -651,3 +644,8 @@ if __name__ == '__main__':
     #numpy.set_printoptions(1)
     #print(reduce(numpy.dot, (m.mo_coeff.T, m.get_ovlp(), mc.mo_coeff)))
 
+    mc = CASSCF(mol, m, 6, (3,1))
+    mc.verbose = 4
+    mc.fcisolver = pyscf.fci.direct_spin1
+    emc = mc.mc1step(mo)[0]
+    print(emc - -84.9038216713284)

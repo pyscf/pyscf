@@ -1,6 +1,19 @@
 #!/usr/bin/env python
 # $Id$
 # -*- coding: utf-8
+#
+# FCI solver for arbitary number of alpha and beta electrons with UHF MO
+# integrals.  This solver can be used to compute doublet, triplet,...  though
+# spin multiplicity is broken. 
+#
+# Other files in the directory
+# direct_ms0   MS=0, same number of alpha and beta nelectrons
+# direct_spin0 singlet
+# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
+#              MO integrals
+# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
+#              MO integrals
+#
 
 import os
 import ctypes
@@ -11,8 +24,8 @@ import davidson
 import cistring
 import direct_spin1
 
-_alib = os.path.join(os.path.dirname(pyscf.lib.__file__), 'libmcscf.so')
-libfci = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 
 # When the spin-orbitals do not have the degeneracy on spacial part,
 # there is only one version of FCI which is close to _spin1 solver.

@@ -7,8 +7,8 @@ import numpy
 import pyscf.lib
 import cistring
 
-_alib = os.path.join(os.path.dirname(pyscf.lib.__file__), 'libmcscf.so')
-librdm = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+librdm = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]
@@ -18,9 +18,14 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
 # dm_pq = <|p^+ q|>
-def make_rdm1_spin0(fname, cibra, ciket, norb, nelec, link_index=None):
+def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
+    if isinstance(nelec, int):
+        neleca = nelec/2
+    else:
+        neleca, nelecb = nelec
+        assert(neleca == nelecb)
     if link_index is None:
-        link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
+        link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na,nlink,_ = link_index.shape
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
@@ -35,9 +40,14 @@ def make_rdm1_spin0(fname, cibra, ciket, norb, nelec, link_index=None):
     return rdm1
 
 # fci_rdm.c call dsyrk_, which might have bug on Debian-6
-def make_rdm12_spin0(fname, cibra, ciket, norb, nelec, link_index=None):
+def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
+    if isinstance(nelec, int):
+        neleca = nelec/2
+    else:
+        neleca, nelecb = nelec
+        assert(neleca == nelecb)
     if link_index is None:
-        link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
+        link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na,nlink,_ = link_index.shape
     rdm1 = numpy.empty((norb,norb))
     rdm2 = numpy.empty((norb,)*4)
@@ -53,17 +63,20 @@ def make_rdm12_spin0(fname, cibra, ciket, norb, nelec, link_index=None):
     return reorder_rdm(rdm1, rdm2, inplace=True)
 
 def make_rdm1(fname, cibra, ciket, norb, nelec, link_index=None):
-    return make_rdm1_spin0(fname, cibra, ciket, norb, nelec, link_index)
+    return make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index)
 
 def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None):
-    return make_rdm12_spin0(fname, cibra, ciket, norb, nelec, link_index)
+    return make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index)
 
 ###################################################
 #
 # nelec and link_index are tuples of (alpha,beta)
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
-    neleca, nelecb = nelec
+    if isinstance(nelec, int):
+        neleca = nelecb = nelec/2
+    else:
+        neleca, nelecb = nelec
     if link_index is None:
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
@@ -87,7 +100,10 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 # to the normal rdm2, which is defined as <p^+ r^+ q s>
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec,
                      link_index=None, symm=0):
-    neleca, nelecb = nelec
+    if isinstance(nelec, int):
+        neleca = nelecb = nelec/2
+    else:
+        neleca, nelecb = nelec
     if link_index is None:
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)

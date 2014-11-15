@@ -6,10 +6,10 @@
 import os
 import ctypes
 import numpy
-from pyscf import lib
+import pyscf.lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libao2mo.so')
-libao2mo = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libao2mo = numpy.ctypeslib.load_library('libao2mo', _loaderpath)
 
 def restore(symmetry, eri, norb, tao=None):
     if symmetry not in (8, 4, 1):
@@ -33,14 +33,14 @@ def restore(symmetry, eri, norb, tao=None):
             return eri.reshape(npair,npair)
         else: # 8-fold
             #return _ao2mo.restore_4to8(eri, norb)
-            return lib.pack_tril(eri.reshape(npair,-1))
+            return pyscf.lib.pack_tril(eri.reshape(npair,-1))
     elif eri.size == npair*(npair+1)/2: # 8-fold
         if symmetry == 1:
             eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
             return _call_restore('8to1', eri, eri1, norb)
         elif symmetry == 4:
             #return _ao2mo.restore_8to4(eri, norb)
-            return lib.unpack_tril(eri.reshape(-1))
+            return pyscf.lib.unpack_tril(eri.ravel())
         else: # 8-fold
             return eri
     else:

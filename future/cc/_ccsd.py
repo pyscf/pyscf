@@ -3,10 +3,10 @@
 import os
 import ctypes
 import numpy
-from pyscf import lib
+import pyscf.lib as lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libcc.so')
-libcc = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(lib.__file__)
+libcc = numpy.ctypeslib.load_library('libcc', _loaderpath)
 
 
 # NOTE requisite on data continuous

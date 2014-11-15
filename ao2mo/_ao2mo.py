@@ -4,10 +4,10 @@ import os
 import ctypes
 import _ctypes
 import numpy
-from pyscf import lib
+import pyscf.lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libao2mo.so')
-libao2mo = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libao2mo = numpy.ctypeslib.load_library('libao2mo', _loaderpath)
 
 
 def _count_ij(istart, icount, jstart, jcount):

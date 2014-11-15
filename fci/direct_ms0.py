@@ -1,6 +1,18 @@
 #!/usr/bin/env python
 # $Id$
 # -*- coding: utf-8
+#
+# FCI solver for equivalent number of alpha and beta electrons
+# (requires MS=0, can be singlet, triplet, quintet, dep on init guess)
+#
+# Other files in the directory
+# direct_ms0   MS=0, same number of alpha and beta nelectrons
+# direct_spin0 singlet
+# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
+#              MO integrals
+# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
+#              MO integrals
+#
 
 import os
 import ctypes
@@ -11,12 +23,17 @@ import davidson
 import cistring
 import rdm
 
-_alib = os.path.join(os.path.dirname(pyscf.lib.__file__), 'libmcscf.so')
-libfci = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), nelec/2)
+        if isinstance(nelec, int):
+            neleca = nelec/2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na,nlink,_ = link_index.shape
     ci1 = numpy.empty((na,na))
     f1e_tril = pyscf.lib.pack_tril(f1e)
@@ -33,7 +50,12 @@ def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
     if not g2e.flags.c_contiguous:
         g2e = g2e.copy()
     if link_index is None:
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), nelec/2)
+        if isinstance(nelec, int):
+            neleca = nelec/2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na,nlink,_ = link_index.shape
     ci1 = numpy.empty((na,na))
 
@@ -47,11 +69,15 @@ def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
     return ci1
 
 def make_hdiag(h1e, g2e, norb, nelec):
+    if isinstance(nelec, int):
+        neleca = nelec/2
+    else:
+        neleca, nelecb = nelec
+        assert(neleca == nelecb)
     g2e = pyscf.ao2mo.restore(1, g2e, norb)
-    link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
+    link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na = link_index.shape[0]
-    nocc = nelec / 2
-    occslist = link_index[:,:nocc,0].copy('C')
+    occslist = link_index[:,:neleca,0].copy('C')
     hdiag = numpy.empty(na*na)
     jdiag = numpy.einsum('iijj->ij',g2e).copy('C')
     kdiag = numpy.einsum('ijji->ij',g2e).copy('C')
@@ -60,11 +86,13 @@ def make_hdiag(h1e, g2e, norb, nelec):
                          jdiag.ctypes.data_as(ctypes.c_void_p),
                          kdiag.ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(norb), ctypes.c_int(na),
-                         ctypes.c_int(nocc),
+                         ctypes.c_int(neleca),
                          occslist.ctypes.data_as(ctypes.c_void_p))
     return hdiag.ravel()
 
 def absorb_h1e(h1e, g2e, norb, nelec):
+    if not isinstance(nelec, int):
+        nelec = sum(nelec)
     h2e = pyscf.ao2mo.restore(1, g2e, norb).copy()
     f1e = h1e - numpy.einsum('...,jiik->jk', .5, h2e)
     f1e = f1e * (1./nelec)
@@ -74,15 +102,20 @@ def absorb_h1e(h1e, g2e, norb, nelec):
     return h2e
 
 def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
+    if isinstance(nelec, int):
+        neleca = nelec/2
+    else:
+        neleca, nelecb = nelec
+        assert(neleca == nelecb)
     g2e = pyscf.ao2mo.restore(1, g2e, norb)
-    na = cistring.num_strings(norb, nelec/2)
+    na = cistring.num_strings(norb, neleca)
     addr = numpy.argsort(hdiag)[:np]
 # symmetrize addra/addrb
     addra = addr / na
     addrb = addr % na
-    stra = numpy.array([cistring.addr2str(norb,nelec/2,ia) for ia in addra],
+    stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
                        dtype=numpy.long)
-    strb = numpy.array([cistring.addr2str(norb,nelec/2,ib) for ib in addrb],
+    strb = numpy.array([cistring.addr2str(norb,neleca,ib) for ib in addrb],
                        dtype=numpy.long)
     np = len(addr)
     h0 = numpy.zeros((np,np))
@@ -101,7 +134,12 @@ def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
 def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1):
-    link_index = cistring.gen_linkstr_index_trilidx(range(norb), nelec/2)
+    if isinstance(nelec, int):
+        neleca = nelec/2
+    else:
+        neleca, nelecb = nelec
+        assert(neleca == nelecb)
+    link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na = link_index.shape[0]
     h2e = absorb_h1e(h1e, g2e, norb, nelec) * .5
     hdiag = make_hdiag(h1e, g2e, norb, nelec)
@@ -170,7 +208,12 @@ def make_rdm12(fcivec, norb, nelec, link_index=None):
 # dm_pq = <I|p^+ q|J>
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
-        link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
+        if isinstance(nelec, int):
+            neleca = nelec/2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        link_index = cistring.gen_linkstr_index(range(norb), neleca)
     rdm1a = rdm.make_rdm1('FCItrans_rdm1a', cibra, ciket,
                           norb, nelec, link_index)
     rdm1b = rdm.make_rdm1('FCItrans_rdm1b', cibra, ciket,

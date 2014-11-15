@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 import numpy
-from pyscf import lib
-from pyscf import ao2mo
+import pyscf.lib
 
 def sort_mo(casscf, mo, caslst, base=1):
     assert(casscf.ncas == len(caslst))
@@ -103,9 +102,6 @@ def make_fock(casscf, fcivec=None, mo=None):
     ncore = casscf.ncore
     ncas = casscf.ncas
     nelecas = casscf.nelecas
-    nocc = ncore + ncas
-    nmo = mo.shape[1]
-    mocc = mo[:,:nocc]
 
     casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
     eris = casscf.update_ao2mo(mo)
@@ -119,7 +115,7 @@ def make_fock(casscf, fcivec=None, mo=None):
     return fock
 
 def restore_cas_natorb(casscf, fcivec=None, mo=None):
-    log = lib.logger.Logger(casscf.stdout, casscf.verbose)
+    log = pyscf.lib.logger.Logger(casscf.stdout, casscf.verbose)
     if fcivec is None:
         fcivec = casscf.ci
     if mo is None:
@@ -128,7 +124,6 @@ def restore_cas_natorb(casscf, fcivec=None, mo=None):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
     nocc = ncore + ncas
-    nmo = mo.shape[1]
     casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
     occ, ucas = numpy.linalg.eigh(-casdm1)
     occ = -occ

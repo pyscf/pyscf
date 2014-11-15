@@ -7,8 +7,8 @@ import os
 import ctypes
 import numpy
 
-_alib = os.path.join(os.path.dirname(__file__), 'libnp_helper.so')
-_np_helper = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(__file__)
+_np_helper = numpy.ctypeslib.load_library('libnp_helper', _loaderpath)
 
 BLOCK_DIM = 192
 HERMITIAN = 1

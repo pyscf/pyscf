@@ -4,10 +4,10 @@ import os
 import ctypes
 import _ctypes
 import numpy
-from pyscf import lib
+import pyscf.lib as lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libcvhf.so')
-libcvhf = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(lib.__file__)
+libcvhf = numpy.ctypeslib.load_library('libcvhf', _loaderpath)
 
 class VHFOpt(object):
     def __init__(self, mol, intor, prescreen, qcondname, dmcondname):

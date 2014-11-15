@@ -1,6 +1,19 @@
 #!/usr/bin/env python
 # $Id$
 # -*- coding: utf-8
+#
+# FCI solver for arbitary number of alpha and beta electrons.  The hamiltonian
+# requires spacial part of the integrals (RHF/ROHF MO integrals).  This solver
+# can be used to compute doublet, triplet,...
+#
+# Other files in the directory
+# direct_ms0   MS=0, same number of alpha and beta nelectrons
+# direct_spin0 singlet
+# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
+#              MO integrals
+# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
+#              MO integrals
+#
 
 import os
 import ctypes
@@ -12,8 +25,8 @@ import cistring
 import direct_spin0
 import rdm
 
-_alib = os.path.join(os.path.dirname(pyscf.lib.__file__), 'libmcscf.so')
-libfci = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     neleca, nelecb = nelec
@@ -102,7 +115,7 @@ def make_hdiag(h1e, g2e, norb, nelec):
     return numpy.array(hdiag)
 
 def absorb_h1e(h1e, g2e, norb, nelec):
-    return direct_spin0_o1.absorb_h1e(h1e, g2e, norb, nelec[0]+nelec[1])
+    return direct_spin0.absorb_h1e(h1e, g2e, norb, nelec[0]+nelec[1])
 
 def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
     neleca, nelecb = nelec

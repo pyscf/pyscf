@@ -12,10 +12,10 @@ import os
 import ctypes
 import numpy
 import radi
-from pyscf import lib
+import pyscf.lib
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libdft.so')
-libdft = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libdft = numpy.ctypeslib.load_library('libdft', _loaderpath)
 
 #TODO: OPTIMIZE ME ACCORDING TO JCP 102, 346
 

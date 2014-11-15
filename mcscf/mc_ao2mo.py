@@ -5,13 +5,12 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-from pyscf import lib
-from pyscf import ao2mo
+import pyscf.lib
 import pyscf.lib.numpy_helper
-import pyscf.ao2mo._ao2mo
+import pyscf.ao2mo._ao2mo as _ao2mo
 
-_alib = os.path.join(os.path.dirname(lib.__file__), 'libmcscf.so')
-libmcscf = ctypes.CDLL(_alib)
+_loaderpath = os.path.dirname(pyscf.lib.__file__)
+libmcscf = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 
 # least memory requirements:
 #       ncore**2*(nmo-ncore)*nmo + ncas**2*nmo**2*2 + nmo**3   words
@@ -34,15 +33,15 @@ def trans_e1_incore(casscf, mo):
     moji = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
     ijshape = (nmo, nocc, 0, nmo)
 
-    eri1 = ao2mo._ao2mo.nr_e1_incore(casscf._scf._eri, moji, ijshape)
+    eri1 = _ao2mo.nr_e1_incore(casscf._scf._eri, moji, ijshape)
 
     c_nmo = ctypes.c_int(nmo)
-    funpack = lib.numpy_helper._np_helper.NPdunpack_tril
+    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
     jc_pp = numpy.empty((ncore,nmo,nmo))
     kc_pp = numpy.empty((ncore,nmo,nmo))
 
     klshape = (0, nmo, 0, nmo)
-    buf = ao2mo._ao2mo.nr_e2(eri1[ncore*nmo:nocc*nmo], moji, klshape)
+    buf = _ao2mo.nr_e2(eri1[ncore*nmo:nocc*nmo], moji, klshape)
     japcp = numpy.empty((ncas,nmo,ncore,nmo))
     appp = numpy.empty((ncas,nmo,nmo,nmo))
     ij = 0
@@ -68,14 +67,14 @@ def trans_e1_incore(casscf, mo):
 #    cvcp = numpy.empty((ncore,nmo-ncore,ncore,nmo))
 #    klshape = (nmo, ncore, 0, nmo)
 #    for i in range(ncore):
-#        ao2mo._ao2mo.nr_e2(eri1[i*nmo+ncore:i*nmo+nmo], moji, klshape, cvcp[i])
+#        _ao2mo.nr_e2(eri1[i*nmo+ncore:i*nmo+nmo], moji, klshape, cvcp[i])
 #        kc_pp[i,ncore:] = cvcp[i,:,i]
 #    jcvcp = cvcp * 4 - cvcp.transpose(2,1,0,3)
 
 #    cpp = numpy.empty((ncore,nmo,nmo))
 #    klshape = (0, nmo, 0, nmo)
 #    for i in range(ncore):
-#        buf = ao2mo._ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
+#        buf = _ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
 #        for j in range(ncore):
 #            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
 #                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -88,11 +87,11 @@ def trans_e1_incore(casscf, mo):
     cpp = numpy.empty((ncore,nmo,nmo))
     for i in range(ncore):
         klshape = (nmo, ncore, 0, nmo)
-        ao2mo._ao2mo.nr_e2(eri1[i*nmo+ncore:i*nmo+nmo], moji, klshape, vcp)
+        _ao2mo.nr_e2(eri1[i*nmo+ncore:i*nmo+nmo], moji, klshape, vcp)
         kc_pp[i,ncore:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
-        buf = ao2mo._ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
+        buf = _ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
         for j in range(ncore):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -114,7 +113,7 @@ def trans_e1_incore(casscf, mo):
 
 def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                      verbose=0):
-    log = lib.logger.Logger(casscf.stdout, verbose)
+    log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     mol = casscf.mol
     ncore = casscf.ncore
     ncas = casscf.ncas
@@ -127,10 +126,10 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     nij_pair = nocc * nmo
     nao_pair = nao*(nao+1)/2
     mem_words, ioblk_words = \
-            ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
-                                                nij_pair, nao_pair)
+            direct._memory_and_ioblk_size(max_memory, ioblk_size,
+                                          nij_pair, nao_pair)
     e1_buflen = min(int(mem_words/nij_pair), nao_pair)
-    ish_ranges = ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
+    ish_ranges = outcore._info_sh_ranges(mol, e1_buflen)
 
     log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
                nij_pair*nao_pair*8/1e6, e1_buflen, nmo,
@@ -144,15 +143,15 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                   sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
                   sh_range[2])
         try:
-            buf = ao2mo._ao2mo.nr_e1range(moji, sh_range, ijshape, \
-                                          mol._atm, mol._bas, mol._env)
+            buf = _ao2mo.nr_e1range(moji, sh_range, ijshape, \
+                                    mol._atm, mol._bas, mol._env)
         except MemoryError:
             log.warn('not enough memory or limited virtual address space `ulimit -v`')
             raise MemoryError
         for ic in range(nocc):
             col0 = ic * nmo
             col1 = ic * nmo + nmo
-            fswap['%d/%d'%(istep,ic)] = lib.transpose(buf[:,col0:col1])
+            fswap['%d/%d'%(istep,ic)] = pyscf.lib.transpose(buf[:,col0:col1])
         buf = None
 
     ###########################
@@ -166,7 +165,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             col0 = col1
         return buf
     c_nmo = ctypes.c_int(nmo)
-    funpack = lib.numpy_helper._np_helper.NPdunpack_tril
+    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
     jc_pp = numpy.empty((ncore,nmo,nmo))
     kc_pp = numpy.empty((ncore,nmo,nmo))
 
@@ -176,7 +175,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     appa = numpy.empty((ncas,nmo,nmo,ncas))
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = ao2mo._ao2mo.nr_e2(load_buf(ncore+i), moji, klshape)
+        buf = _ao2mo.nr_e2(load_buf(ncore+i), moji, klshape)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -196,11 +195,11 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     for i in range(ncore):
         buf = load_buf(i)
         klshape = (nmo, ncore, 0, nmo)
-        ao2mo._ao2mo.nr_e2(buf[ncore:nmo], moji, klshape, vcp)
+        _ao2mo.nr_e2(buf[ncore:nmo], moji, klshape, vcp)
         kc_pp[i,ncore:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
-        ao2mo._ao2mo.nr_e2(buf[:ncore], moji, klshape, buf[:ncore])
+        _ao2mo.nr_e2(buf[:ncore], moji, klshape, buf[:ncore])
         for j in range(ncore):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -235,13 +234,14 @@ class _ERIS(object):
         mocc = mo[:,:nocc]
 
         if method == 'outcore' \
-           or _mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 > casscf.max_memory*.9:
+           or _mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 > casscf.max_memory*.9 \
+           or casscf._scf._eri is None:
             self.jc_pp, self.kc_pp, \
             self.aapp, self.appa, self.aaaa, \
             self.ApcP, self.CvcP = \
                     trans_e1_outcore(casscf, mo, max_memory=casscf.max_memory,
                                      verbose=casscf.verbose)
-        elif method == 'incore' or casscf._scf._eri is not None:
+        elif method == 'incore' and casscf._scf._eri is not None:
             self.jc_pp, self.kc_pp, \
             self.aapp, self.appa, self.aaaa, \
             self.ApcP, self.CvcP = \
@@ -253,12 +253,13 @@ def _mem_usage(ncore, ncas, nmo):
     outcore = (ncore**2*(nmo-ncore)*nmo + ncas**2*nmo**2*2 + nmo**3) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
     if outcore > 10000:
-        print('Be careful with the virtual memorty address space `ulimit -v`')
+        print 'Be careful with the virtual memorty address space `ulimit -v`'
     return incore, outcore
 
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
+    from pyscf import ao2mo
     import mc1step
 
     mol = gto.Mole()
