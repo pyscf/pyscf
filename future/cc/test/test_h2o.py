@@ -4,7 +4,7 @@ import numpy
 
 from pyscf import gto
 from pyscf import scf
-from pyscf.future import cc
+from pyscf import cc
 
 mol = gto.Mole()
 mol.verbose = 0

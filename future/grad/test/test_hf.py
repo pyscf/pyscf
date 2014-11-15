@@ -3,7 +3,7 @@
 import unittest
 from pyscf import scf
 from pyscf import gto
-from pyscf.future import grad
+from pyscf import grad
 
 mol = gto.Mole()
 mol.verbose = 0

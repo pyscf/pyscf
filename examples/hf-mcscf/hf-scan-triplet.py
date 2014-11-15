@@ -27,7 +27,9 @@ def run(b, caslst):
     m.set_mo_occ = scf.addons.dynamic_occ(m, 1e-3)
     ehf.append(m.scf())
 
-    mc = mcscf.CASSCF(mol, m, 6, (4,2))
+    nelec_alpha = 4
+    nelec_beta = 2
+    mc = mcscf.CASSCF(mol, m, 6, (nelec_alpha,nelec_beta))
     mc.fcisolver = pyscf.fci.direct_spin1
     mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caslst, 1)
     e1 = mc.mc1step(mo)[0]

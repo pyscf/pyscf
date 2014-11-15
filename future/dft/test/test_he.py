@@ -4,7 +4,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import lib
-from pyscf.future import dft
+from pyscf import dft
 
 # for cgto
 mol = gto.Mole()

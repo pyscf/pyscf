@@ -112,3 +112,7 @@ Version 0.7 (2014-11-12):
   * Add CCSD in future module
   * Move FCI from future module to regular dir
   * Move MCSCF from future module to regular dir
+
+Version 0.8 (2014-12-?):
+  * Support mac and windows?
+  * MCSCF supports external CI solver

@@ -13,7 +13,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
-from pyscf.future import grad
+from pyscf import grad
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import pyscf.scf._vhf

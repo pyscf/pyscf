@@ -3,7 +3,7 @@
 import unittest
 from pyscf import gto
 from pyscf import lib
-from pyscf.future import dft
+from pyscf import dft
 
 h2o = gto.Mole()
 h2o.verbose = 0

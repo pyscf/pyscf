@@ -2,7 +2,7 @@
 import numpy
 from pyscf import gto
 from pyscf import scf
-from pyscf.future import nmr
+from pyscf import nmr
 
 mol = gto.Mole()
 mol.verbose = 5
