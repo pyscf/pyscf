@@ -133,7 +133,7 @@ def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1):
+def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, fciRestart=False):
     if isinstance(nelec, int):
         neleca = nelec/2
     else:

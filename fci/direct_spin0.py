@@ -142,7 +142,7 @@ def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
     return pspace_o2(h1e, g2e, norb, nelec, hdiag, np)
 
 
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, tol=1e-8):
+def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, tol=1e-8, fciRestart=False):
     if isinstance(nelec, int):
         neleca = nelec/2
     else:

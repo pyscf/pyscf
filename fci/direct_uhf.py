@@ -221,7 +221,7 @@ def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.001):
+def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.001, fciRestart=False):
     neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
