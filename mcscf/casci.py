@@ -19,7 +19,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
 
-def kernel(casci, mo_coeff, ci0=None, verbose=None):
+def kernel(casci, mo_coeff, ci0=None, verbose=None, fciRestart=False):
     if verbose is None:
         verbose = casci.verbose
     log = pyscf.lib.logger.Logger(casci.stdout, verbose)
@@ -49,7 +49,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None):
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
-    e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0)
+    e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas, ci0=ci0, fciRestart=fciRestart)
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core

@@ -164,7 +164,9 @@ def rotate_orb_ah(casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
     nmo = mo.shape[1]
 
     t2m = (time.clock(), time.time())
+
     casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas)
+
     g_orb0, h_op, h_diag = gen_g_hop(casscf, mo, casdm1, casdm2, eris)
     t3m = log.timer('gen h_op', *t2m)
 
@@ -497,12 +499,12 @@ class CASSCF(casci.CASCI):
                                ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def casci(self, mo, ci0=None, eris=None):
+    def casci(self, mo, ci0=None, eris=None, fciRestart=False):
         if eris is None:
             fcasci = self
         else:
             fcasci = _fake_h_for_fast_casci(self, mo, eris)
-        return casci.kernel(fcasci, mo, ci0=ci0, verbose=0)
+        return casci.kernel(fcasci, mo, ci0=ci0, verbose=0, fciRestart=fciRestart)
 
     def pack_uniq_var(self, mat):
         ncore = self.ncore

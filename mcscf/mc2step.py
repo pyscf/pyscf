@@ -24,7 +24,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     mo = mo_coeff
     eris = casscf.update_ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, fciRestart= False)
     log.info('CASCI E = %.15g', e_tot)
     elast = e_tot
     conv = False
@@ -60,7 +60,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, fciRestart=True)
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         norm_gorb = numpy.linalg.norm(g_orb)
