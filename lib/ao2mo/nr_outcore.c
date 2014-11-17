@@ -8,10 +8,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <omp.h>
 #include <assert.h>
 //#define NDEBUG
-
+//#include <omp.h>
+#include "config.h"
 #include "cint.h"
 #include "vhf/cvhf.h"
 #include "vhf/fblas.h"

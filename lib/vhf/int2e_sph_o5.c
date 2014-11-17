@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
+//#include <omp.h>
+#include "config.h"
 #include "cint.h"
 #include "cvhf.h"
 #include "nr_direct.h"

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
-#include <omp.h>
+//#include <omp.h>
+#include "config.h"
 #include "vhf/fblas.h"
 
 #define MIN(X,Y)        ((X) < (Y) ? (X) : (Y))
@@ -19,7 +20,8 @@ void NPdgemm(const char trans_a, const char trans_b,
         b += offsetb;
         c += offsetc;
 
-        int stride, nthread, nblk;
+        int stride, nblk;
+        int nthread = 1;
         int i, di;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
@@ -54,7 +56,9 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, stride_b, nthread, nblk) \
         private(i, ij, j, di, cpriv, pc)
                 {
+#if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
+#endif
                         nblk = (int)(k/nthread) + 1;
                         cpriv = malloc(sizeof(double) * m * n);
 
@@ -90,7 +94,9 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
                 {
+#if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
+#endif
                         nblk = (int)(m/nthread) + 1;
 
 #pragma omp for nowait schedule(static)
@@ -114,7 +120,9 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
                 {
+#if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
+#endif
                         nblk = (int)(n/nthread) + 1;
 
 #pragma omp for nowait schedule(static)

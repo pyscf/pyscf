@@ -1,1 +1,6 @@
-#cmakedefine HAVE_STDINT_H
+#cmakedefine HAVE_OPENMP
+
+#if defined HAVE_OPENMP
+#include <omp.h>
+#endif
+

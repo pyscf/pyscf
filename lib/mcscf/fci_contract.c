@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
-
+//#include <omp.h>
+#include "config.h"
 #include "vhf/fblas.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
@@ -266,9 +266,11 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                           int buf_size)
 {
         const int nnorb = norb * (norb+1)/2;
-        int nthreads = 16;
+        int nthreads = 1;
+#if defined HAVE_OPENMP
 #pragma omp parallel shared(nthreads)
         nthreads = omp_get_num_threads();
+#endif
 
         int strk0, strk1, strk;
         long blk_base = MAX(sqrt((((long)buf_size)<<20)/8/nnorb*2), nthreads);
@@ -314,9 +316,11 @@ void FCIcontract_rhf2e_spin1(double *eri, double *ci0, double *ci1,
                              int *link_indexa, int *link_indexb, int buf_size)
 {
         const int nnorb = norb * (norb+1)/2;
-        int len_blk;
+        int len_blk = 1;
+#if defined HAVE_OPENMP
 #pragma omp parallel shared(len_blk)
         len_blk = omp_get_num_threads();
+#endif
 
         int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/nb, len_blk);
         len_blk = (int)(max_buflen/len_blk) * len_blk;
@@ -407,9 +411,11 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                        int *link_indexa, int *link_indexb, int buf_size)
 {
         const int nnorb = norb * (norb+1)/2;
-        int len_blk;
+        int len_blk = 1;
+#if defined HAVE_OPENMP
 #pragma omp parallel shared(len_blk)
         len_blk = omp_get_num_threads();
+#endif
 
         int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/nb, len_blk);
         len_blk = (int)(max_buflen/len_blk) * len_blk;

@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
+//#include <omp.h>
+#include "config.h"
 #include "cvhf.h"
 #include "np_helper/np_helper.h"
 #include "fblas.h"

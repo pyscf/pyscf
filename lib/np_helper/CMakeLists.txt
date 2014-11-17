@@ -2,7 +2,8 @@ add_library(np_helper SHARED
   transpose.c pack_tril.c npdot.c)
 
 set_target_properties(np_helper PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
+  COMPILE_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(np_helper ${OpenMP_C_FLAGS} ${BLAS_LIBRARIES})
+target_link_libraries(np_helper ${BLAS_LIBRARIES})
 

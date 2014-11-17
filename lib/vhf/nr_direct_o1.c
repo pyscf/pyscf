@@ -6,7 +6,8 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
-#include <omp.h>
+//#include <omp.h>
+#include "config.h"
 #include "cint.h"
 #include "optimizer.h"
 #include "nr_direct.h"

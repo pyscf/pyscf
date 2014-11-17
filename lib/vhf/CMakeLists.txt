@@ -9,5 +9,5 @@ set_target_properties(cvhf PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(cvhf np_helper cint ${BLAS_LIBRARIES} ${OpenMP_C_FLAGS})
+target_link_libraries(cvhf np_helper cint ${BLAS_LIBRARIES})
 

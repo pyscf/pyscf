@@ -71,6 +71,9 @@ there are few rules to follow
 
 Known problems
 --------------
+* Error message "Library not loaded: libcint.2.1.1.dylib" On OS X
+  libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
+  "/path/to/pyscf/lib/deps/lib"  to  DYLD_LIBRARY_PATH
 
 
 Bug report
@@ -109,10 +112,8 @@ Version 0.7 (2014-11-12):
   * Runtime keywords checking
   * Add MP2 density matrix
   * Add FCI based on uhf integrals
-  * Add CCSD in future module
-  * Move FCI from future module to regular dir
-  * Move MCSCF from future module to regular dir
+  * Add CCSD
 
 Version 0.8 (2014-12-?):
-  * Support mac and windows?
-  * MCSCF supports external CI solver
+  * Support OS X
+  * MCSCF for triplet

@@ -131,7 +131,7 @@ def parity(string0, string1):
 
 def addr2str_o0(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
-    if addr == 0:
+    if addr == 0 or nelec == 0:
         return (1<<nelec) - 1   # ..0011..11
     else:
         for i in reversed(range(norb)):
@@ -140,6 +140,8 @@ def addr2str_o0(norb, nelec, addr):
                 return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
 def addr2str_o1(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
+    if nelec == norb:
+        return 0
     str1 = 0
     nelec_left = nelec
     for norb_left in reversed(range(norb)):

@@ -8,8 +8,8 @@
 #include <math.h>
 #include <string.h>
 #include <assert.h>
-#include <omp.h>
-
+//#include <omp.h>
+#include "config.h"
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
 #include "nr_ao2mo_o3.h"

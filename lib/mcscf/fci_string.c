@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
-
+//#include <omp.h>
+#include "config.h"
 #include "vhf/fblas.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
