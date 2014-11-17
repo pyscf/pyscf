@@ -1,0 +1,6 @@
+#
+# This file is an example to set the environment for block code.  The
+# configs will be used in dmrgci.py
+#
+
+BLOCKEXE = '/home/sharma/apps/Block/block.spin_adapted'
