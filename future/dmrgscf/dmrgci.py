@@ -5,6 +5,14 @@
 
 import numpy
 
+try:
+    import settings
+except ImportError:
+    import os, sys
+    msg = '''settings.py not found.  Please create %s
+''' % os.path.join(os.path.dirname(__file__), 'settings.py')
+    sys.stderr.write(msg)
+
 class DMRGCI(object):
     scratchDirectory = "scratch"
     integralFile = "FCIDUMP"
@@ -14,7 +22,7 @@ class DMRGCI(object):
     twodot_to_onedot=15
     tol=1e-12
     maxM=1000
-    executable="/home/sharma/apps/Block/block.spin_adapted"
+    executable = settings.BLOCKEXE
 
 def make_rdm12(fcivec, norb, nelec, link_index=None):
 
