@@ -4,6 +4,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
+from pyscf import mcscf
 from pyscf import dmrgscf
 
 b = 1.4
@@ -22,13 +23,27 @@ m.scf()
 
 
 class KnowValues(unittest.TestCase):
-    def test_mc2step_4o4e(self):
-        mc = dmrgscf.NameMeCASSCF(mol, m, 4, 4)
+    def test_dmrgci_mc2step_4o4e(self):
+        mc = mcscf.CASSCF(mol, m, 4, 4)
+        mc.fcisolver = dmrgscf.DMRGCI(mol)
         emc = mc.mc2step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -108.913786407955, 7)
 
-    def test_mc2step_6o6e(self):
-        mc = dmrgscf.NameMeCASSCF(mol, m, 6, 6)
+    def test_dmrgci_mc2step_6o6e(self):
+        mc = mcscf.CASSCF(mol, m, 6, 6)
+        mc.fcisolver = dmrgscf.DMRGCI(mol)
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
+        self.assertAlmostEqual(emc, -108.980105451388, 7)
+
+    def test_chemps2_mc2step_4o4e(self):
+        mc = mcscf.CASSCF(mol, m, 4, 4)
+        mc.fcisolver = dmrgscf.CheMPS2(mol)
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
+        self.assertAlmostEqual(emc, -108.913786407955, 7)
+
+    def test_chemps2_mc2step_6o6e(self):
+        mc = mcscf.CASSCF(mol, m, 6, 6)
+        mc.fcisolver = dmrgscf.CheMPS2(mol)
         emc = mc.mc2step()[0] + mol.nuclear_repulsion()
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
