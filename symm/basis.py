@@ -98,8 +98,8 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
 def dump_symm_adapted_basis(mol, so):
     pass
 
-def irrep_name(pgname, irrep_id):
-    return param.CHARACTER_TABLE[pgname][irrep_id][0]
+def irrep_name(groupname, irrep_id):
+    return param.CHARACTER_TABLE[groupname][irrep_id][0]
 
 def symmetrize_matrix(mat, so):
     return [reduce(numpy.dot, (c.T,mat,c)) for c in so]

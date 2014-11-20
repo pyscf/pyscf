@@ -146,7 +146,7 @@ class Mole(object):
         self._env = [0] * PTR_ENV_START
 
         self.stdout = sys.stdout
-        self.pgname = 'C1'
+        self.groupname = 'C1'
         self.nelectron = 0
         self.symm_orb = None
         self.irrep_name = None
@@ -274,12 +274,12 @@ class Mole(object):
         else:
             from pyscf import symm
             #if self.symmetry in symm.param.POINTGROUP
-            #    self.pgname = self.symmetry
+            #    self.groupname = self.symmetry
             #    #todo: symm.check_given_symm(self.symmetric, self.atom)
             #    pass
             #else:
-            #    self.pgname, inp_atoms = symm.detect_symm(self.atom)
-            self.pgname, origin, axes = symm.detect_symm(self.atom)
+            #    self.groupname, inp_atoms = symm.detect_symm(self.atom)
+            self.groupname, origin, axes = symm.detect_symm(self.atom)
             self.atom = self.format_atom(self.atom, origin, axes)
         self.basis = self.format_basis(self.basis)
 
@@ -293,12 +293,12 @@ class Mole(object):
 
         if self.symmetry:
             from pyscf import symm
-            eql_atoms = symm.symm_identical_atoms(self.pgname, self.atom)
-            symm_orb = symm.symm_adapted_basis(self.pgname, eql_atoms,\
+            eql_atoms = symm.symm_identical_atoms(self.groupname, self.atom)
+            symm_orb = symm.symm_adapted_basis(self.groupname, eql_atoms,\
                                                self.atom, self.basis)
             self.irrep_id = [ir for ir in range(len(symm_orb)) \
                              if symm_orb[ir].size > 0]
-            self.irrep_name = [symm.irrep_name(self.pgname,ir) \
+            self.irrep_name = [symm.irrep_name(self.groupname,ir) \
                                for ir in self.irrep_id]
             self.symm_orb = [c for c in symm_orb if c.size > 0]
 
@@ -508,7 +508,7 @@ class Mole(object):
 
         log.info(self, 'nuclear repulsion = %.15g', self.nuclear_repulsion())
         if self.symmetry:
-            log.info(self, 'point group symmetry = %s', self.pgname)
+            log.info(self, 'point group symmetry = %s', self.groupname)
             for ir in range(self.symm_orb.__len__()):
                 log.info(self, 'num. orbitals of %s = %d', \
                          self.irrep_name[ir], self.symm_orb[ir].shape[1])

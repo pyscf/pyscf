@@ -22,7 +22,8 @@ class CASSCF(mc1step.CASSCF):
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
         assert(mol.symmetry)
 # Ag, A1 or A
-#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mmol.pgname][0][0]
+#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mmol.groupname][0][0]
+        self.orbsym = []
         mc1step.CASSCF.__init__(self, mol, mf, ncas, nelecas, ncore)
 
     def mc1step(self, mo=None, ci0=None, macro=None, micro=None):
@@ -39,17 +40,13 @@ class CASSCF(mc1step.CASSCF):
 
         self.dump_flags()
 
-        #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
                                                 self.mo_coeff)
-
-        if not hasattr(self.fcisolver, 'orbsym') or \
-           not self.fcisolver.orbsym:
-            ncore = self.ncore
-            nocc = self.ncore + self.ncas
-            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        ncore = self.ncore
+        nocc = self.ncore + self.ncas
+        self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc1step.kernel(self, mo, \
@@ -71,16 +68,13 @@ class CASSCF(mc1step.CASSCF):
 
         self.dump_flags()
 
-        #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
                                                 self.mo_coeff)
-        if not hasattr(self.fcisolver, 'orbsym') or \
-           not self.fcisolver.orbsym:
-            ncore = self.ncore
-            nocc = self.ncore + self.ncas
-            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        ncore = self.ncore
+        nocc = self.ncore + self.ncas
+        self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo, \
@@ -91,13 +85,13 @@ class CASSCF(mc1step.CASSCF):
     def gen_g_hop(self, mo, casdm1, casdm2, eris):
         g_orb, h_op, h_diag = mc1step.gen_g_hop(self, mo, casdm1, casdm2, eris)
         g_orb = _symmetrize(self.unpack_uniq_var(g_orb), self.orbsym,
-                            self.mol.pgname)
+                            self.mol.groupname)
         h_diag = _symmetrize(self.unpack_uniq_var(h_diag), self.orbsym,
-                             self.mol.pgname)
+                             self.mol.groupname)
         def sym_h_op(x):
             hx = h_op(x)
             hx = _symmetrize(self.unpack_uniq_var(hx), self.orbsym,
-                             self.mol.pgname)
+                             self.mol.groupname)
             return self.pack_uniq_var(hx)
         return self.pack_uniq_var(g_orb), sym_h_op, \
                self.pack_uniq_var(h_diag)
@@ -106,9 +100,9 @@ class CASSCF(mc1step.CASSCF):
         u, dx, g_orb, jkcnt = \
                 mc1step.rotate_orb_ah(self, mo, fcivec, e_ci, eris, dx,
                                       self.verbose)
-        u = _symmetrize(u, self.orbsym, self.mol.pgname)
+        u = _symmetrize(u, self.orbsym, self.mol.groupname)
         dx = _symmetrize(self.unpack_uniq_var(dx), self.orbsym,
-                         self.mol.pgname)
+                         self.mol.groupname)
         return u, self.pack_uniq_var(dx), g_orb, jkcnt
 
     def get_hcore(self, mol=None):
@@ -119,8 +113,8 @@ class CASSCF(mc1step.CASSCF):
     def get_veff(self, dm):
         return pyscf.scf.hf.RHF.get_veff(self._scf, self.mol, dm)
 
-def _symmetrize(mat, orbsym, pgname, wfnsym=0):
-    irreptab = pyscf.symm.param.IRREP_ID_TABLE[pgname]
+def _symmetrize(mat, orbsym, groupname, wfnsym=0):
+    irreptab = pyscf.symm.param.IRREP_ID_TABLE[groupname]
     if isinstance(wfnsym, str):
         wfnsym = irreptab[wfnsym]
 
