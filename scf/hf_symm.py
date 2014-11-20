@@ -160,7 +160,7 @@ class RHF(hf.RHF):
                 irorbcnt.extend(range(nso))
                 p0 += nso
             log.info(self, 'total symmetry = %s', \
-                     pyscf.symm.irrep_name(mol.pgname, tot_sym))
+                     pyscf.symm.irrep_name(mol.groupname, tot_sym))
             log.info(self, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
                      *mol.irrep_name)
             log.info(self, '                           ' + (' %4d'*nirrep), \
@@ -453,7 +453,7 @@ class UHF(hf.UHF):
                 irorbcnt.extend(range(nso))
                 p0 += nso
             log.info(self, 'total symmetry = %s', \
-                     pyscf.symm.irrep_name(mol.pgname, tot_sym))
+                     pyscf.symm.irrep_name(mol.groupname, tot_sym))
             log.info(self, 'alpha occupancy for each irrep:  '+(' %4s'*nirrep), \
                      *mol.irrep_name)
             log.info(self, '                                 '+(' %4d'*nirrep), \

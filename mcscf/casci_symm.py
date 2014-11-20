@@ -18,7 +18,8 @@ class CASCI(casci.CASCI):
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
         assert(mol.symmetry)
 # Ag, A1 or A
-#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mmol.pgname][0][0]
+#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
+        self.orbsym = []
         casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
 
     def casci(self, mo=None, ci0=None):

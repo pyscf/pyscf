@@ -12,13 +12,13 @@ import diis
 
 
 def RHF(mol, *args):
-    if not mol.symmetry or mol.pgname is 'C1' or mol.nelectron == 1:
+    if not mol.symmetry or mol.groupname is 'C1' or mol.nelectron == 1:
         return hf.RHF(mol, *args)
     else:
         return hf_symm.RHF(mol, *args)
 
 def UHF(mol, *args):
-    if not mol.symmetry or mol.pgname is 'C1' or mol.nelectron == 1:
+    if not mol.symmetry or mol.groupname is 'C1' or mol.nelectron == 1:
         return hf.UHF(mol, *args)
     else:
         return hf_symm.UHF(mol, *args)
