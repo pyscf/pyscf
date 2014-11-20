@@ -77,12 +77,12 @@ class CASCI(object):
             self.ncore = ncorelec / 2
         else:
             self.ncore = ncore
-        #TODO: for FCI solver
-        self.ci_lindep = 1e-14
-        self.ci_max_cycle = 30
-        self.ci_conv_threshold = 1e-8
         #self.fcisolver = pyscf.fci.direct_spin0.FCISolver(mol)
         self.fcisolver = pyscf.fci.solver(mol)
+# CI solver parameters are set in fcisolver object
+        self.fcisolver.lindep = 1e-10
+        self.fcisolver.max_cycle = 30
+        self.fcisolver.conv_threshold = 1e-8
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
