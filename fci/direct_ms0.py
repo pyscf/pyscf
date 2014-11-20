@@ -267,7 +267,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None):
     else:
         ci0 = ci0.ravel()
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    #e, c = davidson.dsyev(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,na)
 
 

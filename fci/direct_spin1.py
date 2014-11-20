@@ -329,17 +329,23 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
     else:
         ci0 = ci0.ravel()
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    #e, c = davidson.dsyev(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,nb)
 
 
 class FCISolver(object):
-    def __init__(self, mol, tol=1e-8, lindep=1e-8, eshift=1e-2):
+    def __init__(self, mol):
         self.mol = mol
-        self.tol = tol
-        self.lindep = lindep
+        self.max_cycle = 50
+        self.max_space = 12
+        self.conv_threshold = 1e-8
+        self.lindep = 1e-8
+        self.max_memory = 1200 # MB
+        self.verbose = 0
 # level shift in precond
-        self.eshift = eshift
+        self.eshift = 1e-2
+
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
@@ -356,6 +362,11 @@ class FCISolver(object):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+
+    def eig(self, op, x0, precond):
+        return davidson.dsyev(op, x0, precond, self.conv_threshold,
+                              self.max_cycle, self.max_space, self.lindep,
+                              self.max_memory, verbose=self.verbose)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         def precond(r, e0, x0, *args):
