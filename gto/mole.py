@@ -8,6 +8,7 @@ import os, sys
 import gc
 import time
 import math
+import copy
 import itertools
 import numpy
 import pyscf.lib.parameters as param
@@ -155,10 +156,10 @@ class Mole(object):
 
     def check_sanity(self, obj):
         if self.verbose > log.QUITE:
-            keysub = set(obj.__dict__.keys()) - obj._keys
+            keysub = set(obj.__dict__.keys()) - set(obj._keys)
             if keysub:
-                print('%s has no attributes %s' %
-                      (str(obj.__class__), ' '.join(keysub)))
+                sys.stderr.write('%s has no attributes %s\n' %
+                                 (str(obj.__class__), ' '.join(keysub)))
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -168,7 +169,6 @@ class Mole(object):
 #        newmol = ...
 # do not use __copy__ to aovid iteratively call copy.copy
     def copy(self):
-        import copy
         newmol = copy.copy(self)
         newmol._atm = copy.deepcopy(self._atm)
         newmol._bas = copy.deepcopy(self._bas)
@@ -272,14 +272,14 @@ class Mole(object):
         if not self.symmetry:
             self.atom = self.format_atom(self.atom)
         else:
-            from pyscf import symm
-            #if self.symmetry in symm.param.POINTGROUP
+            import pyscf.symm
+            #if self.symmetry in pyscf.symm.param.POINTGROUP
             #    self.groupname = self.symmetry
-            #    #todo: symm.check_given_symm(self.symmetric, self.atom)
+            #    #todo: pyscf.symm.check_given_symm(self.symmetric, self.atom)
             #    pass
             #else:
-            #    self.groupname, inp_atoms = symm.detect_symm(self.atom)
-            self.groupname, origin, axes = symm.detect_symm(self.atom)
+            #    self.groupname, inp_atoms = pyscf.symm.detect_symm(self.atom)
+            self.groupname, origin, axes = pyscf.symm.detect_symm(self.atom)
             self.atom = self.format_atom(self.atom, origin, axes)
         self.basis = self.format_basis(self.basis)
 
@@ -292,13 +292,13 @@ class Mole(object):
         self.nelectron = self.tot_electrons()
 
         if self.symmetry:
-            from pyscf import symm
-            eql_atoms = symm.symm_identical_atoms(self.groupname, self.atom)
-            symm_orb = symm.symm_adapted_basis(self.groupname, eql_atoms,\
+            import pyscf.symm
+            eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
+            symm_orb = pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,\
                                                self.atom, self.basis)
             self.irrep_id = [ir for ir in range(len(symm_orb)) \
                              if symm_orb[ir].size > 0]
-            self.irrep_name = [symm.irrep_name(self.groupname,ir) \
+            self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir) \
                                for ir in self.irrep_id]
             self.symm_orb = [c for c in symm_orb if c.size > 0]
 

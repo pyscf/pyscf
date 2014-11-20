@@ -1,10 +1,11 @@
+#!/usr/bin/env python
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
-from pyscf import gto
-from pyscf import lib
+import pyscf.gto
+import pyscf.lib as lib
 
 GEOM_THRESHOLD = 1e-5
 
@@ -15,13 +16,13 @@ def get_charge_center(atoms):
     totchg = 0
     for atm in atoms:
         symb = atm[0]
-        charge = gto.mole._charge(symb)
+        charge = pyscf.gto.mole._charge(symb)
         x,y,z = atm[1]
         xbar += charge * x
         ybar += charge * y
         zbar += charge * z
         totchg += charge
-    return numpy.array((xbar,ybar,zbar)) / totchg
+    return numpy.array((xbar,ybar,zbar), dtype=float) / totchg
 
 def get_mass_center(atoms):
     xbar = 0
@@ -30,7 +31,7 @@ def get_mass_center(atoms):
     totmass = 0
     for atm in atoms:
         symb = atm[0]
-        charge = gto.mole._charge(symb)
+        charge = pyscf.gto.mole._charge(symb)
         mass = lib.parameters.ELEMENTS[charge][1]
         x,y,z = atm[1]
         xbar += mass * x
@@ -173,9 +174,9 @@ class SymmOperator(object):
         groups = self.group_atoms_by_distance()
         maybe_c2 = [] # normalized vector
         for g in groups:
-            if g.__len__() == 1 \
-               and g[0][2] > GEOM_THRESHOLD:
-                maybe_c2.append(normalize(g[0][1]))
+            if g.__len__() == 1:
+               if g[0][2] > GEOM_THRESHOLD:
+                   maybe_c2.append(normalize(g[0][1]))
             else:
                 for i,gi in enumerate(g):
                     for j in range(i):
@@ -272,6 +273,14 @@ def find_axis(vecs):
         return None
 
 ####################################
+def atoms_in_line(atoms):
+    if len(atoms) == 2:
+        return True
+    else:
+        coords = numpy.array([a[1] for a in atoms])
+        v12 = coords[1] - coords[0]
+        return all([parallel_vectors(c-coords[0], v12) for c in coords[2:]])
+
 def detect_symm(atoms):
     if atoms.__len__() == 1:
         return 'D2h', (atoms[0][0], (0.,0.,0.))
@@ -279,6 +288,18 @@ def detect_symm(atoms):
         rchg = get_charge_center(atoms)
         new_axis = gen_new_axis(numpy.array(atoms[0][1])-rchg, axisx=(1,0,0))
         if atoms[0][0] == atoms[1][0]:
+            return 'D2h', rchg, new_axis
+        else:
+            return 'C2v', rchg, new_axis
+    elif atoms_in_line(atoms):
+        rchg = get_charge_center(atoms)
+        if numpy.allclose(atoms[0][1], 0):
+            zaxis = numpy.array(atoms[1][1])-rchg
+        else:
+            zaxis = numpy.array(atoms[0][1])-rchg
+        new_axis = gen_new_axis(zaxis, axisx=(1,0,0))
+        symbs = [a[0] for a in atoms]
+        if symbs == list(reversed(symbs)):
             return 'D2h', rchg, new_axis
         else:
             return 'C2v', rchg, new_axis
@@ -368,12 +389,12 @@ def check_given_symm(gpname, atoms):
     pass
 
 if __name__ == "__main__":
-    h2o = gto.Mole()
-    h2o.verbose = 0
-    h2o.output = None#"out_h2o"
-    h2o.atom = [["O" , (1. , 0.    , 0.   ,)],
-                [1   , (0. , -.757 , 0.587,)],
-                [1   , (0. , 0.757 , 0.587,)] ]
-    gpname, orig, axes = detect_symm(h2o.atom)
-    print(gpname)
-    print(symm_identical_atoms(gpname, h2o.atom))
+    atom = [["O" , (1. , 0.    , 0.   ,)],
+            [1   , (0. , -.757 , 0.587,)],
+            [1   , (0. , 0.757 , 0.587,)] ]
+    gpname, orig, axes = detect_symm(atom)
+    print(gpname, symm_identical_atoms(gpname, atom))
+
+    atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]]
+    gpname, orig, axes = detect_symm(atom)
+    print(gpname, symm_identical_atoms(gpname, atom))

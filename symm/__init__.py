@@ -7,3 +7,5 @@ from geom import *
 from basis import *
 
 import cg
+
+from addons import *
