@@ -9,8 +9,7 @@ Dirac Hartree-Fock
 import ctypes
 import numpy
 import copy
-from pyscf import gto
-from pyscf import lib
+import pyscf.lib as lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import hf
@@ -162,7 +161,9 @@ class UHF(dhf.UHF):
         s1e[n2c:,n2c:] = s[n2c:,n2c:] + t[n2c:,n2c:] * (.5/c**2)
         return s1e
 
-    def build(self, mol):
+    def build(self, mol=None):
+        if mol is None:
+            mol = self.mol
         self.init_direct_scf(mol)
 
     def init_direct_scf(self, mol):
@@ -183,6 +184,8 @@ class UHF(dhf.UHF):
         _cint.del_dkb_direct_scf_.restype = ctypes.c_void_p
         _cint.del_dkb_direct_scf_()
 
+    def set_direct_scf_threshold(self, threshold):
+        _cint.set_direct_scf_cutoff_(lib.c_double_p(ctypes.c_double(threshold)))
 
     def get_coulomb_vj_vk(self, mol, dm, coulomb_allow):
         log.info(self, 'DKB Coulomb integral')
@@ -201,6 +204,7 @@ class UHF(dhf.UHF):
 
 
 if __name__ == '__main__':
+    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf_dkb'

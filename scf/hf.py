@@ -53,6 +53,10 @@ def scf_cycle(mol, scf, conv_threshold=1e-10, dump_chk=True, init_dm=None):
         hf_energy = 0
         dm = init_dm
 
+    if dump_chk:
+        # dump mol after reading initialized DM
+        chkfile.dump(scf.chkfile, 'mol', format(mol.pack()))
+
     scf_conv = False
     cycle = 0
     diis = scf.init_diis()
@@ -113,7 +117,10 @@ class SCF(object):
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
 
-        self.chkfile = tempfile.NamedTemporaryFile(dir='/dev/shm').name
+# the chkfile will be removed automatically, to save the chkfile, assign a
+# filename to self.chkfile
+        self._chkfile = tempfile.NamedTemporaryFile()
+        self.chkfile = self._chkfile.name
         self.conv_threshold = 1e-10
         self.max_cycle = 50
         self.init_guess = 'minao'
@@ -136,6 +143,8 @@ class SCF(object):
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def build(self, mol=None):
+        return self.build_(mol)
+    def build_(self, mol=None):
         if mol is None:
             mol = self.mol
         mol.check_sanity(self)
@@ -207,7 +216,6 @@ class SCF(object):
 
     def dump_scf_to_chkfile(self, *args):
         if self.chkfile:
-            chkfile.dump(self.chkfile, 'mol', format(self.mol.pack()))
             chkfile.dump_scf(self.mol, self.chkfile, *args)
 
     def _init_guess_by_minao(self, mol=None):
@@ -716,10 +724,10 @@ class UHF(SCF):
     @pyscf.lib.omnimethod
     def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
         sum_mo_energy = numpy.dot(mo_energy[0], mo_occ[0]) \
-                + numpy.dot(mo_energy[1], mo_occ[1])
+                      + numpy.dot(mo_energy[1], mo_occ[1])
         # trace (D*V_HF)
         coul_dup = pyscf.lib.trace_ab(dm[0], vhf[0]) \
-                + pyscf.lib.trace_ab(dm[1], vhf[1])
+                 + pyscf.lib.trace_ab(dm[1], vhf[1])
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
 
@@ -909,20 +917,21 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.max_cycle             = rhf.max_cycle
     return uhf
 
-def spin_square(mol, occ_mo_a, occ_mo_b):
+# mo_a and mo_b are occupied orbitals
+def spin_square(mol, mo_a, mo_b):
     # S^2 = S+ * S- + S- * S+ + Sz * Sz
     # S+ = \sum_i S_i+ ~ effective for all beta occupied orbitals
     # S- = \sum_i S_i- ~ effective for all alpha occupied orbitals
     # S+ * S- ~ sum of nocc_a * nocc_b couplings
     # Sz = Msz^2
-    nocc_a = occ_mo_a.shape[1]
-    nocc_b = occ_mo_b.shape[1]
+    nocc_a = mo_a.shape[1]
+    nocc_b = mo_b.shape[1]
     ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
-    s = reduce(numpy.dot, (occ_mo_a.T, ovlp, occ_mo_b))
+    s = reduce(numpy.dot, (mo_a.T, ovlp, mo_b))
     ssx = ssy = (nocc_a+nocc_b)*.25 - 2*(s**2).sum()*.25
     ssz = (nocc_b-nocc_a)**2 * .25
     ss = ssx + ssy + ssz
-    #log.debug(mol, "s_x^2 = %.9g, s_y^2 = %.9g, s_z^2 = %.9g" % (ssx,ssy,ssz))
+    log.debug1(mol, 's_x^2 = %.9g, s_y^2 = %.9g, s_z^2 = %.9g', ssx,ssy,ssz)
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip

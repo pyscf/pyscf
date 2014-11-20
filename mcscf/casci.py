@@ -81,7 +81,8 @@ class CASCI(object):
         self.ci_lindep = 1e-14
         self.ci_max_cycle = 30
         self.ci_conv_threshold = 1e-8
-        self.fcisolver = pyscf.fci.direct_spin0
+        #self.fcisolver = pyscf.fci.direct_spin0.FCISolver(mol)
+        self.fcisolver = pyscf.fci.solver(mol)
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
@@ -128,6 +129,8 @@ class CASCI(object):
     def casci(self, mo=None, ci0=None):
         if mo is None:
             mo = self.mo_coeff
+        else:
+            self.mo_coeff = mo
         if ci0 is None:
             ci0 = self.ci
 
@@ -142,8 +145,8 @@ class CASCI(object):
 
 
 if __name__ == '__main__':
-    import gto
-    import scf
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
@@ -159,13 +162,15 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
+    mc.fcisolver = pyscf.fci.solver(mol)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
     mc = CASCI(mol, m, 4, (3,1))
-    mc.fcisolver = pyscf.fci.direct_spin1
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(emc - -75.439016172976)
 
@@ -193,11 +198,13 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 9, 8)
+    mc.fcisolver = pyscf.fci.solver(mol)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)
 
     mc = CASCI(mol, m, 9, (5,3))
-    mc.fcisolver = pyscf.fci.direct_spin1
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(emc - -227.7674519720)

@@ -74,10 +74,8 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     ############## hessian, diagonal ###########
     # part1
     tmp = casdm2.transpose(1,2,0,3) + casdm2.transpose(0,2,1,3)
-    tmp = numpy.dot(tmp.reshape(ncas*ncas,-1), \
-                    eris.appa.transpose(0,3,1,2).reshape(-1,nmo*nmo))
-    tmp = tmp.reshape(ncas,ncas,nmo,nmo)
-    hdm2 = numpy.array((hdm2+tmp).transpose(0,2,1,3), order='C')
+    tmp = numpy.einsum('uvtw,tpqw->uvpq', tmp, eris.appa)
+    hdm2 = (hdm2+tmp).transpose(0,2,1,3).copy(order='C')
 
     # part7
     h_diag = numpy.einsum('ii,jj->ij', h1e_mo, dm1) - h1e_mo * dm1
@@ -164,10 +162,8 @@ def rotate_orb_ah(casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
     nmo = mo.shape[1]
 
     t2m = (time.clock(), time.time())
-
     casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas)
-
-    g_orb0, h_op, h_diag = gen_g_hop(casscf, mo, casdm1, casdm2, eris)
+    g_orb0, h_op, h_diag = casscf.gen_g_hop(mo, casdm1, casdm2, eris)
     t3m = log.timer('gen h_op', *t2m)
 
     precond = lambda x, e: x/(h_diag-(e-casscf.ah_level_shift))
@@ -325,7 +321,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 # approximate newton step, fcivec is not updated during micro iters
             #dr = casscf.unpack_uniq_var(dx)
             dr = u - numpy.eye(nmo)
-            gci = hessian_co(casscf, mo, dr, fcivec, e_ci, eris)
+            gci = casscf.hessian_co(mo, dr, fcivec, e_ci, eris)
             t3m = log.timer('ci gradient', *t3m)
 
 # Perturbation updating   gci/(e_ci-hci_diag), gci = H^1 ci^0  is the way
@@ -408,6 +404,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     return e_tot, e_ci, fcivec, mo
 
 
+# To extend CASSCF for certain CAS space solver, it can be done by assign an
+# object or a module to CASSCF.fcisolver.  The fcisolver object or module
+# should at least have three member functions "kernel" (wfn for given
+# hamiltonain), "make_rdm12" (1- and 2-pdm), "absorb_h1e" (effective
+# 2e-hamiltonain) in 1-step CASSCF solver, and two member functions "kernel"
+# and "make_rdm12" in 2-step CASSCF solver
 class CASSCF(casci.CASCI):
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
         casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
@@ -542,6 +544,9 @@ class CASSCF(casci.CASCI):
         mat[:nocc,nocc:] = -mat[nocc:,:nocc].T
         return mat
 
+    def gen_g_hop(self, *args):
+        return gen_g_hop(self, *args)
+
     def rotate_orb(self, mo, fcivec, e_ci, eris, dx=0):
         return rotate_orb_ah(self, mo, fcivec, e_ci, eris, dx, self.verbose)
 
@@ -566,6 +571,9 @@ class CASSCF(casci.CASCI):
         va = numpy.dot(casdm1, vhf3a)
         vc = 2 * vhf3c + vhf4
         return va, vc
+
+    def hessian_co(self, *args):
+        return hessian_co(self, *args)
 
     def save_mo_coeff(self, mo_coeff, *args):
         pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo_coeff)
@@ -593,6 +601,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     import pyscf.fci
+    import addons
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -620,7 +629,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(mol, m, 4, (3,1))
     mc.verbose = 0
-    mc.fcisolver = pyscf.fci.direct_spin1
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[0]
     print(emc - -15.950852049859)
 
@@ -636,18 +646,17 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASSCF(mol, m, 6, 4)
+    mc.fcisolver = pyscf.fci.solver(mol)
     mc.verbose = 4
-    mo = m.mo_coeff.copy()
-    mo[:,2:5] = m.mo_coeff[:,[4,2,3]]
+    mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     emc = mc.mc1step(mo)[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print(emc - -76.0873923174, emc - -76.0926176464)
-    #numpy.set_printoptions(1)
-    #print(reduce(numpy.dot, (m.mo_coeff.T, m.get_ovlp(), mc.mo_coeff)))
 
     mc = CASSCF(mol, m, 6, (3,1))
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
     mc.verbose = 4
-    mc.fcisolver = pyscf.fci.direct_spin1
     emc = mc.mc1step(mo)[0]
     print(emc - -84.9038216713284)

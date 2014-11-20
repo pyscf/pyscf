@@ -7,6 +7,7 @@ import hf_symm
 import dhf
 import chkfile
 import addons
+import diis
 
 
 

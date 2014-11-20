@@ -117,3 +117,5 @@ Version 0.7 (2014-11-12):
 Version 0.8 (2014-12-?):
   * Support OS X
   * MCSCF for triplet
+  * Add symmetry support for MCSCF
+  * Add 2-step DMRGSCF, using Block and ChemPS2 as FCI solver

@@ -16,10 +16,11 @@ import pyscf.lib.logger as log
 class DIIS:
 # J. Mol. Struct. 114, 31-34
 # PCCP, 4, 11
-# GEDIIS JCTC, 2, 835
-# C2DIIS IJQC, 45, 31
+# GEDIIS, JCTC, 2, 835
+# C2DIIS, IJQC, 45, 31
+# SCF-EDIIS, JCP 116, 8255
 # DIIS try to minimize the change of the input vectors. It rotates the vectors
-# to make the error vector as small as possible.
+# to minimize the error in the least square sense.
     def __init__(self, dev):
         self.verbose = dev.verbose
         self.stdout = dev.stdout
@@ -27,7 +28,6 @@ class DIIS:
         self.threshold = 1e-6
         self.diis_space = 6
         self.diis_start_cycle = 2
-        self._head = 0
 
     def push_vec(self, x):
         self.diis_vec_stack.append(x)
@@ -49,26 +49,24 @@ class DIIS:
 
         nd = self.get_num_diis_vec()
         if nd < self.diis_start_cycle:
-            if self.diis_start_cycle >= self.diis_space:
-                self.diis_start_cycle = self.diis_space - 1
             return x
 
         H = numpy.ones((nd+1,nd+1), x.dtype)
         H[0,0] = 0
         G = numpy.zeros(nd+1, x.dtype)
         G[0] = 1
-        for i in range(1,nd+1):
-            dti = self.get_err_vec(i-1)
-            for j in range(1,i+1):
-                dtj = self.get_err_vec(j-1)
-                H[i,j] = numpy.dot(numpy.array(dti).flatten(), \
-                                   numpy.array(dtj).flatten())
-                H[j,i] = H[i,j].conj()
+        for i in range(nd):
+            dti = self.get_err_vec(i)
+            for j in range(i+1):
+                dtj = self.get_err_vec(j)
+                H[i+1,j+1] = numpy.dot(numpy.array(dti).ravel(), \
+                                       numpy.array(dtj).ravel())
+                H[j+1,i+1] = H[i+1,j+1].conj()
 
         try:
             c = numpy.linalg.solve(H, G)
         except numpy.linalg.linalg.LinAlgError:
-            log.warn(self, 'singularity in scf diis')
+            log.warn(self, 'singularity in diis')
             #c = pyscf.lib.solve_lineq_by_SVD(H, G)
             ## damp diagonal elements to avoid singularity
             #for i in range(H.shape[0]):
@@ -90,44 +88,39 @@ class DIISLarge(DIIS):
         import h5py
         DIIS.__init__(self, dev)
         if filename is None:
-            fd, tmp = tempfile.mkstemp('.h5')
-            os.close(fd)
-        else:
-            tmp = filename
-        self.diistmpfile = h5py.File(tmp, 'w')
+            self._tmpfile = tempfile.NamedTemporaryFile(suffix='.h5')
+            filename = self._tmpfile.name
+        self.diisfile = h5py.File(filename, 'w')
+        self._count = 0
+        self._head = 0
         self._is_tmpfile_reused = False
 
     def push_vec(self, x):
-        try:
-            self.diistmpfile['/diis_vec/x%d' % self._head] = x
-        except:
-            self.diistmpfile['/diis_vec/x%d' % self._head][:] = x
-        if self._head == self.diis_space:
-            self._head = 0
-            self._is_tmpfile_reused = True
+        key = 'x%d' % (self._count % self.diis_space)
+        if self._count < self.diis_space:
+            self.diisfile[key] = x
         else:
-            self._head += 1
+            self.diisfile[key][:] = x
+        self._count += 1
 
     def get_err_vec(self, idx):
-        if self._is_tmpfile_reused and idx == self._head:
-            # x_head is not x_{head+1}-x_head
-            return numpy.array(self.diistmpfile['/diis_vec/x0']) \
-                    - numpy.array(self.diistmpfile['/diis_vec/x%d'%self.diis_space])
+        if self._count < self.diis_space:
+            return numpy.array(self.diisfile['x%d'%(idx+1)]) \
+                 - numpy.array(self.diisfile['x%d'%idx])
         else:
-            return numpy.array(self.diistmpfile['/diis_vec/x%d'%(idx+1)]) \
-                    - numpy.array(self.diistmpfile['/diis_vec/x%d'%idx])
+# the previous vector may refer to the last one in circular store
+            last_id = (idx+self.diis_space-1) % self.diis_space
+            return numpy.array(self.diisfile['x%d'%idx]) \
+                 - numpy.array(self.diisfile['x%d'%last_id])
 
     def get_vec(self, idx):
-        if self._is_tmpfile_reused and idx == self._head:
-            return numpy.array(self.diistmpfile['/diis_vec/x0'])
+        if self._count < self.diis_space:
+            return numpy.array(self.diisfile['x%d'%(idx+1)])
         else:
-            return numpy.array(self.diistmpfile['/diis_vec/x%d'%(i+1)])
+            return numpy.array(self.diisfile['x%d'%idx])
 
     def get_num_diis_vec(self):
-        if self._is_tmpfile_reused:
-            return self.diis_space
-        else:
-            return self._head - 1
+        return len(self.diisfile.keys()) - 1
 
 
 # error vector = SDF-FDS
@@ -163,48 +156,6 @@ class SCF_DIIS(DIIS):
         self.push_err_vec(s, d, f)
         return DIIS.update(self, f)
 
-class DIISDamping(DIIS):
-# Based on the given vector, minmize the previous error vectors.  Then mix the
-# given vector with the optmized previous vector.
-#TESTME
-    def get_err_vec(self, idx, vec_ref):
-        return self.diis_vec_stack[idx+1] - vec_ref
-
-    def get_vec(self, idx):
-        return self.diis_vec_stack[idx+1]
-
-    def get_num_diis_vec(self):
-        return self.diis_vec_stack.__len__() - 1
-
-    def update(self, x, factor=.5):
-        '''use DIIS method to solve Eq.  operator(x) = x.'''
-        self.push_vec(x)
-
-        nd = self.get_num_diis_vec()
-        if nd + 1 < self.diis_start_cycle:
-            if self.diis_start_cycle >= self.diis_space:
-                self.diis_start_cycle = self.diis_space - 1
-            return x
-
-        H = numpy.ones((nd,nd), x.dtype)
-        H[-1,-1] = 0
-        G = numpy.zeros(nd, x.dtype)
-        G[-1] = 1
-        for i in range(nd-1):
-            dti = self.get_err_vec(i, x)
-            for j in range(i+1):
-                dtj = self.get_err_vec(j, x)
-                H[i,j] = numpy.dot(numpy.array(dti).flatten(), \
-                                   numpy.array(dtj).flatten())
-                H[j,i] = H[i,j].conj()
-
-        c_GH = self.diis_lineq(H, G)
-
-        t = numpy.zeros_like(x)
-        for i, c in enumerate(c_GH[:-1]):
-            t += self.get_vec(i) * c
-        x = x * factor + t * (1-factor)
-        return x
 
 
 if __name__ == '__main__':
