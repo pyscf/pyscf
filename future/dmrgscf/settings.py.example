@@ -7,7 +7,7 @@ import os
 
 BLOCKEXE = '/path/to/Block/block.spin_adapted'
 #BLOCKSCRATCHDIR = os.environ['TMPDIR']
-BLOCKSCRATCHDIR = './scratch' 
+BLOCKSCRATCHDIR = './scratch'
 
 # building PyChemPS2, a python module will be generated in
 #       /path/to/ChemPS2/build/PyChemPS2

@@ -42,7 +42,7 @@ IRREP_MAP = {'D2h': (1,         # Ag
                      2),        # B
              'Ci' : (1,         # Ag
                      2),        # Au
-             'C1' : 1}
+             'C1' : (1,)}
 
 class DMRGCI(object):
     scratchDirectory = settings.BLOCKSCRATCHDIR
@@ -68,8 +68,6 @@ class DMRGCI(object):
 
     def kernel(self, fcivec, norb, nelec, link_index=None,
                fciRestart=False, **kwargs):
-        if self.mol.symmetry and self.orbsym:
-            orbsym = [IRREP_MAP[self.groupname][i] for i in self.orbsym]
         return kernel(fcivec, norb, nelec, link_index, fciRestart, DMRGCI=self)
 
 def make_rdm12(fcivec, norb, nelec, link_index=None, DMRGCI=DMRGCI):
@@ -120,6 +118,8 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI=DMRGCI):
         f.write('fullrestart\n')
         f.write('onedot \n')
 
+    if DMRGCI.mol.symmetry:
+        f.write('sym %s\n' % DMRGCI.groupname.lower())
     f.write('orbitals %s%s%s\n'%(DMRGCI.scratchDirectory, os.sep, DMRGCI.integralFile))
     f.write('maxiter %i\n'%DMRGCI.maxIter)
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
@@ -135,10 +135,14 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI=DMRGCI):
     import os
     integralFile = "%s%s%s"%(DMRGCI.scratchDirectory,os.sep,DMRGCI.integralFile)
 # ensure 4-fold symmetry
-    eri_cas = pyscf.ao2mo.restore(4, eri_cas)
-    pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri, ncas,
+    eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
+    if DMRGCI.mol.symmetry and DMRGCI.orbsym:
+        orbsym = [IRREP_MAP[DMRGCI.groupname][i] for i in DMRGCI.orbsym]
+    else:
+        orbsym = []
+    pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ms=abs(neleca-nelecb),
-                                       orbsym=DMRGCI.orbsym)
+                                       orbsym=orbsym)
 
 #    f = open(integralFile, 'w')
 #    f.write(' &FCI NORB= %i,NELEC= %i,MS2= %i,\n' %(ncas, neleca+nelecb, neleca-nelecb))
