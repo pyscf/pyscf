@@ -24,6 +24,8 @@ GROUPNAME_ID = {
 class CheMPS2(object):
     def __init__(self, mol, **kwargs):
         self.mol = mol
+        self.verbose = mol.verbose
+        self.stdout = mol.stdout
         if self.mol.symmetry:
             self.groupname = mol.groupname
         else:
@@ -40,6 +42,20 @@ class CheMPS2(object):
         self.dmrg_noise_factor = 0.03
         self.dmrg_maxiter_noise = 5
         self.dmrg_maxiter_silent = 100
+
+        self._keys = set(self.__dict__.keys() + ['_keys'])
+
+    def dump_flags(self, verbose=None):
+        if verbose is None:
+            verbose = self.verbose
+        log = pyscf.lib.logger.Logger(self.stdout, verbose)
+        log.info('******** CheMPS2 flags ********')
+        log.info('dmrg_states = %s', str(self.dmrg_states))
+        log.info('dmrg_noise = %s', str(self.dmrg_noise))
+        log.info('dmrg_e_convergence = %g', self.dmrg_e_convergence)
+        log.info('dmrg_noise_factor = %g', self.dmrg_noise_factor)
+        log.info('dmrg_maxiter_noise = %d', self.dmrg_maxiter_noise)
+        log.info('dmrg_maxiter_silent = %d', self.dmrg_maxiter_silent)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
@@ -122,7 +138,6 @@ class CheMPS2(object):
 
 
 if __name__ == '__main__':
-    import numpy
     from pyscf import gto
     from pyscf import scf
     from pyscf import mcscf

@@ -105,6 +105,10 @@ class CASCI(object):
         except:
             pass
         log.info('max_memory %d (MB)', self.max_memory)
+        try:
+            self.mol.check_sanity(self.fcisolver)
+        except:
+            pass
 
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)

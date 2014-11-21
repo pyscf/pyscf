@@ -459,6 +459,10 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
         log.info('augmented hessian level shift = %d', self.ah_level_shift)
         log.info('max_memory %d MB', self.max_memory)
+        try:
+            self.mol.check_sanity(self.fcisolver)
+        except:
+            pass
 
     def mc1step(self, mo=None, ci0=None, macro=None, micro=None):
         if mo is None:

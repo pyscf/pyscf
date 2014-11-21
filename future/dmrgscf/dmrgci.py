@@ -7,6 +7,7 @@
 import os, sys
 import numpy
 import pyscf.tools
+import pyscf.lib.logger as logger
 
 try:
     import settings
@@ -45,71 +46,128 @@ IRREP_MAP = {'D2h': (1,         # Ag
              'C1' : (1,)}
 
 class DMRGCI(object):
-    scratchDirectory = settings.BLOCKSCRATCHDIR
-    integralFile = "FCIDUMP"
-    configFile="dmrg.conf"
-    outputFile="dmrg.out"
-    maxIter=20
-    twodot_to_onedot=15
-    tol=1e-12
-    maxM=1000
-    executable = settings.BLOCKEXE
-    orbsym = []
-
     def __init__(self, mol):
         self.mol = mol
+        self.verbose = mol.verbose
+        self.stdout = mol.stdout
+
+        self.executable = settings.BLOCKEXE
+        self.scratchDirectory = settings.BLOCKSCRATCHDIR
+
+        self.integralFile = "FCIDUMP"
+        self.configFile = "dmrg.conf"
+        self.outputFile = "dmrg.out"
+        self.maxIter = 20
+        self.twodot_to_onedot = 15
+        self.tol = 1e-12
+        self.maxM = 1000
+        self.restart = False
+        self.scheduleSweeps = [0, 1, 10, 16]
+        self.scheduleMaxMs  = [self.maxM] * 4
+        self.scheduleTols   = [1e-5, 1e-5, 1e-6, self.tol/10]
+        self.scheduleNoises = [10, 1e-4, 1e-5, 0]
+
+        self.orbsym = []
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
             self.groupname = None
 
+        self._keys = set(self.__dict__.keys() + ['_keys'])
+
+    def dump_flags(self, verbose=None):
+        if verbose is None:
+            verbose = self.verbose
+        log = logger.Logger(self.stdout, verbose)
+        log.info('******** Block flags ********')
+        log.info('scratchDirectory = %s', self.scratchDirectory)
+        log.info('integralFile = %s', self.integralFile)
+        log.info('configFile = %s', self.configFile)
+        log.info('outputFile = %s', self.outputFile)
+        log.info('maxIter = %d', self.maxIter)
+        log.info('scheduleSweeps = %s', str(scheduleSweeps))
+        log.info('scheduleMaxMs = %s', str(scheduleMaxMs))
+        log.info('scheduleTols = %s', str(scheduleTols))
+        log.info('scheduleNoises = %s', str(scheduleNoises))
+        log.info('twodot_to_onedot = %d', self.twodot_to_onedot)
+        log.info('tol = %g', self.tol)
+        log.info('maxM = %d', self.maxM)
+
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12(fcivec, norb, nelec, link_index, DMRGCI=self)
+        nelectrons = 0
+        if isinstance(nelec, int):
+            nelectrons = nelec
+        else:
+            nelectrons = nelec[0]+nelec[1]
 
-    def kernel(self, fcivec, norb, nelec, link_index=None,
-               fciRestart=False, **kwargs):
-        return kernel(fcivec, norb, nelec, link_index, fciRestart, DMRGCI=self)
+        import os
+        f = open(os.path.join(self.scratchDirectory, "spatial_twopdm.0.0.txt"), 'r')
 
-def make_rdm12(fcivec, norb, nelec, link_index=None, DMRGCI=DMRGCI):
+        twopdm = numpy.zeros( (norb, norb, norb, norb) )
+        norb_read = int(f.readline().split()[0])
+        assert(norb_read == norb)
 
-    nelectrons = 0
-    if isinstance(nelec, int):
-        nelectrons = nelec
+        for line in f.readlines():
+            linesp = line.split()
+            twopdm[int(linesp[0]),int(linesp[3]),int(linesp[1]),int(linesp[2])] = 2.0*float(linesp[4])
+
+        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm /= (nelectrons-1)
+
+        return onepdm, twopdm
+
+    def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
+        if fciRestart is None:
+            fciRestart = self.restart
+        if isinstance(nelec, int):
+            neleca = nelec/2 + nelec%2
+            nelecb = nelec - neleca
+        else :
+            neleca, nelecb = nelec
+
+        writeIntegralFile(h1e, eri, norb, neleca, nelecb, self)
+        writeDMRGConfFile(neleca, nelecb, fciRestart, self)
+        if self.verbose >= logger.DEBUG1:
+            inFile = os.path.join(self.scratchDirectory,self.configFile)
+            logger.debug1(self, 'Block Input conf')
+            logger.debug1(self, open(inFile, 'r').read())
+        executeBLOCK(self)
+        if self.verbose >= logger.DEBUG1:
+            outFile = os.path.join(self.scratchDirectory,self.outputFile)
+            logger.debug1(self, open(outFile))
+        calc_e = readEnergy(self)
+
+        return calc_e, None
+
+def make_schedule(sweeps, Ms, tols, noises):
+    if len(sweeps) == len(Ms) == len(tols) == len(noises):
+        schedule = ['schedule']
+        for i, s in enumerate(sweeps):
+            schedule.append('%d %6d  %8.4e  %8.4e' % (s, Ms[i], tols[i], noises[i]))
+        schedule.append('end')
+        return '\n'.join(schedule)
     else:
-        nelectrons = nelec[0]+nelec[1]
+        return 'schedule default'
 
-    import os
-    f = open("%s%s%s"%(DMRGCI.scratchDirectory, os.sep, "spatial_twopdm.0.0.txt"), 'r')
-
-    twopdm = numpy.zeros( (norb, norb, norb, norb) )
-    norb_read = int(f.readline().split()[0])
-    assert norb_read == norb
-
-    for line in f.readlines():
-        linesp = line.split()
-        twopdm[int(linesp[0]),int(linesp[3]),int(linesp[1]),int(linesp[2])] = 2.0*float(linesp[4])
-
-    onepdm = numpy.einsum('ikjj->ik', twopdm)
-    onepdm /= (nelectrons-1)
-
-
-    return onepdm, twopdm
-
-def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI=DMRGCI):
-    import os
-    confFile = "%s%s%s"%(DMRGCI.scratchDirectory,os.sep,DMRGCI.configFile)
+def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
+    confFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
 
     f = open(confFile, 'w')
     f.write('nelec %i\n'%(neleca+nelecb))
     f.write('spin %i\n' %(neleca-nelecb))
 
     if (not Restart):
-        f.write('schedule\n')
-        f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, 1e-5, 10.0))
-        f.write('1 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, 1e-5, 1e-4))
-        f.write('10 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, 1e-6, 1e-5))
-        f.write('16 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol/10.0, 0e-6))
-        f.write('end\n')
+        #f.write('schedule\n')
+        #f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, 1e-5, 10.0))
+        #f.write('1 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, 1e-5, 1e-4))
+        #f.write('10 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, 1e-6, 1e-5))
+        #f.write('16 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol/10.0, 0e-6))
+        #f.write('end\n')
+        schedule = make_schedule(DMRGCI.scheduleSweeps,
+                                 DMRGCI.scheduleMaxMs,
+                                 DMRGCI.scheduleTols,
+                                 DMRGCI.scheduleNoises)
+        f.write('%s\n' % schedule)
         f.write('twodot_to_onedot %i\n'%DMRGCI.twodot_to_onedot)
     else :
         f.write('schedule\n')
@@ -120,7 +178,8 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI=DMRGCI):
 
     if DMRGCI.mol.symmetry:
         f.write('sym %s\n' % DMRGCI.groupname.lower())
-    f.write('orbitals %s%s%s\n'%(DMRGCI.scratchDirectory, os.sep, DMRGCI.integralFile))
+    f.write('orbitals %s\n' % os.path.join(DMRGCI.scratchDirectory,
+                                           DMRGCI.integralFile))
     f.write('maxiter %i\n'%DMRGCI.maxIter)
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
     f.write('outputlevel 2\n')
@@ -131,9 +190,8 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI=DMRGCI):
     #no reorder
     #f.write('noreorder\n')
 
-def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI=DMRGCI):
-    import os
-    integralFile = "%s%s%s"%(DMRGCI.scratchDirectory,os.sep,DMRGCI.integralFile)
+def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI):
+    integralFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.integralFile)
 # ensure 4-fold symmetry
     eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
     if DMRGCI.mol.symmetry and DMRGCI.orbsym:
@@ -168,38 +226,23 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI=DMRGCI):
 #    f.close()
 
 
-def executeBLOCK(DMRGCI=DMRGCI):
-    import os
-    inFile = "%s%s%s"%(DMRGCI.scratchDirectory,os.sep,DMRGCI.configFile)
-    outFile = "%s%s%s"%(DMRGCI.scratchDirectory,os.sep,DMRGCI.outputFile)
+def executeBLOCK(DMRGCI):
+    inFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
+    outFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.outputFile)
     from subprocess import call
     call("%s  %s > %s"%(DMRGCI.executable, inFile, outFile), shell=True)
 
-def readEnergy(DMRGCI=DMRGCI):
+def readEnergy(DMRGCI):
     import struct, os
-    file1 = open("%s%s%s"%(DMRGCI.scratchDirectory, os.sep, "dmrg.e"),"rb")
+    file1 = open(os.path.join(DMRGCI.scratchDirectory, "dmrg.e"),"rb")
     calc_e = struct.unpack('d', file1.read(8))[0]
+    file1.close()
 
     return calc_e
 
-def kernel(h1eff, eri_cas, ncas, neleccas, ci0=False, fciRestart=False,
-           DMRGCI=DMRGCI):
-    if isinstance(neleccas, int):
-        neleca=neleccas/2 + neleccas%2
-        nelecb=neleccas - neleca
-    else :
-        neleca, nelecb = neleccas
-
-    writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI)
-    writeDMRGConfFile(neleca, nelecb, fciRestart, DMRGCI)
-    executeBLOCK(DMRGCI)
-    calc_e = readEnergy(DMRGCI)
-
-    return calc_e, None
 
 
 if __name__ == '__main__':
-    import numpy
     from pyscf import gto
     from pyscf import scf
     from pyscf import mcscf
@@ -245,3 +288,4 @@ if __name__ == '__main__':
 
     print('DMRGCI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))
     print('DMRGSCF = %.15g CASSCF = %.15g' % (emc_1, emc_1ref))
+
