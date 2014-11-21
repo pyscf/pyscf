@@ -203,8 +203,8 @@ if __name__ == '__main__':
     b = 1.4
     mol = gto.Mole()
     mol.build(
-        verbose = 0,
-        output = None,
+        verbose = 5,
+        output = 'out-dmrgci',
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
         symmetry = True,
@@ -213,8 +213,31 @@ if __name__ == '__main__':
     m.scf()
 
     mc = mcscf.CASSCF(mol, m, 4, 4)
-# a DMRGCI instance for fcisolver is preferred, since the symmetry information
-# is only handled in the DMRGCI instance.
     mc.fcisolver = DMRGCI(mol)
     mc.fcisolver.tol = 1e-9
-    emc = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1 = mc.mc2step()[0] + mol.nuclear_repulsion()
+
+    mc = mcscf.CASCI(mol, m, 4, 4)
+    mc.fcisolver = DMRGCI(mol)
+    emc_0 = mc.casci()[0] + mol.nuclear_repulsion()
+
+    b = 1.4
+    mol = gto.Mole()
+    mol.build(
+        verbose = 5,
+        output = 'out-casscf',
+        atom = [['H', (0.,0.,i)] for i in range(8)],
+        basis = {'H': 'sto-3g'},
+        symmetry = True,
+    )
+    m = scf.RHF(mol)
+    m.scf()
+
+    mc = mcscf.CASSCF(mol, m, 4, 4)
+    emc_1ref = mc.mc2step()[0] + mol.nuclear_repulsion()
+
+    mc = mcscf.CASCI(mol, m, 4, 4)
+    emc_0ref = mc.casci()[0] + mol.nuclear_repulsion()
+
+    print('DMRGCI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))
+    print('DMRGSCF = %.15g CASSCF = %.15g' % (emc_1, emc_1ref))
