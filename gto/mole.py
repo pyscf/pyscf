@@ -158,8 +158,12 @@ class Mole(object):
         if self.verbose > log.QUIET:
             keysub = set(obj.__dict__.keys()) - set(obj._keys)
             if keysub:
-                sys.stderr.write('%s has no attributes %s\n' %
-                                 (str(obj.__class__), ' '.join(keysub)))
+                log.warn(self, 'overwrite keys %s of %s',
+                         ' '.join(keysub), str(obj.__class__))
+                keysub = keysub - set(dir(obj))
+                if keysub:
+                    sys.stderr.write('%s has no attributes %s\n' %
+                                     (str(obj.__class__), ' '.join(keysub)))
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
