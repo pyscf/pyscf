@@ -43,7 +43,7 @@ class MSC(hf.MSC):
         e11 = msc_para + msc_dia
 
         log.timer(self, 'NMR', *cput0)
-        if self.verbose > param.VERBOSE_QUITE:
+        if self.verbose > param.VERBOSE_QUIET:
             fout = self.stdout
             for tot,d,p,p0,ppos,pneg,atom in \
                     zip(e11, msc_dia, msc_para, para_occ, \

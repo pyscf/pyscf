@@ -337,16 +337,29 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
 class FCISolver(object):
     def __init__(self, mol):
         self.mol = mol
+        self.verbose = 0
         self.max_cycle = 50
         self.max_space = 12
         self.conv_threshold = 1e-8
         self.lindep = 1e-8
         self.max_memory = 1200 # MB
-        self.verbose = 0
 # level shift in precond
-        self.eshift = 1e-2
+        self.level_shift = 1e-2
 
         self._keys = set(self.__dict__.keys() + ['_keys'])
+
+    def dump_flags(self, verbose=None):
+        if verbose is None:
+            verbose = self.verbose
+        log = pyscf.lib.logger.Logger(self.mol.stdout, verbose)
+        log.info('******** CI flags ********')
+        log.info('max. cycles = %d', self.max_cycle)
+        log.info('conv_threshold = %g', self.conv_threshold)
+        log.info('linear dependence = %g', self.lindep)
+        log.info('level shift = %d', self.level_shift)
+        log.info('max iter space = %d', self.max_space)
+        log.info('max_memory %d MB', self.max_memory)
+
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
@@ -370,10 +383,10 @@ class FCISolver(object):
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         def precond(r, e0, x0, *args):
-            #h0e0 = h0 - numpy.eye(len(addr))*(e0-self.eshift)
-            h0e0inv = numpy.dot(pspaceci/(pspaceig-(e0-self.eshift)),
+            #h0e0 = h0 - numpy.eye(len(addr))*(e0-self.level_shift)
+            h0e0inv = numpy.dot(pspaceci/(pspaceig-(e0-self.level_shift)),
                                 pspaceci.T)
-            hdiaginv = 1/(hdiag - (e0-self.eshift))
+            hdiaginv = 1/(hdiag - (e0-self.level_shift))
             h0x0 = x0 * hdiaginv
             #h0x0[addr] = numpy.linalg.solve(h0e0, x0[addr])
             h0x0[addr] = numpy.dot(h0e0inv, x0[addr])
@@ -389,7 +402,7 @@ class FCISolver(object):
             return x1
         return precond
 #    def make_precond(self, hdiag, *args):
-#        return lambda x, e, *args: x/(hdiag-(e-self.eshift))
+#        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
