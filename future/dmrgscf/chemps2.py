@@ -7,7 +7,6 @@ import numpy
 import pyscf.ao2mo
 import settings
 import imp
-PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
 
 # point group ID defined in CheMPS2, see
 # http://sebwouters.github.io/CheMPS2/classCheMPS2_1_1Irreps.html
@@ -43,6 +42,7 @@ class CheMPS2(object):
         self.dmrg_maxiter_silent = 100
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+        PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
         Initializer = PyCheMPS2.PyInitialize()
         Initializer.Init()
 
