@@ -155,7 +155,7 @@ class Mole(object):
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def check_sanity(self, obj):
-        if self.verbose > log.QUITE:
+        if self.verbose > log.QUIET:
             keysub = set(obj.__dict__.keys()) - set(obj._keys)
             if keysub:
                 sys.stderr.write('%s has no attributes %s\n' %
@@ -227,10 +227,10 @@ class Mole(object):
         if self.output is not None:
             if os.path.isfile(self.output):
                 #os.remove(self.output)
-                if self.verbose > log.QUITE:
+                if self.verbose > log.QUIET:
                     print('overwrite output file: %s' % self.output)
             else:
-                if self.verbose > log.QUITE:
+                if self.verbose > log.QUIET:
                     print('output file: %s' % self.output)
 
 

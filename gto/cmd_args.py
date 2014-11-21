@@ -27,7 +27,7 @@ def cmd_args():
     (opts, args_left) = parser.parse_args()
 
     if opts.quite:
-        opts.verbose = lib.logger.QUITE
+        opts.verbose = lib.logger.QUIET
 
     if opts.verbose:
         opts.verbose = lib.logger.DEBUG

@@ -53,7 +53,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, fciRestart=False):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core
-    log.info('CASCI E = %.15g', e_tot)
+    log.info('CASCI E = %.15g, E(CI) = %.15g', e_tot, e_cas)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -97,10 +97,13 @@ class CASCI(object):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        log.info('CI max. cycles = %d', self.ci_max_cycle)
-        log.info('CI conv_threshold = %g', self.ci_conv_threshold)
-        log.info('CI linear dependence = %g', self.ci_lindep)
-        #log.info('CI level shift = %d', self.ci_level_shift)
+        try:
+            log.info('CI max. cycles = %d', self.fcisolver.max_cycle)
+            log.info('CI conv_threshold = %g', self.fcisolver.conv_threshold)
+            log.info('CI linear dependence = %g', self.fcisolver.lindep)
+            log.info('CI level shift = %d', self.fcisolver.level_shift)
+        except:
+            pass
         log.info('max_memory %d (MB)', self.max_memory)
 
     def get_hcore(self, mol=None):

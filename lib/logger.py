@@ -25,7 +25,7 @@ WARN   = param.VERBOSE_WARN
 WARNING = WARN
 ERR    = param.VERBOSE_ERR
 ERROR  = ERR
-QUITE  = param.VERBOSE_QUITE
+QUIET  = param.VERBOSE_QUIET
 CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
@@ -83,7 +83,7 @@ def flush(rec, msg, *args):
     rec.stdout.flush()
 
 def log(rec, msg, *args):
-    if rec.verbose > QUITE:
+    if rec.verbose > QUIET:
         flush(rec, msg, *args)
 
 def error(rec, msg, *args):
