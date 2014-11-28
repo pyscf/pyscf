@@ -11,7 +11,7 @@ import pyscf.scf
 import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
-           ci0=None, verbose=None):
+           ci0=None, verbose=None, restart=False):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -24,7 +24,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     mo = mo_coeff
     eris = casscf.update_ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, fciRestart= False)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, fciRestart= restart)
     log.info('CASCI E = %.15g', e_tot)
     elast = e_tot
     conv = False
