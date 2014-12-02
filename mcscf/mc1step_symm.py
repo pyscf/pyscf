@@ -54,7 +54,7 @@ class CASSCF(mc1step.CASSCF):
                                ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo=None, ci0=None, macro=None, micro=None):
+    def mc2step(self, mo=None, ci0=None, macro=None, micro=None, restart=False):
         if mo is None:
             mo = self.mo_coeff
         else:
@@ -79,7 +79,7 @@ class CASSCF(mc1step.CASSCF):
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo, \
                                tol=self.conv_threshold, macro=macro, micro=micro, \
-                               ci0=ci0, verbose=self.verbose)
+                               ci0=ci0, verbose=self.verbose, restart=restart)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def gen_g_hop(self, mo, casdm1, casdm2, eris):

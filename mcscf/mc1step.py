@@ -484,7 +484,7 @@ class CASSCF(casci.CASCI):
                        ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo=None, ci0=None, macro=None, micro=None):
+    def mc2step(self, mo=None, ci0=None, macro=None, micro=None, restart=False):
         import mc2step
         if mo is None:
             mo = self.mo_coeff
@@ -502,7 +502,7 @@ class CASSCF(casci.CASCI):
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo, \
                                tol=self.conv_threshold, macro=macro, micro=micro, \
-                               ci0=ci0, verbose=self.verbose)
+                               ci0=ci0, verbose=self.verbose, restart=restart)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def casci(self, mo, ci0=None, eris=None, fciRestart=False):
@@ -581,6 +581,8 @@ class CASSCF(casci.CASCI):
 
     def save_mo_coeff(self, mo_coeff, *args):
         pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo_coeff)
+    def load_mo_coeff(self):
+        return pyscf.scf.chkfile.load(self.chkfile, 'mcscf/mo_coeff')
 
 
 # to avoid calculating AO integrals
