@@ -136,7 +136,7 @@ class SCF(object):
         self.mo_coeff = None
         self.mo_occ = None
         self.hf_energy = 0
-        self.scf_conv = False
+        self.converged = False
 
         self.opt = None
 
@@ -182,8 +182,8 @@ class SCF(object):
 
     def init_diis(self):
         diis_a = diis.SCF_DIIS(self)
-        diis_a.diis_space = self.diis_space
-        #diis_a.diis_start_cycle = self.diis_start_cycle
+        diis_a.space = self.diis_space
+        #diis_a.start_cycle = self.diis_start_cycle
         def scf_diis(cycle, s, d, f):
             if cycle >= self.diis_start_cycle:
                 f = diis_a.update(s, d, f)
@@ -292,7 +292,7 @@ class SCF(object):
     def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
         sum_mo_energy = numpy.dot(mo_energy, mo_occ)
         # trace (D*V_HF)
-        coul_dup = pyscf.lib.trace_ab(dm, vhf)
+        coul_dup = numpy.einsum('ij,ji', dm, vhf)
         log.debug1(self, 'E_coul = %.15g', (coul_dup.real * .5))
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
@@ -311,7 +311,7 @@ class SCF(object):
         cput0 = (time.clock(), time.time())
 
         if self.mol.nelectron == 1:
-            self.scf_conv = True
+            self.converged = True
             self.mo_energy, self.mo_coeff = self.solve_1e(self.mol)
             self.mo_occ = numpy.zeros_like(self.mo_energy)
             self.mo_occ[0] = 1
@@ -320,12 +320,12 @@ class SCF(object):
             self.build()
             self.dump_flags()
             # call self.scf_cycle because dhf redefine scf_cycle
-            self.scf_conv, self.hf_energy, \
+            self.converged, self.hf_energy, \
                     self.mo_energy, self.mo_occ, self.mo_coeff \
                     = self.scf_cycle(self.mol, self.conv_threshold)
 
         log.timer(self, 'SCF', *cput0)
-        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
+        etot = self.dump_final_energy(self.hf_energy, self.converged)
         if self.verbose >= param.VERBOSE_INFO:
             self.analyze_scf_result(self.mol, self.mo_energy, self.mo_occ, \
                                     self.mo_coeff)
@@ -350,9 +350,9 @@ class SCF(object):
         #log.info(self, '1 electron energy = %.15g.', mo_energy[0])
         return mo_energy, mo_coeff
 
-    def dump_final_energy(self, hf_energy, scf_conv):
+    def dump_final_energy(self, hf_energy, converged):
         e_nuc = self.mol.nuclear_repulsion()
-        if scf_conv:
+        if converged:
             log.log(self, 'converged electronic energy = %.15g, nuclear repulsion = %.15g', \
                     hf_energy, e_nuc)
         else:
@@ -505,6 +505,8 @@ class RHF(SCF):
     def __init__(self, mol):
         if mol.nelectron != 1 and mol.nelectron.__mod__(2) is not 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
+# Note: self._eri consumes much memory.  Be careful with the Circular
+# reference of SCF (RHF, UHF) objects
         self._eri = None
         SCF.__init__(self, mol)
 
@@ -639,8 +641,8 @@ class UHF(SCF):
 
     def init_diis(self):
         udiis = diis.SCF_DIIS(self)
-        udiis.diis_space = self.diis_space
-        #udiis.diis_start_cycle = self.diis_start_cycle
+        udiis.space = self.diis_space
+        #udiis.start_cycle = self.diis_start_cycle
         def scf_diis(cycle, s, d, f):
             if cycle >= self.diis_start_cycle:
                 sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
@@ -650,7 +652,7 @@ class UHF(SCF):
                 udiis.err_vec_stack.append(errvec)
                 log.debug(self, 'diis-norm(errvec) = %g', \
                           numpy.linalg.norm(errvec))
-                if udiis.err_vec_stack.__len__() > udiis.diis_space:
+                if udiis.err_vec_stack.__len__() > udiis.space:
                     udiis.err_vec_stack.pop(0)
                 f = diis.DIIS.update(udiis, f)
             if cycle < self.diis_start_cycle-1:
@@ -726,8 +728,8 @@ class UHF(SCF):
         sum_mo_energy = numpy.dot(mo_energy[0], mo_occ[0]) \
                       + numpy.dot(mo_energy[1], mo_occ[1])
         # trace (D*V_HF)
-        coul_dup = pyscf.lib.trace_ab(dm[0], vhf[0]) \
-                 + pyscf.lib.trace_ab(dm[1], vhf[1])
+        coul_dup = numpy.einsum('ij,ji', dm[0], vhf[0]) \
+                 + numpy.einsum('ij,ji', dm[1], vhf[1])
         e = sum_mo_energy - coul_dup * .5
         return e.real, coul_dup * .5
 
@@ -813,7 +815,7 @@ class UHF(SCF):
         cput0 = (time.clock(), time.time())
 
         if self.mol.nelectron == 1:
-            self.scf_conv = True
+            self.converged = True
             h1e = self.get_hcore(self.mol)
             s1e = self.get_ovlp(self.mol)
             self.mo_energy, self.mo_coeff = SCF.eig(self, h1e[0], s1e)
@@ -824,7 +826,7 @@ class UHF(SCF):
         else:
             self.build()
             self.dump_flags()
-            self.scf_conv, self.hf_energy, \
+            self.converged, self.hf_energy, \
                     self.mo_energy, self.mo_occ, self.mo_coeff \
                     = self.scf_cycle(self.mol, self.conv_threshold)
             if self.nelectron_alpha * 2 < self.mol.nelectron:
@@ -833,7 +835,7 @@ class UHF(SCF):
                 self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
         log.timer(self, 'SCF', *cput0)
-        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
+        etot = self.dump_final_energy(self.hf_energy, self.converged)
         if self.verbose >= param.VERBOSE_INFO:
             self.analyze_scf_result(self.mol, self.mo_energy, self.mo_occ, \
                                     self.mo_coeff)
@@ -907,7 +909,7 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.diis_start_cycle      = rhf.diis_start_cycle
     uhf.damp_factor           = rhf.damp_factor
     uhf.level_shift_factor    = rhf.level_shift_factor
-    uhf.scf_conv              = rhf.scf_conv
+    uhf.converged             = rhf.converged
     uhf.direct_scf            = rhf.direct_scf
     uhf.direct_scf_threshold  = rhf.direct_scf_threshold
 

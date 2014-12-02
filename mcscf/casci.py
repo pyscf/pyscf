@@ -39,8 +39,8 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, fciRestart=False):
     else:
         core_dm = numpy.dot(mo_core, mo_core.T) * 2
         corevhf = casci.get_veff(core_dm)
-        energy_core = pyscf.lib.trace_ab(core_dm, hcore) \
-                + pyscf.lib.trace_ab(core_dm, corevhf) * .5
+        energy_core = numpy.einsum('ij,ji', core_dm, hcore) \
+                    + numpy.einsum('ij,ji', core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     t1 = log.timer('effective h1e in CAS space', *t0)
 
@@ -93,20 +93,13 @@ class CASCI(object):
     def dump_flags(self):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** CASSCF flags ********')
+        log.info('******** CASCI flags ********')
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        try:
-            log.info('CI max. cycles = %d', self.fcisolver.max_cycle)
-            log.info('CI conv_threshold = %g', self.fcisolver.conv_threshold)
-            log.info('CI linear dependence = %g', self.fcisolver.lindep)
-            log.info('CI level shift = %d', self.fcisolver.level_shift)
-        except:
-            pass
         log.info('max_memory %d (MB)', self.max_memory)
         try:
-            self.mol.check_sanity(self.fcisolver)
+            self.fcisolver.dump_flags(self.verbose)
         except:
             pass
 

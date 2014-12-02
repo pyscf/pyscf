@@ -17,6 +17,7 @@
 import os
 import ctypes
 import numpy
+import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
 import davidson
@@ -140,7 +141,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, **kwargs):
     hdiag = make_hdiag(h1e, eri, norb, nelec)
 
     addr, h0 = pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = numpy.linalg.eigh(h0)
+    pw, pv = scipy.linalg.eigh(h0)
     if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]
@@ -246,7 +247,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None):
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = numpy.linalg.eigh(h0)
+    pw, pv = scipy.linalg.eigh(h0)
     if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]

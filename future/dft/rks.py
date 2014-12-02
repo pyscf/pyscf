@@ -60,18 +60,18 @@ class RKS(scf.hf.RHF):
                 vj, vk = scf._vhf.direct(dm, mol._atm, mol._bas, mol._env, \
                                          hermi=hermi)
         log.timer(self, 'vj and vk', *t0)
-        self._ecoul = lib.trace_ab(dm, vj) * .5
+        self._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
 
         hyb = vxc.hybrid_coeff(x_code, spin=1)
         if abs(hyb) > 1e-10:
             vk = vk * hyb * .5
-            self._exc -= lib.trace_ab(dm, vk) * .5
+            self._exc -= numpy.einsum('ij,ji', dm, vk) * .5
             vx -= vk
         return vj + vx
 
     def calc_tot_elec_energy(self, veff, dm, mo_energy, mo_occ):
         sum_mo_energy = numpy.dot(mo_energy, mo_occ)
-        coul_dup = lib.trace_ab(dm, veff)
+        coul_dup = numpy.einsum('ij,ji', dm, veff)
         tot_e = sum_mo_energy - coul_dup + self._ecoul + self._exc
         log.debug(self, 'Ecoul = %s  Exc = %s', self._ecoul, self._exc)
         return tot_e, self._ecoul, self._exc

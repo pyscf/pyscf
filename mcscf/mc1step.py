@@ -460,7 +460,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian level shift = %d', self.ah_level_shift)
         log.info('max_memory %d MB', self.max_memory)
         try:
-            self.mol.check_sanity(self.fcisolver)
+            self.fcisolver.dump_flags(self.verbose)
         except:
             pass
 

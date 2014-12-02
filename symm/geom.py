@@ -283,7 +283,7 @@ def atoms_in_line(atoms):
 
 def detect_symm(atoms):
     if atoms.__len__() == 1:
-        return 'D2h', (atoms[0][0], (0.,0.,0.))
+        return 'D2h', numpy.zeros(3), numpy.eye(3)
     elif atoms.__len__() == 2:
         rchg = get_charge_center(atoms)
         new_axis = gen_new_axis(numpy.array(atoms[0][1])-rchg, axisx=(1,0,0))

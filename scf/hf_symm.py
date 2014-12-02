@@ -26,7 +26,7 @@ class RHF(hf.RHF):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nocc = {} # {'ir_name':int,...}
-        self._keys = set(list(self._keys)+['irrep_nocc'])
+        self._keys = self._keys | set(['irrep_nocc'])
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
@@ -121,12 +121,12 @@ class RHF(hf.RHF):
         cput0 = (time.clock(), time.time())
         self.build()
         self.dump_flags()
-        self.scf_conv, self.hf_energy, \
+        self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
 
         log.timer(self, 'SCF', *cput0)
-        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
+        etot = self.dump_final_energy(self.hf_energy, self.converged)
         self.analyze_scf_result(self.mol, self.mo_energy,
                                 self.mo_occ, self.mo_coeff)
 
@@ -193,8 +193,7 @@ class UHF(hf.UHF):
         # number of electrons for each irreps
         self.irrep_nocc_alpha = {}
         self.irrep_nocc_beta = {}
-        self._keys = set(list(self._keys) +
-                         ['irrep_nocc_alpha','irrep_nocc_beta'])
+        self._keys = self._keys | set(['irrep_nocc_alpha','irrep_nocc_beta'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -350,7 +349,7 @@ class UHF(hf.UHF):
             if irname in self.irrep_nocc_alpha:
                 nocc = self.irrep_nocc_alpha[irname]
             else:
-                nocc = int((mo_energy[0][p0:p0+nso]<elumo_float).sum())
+                nocc = int((mo_energy[0][p0:p0+nso]<elumoa_float).sum())
                 mo_occ[0][p0:p0+nocc] = 1
                 noccsa[ir] = nocc
             if nocc > 0 and mo_energy[0][p0+nocc-1] > ehomoa:
@@ -361,7 +360,7 @@ class UHF(hf.UHF):
             if irname in self.irrep_nocc_beta:
                 nocc = self.irrep_nocc_beta[irname]
             else:
-                nocc = int((mo_energy[1][p0:p0+nso]<elumo_float).sum())
+                nocc = int((mo_energy[1][p0:p0+nso]<elumob_float).sum())
                 mo_occ[1][p0:p0+nocc] = 1
                 noccsb[ir] = nocc
             if nocc > 0 and mo_energy[1][p0+nocc-1] > ehomob:
@@ -395,7 +394,7 @@ class UHF(hf.UHF):
         cput0 = (time.clock(), time.time())
         self.build()
         self.dump_flags()
-        self.scf_conv, self.hf_energy, \
+        self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
         if self.nelectron_alpha * 2 < self.mol.nelectron:
@@ -404,7 +403,7 @@ class UHF(hf.UHF):
             self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
         log.timer(self, 'SCF', *cput0)
-        etot = self.dump_final_energy(self.hf_energy, self.scf_conv)
+        etot = self.dump_final_energy(self.hf_energy, self.converged)
         self.analyze_scf_result(self.mol, self.mo_energy,
                                 self.mo_occ, self.mo_coeff)
 
@@ -542,7 +541,7 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.diis_start_cycle      = rhf.diis_start_cycle
     uhf.damp_factor           = rhf.damp_factor
     uhf.level_shift_factor    = rhf.level_shift_factor
-    uhf.scf_conv              = rhf.scf_conv
+    uhf.converged             = rhf.converged
     uhf.direct_scf            = rhf.direct_scf
     uhf.direct_scf_threshold  = rhf.direct_scf_threshold
 

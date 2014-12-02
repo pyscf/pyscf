@@ -101,8 +101,8 @@ class UHF(hf.SCF):
 
     def init_diis(self):
         diis_a = diis.SCF_DIIS(self)
-        diis_a.diis_space = self.diis_space
-        #diis_a.diis_start_cycle = self.diis_start_cycle
+        diis_a.space = self.diis_space
+        #diis_a.start_cycle = self.diis_start_cycle
         def scf_diis(cycle, s, d, f):
             if cycle >= self.diis_start_cycle:
                 f = diis_a.update(s, d, f)

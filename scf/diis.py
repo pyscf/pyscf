@@ -24,31 +24,31 @@ class DIIS:
     def __init__(self, dev):
         self.verbose = dev.verbose
         self.stdout = dev.stdout
-        self.diis_vec_stack = []
+        self._vec_stack = []
         self.threshold = 1e-6
-        self.diis_space = 6
-        self.diis_start_cycle = 2
+        self.space = 6
+        self.start_cycle = 2
 
     def push_vec(self, x):
-        self.diis_vec_stack.append(x)
-        if self.diis_vec_stack.__len__() > self.diis_space:
-            self.diis_vec_stack.pop(0)
+        self._vec_stack.append(x)
+        if self._vec_stack.__len__() > self.space:
+            self._vec_stack.pop(0)
 
     def get_err_vec(self, idx):
-        return self.diis_vec_stack[idx+1] - self.diis_vec_stack[idx]
+        return self._vec_stack[idx+1] - self._vec_stack[idx]
 
     def get_vec(self, idx):
-        return self.diis_vec_stack[idx+1]
+        return self._vec_stack[idx+1]
 
     def get_num_diis_vec(self):
-        return self.diis_vec_stack.__len__() - 1
+        return self._vec_stack.__len__() - 1
 
     def update(self, x):
         '''use DIIS method to solve Eq.  operator(x) = x.'''
         self.push_vec(x)
 
         nd = self.get_num_diis_vec()
-        if nd < self.diis_start_cycle:
+        if nd < self.start_cycle:
             return x
 
         H = numpy.ones((nd+1,nd+1), x.dtype)
@@ -96,25 +96,25 @@ class DIISLarge(DIIS):
         self._is_tmpfile_reused = False
 
     def push_vec(self, x):
-        key = 'x%d' % (self._count % self.diis_space)
-        if self._count < self.diis_space:
+        key = 'x%d' % (self._count % self.space)
+        if self._count < self.space:
             self.diisfile[key] = x
         else:
             self.diisfile[key][:] = x
         self._count += 1
 
     def get_err_vec(self, idx):
-        if self._count < self.diis_space:
+        if self._count < self.space:
             return numpy.array(self.diisfile['x%d'%(idx+1)]) \
                  - numpy.array(self.diisfile['x%d'%idx])
         else:
 # the previous vector may refer to the last one in circular store
-            last_id = (idx+self.diis_space-1) % self.diis_space
+            last_id = (idx+self.space-1) % self.space
             return numpy.array(self.diisfile['x%d'%idx]) \
                  - numpy.array(self.diisfile['x%d'%last_id])
 
     def get_vec(self, idx):
-        if self._count < self.diis_space:
+        if self._count < self.space:
             return numpy.array(self.diisfile['x%d'%(idx+1)])
         else:
             return numpy.array(self.diisfile['x%d'%idx])
@@ -131,7 +131,7 @@ class SCF_DIIS(DIIS):
         self.err_vec_stack = []
 
     def clear_diis_space(self):
-        self.diis_vec_stack = []
+        self._vec_stack = []
         self.err_vec_stack = []
 
     def push_err_vec(self, s, d, f):
@@ -140,17 +140,17 @@ class SCF_DIIS(DIIS):
         log.debug1(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
 
         self.err_vec_stack.append(errvec)
-        if self.err_vec_stack.__len__() > self.diis_space:
+        if self.err_vec_stack.__len__() > self.space:
             self.err_vec_stack.pop(0)
 
     def get_err_vec(self, idx):
         return self.err_vec_stack[idx]
 
     def get_vec(self, idx):
-        return self.diis_vec_stack[idx]
+        return self._vec_stack[idx]
 
     def get_num_diis_vec(self):
-        return self.diis_vec_stack.__len__()
+        return self._vec_stack.__len__()
 
     def update(self, s, d, f):
         self.push_err_vec(s, d, f)

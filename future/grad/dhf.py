@@ -8,9 +8,8 @@ Relativistic Dirac-Hartree-Fock
 
 
 import numpy
-from pyscf import lib
-from pyscf import scf
-import pyscf.scf._vhf
+import pyscf.lib
+import pyscf.scf._vhf as _vhf
 import pyscf.lib.logger as log
 import hf
 
@@ -29,7 +28,7 @@ class UHF(hf.RHF):
         else:
             self.vhf_level = WITH_NOSS
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_hcore(self, mol):
         n4c = mol.num_4C_function()
         n2c = n4c / 2
@@ -46,7 +45,7 @@ class UHF(hf.RHF):
         h1e[:,n2c:,n2c:] = wn * (.25/c**2) - t
         return h1e
 
-    @lib.omnimethod
+    @pyscf.lib.omnimethod
     def get_ovlp(self, mol):
         n4c = mol.num_4C_function()
         n2c = n4c / 2
@@ -72,6 +71,7 @@ class UHF(hf.RHF):
         return v
 
     def get_coulomb_hf(self, mol, dm):
+        import pyscf.scf as scf
         '''Dirac-Hartree-Fock Coulomb repulsion'''
         if self.vhf_level == WITH_LLLL:
             log.info(mol, 'Compute Gradients: (LL|LL)')
@@ -116,9 +116,9 @@ def _call_vhf1_llll(mol, dm):
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
-            scf._vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
-                                   ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                                   dmll, 3, mol._atm, mol._bas, mol._env)
+            _vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
+                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                               dmll, 3, mol._atm, mol._bas, mol._env)
     return vj, vk
 
 def _call_vhf1(mol, dm):
@@ -131,23 +131,23 @@ def _call_vhf1(mol, dm):
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
-            scf._vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
-                                   ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                                   dmll, 3, mol._atm, mol._bas, mol._env)
+            _vhf.rdirect_mapdm('cint2e_ip1', 'CVHFdot_rs2kl',
+                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                               dmll, 3, mol._atm, mol._bas, mol._env)
     vj[:,n2c:,n2c:], vk[:,n2c:,n2c:] = \
-            scf._vhf.rdirect_mapdm('cint2e_ipspsp1spsp2', 'CVHFdot_rs2kl',
-                                   ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                                   dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
-    vx = scf._vhf.rdirect_bindm('cint2e_ipspsp1', 'CVHFdot_rs2kl',
-                                ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                                (dmll, dmsl), 3,
-                                mol._atm, mol._bas, mol._env) * c1**2
+            _vhf.rdirect_mapdm('cint2e_ipspsp1spsp2', 'CVHFdot_rs2kl',
+                               ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                               dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
+    vx = _vhf.rdirect_bindm('cint2e_ipspsp1', 'CVHFdot_rs2kl',
+                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                            (dmll, dmsl), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
     vj[:,n2c:,n2c:] += vx[0]
     vk[:,n2c:,:n2c] += vx[1]
-    vx = scf._vhf.rdirect_bindm('cint2e_ip1spsp2', 'CVHFdot_rs2kl',
-                                ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
-                                (dmss, dmls), 3,
-                                mol._atm, mol._bas, mol._env) * c1**2
+    vx = _vhf.rdirect_bindm('cint2e_ip1spsp2', 'CVHFdot_rs2kl',
+                            ('CVHFrs2kl_lk_s1ij', 'CVHFrs2kl_jk_s1il'),
+                            (dmss, dmls), 3,
+                            mol._atm, mol._bas, mol._env) * c1**2
     vj[:,:n2c,:n2c] += vx[0]
     vk[:,:n2c,n2c:] += vx[1]
     return vj, vk

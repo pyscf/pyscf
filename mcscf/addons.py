@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy
+import scipy.linalg
 import pyscf.lib
 
 def sort_mo(casscf, mo, caslst, base=1):
@@ -125,7 +126,7 @@ def restore_cas_natorb(casscf, fcivec=None, mo=None):
     nelecas = casscf.nelecas
     nocc = ncore + ncas
     casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
-    occ, ucas = numpy.linalg.eigh(-casdm1)
+    occ, ucas = scipy.linalg.eigh(-casdm1)
     occ = -occ
     log.info('Natural occs')
     log.info(str(occ))

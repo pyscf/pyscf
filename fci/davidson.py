@@ -151,7 +151,7 @@ if __name__ == '__main__':
     a = numpy.sin(numpy.sin(a))
     a = a + a.T
 
-    e,u = numpy.linalg.eigh(a)
+    e,u = scipy.linalg.eigh(a)
     #a = numpy.dot(u[:,:15]*e[:15], u[:,:15].T)
     print(e[0], u[0,0])
 
