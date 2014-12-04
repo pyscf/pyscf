@@ -113,7 +113,16 @@ PTR_ENV_START   = 20
 
 
 class Mole(object):
-    ''' moleinfo for contracted GTO '''
+    '''Define molecular system
+mol = Mole()
+mol.build(
+    verbose,
+    output,
+    max_memory,
+    charge,
+    spin,  # 2j
+)
+    '''
     def __init__(self):
         self.verbose = log.ERROR
         self.output = None
@@ -121,7 +130,7 @@ class Mole(object):
 
         self.light_speed = param.LIGHTSPEED
         self.charge = 0
-        self.spin = 0
+        self.spin = 0 # 2j
         self.symmetry = False
 
 # atom, etb, basis, nucmod, mass, grids to save inputs
@@ -294,6 +303,7 @@ class Mole(object):
         self.natm = self._atm.__len__()
         self.nbas = self._bas.__len__()
         self.nelectron = self.tot_electrons()
+        assert((self.nelectron+self.spin) % 2 == 0)
 
         if self.symmetry:
             import pyscf.symm
@@ -463,6 +473,8 @@ class Mole(object):
         self.stdout.write('[INPUT] light speed = %s\n' % self.light_speed)
         self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
+        self.stdout.write('[INPUT] charge = %d\n' % self.charge)
+        self.stdout.write('[INPUT] spin (2S) = %d\n' % self.spin)
 
         for nuc,(rad,ang) in self.grids.items():
             self.stdout.write('[INPUT] %s (%d, %d)\n' % (nuc, rad, ang))

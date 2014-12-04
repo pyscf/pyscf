@@ -40,11 +40,6 @@ self.potential(v, oob)          # v = one of 'coulomb', 'gaunt'
                                 #       2 sp|f> -> sr|f>
 '''
 
-def get_vj_vk(vhfor, mol, dm):
-    return vhfor(dm, mol._atm, mol._bas, mol._env)
-
-
-
 def scf_cycle(mol, scf, conv_threshold=1e-10, dump_chk=True, init_dm=None):
     cput0 = (time.clock(), time.time())
     if init_dm is None:
@@ -77,7 +72,7 @@ def scf_cycle(mol, scf, conv_threshold=1e-10, dump_chk=True, init_dm=None):
         mo_energy, mo_coeff = scf.eig(fock, s1e)
         mo_occ = scf.set_occ(mo_energy, mo_coeff)
         dm = scf.make_rdm1(mo_coeff, mo_occ)
-        hf_energy = scf.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)[0]
+        hf_energy = scf.calc_tot_elec_energy(h1e, vhf, dm)[0]
 
         log.info(scf, 'cycle= %d E=%.15g (+nuc=%.5f), delta_E= %g', \
                  cycle+1, hf_energy, hf_energy+mol.nuclear_repulsion(), \
@@ -99,7 +94,7 @@ def scf_cycle(mol, scf, conv_threshold=1e-10, dump_chk=True, init_dm=None):
     mo_energy, mo_coeff = scf.eig(fock, s1e)
     mo_occ = scf.set_occ(mo_energy, mo_coeff)
     dm = scf.make_rdm1(mo_coeff, mo_occ)
-    hf_energy = scf.calc_tot_elec_energy(vhf, dm, mo_energy, mo_occ)[0]
+    hf_energy = scf.calc_tot_elec_energy(h1e, vhf, dm)[0]
     if dump_chk:
         scf.dump_scf_to_chkfile(hf_energy, mo_energy, mo_occ, mo_coeff)
     log.timer(scf, 'scf_cycle', *cput0)
@@ -289,13 +284,11 @@ class SCF(object):
     def calc_den_mat(self, mo_coeff=None, mo_occ=None):
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
-        sum_mo_energy = numpy.dot(mo_energy, mo_occ)
-        # trace (D*V_HF)
-        coul_dup = numpy.einsum('ij,ji', dm, vhf)
-        log.debug1(self, 'E_coul = %.15g', (coul_dup.real * .5))
-        e = sum_mo_energy - coul_dup * .5
-        return e.real, coul_dup * .5
+    def calc_tot_elec_energy(self, h1e, vhf, dm):
+        e1 = numpy.einsum('ij,ji', h1e, dm).real
+        e_coul = numpy.einsum('ij,ji', vhf, dm).real * .5
+        log.debug1(self, 'E_coul = %.15g', e_coul)
+        return e1+e_coul, e_coul
 
     def scf_cycle(self, mol, *args, **kwargs):
         return scf_cycle(mol, self, *args, **kwargs)
@@ -604,9 +597,8 @@ def rhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
     return pop, chg
 
 
-
 class UHF(SCF):
-    __doc__ = 'UHF'
+    '''UHF'''
     def __init__(self, mol):
         SCF.__init__(self, mol)
         # self.mo_coeff => [mo_a, mo_b]
@@ -614,25 +606,15 @@ class UHF(SCF):
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
         self.nelectron_alpha = (mol.nelectron + mol.spin) / 2
-        # fix_nelectron_alpha=0 may lead high spin states
-        if mol.spin > 0:
-            self.fix_nelectron_alpha = self.nelectron_alpha
-        else:
-            self.fix_nelectron_alpha = 0
         self.break_symmetry = False
         self._eri = None
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = self._keys | set(['nelectron_alpha', 'break_symmetry'])
 
     def dump_flags(self):
         SCF.dump_flags(self)
-        if self.fix_nelectron_alpha:
-            log.info(self, 'number electrons alpha = %d, beta = %d', \
-                     self.fix_nelectron_alpha,
-                     self.mol.nelectron-self.fix_nelectron_alpha)
-        else:
-            log.info(self, 'number electrons alpha = %d, beta = %d', \
-                     self.nelectron_alpha,
-                     self.mol.nelectron-self.nelectron_alpha)
+        log.info(self, 'number electrons alpha = %d, beta = %d', \
+                 self.nelectron_alpha,
+                 self.mol.nelectron-self.nelectron_alpha)
 
     def eig(self, fock, s):
         e_a, c_a = scipy.linalg.eigh(fock[0], s)
@@ -668,28 +650,9 @@ class UHF(SCF):
             return numpy.array(f)
         return scf_diis
 
-    @pyscf.lib.omnimethod
-    def get_hcore(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        hcore = SCF.get_hcore(mol)
-        return numpy.array((hcore,hcore))
-
     def set_occ(self, mo_energy, mo_coeff=None):
-        if self.fix_nelectron_alpha > 0:
-            n_a = self.nelectron_alpha = self.fix_nelectron_alpha
-            n_b = self.mol.nelectron - n_a
-        else:
-            ee = sorted([(e,0) for e in mo_energy[0]] \
-                        + [(e,1) for e in mo_energy[1]])
-            n_a = filter(lambda x: x[1]==0, ee[:self.mol.nelectron]).__len__()
-            n_b = self.mol.nelectron - n_a
-            if n_a != self.nelectron_alpha:
-                log.info(self, 'change num. alpha/beta electrons ' \
-                         ' %d / %d -> %d / %d', \
-                         self.nelectron_alpha,
-                         self.mol.nelectron-self.nelectron_alpha, n_a, n_b)
-                self.nelectron_alpha = n_a
+        n_a = self.nelectron_alpha
+        n_b = self.mol.nelectron - n_a
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[0][:n_a] = 1
         mo_occ[1][:n_b] = 1
@@ -723,38 +686,17 @@ class UHF(SCF):
         dm_b = numpy.dot(mo_b*occ_b, mo_b.T.conj())
         return numpy.array((dm_a,dm_b))
 
-    @pyscf.lib.omnimethod
-    def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
-        sum_mo_energy = numpy.dot(mo_energy[0], mo_occ[0]) \
-                      + numpy.dot(mo_energy[1], mo_occ[1])
-        # trace (D*V_HF)
-        coul_dup = numpy.einsum('ij,ji', dm[0], vhf[0]) \
-                 + numpy.einsum('ij,ji', dm[1], vhf[1])
-        e = sum_mo_energy - coul_dup * .5
-        return e.real, coul_dup * .5
+    def make_fock(self, h1e, vhf):
+        return numpy.array((h1e+vhf[0], h1e+vhf[1]))
 
-    def break_spin_sym(self, mol, mo_coeff):
-        # break symmetry between alpha and beta
-        nocc = mol.nelectron / 2
-        if self.break_symmetry == 1: # break spatial symmetry
-            nmo = mo_coeff[0].shape[1]
-            nvir = nmo - nocc
-            if nvir < 5:
-                for i in range(nocc-1,nmo):
-                    mo_coeff[1][:,nocc-1] += mo_coeff[0][:,i]
-                mo_coeff[1][:,nocc-1] *= 1./(nvir+1)
-            else:
-                for i in range(nocc-1,nocc+5):
-                    mo_coeff[1][:,nocc-1] += mo_coeff[0][:,i]
-                mo_coeff[1][:,nocc-1] *= 1./2
-        elif self.break_symmetry == 2:
-            mo_coeff[1][:,nocc-1] = mo_coeff[0][:,nocc]
-        else:
-            if nocc == 1:
-                mo_coeff[1][:,:nocc] = 0
-            else:
-                mo_coeff[1][:,nocc-1] = 0
-        return mo_coeff
+    @pyscf.lib.omnimethod
+    def calc_tot_elec_energy(self, h1e, vhf, dm):
+        e1 = numpy.einsum('ij,ij', h1e, dm[0]+dm[1])
+        e_coul = numpy.einsum('ij,ji', dm[0], vhf[0]) \
+               + numpy.einsum('ij,ji', dm[1], vhf[1])
+        e_coul *= .5
+        log.debug1(self, 'E_coul = %.15g', e_coul)
+        return e1+e_coul, e_coul
 
     def _init_guess_by_1e(self, mol=None):
         '''Initial guess from one electron system.'''
@@ -764,8 +706,10 @@ class UHF(SCF):
         log.info(self, 'Initial guess from one electron system.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff = self.eig(h1e, s1e)
-        mo_coeff = self.break_spin_sym(mol, mo_coeff)
+        mo_energy, mo_coeff = self.eig((h1e,h1e), s1e)
+        if self.break_symmetry:
+            mo_coeff = scf.addons.break_spin_sym(mol, mo_coeff,
+                                                 self.break_symmetry)
 
         mo_occ = self.set_occ(mo_energy, mo_coeff)
         dm = self.make_rdm1(mo_coeff, mo_occ)
@@ -814,25 +758,15 @@ class UHF(SCF):
     def scf(self):
         cput0 = (time.clock(), time.time())
 
-        if self.mol.nelectron == 1:
-            self.converged = True
-            h1e = self.get_hcore(self.mol)
-            s1e = self.get_ovlp(self.mol)
-            self.mo_energy, self.mo_coeff = SCF.eig(self, h1e[0], s1e)
-            self.mo_occ = numpy.zeros_like(self.mo_energy)
-            self.mo_occ[0] = 1
-            self.hf_energy = self.mo_energy[0]
-            log.info(self, '1 electron energy = %.15g.', mo_energy[0])
-        else:
-            self.build()
-            self.dump_flags()
-            self.converged, self.hf_energy, \
-                    self.mo_energy, self.mo_occ, self.mo_coeff \
-                    = self.scf_cycle(self.mol, self.conv_threshold)
-            if self.nelectron_alpha * 2 < self.mol.nelectron:
-                self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
-                self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
-                self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
+        self.build()
+        self.dump_flags()
+        self.converged, self.hf_energy, \
+                self.mo_energy, self.mo_occ, self.mo_coeff \
+                = self.scf_cycle(self.mol, self.conv_threshold)
+#        if self.nelectron_alpha * 2 < self.mol.nelectron:
+#            self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
+#            self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
+#            self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
         log.timer(self, 'SCF', *cput0)
         etot = self.dump_final_energy(self.hf_energy, self.converged)
@@ -885,16 +819,6 @@ class UHF(SCF):
         res = uhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao)
         mol.verbose = mol_verbose_bak
         return res
-
-
-
-def chk_scf_type(mo_coeff):
-    if mo_coeff[0].ndim == 2:
-        return 'NR-UHF'
-    elif isinstance(mo_coeff[0,0], complex):
-        return 'R-DHF'
-    else:
-        return 'NR-RHF'
 
 
 def map_rhf_to_uhf(mol, rhf):
@@ -989,6 +913,115 @@ def uhf_mulliken_pop_with_meta_lowdin_ao(mol, dm_ao):
         chg[ia] = nuc - chg[ia]
         log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
+
+
+# use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
+# keep mo_occ, mo_energy, mo_coeff as RHF structure
+class ROHF(UHF):
+    '''ROHF'''
+    def __init__(self, mol):
+        SCF.__init__(self, mol)
+        self._eri = None
+        self._mo_prev = None
+
+    def dump_flags(self):
+        SCF.dump_flags(self)
+        log.info(self, 'num. doubly occ = %d, num. singly occ = %d', \
+                 (self.mol.nelectron-self.mol.spin)/2, self.mol.spin)
+
+    def init_diis(self):
+        diis_a = diis.SCF_DIIS(self)
+        diis_a.space = self.diis_space
+        #diis_a.start_cycle = self.diis_start_cycle
+        def scf_diis(cycle, s, d, f):
+            if cycle >= self.diis_start_cycle:
+                f = diis_a.update(s, d[0]+d[1], f)
+            if cycle < self.diis_start_cycle-1:
+                f = damping(s, (d[0]+d[1])*.5, f, self.damp_factor)
+                f = level_shift(s, (d[0]+d[1])*.5, f, self.level_shift_factor)
+            else:
+                fac = self.level_shift_factor \
+                    * numpy.exp(self.diis_start_cycle-cycle-1)
+                f = level_shift(s, (d[0]+d[1])*.5, f, fac)
+            return f
+        return scf_diis
+
+    def eig(self, h, s):
+        return scipy.linalg.eigh(h, s)
+
+    def make_fock(self, h1e, vhf):
+# Roothaan's effective fock
+# http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
+#          |  closed     open    virtual
+#  ----------------------------------------
+#  closed  |    Fc        Fb       Fc
+#  open    |    Fb        Fc       Fa
+#  virtual |    Fc        Fa       Fc
+# Fc = (Fa+Fb)/2
+        fa = h1e + vhf[0]
+        fb = h1e + vhf[1]
+        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        nopen = self.mol.spin
+        nocc = ncore + nopen
+        s = self.get_ovlp(self.mol)
+        if self._mo_prev is None:
+            ftmp = (fa + fb) * .5
+            _, mo_space = scipy.linalg.eigh(ftmp, s)
+            ftmp = reduce(numpy.dot, (mo_space[:,ncore:].T, fa,
+                                      mo_space[:,ncore:]))
+            mo_space[:,ncore:] = numpy.dot(mo_space[:,ncore:],
+                                           scipy.linalg.eigh(ftmp)[1])
+        else:
+            mo_space = self._mo_prev
+        fa = reduce(numpy.dot, (mo_space.T, fa, mo_space))
+        fb = reduce(numpy.dot, (mo_space.T, fb, mo_space))
+        feff = (fa + fb) * .5
+        feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
+        feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
+        feff[nocc:,ncore:nocc] = fa[nocc:,ncore:nocc]
+        feff[ncore:nocc,nocc:] = fa[ncore:nocc,nocc:]
+        cinv = numpy.dot(mo_space.T, s)
+        return reduce(numpy.dot, (cinv.T, feff, cinv))
+
+    def set_occ(self, mo_energy, mo_coeff=None):
+        mo_occ = numpy.zeros_like(mo_energy)
+        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        nopen = self.mol.spin
+        nocc = ncore + nopen
+        mo_occ[:ncore] = 2
+        mo_occ[ncore:nocc] = 1
+        if nocc < mo_energy.size:
+            log.info(self, 'HOMO = %.12g, LUMO = %.12g,', \
+                     mo_energy[nocc-1], mo_energy[nocc])
+        else:
+            log.info(self, 'HOMO = %.12g, no LUMO,', mo_energy[nocc-1])
+        if nopen > 0:
+            for i in range(ncore, nocc):
+                log.info(self, 'singly occupied orbital energy = %.12g', \
+                         mo_energy[i])
+        log.debug(self, '  mo_energy = %s', mo_energy)
+        return mo_occ
+
+    @pyscf.lib.omnimethod
+    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_occ is None:
+            mo_occ = self.mo_occ
+        mo_a = mo_coeff[:,mo_occ>0]
+        mo_b = mo_coeff[:,mo_occ==2]
+        dm_a = numpy.dot(mo_a, mo_a.T)
+        dm_b = numpy.dot(mo_b, mo_b.T)
+        return numpy.array((dm_a, dm_b))
+
+    def _init_guess_by_1e(self, mol=None):
+        return SCF._init_guess_by_1e(self, mol)
+
+    def scf(self):
+        return SCF.scf(self)
+
+    def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
+        SCF.analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff)
 
 
 

@@ -22,6 +22,7 @@ import _vhf
 
 
 class RHF(hf.RHF):
+    '''RHF'''
     def __init__(self, mol):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
@@ -30,7 +31,7 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        log.info(self, 'RHF with symmetry adpated basis')
+        log.info(self, '%s with symmetry adpated basis', self.__doc__)
         float_irname = []
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
@@ -152,9 +153,9 @@ class RHF(hf.RHF):
             p0 = 0
             for ir in range(nirrep):
                 nso = mol.symm_orb[ir].shape[1]
-                nocc = (mo_occ[p0:p0+nso]>0).sum()
-                if nocc % 2:
-                    tot_sym ^= mol.irrep_id[ir]
+                nocc = int(mo_occ[p0:p0+nso].sum())
+                #if nocc % 2:
+                #    tot_sym ^= mol.irrep_id[ir]
                 noccs.append(nocc*2)
                 irlabels.extend([mol.irrep_name[ir]]*nso)
                 irorbcnt.extend(range(nso))
@@ -187,7 +188,7 @@ class RHF(hf.RHF):
 
 
 class UHF(hf.UHF):
-    __doc__ = 'UHF'
+    '''UHF'''
     def __init__(self, mol):
         hf.UHF.__init__(self, mol)
         # number of electrons for each irreps
@@ -197,7 +198,7 @@ class UHF(hf.UHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        log.info(self, 'UHF with symmetry adpated basis')
+        log.info(self, '%s with symmetry adpated basis', self.__doc__)
         float_irname = []
         fix_na = 0
         fix_nb = 0
@@ -218,25 +219,17 @@ class UHF(hf.UHF):
                      fix_na+fix_nb, self.irrep_nocc_alpha.items(), \
                      self.irrep_nocc_beta.items())
             if fix_na+fix_nb > self.mol.nelectron \
-               or (self.fix_nelectron_alpha > 0 and \
-                   ((fix_na>self.fix_nelectron_alpha) or \
-                    (fix_nb+self.fix_nelectron_alpha>self.mol.nelectron))):
+               or ((fix_na>self.nelectron_alpha) or \
+                   (fix_nb+self.nelectron_alpha>self.mol.nelectron)):
                 log.error(self, 'number of electrons error in irrep_nocc\n' \
                         '   alpha %s,\n   beta  %s', \
                         self.irrep_nocc_alpha.items(), \
                         self.irrep_nocc_beta.items())
                 raise ValueError('irrep_nocc')
         if float_irname:
-            if self.fix_nelectron_alpha > 0:
-                log.info(self, '%d free alpha electrons ' \
-                         '%d free beta electrons in irreps %s', \
-                         self.fix_nelectron_alpha-fix_na, \
-                         self.mol.nelectron-self.fix_nelectron_alpha-fix_nb, \
-                         ' '.join(float_irname))
-            else:
-                log.info(self, '%d free electrons in irreps %s', \
-                         self.mol.nelectron-fix_na-fix_nb,
-                         ' '.join(float_irname))
+            log.info(self, '%d free electrons in irreps %s', \
+                     self.mol.nelectron-fix_na-fix_nb,
+                     ' '.join(float_irname))
         elif fix_na+fix_nb != self.mol.nelectron:
             log.error(self, 'number of electrons error in irrep_nocc \n' \
                     '   alpha %s,\n   beta  %s', \
@@ -285,15 +278,17 @@ class UHF(hf.UHF):
                 n = self.irrep_nocc_alpha[irname]
                 mo_occ[0][p0:p0+n] = 1
                 neleca_fix += n
+                noccsa.append(n)
             else:
-                noccsa.append(-1)
+                noccsa.append(0)
                 mo_ea_left.append(mo_energy[0][p0:p0+nso])
             if irname in self.irrep_nocc_beta:
                 n = self.irrep_nocc_beta[irname]
                 mo_occ[1][p0:p0+n] = 1
                 nelecb_fix += n
+                noccsb.append(n)
             else:
-                noccsb.append(-1)
+                noccsb.append(0)
                 mo_eb_left.append(mo_energy[1][p0:p0+nso])
             p0 += nso
 
@@ -310,31 +305,14 @@ class UHF(hf.UHF):
         neleca_float = 0
         nelecb_float = 0
         if nelec_float > 0:
-            if self.fix_nelectron_alpha > 0:
-                neleca_float = self.fix_nelectron_alpha - neleca_fix
-                nelecb_float = mol.nelectron - self.fix_nelectron_alpha - nelecb_fix
-                assert(neleca_float >= 0)
-                assert(nelecb_float >= 0)
-                if len(mo_ea_left) > 0:
-                    elumoa_float = mo_ea_left[neleca_float]
-                if len(mo_eb_left) > 0:
-                    elumob_float = mo_eb_left[nelecb_float]
-            else:
-                ee = sorted(numpy.hstack((mo_ea_left,mo_eb_left)))
-                elumo_float = ee[nelec_float]
-                if len(mo_ea_left) > 0:
-                    neleca_float = int((mo_ea_left<elumo_float).sum())
-                    elumoa_float = mo_ea_left[neleca_float]
-                if len(mo_eb_left) > 0:
-                    nelecb_float = int((mo_eb_left<elumo_float).sum())
-                    elumob_float = mo_eb_left[nelecb_float]
-                if neleca_float+neleca_fix != self.nelectron_alpha:
-                    log.info(self, 'change alpha/beta occupancies ' \
-                             '%d / %d -> %d / %d', \
-                             self.nelectron_alpha,
-                             mol.nelectron-self.nelectron_alpha,
-                             neleca_float+neleca_fix, nelecb_float+nelecb_fix)
-        self.nelectron_alpha = neleca_float + neleca_fix
+            neleca_float = self.nelectron_alpha - neleca_fix
+            nelecb_float = mol.nelectron - self.nelectron_alpha - nelecb_fix
+            assert(neleca_float >= 0)
+            assert(nelecb_float >= 0)
+            if len(mo_ea_left) > 0:
+                elumoa_float = mo_ea_left[neleca_float]
+            if len(mo_eb_left) > 0:
+                elumob_float = mo_eb_left[nelecb_float]
 
 # determine how many alpha and beta occs for all irreps
         ehomoa, irhomoa = (-1e9, None)
@@ -383,13 +361,6 @@ class UHF(hf.UHF):
             dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
         return mo_occ
 
-    def break_spin_sym(self, mol, mo_coeff, inplace=True):
-        if not inplace:
-            mo_coeff = mo_coeff.copy()
-        if self.break_symmetry:
-            mo_coeff[1][:,0] = 0
-        return mo_coeff
-
     def scf(self):
         cput0 = (time.clock(), time.time())
         self.build()
@@ -397,10 +368,6 @@ class UHF(hf.UHF):
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_occ, self.mo_coeff \
                 = hf.scf_cycle(self.mol, self, self.conv_threshold)
-        if self.nelectron_alpha * 2 < self.mol.nelectron:
-            self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
-            self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
-            self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
         log.timer(self, 'SCF', *cput0)
         etot = self.dump_final_energy(self.hf_energy, self.converged)
@@ -550,6 +517,245 @@ def map_rhf_to_uhf(mol, rhf):
     uhf.conv_threshold        = rhf.conv_threshold
     uhf.max_cycle             = rhf.max_cycle
     return uhf
+
+
+class ROHF(UHF):
+    '''ROHF'''
+    def __init__(self, mol):
+        UHF.__init__(self, mol)
+        self._mo_prev = None
+
+    def build_(self, mol=None):
+        # specify alpha,beta for same irreps
+        assert(set(self.irrep_nocc_alpha.keys()) == \
+               set(self.irrep_nocc_beta.keys()))
+        na = sum(self.irrep_nocc_alpha.values())
+        nb = sum(self.irrep_nocc_beta.values())
+        nopen = self.mol.spin
+        assert(na >= nb and nopen >= na-nb)
+        return hf.SCF.build_(self, mol)
+
+    def init_diis(self):
+        diis_a = diis.SCF_DIIS(self)
+        diis_a.space = self.diis_space
+        #diis_a.start_cycle = self.diis_start_cycle
+        def scf_diis(cycle, s, d, f):
+            if cycle >= self.diis_start_cycle:
+                f = diis_a.update(s, d[0]+d[1], f)
+            if cycle < self.diis_start_cycle-1:
+                f = hf.damping(s, (d[0]+d[1])*.5, f, self.damp_factor)
+                f = hf.level_shift(s, (d[0]+d[1])*.5, f, self.level_shift_factor)
+            else:
+                fac = self.level_shift_factor \
+                    * numpy.exp(self.diis_start_cycle-cycle-1)
+                f = hf.level_shift(s, (d[0]+d[1])*.5, f, fac)
+            return f
+        return scf_diis
+
+    # same to RHF.eig
+    def eig(self, h, s):
+        nirrep = self.mol.symm_orb.__len__()
+        h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)
+        s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
+        cs = []
+        es = []
+        for ir in range(nirrep):
+            e, c = scipy.linalg.eigh(h[ir], s[ir])
+            cs.append(c)
+            es.append(e)
+        e = numpy.hstack(es)
+        c = so2ao_mo_coeff(self.mol.symm_orb, cs)
+        return e, c
+
+    def make_fock(self, h1e, vhf):
+# Roothaan's effective fock
+# http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
+#          |  closed     open    virtual
+#  ----------------------------------------
+#  closed  |    Fc        Fb       Fc
+#  open    |    Fb        Fc       Fa
+#  virtual |    Fc        Fa       Fc
+# Fc = (Fa+Fb)/2
+        fa = h1e + vhf[0]
+        fb = h1e + vhf[1]
+        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        nopen = self.mol.spin
+        nocc = ncore + nopen
+        s = self.get_ovlp(self.mol)
+
+        if self._mo_prev is None:
+            ftmp = (fa + fb) * .5
+            _, mo_space = scipy.linalg.eigh(ftmp, s)
+            ftmp = reduce(numpy.dot, (mo_space[:,ncore:].T, fa,
+                                      mo_space[:,ncore:]))
+            mo_space[:,ncore:] = numpy.dot(mo_space[:,ncore:],
+                                           scipy.linalg.eigh(ftmp)[1])
+        else:
+            mo_space = self._mo_prev
+
+        fa = reduce(numpy.dot, (mo_space.T, fa, mo_space))
+        fb = reduce(numpy.dot, (mo_space.T, fb, mo_space))
+        feff = (fa + fb) * .5
+        feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
+        feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
+        feff[nocc:,ncore:nocc] = fa[nocc:,ncore:nocc]
+        feff[ncore:nocc,nocc:] = fa[ncore:nocc,nocc:]
+        cinv = numpy.dot(mo_space.T, s)
+        return reduce(numpy.dot, (cinv.T, feff, cinv))
+
+    def set_occ(self, mo_energy, mo_coeff=None):
+        mol = self.mol
+        mo_occ = numpy.zeros_like(mo_energy)
+        nirrep = mol.symm_orb.__len__()
+        mo_e_left = []
+        ndoccs = []
+        nsoccs = []
+        neleca_fix = nelecb_fix = 0
+        p0 = 0
+        for ir in range(nirrep):
+            irname = mol.irrep_name[ir]
+            nso = mol.symm_orb[ir].shape[1]
+            if irname in self.irrep_nocc_alpha:
+                ncore = self.irrep_nocc_beta[irname]
+                nocc = self.irrep_nocc_alpha[irname]
+                mo_occ[p0:p0+ncore] = 2
+                mo_occ[p0+ncore:p0+nocc] = 1
+                neleca_fix += nocc
+                nelecb_fix += ncore
+                ndoccs.append(ncore)
+                nsoccs.append(nocc-ncore)
+            else:
+                ndoccs.append(0)
+                nsoccs.append(0)
+                mo_e_left.append(mo_energy[p0:p0+nso])
+            p0 += nso
+
+        nelec_float = mol.nelectron - neleca_fix - nelecb_fix
+        assert(nelec_float >= 0)
+        if len(mo_e_left) > 0:
+            mo_e_left = sorted(numpy.hstack(mo_e_left))
+            nopen = self.mol.spin - (neleca_fix - nelecb_fix)
+            ncore = (nelec_float - nopen)/2
+            elumoa_float = mo_e_left[ncore+nopen]
+            elumob_float = mo_e_left[ncore]
+        else:
+            elumoa_float = 1e9
+            elumob_float = 1e9
+
+        ehomo, irhomo = (-1e9, None)
+        elumo, irlumo = ( 1e9, None)
+        p0 = 0
+        for ir in range(nirrep):
+            irname = mol.irrep_name[ir]
+            nso = mol.symm_orb[ir].shape[1]
+
+            if irname in self.irrep_nocc_alpha:
+                nocc = self.irrep_nocc_alpha[irname]
+            else:
+                ncore = int((mo_energy[p0:p0+nso]<elumob_float).sum())
+                nocc = int((mo_energy[p0:p0+nso]<elumoa_float).sum())
+                mo_occ[p0:p0+ncore] = 2
+                mo_occ[p0+ncore:p0+nocc] = 1
+                ndoccs[ir] = ncore
+                nsoccs[ir] = nocc - ncore
+            if nocc > 0 and mo_energy[p0+nocc-1] > ehomo:
+                ehomo, irhomo = mo_energy[p0+nocc-1], irname
+            if nocc < nso and mo_energy[p0+nocc] < elumo:
+                elumo, irlumo = mo_energy[p0+nocc], irname
+            p0 += nso
+
+        if self.verbose >= param.VERBOSE_DEBUG:
+            log.debug(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+                      irhomo, ehomo, irlumo, elumo)
+            log.debug(self, 'doubly occ irrep_nocc = %s', ndoccs)
+            log.debug(self, 'singly occ irrep_nocc = %s', nsoccs)
+            dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
+        return mo_occ
+
+    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_occ is None:
+            mo_occ = self.mo_occ
+        mo_a = mo_coeff[:,mo_occ>0]
+        mo_b = mo_coeff[:,mo_occ==2]
+        dm_a = numpy.dot(mo_a, mo_a.T)
+        dm_b = numpy.dot(mo_b, mo_b.T)
+        return numpy.array((dm_a, dm_b))
+
+    def scf(self):
+        cput0 = (time.clock(), time.time())
+        self.build()
+        self.dump_flags()
+        self.converged, self.hf_energy, \
+                self.mo_energy, self.mo_occ, self.mo_coeff \
+                = hf.scf_cycle(self.mol, self, self.conv_threshold)
+
+        log.timer(self, 'SCF', *cput0)
+        etot = self.dump_final_energy(self.hf_energy, self.converged)
+        self.analyze_scf_result(self.mol, self.mo_energy,
+                                self.mo_occ, self.mo_coeff)
+
+        # sort MOs wrt orbital energies, it should be done last.
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
+        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort], \
+                                       self.mo_energy[self.mo_occ==0][v_sort]))
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0][:,o_sort], \
+                                      self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
+        nocc = len(o_sort)
+        self.mo_occ[:nocc] = self.mo_occ[self.mo_occ>0][o_sort]
+        self.mo_occ[nocc:] = 0
+        return etot
+
+    def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
+        nirrep = mol.symm_orb.__len__()
+        if self.verbose >= param.VERBOSE_INFO:
+            tot_sym = 0
+            noccs = []
+            irlabels = []
+            irorbcnt = []
+            ndoccs = []
+            nsoccs = []
+            p0 = 0
+            for ir in range(nirrep):
+                nso = mol.symm_orb[ir].shape[1]
+                ndocc = (mo_occ[p0:p0+nso]==2).sum()
+                nsocc = int(mo_occ[p0:p0+nso].sum()) - ndocc*2
+                if nsocc % 2:
+                    tot_sym ^= mol.irrep_id[ir]
+                ndoccs.append(ndocc)
+                nsoccs.append(nsocc)
+                irlabels.extend([mol.irrep_name[ir]]*nso)
+                irorbcnt.extend(range(nso))
+                p0 += nso
+            log.info(self, 'total symmetry = %s', \
+                     pyscf.symm.irrep_name(mol.groupname, tot_sym))
+            log.info(self, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
+                     *mol.irrep_name)
+            log.info(self, 'doubly occ                 ' + (' %4d'*nirrep), \
+                     *ndoccs)
+            log.info(self, 'singly occ                 ' + (' %4d'*nirrep), \
+                     *nsoccs)
+            log.info(self, '**** MO energy ****')
+            idx = numpy.argsort(mo_energy)
+            for k, j in enumerate(idx):
+                log.info(self, 'MO #%d (%s #%d), energy= %.15g occ= %g', \
+                         k+1, irlabels[j], irorbcnt[j]+1,
+                         mo_energy[j], mo_occ[j])
+
+        if self.verbose >= param.VERBOSE_DEBUG:
+            import pyscf.tools.dump_mat as dump_mat
+            label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
+            molabel = []
+            for k, j in enumerate(idx):
+                molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
+                                                 irorbcnt[j]+1))
+            log.debug(self, ' ** MO coefficients **')
+            dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
+
+        dm = self.make_rdm1(mo_coeff, mo_occ)
+        self.mulliken_pop(mol, dm, self.get_ovlp())
 
 
 

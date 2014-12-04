@@ -208,11 +208,6 @@ class UHF(hf.SCF):
         log.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
         log.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
 
-    def calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ):
-        e_tmp = hf.SCF.calc_tot_elec_energy(self, vhf, dm, mo_energy, mo_occ)
-        return e_tmp
-
-
     def get_coulomb_vj_vk(self, mol, dm, coulomb_allow='SSSS', hermi=1):
         if coulomb_allow.upper() == 'LLLL':
             log.info(self, 'Coulomb integral: (LL|LL)')
