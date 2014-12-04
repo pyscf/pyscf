@@ -19,9 +19,9 @@ def RHF(mol, *args):
             return hf.RHF(mol, *args)
     else:
         if mol.spin > 0:
-            return hf_symm.RHF(mol, *args)
-        else:
             return hf_symm.ROHF(mol, *args)
+        else:
+            return hf_symm.RHF(mol, *args)
 
 def UHF(mol, *args):
     if not mol.symmetry or mol.groupname is 'C1' or mol.nelectron == 1:

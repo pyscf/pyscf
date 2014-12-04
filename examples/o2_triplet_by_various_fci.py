@@ -16,13 +16,12 @@ mol.atom = [
 
 mol.basis = {'O': 'cc-pvdz',
              'C': 'cc-pvdz',}
-mol.charge = 2
+mol.spin = 2
 mol.build()
 
 m = scf.RHF(mol)
 print('HF     = %.15g' % m.scf())
 
-mol.nelectron += 2
 mc = mcscf.CASSCF(mol, m, 4, (4,2))
 mc.fcisolver = fci.direct_spin1
 label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
@@ -46,7 +45,6 @@ mol.stdout.write('%s\n' % str(fci.addons.large_ci(mc.ci, 4, (4,2))))
 
 mc.stdout.write('** Triplet,  using MS0 ci solver **\n')
 
-mol.charge = 0
 mol.build(False, False)
 m = scf.RHF(mol)
 print('HF     = %.15g' % m.scf())

@@ -84,8 +84,9 @@ class RHF(hf.RHF):
                 n = self.irrep_nocc[irname]
                 mo_occ[p0:p0+n/2] = 2
                 nelec_fix += n
+                noccs.append(n)
             else:
-                noccs.append(-1)
+                noccs.append(0)
                 mo_e_left.append(mo_energy[p0:p0+nso])
             p0 += nso
         nelec_float = mol.nelectron - nelec_fix
@@ -156,7 +157,7 @@ class RHF(hf.RHF):
                 nocc = int(mo_occ[p0:p0+nso].sum())
                 #if nocc % 2:
                 #    tot_sym ^= mol.irrep_id[ir]
-                noccs.append(nocc*2)
+                noccs.append(nocc)
                 irlabels.extend([mol.irrep_name[ir]]*nso)
                 irorbcnt.extend(range(nso))
                 p0 += nso
@@ -164,7 +165,7 @@ class RHF(hf.RHF):
                      pyscf.symm.irrep_name(mol.groupname, tot_sym))
             log.info(self, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
                      *mol.irrep_name)
-            log.info(self, '                           ' + (' %4d'*nirrep), \
+            log.info(self, 'double occ                 ' + (' %4d'*nirrep), \
                      *noccs)
             log.info(self, '**** MO energy ****')
             idx = numpy.argsort(mo_energy)
@@ -667,8 +668,8 @@ class ROHF(UHF):
         if self.verbose >= param.VERBOSE_DEBUG:
             log.debug(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
                       irhomo, ehomo, irlumo, elumo)
-            log.debug(self, 'doubly occ irrep_nocc = %s', ndoccs)
-            log.debug(self, 'singly occ irrep_nocc = %s', nsoccs)
+            log.debug(self, 'double occ irrep_nocc = %s', ndoccs)
+            log.debug(self, 'single occ irrep_nocc = %s', nsoccs)
             dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
         return mo_occ
 
@@ -733,9 +734,9 @@ class ROHF(UHF):
                      pyscf.symm.irrep_name(mol.groupname, tot_sym))
             log.info(self, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
                      *mol.irrep_name)
-            log.info(self, 'doubly occ                 ' + (' %4d'*nirrep), \
+            log.info(self, 'double occ                 ' + (' %4d'*nirrep), \
                      *ndoccs)
-            log.info(self, 'singly occ                 ' + (' %4d'*nirrep), \
+            log.info(self, 'single occ                 ' + (' %4d'*nirrep), \
                      *nsoccs)
             log.info(self, '**** MO energy ****')
             idx = numpy.argsort(mo_energy)
