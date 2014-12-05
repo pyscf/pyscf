@@ -15,6 +15,8 @@ MAPSPDF = {'S': 0,
            'I': 6,
            'J': 7}
 
+# parse the basis text which is in NWChem format, return an internal basis
+# format which can be assigned to gto.mole.basis
 def parse_str(string):
     bastxt = [x for x in string.split('\n') \
               if x.strip() and 'END' not in x and '#BASIS SET' not in x]

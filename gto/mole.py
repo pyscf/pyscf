@@ -159,6 +159,7 @@ mol.build(
         self.groupname = 'C1'
         self.nelectron = 0
         self.symm_orb = None
+        self.irrep_id = None
         self.irrep_name = None
         self._built = False
         self._keys = set(self.__dict__.keys() + ['_keys'])
@@ -294,6 +295,11 @@ mol.build(
             #    self.groupname, inp_atoms = pyscf.symm.detect_symm(self.atom)
             self.groupname, origin, axes = pyscf.symm.detect_symm(self.atom)
             self.atom = self.format_atom(self.atom, origin, axes)
+
+        if isinstance(self.basis, str):
+            # specify basis for whole molecule
+            uniq_atoms = set([a[0] for a in self.atom])
+            self.basis = dict([(a, self.basis) for a in uniq_atoms])
         self.basis = self.format_basis(self.basis)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
@@ -319,9 +325,9 @@ mol.build(
         if dump_input and self.verbose >= log.NOTICE:
             self.dump_input()
 
-        log.debug1(self, 'arg.atm = %s', self._atm)
-        log.debug1(self, 'arg.bas = %s', self._bas)
-        log.debug1(self, 'arg.env = %s', self._env)
+        log.debug2(self, 'arg.atm = %s', self._atm)
+        log.debug2(self, 'arg.bas = %s', self._bas)
+        log.debug2(self, 'arg.env = %s', self._env)
         return self._atm, self._bas, self._env
 
     @classmethod

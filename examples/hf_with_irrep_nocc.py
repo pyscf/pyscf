@@ -1,11 +1,6 @@
 #!/usr/bin/env python
-import numpy
 from pyscf import scf
 from pyscf import gto
-from pyscf import mcscf
-from pyscf import fci
-from pyscf.tools import dump_mat
-
 
 mol = gto.Mole()
 mol.verbose = 5

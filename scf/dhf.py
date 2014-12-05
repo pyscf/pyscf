@@ -60,25 +60,6 @@ class UHF(hf.SCF):
         self.opt_ssss = None
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
-    def _init_guess_by_atom(self, mol=None):
-        '''Initial guess from occupancy-averaged atomic NR-RHF'''
-        if mol is None:
-            mol = self.mol
-        ehf, dm0 = hf.init_guess_by_atom(self, mol)
-
-        s0 = mol.intor_symmetric('cint1e_ovlp_sph')
-        ua, ub = symm.cg.real2spinor_whole(mol)
-        s = numpy.dot(ua.T.conj(), s0) + numpy.dot(ub.T.conj(), s0) # (*)
-        proj = numpy.linalg.solve(mol.intor_symmetric('cint1e_ovlp'), s)
-
-        n2c = ua.shape[1]
-        n4c = n2c * 2
-        dm = numpy.zeros((n4c,n4c), dtype=complex)
-        # *.5 because alpha and beta are summed in Eq. (*)
-        dm_ll = reduce(numpy.dot, (proj, dm0*.5, proj.T.conj()))
-        dm[:n2c,:n2c] = (dm_ll + time_reversal_matrix(mol, dm_ll)) * .5
-        return ehf, dm
-
     def _init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
         from pyscf import symm
@@ -99,22 +80,28 @@ class UHF(hf.SCF):
         hf.SCF.dump_flags(self)
         log.info(self, 'OOB = %d', self.oob)
 
-    def init_diis(self):
-        diis_a = diis.SCF_DIIS(self)
-        diis_a.space = self.diis_space
-        #diis_a.start_cycle = self.diis_start_cycle
-        def scf_diis(cycle, s, d, f):
-            if cycle >= self.diis_start_cycle:
-                f = diis_a.update(s, d, f)
-            if cycle < self.diis_start_cycle-1:
-                f = hf.damping(s, d, f, self.damp_factor)
-                f = hf.level_shift(s, d, f, self.level_shift_factor)
-            else:
-                fac = self.level_shift_factor \
-                        * numpy.exp(self.diis_start_cycle-cycle-1)
-                f = hf.level_shift(s, d, f, fac)
-            return f
-        return scf_diis
+    def eig(self, h, s):
+        e, c = scipy.linalg.eigh(h, s)
+        return e, c
+        #try:
+        #    import pyscf.lib.jacobi
+        #    return pyscf.lib.jacobi.zgeeigen(h, s)[:2]
+        #except ImportError:
+        #    e, c = scipy.linalg.eigh(h, s)
+        #    return e, c
+
+    def make_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+        f = h1e + vhf
+        if 0 <= cycle < self.diis_start_cycle-1:
+            f = hf.damping(s1e, dm, f, self.damp_factor)
+            f = hf.level_shift(s1e, dm, f, self.level_shift_factor)
+        elif 0 <= cycle:
+            fac = self.level_shift_factor \
+                    * numpy.exp(self.diis_start_cycle-cycle-1)
+            f = hf.level_shift(s1e, dm, f, fac)
+        if adiis is not None and cycle >= self.diis_start_cycle:
+            f = adiis.update(s1e, dm, f)
+        return f
 
     @pyscf.lib.omnimethod
     def get_hcore(self, mol):
