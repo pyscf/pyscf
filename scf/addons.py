@@ -5,7 +5,7 @@ import pyscf.gto.mole as mole
 import pyscf.gto.moleintor as moleintor
 import pyscf.lib.logger as log
 import pyscf.symm
-import scf
+import hf
 import chkfile
 
 def frac_occ(mf, tol=1e-3):
@@ -52,7 +52,7 @@ def dynamic_occ(mf, tol=1e-3):
 
 def float_occ(uhf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
-    assert(isinstance(uhf, scf.UHF))
+    assert(isinstance(uhf, hf.UHF))
     def set_occ(mo_energy, mo_coeff=None):
         mol = uhf.mol
         ee = sorted([(e,0) for e in mo_energy[0]] \
@@ -65,7 +65,7 @@ def float_occ(uhf):
                      uhf.nelectron_alpha,
                      mol.nelectron-uhf.nelectron_alpha, n_a, n_b)
             uhf.nelectron_alpha = n_a
-        return scf.hf.UHF.set_occ(uhf, mo_energy, mo_coeff)
+        return hf.UHF.set_occ(uhf, mo_energy, mo_coeff)
     return set_occ
 
 def symm_allow_occ(mf, tol=1e-3):
@@ -171,7 +171,6 @@ def project_mo_r2r(mol1, mo1, mol2):
                          numpy.dot(ps, mo1[n2c:])))
 
 def init_guess_by_chkfile(mf, chkfile_name, projection=True):
-    import hf
     import dhf
     mol = mf.mol
     chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
