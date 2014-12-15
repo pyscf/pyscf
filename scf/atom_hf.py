@@ -13,8 +13,8 @@ import hf
 
 class AtomSphericAverageRHF(hf.RHF):
     def __init__(self, mol):
-        hf.SCF.__init__(self, mol)
         self._eri = None
+        hf.SCF.__init__(self, mol)
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)

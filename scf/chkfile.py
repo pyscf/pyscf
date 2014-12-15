@@ -5,7 +5,7 @@
 
 import numpy
 import h5py
-from pyscf import gto
+import pyscf.gto
 
 def load_chkfile_key(chkfile, key):
     return load(chkfile, key)
@@ -31,7 +31,7 @@ def dump(chkfile, key, value):
 ###########################################
 def load_scf(chkfile):
     fh5 = h5py.File(chkfile, 'r')
-    mol = gto.Mole()
+    mol = pyscf.gto.Mole()
     mol.verbose = 0
     mol.output = '/dev/null'
     moldic = eval(fh5['mol'].value)
@@ -59,25 +59,3 @@ def dump_scf(mol, chkfile, hf_energy, mo_energy, mo_occ, mo_coeff):
     fh5['scf/mo_coeff' ] = mo_coeff
     fh5.close()
 
-
-#################################
-def _pickle2hdf5(chkfile, ext='.h5'):
-    import cPickle as pickle
-    rec = pickle.load(open(chkfile, 'r'))
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = '/dev/null'
-    mol.atom     = rec['mol']['atom']
-    mol.basis    = rec['mol']['basis']
-    mol.etb      = rec['mol']['etb']
-    mol.build(False, False)
-
-    fh5 = h5py.File(chkfile+ext, 'w')
-    fh5['mol'] = format(mol.pack())
-    for k1, v1 in rec.items():
-        if k1 not in ['mol']:
-            if isinstance(v1, dict):
-                for k2, v2 in v1.items():
-                    fh5['/'.join((k1,k2))] = v2
-            else:
-                fh5[k1] = v1

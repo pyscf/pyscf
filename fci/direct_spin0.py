@@ -16,11 +16,14 @@
 import os
 import ctypes
 import numpy
+import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
 import davidson
 import cistring
 import rdm
+import direct_ms0
+import direct_spin1
 
 _loaderpath = os.path.dirname(pyscf.lib.__file__)
 libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
@@ -45,10 +48,10 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 # the input fcivec should be symmetrized
-def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
-    g2e = pyscf.ao2mo.restore(4, g2e, norb)
-    if not g2e.flags.c_contiguous:
-        g2e = g2e.copy()
+def contract_2e(eri, fcivec, norb, nelec, link_index=None, bufsize=1024):
+    eri = pyscf.ao2mo.restore(4, eri, norb)
+    if not eri.flags.c_contiguous:
+        eri = eri.copy()
     if link_index is None:
         if isinstance(nelec, int):
             neleca = nelec/2
@@ -59,7 +62,7 @@ def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
     na,nlink,_ = link_index.shape
     ci1 = numpy.empty((na,na))
 
-    libfci.FCIcontract_2e_spin0(g2e.ctypes.data_as(ctypes.c_void_p),
+    libfci.FCIcontract_2e_spin0(eri.ctypes.data_as(ctypes.c_void_p),
                                 fcivec.ctypes.data_as(ctypes.c_void_p),
                                 ci1.ctypes.data_as(ctypes.c_void_p),
                                 ctypes.c_int(norb), ctypes.c_int(na),
@@ -68,81 +71,10 @@ def contract_2e(g2e, fcivec, norb, nelec, link_index=None, bufsize=1024):
                                 ctypes.c_int(bufsize))
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
-def make_hdiag(h1e, g2e, norb, nelec):
-    if isinstance(nelec, int):
-        neleca = nelec/2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    g2e = pyscf.ao2mo.restore(1, g2e, norb)
-    link_index = cistring.gen_linkstr_index(range(norb), neleca)
-    na = link_index.shape[0]
-    occslist = link_index[:,:neleca,0].copy('C')
-    hdiag = numpy.empty((na,na))
-    jdiag = numpy.einsum('iijj->ij',g2e).copy('C')
-    kdiag = numpy.einsum('ijji->ij',g2e).copy('C')
-    libfci.FCImake_hdiag(hdiag.ctypes.data_as(ctypes.c_void_p),
-                         h1e.ctypes.data_as(ctypes.c_void_p),
-                         jdiag.ctypes.data_as(ctypes.c_void_p),
-                         kdiag.ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(norb), ctypes.c_int(na),
-                         ctypes.c_int(neleca),
-                         occslist.ctypes.data_as(ctypes.c_void_p))
-# symmetrize hdiag to reduce numerical error
-    hdiag = pyscf.lib.transpose_sum(hdiag, inplace=True) * .5
-    return hdiag.ravel()
+def absorb_h1e(*args, **kwargs):
+    return direct_spin1.absorb_h1e(*args, **kwargs)
 
-def absorb_h1e(h1e, g2e, norb, nelec):
-    if not isinstance(nelec, int):
-        nelec = sum(nelec)
-    h2e = pyscf.ao2mo.restore(1, g2e, norb).copy()
-    f1e = h1e - numpy.einsum('...,jiik->jk', .5, h2e)
-    f1e = f1e * (1./nelec)
-    for k in range(norb):
-        h2e[k,k,:,:] += f1e
-        h2e[:,:,k,k] += f1e
-    return pyscf.ao2mo.restore(4, h2e, norb)
-
-
-# pspace Hamiltonian matrix, CPL, 169, 463
-def pspace_o2(h1e, g2e, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, int):
-        neleca = nelec/2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    g2e = pyscf.ao2mo.restore(1, g2e, norb)
-    na = cistring.num_strings(norb, neleca)
-    addr = numpy.argsort(hdiag)[:np]
-# symmetrize addra/addrb
-    addra = addr / na
-    addrb = addr % na
-    intersect = set(addra).intersection(set(addrb))
-    addr = numpy.array([addr[i] for i in range(len(addr)) \
-                        if addra[i] in intersect and addrb[i] in intersect])
-    addra = addr / na
-    addrb = addr % na
-    strdic = dict([(i, cistring.addr2str(norb,neleca,i)) for i in intersect])
-    stra = numpy.array([strdic[ia] for ia in addra], dtype=numpy.long)
-    strb = numpy.array([strdic[ib] for ib in addrb], dtype=numpy.long)
-    np = len(addr)
-    h0 = numpy.zeros((np,np))
-    libfci.FCIpspace_h0tril(h0.ctypes.data_as(ctypes.c_void_p),
-                            h1e.ctypes.data_as(ctypes.c_void_p),
-                            g2e.ctypes.data_as(ctypes.c_void_p),
-                            stra.ctypes.data_as(ctypes.c_void_p),
-                            strb.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(norb), ctypes.c_int(np))
-
-    for i in range(np):
-        h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
-    return addr, h0
-def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
-    return pspace_o2(h1e, g2e, norb, nelec, hdiag, np)
-
-
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, tol=1e-8, fciRestart=False):
+def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, **kwargs):
     if isinstance(nelec, int):
         neleca = nelec/2
     else:
@@ -150,11 +82,11 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, tol=1e-8, fciRestart=Fals
         assert(neleca == nelecb)
     link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na = link_index.shape[0]
-    h2e = absorb_h1e(h1e, g2e, norb, nelec) * .5
-    hdiag = make_hdiag(h1e, g2e, norb, nelec)
+    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
+    hdiag = direct_ms0.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = pspace(h1e, g2e, norb, nelec, hdiag)
-    pw, pv = numpy.linalg.eigh(h0)
+    addr, h0 = direct_ms0.pspace(h1e, eri, norb, nelec, hdiag)
+    pw, pv = scipy.linalg.eigh(h0)
     if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]
@@ -179,7 +111,6 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.1, tol=1e-8, fciRestart=Fals
         return x1
     #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
 
-    h2e = pyscf.ao2mo.restore(4, h2e, norb)
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec, link_index)
         return hc.ravel()
@@ -213,7 +144,6 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
                          norb, nelec, link_index)
     return (rdm1, rdm1)
 
-# dm_pq,rs = <|p^+ q r^+ s|>
 def make_rdm12(fcivec, norb, nelec, link_index=None):
     return rdm.make_rdm12('FCImake_rdm12_spin0', fcivec, fcivec,
                           norb, nelec, link_index)
@@ -242,10 +172,42 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
     return rdm.make_rdm12('FCItrans_rdm12_spin0', cibra, ciket,
                           norb, nelec, link_index)
 
-def energy(h1e, g2e, fcivec, norb, nelec, link_index=None):
-    h2e = absorb_h1e(h1e, g2e, norb, nelec) * .5
+def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
+    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec) * .5
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
+
+
+class FCISolver(direct_ms0.FCISolver):
+
+    def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
+        return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
+
+    def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+        self.mol.check_sanity(self)
+        e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0)
+        return e, pyscf.lib.transpose_sum(ci, inplace=True) * .5
+
+    def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        return make_rdm1s(fcivec, norb, nelec, link_index)
+
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        return make_rdm1(fcivec, norb, nelec, link_index)
+
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        return make_rdm12(fcivec, norb, nelec, link_index)
+
+    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+        return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
+
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
+
+    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+        return trans_rdm12(cibra, ciket, norb, nelec, link_index)
 
 
 
@@ -275,15 +237,12 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
 
+    cis = FCISolver(mol)
     norb = m.mo_coeff.shape[1]
     nelec = mol.nelectron
     h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-    e, c = kernel(h1e, g2e, norb, nelec)
+    eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
+    e, c = cis.kernel(h1e, eri, norb, nelec)
     print(e - -15.9977886375)
     print('t',time.clock())
 
-    numpy.random.seed(1)
-    na = cistring.num_strings(norb, nelec/2)
-    fcivec = numpy.random.random((na,na))
-    fcivec = fcivec + fcivec.T

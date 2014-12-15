@@ -8,16 +8,15 @@ from pyscf import scf
 from pyscf.scf import dhf
 
 mol = gto.Mole()
-mol.verbose = 0
-mol.output = None#"out_h2o"
-mol.atom.extend([
+mol.build(
+    verbose = 0,
+    atom = [
     ["O" , (0. , 0.     , 0.)],
     [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-
-mol.basis = {"H": '6-31g',
+    [1   , (0. , 0.757  , 0.587)] ],
+    basis = {"H": '6-31g',
              "O": '6-31g',}
-mol.build()
+)
 
 
 class KnowValues(unittest.TestCase):
@@ -25,6 +24,23 @@ class KnowValues(unittest.TestCase):
         rhf = scf.RHF(mol)
         rhf.conv_threshold = 1e-11
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
+
+    def test_nr_rohf(self):
+        mol = gto.Mole()
+        mol.build(
+            verbose = 0,
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ],
+            basis = {"H": '6-31g',
+                     "O": '6-31g',},
+            charge = 1,
+            spin = 1,
+        )
+        mf = scf.hf.ROHF(mol)
+        mf.conv_threshold = 1e-11
+        self.assertAlmostEqual(mf.scf(), -75.578396379589748, 9)
 
     def test_nr_uhf(self):
         uhf = scf.UHF(mol)
@@ -90,6 +106,24 @@ class KnowValues(unittest.TestCase):
         rhf = scf.hf.RHF(mol1)
         rhf.conv_threshold = 1e-11
         self.assertAlmostEqual(rhf.scf(), -75.98394849812, 9)
+
+    def test_nr_rohf_symm(self):
+        mol = gto.Mole()
+        mol.build(
+            verbose = 0,
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ],
+            basis = {"H": '6-31g',
+                     "O": '6-31g',},
+            charge = 1,
+            spin = 1,
+            symmetry = True,
+        )
+        mf = scf.hf_symm.ROHF(mol)
+        mf.conv_threshold = 1e-11
+        self.assertAlmostEqual(mf.scf(), -75.578396379589748, 9)
 
     def test_nr_uhf_symm(self):
         mol1 = mol.copy()

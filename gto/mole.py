@@ -8,6 +8,7 @@ import os, sys
 import gc
 import time
 import math
+import copy
 import itertools
 import numpy
 import pyscf.lib.parameters as param
@@ -112,7 +113,16 @@ PTR_ENV_START   = 20
 
 
 class Mole(object):
-    ''' moleinfo for contracted GTO '''
+    '''Define molecular system
+mol = Mole()
+mol.build(
+    verbose,
+    output,
+    max_memory,
+    charge,
+    spin,  # 2j
+)
+    '''
     def __init__(self):
         self.verbose = log.ERROR
         self.output = None
@@ -120,7 +130,7 @@ class Mole(object):
 
         self.light_speed = param.LIGHTSPEED
         self.charge = 0
-        self.spin = 0
+        self.spin = 0 # 2j
         self.symmetry = False
 
 # atom, etb, basis, nucmod, mass, grids to save inputs
@@ -146,19 +156,24 @@ class Mole(object):
         self._env = [0] * PTR_ENV_START
 
         self.stdout = sys.stdout
-        self.pgname = 'C1'
+        self.groupname = 'C1'
         self.nelectron = 0
         self.symm_orb = None
+        self.irrep_id = None
         self.irrep_name = None
         self._built = False
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
     def check_sanity(self, obj):
-        if self.verbose > log.QUITE:
-            keysub = set(obj.__dict__.keys()) - obj._keys
+        if self.verbose > log.QUIET:
+            keysub = set(obj.__dict__.keys()) - set(obj._keys)
             if keysub:
-                print('%s has no attributes %s' %
-                      (str(obj.__class__), ' '.join(keysub)))
+                log.warn(self, 'overwrite keys %s of %s',
+                         ' '.join(keysub), str(obj.__class__))
+                keysub = keysub - set(dir(obj))
+                if keysub:
+                    sys.stderr.write('%s has no attributes %s\n' %
+                                     (str(obj.__class__), ' '.join(keysub)))
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -168,7 +183,6 @@ class Mole(object):
 #        newmol = ...
 # do not use __copy__ to aovid iteratively call copy.copy
     def copy(self):
-        import copy
         newmol = copy.copy(self)
         newmol._atm = copy.deepcopy(self._atm)
         newmol._bas = copy.deepcopy(self._bas)
@@ -227,10 +241,10 @@ class Mole(object):
         if self.output is not None:
             if os.path.isfile(self.output):
                 #os.remove(self.output)
-                if self.verbose > log.QUITE:
+                if self.verbose > log.QUIET:
                     print('overwrite output file: %s' % self.output)
             else:
-                if self.verbose > log.QUITE:
+                if self.verbose > log.QUIET:
                     print('output file: %s' % self.output)
 
 
@@ -272,15 +286,20 @@ class Mole(object):
         if not self.symmetry:
             self.atom = self.format_atom(self.atom)
         else:
-            from pyscf import symm
-            #if self.symmetry in symm.param.POINTGROUP
-            #    self.pgname = self.symmetry
-            #    #todo: symm.check_given_symm(self.symmetric, self.atom)
+            import pyscf.symm
+            #if self.symmetry in pyscf.symm.param.POINTGROUP
+            #    self.groupname = self.symmetry
+            #    #todo: pyscf.symm.check_given_symm(self.symmetric, self.atom)
             #    pass
             #else:
-            #    self.pgname, inp_atoms = symm.detect_symm(self.atom)
-            self.pgname, origin, axes = symm.detect_symm(self.atom)
+            #    self.groupname, inp_atoms = pyscf.symm.detect_symm(self.atom)
+            self.groupname, origin, axes = pyscf.symm.detect_symm(self.atom)
             self.atom = self.format_atom(self.atom, origin, axes)
+
+        if isinstance(self.basis, str):
+            # specify basis for whole molecule
+            uniq_atoms = set([a[0] for a in self.atom])
+            self.basis = dict([(a, self.basis) for a in uniq_atoms])
         self.basis = self.format_basis(self.basis)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
@@ -290,24 +309,25 @@ class Mole(object):
         self.natm = self._atm.__len__()
         self.nbas = self._bas.__len__()
         self.nelectron = self.tot_electrons()
+        assert((self.nelectron+self.spin) % 2 == 0)
 
         if self.symmetry:
-            from pyscf import symm
-            eql_atoms = symm.symm_identical_atoms(self.pgname, self.atom)
-            symm_orb = symm.symm_adapted_basis(self.pgname, eql_atoms,\
+            import pyscf.symm
+            eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
+            symm_orb = pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,\
                                                self.atom, self.basis)
             self.irrep_id = [ir for ir in range(len(symm_orb)) \
                              if symm_orb[ir].size > 0]
-            self.irrep_name = [symm.irrep_name(self.pgname,ir) \
+            self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir) \
                                for ir in self.irrep_id]
             self.symm_orb = [c for c in symm_orb if c.size > 0]
 
         if dump_input and self.verbose >= log.NOTICE:
             self.dump_input()
 
-        log.debug1(self, 'arg.atm = %s', self._atm)
-        log.debug1(self, 'arg.bas = %s', self._bas)
-        log.debug1(self, 'arg.env = %s', self._env)
+        log.debug2(self, 'arg.atm = %s', self._atm)
+        log.debug2(self, 'arg.bas = %s', self._bas)
+        log.debug2(self, 'arg.env = %s', self._env)
         return self._atm, self._bas, self._env
 
     @classmethod
@@ -459,6 +479,8 @@ class Mole(object):
         self.stdout.write('[INPUT] light speed = %s\n' % self.light_speed)
         self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
+        self.stdout.write('[INPUT] charge = %d\n' % self.charge)
+        self.stdout.write('[INPUT] spin (2S) = %d\n' % self.spin)
 
         for nuc,(rad,ang) in self.grids.items():
             self.stdout.write('[INPUT] %s (%d, %d)\n' % (nuc, rad, ang))
@@ -508,7 +530,7 @@ class Mole(object):
 
         log.info(self, 'nuclear repulsion = %.15g', self.nuclear_repulsion())
         if self.symmetry:
-            log.info(self, 'point group symmetry = %s', self.pgname)
+            log.info(self, 'point group symmetry = %s', self.groupname)
             for ir in range(self.symm_orb.__len__()):
                 log.info(self, 'num. orbitals of %s = %d', \
                          self.irrep_name[ir], self.symm_orb[ir].shape[1])

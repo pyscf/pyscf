@@ -14,8 +14,6 @@ BLOCK_DIM = 192
 HERMITIAN = 1
 ANTIHERMI = 2
 
-def trace_ab(a, b):
-    return (numpy.array(a,copy=False).T*numpy.array(b,copy=False)).sum()
 
 # 2d -> 1d
 def pack_tril(mat):
@@ -220,6 +218,8 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        c.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_double(alpha), ctypes.c_double(beta))
     return c
+
+
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))

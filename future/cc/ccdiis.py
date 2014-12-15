@@ -8,7 +8,7 @@ class DIIS(diis.DIIS):
         self.push_vec(x)
 
         nd = self.get_num_diis_vec()
-        if nd < self.diis_start_cycle:
+        if nd < self.start_cycle:
             return x
 
         H = numpy.ones((nd+1,nd+1), x.dtype)

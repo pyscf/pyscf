@@ -10,7 +10,9 @@
 #include "vhf/fblas.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
-#define CSUMTHR         1e-14
+#define CSUMTHR         1e-28
+// ~ 1MB
+#define L2SIZE          120000
 
 
 /* 
@@ -35,24 +37,18 @@ static double prog_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 ia   = tab[j*4+0];
                 str1 = tab[j*4+2];
                 sign = tab[j*4+3];
-                pci = ci0 + str1*nstrb;
                 pt1 = t1 + ia;
+                pci = ci0 + str1*nstrb;
                 if (sign > 0) {
-                        for (k = 0; k < fillcnt-1; k+=2) {
+                        for (k = 0; k < fillcnt; k++) {
                                 pt1[k*nnorb] += pci[k];
-                                pt1[k*nnorb+nnorb] += pci[k+1];
-                                csum += fabs(pci[k]) + fabs(pci[k+1]);
+                                csum += pci[k] * pci[k];
                         }
                 } else {
-                        for (k = 0; k < fillcnt-1; k+=2) {
+                        for (k = 0; k < fillcnt; k++) {
                                 pt1[k*nnorb] -= pci[k];
-                                pt1[k*nnorb+nnorb] -= pci[k+1];
-                                csum += fabs(pci[k]) + fabs(pci[k+1]);
+                                csum += pci[k] * pci[k];
                         }
-                }
-                if (k < fillcnt) {
-                        pt1[k*nnorb] += sign * pci[k];
-                        csum += fabs(pci[k]);
                 }
         }
         return csum;
@@ -64,30 +60,59 @@ static double prog_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
  * fillcnt control the number of beta strings to be calculated.
  * for spin=0 system, only lower triangle of the intermediate ci vector
  * needs to be calculated
- */
 static double prog_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                         int norb, int nstrb, int nlinkb, int *link_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const int *tab;
-        double *pt1, *pci;
+        const int *tab = link_indexb;
+        double *pci = ci0 + stra_id*nstrb;
         double csum = 0;
 
-        pci = ci0 + stra_id*nstrb;
         for (str0 = 0; str0 < fillcnt; str0++) {
-                tab = link_indexb + str0 * nlinkb * 4;
-                pt1 = t1 + str0*nnorb;
                 for (j = 0; j < nlinkb; j++) {
                         ia   = tab[j*4+0];
                         str1 = tab[j*4+2];
                         sign = tab[j*4+3];
-                        pt1[ia] += sign * pci[str1];
-                        csum += fabs(pci[str1]);
+                        t1[ia] += sign * pci[str1];
+                        csum += pci[str1] * pci[str1];
                 }
+                t1 += nnorb;
+                tab += nlinkb * 4;
         }
         return csum;
 }
+ */
+
+/*
+ * prog0_b_t1 is the same to prog_b_t1, except that prog0_b_t1
+ * initializes t1 with 0, to reduce data transfer between CPU
+ * cache and memory
+ */
+static double prog0_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+                         int norb, int nstrb, int nlinkb, int *link_indexb)
+{
+        const int nnorb = norb * (norb+1)/2;
+        int j, ia, str0, str1, sign;
+        const int *tab = link_indexb;
+        double *pci = ci0 + stra_id*nstrb;
+        double csum = 0;
+
+        for (str0 = 0; str0 < fillcnt; str0++) {
+                memset(t1, 0, sizeof(double)*nnorb);
+                for (j = 0; j < nlinkb; j++) {
+                        ia   = tab[j*4+0];
+                        str1 = tab[j*4+2];
+                        sign = tab[j*4+3];
+                        t1[ia] += sign * pci[str1];
+                        csum += pci[str1] * pci[str1];
+                }
+                t1 += nnorb;
+                tab += nlinkb * 4;
+        }
+        return csum;
+}
+
 
 /*
  * spread t1 into ci1
@@ -123,19 +148,18 @@ static void spread_b_t1(double *ci1, double *t1, int fillcnt, int stra_id,
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const int *tab;
-        double *pt1, *pci;
+        const int *tab = link_indexb;
+        double *pci = ci1 + stra_id * nstrb;
 
-        pci = ci1 + stra_id * nstrb;
         for (str0 = 0; str0 < fillcnt; str0++) {
-                tab = link_indexb + str0 * nlinkb * 4;
-                pt1 = t1 + str0 * nnorb;
                 for (j = 0; j < nlinkb; j++) {
                         ia   = tab[j*4+0];
                         str1 = tab[j*4+2];
                         sign = tab[j*4+3];
-                        pci[str1] += sign * pt1[ia];
+                        pci[str1] += sign * t1[ia];
                 }
+                t1 += nnorb;
+                tab += nlinkb * 4;
         }
 }
 
@@ -216,9 +240,10 @@ void FCIcontract_1e_ms0(double *f1e_tril, double *ci0, double *ci1,
                          link_index, link_index);
 }
 
+
 static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
-                           int fillcnt, int stra_id, int norb, int na, int nb,
-                           int nlinka, int nlinkb,
+                           int fillcnt, int stra_id, int strb_id,
+                           int norb, int na, int nb, int nlinka, int nlinkb,
                            int *link_indexa, int *link_indexb)
 {
         const char TRANS_T = 'T';
@@ -229,15 +254,17 @@ static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
         double *t1 = malloc(sizeof(double) * nnorb*fillcnt);
         double csum;
 
-        memset(t1, 0, sizeof(double)*nnorb*fillcnt);
-        csum = prog_a_t1(ci0, t1, fillcnt, stra_id, norb, nb, nlinka, link_indexa)
-             + prog_b_t1(ci0, t1, fillcnt, stra_id, norb, nb, nlinkb, link_indexb);
+        csum = prog0_b_t1(ci0, t1, fillcnt, stra_id, norb, nb,
+                          nlinkb, link_indexb+strb_id*nlinkb*4)
+             + prog_a_t1(ci0+strb_id, t1, fillcnt, stra_id, norb, nb,
+                         nlinka, link_indexa);
 
         if (csum > CSUMTHR) {
                 dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
-                       &D1, eri, &nnorb, t1, &nnorb, &D0, tbuf, &nnorb);
-                spread_b_t1(ci1, tbuf, fillcnt, stra_id, norb, nb, nlinkb,
-                            link_indexb);
+                       &D1, eri, &nnorb, t1, &nnorb,
+                       &D0, tbuf, &nnorb);
+                spread_b_t1(ci1, tbuf, fillcnt, stra_id, norb, nb,
+                            nlinkb, link_indexb+strb_id*nlinkb*4);
         } else {
                 memset(tbuf, 0, sizeof(double)*nnorb*fillcnt);
         }
@@ -260,51 +287,52 @@ static int _square_pace(int n, int base, int minimal)
  * link_index[str0][ith-linking-string] ==
  *     [tril(creation_op,annihilation_op),0,linking-string-id,sign]
  * buf_size in MB
+ * FCIcontract_2e_spin0 only compute half of the contraction, due to the
+ * symmetry between alpha and beta spin.  The right contracted ci vector
+ * is (ci1+ci1.T)
  */
 void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                           int norb, int na, int nlink, int *link_index,
                           int buf_size)
 {
         const int nnorb = norb * (norb+1)/2;
-        int nthreads = 1;
-#if defined HAVE_OPENMP
-#pragma omp parallel shared(nthreads)
-        nthreads = omp_get_num_threads();
-#endif
+        const int blksize = MIN(na, (L2SIZE/nnorb)&0xffffff0);
 
-        int strk0, strk1, strk;
-        long blk_base = MAX(sqrt((((long)buf_size)<<20)/8/nnorb*2), nthreads);
+        int strk0, strk1, strk, ib, blen;
+        int blk_base = 256;//(((long)buf_size)<<20)/(blksize*nnorb*8);
         blk_base = MIN(blk_base, na);
-        double *buf = malloc(sizeof(double)*blk_base*(blk_base+1)*nnorb/2);
+        double *buf = malloc(sizeof(double)*blk_base*blksize*nnorb);
         double *pbuf;
-        long off;
 
         memset(ci1, 0, sizeof(double)*na*na);
         for (strk0 = 0, strk1 = na; strk0 < na; strk0 = strk1) {
-                strk1 = _square_pace(strk0, blk_base, nthreads);
+                strk1 = _square_pace(strk0, blk_base, 1);
                 strk1 = MIN(strk1, na);
+                for (ib = 0; ib < strk1; ib += blksize) {
+                        blen = MIN(blksize, strk1-ib);
 #pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nlink, link_index, \
-               nthreads, strk0, strk1, blk_base, buf), \
-        private(strk, off, pbuf)
-#pragma omp for schedule(guided, 1)
-                for (strk = strk0; strk < strk1; strk++) {
-                        //pbuf = buf; ; pbuf += nnorb*(strk+1);
-                        off = ((long)(strk-strk0))*(strk+strk0+1)/2;
-                        pbuf = buf + off*nnorb;
-                        ctr_rhf2e_kern(eri, ci0, ci1, pbuf,
-                                       strk+1, strk, norb, na, na, nlink, nlink,
-                                       link_index, link_index);
-                }
+                shared(eri, ci0, ci1, norb, na, nlink, link_index, \
+                       strk0, strk1, blk_base, buf, ib, blen), \
+                private(strk, pbuf)
+#pragma omp for schedule(dynamic, 1)
+/* strk starts from MAX(strk0, ib), because [0:ib,0:ib] have been evaluated */
+                        for (strk = MAX(strk0, ib); strk < strk1; strk++) {
+                                pbuf = buf + (strk-strk0)*blen*nnorb;
+                                ctr_rhf2e_kern(eri, ci0, ci1, pbuf,
+                                               MIN(blksize, strk+1-ib), strk, ib,
+                                               norb, na, na, nlink, nlink,
+                                               link_index, link_index);
+                        }
 
 /* Note: the fillcnt diffs in ctr_rhf2e_kern and spread_a_t1.
  * ctr_rhf2e_kern needs strk+1 beta-strings, spread_a_t1 takes strk
  * beta-strings */
-                for (strk = strk0; strk < strk1; strk++) {
-                        off = ((long)(strk-strk0))*(strk+strk0+1)/2;
-                        pbuf = buf + off*nnorb;
-                        spread_a_t1(ci1, pbuf, strk, strk, norb, na, nlink,
-                                    link_index);
+                        for (strk = MAX(strk0, ib); strk < strk1; strk++) {
+                                pbuf = buf + (strk-strk0)*blen*nnorb;
+                                spread_a_t1(ci1+ib, pbuf,
+                                            MIN(blksize,strk-ib), strk, norb, na,
+                                            nlink, link_index);
+                        }
                 }
         }
         free(buf);
@@ -316,40 +344,39 @@ void FCIcontract_rhf2e_spin1(double *eri, double *ci0, double *ci1,
                              int *link_indexa, int *link_indexb, int buf_size)
 {
         const int nnorb = norb * (norb+1)/2;
-        int len_blk = 1;
-#if defined HAVE_OPENMP
-#pragma omp parallel shared(len_blk)
-        len_blk = omp_get_num_threads();
-#endif
+        const int blksize = MIN(nb, (L2SIZE/nnorb)&0xffffff0);
 
-        int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/nb, len_blk);
-        len_blk = (int)(max_buflen/len_blk) * len_blk;
-        len_blk = MIN(len_blk, na);
-        double *buf = (double *)malloc(sizeof(double) * len_blk*nnorb*nb);
+        int ic, strk1, strk0, strk, ib, blen;
+        int blk_base = 256;//(((long)buf_size)<<20)/(blksize*nnorb*8);
+        blk_base = MIN(blk_base, na);
+        double *buf = (double *)malloc(sizeof(double) * blk_base*nnorb*blksize);
         double *pbuf;
 
-        int ic, ic1, strk0, strk;
-
         memset(ci1, 0, sizeof(double)*na*nb);
-        for (strk0 = 0; strk0 < na; strk0 += len_blk) {
-                ic1 = MIN(na-strk0, len_blk);
+        for (strk0 = 0; strk0 < na; strk0 += blk_base) {
+                strk1 = MIN(na-strk0, blk_base);
+                for (ib = 0; ib < nb; ib += blksize) {
+                        blen = MIN(blksize, nb-ib);
 #pragma omp parallel default(none) \
         shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
-               link_indexa, link_indexb, buf, strk0, ic1), \
-        private(strk, ic)
+               link_indexa, link_indexb, buf, strk0, strk1, ib, blen), \
+        private(strk, ic, pbuf)
 #pragma omp for schedule(static)
-                for (ic = 0; ic < ic1; ic++) {
-                        strk = strk0 + ic;
-                        ctr_rhf2e_kern(eri, ci0, ci1, buf+ic*nnorb*nb,
-                                       nb, strk, norb, na, nb, nlinka, nlinkb,
-                                       link_indexa, link_indexb);
-                }
+                        for (ic = 0; ic < strk1; ic++) {
+                                strk = strk0 + ic;
+                                pbuf = buf + ic * blen * nnorb;
+                                ctr_rhf2e_kern(eri, ci0, ci1, pbuf,
+                                               blen, strk, ib,
+                                               norb, na, nb, nlinka, nlinkb,
+                                               link_indexa, link_indexb);
+                        }
 // spread alpha-strings in serial mode
-                for (ic = 0; ic < ic1; ic++) {
-                        strk = strk0 + ic;
-                        pbuf = buf + ic * nnorb * nb;
-                        spread_a_t1(ci1, pbuf, nb, strk, norb, nb, nlinka,
-                                    link_indexa);
+                        for (ic = 0; ic < strk1; ic++) {
+                                strk = strk0 + ic;
+                                pbuf = buf + ic * blen * nnorb;
+                                spread_a_t1(ci1+ib, pbuf, blen, strk, norb, nb,
+                                            nlinka, link_indexa);
+                        }
                 }
         }
         free(buf);
@@ -369,8 +396,8 @@ void FCIcontract_2e_ms0(double *eri, double *ci0, double *ci1,
  */
 static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
                            double *ci0, double *ci1, double *tbuf,
-                           int stra_id, int norb, int na, int nb,
-                           int nlinka, int nlinkb,
+                           int fillcnt, int stra_id, int strb_id,
+                           int norb, int na, int nb, int nlinka, int nlinkb,
                            int *link_indexa, int *link_indexb)
 {
         const char TRANS_T = 'T';
@@ -378,29 +405,31 @@ static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * (norb+1)/2;
-        double *t1a = malloc(sizeof(double) * nnorb*nb*3);
-        double *t1b = t1a + nnorb*nb;
-        double *tmp = t1b + nnorb*nb;
+        double *t1a = malloc(sizeof(double) * nnorb*fillcnt*3);
+        double *t1b = t1a + nnorb*fillcnt;
+        double *tmp = t1b + nnorb*fillcnt;
         double csum;
 
-        memset(t1a, 0, sizeof(double)*nnorb*nb*2);
-        csum = prog_a_t1(ci0, t1a, nb, stra_id, norb, nb, nlinka, link_indexa)
-             + prog_b_t1(ci0, t1b, nb, stra_id, norb, nb, nlinkb, link_indexb);
+        memset(t1a, 0, sizeof(double)*nnorb*fillcnt);
+        csum = prog0_b_t1(ci0, t1b, fillcnt, stra_id, norb, nb,
+                          nlinkb, link_indexb+strb_id*nlinkb*4)
+             + prog_a_t1(ci0+strb_id, t1a, fillcnt, stra_id, norb, nb,
+                         nlinka, link_indexa);
 
         if (csum > CSUMTHR) {
-                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nb, &nnorb,
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
                        &D1, eri_aa, &nnorb, t1a, &nnorb, &D0, tbuf, &nnorb);
-                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nb, &nnorb,
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
                        &D1, eri_ab, &nnorb, t1b, &nnorb, &D1, tbuf, &nnorb);
 
-                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &nb, &nnorb,
+                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &fillcnt, &nnorb,
                        &D1, eri_ab, &nnorb, t1a, &nnorb, &D0, tmp, &nnorb);
-                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nb, &nnorb,
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
                        &D1, eri_bb, &nnorb, t1b, &nnorb, &D1, tmp, &nnorb);
-                spread_b_t1(ci1, tmp, nb, stra_id, norb, nb, nlinkb,
-                            link_indexb);
+                spread_b_t1(ci1, tmp, fillcnt, stra_id, norb, nb,
+                            nlinkb, link_indexb+strb_id*nlinkb*4);
         } else {
-                memset(tbuf, 0, sizeof(double)*nnorb*nb);
+                memset(tbuf, 0, sizeof(double)*nnorb*fillcnt);
         }
         free(t1a);
 }
@@ -411,41 +440,39 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                        int *link_indexa, int *link_indexb, int buf_size)
 {
         const int nnorb = norb * (norb+1)/2;
-        int len_blk = 1;
-#if defined HAVE_OPENMP
-#pragma omp parallel shared(len_blk)
-        len_blk = omp_get_num_threads();
-#endif
+        const int blksize = MIN(na, (L2SIZE/nnorb)&0xffffff0);
 
-        int max_buflen = MAX((((long)buf_size)<<20)/8/nnorb/nb, len_blk);
-        len_blk = (int)(max_buflen/len_blk) * len_blk;
-        len_blk = MIN(len_blk, na);
-        double *buf = (double *)malloc(sizeof(double) * len_blk*nnorb*nb);
+        int ic, strk1, strk0, strk, ib, blen;
+        int blk_base = 256;//(((long)buf_size)<<20)/(blksize*nnorb*8);
+        blk_base = MIN(blk_base, na);
+        double *buf = (double *)malloc(sizeof(double) * blk_base*nnorb*blksize);
         double *pbuf;
 
-        int ic, ic1, strk0, strk;
-
         memset(ci1, 0, sizeof(double)*na*nb);
-        for (strk0 = 0; strk0 < na; strk0 += len_blk) {
-                ic1 = MIN(na-strk0, len_blk);
+        for (strk0 = 0; strk0 < na; strk0 += blk_base) {
+                strk1 = MIN(na-strk0, blk_base);
+                for (ib = 0; ib < nb; ib += blksize) {
+                        blen = MIN(blksize, nb-ib);
 #pragma omp parallel default(none) \
         shared(eri_aa, eri_ab, eri_bb, ci0, ci1, norb, na, nb, nlinka, nlinkb,\
-               link_indexa, link_indexb, buf, strk0, ic1), \
-        private(strk, ic)
+               link_indexa, link_indexb, buf, strk0, strk1, ib, blen), \
+        private(strk, ic, pbuf)
 #pragma omp for schedule(static)
-                for (ic = 0; ic < ic1; ic++) {
-                        strk = strk0 + ic;
-                        ctr_uhf2e_kern(eri_aa, eri_ab, eri_bb,
-                                       ci0, ci1, buf+ic*nnorb*nb,
-                                       strk, norb, na, nb, nlinka, nlinkb,
-                                       link_indexa, link_indexb);
-                }
+                        for (ic = 0; ic < strk1; ic++) {
+                                strk = strk0 + ic;
+                                pbuf = buf + ic * blen * nnorb;
+                                ctr_uhf2e_kern(eri_aa, eri_ab, eri_bb, ci0, ci1, pbuf,
+                                               blen, strk, ib,
+                                               norb, na, nb, nlinka, nlinkb,
+                                               link_indexa, link_indexb);
+                        }
 // spread alpha-strings in serial mode
-                for (ic = 0; ic < ic1; ic++) {
-                        strk = strk0 + ic;
-                        pbuf = buf + ic * nnorb * nb;
-                        spread_a_t1(ci1, pbuf, nb, strk, norb, nb, nlinka,
-                                    link_indexa);
+                        for (ic = 0; ic < strk1; ic++) {
+                                strk = strk0 + ic;
+                                pbuf = buf + ic * blen * nnorb;
+                                spread_a_t1(ci1+ib, pbuf, blen, strk, norb, nb,
+                                            nlinka, link_indexa);
+                        }
                 }
         }
         free(buf);
@@ -742,3 +769,163 @@ void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
 {
         FCIpspace_h0tril_uhf(h0, h1e, h1e, g2e, g2e, g2e, stra, strb, norb, np);
 }
+
+
+
+/***********************************************************************
+ *
+ * With symmetry
+ *
+ * Note the ordering in eri and the index in link_index
+ * eri is a tril matrix, it should be reordered wrt the irrep of the
+ * direct product E_i^j.  The 2D array eri(ij,kl) is a diagonal block
+ * matrix.  Each block is associated with an irrep.
+ * link_index[str_id,pair_id,0] which is the index of pair_id, should be
+ * reordered wrt the irreps accordingly
+ *
+ * dimirrep stores the number of occurence for each irrep
+ *
+ ***********************************************************************/
+static void ctr_rhf2esym_kern(double *eri, double *ci0, double *ci1, double *tbuf,
+                              int fillcnt, int stra_id, int strb_id,
+                              int norb, int na, int nb, int nlinka, int nlinkb,
+                              int *link_indexa, int *link_indexb,
+                              int *dimirrep, int totirrep)
+{
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        const int nnorb = norb * (norb+1)/2;
+        const int blksize = L2SIZE/nnorb & 0xffffff0;
+        int ir, p0, ib, blen;
+        double *t1 = malloc(sizeof(double) * nnorb*blksize);
+        double csum;
+
+        for (ib = 0; ib < fillcnt; ib+=blksize) {
+                blen = MIN(blksize, fillcnt-ib);
+                csum = prog0_b_t1(ci0, t1, blen, stra_id, norb, nb,
+                                  nlinkb, link_indexb+ib*nlinkb*4)
+                     + prog_a_t1(ci0+ib, t1, blen, stra_id, norb, nb,
+                                 nlinka, link_indexa);
+
+                if (csum > CSUMTHR) {
+                        for (ir = 0, p0 = 0; ir < totirrep; ir++) {
+                                dgemm_(&TRANS_T, &TRANS_N,
+                                       dimirrep+ir, &blen, dimirrep+ir,
+                                       &D1, eri+p0*nnorb+p0, &nnorb, t1+p0, &nnorb,
+                                       &D0, tbuf+ib*nnorb+p0, &nnorb);
+                                p0 += dimirrep[ir];
+                        }
+                        spread_b_t1(ci1, tbuf+ib*nnorb, blen, stra_id, norb, nb,
+                                    nlinkb, link_indexb+ib*nlinkb*4);
+                } else {
+                        memset(tbuf+ib*nnorb, 0, sizeof(double)*nnorb*blen);
+                }
+        }
+        free(t1);
+}
+
+void FCIcontract_rhf2e_spin1_symm(double *eri, double *ci0, double *ci1,
+                                  int norb, int na, int nb, int nlinka, int nlinkb,
+                                  int *link_indexa, int *link_indexb,
+                                  int *dimirrep, int totirrep, int buf_size)
+{
+        const int nnorb = norb * (norb+1)/2;
+        const int blksize = MIN(na, (L2SIZE/nnorb)&0xffffff0);
+
+        int ic, strk1, strk0, strk, ib, blen;
+        int blk_base = 256;//(((long)buf_size)<<20)/(blksize*nnorb*8);
+        blk_base = MIN(blk_base, na);
+        double *buf = (double *)malloc(sizeof(double) * blk_base*nnorb*blksize);
+        double *pbuf;
+
+
+        memset(ci1, 0, sizeof(double)*na*nb);
+        for (strk0 = 0; strk0 < na; strk0 += blk_base) {
+                strk1 = MIN(na-strk0, blk_base);
+                for (ib = 0; ib < nb; ib += blksize) {
+                        blen = MIN(blksize, nb-ib);
+#pragma omp parallel default(none) \
+                shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
+                       link_indexa, link_indexb, dimirrep, totirrep, \
+                       buf, strk0, strk1, ib, blen), \
+                private(strk, ic, pbuf)
+#pragma omp for schedule(static)
+                        for (ic = 0; ic < strk1; ic++) {
+                                strk = strk0 + ic;
+                                pbuf = buf + ic * blen * nnorb;
+                                ctr_rhf2esym_kern(eri, ci0, ci1, pbuf,
+                                                  blen, strk, ib,
+                                                  norb, na, nb, nlinka, nlinkb,
+                                                  link_indexa, link_indexb,
+                                                  dimirrep, totirrep);
+                        }
+// spread alpha-strings in serial mode
+                        for (ic = 0; ic < strk1; ic++) {
+                                strk = strk0 + ic;
+                                pbuf = buf + ic * blen * nnorb;
+                                spread_a_t1(ci1+ib, pbuf, blen, strk, norb, nb,
+                                            nlinka, link_indexa);
+                        }
+                }
+        }
+        free(buf);
+}
+
+void FCIcontract_2e_ms0_symm(double *eri, double *ci0, double *ci1,
+                             int norb, int na, int nlink, int *link_index,
+                             int *dimirrep, int totirrep, int buf_size)
+{
+        FCIcontract_rhf2e_spin1_symm(eri, ci0, ci1, norb, na, na, nlink, nlink,
+                                     link_index, link_index, dimirrep, totirrep,
+                                     buf_size);
+}
+
+void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
+                               int norb, int na, int nlink, int *link_index,
+                               int *dimirrep, int totirrep, int buf_size)
+{
+        const int nnorb = norb * (norb+1)/2;
+        const int blksize = MIN(na, (L2SIZE/nnorb)&0xffffff0);
+
+        int strk0, strk1, strk, ib, blen;
+        int blk_base = 256;//(((long)buf_size)<<20)/(blksize*nnorb*8);
+        blk_base = MIN(blk_base, na);
+        double *buf = malloc(sizeof(double)*blk_base*blksize*nnorb);
+        double *pbuf;
+
+        memset(ci1, 0, sizeof(double)*na*na);
+        for (strk0 = 0, strk1 = na; strk0 < na; strk0 = strk1) {
+                strk1 = _square_pace(strk0, blk_base, 1);
+                strk1 = MIN(strk1, na);
+                for (ib = 0; ib < strk1; ib += blksize) {
+                        blen = MIN(blksize, strk1-ib);
+#pragma omp parallel default(none) \
+        shared(eri, ci0, ci1, norb, na, nlink, link_index, \
+               dimirrep, totirrep, strk0, strk1, blk_base, buf, ib, blen), \
+        private(strk, pbuf)
+#pragma omp for schedule(dynamic, 1)
+                        for (strk = MAX(strk0, ib); strk < strk1; strk++) {
+                                pbuf = buf + (strk-strk0)*blen*nnorb;
+                                ctr_rhf2esym_kern(eri, ci0, ci1, pbuf,
+                                                  MIN(blksize, strk+1-ib), strk, ib,
+                                                  norb, na, na, nlink, nlink,
+                                                  link_index, link_index,
+                                                  dimirrep, totirrep);
+                }
+
+/* Note: the fillcnt diffs in ctr_rhf2e_kern and spread_a_t1.
+ * ctr_rhf2e_kern needs strk+1 beta-strings, spread_a_t1 takes strk
+ * beta-strings */
+                        for (strk = MAX(strk0, ib); strk < strk1; strk++) {
+                                pbuf = buf + (strk-strk0)*blen*nnorb;
+                                spread_a_t1(ci1+ib, pbuf,
+                                            MIN(blksize,strk-ib), strk, norb, na,
+                                            nlink, link_index);
+                        }
+                }
+        }
+        free(buf);
+}
+

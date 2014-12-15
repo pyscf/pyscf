@@ -29,6 +29,7 @@ mf.conv_threshold = 1e-8
 e = mf.scf()
 print('E = %.15g, ref -230.776765415' % e)
 
+# Given four MOs, compute the MO-integrals
 import tempfile
 import numpy
 import h5py

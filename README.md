@@ -52,6 +52,13 @@ Installation
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
     set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
+* Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
+  interfaces avaialbe in pyscf.
+      Block (https://github.com/sanshar/Block)
+      CheMPS2 (https://github.com/SebWouters/CheMPS2)
+  After installing the DMRG solver, create a file future/dmrgscf/settings.py
+  to store the path where the DMRG solver was installed.
+
 
 Adding new features
 -------------------
@@ -117,3 +124,6 @@ Version 0.7 (2014-11-12):
 Version 0.8 (2014-12-?):
   * Support OS X
   * MCSCF for triplet
+  * Add symmetry support for MCSCF
+  * Add 2-step DMRGSCF, using Block and ChemPS2 as FCI solver
+  * Add ROHF

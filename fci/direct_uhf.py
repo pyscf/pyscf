@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 # FCI solver for arbitary number of alpha and beta electrons with UHF MO
 # integrals.  This solver can be used to compute doublet, triplet,...  though
@@ -18,6 +18,7 @@
 import os
 import ctypes
 import numpy
+import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
 import davidson
@@ -64,12 +65,12 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     return ci1
 
 # the input fcivec should be symmetrized
-def contract_2e(g2e, fcivec, norb, nelec,
+def contract_2e(eri, fcivec, norb, nelec,
                 link_index=None, bufsize=1024):
     neleca, nelecb = nelec
-    g2e_aa = pyscf.ao2mo.restore(4, g2e[0], norb)
-    g2e_ab = pyscf.ao2mo.restore(4, g2e[1], norb)
-    g2e_bb = pyscf.ao2mo.restore(4, g2e[2], norb)
+    g2e_aa = pyscf.ao2mo.restore(4, eri[0], norb)
+    g2e_ab = pyscf.ao2mo.restore(4, eri[1], norb)
+    g2e_bb = pyscf.ao2mo.restore(4, eri[2], norb)
     if not g2e_aa.flags.c_contiguous:
         g2e_aa = g2e_aa.copy()
     if not g2e_ab.flags.c_contiguous:
@@ -101,12 +102,12 @@ def contract_2e(g2e, fcivec, norb, nelec,
                              ctypes.c_int(bufsize))
     return ci1
 
-def make_hdiag(h1e, g2e, norb, nelec):
+def make_hdiag(h1e, eri, norb, nelec):
     neleca, nelecb = nelec
     h1e_a, h1e_b = h1e
-    g2e_aa = pyscf.ao2mo.restore(1, g2e[0], norb)
-    g2e_ab = pyscf.ao2mo.restore(1, g2e[1], norb)
-    g2e_bb = pyscf.ao2mo.restore(1, g2e[2], norb)
+    g2e_aa = pyscf.ao2mo.restore(1, eri[0], norb)
+    g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb)
+    g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb)
 
     link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
@@ -136,11 +137,11 @@ def make_hdiag(h1e, g2e, norb, nelec):
                              occslistb.ctypes.data_as(ctypes.c_void_p))
     return numpy.array(hdiag)
 
-def absorb_h1e(h1e, g2e, norb, nelec):
+def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     h1e_a, h1e_b = h1e
-    h2e_aa = pyscf.ao2mo.restore(1, g2e[0], norb).copy()
-    h2e_ab = pyscf.ao2mo.restore(1, g2e[1], norb).copy()
-    h2e_bb = pyscf.ao2mo.restore(1, g2e[2], norb).copy()
+    h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
+    h2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
+    h2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
     f1e_a = h1e_a - numpy.einsum('...,jiik->jk', .5, h2e_aa)
     f1e_b = h1e_b - numpy.einsum('...,jiik->jk', .5, h2e_bb)
     f1e_a *= 1./(nelec[0]+nelec[1])
@@ -152,42 +153,15 @@ def absorb_h1e(h1e, g2e, norb, nelec):
         h2e_ab[k,k,:,:] += f1e_b
         h2e_bb[:,:,k,k] += f1e_b
         h2e_bb[k,k,:,:] += f1e_b
-    return (pyscf.ao2mo.restore(4, h2e_aa, norb),
-            pyscf.ao2mo.restore(4, h2e_ab, norb),
-            pyscf.ao2mo.restore(4, h2e_bb, norb))
+    return (pyscf.ao2mo.restore(4, h2e_aa, norb) * fac,
+            pyscf.ao2mo.restore(4, h2e_ab, norb) * fac,
+            pyscf.ao2mo.restore(4, h2e_bb, norb) * fac)
 
-def pspace_o0(h1e, g2e, norb, nelec, hdiag, np=400):
+def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     neleca, nelecb = nelec
-    h2e_aa, h2e_ab, h2e_bb = absorb_h1e(h1e, g2e, norb, nelec)
-    h2e = (h2e_aa*.5, h2e_ab*.5, h2e_bb*.5)
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    na, nlinka = link_indexa.shape[:2]
-    nb, nlinkb = link_indexb.shape[:2]
-    addr = numpy.argsort(hdiag)[:np]
-    addra = addr / nb
-    addrb = addr % nb
-    stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
-                       dtype=numpy.long)
-    strb = numpy.array([cistring.addr2str(norb,nelecb,ib) for ib in addrb],
-                       dtype=numpy.long)
-    np = len(addr)
-    h0 = numpy.zeros((np,np))
-
-    c0 = numpy.zeros(na*nb)
-    for i in range(np):
-        c0[addr[i]] = 1
-        hc = contract_2e(h2e, c0, norb, nelec, (link_indexa,link_indexb)).ravel()
-        c0[addr[i]] = 0
-        for j in range(i):
-            h0[i,j] = h0[j,i] = hc[addr[j]]
-        h0[i,i] = hdiag[addr[i]]
-    return addr, h0
-def pspace_o1(h1e, g2e, norb, nelec, hdiag, np=400):
-    neleca, nelecb = nelec
-    g2e_aa = pyscf.ao2mo.restore(1, g2e[0], norb).copy()
-    g2e_ab = pyscf.ao2mo.restore(1, g2e[1], norb).copy()
-    g2e_bb = pyscf.ao2mo.restore(1, g2e[2], norb).copy()
+    g2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
+    g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
+    g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     na, nlinka = link_indexa.shape[:2]
@@ -215,22 +189,20 @@ def pspace_o1(h1e, g2e, norb, nelec, hdiag, np=400):
         h0[i,i] = hdiag[addr[i]]
     h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
-def pspace(h1e, g2e, norb, nelec, hdiag, np=400):
-    return pspace_o1(h1e, g2e, norb, nelec, hdiag, np)
 
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.001, fciRestart=False):
+def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
     neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
 
-    hdiag = make_hdiag(h1e, g2e, norb, nelec)
-    addr, h0 = pspace(h1e, g2e, norb, nelec, hdiag)
-    pw, pv = numpy.linalg.eigh(h0)
+    hdiag = make_hdiag(h1e, eri, norb, nelec)
+    addr, h0 = pspace(h1e, eri, norb, nelec, hdiag)
+    pw, pv = scipy.linalg.eigh(h0)
     if len(addr) == na*nb:
         ci0 = numpy.empty((na*nb))
         ci0[addr] = pv[:,0]
@@ -253,8 +225,7 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.001, fciRestart=False):
 # pspace (h0-e0)^{-1} cause diverging?
         #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
         return x1
-    h2e_aa, h2e_ab, h2e_bb = absorb_h1e(h1e, g2e, norb, nelec)
-    h2e = (h2e_aa*.5, h2e_ab*.5, h2e_bb*.5)
+    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
 
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
@@ -269,10 +240,9 @@ def kernel(h1e, g2e, norb, nelec, ci0=None, eshift=.001, fciRestart=False):
     e, c = davidson.dsyev(hop, ci0, precond, tol=1e-8, lindep=1e-8)
     return e, c.reshape(na,nb)
 
-def energy(h1e, g2e, fcivec, norb, nelec, link_index=None):
-    h2e_aa, h2e_ab, h2e_bb = absorb_h1e(h1e, g2e, norb, nelec)
-    ci1 = contract_2e((h2e_aa*.5, h2e_ab*.5, h2e_bb*.5), fcivec, norb,
-                      nelec, link_index)
+def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
+    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
+    ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
 # dm_pq = <|p^+ q|>
@@ -295,6 +265,32 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None):
     return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index)
+
+
+###############################################################
+# uhf-integral direct-CI driver
+###############################################################
+
+class FCISolver(direct_spin1.FCISolver):
+
+    def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
+        return absorb_h1e(h1e, eri, norb, nelec, fac)
+
+    def make_hdiag(self, h1e, eri, norb, nelec):
+        return make_hdiag(h1e, eri, norb, nelec)
+
+    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+        return pspace(h1e, eri, norb, nelec, hdiag, np)
+
+    def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
+        return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
+
+    def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+        self.mol.check_sanity(self)
+        return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0)
 
 
 if __name__ == '__main__':
@@ -323,6 +319,7 @@ if __name__ == '__main__':
     m = scf.UHF(mol)
     ehf = m.scf()
 
+    cis = FCISolver(mol)
     norb = m.mo_energy[0].size
     nea = (mol.nelectron+1) / 2
     neb = (mol.nelectron-1) / 2
@@ -338,12 +335,12 @@ if __name__ == '__main__':
     g2e_bb = ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False)
     g2e_bb = g2e_bb.reshape(norb,norb,norb,norb)
     h1e = (h1e_a, h1e_b)
-    g2e = (g2e_aa, g2e_ab, g2e_bb)
+    eri = (g2e_aa, g2e_ab, g2e_bb)
     na = cistring.num_strings(norb, nea)
     nb = cistring.num_strings(norb, neb)
     numpy.random.seed(15)
     fcivec = numpy.random.random((na,nb))
 
-    e = kernel(h1e, g2e, norb, nelec)[0]
+    e = kernel(h1e, eri, norb, nelec)[0]
     print(e, e - -8.65159903476)
 

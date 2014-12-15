@@ -9,7 +9,7 @@ for k,v in vxc.XC_CODES.items():
 
 
 def RKS(mol, *args):
-    if not mol.symmetry or mol.pgname is 'C1':
+    if not mol.symmetry or mol.groupname is 'C1':
         return rks.RKS(mol, *args)
     else:
         raise ValueError('symmetry is not implemented')

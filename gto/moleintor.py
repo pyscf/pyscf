@@ -75,3 +75,70 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, dim3=1, hermi=0):
                 lib.hermi_triu(mat[i], hermi=hermi)
         return mat
 
+def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
+    atm = numpy.array(atm, dtype=numpy.int32)
+    bas = numpy.array(bas, dtype=numpy.int32)
+    env = numpy.array(env, numpy.double)
+    c_bas = bas.ctypes.data_as(ctypes.c_void_p)
+    natm = ctypes.c_int(atm.shape[0])
+    nbas = ctypes.c_int(bas.shape[0])
+    if '_cart' in intor_name:
+        dtype = numpy.double
+        num_cgto_of = lambda basid: _cint.CINTcgto_cart(ctypes.c_int(basid),
+                                                        c_bas)
+    elif '_sph' in intor_name:
+        dtype = numpy.double
+        num_cgto_of = lambda basid: _cint.CINTcgto_spheric(ctypes.c_int(basid),
+                                                           c_bas)
+    else:
+        dtype = numpy.complex
+        num_cgto_of = lambda basid: _cint.CINTcgto_spinor(ctypes.c_int(basid),
+                                                          c_bas)
+    if '2e' in intor_name:
+        assert(len(shls) == 4)
+        di, dj, dk, dl = map(num_cgto_of, shls)
+        buf = numpy.empty((di,dj,dk,dl,dim3), dtype, order='F')
+        fintor = getattr(_cint, intor_name)
+        nullopt = ctypes.c_void_p()
+        fintor(buf.ctypes.data_as(ctypes.c_void_p),
+               (ctypes.c_int*4)(*shls),
+               atm.ctypes.data_as(ctypes.c_void_p), natm,
+               bas.ctypes.data_as(ctypes.c_void_p), nbas,
+               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+        if dim3 == 1:
+            return buf.reshape(di,dj,dk,dl)
+        else:
+            return buf.transpose(4,0,1,2,3)
+    else:
+        assert(len(shls) == 2)
+        di, dj = map(num_cgto_of, shls)
+        buf = numpy.empty((di,dj,dim3), dtype, order='F')
+        fintor = getattr(_cint, intor_name)
+        fintor(buf.ctypes.data_as(ctypes.c_void_p),
+               (ctypes.c_int*2)(*shls),
+               atm.ctypes.data_as(ctypes.c_void_p), natm,
+               bas.ctypes.data_as(ctypes.c_void_p), nbas,
+               env.ctypes.data_as(ctypes.c_void_p))
+        if dim3 == 1:
+            return buf.reshape(di,dj)
+        else:
+            return buf.transpose(2,0,1)
+
+
+if __name__ == '__main__':
+    import gto
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+
+    mol.atom.extend([
+        ["H", (0,  0, 0  )],
+        ["H", (0,  0, 1  )],
+    ])
+    mol.basis = {"H": 'cc-pvdz'}
+    mol.build()
+    mol.set_rinv_orig(mol.coord_of_atm(0))
+    for i in range(mol.nbas):
+        for j in range(mol.nbas):
+            print i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),
+                                         mol._atm, mol._bas, mol._env, 3)

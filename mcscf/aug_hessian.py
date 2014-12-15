@@ -61,7 +61,7 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7, max_cycle=10, max_stepsize=.6,
         norm_dx = numpy.linalg.norm(dx)
 # note that linear dependence of trial-vectors is very common, it always
 # causes numerical problems in CASSCF
-        s0 = numpy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         if norm_dx < tol or s0 < lindep:
             break
         log.debug1('AH step %d, index=%d, |dx|=%.5g, lambda=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
@@ -106,7 +106,7 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
         norm_dx = numpy.linalg.norm(dx)
         if norm_dx < toloose:
             yield istep, w_t, xtrial
-        s0 = numpy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, |dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
         if norm_dx < tol or s0 < lindep:

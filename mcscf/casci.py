@@ -39,8 +39,8 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, fciRestart=False):
     else:
         core_dm = numpy.dot(mo_core, mo_core.T) * 2
         corevhf = casci.get_veff(core_dm)
-        energy_core = pyscf.lib.trace_ab(core_dm, hcore) \
-                + pyscf.lib.trace_ab(core_dm, corevhf) * .5
+        energy_core = numpy.einsum('ij,ji', core_dm, hcore) \
+                    + numpy.einsum('ij,ji', core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     t1 = log.timer('effective h1e in CAS space', *t0)
 
@@ -53,7 +53,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, fciRestart=False):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core
-    log.info('CASCI E = %.15g', e_tot)
+    log.info('CASCI E = %.15g, E(CI) = %.15g', e_tot, e_cas)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -77,11 +77,12 @@ class CASCI(object):
             self.ncore = ncorelec / 2
         else:
             self.ncore = ncore
-        #TODO: for FCI solver
-        self.ci_lindep = 1e-14
-        self.ci_max_cycle = 30
-        self.ci_conv_threshold = 1e-8
-        self.fcisolver = pyscf.fci.direct_spin0
+        #self.fcisolver = pyscf.fci.direct_spin0.FCISolver(mol)
+        self.fcisolver = pyscf.fci.solver(mol)
+# CI solver parameters are set in fcisolver object
+        self.fcisolver.lindep = 1e-10
+        self.fcisolver.max_cycle = 30
+        self.fcisolver.conv_threshold = 1e-8
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
@@ -92,15 +93,15 @@ class CASCI(object):
     def dump_flags(self):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** CASSCF flags ********')
+        log.info('******** CASCI flags ********')
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        log.info('CI max. cycles = %d', self.ci_max_cycle)
-        log.info('CI conv_threshold = %g', self.ci_conv_threshold)
-        log.info('CI linear dependence = %g', self.ci_lindep)
-        #log.info('CI level shift = %d', self.ci_level_shift)
         log.info('max_memory %d (MB)', self.max_memory)
+        try:
+            self.fcisolver.dump_flags(self.verbose)
+        except:
+            pass
 
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
@@ -128,6 +129,8 @@ class CASCI(object):
     def casci(self, mo=None, ci0=None):
         if mo is None:
             mo = self.mo_coeff
+        else:
+            self.mo_coeff = mo
         if ci0 is None:
             ci0 = self.ci
 
@@ -142,8 +145,8 @@ class CASCI(object):
 
 
 if __name__ == '__main__':
-    import gto
-    import scf
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
@@ -159,13 +162,15 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
+    mc.fcisolver = pyscf.fci.solver(mol)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
     mc = CASCI(mol, m, 4, (3,1))
-    mc.fcisolver = pyscf.fci.direct_spin1
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(emc - -75.439016172976)
 
@@ -193,11 +198,13 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 9, 8)
+    mc.fcisolver = pyscf.fci.solver(mol)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)
 
     mc = CASCI(mol, m, 9, (5,3))
-    mc.fcisolver = pyscf.fci.direct_spin1
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = mc.casci()[0] + mol.nuclear_repulsion()
     print(emc - -227.7674519720)

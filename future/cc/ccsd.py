@@ -474,8 +474,8 @@ class CC(object):
         nvir = self.nmo-self.nocc
         nov = nocc*nvir
         damp = ccdiis.DIIS(self)
-        damp.diis_space = self.diis_space
-        damp.diis_start_cycle = 1
+        damp.space = self.diis_space
+        damp.start_cycle = 1
         def fupdate(t1, t2, istep, normt, de):
             if istep > self.diis_start_cycle and \
                (abs(de) < 1e-3 and istep % 3 == 0):
