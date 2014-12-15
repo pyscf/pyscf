@@ -113,7 +113,7 @@ class SCF(object):
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
 
-        self.chkfile = tempfile.NamedTemporaryFile(dir='/dev/shm').name
+        self.chkfile = tempfile.NamedTemporaryFile().name
         self.conv_threshold = 1e-10
         self.max_cycle = 50
         self.init_guess = 'minao'
