@@ -91,12 +91,27 @@ def incore(eri, dm, hermi=0):
     nao = dm.shape[0]
     vj = numpy.empty((nao,nao))
     vk = numpy.empty((nao,nao))
-    fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
-    fvj = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs8_tridm_vj'))
-    fvk = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs8_jk_s2il'))
-    tridm = lib.pack_tril(lib.transpose_sum(dm))
-    for i in range(nao):
-        tridm[i*(i+1)/2+i] *= .5
+    npair = nao*(nao+1)/2
+    if eri.ndim == 2 and npair*npair == eri.size: # 4-fold symmetry eri
+        fdrv = getattr(libcvhf, 'CVHFnrs4_incore_drv')
+        # 'ijkl,kl->ij'
+        fvj = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs4_kl_s2ij'))
+        # 'ijkl,il->jk'
+        fvk = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs4_il_s1jk'))
+        # or
+        ## 'ijkl,ij->kl'
+        #fvj = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs4_ij_s2kl'))
+        ## 'ijkl,jk->il'
+        #fvk = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs4_jk_s1il'))
+
+        tridm = dm
+    else: # 8-fold symmetry eri
+        fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
+        fvj = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs8_tridm_vj'))
+        fvk = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs8_jk_s2il'))
+        tridm = lib.pack_tril(lib.transpose_sum(dm))
+        for i in range(nao):
+            tridm[i*(i+1)/2+i] *= .5
     fdrv(eri.ctypes.data_as(ctypes.c_void_p),
          tridm.ctypes.data_as(ctypes.c_void_p),
          vj.ctypes.data_as(ctypes.c_void_p),

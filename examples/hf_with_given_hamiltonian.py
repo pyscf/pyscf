@@ -22,10 +22,11 @@ for i in range(n):
 
 e,c = scipy.linalg.eigh(h1)
 dm = numpy.dot(c[:,:3],c[:,:3].T) * 2
+hf_energy_initguess = 0
 
 mf.get_hcore = lambda *args: h1
 mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
-mf.make_init_guess = lambda *args: (0, dm)
+mf.make_init_guess = lambda *args: (hf_energy_initguess, dm)
 
 mf.scf()

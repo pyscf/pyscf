@@ -20,7 +20,6 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
-import davidson
 import cistring
 import rdm
 import direct_spin1
@@ -47,7 +46,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                               link_index.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-def contract_2e(eri, fcivec, norb, nelec, link_index=None, bufsize=1024):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if not eri.flags.c_contiguous:
         eri = eri.copy()
@@ -66,8 +65,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, bufsize=1024):
                               ci1.ctypes.data_as(ctypes.c_void_p),
                               ctypes.c_int(norb), ctypes.c_int(na),
                               ctypes.c_int(nlink),
-                              link_index.ctypes.data_as(ctypes.c_void_p),
-                              ctypes.c_int(bufsize))
+                              link_index.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
 def absorb_h1e(*args, **kwargs):
@@ -179,7 +177,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, **kwargs):
     else:
         ci0 = ci0.ravel()
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=1e-8, lindep=1e-8)
+    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=1e-8, lindep=1e-8)
     return e, c.reshape(na,na)
 
 # alpha and beta 1pdm
@@ -268,7 +266,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None):
     else:
         ci0 = ci0.ravel()
 
-    #e, c = davidson.dsyev(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,na)
 

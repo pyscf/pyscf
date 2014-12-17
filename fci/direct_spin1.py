@@ -21,7 +21,6 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
-import davidson
 import cistring
 import rdm
 
@@ -63,7 +62,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     return ci1
 
 # the input fcivec should be symmetrized
-def contract_2e(eri, fcivec, norb, nelec, link_index=None, bufsize=1024):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if not eri.flags.c_contiguous:
         eri = eri.copy()
@@ -90,8 +89,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, bufsize=1024):
                                    ctypes.c_int(na), ctypes.c_int(nb),
                                    ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                                    link_indexa.ctypes.data_as(ctypes.c_void_p),
-                                   link_indexb.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(bufsize))
+                                   link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
 def make_hdiag(h1e, eri, norb, nelec):
@@ -150,9 +148,9 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     addra = addr / nb
     addrb = addr % nb
     stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
-                       dtype=numpy.long)
+                       dtype=numpy.uint64)
     strb = numpy.array([cistring.addr2str(norb,nelecb,ib) for ib in addrb],
-                       dtype=numpy.long)
+                       dtype=numpy.uint64)
     np = len(addr)
     h0 = numpy.zeros((np,np))
     libfci.FCIpspace_h0tril(h0.ctypes.data_as(ctypes.c_void_p),
@@ -218,7 +216,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
     else:
         ci0 = ci0.ravel()
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=1e-8, lindep=1e-8)
+    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=1e-8, lindep=1e-8)
     return e, c.reshape(na,nb)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
@@ -330,7 +328,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
     else:
         ci0 = ci0.ravel()
 
-    #e, c = davidson.dsyev(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,nb)
 
@@ -378,9 +376,9 @@ class FCISolver(object):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0, precond):
-        return davidson.dsyev(op, x0, precond, self.conv_threshold,
-                              self.max_cycle, self.max_space, self.lindep,
-                              self.max_memory, verbose=self.verbose)
+        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+                                  self.max_cycle, self.max_space, self.lindep,
+                                  self.max_memory, log=self.verbose)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         def precond(r, e0, x0, *args):

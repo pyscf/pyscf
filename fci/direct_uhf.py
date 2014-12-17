@@ -21,7 +21,6 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
-import davidson
 import cistring
 import direct_spin1
 
@@ -34,7 +33,11 @@ libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 # h2e has three parts (h2e_aa, h2e_ab, h2e_bb)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
-    neleca, nelecb = nelec
+    if isinstance(nelec, int):
+        nelecb = nelec/2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     if link_index is None:
         link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
@@ -65,9 +68,12 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     return ci1
 
 # the input fcivec should be symmetrized
-def contract_2e(eri, fcivec, norb, nelec,
-                link_index=None, bufsize=1024):
-    neleca, nelecb = nelec
+def contract_2e(eri, fcivec, norb, nelec, link_index=None):
+    if isinstance(nelec, int):
+        nelecb = nelec/2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     g2e_aa = pyscf.ao2mo.restore(4, eri[0], norb)
     g2e_ab = pyscf.ao2mo.restore(4, eri[1], norb)
     g2e_bb = pyscf.ao2mo.restore(4, eri[2], norb)
@@ -98,12 +104,15 @@ def contract_2e(eri, fcivec, norb, nelec,
                              ctypes.c_int(na), ctypes.c_int(nb),
                              ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                              link_indexa.ctypes.data_as(ctypes.c_void_p),
-                             link_indexb.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(bufsize))
+                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
 def make_hdiag(h1e, eri, norb, nelec):
-    neleca, nelecb = nelec
+    if isinstance(nelec, int):
+        nelecb = nelec/2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     h1e_a, h1e_b = h1e
     g2e_aa = pyscf.ao2mo.restore(1, eri[0], norb)
     g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb)
@@ -158,7 +167,11 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
             pyscf.ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    neleca, nelecb = nelec
+    if isinstance(nelec, int):
+        nelecb = nelec/2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     g2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
     g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
     g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
@@ -194,7 +207,11 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
-    neleca, nelecb = nelec
+    if isinstance(nelec, int):
+        nelecb = nelec/2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     na = link_indexa.shape[0]
@@ -237,7 +254,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
     else:
         ci0 = ci0.reshape(-1)
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=1e-8, lindep=1e-8)
+    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=1e-8, lindep=1e-8)
     return e, c.reshape(na,nb)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
@@ -314,6 +331,7 @@ if __name__ == '__main__':
 
     mol.basis = {'H': 'sto-3g'}
     mol.charge = 1
+    mol.spin = 1
     mol.build()
 
     m = scf.UHF(mol)
@@ -326,8 +344,8 @@ if __name__ == '__main__':
     nelec = (nea, neb)
     mo_a = m.mo_coeff[0]
     mo_b = m.mo_coeff[1]
-    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore()[0], mo_a))
-    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore()[1], mo_b))
+    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
+    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b))
     g2e_aa = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
     g2e_aa = g2e_aa.reshape(norb,norb,norb,norb)
     g2e_ab = ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)

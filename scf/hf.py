@@ -79,7 +79,7 @@ def scf_cycle(mol, scf, conv_threshold=1e-10, dump_chk=True, init_dm=None):
         hf_energy = scf.calc_tot_elec_energy(h1e, vhf, dm)[0]
 
         log.info(scf, 'cycle= %d E=%.15g (+nuc=%.5f), delta_E= %g', \
-                 cycle+1, hf_energy, hf_energy+mol.nuclear_repulsion(), \
+                 cycle+1, hf_energy, hf_energy+mol.get_enuc(), \
                  hf_energy-last_hf_e)
 
         if abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_threshold \
@@ -279,19 +279,12 @@ class SCF(object):
     def scf(self, dm0=None):
         cput0 = (time.clock(), time.time())
 
-        if self.mol.nelectron == 1:
-            self.converged = True
-            self.mo_energy, self.mo_coeff = self.solve_1e(self.mol)
-            self.mo_occ = numpy.zeros_like(self.mo_energy)
-            self.mo_occ[0] = 1
-            self.hf_energy = self.mo_energy[0]
-        else:
-            self.build()
-            self.dump_flags()
-            # call self.scf_cycle because dhf redefine scf_cycle
-            self.converged, self.hf_energy, \
-                    self.mo_energy, self.mo_occ, self.mo_coeff \
-                    = self.scf_cycle(self.mol, self.conv_threshold, init_dm=dm0)
+        self.build()
+        self.dump_flags()
+        # call self.scf_cycle because dhf redefine scf_cycle
+        self.converged, self.hf_energy, \
+                self.mo_energy, self.mo_occ, self.mo_coeff \
+                = self.scf_cycle(self.mol, self.conv_threshold, init_dm=dm0)
 
         log.timer(self, 'SCF', *cput0)
         etot = self.dump_final_energy(self.hf_energy, self.converged)
@@ -311,16 +304,8 @@ class SCF(object):
                                  self.opt, hermi=hermi)
             return vj - vk * .5
 
-    @classmethod
-    def solve_1e(self, mol):
-        h1e = self.get_hcore(mol)
-        s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff = self.eig(h1e, s1e)
-        #log.info(self, '1 electron energy = %.15g.', mo_energy[0])
-        return mo_energy, mo_coeff
-
     def dump_final_energy(self, hf_energy, converged):
-        e_nuc = self.mol.nuclear_repulsion()
+        e_nuc = self.mol.get_enuc()
         if converged:
             log.log(self, 'converged electronic energy = %.15g, nuclear repulsion = %.15g', \
                     hf_energy, e_nuc)
@@ -439,6 +424,23 @@ def dot_eri_dm(eri, dm, hermi=0):
         vj = numpy.array([v[0] for v in vjk])
         vk = numpy.array([v[1] for v in vjk])
     return vj, vk
+
+
+############
+
+class HF1e(SCF):
+    def scf(self, *args):
+        log.info(self, '\n')
+        log.info(self, '******** 1 electron system ********')
+        self.converged = True
+        h1e = self.get_hcore(self.mol)
+        s1e = self.get_ovlp(self.mol)
+        self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
+        self.mo_occ = numpy.zeros_like(self.mo_energy)
+        self.mo_occ[0] = 1
+        self.hf_energy = self.mo_energy[0]
+        return self.hf_energy + self.mol.get_enuc()
+
 
 class RHF(SCF):
     '''RHF'''
@@ -765,19 +767,44 @@ def map_rhf_to_uhf(mol, rhf):
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mol, mo_a, mo_b):
-    # S^2 = S+ * S- + S- * S+ + Sz * Sz
-    # S+ = \sum_i S_i+ ~ effective for all beta occupied orbitals
-    # S- = \sum_i S_i- ~ effective for all alpha occupied orbitals
-    # S+ * S- ~ sum of nocc_a * nocc_b couplings
-    # Sz = Msz^2
+# S^2 = (S+ * S- + S- * S+)/2 + Sz * Sz
+# S+ = \sum_i S_i+ ~ effective for all beta occupied orbitals.
+# S- = \sum_i S_i- ~ effective for all alpha occupied orbitals.
+# There are two cases for S+*S-
+# 1) same electron \sum_i s_i+*s_i-, <UHF|s_i+*s_i-|UHF> gives
+#       <p|s+s-|q> \gamma_qp = nocc_a
+# 2) different electrons for \sum s_i+*s_j- (i\neq j, n*(n-1) terms)
+# As a two-particle operator S+*S-
+#       <ij|s+s-|ij> - <ij|s+s-|ji> = -<ij|s+s-|ji>
+#       = -<ia|jb><jb|ia>
+# <UHF|S+*S-|UHF> = nocc_a - <ia|jb><jb|ia>
+#
+# There are two cases for S-*S+
+# 1) same electron \sum_i s_i-*s_i+
+#       <p|s-s+|q> \gamma_qp = nocc_b
+# 2) different electrons
+#       <ij|s-s+|ij> - <ij|s-s+|ji> = -<ij|s-s+|ji>
+#       = -<ib|ja><ja|ib>
+# <UHF|S+*S-|UHF> = nocc_b - <ib|ja><ja|ib>
+#
+# Sz*Sz = Msz^2 = (nocc_a-nocc_b)^2
+# 1) same electron
+#       <p|ss|q> = (nocc_a+nocc_b)/4
+# 2) different electrons
+#       (<ij|2s1s2|ij>-<ij|2s1s2|ji>)/2 = <ij|s1s2|ij> - <ii|s1s2|ii>
+#       = (<ia|ia><ja|ja> - <ia|ia><jb|jb> - <ib|ib><ja|ja> + <ib|ib><jb|jb>)/4
+#       - (<ia|ia><ia|ia>+<ib|ib><ib|ib>)/4
+#       = (nocc_a^2 - nocc_a*nocc_b - nocc_b*nocc_a + nocc_b^2)/4
+#       - (nocc_a+nocc_b)/4
+#       = (nocc_a-nocc_b)^2 / 4 - (nocc_a+nocc_b)/4
+#
     nocc_a = mo_a.shape[1]
     nocc_b = mo_b.shape[1]
     ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
     s = reduce(numpy.dot, (mo_a.T, ovlp, mo_b))
-    ssx = ssy = (nocc_a+nocc_b)*.25 - 2*(s**2).sum()*.25
+    ssxy = (nocc_a+nocc_b) * .5 - (s**2).sum()
     ssz = (nocc_b-nocc_a)**2 * .25
-    ss = ssx + ssy + ssz
-    log.debug1(mol, 's_x^2 = %.9g, s_y^2 = %.9g, s_z^2 = %.9g', ssx,ssy,ssz)
+    ss = ssxy + ssz
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
