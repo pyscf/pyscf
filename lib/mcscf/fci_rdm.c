@@ -7,7 +7,9 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
+#define BUFBASE         320
 
 
 static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
