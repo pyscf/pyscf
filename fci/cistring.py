@@ -15,7 +15,7 @@ libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
 # refer to ci.rdm3.gen_strings
 def gen_strings4orblist(orb_list, nelec, ordering=True):
     if nelec == 0:
-        return []
+        return [0]
     def gen_str_iter(orb_list, nelec):
         if nelec == 1:
             res = [(1<<i) for i in orb_list]
@@ -71,7 +71,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
         return pumpmap
 
     t = [pump1e(s) for s in strs]
-    return numpy.array(t, dtype=numpy.int32)
+    return numpy.array(t, dtype=numpy.int16)
 
 def gen_linkstr_index(orb_list, nocc, strs=None):
     if strs is None:
@@ -80,7 +80,7 @@ def gen_linkstr_index(orb_list, nocc, strs=None):
     norb = len(orb_list)
     nvir = norb - nocc
     na = num_strings(norb, nocc)
-    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
+    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int16)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
                             ctypes.c_int(nocc),
@@ -108,13 +108,53 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
     norb = len(orb_list)
     nvir = norb - nocc
     na = num_strings(norb, nocc)
-    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
+    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int16)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
                             ctypes.c_int(nocc),
                             strs.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(1))
     return link_index
+
+# a mapping between N electron string to N+1 electron string.
+# creation of an electron for the given string -> the address of the
+# resultant string
+def gen_cre_str_index(orb_list, nelec):
+    cre_strs = gen_strings4orblist(orb_list, nelec+1)
+    credic = dict(zip(cre_strs,range(cre_strs.__len__())))
+    def parity(str0, cre_bit):
+        return (-1) ** bin(str0>>(cre_bit+1)).count('1')
+    def pump1e(str0):
+        pumpmap = []
+        for i in orb_list:
+            if not str0 & (1<<i):
+                str1 = str0 | (1<<i)
+                pumpmap.append((i, i*(i+1)/2, credic[str1], parity(str0, i)))
+        return pumpmap
+
+    t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
+    return numpy.array(t, dtype=numpy.int16)
+
+# a mapping between N electron string to N-1 electron string.
+# annihilation of an electron for the given string -> the address of the
+# resultant string
+def gen_des_str_index(orb_list, nelec):
+    des_strs = gen_strings4orblist(orb_list, nelec-1)
+    desdic = dict(zip(des_strs,range(des_strs.__len__())))
+    def parity(str0, des_bit):
+        return (-1) ** bin(str0>>(des_bit+1)).count('1')
+    def pump1e(str0):
+        pumpmap = []
+        for i in orb_list:
+            if str0 & (1<<i):
+                str1 = str0 ^ (1<<i)
+                pumpmap.append((i, i*(i+1)/2, desdic[str1], parity(str0, i)))
+        return pumpmap
+
+    t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
+    return numpy.array(t, dtype=numpy.int16)
+
+
 
 def parity(string0, string1):
     ss = string1 - string0
@@ -181,6 +221,9 @@ def str2addr_o1(norb, nelec, string):
 def str2addr(norb, nelec, string):
     if isinstance(string, str):
         string = int(string, 2)
+        assert(string.count('1') == nelec)
+    else:
+        assert(bin(string).count('1') == nelec)
     libfci.FCIstr2addr.restype = ctypes.c_int
     return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
                               ctypes.c_ulong(string))

@@ -20,7 +20,6 @@ import scipy.linalg
 import pyscf.lib
 import pyscf.symm
 import pyscf.ao2mo
-import davidson
 import cistring
 import direct_spin0
 import direct_spin1
@@ -33,11 +32,9 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return direct_spin0.contract_1e(f1e, fcivec, norb, nelec, link_index)
 
 # the input fcivec should be symmetrized
-def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[],
-                bufsize=1024):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     if not orbsym:
-        return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index,
-                                        bufsize)
+        return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
@@ -61,8 +58,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[],
                                      ctypes.c_int(nlink),
                                      link_index.ctypes.data_as(ctypes.c_void_p),
                                      dimirrep.ctypes.data_as(ctypes.c_void_p),
-                                     ctypes.c_int(len(dimirrep)),
-                                     ctypes.c_int(bufsize))
+                                     ctypes.c_int(len(dimirrep)))
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 
@@ -115,7 +111,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, orbsym=[],
     else:
         ci0 = ci0.ravel()
 
-    e, c = davidson.dsyev(hop, ci0, precond, tol=tol, lindep=1e-8)
+    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=tol, lindep=1e-8)
     return e, pyscf.lib.transpose_sum(c.reshape(na,na)) * .5
 
 # dm_pq = <|p^+ q|>

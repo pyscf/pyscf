@@ -7,8 +7,11 @@ import direct_ms0_symm
 import direct_spin0_symm
 import direct_spin1_symm
 import addons
+import rdm
+import spin_op
 from cistring import num_strings
 from rdm import reorder_rdm
+from spin_op import spin_square
 
 def solver(mol, singlet=True):
     if mol.symmetry:

@@ -1,7 +1,7 @@
 #include_directories(${CINT_INCLUDE_DIR})
 
 add_library(mcscf SHARED
-  fci_contract.c fci_rdm.c fci_string.c mc_eri.c)
+  fci_contract.c fci_rdm.c fci_string.c fci_spin.c mc_eri.c)
 
 set_target_properties(mcscf PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

@@ -71,7 +71,7 @@ there are few rules to follow
   - Compatibile with 2.5 - 3.3 for Python code;
   - Following C89 standard for C code;
   - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
-  - Avoid using other program language if possible, to keep package light-weight
+  - Avoid using other program language, to keep package light-weight
 * Loose-coupling principle
   - Reinventing-wheel is encouraged if it reduces the coupling to the rest of the package.
 
