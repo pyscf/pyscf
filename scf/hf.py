@@ -598,7 +598,7 @@ class UHF(SCF):
                      n_a, mo_energy[0][n_a-1])
         log.debug(self, '  mo_energy = %s', mo_energy[0])
         log.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
-                 n_b, mo_energy[0][n_b-1], mo_energy[0][n_b])
+                 n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
         log.debug(self, '  mo_energy = %s', mo_energy[1])
         if mo_coeff is not None:
             ss, s = spin_square(self.mol, mo_coeff[0][:,mo_occ[0]>0], \
