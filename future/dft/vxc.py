@@ -13,8 +13,7 @@ import re
 import numpy
 import pyscf.lib
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libdft = numpy.ctypeslib.load_library('libdft', _loaderpath)
+libdft = pyscf.lib.load_library('libdft')
 
 # xc_code from libxc
 XC_CODES = {

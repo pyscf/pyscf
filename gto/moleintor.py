@@ -9,8 +9,7 @@ import ctypes
 import _ctypes
 import pyscf.lib as lib
 
-_loaderpath = os.path.dirname(lib.__file__)
-_cint = numpy.ctypeslib.load_library('libcvhf', _loaderpath)
+_cint = lib.load_library('libcvhf')
 _cint.CINTcgto_cart.restype = ctypes.c_int
 _cint.CINTcgto_spheric.restype = ctypes.c_int
 _cint.CINTcgto_spinor.restype = ctypes.c_int

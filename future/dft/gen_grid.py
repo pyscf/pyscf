@@ -14,8 +14,7 @@ import numpy
 import radi
 import pyscf.lib
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libdft = numpy.ctypeslib.load_library('libdft', _loaderpath)
+libdft = pyscf.lib.load_library('libdft')
 
 #TODO: OPTIMIZE ME ACCORDING TO JCP 102, 346
 

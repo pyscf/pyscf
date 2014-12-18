@@ -24,8 +24,7 @@ import cistring
 import direct_ms0
 import direct_spin1_symm
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
+libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return direct_ms0.contract_1e(f1e, fcivec, norb, nelec, link_index)

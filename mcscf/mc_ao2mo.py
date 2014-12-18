@@ -9,8 +9,7 @@ import pyscf.lib
 import pyscf.lib.numpy_helper
 import pyscf.ao2mo._ao2mo as _ao2mo
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libmcscf = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
+libmcscf = pyscf.lib.load_library('libmcscf')
 
 # least memory requirements:
 #       ncore**2*(nmo-ncore)*nmo + ncas**2*nmo**2*2 + nmo**3   words

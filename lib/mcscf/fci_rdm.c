@@ -166,7 +166,7 @@ void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb * na);
+        double *buf = malloc(sizeof(double) * nnorb * fillcnt);
 
         csum = kern_ms0_ab(ket, buf, fillcnt, stra_id, strb_id,
                            norb, na, nlinka, link_indexa);
@@ -273,8 +273,8 @@ void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*na);
-        double *buf1 = malloc(sizeof(double) * nnorb*na);
+        double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
 
         csum = kern_ms0_ab(bra, buf1, fillcnt, stra_id, strb_id,
                            norb, na, nlinka, link_indexa);
@@ -318,9 +318,9 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb*nb);
+        double *buf = malloc(sizeof(double) * nnorb*fillcnt);
 
-        memset(buf, 0, sizeof(double)*nnorb*nb);
+        memset(buf, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(ket+strb_id, buf, fillcnt, stra_id,
                          norb, nb, nlinka, link_indexa);
         if (csum > CSUMTHR) {
@@ -342,7 +342,7 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb*nb);
+        double *buf = malloc(sizeof(double) * nnorb*fillcnt);
 
         csum = rdm2_0b_t1(ket, buf, fillcnt, stra_id,
                           norb, nb, nlinkb, link_indexb+strb_id*nlinkb*4);
@@ -366,14 +366,14 @@ void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*nb);
-        double *buf1 = malloc(sizeof(double) * nnorb*nb);
+        double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
 
-        memset(buf1, 0, sizeof(double)*nnorb*nb);
+        memset(buf1, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(bra+strb_id, buf1, fillcnt, stra_id,
                          norb, nb, nlinka, link_indexa);
         if (csum < CSUMTHR) { goto end; }
-        memset(buf0, 0, sizeof(double)*nnorb*nb);
+        memset(buf0, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(ket+strb_id, buf0, fillcnt, stra_id,
                          norb, nb, nlinka, link_indexa);
         if (csum < CSUMTHR) { goto end; }
@@ -398,8 +398,8 @@ void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*nb);
-        double *buf1 = malloc(sizeof(double) * nnorb*nb);
+        double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
 
         csum = rdm2_0b_t1(bra, buf1, fillcnt, stra_id,
                           norb, nb, nlinkb, link_indexb+strb_id*nlinkb*4);
@@ -427,10 +427,10 @@ void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *bufb = malloc(sizeof(double) * nnorb*nb);
-        double *bufa = malloc(sizeof(double) * nnorb*nb);
+        double *bufb = malloc(sizeof(double) * nnorb*fillcnt);
+        double *bufa = malloc(sizeof(double) * nnorb*fillcnt);
 
-        memset(bufa, 0, sizeof(double)*nnorb*nb);
+        memset(bufa, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(bra+strb_id, bufa, fillcnt, stra_id,
                          norb, nb, nlinka, link_indexa);
         if (csum < CSUMTHR) { goto end; }

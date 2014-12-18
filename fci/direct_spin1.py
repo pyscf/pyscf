@@ -24,8 +24,7 @@ import pyscf.ao2mo
 import cistring
 import rdm
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
+libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:

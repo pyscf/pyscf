@@ -6,9 +6,9 @@
 import os
 import ctypes
 import numpy
+import misc
 
-_loaderpath = os.path.dirname(__file__)
-_np_helper = numpy.ctypeslib.load_library('libnp_helper', _loaderpath)
+_np_helper = misc.load_library('libnp_helper')
 
 BLOCK_DIM = 192
 HERMITIAN = 1

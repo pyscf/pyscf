@@ -7,8 +7,7 @@ import numpy
 import pyscf.lib
 import cistring
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-librdm = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
+librdm = pyscf.lib.load_library('libmcscf')
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]

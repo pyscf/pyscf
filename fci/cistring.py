@@ -9,8 +9,7 @@ import math
 import numpy
 import pyscf.lib
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libfci = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
+libfci = pyscf.lib.load_library('libmcscf')
 
 # refer to ci.rdm3.gen_strings
 def gen_strings4orblist(orb_list, nelec, ordering=True):

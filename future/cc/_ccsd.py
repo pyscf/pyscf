@@ -5,8 +5,7 @@ import ctypes
 import numpy
 import pyscf.lib as lib
 
-_loaderpath = os.path.dirname(lib.__file__)
-libcc = numpy.ctypeslib.load_library('libcc', _loaderpath)
+libcc = lib.load_library('libcc')
 
 
 # NOTE requisite on data continuous

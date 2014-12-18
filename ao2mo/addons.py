@@ -8,8 +8,7 @@ import ctypes
 import numpy
 import pyscf.lib
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-libao2mo = numpy.ctypeslib.load_library('libao2mo', _loaderpath)
+libao2mo = pyscf.lib.load_library('libao2mo')
 
 def restore(symmetry, eri, norb, tao=None):
     if symmetry not in (8, 4, 1):

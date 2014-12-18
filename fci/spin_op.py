@@ -9,8 +9,7 @@ import cistring
 import direct_spin1
 import rdm
 
-_loaderpath = os.path.dirname(pyscf.lib.__file__)
-librdm = numpy.ctypeslib.load_library('libmcscf', _loaderpath)
+librdm = pyscf.lib.load_library('libmcscf')
 
 ######################################################
 # Spin squared operator
