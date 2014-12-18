@@ -182,7 +182,7 @@ class FCISolver(direct_spin1.FCISolver):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
                     orbsym=[], **kwargs):
-        if orbsym is []:
+        if not orbsym:
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 

@@ -10,6 +10,7 @@
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
 #define BUFBASE         320
+#define SQRT2           1.4142135623730950488
 
 
 static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
@@ -194,14 +195,16 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
                         int norb, int na, int nb, int nlinka, int nlinkb,
                         short *link_indexa, short *link_indexb)
 {
+        if (stra_id < strb_id) {
+                return;
+        }
         const int INC1 = 1;
         const char UP = 'U';
         const char TRANS_N = 'N';
         const double D1 = 1;
         const double D2 = 2;
-        const double D4 = 4;
         const int nnorb = norb * norb;
-        int fill0, fill1;
+        int fill0, fill1, i;
         double csum;
         double *buf = malloc(sizeof(double) * nnorb * na);
 
@@ -228,10 +231,18 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
 //                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill0,
 //                               &D1, buf, &nnorb, buf, &nnorb,
 //                               &D1, rdm2, &nnorb);
-                dsyrk_(&UP, &TRANS_N, &nnorb, &fill0,
+//                dsyrk_(&UP, &TRANS_N, &nnorb, &fill0,
+//                       &D2, buf, &nnorb, &D1, rdm2, &nnorb);
+//                if (fill1 > fill0) {
+//                        const double D4 = 4;
+//                        dsyr_(&UP, &nnorb, &D4, buf+nnorb*fill0, &INC1,
+//                              rdm2, &nnorb);
+//                }
+                for (i = fill0*nnorb; i < fill1*nnorb; i++) {
+                        buf[i] *= SQRT2;
+                }
+                dsyrk_(&UP, &TRANS_N, &nnorb, &fill1,
                        &D2, buf, &nnorb, &D1, rdm2, &nnorb);
-                dsyr_(&UP, &nnorb, &D4, buf+nnorb*fill0, &INC1,
-                      rdm2, &nnorb);
         }
         free(buf);
 }
