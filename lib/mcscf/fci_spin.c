@@ -115,9 +115,51 @@ void FCIspindm12_drv(void (*dm12kernel)(),
                      int norb, int na, int nb, int neleca, int nelecb,
                      short *link_indexa, short *link_indexb, int symm)
 {
-        FCIrdm12_drv(dm12kernel, rdm1, rdm2, bra, ket,
-                     norb, na, nb, neleca, nelecb,
-                     link_indexa, link_indexb, symm);
+        const int nnorb = norb * norb;
+        int strk, i, j;
+        double *pdm1, *pdm2;
+        memset(rdm1, 0, sizeof(double) * nnorb);
+        memset(rdm2, 0, sizeof(double) * nnorb*nnorb);
+
+#pragma omp parallel default(none) \
+        shared(dm12kernel, bra, ket, norb, na, nb, neleca, nelecb, \
+               link_indexa, link_indexb, rdm1, rdm2), \
+        private(strk, i, pdm1, pdm2)
+{
+        pdm1 = (double *)malloc(sizeof(double) * nnorb);
+        pdm2 = (double *)malloc(sizeof(double) * nnorb*nnorb);
+        memset(pdm1, 0, sizeof(double) * nnorb);
+        memset(pdm2, 0, sizeof(double) * nnorb*nnorb);
+#pragma omp for schedule(dynamic, 2)
+        for (strk = 0; strk < na; strk++) {
+                (*dm12kernel)(pdm1, pdm2, bra, ket,
+                              strk, norb, na, nb, neleca, nelecb,
+                              link_indexa, link_indexb);
+        }
+#pragma omp critical
+{
+        for (i = 0; i < nnorb; i++) {
+                rdm1[i] += pdm1[i];
+        }
+        for (i = 0; i < nnorb*nnorb; i++) {
+                rdm2[i] += pdm2[i];
+        }
+}
+        free(pdm1);
+        free(pdm2);
+}
+        if (symm) {
+                for (i = 0; i < norb; i++) {
+                        for (j = 0; j < i; j++) {
+                                rdm1[j*norb+i] = rdm1[i*norb+j];
+                        }
+                }
+                for (i = 0; i < nnorb; i++) {
+                        for (j = 0; j < i; j++) {
+                                rdm2[j*nnorb+i] = rdm2[i*nnorb+j];
+                        }
+                }
+        }
 }
 
 

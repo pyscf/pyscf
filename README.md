@@ -78,7 +78,7 @@ there are few rules to follow
 
 Known problems
 --------------
-* Error message "Library not loaded: libcint.2.1.1.dylib" On OS X
+* Error message "Library not loaded: libcint.2.3.0.dylib" On OS X
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  DYLD_LIBRARY_PATH
 
