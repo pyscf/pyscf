@@ -11,7 +11,7 @@ import rdm
 import spin_op
 from cistring import num_strings
 from rdm import reorder_rdm
-from spin_op import spin_square
+from spin_op import spin_square, spin_square_with_overlap
 
 def solver(mol, singlet=True):
     if mol.symmetry:

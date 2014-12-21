@@ -13,21 +13,19 @@ import pyscf.scf
 def CASSCF(mol, mf, *args, **kwargs):
     if mol.symmetry:
         mc = mc1step_symm.CASSCF(mol, mf, *args, **kwargs)
-        mc.fcisolver = pyscf.fci.solver(mol)
     else:
-        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' in str(mf.__class__):
-            mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
-        else:
+        if 'RHF' in str(mf.__class__) or 'ROHF' in str(mf.__class__):
             mc = mc1step.CASSCF(mol, mf, *args, **kwargs)
+        else:
+            mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
     return mc
 
 def CASCI(mol, mf, *args, **kwargs):
     if mol.symmetry:
         mc = casci_symm.CASCI(mol, mf, *args, **kwargs)
-        mc.fcisolver = pyscf.fci.solver(mol)
     else:
-        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' in str(mf.__class__):
-            mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)
-        else:
+        if 'RHF' in str(mf.__class__) or 'ROHF' in str(mf.__class__):
             mc = casci.CASCI(mol, mf, *args, **kwargs)
+        else:
+            mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)
     return mc

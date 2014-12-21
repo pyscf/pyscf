@@ -76,7 +76,7 @@ class CASCI(object):
         self.max_memory = mf.max_memory
         self.ncas = ncas
         if isinstance(nelecas, int):
-            nelecb = nelecas/2
+            nelecb = (nelecas-mol.spin)/2
             neleca = nelecas - nelecb
             self.nelecas = (neleca, nelecb)
         else:

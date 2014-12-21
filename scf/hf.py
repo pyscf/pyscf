@@ -557,7 +557,7 @@ class UHF(SCF):
         self.DIIS = UHF_DIIS
         self.nelectron_alpha = (mol.nelectron + mol.spin) / 2
         self._eri = None
-        self._keys = self._keys | set(['nelectron_alpha'])
+        self._keys = self._keys | set(['nelectron_alpha', '_eri'])
 
     def dump_flags(self):
         SCF.dump_flags(self)
@@ -869,10 +869,7 @@ class ROHF(UHF):
     def __init__(self, mol):
         SCF.__init__(self, mol)
         self._eri = None
-# The _core_mo_energy is the orbital energy to help set_occ find doubly
-# occupied core orbitals, it's calculated from beta fock
-        self._core_mo_energy = None
-        self._keys = self._keys | set(['_eri', '_core_mo_energy'])
+        self._keys = self._keys | set(['_eri'])
 
     def dump_flags(self):
         SCF.dump_flags(self)

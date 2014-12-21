@@ -322,7 +322,7 @@ mol.build(
                                for ir in self.irrep_id]
             self.symm_orb = [c for c in symm_orb if c.size > 0]
 
-        if dump_input and self.verbose >= log.NOTICE:
+        if dump_input and not self._built and self.verbose >= log.NOTICE:
             self.dump_input()
 
         log.debug2(self, 'arg.atm = %s', self._atm)

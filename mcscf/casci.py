@@ -68,7 +68,9 @@ class CASCI(object):
         self.ncas = ncas
         if isinstance(nelecas, int):
             assert(nelecas%2 == 0)
-            self.nelecas = (nelecas/2,nelecas/2)
+            nelecb = (nelecas-mol.spin)/2
+            neleca = nelecas - nelecb
+            self.nelecas = (neleca, nelecb)
         else:
             self.nelecas = (nelecas[0],nelecas[1])
         if ncore is None:
@@ -76,9 +78,10 @@ class CASCI(object):
             assert(ncorelec % 2 == 0)
             self.ncore = ncorelec / 2
         else:
+            assert(isinstance(ncore, int))
             self.ncore = ncore
         #self.fcisolver = pyscf.fci.direct_spin0.FCISolver(mol)
-        self.fcisolver = pyscf.fci.solver(mol)
+        self.fcisolver = pyscf.fci.solver(mol, self.nelecas[0]==self.nelecas[1])
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 30

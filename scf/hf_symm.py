@@ -524,9 +524,12 @@ class ROHF(UHF):
 # do not overwrite them
         self._irrep_doccs = []
         self._irrep_soccs = []
+# The _core_mo_energy is the orbital energy to help set_occ find doubly
+# occupied core orbitals
         self._core_mo_energy = None
+        self._open_mo_energy = None
         self._keys = self._keys | set(['_irrep_doccs', '_irrep_soccs',
-                                       '_core_mo_energy'])
+                                       '_core_mo_energy', '_open_mo_energy'])
 
     def build_(self, mol=None):
         # specify alpha,beta for same irreps

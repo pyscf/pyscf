@@ -74,6 +74,10 @@ def _bi_trace(a):
     atmp = numpy.einsum('iipq->pq', a)
     return numpy.einsum('ii', atmp)
 
+#TODO
+def spin_square_with_overlap(ovlp, ci, norb, nelec):
+    return -1, -1
+
 # for S+*S-
 # dm(pq,rs) * [q(beta)^+ p(alpha) s(alpha)^+ r(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
