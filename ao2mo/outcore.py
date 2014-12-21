@@ -7,9 +7,9 @@ import random
 import time
 import numpy
 import h5py
-from pyscf import lib
+import pyscf.lib
 import pyscf.lib.parameters as param
-import pyscf.lib.logger
+import pyscf.lib.logger as logger
 import _ao2mo
 import direct
 
@@ -22,7 +22,7 @@ def full(mol, mo_coeff, erifile, max_memory=1500, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     mo_coeff = numpy.array(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
@@ -53,15 +53,14 @@ def full(mol, mo_coeff, erifile, max_memory=1500, ioblk_size=512, \
         log.debug('step 1, AO %d:%d, [%d/%d], len(buf) = %d', \
                   sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
                   sh_range[2])
-        buf = _ao2mo.nr_e1range(mo_coeff, sh_range, ijshape, \
-                                mol._atm, mol._bas, mol._env)
+        buf = _ao2mo.nr_e1range_(mo_coeff, sh_range, ijshape, \
+                                 mol._atm, mol._bas, mol._env)
         ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,len(ish_ranges)),
                         *ti0)
         #fg = fswap.create_group(str(istep))
         #tc0 = ti2
         for ic, col0 in enumerate(range(0, nmo_pair, e2_buflen)):
             col1 = min(col0+e2_buflen, nmo_pair)
-            #fg[str(ic)] = lib.transpose(buf[:,col0:col1])
             fswap['%d/%d'%(istep,ic)] = lib.transpose(buf[:,col0:col1])
             #tc0 = log.timer('          transpose block %d'%ic, *tc0)
         ti0 = log.timer('transposing to disk', *ti2)
@@ -93,7 +92,7 @@ def full(mol, mo_coeff, erifile, max_memory=1500, ioblk_size=512, \
         for ih, ib in enumerate(range(0, nrow, ioblklen)):
             ib1 = min(ib+ioblklen, nrow)
             pbuf = buf[ib:ib1]
-            pbuf = _ao2mo.nr_e2(pbuf, mo_coeff, klshape)
+            pbuf = _ao2mo.nr_e2_(pbuf, mo_coeff, klshape)
             tc1 = (time.clock(), time.time())
 
             h5d_eri[row0+ib:row0+ib1] = pbuf
@@ -121,11 +120,11 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
-                or (mo1.shape==mo2.shape and abs(mo1-mo2).sum()<1e-12)
+                or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
@@ -192,14 +191,14 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         log.debug('step 1, AO %d:%d, [%d/%d], len(buf) = %d', \
                   sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
                   sh_range[2])
-        buf = _ao2mo.nr_e1range(moji, sh_range, ijshape, \
-                                mol._atm, mol._bas, mol._env)
+        buf = _ao2mo.nr_e1range_(moji, sh_range, ijshape, \
+                                 mol._atm, mol._bas, mol._env)
         ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,len(ish_ranges)),
                         *ti0)
         #tc0 = ti2
         for ic, col0 in enumerate(range(0, nij_pair, e2_buflen)):
             col1 = min(col0+e2_buflen, nij_pair)
-            fswap['%d/%d'%(istep,ic)] = lib.transpose(buf[:,col0:col1])
+            fswap['%d/%d'%(istep,ic)] = pyscf.lib.transpose(buf[:,col0:col1])
             #tc0 = log.timer('          transpose block %d'%ic, *tc0)
         ti0 = log.timer('transposing to disk', *ti2)
         # release the memory of buf before allocating temporary data
@@ -230,7 +229,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         for ih, ib in enumerate(range(0, nrow, ioblklen)):
             ib1 = min(ib+ioblklen, nrow)
             pbuf = buf[ib:ib1]
-            pbuf = _ao2mo.nr_e2(pbuf, molk, klshape)
+            pbuf = _ao2mo.nr_e2_(pbuf, molk, klshape)
             tc1 = (time.clock(), time.time())
 
             h5d_eri[row0+ib:row0+ib1] = pbuf

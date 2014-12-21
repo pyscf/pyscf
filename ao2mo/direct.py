@@ -7,8 +7,7 @@ import os
 import time
 import numpy
 import h5py
-from pyscf import lib
-import pyscf.lib.logger
+import pyscf.lib.logger as logger
 import pyscf.lib.parameters as param
 import _ao2mo
 
@@ -21,7 +20,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -56,7 +55,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
         ijshape = f_ijshape(block_id)
         log.debug('transform MO %d:%d, [%d/%d] step 1, trans e1', \
                   ijshape[0], ijshape[0]+ijshape[1], block_id+1, num_block)
-        buf = _ao2mo.nr_e1(mo_coeff, ijshape, mol._atm, mol._bas, mol._env)
+        buf = _ao2mo.nr_e1_(mo_coeff, ijshape, mol._atm, mol._bas, mol._env)
         ti1 = log.timer('step 1', *ti0)
 
         nrow = buf.shape[0]
@@ -69,7 +68,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
         for ih, ib in enumerate(range(0, nrow, ioblklen)):
             ib1 = min(ib+ioblklen, nrow)
             pbuf = buf[ib:ib1]
-            pbuf = _ao2mo.nr_e2(pbuf, mo_coeff, klshape)
+            pbuf = _ao2mo.nr_e2_(pbuf, mo_coeff, klshape)
             tc1 = (time.clock(), time.time())
             h5d_eri[blkstart+ib:blkstart+ib1] = pbuf
             tc2 = (time.clock(), time.time())
@@ -97,7 +96,7 @@ def full_iofree(mol, mo_coeff, verbose=None):
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
@@ -110,11 +109,11 @@ def full_iofree(mol, mo_coeff, verbose=None):
     ijshape = klshape = (0, nmo, 0, nmo)
 
     log.debug('transform MO step 1, trans e1')
-    buf = _ao2mo.nr_e1(mo_coeff, ijshape, mol._atm, mol._bas, mol._env)
+    buf = _ao2mo.nr_e1_(mo_coeff, ijshape, mol._atm, mol._bas, mol._env)
     cput1 = log.timer('step 1', *cput0)
 
     log.debug('transform MO step 2, trans e2')
-    buf = _ao2mo.nr_e2(buf, mo_coeff, klshape)
+    buf = _ao2mo.nr_e2_(buf, mo_coeff, klshape)
     cput1 = log.timer('step 2', *cput1)
 
     log.timer('AO->MO eri transformation', *cput0)
@@ -145,11 +144,11 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
-                or (mo1.shape==mo2.shape and abs(mo1-mo2).sum()<1e-12)
+                or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
@@ -222,7 +221,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         ijshape = f_ijshape(block_id)
         log.debug('transform MO %d:%d, [%d/%d] step 1, trans e1', \
                   ijshape[0], ijshape[0]+ijshape[1], block_id+1, num_block)
-        buf = _ao2mo.nr_e1(moji, ijshape, mol._atm, mol._bas, mol._env)
+        buf = _ao2mo.nr_e1_(moji, ijshape, mol._atm, mol._bas, mol._env)
         ti1 = log.timer('step 1', *ti0)
 
         nrow = buf.shape[0]
@@ -235,7 +234,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         for ih, ib in enumerate(range(0, nrow, ioblklen)):
             ib1 = min(ib+ioblklen, nrow)
             pbuf = buf[ib:ib1]
-            pbuf = _ao2mo.nr_e2(pbuf, molk, klshape)
+            pbuf = _ao2mo.nr_e2_(pbuf, molk, klshape)
             tc1 = (time.clock(), time.time())
             h5d_eri[blkstart+ib:blkstart+ib1] = pbuf
             tc2 = (time.clock(), time.time())
@@ -263,7 +262,7 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
 
     if verbose is None:
         verbose = mol.verbose
-    log = lib.logger.Logger(mol.stdout, verbose)
+    log = logger.Logger(mol.stdout, verbose)
 
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
@@ -318,11 +317,11 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
         klshape = (nmol, nmok, 0, nmol)
 
     log.debug('transform MO step 1, trans e1')
-    buf = _ao2mo.nr_e1(moji, ijshape, mol._atm, mol._bas, mol._env)
+    buf = _ao2mo.nr_e1_(moji, ijshape, mol._atm, mol._bas, mol._env)
     cput1 = log.timer('step 1', *cput0)
 
     log.debug('transform MO step 2, trans e2')
-    buf = _ao2mo.nr_e2(buf, molk, klshape)
+    buf = _ao2mo.nr_e2_(buf, molk, klshape)
     cput1 = log.timer('step 2', *cput1)
 
     log.timer('AO->MO eri transformation', *cput0)

@@ -13,7 +13,7 @@ def full(eri_ao, mo_coeff, verbose=None, compact=True):
 def general(eri_ao, mo_coeffs, verbose=None, compact=True):
     def iden_coeffs(mo1, mo2):
         return (id(mo1) == id(mo2)) \
-                or (mo1.shape==mo2.shape and abs(mo1-mo2).sum()<1e-12)
+                or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
@@ -54,8 +54,8 @@ def general(eri_ao, mo_coeffs, verbose=None, compact=True):
                            order='F', copy=False)
         klshape = (nmol, nmok, 0, nmol)
 
-    buf = _ao2mo.nr_e1_incore(eri_ao, moji, ijshape)
-    buf = _ao2mo.nr_e2(buf, molk, klshape)
+    buf = _ao2mo.nr_e1_incore_(eri_ao, moji, ijshape)
+    buf = _ao2mo.nr_e2_(buf, molk, klshape)
     return buf
 
 if __name__ == '__main__':

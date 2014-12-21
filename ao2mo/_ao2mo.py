@@ -22,7 +22,7 @@ def _get_num_threads():
     nthreads = libao2mo.omp_get_num_threads()
     return nthreads
 
-def nr_e1(mo_coeff, shape, atm, bas, env, vout=None):
+def nr_e1_(mo_coeff, shape, atm, bas, env, vout=None):
     mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
     assert(j0 <= i0)
@@ -32,6 +32,8 @@ def nr_e1(mo_coeff, shape, atm, bas, env, vout=None):
 
     if vout is None:
         vout = numpy.empty((_count_ij(*shape),nao_pair))
+    else:
+        assert(vout.flags.c_contiguous)
     if ic < jc:
         if i0+70 > j0+jc:
             fn = ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle,
@@ -63,7 +65,7 @@ def nr_e1(mo_coeff, shape, atm, bas, env, vout=None):
     return vout
 
 # in-place transform AO to MO
-def nr_e2(eri, mo_coeff, shape, vout=None):
+def nr_e2_(eri, mo_coeff, shape, vout=None):
     assert(eri.flags.c_contiguous)
     mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
@@ -82,6 +84,8 @@ def nr_e2(eri, mo_coeff, shape, vout=None):
 # When OMP is used, data is not accessed sequentially, the transformed
 # integrals can overwrite the AO integrals which are not used.
             vout = numpy.empty((nrow,nij))
+    else:
+        assert(vout.flags.c_contiguous)
 
     if ic < jc:
         fn = ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle,
@@ -99,7 +103,7 @@ def nr_e2(eri, mo_coeff, shape, vout=None):
                             ctypes.c_int(j0), ctypes.c_int(jc))
     return vout
 
-def nr_e1range(mo_coeff, sh_range, shape, atm, bas, env, vout=None):
+def nr_e1range_(mo_coeff, sh_range, shape, atm, bas, env, vout=None):
     mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
     assert(j0 <= i0)
@@ -120,6 +124,8 @@ def nr_e1range(mo_coeff, sh_range, shape, atm, bas, env, vout=None):
 
     if vout is None:
         vout = numpy.empty((buflen,_count_ij(*shape)))
+    else:
+        assert(vout.flags.c_contiguous)
     libao2mo.AO2MOnr_e1outcore_drv(vout.ctypes.data_as(ctypes.c_void_p),
                                    mo_coeff.ctypes.data_as(ctypes.c_void_p),
                                    fn,
@@ -132,7 +138,7 @@ def nr_e1range(mo_coeff, sh_range, shape, atm, bas, env, vout=None):
     return vout
 
 
-def nr_e1_incore(eri_ao, mo_coeff, shape, vout=None):
+def nr_e1_incore_(eri_ao, mo_coeff, shape, vout=None):
     assert(eri_ao.flags.c_contiguous)
     mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
@@ -144,6 +150,8 @@ def nr_e1_incore(eri_ao, mo_coeff, shape, vout=None):
 
     if vout is None:
         vout = numpy.empty((_count_ij(*shape),nao_pair))
+    else:
+        assert(vout.flags.c_contiguous)
     if eri_ao.size != nao_pair**2: # 8-fold symmetry of eri_ao
         facc = ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle,
                                              'AO2MOnr_incore8f_acc'))

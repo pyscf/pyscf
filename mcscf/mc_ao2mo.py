@@ -12,123 +12,52 @@ import pyscf.ao2mo._ao2mo as _ao2mo
 libmcscf = pyscf.lib.load_library('libmcscf')
 
 # least memory requirements:
-#       ncore**2*(nmo-ncore)*nmo + ncas**2*nmo**2*2 + nmo**3   words
 # nmo  ncore  ncas  outcore  incore
-# 200  40     16    0.6GB    3.5 GB (_eri 1.6GB intermediates 1.3G)
-# 250  50     16    1.4GB    8.4 GB (_eri 3.9GB intermediates 3.1G)
-# 300  60     16    2.7GB    17.2GB (_eri 8.1GB intermediates 6.5G)
-# 400  80     16    7.8GB    54  GB (_eri 25.6GB intermediates 20.5G)
-# 500  100    16    18 GB
+# 200  40     16    0.8GB    3.7 GB (_eri 1.6GB intermediates 1.3G)
+# 250  50     16    1.7GB    8.2 GB (_eri 3.9GB intermediates 2.6G)
+# 300  60     16    3.1GB    16.8GB (_eri 8.1GB intermediates 5.6G)
+# 400  80     16    8.5GB    53  GB (_eri 25.6GB intermediates 19G)
+# 500  100    16    19 GB
 # 600  120    16    37 GB
-# 750  150    16    87 GB
+# 750  150    16    85 GB
 
 
-def trans_e1_incore(casscf, mo):
-    ncore = casscf.ncore
-    ncas = casscf.ncas
+
+def trans_e1_incore(eri_ao, mo, ncore, ncas):
     nmo = mo.shape[1]
     nocc = ncore + ncas
-    nvir = nmo - nocc
     moji = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
     ijshape = (nmo, nocc, 0, nmo)
 
-    eri1 = _ao2mo.nr_e1_incore(casscf._scf._eri, moji, ijshape)
+    eri1 = _ao2mo.nr_e1_incore_(eri_ao, moji, ijshape)
 
-    c_nmo = ctypes.c_int(nmo)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
-    jc_pp = numpy.empty((ncore,nmo,nmo))
-    kc_pp = numpy.empty((ncore,nmo,nmo))
-
-    klshape = (0, nmo, 0, nmo)
-    buf = _ao2mo.nr_e2(eri1[ncore*nmo:nocc*nmo], moji, klshape)
-    japcp = numpy.empty((ncas,nmo,ncore,nmo))
-    appp = numpy.empty((ncas,nmo,nmo,nmo))
-    ij = 0
-    for i in range(ncas):
-        for j in range(nmo):
-            funpack(c_nmo, buf[ij].ctypes.data_as(ctypes.c_void_p),
-                    appp[i,j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-            ij += 1
-        libmcscf.MCSCFinplace_apcp(japcp[i].ctypes.data_as(ctypes.c_void_p),
-                                   appp[i].ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(ncore), ctypes.c_int(ncas),
-                                   ctypes.c_int(nmo))
-    aapp = appp[:,ncore:nocc,:,:].copy()
-    appa = appp[:,:,:,ncore:nocc].copy()
-    aaaa = aapp[:,:,ncore:nocc,ncore:nocc].copy()
-    #apcp = appp[:,:,:ncore,:]
-    #acpp = appp[:,:ncore,:,:]
-    #japcp = apcp * 4 \
-    #        - acpp.transpose(0,2,1,3) \
-    #        - apcp.transpose(0,3,2,1)
-    buf = appp = None
-
-#    cvcp = numpy.empty((ncore,nmo-ncore,ncore,nmo))
-#    klshape = (nmo, ncore, 0, nmo)
-#    for i in range(ncore):
-#        _ao2mo.nr_e2(eri1[i*nmo+ncore:i*nmo+nmo], moji, klshape, cvcp[i])
-#        kc_pp[i,ncore:] = cvcp[i,:,i]
-#    jcvcp = cvcp * 4 - cvcp.transpose(2,1,0,3)
-
-#    cpp = numpy.empty((ncore,nmo,nmo))
-#    klshape = (0, nmo, 0, nmo)
-#    for i in range(ncore):
-#        buf = _ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
-#        for j in range(ncore):
-#            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-#                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-#        jc_pp[i] = cpp[i]
-#        kc_pp[i,:ncore] = cpp[:,i]
-#        jcvcp[i] -= cpp[:,ncore:].transpose(1,0,2)
-
-    jcvcp = numpy.zeros((ncore,nmo-ncore,ncore,nmo))
-    vcp = numpy.empty((nmo-ncore,ncore,nmo))
-    cpp = numpy.empty((ncore,nmo,nmo))
-    for i in range(ncore):
-        klshape = (nmo, ncore, 0, nmo)
-        _ao2mo.nr_e2(eri1[i*nmo+ncore:i*nmo+nmo], moji, klshape, vcp)
-        kc_pp[i,ncore:] = vcp[:,i]
-
-        klshape = (0, nmo, 0, nmo)
-        buf = _ao2mo.nr_e2(eri1[i*nmo:i*nmo+ncore], moji, klshape)
-        for j in range(ncore):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        jc_pp[i] = cpp[i]
-        kc_pp[i,:ncore] = cpp[:,i]
-
-        #jcvcp = cvcp * 4 - cvcp.transpose(2,1,0,3) - ccvp.transpose(0,2,1,3)
-        #jcvcp[i] += vcp * 4 - cpp[:,ncore:].transpose(1,0,2)
-        #jcvcp[:,:,i] -= vcp.transpose(1,0,2)
-        libmcscf.MCSCFinplace_cvcp(jcvcp.ctypes.data_as(ctypes.c_void_p),
-                                   vcp.ctypes.data_as(ctypes.c_void_p),
-                                   cpp.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(i), ctypes.c_int(ncore),
-                                   ctypes.c_int(ncas), ctypes.c_int(nmo))
-    vcp = cpp = None
-
-    return jc_pp, kc_pp, aapp, appa, aaaa, japcp, jcvcp
+    load_buf = lambda bufid: eri1[bufid*nmo:bufid*nmo+nmo]
+    aapp, appa, Iapcv = \
+            _trans_aapp_(mo, ncore, ncas, load_buf)
+    jc_pp, kc_pp, Icvcv = \
+            _trans_cvcv_(mo, ncore, ncas, load_buf)
+    return jc_pp, kc_pp, aapp, appa, Iapcv, Icvcv
 
 
 def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                      verbose=0):
+    mo = numpy.ascontiguousarray(mo)
     log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     mol = casscf.mol
     ncore = casscf.ncore
     ncas = casscf.ncas
     nao, nmo = mo.shape
     nocc = ncore + ncas
-    nvir = nmo - nocc
     moji = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
     ijshape = (nmo, nocc, 0, nmo)
 
     nij_pair = nocc * nmo
     nao_pair = nao*(nao+1)/2
     mem_words, ioblk_words = \
-            direct._memory_and_ioblk_size(max_memory, ioblk_size,
-                                          nij_pair, nao_pair)
+            pyscf.ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
+                                                      nij_pair, nao_pair)
     e1_buflen = min(int(mem_words/nij_pair), nao_pair)
-    ish_ranges = outcore._info_sh_ranges(mol, e1_buflen)
+    ish_ranges = pyscf.ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
 
     log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
                nij_pair*nao_pair*8/1e6, e1_buflen, nmo,
@@ -142,8 +71,8 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                   sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
                   sh_range[2])
         try:
-            buf = _ao2mo.nr_e1range(moji, sh_range, ijshape, \
-                                    mol._atm, mol._bas, mol._env)
+            buf = _ao2mo.nr_e1range_(moji, sh_range, ijshape, \
+                                     mol._atm, mol._bas, mol._env)
         except MemoryError:
             log.warn('not enough memory or limited virtual address space `ulimit -v`')
             raise MemoryError
@@ -163,60 +92,74 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             buf[:nmo,col0:col1] = dat
             col0 = col1
         return buf
+    aapp, appa, Iapcv = \
+            _trans_aapp_(mo, ncore, ncas, load_buf)
+    jc_pp, kc_pp, Icvcv = \
+            _trans_cvcv_(mo, ncore, ncas, load_buf)
+    fswap.close()
+    return jc_pp, kc_pp, aapp, appa, Iapcv, Icvcv
+
+def _trans_aapp_(mo, ncore, ncas, fload):
+    nmo = mo.shape[1]
+    nocc = ncore + ncas
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
-    jc_pp = numpy.empty((ncore,nmo,nmo))
-    kc_pp = numpy.empty((ncore,nmo,nmo))
 
+    molk = numpy.asfortranarray(mo)
     klshape = (0, nmo, 0, nmo)
-    japcp = numpy.empty((ncas,nmo,ncore,nmo))
+
+    japcv = numpy.empty((ncas,nmo,ncore,nmo-ncore))
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     appa = numpy.empty((ncas,nmo,nmo,ncas))
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = _ao2mo.nr_e2(load_buf(ncore+i), moji, klshape)
+        buf = _ao2mo.nr_e2_(fload(ncore+i), molk, klshape)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        buf = None
         aapp[i] = ppp[ncore:nocc]
         appa[i] = ppp[:,:,ncore:nocc]
-        libmcscf.MCSCFinplace_apcp(japcp[i].ctypes.data_as(ctypes.c_void_p),
+        #japcv = apcv * 4 - acpv.transpose(0,2,1,3) - avcp.transpose(0,3,2,1)
+        libmcscf.MCSCFinplace_apcv(japcv[i].ctypes.data_as(ctypes.c_void_p),
                                    ppp.ctypes.data_as(ctypes.c_void_p),
                                    ctypes.c_int(ncore), ctypes.c_int(ncas),
                                    ctypes.c_int(nmo))
-    aaaa = aapp[:,:,ncore:nocc,ncore:nocc].copy()
-    ppp = None
+    return aapp, appa, japcv
 
-    jcvcp = numpy.zeros((ncore,nmo-ncore,ncore,nmo))
+def _trans_cvcv_(mo, ncore, ncas, fload):
+    nmo = mo.shape[1]
+    nocc = ncore + ncas
+    c_nmo = ctypes.c_int(nmo)
+    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
+
+    molk = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
+
+    jc_pp = numpy.empty((ncore,nmo,nmo))
+    kc_pp = numpy.empty((ncore,nmo,nmo))
+    jcvcv = numpy.zeros((ncore,nmo-ncore,ncore,nmo-ncore))
     vcp = numpy.empty((nmo-ncore,ncore,nmo))
     cpp = numpy.empty((ncore,nmo,nmo))
     for i in range(ncore):
-        buf = load_buf(i)
+        buf = fload(i)
         klshape = (nmo, ncore, 0, nmo)
-        _ao2mo.nr_e2(buf[ncore:nmo], moji, klshape, vcp)
+        _ao2mo.nr_e2_(buf[ncore:nmo], molk, klshape, vcp)
         kc_pp[i,ncore:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2(buf[:ncore], moji, klshape, buf[:ncore])
+        _ao2mo.nr_e2_(buf[:ncore], molk, klshape, buf[:ncore])
         for j in range(ncore):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
         jc_pp[i] = cpp[i]
         kc_pp[i,:ncore] = cpp[:,i]
 
-        #jcvcp = cvcp * 4 - cvcp.transpose(2,1,0,3) - ccvp.transpose(0,2,1,3)
-        #jcvcp[i] += vcp * 4 - cpp[:,ncore:].transpose(1,0,2)
-        #jcvcp[:,:,i] -= vcp.transpose(1,0,2)
-        libmcscf.MCSCFinplace_cvcp(jcvcp.ctypes.data_as(ctypes.c_void_p),
+        #jcvcv = cvcv * 4 - cvcv.transpose(2,1,0,3) - ccvv.transpose(0,2,1,3)
+        libmcscf.MCSCFinplace_cvcv(jcvcv[i].ctypes.data_as(ctypes.c_void_p),
                                    vcp.ctypes.data_as(ctypes.c_void_p),
                                    cpp.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(i), ctypes.c_int(ncore),
-                                   ctypes.c_int(ncas), ctypes.c_int(nmo))
-    vcp = cpp = None
-    fswap.close()
-
-    return jc_pp, kc_pp, aapp, appa, aaaa, japcp, jcvcp
+                                   ctypes.c_int(ncore), ctypes.c_int(ncas),
+                                   ctypes.c_int(nmo))
+    return jc_pp, kc_pp, jcvcv
 
 
 
@@ -225,31 +168,31 @@ class _ERIS(object):
         mol = casscf.mol
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
-        self.nmo = mo.shape[1]
+        nmo = mo.shape[1]
         ncore = self.ncore
         ncas = self.ncas
-        nmo = self.nmo
-        nocc = ncore + ncas
-        mocc = mo[:,:nocc]
 
         if method == 'outcore' \
            or _mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 > casscf.max_memory*.9 \
            or casscf._scf._eri is None:
             self.jc_pp, self.kc_pp, \
-            self.aapp, self.appa, self.aaaa, \
-            self.ApcP, self.CvcP = \
+            self.aapp, self.appa, \
+            self.Iapcv, self.Icvcv = \
                     trans_e1_outcore(casscf, mo, max_memory=casscf.max_memory,
                                      verbose=casscf.verbose)
         elif method == 'incore' and casscf._scf._eri is not None:
             self.jc_pp, self.kc_pp, \
-            self.aapp, self.appa, self.aaaa, \
-            self.ApcP, self.CvcP = \
-                    trans_e1_incore(casscf, mo)
+            self.aapp, self.appa, \
+            self.Iapcv, self.Icvcv = \
+                    trans_e1_incore(casscf._scf._eri, mo,
+                                    casscf.ncore, casscf.ncas)
         else:
             raise KeyError('update ao2mo')
 
 def _mem_usage(ncore, ncas, nmo):
-    outcore = (ncore**2*(nmo-ncore)*nmo + ncas**2*nmo**2*2 + nmo**3) * 8/1e6
+    nvir = nmo - ncore
+    outcore = (ncore**2*nvir**2 + ncas*nmo*ncore*nvir + ncore*nmo**2*3 +
+               ncas**2*nmo**2*2 + nmo**3*2) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
     if outcore > 10000:
         print 'Be careful with the virtual memorty address space `ulimit -v`'
@@ -285,9 +228,8 @@ if __name__ == '__main__':
     print('kc_pp', numpy.allclose(eris0.kc_pp, eris1.kc_pp))
     print('aapp ', numpy.allclose(eris0.aapp , eris1.aapp ))
     print('appa ', numpy.allclose(eris0.appa , eris1.appa ))
-    print('aaaa ', numpy.allclose(eris0.aaaa , eris1.aaaa ))
-    print('ApcP ', numpy.allclose(eris0.ApcP , eris1.ApcP ))
-    print('CvcP ', numpy.allclose(eris0.CvcP , eris1.CvcP ))
+    print('Iapcv ', numpy.allclose(eris0.Iapcv , eris1.Iapcv ))
+    print('Icvcv ', numpy.allclose(eris0.Icvcv , eris1.Icvcv ))
 
     ncore = mc.ncore
     ncas = mc.ncas
@@ -295,30 +237,26 @@ if __name__ == '__main__':
     nmo = mo.shape[1]
     eri = ao2mo.incore.full(m._eri, mo, compact=False).reshape(nmo,nmo,nmo,nmo)
     aaap = numpy.array(eri[ncore:nocc,ncore:nocc,ncore:nocc,:])
-    aacp = numpy.array(eri[ncore:nocc,ncore:nocc,:ncore,:])
-    acap = numpy.array(eri[ncore:nocc,:ncore,ncore:nocc,:])
     jc_pp = numpy.einsum('iipq->ipq', eri[:ncore,:ncore,:,:])
     kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])
-    aaaa = numpy.array(aaap[:,:,:,ncore:nocc])
     aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
     appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
-    capp = eri[:ncore,ncore:nocc,:,:]
-    cpap = eri[:ncore,:,ncore:nocc,:]
-    ccvp = eri[:ncore,:ncore,ncore:,:]
-    cpcv = eri[:ncore,:,:ncore,ncore:]
-    cvcp = eri[:ncore,ncore:,:ncore,:]
+    capv = eri[:ncore,ncore:nocc,:,ncore:]
+    cvap = eri[:ncore,ncore:,ncore:nocc,:]
+    cpav = eri[:ncore,:,ncore:nocc,ncore:]
+    ccvv = eri[:ncore,:ncore,ncore:,ncore:]
+    cvcv = eri[:ncore,ncore:,:ncore,ncore:]
 
-    cPAp = cpap * 4 \
-         - capp.transpose(0,3,1,2) \
-         - cpap.transpose(0,3,2,1)
-    cPCv = cpcv * 4 \
-         - ccvp.transpose(0,3,1,2) \
-         - cvcp.transpose(0,3,2,1)
+    cVAp = cvap * 4 \
+         - capv.transpose(0,3,1,2) \
+         - cpav.transpose(0,3,2,1)
+    cVCv = cvcv * 4 \
+         - ccvv.transpose(0,3,1,2) \
+         - cvcv.transpose(0,3,2,1)
 
     print('jc_pp', numpy.allclose(jc_pp, eris0.jc_pp))
     print('kc_pp', numpy.allclose(kc_pp, eris0.kc_pp))
     print('aapp ', numpy.allclose(aapp , eris0.aapp ))
     print('appa ', numpy.allclose(appa , eris0.appa ))
-    print('aaaa ', numpy.allclose(aaaa , eris0.aaaa ))
-    print('ApcP ', numpy.allclose(cPAp.transpose(2,3,0,1), eris1.ApcP ))
-    print('CvcP ', numpy.allclose(cPCv.transpose(2,3,0,1), eris1.CvcP ))
+    print('Iapcv ', numpy.allclose(cVAp.transpose(2,3,0,1), eris1.Iapcv ))
+    print('Icvcv ', numpy.allclose(cVCv.transpose(2,3,0,1), eris1.Icvcv ))

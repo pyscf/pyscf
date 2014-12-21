@@ -18,11 +18,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     cput0 = (time.clock(), time.time())
     log.debug('Start 2-step CASSCF')
 
-    ncas = casscf.ncas
-    nelecas = casscf.nelecas
-    nmo = mo_coeff.shape[1]
-
     mo = mo_coeff
+    if isinstance(mo, numpy.ndarray) and mo.ndim == 2:
+        _uhf_mo = False
+        nmo = mo.shape[1]
+    else:
+        _uhf_mo = True
+        nmo = mo[0].shape[1]
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, fciRestart= restart)
     log.info('CASCI E = %.15g', e_tot)
@@ -40,7 +42,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             u, dx, g_orb, nin = casscf.rotate_orb(mo, fcivec, e_ci, eris, 0)
             t3m = log.timer('orbital rotation', *t3m)
 
-            mo = numpy.dot(mo, u)
+            if _uhf_mo:
+                mo = map(numpy.dot, mo, u)
+            else:
+                mo = numpy.dot(mo, u)
             #pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
             casscf.save_mo_coeff(mo, imacro, imicro)
 

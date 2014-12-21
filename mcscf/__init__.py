@@ -5,20 +5,29 @@ import mc1step_symm
 import casci
 import casci_symm
 import addons
+import casci_uhf
+import mc1step_uhf
 import pyscf.fci
+import pyscf.scf
 
-def CASSCF(mol, *args, **kwargs):
+def CASSCF(mol, mf, *args, **kwargs):
     if mol.symmetry:
-        mc = mc1step_symm.CASSCF(mol, *args, **kwargs)
+        mc = mc1step_symm.CASSCF(mol, mf, *args, **kwargs)
         mc.fcisolver = pyscf.fci.solver(mol)
     else:
-        mc = mc1step.CASSCF(mol, *args, **kwargs)
+        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' in str(mf.__class__):
+            mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
+        else:
+            mc = mc1step.CASSCF(mol, mf, *args, **kwargs)
     return mc
 
-def CASCI(mol, *args, **kwargs):
+def CASCI(mol, mf, *args, **kwargs):
     if mol.symmetry:
-        mc = casci_symm.CASCI(mol, *args, **kwargs)
+        mc = casci_symm.CASCI(mol, mf, *args, **kwargs)
         mc.fcisolver = pyscf.fci.solver(mol)
     else:
-        mc = casci.CASCI(mol, *args, **kwargs)
+        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' in str(mf.__class__):
+            mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)
+        else:
+            mc = casci.CASCI(mol, mf, *args, **kwargs)
     return mc
