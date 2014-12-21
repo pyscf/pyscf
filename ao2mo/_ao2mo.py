@@ -23,7 +23,7 @@ def _get_num_threads():
     return nthreads
 
 def nr_e1(mo_coeff, shape, atm, bas, env, vout=None):
-    assert(mo_coeff.flags.f_contiguous)
+    mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
     assert(j0 <= i0)
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])
@@ -64,7 +64,8 @@ def nr_e1(mo_coeff, shape, atm, bas, env, vout=None):
 
 # in-place transform AO to MO
 def nr_e2(eri, mo_coeff, shape, vout=None):
-    assert(mo_coeff.flags.f_contiguous)
+    assert(eri.flags.c_contiguous)
+    mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
     assert(j0 <= i0)
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])
@@ -99,7 +100,7 @@ def nr_e2(eri, mo_coeff, shape, vout=None):
     return vout
 
 def nr_e1range(mo_coeff, sh_range, shape, atm, bas, env, vout=None):
-    assert(mo_coeff.flags.f_contiguous)
+    mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
     assert(j0 <= i0)
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])
@@ -132,7 +133,8 @@ def nr_e1range(mo_coeff, sh_range, shape, atm, bas, env, vout=None):
 
 
 def nr_e1_incore(eri_ao, mo_coeff, shape, vout=None):
-    assert(mo_coeff.flags.f_contiguous)
+    assert(eri_ao.flags.c_contiguous)
+    mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, ic, j0, jc = shape
     assert(j0 <= i0)
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])

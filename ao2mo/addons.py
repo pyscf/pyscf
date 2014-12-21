@@ -14,6 +14,7 @@ def restore(symmetry, eri, norb, tao=None):
     if symmetry not in (8, 4, 1):
         raise ValueError('symmetry = %s' % symmetry)
 
+    eri = numpy.ascontiguousarray(eri)
     npair = norb*(norb+1)/2
     if eri.size == norb**4:
         if symmetry == 1:

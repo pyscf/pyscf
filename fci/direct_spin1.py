@@ -63,8 +63,6 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if not eri.flags.c_contiguous:
-        eri = eri.copy()
     if link_index is None:
         if isinstance(nelec, int):
             nelecb = nelec/2
@@ -97,6 +95,7 @@ def make_hdiag(h1e, eri, norb, nelec):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
+    h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
     link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
@@ -126,7 +125,8 @@ def make_hdiag(h1e, eri, norb, nelec):
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     if not isinstance(nelec, int):
         nelec = sum(nelec)
-    h2e = pyscf.ao2mo.restore(1, eri, norb).copy()
+    eri = eri.copy()
+    h2e = pyscf.ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('...,jiik->jk', .5, h2e)
     f1e = f1e * (1./nelec)
     for k in range(norb):
@@ -134,12 +134,14 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
         h2e[:,:,k,k] += f1e
     return pyscf.ao2mo.restore(4, h2e, norb) * fac
 
+# pspace Hamiltonian matrix, CPL, 169, 463
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     if isinstance(nelec, int):
         nelecb = nelec/2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
+    h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
@@ -173,11 +175,12 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
         nelec = (neleca, nelecb)
     else:
         neleca, nelecb = nelec
+    h1e = numpy.ascontiguousarray(h1e)
+    eri = numpy.ascontiguousarray(eri)
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
-    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
     hdiag = make_hdiag(h1e, eri, norb, nelec)
 
     addr, h0 = pspace(h1e, eri, norb, nelec, hdiag)
@@ -187,24 +190,10 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
         ci0[addr] = pv[:,0]
         return pw[0], ci0.reshape(na,nb)
 
-    def precond(r, e0, x0, *args):
-        #h0e0 = h0 - numpy.eye(len(addr))*(e0-eshift)
-        h0e0inv = numpy.dot(pv/(pw-(e0-eshift)), pv.T)
-        hdiaginv = 1/(hdiag - (e0-eshift))
-        h0x0 = x0 * hdiaginv
-        #h0x0[addr] = numpy.linalg.solve(h0e0, x0[addr])
-        h0x0[addr] = numpy.dot(h0e0inv, x0[addr])
-        h0r = r * hdiaginv
-        #h0r[addr] = numpy.linalg.solve(h0e0, r[addr])
-        h0r[addr] = numpy.dot(h0e0inv, r[addr])
-        e1 = numpy.dot(x0, h0r) / numpy.dot(x0, h0x0)
-        x1 = r - e1*x0
-        #pspace_x1 = x1[addr].copy()
-        x1 *= hdiaginv
-# pspace (h0-e0)^{-1} cause diverging?
-        #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
-        return x1
+    precond = make_pspace_precond(hdiag, pw, pv, addr, eshift)
+    #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
 
+    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
         return hc.ravel()
@@ -305,7 +294,6 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
-    h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
@@ -317,6 +305,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
+    h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     def hop(c):
         hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
         return hc.ravel()
@@ -330,6 +319,30 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,nb)
+
+def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
+    # precondition with pspace Hamiltonian, CPL, 169, 463
+    def precond(r, e0, x0, *args):
+        #h0e0 = h0 - numpy.eye(len(addr))*(e0-level_shift)
+        h0e0inv = numpy.dot(pspaceci/(pspaceig-(e0-level_shift)), pspaceci.T)
+        hdiaginv = 1/(hdiag - (e0-level_shift))
+        h0x0 = x0 * hdiaginv
+        #h0x0[addr] = numpy.linalg.solve(h0e0, x0[addr])
+        h0x0[addr] = numpy.dot(h0e0inv, x0[addr])
+        h0r = r * hdiaginv
+        #h0r[addr] = numpy.linalg.solve(h0e0, r[addr])
+        h0r[addr] = numpy.dot(h0e0inv, r[addr])
+        e1 = numpy.dot(x0, h0r) / numpy.dot(x0, h0x0)
+        x1 = r - e1*x0
+        #pspace_x1 = x1[addr].copy()
+        x1 *= hdiaginv
+# pspace (h0-e0)^{-1} cause diverging?
+        #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
+        return x1
+    return precond
+
+def make_diag_precond(hdiag, level_shift=0):
+    return lambda x, e, *args: x/(hdiag-(e-level_shift))
 
 
 class FCISolver(object):
@@ -380,26 +393,10 @@ class FCISolver(object):
                                   self.max_memory, log=self.verbose)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        def precond(r, e0, x0, *args):
-            #h0e0 = h0 - numpy.eye(len(addr))*(e0-self.level_shift)
-            h0e0inv = numpy.dot(pspaceci/(pspaceig-(e0-self.level_shift)),
-                                pspaceci.T)
-            hdiaginv = 1/(hdiag - (e0-self.level_shift))
-            h0x0 = x0 * hdiaginv
-            #h0x0[addr] = numpy.linalg.solve(h0e0, x0[addr])
-            h0x0[addr] = numpy.dot(h0e0inv, x0[addr])
-            h0r = r * hdiaginv
-            #h0r[addr] = numpy.linalg.solve(h0e0, r[addr])
-            h0r[addr] = numpy.dot(h0e0inv, r[addr])
-            e1 = numpy.dot(x0, h0r) / numpy.dot(x0, h0x0)
-            x1 = r - e1*x0
-            #pspace_x1 = x1[addr].copy()
-            x1 *= hdiaginv
-# pspace (h0-e0)^{-1} cause diverging?
-            #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
-            return x1
-        return precond
+        return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
+                                   self.level_shift)
 #    def make_precond(self, hdiag, *args):
+#        return make_diag_precond(hdiag, self.level_shift)
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):

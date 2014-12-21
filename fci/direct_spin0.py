@@ -48,8 +48,6 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if not eri.flags.c_contiguous:
-        eri = eri.copy()
     if link_index is None:
         if isinstance(nelec, int):
             neleca = nelec/2
@@ -77,9 +75,10 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, **kwargs):
     else:
         neleca, nelecb = nelec
         assert(neleca == nelecb)
+    h1e = numpy.ascontiguousarray(h1e)
+    eri = numpy.ascontiguousarray(eri)
     link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na = link_index.shape[0]
-    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     hdiag = direct_ms0.make_hdiag(h1e, eri, norb, nelec)
 
     addr, h0 = direct_ms0.pspace(h1e, eri, norb, nelec, hdiag)
@@ -89,25 +88,10 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, **kwargs):
         ci0[addr] = pv[:,0]
         return pw[0], pyscf.lib.transpose_sum(ci0.reshape(na,na),True)*.5
 
-    def precond(r, e0, x0, *args):
-        #h0e0 = h0 - numpy.eye(len(addr))*(e0-eshift)
-        h0e0inv = numpy.dot(pv/(pw-(e0-eshift)), pv.T)
-        hdiaginv = 1/(hdiag - (e0-eshift))
-        h0x0 = x0 * hdiaginv
-        #h0x0[addr] = numpy.linalg.solve(h0e0, x0[addr])
-        h0x0[addr] = numpy.dot(h0e0inv, x0[addr])
-        h0r = r * hdiaginv
-        #h0r[addr] = numpy.linalg.solve(h0e0, r[addr])
-        h0r[addr] = numpy.dot(h0e0inv, r[addr])
-        e1 = numpy.dot(x0, h0r) / numpy.dot(x0, h0x0)
-        x1 = r - e1*x0
-        #pspace_x1 = x1[addr].copy()
-        x1 *= hdiaginv
-# pspace (h0-e0)^{-1} cause diverging?
-        #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
-        return x1
+    precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
     #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
 
+    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec, link_index)
         return hc.ravel()
@@ -177,16 +161,43 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 class FCISolver(direct_ms0.FCISolver):
 
+    def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
+        return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
+
+    def make_hdiag(self, h1e, eri, norb, nelec):
+        return direct_ms0.make_hdiag(h1e, eri, norb, nelec)
+
+    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+        return direct_ms0.pspace(h1e, eri, norb, nelec, hdiag, np)
+
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
+    def eig(self, op, x0, precond):
+        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+                                  self.max_cycle, self.max_space, self.lindep,
+                                  self.max_memory, log=self.verbose)
+
+    def make_precond(self, hdiag, pspaceig, pspaceci, addr):
+        return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
+                                                self.level_shift)
+
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
         e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0)
-        return e, pyscf.lib.transpose_sum(ci, inplace=True) * .5
+# when norb is small, ci is obtained by exactly diagonalization. It can happen
+# that the ground state is triplet (ci = -ci.T), symmetrize the coefficients
+# will lead to ci = 0
+#        ci = pyscf.lib.transpose_sum(ci, inplace=True) * .5
+        return e, ci
+
+    def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
+        h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
+        ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
+        return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return make_rdm1s(fcivec, norb, nelec, link_index)

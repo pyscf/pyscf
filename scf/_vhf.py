@@ -63,7 +63,7 @@ class VHFOpt(object):
             n_dm = 1
         else:
             n_dm = len(dm)
-            dm = numpy.array(dm)
+        dm = numpy.ascontiguousarray(dm)
         fsetdm = getattr(libcvhf, self._dmcondname)
         fsetdm(self._this,
                dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
@@ -87,6 +87,8 @@ class _CVHFOpt(ctypes.Structure):
 # hermi = 2 : anti-hermitian
 ################################################
 def incore(eri, dm, hermi=0):
+    eri = numpy.ascontiguousarray(eri)
+    dm = numpy.ascontiguousarray(dm)
     nao = dm.shape[0]
     vj = numpy.empty((nao,nao))
     vk = numpy.empty((nao,nao))
@@ -354,6 +356,8 @@ def int2e_sph(atm, bas, env):
 
 def incore_o2(eri, dm, hermi=1):
     '''use 4-fold symmetry for eri, ijkl=ijlk=jikl=jilk'''
+    eri = numpy.ascontiguousarray(eri)
+    dm = numpy.ascontiguousarray(dm)
     nao = dm.shape[0]
     dm0 = lib.pack_tril(dm) * 2
     for i in range(nao):

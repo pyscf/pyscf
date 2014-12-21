@@ -17,8 +17,7 @@ ANTIHERMI = 2
 
 # 2d -> 1d
 def pack_tril(mat):
-    if not mat.flags.c_contiguous:
-        mat = mat.copy(order='C')
+    mat = numpy.ascontiguousarray(mat)
     nd = mat.shape[0]
     tril = numpy.empty(nd*(nd+1)/2, mat.dtype)
     if numpy.iscomplexobj(mat):
@@ -32,6 +31,7 @@ def pack_tril(mat):
 
 # 1d -> 2d, write hermitian lower triangle to upper triangle
 def unpack_tril(tril, filltriu=HERMITIAN):
+    tril = numpy.ascontiguousarray(tril)
     nd = int(numpy.sqrt(tril.size*2))
     mat = numpy.empty((nd,nd), tril.dtype)
     if numpy.iscomplexobj(tril):
@@ -46,6 +46,7 @@ def unpack_tril(tril, filltriu=HERMITIAN):
 
 # extract a row from a tril-packed matrix
 def unpack_row(tril, row_id):
+    tril = numpy.ascontiguousarray(tril)
     nd = int(numpy.sqrt(tril.size*2))
     mat = numpy.empty(nd, tril.dtype)
     if numpy.iscomplexobj(tril):
@@ -170,6 +171,8 @@ def transpose_sum(a, inplace=False):
         anew[i0:i1,i0:i1] = tmp
     return anew
 
+# NOTE: NOT assume array a, b to be C-contiguous, since a and b are two
+# pointers we want to pass in.
 # numpy.dot might not call optimized blas
 def dot(a, b, alpha=1, c=None, beta=0):
     m = a.shape[0]
