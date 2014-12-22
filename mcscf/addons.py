@@ -5,14 +5,33 @@ import scipy.linalg
 import pyscf.lib
 
 def sort_mo(casscf, mo, caslst, base=1):
-    assert(casscf.ncas == len(caslst))
     ncore = casscf.ncore
-    nocc = ncore + casscf.ncas
-    nmo = mo.shape[0]
-    if base != 0:
-        caslst = [i-1 for i in caslst]
-    idx = [i for i in range(nmo) if i not in caslst]
-    return numpy.hstack((mo[:,idx[:ncore]], mo[:,caslst], mo[:,idx[ncore:]]))
+    if isinstance(ncore, int):
+        assert(casscf.ncas == len(caslst))
+        nmo = mo.shape[0]
+        if base != 0:
+            caslst = [i-1 for i in caslst]
+        idx = [i for i in range(nmo) if i not in caslst]
+        return numpy.hstack((mo[:,idx[:ncore]], mo[:,caslst], mo[:,idx[ncore:]]))
+    else: # UHF-based CASSCF
+        if isinstance(caslst[0], int):
+            assert(casscf.ncas == len(caslst))
+            if base != 0:
+                caslsta = [i-1 for i in caslst]
+                caslst = (caslsta, caslsta)
+        else: # two casspace lists, for alpha and beta
+            assert(casscf.ncas == len(caslst[0]))
+            assert(casscf.ncas == len(caslst[1]))
+            if base != 0:
+                caslst = ([i-1 for i in caslst[0]], [i-1 for i in caslst[1]])
+        nmo = mo[0].shape[0]
+        idx = [i for i in range(nmo) if i not in caslst[0]]
+        mo_a = numpy.hstack((mo[0][:,idx[:ncore[0]]], mo[0][:,caslst[0]],
+                             mo[0][:,idx[ncore[0]:]]))
+        idx = [i for i in range(nmo) if i not in caslst[1]]
+        mo_b = numpy.hstack((mo[1][:,idx[:ncore[1]]], mo[1][:,caslst[1]],
+                             mo[1][:,idx[ncore[1]:]]))
+        return (mo_a, mo_b)
 
 def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
     nocc = ncas + ncore

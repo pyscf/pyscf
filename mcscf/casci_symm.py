@@ -39,9 +39,11 @@ class CASCI(casci.CASCI):
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
                                                 self.mo_coeff)
-        ncore = self.ncore
-        nocc = self.ncore + self.ncas
-        self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        if not hasattr(self.fcisolver, 'orbsym') or \
+           not self.fcisolver.orbsym:
+            ncore = self.ncore
+            nocc = self.ncore + self.ncas
+            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci = \
                 casci.kernel(self, mo, ci0=ci0, verbose=self.verbose)

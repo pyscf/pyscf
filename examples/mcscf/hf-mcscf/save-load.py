@@ -21,7 +21,8 @@ m.set_mo_occ = scf.addons.dynamic_occ(m, 1e-3)
 m.scf()
 
 mc = mcscf.CASSCF(mol, m, 6, (4,2))
-mc.fcisolver = pyscf.fci.direct_spin1
+# Change the default CASSCF save_mo_coeff function. Save every MO coefficients
+# for each CAS iteration step
 def save_mo_coeff(mo_coeff, imacro, imicro):
     if imacro % 3 == 2:
         print imacro, imicro

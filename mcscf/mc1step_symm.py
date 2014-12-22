@@ -15,8 +15,6 @@ import aug_hessian
 import mc1step
 import mc2step
 
-# ref. JCP, 82, 5053;  JCP, 73, 2342
-
 
 class CASSCF(mc1step.CASSCF):
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
@@ -44,9 +42,12 @@ class CASSCF(mc1step.CASSCF):
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
                                                 self.mo_coeff)
-        ncore = self.ncore
-        nocc = self.ncore + self.ncas
-        self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+
+        if not hasattr(self.fcisolver, 'orbsym') or \
+           not self.fcisolver.orbsym:
+            ncore = self.ncore
+            nocc = self.ncore + self.ncas
+            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc1step.kernel(self, mo, \
@@ -72,9 +73,11 @@ class CASSCF(mc1step.CASSCF):
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
                                                 self.mo_coeff)
-        ncore = self.ncore
-        nocc = self.ncore + self.ncas
-        self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        if not hasattr(self.fcisolver, 'orbsym') or \
+           not self.fcisolver.orbsym:
+            ncore = self.ncore
+            nocc = self.ncore + self.ncas
+            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo, \

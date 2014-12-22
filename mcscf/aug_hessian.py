@@ -29,7 +29,6 @@ def pick_large_mode(e, v):
 def davidson(h_op, g, precond, x0, log, tol=1e-7, max_cycle=10, max_stepsize=.6,
              lindep=1e-14, pick_mode=pick_large_mode, dot=numpy.dot):
     # the first trial vector is (1,0,0,...), which is not included in xs
-    x0 = x0/numpy.linalg.norm(x0)
     xs = []
     ax = []
 
@@ -81,7 +80,6 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
                 lindep=1e-14, pick_mode=pick_large_mode, dot=numpy.dot):
 
     # the first trial vector is (1,0,0,...), which is not included in xs
-    x0 = x0/numpy.linalg.norm(x0)
     xs = []
     ax = []
 
@@ -114,7 +112,10 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
         x0 = precond(dx, w_t)
 
         #yield w_t, xtrial
-    yield istep+1, w_t, xtrial
+    if x0.size == 0:
+        yield 0, 0, x0
+    else:
+        yield istep+1, w_t, xtrial
 
 # As did in orz, optimize the stepsize by searching the best lambda
 def _opt_step_as_orz_lambda(heff, ovlp, xs, pick_mode, lambda0,

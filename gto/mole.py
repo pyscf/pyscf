@@ -281,8 +281,6 @@ mol.build(
 
         self.check_sanity(self)
 
-        self._built = True
-
         if not self.symmetry:
             self.atom = self.format_atom(self.atom)
         else:
@@ -328,6 +326,8 @@ mol.build(
         log.debug2(self, 'arg.atm = %s', self._atm)
         log.debug2(self, 'arg.bas = %s', self._bas)
         log.debug2(self, 'arg.env = %s', self._env)
+
+        self._built = True
         return self._atm, self._bas, self._env
 
     @classmethod
@@ -445,9 +445,6 @@ mol.build(
 
 
     def dump_input(self):
-        if not self._built:
-            self.build()
-
         try:
             filename = os.path.join(os.getcwd(), sys.argv[0])
             finput = open(filename, 'r')
