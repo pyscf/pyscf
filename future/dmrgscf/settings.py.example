@@ -1,6 +1,6 @@
 #
 # This file is an example to set the environment.
-# The configs will be used in dmrgci.py and chemps2.py fciqmc.py
+# The configs will be used in dmrgci.py and chemps2.py
 #
 
 import os
@@ -18,7 +18,3 @@ BLOCKSCRATCHDIR = './scratch'
 # see more details in the ChemPS2 document
 #       https://github.com/SebWouters/CheMPS2
 PYCHEMPS2BIN = '/path/to/ChemPS2/build/PyChemPS2/PyChemPS2.so'
-
-# To install FCIQMC as the FCI sovler for CASSCF, see
-#       https://github.com/ghb24/NECI_STABLE
-FCIQMCEXE = '/path/to/FCIQMC/neci.x'

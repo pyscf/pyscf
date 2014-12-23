@@ -238,7 +238,7 @@ if __name__ == '__main__':
     mol = gto.Mole()
     mol.build(
         verbose = 5,
-        output = 'out-dmrgci',
+        output = 'out-fciqmc',
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
         symmetry = True,
