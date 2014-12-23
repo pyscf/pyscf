@@ -9,6 +9,13 @@ import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
 
+'''
+DMRG solver for CASSCF.
+
+DMRGCI.kernel function has a kerword fciRestart to control the Block solver
+restart from previous calculation
+'''
+
 try:
     import settings
 except ImportError:

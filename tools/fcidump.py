@@ -77,7 +77,7 @@ def from_chkfile(output, chkfile, tol=1e-15):
         write_hcore(fout, h, nmo, tol=tol)
         fout.write(' %.16g  0  0  0  0\n' % mol.nuclear_repulsion())
 
-def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[]):
+def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[], tol=1e-15):
     with open(output, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol)

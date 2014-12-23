@@ -383,7 +383,7 @@ class CASSCF(casci_uhf.CASCI):
         except:
             pass
 
-    def mc1step(self, mo=None, ci0=None, macro=None, micro=None):
+    def mc1step(self, mo=None, ci0=None, macro=None, micro=None, **cikwargs):
         if mo is None:
             mo = self.mo_coeff
         else:
@@ -400,10 +400,10 @@ class CASSCF(casci_uhf.CASCI):
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 kernel(self, mo, \
                        tol=self.conv_threshold, macro=macro, micro=micro, \
-                       ci0=ci0, verbose=self.verbose)
+                       ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo=None, ci0=None, macro=None, micro=None):
+    def mc2step(self, mo=None, ci0=None, macro=None, micro=None, **cikwargs):
         import mc2step_uhf
         if mo is None:
             mo = self.mo_coeff
@@ -421,15 +421,15 @@ class CASSCF(casci_uhf.CASCI):
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step_uhf.kernel(self, mo, \
                                    tol=self.conv_threshold, macro=macro, micro=micro, \
-                                   ci0=ci0, verbose=self.verbose)
+                                   ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def casci(self, mo, ci0=None, eris=None):
+    def casci(self, mo, ci0=None, eris=None, **cikwargs):
         if eris is None:
             fcasci = self
         else:
             fcasci = _fake_h_for_fast_casci(self, mo, eris)
-        return casci_uhf.kernel(fcasci, mo, ci0=ci0, verbose=0)
+        return casci_uhf.kernel(fcasci, mo, ci0=ci0, verbose=0, **cikwargs)
 
     def pack_uniq_var(self, mat):
         v = []

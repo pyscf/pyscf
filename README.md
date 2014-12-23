@@ -59,6 +59,11 @@ Installation
   After installing the DMRG solver, create a file future/dmrgscf/settings.py
   to store the path where the DMRG solver was installed.
 
+* Using FCIQMC as the FCI solver for CASSCF.
+      NECI (https://github.com/ghb24/NECI_STABLE)
+  After installing the NECI, create a file future/fciqmc/settings.py
+  to store the path where the NECI was installed.
+
 
 Adding new features
 -------------------
@@ -128,3 +133,6 @@ Version 0.8 (2014-12-21):
   * Add UHF-MCSCF
   * Add 2-step DMRGSCF, using Block and ChemPS2 as FCI solver
   * Add ROHF
+
+Version 0.9 (2015-1-?):
+  * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
