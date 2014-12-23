@@ -78,7 +78,7 @@ class FCIQMCCI(object):
         log = logger.Logger(self.stdout, verbose)
         log.info('******** FCIQMC options ********')
         log.info('Number of walkers = %s', self.maxwalkers)
-        log.info('Maximum number of iterations = %d', self.maxIter
+        log.info('Maximum number of iterations = %d', self.maxIter)
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -97,7 +97,7 @@ class FCIQMCCI(object):
         for line in f.readlines():
             linesp = line.split()
 
-            if(int(linesp[0]) /= -1):
+            if(int(linesp[0]) != -1):
 
                 assert(int(linesp[0]) <= norb)
                 assert(int(linesp[1]) <= norb)
