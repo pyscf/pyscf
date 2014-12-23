@@ -1,6 +1,6 @@
 #
 # This file is an example to set the environment.
-# The configs will be used in dmrgci.py and chemps2.py
+# The configs will be used in dmrgci.py and chemps2.py fciqmc.py
 #
 
 import os
@@ -15,3 +15,4 @@ BLOCKSCRATCHDIR = './scratch'
 #       https://github.com/SebWouters/CheMPS2
 PYCHEMPS2BIN = '/path/to/ChemPS2/build/PyChemPS2/PyChemPS2.so'
 
+FCIQMCEXE = '/path/to/FCIQMC/neci.x'
