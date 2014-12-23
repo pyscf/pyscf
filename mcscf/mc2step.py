@@ -11,7 +11,7 @@ import pyscf.scf
 import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
-           ci0=None, verbose=None, **kwargs):
+           ci0=None, verbose=None, **cikwargs):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -26,7 +26,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         _uhf_mo = True
         nmo = mo[0].shape[1]
     eris = casscf.update_ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **kwargs)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     elast = e_tot
     conv = False
@@ -65,7 +65,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **kwargs)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         norm_gorb = numpy.linalg.norm(g_orb)

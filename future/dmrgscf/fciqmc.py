@@ -208,28 +208,6 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, FCIQMCCI):
                                        neleca+nelecb, ms=abs(neleca-nelecb),
                                        orbsym=orbsym,tol=1e-10)
 
-#    f = open(integralFile, 'w')
-#    f.write(' &FCI NORB= %i,NELEC= %i,MS2= %i,\n' %(ncas, neleca+nelecb, neleca-nelecb))
-#    f.write(' ORBSYM=%s\n')
-#    for i in range(ncas):
-#        f.write('1 ')
-#
-#    f.write('\nISYM=1\n')
-#    f.write('&END\n')
-#    index1 = 0
-#    for i in range(ncas):
-#        for j in range(i+1):
-#            index2=0
-#            for k in range(ncas):
-#                for l in range(k+1):
-#                    f.write('%18.10e %3i  %3i  %3i  %3i\n' %(eri_cas[index1,index2], i+1, j+1, k+1, l+1))
-#                    index2=index2+1
-#            index1=index1+1
-#    for i in range(ncas):
-#        for j in range(i+1):
-#            f.write('%18.10e %3i  %3i  %3i  %3i\n' %(h1eff[i,j], i+1, j+1, 0, 0))
-#
-#    f.close()
 
 
 def executeFCIQMC(FCIQMCCI):
@@ -244,7 +222,7 @@ def readEnergy(FCIQMCCI):
         if "*TOTAL ENERGY* CALCULATED USING THE" in line:
             calc_e = float(line.split()[-1])
             break
-    print 'total energy from fciqmc: ',calc_e
+    logger.info(FCIQMCCI, 'total energy from fciqmc: %.15f', calc_e)
     file1.close()
 
     return calc_e

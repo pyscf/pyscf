@@ -5,14 +5,20 @@
 
 import os
 
+# To install Block as the FCI solver for CASSCF, see
+#       http://www.princeton.edu/chemistry/chan/software/dmrg/
+#       https://github.com/sanshar/Block
 BLOCKEXE = '/path/to/Block/block.spin_adapted'
 #BLOCKSCRATCHDIR = os.environ['TMPDIR']
 BLOCKSCRATCHDIR = './scratch'
 
+# Use ChemPS2 as the FCI solver for CASSCF
 # building PyChemPS2, a python module will be generated in
 #       /path/to/ChemPS2/build/PyChemPS2
 # see more details in the ChemPS2 document
 #       https://github.com/SebWouters/CheMPS2
 PYCHEMPS2BIN = '/path/to/ChemPS2/build/PyChemPS2/PyChemPS2.so'
 
+# To install FCIQMC as the FCI sovler for CASSCF, see
+#       https://github.com/ghb24/NECI_STABLE
 FCIQMCEXE = '/path/to/FCIQMC/neci.x'

@@ -22,7 +22,7 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
 
-    def casci(self, mo=None, ci0=None):
+    def casci(self, mo=None, ci0=None, **cikwargs):
         if mo is None:
             mo = self.mo_coeff
         else:
@@ -46,7 +46,7 @@ class CASCI(casci.CASCI):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci = \
-                casci.kernel(self, mo, ci0=ci0, verbose=self.verbose)
+                casci.kernel(self, mo, ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci
 
     def get_hcore(self, mol=None):
