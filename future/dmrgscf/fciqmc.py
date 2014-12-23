@@ -65,10 +65,15 @@ class FCIQMCCI(object):
         self.integralFile = "FCIDUMP"
         self.configFile = "neci.inp"
         self.outputFile = "neci.out"
-        self.maxwalkers = "100000"
-        self.maxIter = -1
+        self.maxwalkers = 10000
+        self.maxIter = 6000
         self.restart = False
         self.time = 10
+        self.orbsym = []
+        if mol.symmetry:
+            self.groupname = mol.groupname
+        else:
+            self.groupname = None
 
         self._keys = set(self.__dict__.keys() + ['_keys'])
 
@@ -104,9 +109,10 @@ class FCIQMCCI(object):
                 assert(int(linesp[2]) <= norb)
                 assert(int(linesp[3]) <= norb)
 
-                twopdm[int(linesp[0]),int(linesp[2]),int(linesp[1]),int(linesp[3])] = float(linesp[4])
+                twopdm[int(linesp[0])-1,int(linesp[2])-1,int(linesp[1])-1,int(linesp[3])-1] = float(linesp[4])
 
-        onepdm = numpy.einsum('ikjj->ik', twopdm) / (nelec-1)
+        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm /= (nelectrons-1)
 
         return onepdm, twopdm
 
@@ -149,9 +155,9 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('\n')
     f.write('calc\n')
     f.write('methods\n')
-    f.write('methods vertex fcimc\n')
+    f.write('method vertex fcimc\n')
     f.write('endmethods\n')
-    f.write('time %d\n'%(FCIQMC.time))
+    f.write('time %d\n'%(FCIQMCCI.time))
     f.write('memoryfacpart 2.0\n')
     f.write('memoryfacspawn 1.0\n')
     f.write('totalwalkers %i\n'%(FCIQMCCI.maxwalkers))
@@ -169,19 +175,21 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('trial-wavefunction 500\n')
     f.write('jump-shift\n')
     f.write('proje-changeref 1.5\n')
+    f.write('stepsshift 10\n')
     f.write('maxwalkerbloom 2\n')
     f.write('endcalc\n')
     f.write('\n')
     f.write('integral\n')
+    f.write('freeze 0,0\n')
     f.write('endint\n')
     f.write('\n')
     f.write('logging\n')
     f.write('popsfiletimer 60.0\n')
     f.write('binarypops\n')
-    f.write('calcrdmonfly 3 100 500')
-    f.write('write-spin-free-rdm') 
-    f.write('endlog') 
-    f.write('end')
+    f.write('calcrdmonfly 3 100 500\n')
+    f.write('write-spin-free-rdm\n') 
+    f.write('endlog\n') 
+    f.write('end\n')
 
     f.close()
     #no reorder
@@ -197,7 +205,7 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, FCIQMCCI):
         orbsym = []
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ms=abs(neleca-nelecb),
-                                       orbsym=orbsym)
+                                       orbsym=orbsym,tol=1e-10)
 
 #    f = open(integralFile, 'w')
 #    f.write(' &FCI NORB= %i,NELEC= %i,MS2= %i,\n' %(ncas, neleca+nelecb, neleca-nelecb))
@@ -233,8 +241,9 @@ def readEnergy(FCIQMCCI):
     file1 = open(os.path.join(FCIQMCCI.scratchDirectory, FCIQMCCI.outputFile),"r")
     for line in file1:
         if "*TOTAL ENERGY* CALCULATED USING THE" in line:
-            calc_e = line.split()[-1]
+            calc_e = float(line.split()[-1])
             break
+    print 'total energy from fciqmc: ',calc_e
     file1.close()
 
     return calc_e
