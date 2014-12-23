@@ -161,6 +161,7 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('memoryfacpart 2.0\n')
     f.write('memoryfacspawn 1.0\n')
     f.write('totalwalkers %i\n'%(FCIQMCCI.maxwalkers))
+    f.write('nmcyc %i\n'%(FCIQMCCI.maxIter))
     if (Restart):
         f.write('readpops')
     else :
