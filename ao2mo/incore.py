@@ -4,7 +4,7 @@
 #
 
 import numpy
-import _ao2mo
+from pyscf.ao2mo import _ao2mo
 
 def full(eri_ao, mo_coeff, verbose=None, compact=True):
     return general(eri_ao, (mo_coeff,)*4, verbose, compact)
@@ -23,12 +23,12 @@ def general(eri_ao, mo_coeffs, verbose=None, compact=True):
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     if ijsame:
-        nij_pair = nmoi*(nmoi+1) / 2
+        nij_pair = nmoi*(nmoi+1) // 2
     else:
         nij_pair = nmoi*nmoj
 
     if klsame:
-        nkl_pair = nmok*(nmok+1) / 2
+        nkl_pair = nmok*(nmok+1) // 2
     else:
         nkl_pair = nmok*nmol
     if nij_pair == 0 or nkl_pair == 0:

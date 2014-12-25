@@ -21,15 +21,15 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
-import cistring
-import rdm
+from pyscf.fci import cistring
+from pyscf.fci import rdm
 
 libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:
         if isinstance(nelec, int):
-            nelecb = nelec/2
+            nelecb = nelec//2
             neleca = nelec - nelecb
         else:
             neleca, nelecb = nelec
@@ -60,12 +60,19 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-# the input fcivec should be symmetrized
+# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
+# h2e = eri_{pq,rs} p^+ q r^+ s
+#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
+# so eri is defined as
+#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
+# to restore the symmetry between pq and rs,
+#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
+# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, int):
-            nelecb = nelec/2
+            nelecb = nelec//2
             neleca = nelec - nelecb
         else:
             neleca, nelecb = nelec
@@ -91,7 +98,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
 def make_hdiag(h1e, eri, norb, nelec):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -137,7 +144,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 # pspace Hamiltonian matrix, CPL, 169, 463
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -146,7 +153,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     addr = numpy.argsort(hdiag)[:np]
-    addra = addr / nb
+    addra = addr // nb
     addrb = addr % nb
     stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
                        dtype=numpy.uint64)
@@ -170,7 +177,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # eigvalue of first davidson iter being equal to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
         nelec = (neleca, nelecb)
     else:
@@ -285,7 +292,7 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
         nelec = (neleca, nelecb)
     else:
@@ -357,7 +364,7 @@ class FCISolver(object):
 # level shift in precond
         self.level_shift = 1e-2
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def dump_flags(self, verbose=None):
         if verbose is None:
@@ -434,6 +441,7 @@ class FCISolver(object):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
@@ -464,8 +472,8 @@ if __name__ == '__main__':
     h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
     eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
     eri = eri.reshape(norb,norb,norb,norb)
-    nea = nelec/2 + 1
-    neb = nelec/2 - 1
+    nea = nelec//2 + 1
+    neb = nelec//2 - 1
     nelec = (nea, neb)
 
     e1 = cis.kernel(h1e, eri, norb, nelec)[0]

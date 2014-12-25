@@ -11,7 +11,7 @@ logger
 import sys
 import time
 
-import parameters as param
+from pyscf.lib import parameters as param
 
 DEBUG4 = param.VERBOSE_DEBUG + 4
 DEBUG3 = param.VERBOSE_DEBUG + 3

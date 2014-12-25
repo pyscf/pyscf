@@ -6,7 +6,7 @@
 import os
 import ctypes
 import numpy
-import misc
+from pyscf.lib import misc
 
 _np_helper = misc.load_library('libnp_helper')
 
@@ -19,7 +19,7 @@ ANTIHERMI = 2
 def pack_tril(mat):
     mat = numpy.ascontiguousarray(mat)
     nd = mat.shape[0]
-    tril = numpy.empty(nd*(nd+1)/2, mat.dtype)
+    tril = numpy.empty(nd*(nd+1)//2, mat.dtype)
     if numpy.iscomplexobj(mat):
         fn = _np_helper.NPzpack_tril
     else:
@@ -96,8 +96,8 @@ def transpose(a, inplace=False):
     arow, acol = a.shape
     if inplace:
         assert(arow == acol)
-        nrblk = (arow-1) / BLOCK_DIM + 1
-        ncblk = (acol-1) / BLOCK_DIM + 1
+        nrblk = (arow-1) // BLOCK_DIM + 1
+        ncblk = (acol-1) // BLOCK_DIM + 1
         tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM), a.dtype)
         for j in range(ncblk):
             c0 = j * BLOCK_DIM
@@ -155,7 +155,7 @@ def transpose_sum(a, inplace=False):
     else:
         anew = numpy.empty_like(a)
     na = a.shape[0]
-    nblk = (na-1) / BLOCK_DIM + 1
+    nblk = (na-1) // BLOCK_DIM + 1
     for i in range(nblk):
         i0 = i*BLOCK_DIM
         i1 = i0 + BLOCK_DIM
@@ -210,7 +210,8 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
 
-    _np_helper.NPdgemm(ctypes.c_char(trans_b), ctypes.c_char(trans_a),
+    _np_helper.NPdgemm(ctypes.c_char(trans_b.encode('ascii')),
+                       ctypes.c_char(trans_a.encode('ascii')),
                        ctypes.c_int(n), ctypes.c_int(m), ctypes.c_int(k),
                        ctypes.c_int(b.shape[1]), ctypes.c_int(a.shape[1]),
                        ctypes.c_int(c.shape[1]),
@@ -248,20 +249,20 @@ if __name__ == '__main__':
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))
-    print abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum()
-    print abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum()
-    print abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum()
-    print abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum()
+    print(abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum())
+    print(abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum())
+    print(abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum())
+    print(abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum())
 
     a = numpy.random.random((400,40))
     b = numpy.random.random((40,400))
-    print abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum()
-    print abs(dot(b  ,a  )-numpy.dot(b  ,a  )).sum()
-    print abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum()
-    print abs(dot(b.T,a.T)-numpy.dot(b.T,a.T)).sum()
+    print(abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum())
+    print(abs(dot(b  ,a  )-numpy.dot(b  ,a  )).sum())
+    print(abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum())
+    print(abs(dot(b.T,a.T)-numpy.dot(b.T,a.T)).sum())
     a = numpy.random.random((400,40))
     b = numpy.random.random((400,40))
-    print abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum()
-    print abs(dot(b  ,a.T)-numpy.dot(b  ,a.T)).sum()
-    print abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum()
-    print abs(dot(b.T,a  )-numpy.dot(b.T,a  )).sum()
+    print(abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum())
+    print(abs(dot(b  ,a.T)-numpy.dot(b  ,a.T)).sum())
+    print(abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum())
+    print(abs(dot(b.T,a  )-numpy.dot(b.T,a  )).sum())

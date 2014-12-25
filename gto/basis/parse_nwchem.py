@@ -30,7 +30,7 @@ def parse_str(string):
         elif key in MAPSPDF:
             basis_add.append([MAPSPDF[key]])
         else:
-            line = map(float, dat.replace('D','e').split())
+            line = [float(x) for x in dat.replace('D','e').split()]
             if key == 'SP':
                 basis_add[-2].append([line[0], line[1]])
                 basis_add[-1].append([line[0], line[2]])
@@ -52,7 +52,7 @@ def parse(basisfile, symb):
             else:
                 basis_add.append([MAPSPDF[key]])
         else:
-            line = map(float, dat.replace('D','e').split())
+            line = [float(x) for x in dat.replace('D','e').split()]
             if key == 'SP':
                 basis_add[-2].append([line[0], line[1]])
                 basis_add[-1].append([line[0], line[2]])

@@ -10,8 +10,8 @@ import h5py
 import pyscf.lib
 import pyscf.lib.parameters as param
 import pyscf.lib.logger as logger
-import _ao2mo
-import direct
+from pyscf.ao2mo import _ao2mo
+from pyscf.ao2mo import direct
 
 # default max_memory (MB) is 1600 MB, large cache cannot give better performance
 # default ioblk_size is 512 MB
@@ -26,8 +26,8 @@ def full(mol, mo_coeff, erifile, max_memory=1500, ioblk_size=512, \
 
     mo_coeff = numpy.array(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
-    nao_pair = nao*(nao+1) / 2
-    nmo_pair = nmo*(nmo+1) / 2
+    nao_pair = nao*(nao+1) // 2
+    nmo_pair = nmo*(nmo+1) // 2
 
     ish_ranges, e1_buflen, e2_buflen, ioblk_words = \
             info_swap_block(mol, max_memory, ioblk_size, nmo_pair, nmo_pair)
@@ -61,7 +61,7 @@ def full(mol, mo_coeff, erifile, max_memory=1500, ioblk_size=512, \
         #tc0 = ti2
         for ic, col0 in enumerate(range(0, nmo_pair, e2_buflen)):
             col1 = min(col0+e2_buflen, nmo_pair)
-            fswap['%d/%d'%(istep,ic)] = lib.transpose(buf[:,col0:col1])
+            fswap['%d/%d'%(istep,ic)] = pyscf.lib.transpose(buf[:,col0:col1])
             #tc0 = log.timer('          transpose block %d'%ic, *tc0)
         ti0 = log.timer('transposing to disk', *ti2)
         # release the memory of buf before allocating temporary data
@@ -135,13 +135,13 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
     nmol = mo_coeffs[3].shape[1]
     if ijsame:
         log.debug('i-mo == j-mo')
-        nij_pair = nmoi*(nmoi+1) / 2
+        nij_pair = nmoi*(nmoi+1) // 2
     else:
         nij_pair = nmoi*nmoj
 
     if klsame:
         log.debug('k-mo == l-mo')
-        nkl_pair = nmok*(nmok+1) / 2
+        nkl_pair = nmok*(nmok+1) // 2
     else:
         nkl_pair = nmok*nmol
 
@@ -162,7 +162,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         return None
 
     nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1) / 2
+    nao_pair = nao*(nao+1) // 2
     log.debug('num. eri in MO repr. = %.8g, require disk %.8g + %.8g MB', \
               float(nij_pair)*nkl_pair, nij_pair*nkl_pair*8/1e6, \
               nij_pair*nao_pair*8/1e6)
@@ -259,7 +259,7 @@ def info_swap_block(mol, max_memory, ioblk_size, nij_pair, nkl_pair):
     nthreads = _ao2mo._get_num_threads()
 
     nao = mol.num_NR_cgto()
-    nao_pair = nao*(nao+1) / 2
+    nao_pair = nao*(nao+1) // 2
 
     # decided the buffer row and column sizes
     e1trans_buflen = min(int(mem_words/nij_pair), nao_pair)
@@ -279,21 +279,21 @@ def _info_sh_ranges(mol, buflen):
     for i in bas_dim:
         ao_loc.append(ao_loc[-1]+i)
     nao = ao_loc[-1]
-    nao_pair = nao*(nao+1) / 2
+    nao_pair = nao*(nao+1) // 2
     ish_seg = [0] # save the starting shell of each buffer
     bufrows = []
     ij_start = 0
     for i in range(mol.nbas):
-        ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)/2
+        ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
         if ij_end - ij_start > buflen:
             ish_seg.append(i) # put present shell to next segments
-            bufrows.append(ao_loc[i]*(ao_loc[i]+1)/2-ij_start)
-            ij_start = ao_loc[i]*(ao_loc[i]+1)/2
+            bufrows.append(ao_loc[i]*(ao_loc[i]+1)//2-ij_start)
+            ij_start = ao_loc[i]*(ao_loc[i]+1)//2
     ish_seg.append(mol.nbas)
     bufrows.append(nao_pair-ij_start)
     assert(sum(bufrows) == nao_pair)
     # for each buffer, ish_ranges record (start, end, bufrow)
-    ish_ranges = zip(ish_seg[:-1], ish_seg[1:], bufrows)
+    ish_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
     return ish_ranges
 
 
@@ -311,11 +311,11 @@ if __name__ == '__main__':
     mol.basis = {'H': 'cc-pvtz',
                  'O': 'cc-pvtz',}
     mol.build()
-#    nao = mol.num_NR_cgto()
-#    npair = nao*(nao+1)/2
-#    print(info_swap_block(mol, 4 , 2, npair, npair))
-#    print(info_swap_block(mol, 20, 1, npair, npair))
-#    print(info_swap_block(mol, 20, 8, npair, npair))
+    nao = mol.num_NR_cgto()
+    npair = nao*(nao+1)//2
+    print(info_swap_block(mol, 4 , 2, npair, npair))
+    print(info_swap_block(mol, 20, 1, npair, npair))
+    print(info_swap_block(mol, 20, 8, npair, npair))
 
     rhf = scf.RHF(mol)
     rhf.scf()

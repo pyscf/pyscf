@@ -15,7 +15,7 @@ def restore(symmetry, eri, norb, tao=None):
         raise ValueError('symmetry = %s' % symmetry)
 
     eri = numpy.ascontiguousarray(eri)
-    npair = norb*(norb+1)/2
+    npair = norb*(norb+1)//2
     if eri.size == norb**4:
         if symmetry == 1:
             return eri.reshape(norb,norb,norb,norb)
@@ -23,7 +23,7 @@ def restore(symmetry, eri, norb, tao=None):
             eri1 = numpy.empty((npair,npair), dtype=eri.dtype)
             return _call_restore('1to4', eri, eri1, norb)
         else: # 8-fold
-            eri1 = numpy.empty(npair*(npair+1)/2, dtype=eri.dtype)
+            eri1 = numpy.empty(npair*(npair+1)//2, dtype=eri.dtype)
             return _call_restore('1to8', eri, eri1, norb)
     elif eri.size == npair**2:
         if symmetry == 1:
@@ -34,7 +34,7 @@ def restore(symmetry, eri, norb, tao=None):
         else: # 8-fold
             #return _ao2mo.restore_4to8(eri, norb)
             return pyscf.lib.pack_tril(eri.reshape(npair,-1))
-    elif eri.size == npair*(npair+1)/2: # 8-fold
+    elif eri.size == npair*(npair+1)//2: # 8-fold
         if symmetry == 1:
             eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
             return _call_restore('8to1', eri, eri1, norb)

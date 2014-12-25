@@ -10,16 +10,17 @@ Dirac Hartree-Fock
 import ctypes
 import _ctypes
 import time
+from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import hf
-import addons
-import diis
-import chkfile
-import _vhf
+from pyscf.scf import hf
+from pyscf.scf import addons
+from pyscf.scf import diis
+from pyscf.scf import chkfile
+from pyscf.scf import _vhf
 
 __doc__ = '''Options:
 self.chkfile = '/dev/shm/...'
@@ -58,7 +59,7 @@ class UHF(hf.SCF):
         self.opt_llll = None
         self.opt_ssll = None
         self.opt_ssss = None
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def _init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -106,7 +107,7 @@ class UHF(hf.SCF):
     @pyscf.lib.omnimethod
     def get_hcore(self, mol):
         n4c = mol.num_4C_function()
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
 
         s  = mol.intor_symmetric('cint1e_ovlp')
@@ -123,7 +124,7 @@ class UHF(hf.SCF):
     @pyscf.lib.omnimethod
     def get_ovlp(self, mol):
         n4c = mol.num_4C_function()
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
 
         s = mol.intor_symmetric('cint1e_ovlp')
@@ -165,7 +166,7 @@ class UHF(hf.SCF):
     def set_occ(self, mo_energy, mo_coeff=None):
         mol = self.mol
         n4c = mo_energy.size
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
         mo_occ = numpy.zeros(n2c * 2)
         if mo_energy[n2c] > -1.999 * mol.light_speed**2:
@@ -188,7 +189,7 @@ class UHF(hf.SCF):
 
     def dump_occ(self, mol, mo_occ, mo_energy):
         n4c = mo_energy.size
-        n2c = n4c / 2
+        n2c = n4c // 2
         log.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,', \
                  n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1], \
                  n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
@@ -317,6 +318,20 @@ class UHF(hf.SCF):
 
         return hf.scf_cycle(mol, self, conv_threshold, dump_chk, init_dm=dm)
 
+class HF1e(UHF):
+    def scf(self, *args):
+        log.info(self, '\n')
+        log.info(self, '******** 1 electron system ********')
+        self.converged = True
+        h1e = self.get_hcore(mol)
+        s1e = self.get_ovlp(mol)
+        mo_energy, mo_coeff = self.eig(h1e, s1e)
+        self.mo_occ = numpy.zeros_like(self.mo_energy)
+        n2c = self.mo_occ.size // 2
+        self.mo_occ[n2c] = 1
+        self.hf_energy = self.mo_energy[n2c]
+        return self.hf_energy + self.mol.get_enuc()
+
 
 def _jk_triu_(vj, vk, hermi):
     if hermi == 0:
@@ -340,10 +355,10 @@ def _call_veff_llll(mf, dm, hermi=1):
     mol = mf.mol
     n2c = mol.nao_2c()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        n2c = dm.shape[0] / 2
+        n2c = dm.shape[0] // 2
         dms = dm[:n2c,:n2c].copy()
     else:
-        n2c = dm[0].shape[0] / 2
+        n2c = dm[0].shape[0] // 2
         dms = []
         for dmi in dm:
             dms.append(dmi[:n2c,:n2c].copy())
@@ -360,14 +375,14 @@ def _call_veff_ssll(mf, dm, hermi=1):
     mol = mf.mol
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
-        n2c = dm.shape[0] / 2
+        n2c = dm.shape[0] // 2
         dmll = dm[:n2c,:n2c].copy()
         dmsl = dm[n2c:,:n2c].copy()
         dmss = dm[n2c:,n2c:].copy()
         dms = (dmll, dmss, dmsl)
     else:
         n_dm = len(dm)
-        n2c = dm[0].shape[0] / 2
+        n2c = dm[0].shape[0] // 2
         dms = []
         for dmi in dm:
             dms.append(dmi[:n2c,:n2c].copy())
@@ -399,10 +414,10 @@ def _call_veff_ssss(mf, dm, hermi=1):
     mol = mf.mol
     c1 = .5/mol.light_speed
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        n2c = dm.shape[0] / 2
+        n2c = dm.shape[0] // 2
         dms = dm[n2c:,n2c:].copy()
     else:
-        n2c = dm[0].shape[0] / 2
+        n2c = dm[0].shape[0] // 2
         dms = []
         for dmi in dm:
             dms.append(dmi[n2c:,n2c:].copy())
@@ -421,9 +436,9 @@ def time_reversal_ao_idx(mol):
     tao = mol.time_reversal_map()
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
-    taoL = numpy.array(map(lambda x: abs(x)-1, tao)) # -1 to fit C-array
+    taoL = numpy.array([abs(x)-1 for x in tao]) # -1 to fit C-array
     idx = numpy.hstack((taoL, taoL+n2c))
-    signL = map(lambda x: 1 if x>0 else -1, tao)
+    signL = list(map(lambda x: 1 if x>0 else -1, tao))
     sign = numpy.hstack((signL, signL))
     return idx, sign
 
@@ -455,10 +470,10 @@ class RHF(UHF):
 
     def dump_occ(self, mol, mo_occ, mo_energy):
         n4c = mo_energy.size
-        n2c = n4c / 2
+        n2c = n4c // 2
         log.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,', \
-                 (n2c+mol.nelectron)/2, mo_energy[n2c+mol.nelectron-1], \
-                 (n2c+mol.nelectron)/2+1, mo_energy[n2c+mol.nelectron])
+                 (n2c+mol.nelectron)//2, mo_energy[n2c+mol.nelectron-1], \
+                 (n2c+mol.nelectron)//2+1, mo_energy[n2c+mol.nelectron])
         log.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
         log.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
 

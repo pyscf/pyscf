@@ -7,8 +7,8 @@ import numpy
 import h5py
 import pyscf.lib
 import pyscf.lib.numpy_helper
-import pyscf.ao2mo._ao2mo as _ao2mo
-import mc_ao2mo
+from pyscf.ao2mo import _ao2mo
+from pyscf.mcscf import mc_ao2mo
 
 libmcscf = pyscf.lib.load_library('libmcscf')
 
@@ -71,11 +71,11 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     ijshape = (nmo, nocc[1], 0, nmo)
 
     nij_pair = nocc[1] * nmo
-    nao_pair = nao*(nao+1)/2
+    nao_pair = nao*(nao+1)//2
     mem_words, ioblk_words = \
             pyscf.ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
                                                       nij_pair, nao_pair)
-    e1_buflen = min(int(mem_words/nij_pair), nao_pair)
+    e1_buflen = min(int(mem_words//nij_pair), nao_pair)
     ish_ranges = pyscf.ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
 
     log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
@@ -123,11 +123,11 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     ijshape = (nmo, nocc[0], 0, nmo)
 
     nij_pair = nocc[0] * nmo
-    nao_pair = nao*(nao+1)/2
+    nao_pair = nao*(nao+1)//2
     mem_words, ioblk_words = \
             pyscf.ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
                                                       nij_pair, nao_pair)
-    e1_buflen = min(int(mem_words/nij_pair), nao_pair)
+    e1_buflen = min(int(mem_words//nij_pair), nao_pair)
     ish_ranges = pyscf.ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
 
     log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
@@ -302,14 +302,14 @@ def _mem_usage(ncore, ncas, nmo):
                ncas**2*nmo**2*7 + nmo**3*2) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
     if outcore > 10000:
-        print 'Be careful with the virtual memorty address space `ulimit -v`'
+        print('Be careful with the virtual memorty address space `ulimit -v`')
     return incore, outcore
 
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
     from pyscf import ao2mo
-    import mc1step_uhf
+    from pyscf.mcscf import mc1step_uhf
 
     mol = gto.Mole()
     mol.verbose = 0

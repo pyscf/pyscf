@@ -25,12 +25,12 @@ class KnowValues_NR(unittest.TestCase):
         e, c = rhf.eig(h1e, s1e)
         self.assertAlmostEqual(e[0], -1.9936233377269388, 12)
 
-    def test_init_guess(self):
-        """NR HF"""
-        rhf = scf.RHF(mol)
-        with lib.quite_run():
-            e = rhf._init_guess_by_atom(mol)[0]
-        self.assertAlmostEqual(e * .5, -1.4275802386213701, 12)
+#    def test_init_guess(self):
+#        """NR HF"""
+#        rhf = scf.RHF(mol)
+#        with lib.quite_run():
+#            e = rhf._init_guess_by_atom(mol)[0]
+#        self.assertAlmostEqual(e * .5, -1.4275802386213701, 12)
 
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)

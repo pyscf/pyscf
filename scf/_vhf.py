@@ -4,9 +4,9 @@ import os
 import ctypes
 import _ctypes
 import numpy
-import pyscf.lib as lib
+import pyscf.lib
 
-libcvhf = lib.load_library('libcvhf')
+libcvhf = pyscf.lib.load_library('libcvhf')
 
 class VHFOpt(object):
     def __init__(self, mol, intor, prescreen, qcondname, dmcondname):
@@ -92,7 +92,7 @@ def incore(eri, dm, hermi=0):
     nao = dm.shape[0]
     vj = numpy.empty((nao,nao))
     vk = numpy.empty((nao,nao))
-    npair = nao*(nao+1)/2
+    npair = nao*(nao+1)//2
     if eri.ndim == 2 and npair*npair == eri.size: # 4-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs4_incore_drv')
         # 'ijkl,kl->ij'
@@ -110,9 +110,9 @@ def incore(eri, dm, hermi=0):
         fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
         fvj = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs8_tridm_vj'))
         fvk = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'CVHFnrs8_jk_s2il'))
-        tridm = lib.pack_tril(lib.transpose_sum(dm))
+        tridm = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dm))
         for i in range(nao):
-            tridm[i*(i+1)/2+i] *= .5
+            tridm[i*(i+1)//2+i] *= .5
     fdrv(eri.ctypes.data_as(ctypes.c_void_p),
          tridm.ctypes.data_as(ctypes.c_void_p),
          vj.ctypes.data_as(ctypes.c_void_p),
@@ -120,10 +120,10 @@ def incore(eri, dm, hermi=0):
          vk.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nao), fvj, fvk)
     if hermi != 0:
-        vj = lib.hermi_triu(vj, hermi)
-        vk = lib.hermi_triu(vk, hermi)
+        vj = pyscf.lib.hermi_triu(vj, hermi)
+        vk = pyscf.lib.hermi_triu(vk, hermi)
     else:
-        vj = lib.hermi_triu(vj, 1)
+        vj = pyscf.lib.hermi_triu(vj, 1)
     return vj, vk
 
 # use cint2e_sph as intor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
@@ -142,12 +142,12 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-    npair = nao*(nao+1)/2
+    npair = nao*(nao+1)//2
     tridm = numpy.empty((n_dm,nao*nao))
     for idm in range(n_dm):
-        tridm[idm,:npair] = lib.pack_tril(lib.transpose_sum(dms[idm]))
+        tridm[idm,:npair] = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dms[idm]))
         for i in range(nao):
-            tridm[idm,i*(i+1)/2+i] *= .5
+            tridm[idm,i*(i+1)//2+i] *= .5
 
     if vhfopt is None:
         intor = ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, 'cint2e_sph'))
@@ -194,10 +194,10 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
 
     # vj must be symmetric
     for idm in range(n_dm):
-        vjk[0,idm] = lib.hermi_triu(vjk[0,idm], 1)
+        vjk[0,idm] = pyscf.lib.hermi_triu(vjk[0,idm], 1)
     if hermi != 0: # vk depends
         for idm in range(n_dm):
-            vjk[1,idm] = lib.hermi_triu(vjk[1,idm], hermi)
+            vjk[1,idm] = pyscf.lib.hermi_triu(vjk[1,idm], hermi)
     if n_dm == 1:
         vjk = vjk.reshape(2,nao,nao)
     return vjk
@@ -345,8 +345,8 @@ def int2e_sph(atm, bas, env):
     nbas = ctypes.c_int(c_bas.shape[0])
     libcvhf.CINTtot_cgto_spheric.restype = ctypes.c_int
     nao = libcvhf.CINTtot_cgto_spheric(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
-    nao_pair = nao*(nao+1)/2
-    eri = numpy.empty((nao_pair*(nao_pair+1)/2))
+    nao_pair = nao*(nao+1)//2
+    eri = numpy.empty((nao_pair*(nao_pair+1)//2))
     libcvhf.int2e_sph_o5(eri.ctypes.data_as(ctypes.c_void_p),
                          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
@@ -359,16 +359,16 @@ def incore_o2(eri, dm, hermi=1):
     eri = numpy.ascontiguousarray(eri)
     dm = numpy.ascontiguousarray(dm)
     nao = dm.shape[0]
-    dm0 = lib.pack_tril(dm) * 2
+    dm0 = pyscf.lib.pack_tril(dm) * 2
     for i in range(nao):
-        dm0[i*(i+1)/2+i] *= .5
-    vj = lib.unpack_tril(numpy.dot(eri, dm0))
+        dm0[i*(i+1)//2+i] *= .5
+    vj = pyscf.lib.unpack_tril(numpy.dot(eri, dm0))
     vk = numpy.zeros((nao,nao))
     libcvhf.CVHFnr_k(ctypes.c_int(nao),
                      eri.ctypes.data_as(ctypes.c_void_p),
                      dm.ctypes.data_as(ctypes.c_void_p),
                      vk.ctypes.data_as(ctypes.c_void_p))
-    vk = lib.hermi_triu(vk, hermi)
+    vk = pyscf.lib.hermi_triu(vk, hermi)
     return vj, vk
 
 

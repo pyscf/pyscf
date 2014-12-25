@@ -8,7 +8,7 @@ import scipy.linalg
 import pyscf.gto as gto
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import hf
+from pyscf.scf import hf
 
 
 class AtomSphericAverageRHF(hf.RHF):
@@ -87,6 +87,7 @@ def get_atm_nrhf_result(mol):
         atm.atom = [[a, (0, 0, 0)]]
         atm.basis = {a: b}
         atm.nelectron = gto.mole._charge(a)
+        atm.spin = atm.nelectron % 2
         atm._atm, atm._bas, atm._env = \
                 atm.make_env(atm.atom, atm.basis, atm._env)
         atm.natm = atm._atm.__len__()

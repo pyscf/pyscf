@@ -67,16 +67,16 @@ def real2spinor(l):
         ua = numpy.zeros((2*l+1,4*l+2),dtype=complex)
         ub = numpy.zeros((2*l+1,4*l+2),dtype=complex)
         j = l * 2 - 1
-        mla = l + (-j-1)/2
-        mlb = l + (-j+1)/2
+        mla = l + (-j-1)//2
+        mlb = l + (-j+1)//2
         for k,mj in enumerate(range(-j, j+1, 2)):
             ua[:,k] = u1[:,mla] * cg_spin(l, j, mj, 1)
             ub[:,k] = u1[:,mlb] * cg_spin(l, j, mj,-1)
             mla += 1
             mlb += 1
         j = l * 2 + 1
-        mla = l + (-j-1)/2
-        mlb = l + (-j+1)/2
+        mla = l + (-j-1)//2
+        mlb = l + (-j+1)//2
         for k,mj in enumerate(range(-j, j+1, 2)):
             if mla < 0:
                 ua[:,l*2+k] = 0
@@ -120,7 +120,7 @@ def cart2spinor(l):
 
 
 if __name__ == '__main__':
-    for kappa in range(-4,0) + range(1,4):
+    for kappa in list(range(-4,0)) + list(range(1,4)):
         if kappa < 0:
             l = -kappa - 1
             j = l * 2 + 1

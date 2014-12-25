@@ -48,6 +48,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for H2O"
+    print("Full Tests for H2O")
     unittest.main()
 

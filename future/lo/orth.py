@@ -2,6 +2,7 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
+from functools import reduce
 import numpy
 
 def lowdin_orth_coeff(s):
@@ -21,7 +22,7 @@ def weight_orthogonal(s, weight):
 
 
 def orth_ao(mol, pre_orth_ao=None, method='meta_lowdin', scf_method=None):
-    import nao
+    from pyscf.lo import nao
     s = mol.intor_symmetric('cint1e_ovlp_sph')
 
     if pre_orth_ao is None:
@@ -47,7 +48,7 @@ def orth_ao(mol, pre_orth_ao=None, method='meta_lowdin', scf_method=None):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    import nao
+    from pyscf.lo import nao
     mol = gto.Mole()
     mol.verbose = 1
     mol.output = 'out_orth'

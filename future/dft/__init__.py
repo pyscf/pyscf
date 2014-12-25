@@ -1,8 +1,8 @@
 import sys
-import vxc
+from pyscf.dft import vxc
+from pyscf.dft import rks
 
-import rks
-
+# register the XC keywords in module
 curmod = sys.modules[__name__]
 for k,v in vxc.XC_CODES.items():
     setattr(curmod, k, v)

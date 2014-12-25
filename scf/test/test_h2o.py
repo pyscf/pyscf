@@ -81,15 +81,6 @@ class KnowValues(unittest.TestCase):
         uhf = dhf.RHF(mol)
         self.assertAlmostEqual(uhf.scf(), -76.038520456484662, 9)
 
-#    def test_r_dhf_dkb(self):
-#        dkb = scf.dhf_dkb.UHF(mol)
-#        self.assertAlmostEqual(dkb.scf(), -76.03856379177, 9)
-#
-#    def test_r_rhf_gaunt(self):
-#        uhf = dhf.RHF(mol)
-#        uhf.with_gaunt = True
-#        self.assertAlmostEqual(uhf.scf(), -76.03070215725, 9)
-
 
     def test_level_shift_uhf(self):
         uhf = scf.UHF(mol)

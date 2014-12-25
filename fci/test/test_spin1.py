@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
+from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -26,7 +27,7 @@ m = scf.RHF(mol)
 ehf = m.scf()
 
 norb = m.mo_coeff.shape[1]
-nelec = (mol.nelectron/2, mol.nelectron/2)
+nelec = (mol.nelectron//2, mol.nelectron//2)
 h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
 g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
 na = fci.cistring.num_strings(norb, nelec[0])
@@ -35,7 +36,7 @@ numpy.random.seed(15)
 ci0 = numpy.random.random((na,nb))
 ci1 = numpy.random.random((na,nb))
 
-neleci = (mol.nelectron/2, mol.nelectron/2-1)
+neleci = (mol.nelectron//2, mol.nelectron//2-1)
 na = fci.cistring.num_strings(norb, neleci[0])
 nb = fci.cistring.num_strings(norb, neleci[1])
 numpy.random.seed(15)
@@ -120,6 +121,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for spin1"
+    print("Full Tests for spin1")
     unittest.main()
 

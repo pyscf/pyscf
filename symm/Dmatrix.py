@@ -7,6 +7,7 @@
 '''Wigner rotation D-matrix for real spherical harmonics'''
 
 from math import sqrt, factorial
+from functools import reduce
 import numpy
 
 def dmatrix(l, alpha, beta, gamma):
@@ -23,7 +24,7 @@ def dmatrix(l, alpha, beta, gamma):
 
 # u * d * u^T is real matrix
 def dmat_to_real(d):
-    l = (d.shape[0]-1)/2
+    l = (d.shape[0]-1)//2
     u = transmat_to_real(l)
     return reduce(numpy.dot, (u, d, u.T))
 
@@ -46,8 +47,8 @@ def transmat_to_real(l):
     return u
 
 def small_dmatrix(l, beta):
-    c = cos(beta/2)
-    s = sin(beta/2)
+    c = numpy.cos(beta/2)
+    s = numpy.sin(beta/2)
     if l == 0:
         return numpy.eye(1)
     elif l == 1:

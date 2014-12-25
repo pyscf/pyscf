@@ -11,7 +11,7 @@ import pyscf.lib
 import pyscf.symm
 import pyscf.scf
 import pyscf.ao2mo
-import casci
+from pyscf.mcscf import casci
 
 
 class CASCI(casci.CASCI):

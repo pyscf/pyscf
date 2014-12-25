@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from pyscf import gto
+from pyscf import lib
 import pyscf.lib.parameters as param
 
 print("test contracted GTO")
@@ -45,3 +46,5 @@ if mol.time_reversal_map() == tao:
 else:
     print("time_reversal_map fail")
 
+mol.x = None
+mol.check_sanity(mol)

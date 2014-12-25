@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
+from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -29,7 +30,7 @@ norb = m.mo_coeff.shape[1]
 nelec = mol.nelectron
 h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
 g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-na = fci.cistring.num_strings(norb, nelec/2)
+na = fci.cistring.num_strings(norb, nelec//2)
 numpy.random.seed(15)
 ci0 = numpy.random.random((na,na))
 ci0 = ci0 + ci0.T
@@ -52,12 +53,6 @@ class KnowValues(unittest.TestCase):
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
         self.assertAlmostEqual(e, -9.1491239692, 8)
-
-    def test_hdiag(self):
-        hdiag = fci.direct_spin0.make_hdiag(h1e, g2e, norb, nelec)
-        hdiagref = fci.direct_ms0.make_hdiag(h1e, g2e, norb, nelec)
-        self.assertTrue(numpy.allclose(hdiag, hdiagref))
-        self.assertAlmostEqual(numpy.linalg.norm(hdiag), 996.50750750276575, 10)
 
     def test_rdm1(self):
         dm1ref = fci.direct_ms0.make_rdm1(ci0, norb, nelec)
@@ -95,6 +90,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for spin0"
+    print("Full Tests for spin0")
     unittest.main()
 

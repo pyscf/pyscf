@@ -2,10 +2,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import param
-from geom import *
-from basis import *
+from pyscf.symm import param
+from pyscf.symm import geom
+from pyscf.symm import basis
+from pyscf.symm import cg
 
-import cg
-
-from addons import *
+from pyscf.symm.geom import *
+from pyscf.symm.basis import *
+from pyscf.symm.addons import *

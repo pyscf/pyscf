@@ -9,6 +9,7 @@ DIIS
 
 import os
 import tempfile
+from functools import reduce
 import numpy
 import pyscf.lib.logger as log
 
@@ -21,13 +22,16 @@ class DIIS:
 # SCF-EDIIS, JCP 116, 8255
 # DIIS try to minimize the change of the input vectors. It rotates the vectors
 # to minimize the error in the least square sense.
+    '''
+diis.space is the maximum of the allowed space
+diis.min_space is the minimal number of vectors to store before damping'''
     def __init__(self, dev):
         self.verbose = dev.verbose
         self.stdout = dev.stdout
         self._vec_stack = []
         self.threshold = 1e-6
         self.space = 6
-        self.start_cycle = 2
+        self.min_space = 1
 
     def push_vec(self, x):
         self._vec_stack.append(x)
@@ -48,7 +52,7 @@ class DIIS:
         self.push_vec(x)
 
         nd = self.get_num_diis_vec()
-        if nd < self.start_cycle:
+        if nd <= self.min_space:
             return x
 
         H = numpy.ones((nd+1,nd+1), x.dtype)
@@ -129,6 +133,8 @@ class SCF_DIIS(DIIS):
     def __init__(self, dev):
         DIIS.__init__(self, dev)
         self.err_vec_stack = []
+        self.start_cycle = 3
+        self.space = 8
 
     def clear_diis_space(self):
         self._vec_stack = []
@@ -156,6 +162,13 @@ class SCF_DIIS(DIIS):
         self.push_err_vec(s, d, f)
         return DIIS.update(self, f)
 
+#TODO
+def with_inits(inits, DiisClass):
+    def fn(*args):
+        adiis = DiisClass(args)
+        adiis._vec_stack = inits
+        return adiis
+    return fn
 
 
 if __name__ == '__main__':

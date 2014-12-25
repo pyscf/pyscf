@@ -3,7 +3,7 @@
 import os
 import ctypes
 import numpy
-import pyscf.lib as lib
+from pyscf import lib
 
 libcc = lib.load_library('libcc')
 

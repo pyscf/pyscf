@@ -8,8 +8,8 @@ import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
 import pyscf.scf
-import mc1step_uhf
-import mc2step
+from pyscf.mcscf import mc1step_uhf
+from pyscf.mcscf import mc2step
 
 def kernel(*args, **kwargs):
     return mc2step.kernel(*args, **kwargs)
@@ -18,7 +18,7 @@ def kernel(*args, **kwargs):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    import addons
+    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -42,9 +42,9 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    emc = kernel(mc1step_uhf.CASSCF(mol, m, 4, (2,2)), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
+    emc = kernel(mc1step_uhf.CASSCF(mol, m, 4, (2,1)), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
-    print(emc - -3.22013929407)
+    print(emc - -2.9782774463926618)
 
 
     mol.atom = [
@@ -59,12 +59,12 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = mc1step_uhf.CASSCF(mol, m, 6, (2,2))
+    mc = mc1step_uhf.CASSCF(mol, m, 4, (2,1))
     mc.verbose = 4
-    mo = addons.sort_mo(mc, (m.mo_coeff[0],)*2, (3,4,6,7,8,9), 1)
+    mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7), 1)
     emc = mc.mc2step(mo)[0] + mol.nuclear_repulsion()
     print(ehf, emc, emc-ehf)
-    #-76.0267656731 -76.0873922924 -0.0606266193028
-    print(emc - -76.0873923174, emc - -76.0926176464)
+    #-75.631870606190233, -75.573930418500652, 0.057940187689581535
+    print(emc - -75.573930418500652, emc - -75.648547447838951)
 
 

@@ -11,7 +11,7 @@ import pyscf.tools
 import pyscf.lib.logger as logger
 
 try:
-    import settings
+    from pyscf.fciqmcscf import settings
 except ImportError:
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
@@ -120,7 +120,7 @@ class FCIQMCCI(object):
         if fciRestart is None:
             fciRestart = self.restart
         if isinstance(nelec, int):
-            neleca = nelec/2 + nelec%2
+            neleca = nelec//2 + nelec%2
             nelecb = nelec - neleca
         else :
             neleca, nelecb = nelec

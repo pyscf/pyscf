@@ -2,11 +2,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from functools import reduce
 import numpy
 import pyscf.lib
 import pyscf.gto
-import geom
-import param
+from pyscf.symm import geom
+from pyscf.symm import param
 
 OP_TEST = {
     'E'  : lambda x,y:True,
@@ -64,9 +65,9 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
     for atom_ids in eql_atom_ids:
         at0 = atoms[atom_ids[0]]
         symb = pyscf.gto.mole._symbol(at0[0])
-        def op_test(x):
-            return OP_TEST[op](at0, atoms[x])
-        op_relate_atoms = [pyscf.lib.find_if(op_test, atom_ids) for op in ops]
+        op_relate_atoms = \
+                [pyscf.lib.find_if(lambda x: OP_TEST[op](at0, atoms[x]), atom_ids)
+                 for op in ops]
 
         ib = 0
         for b in basis_tab[symb]:

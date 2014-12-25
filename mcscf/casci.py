@@ -5,6 +5,7 @@
 
 import tempfile
 import time
+from functools import reduce
 import numpy
 import h5py
 import pyscf.lib
@@ -69,7 +70,7 @@ class CASCI(object):
         self.ncas = ncas
         if isinstance(nelecas, int):
             assert(nelecas%2 == 0)
-            nelecb = (nelecas-mol.spin)/2
+            nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
             self.nelecas = (neleca, nelecb)
         else:
@@ -77,7 +78,7 @@ class CASCI(object):
         if ncore is None:
             ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
             assert(ncorelec % 2 == 0)
-            self.ncore = ncorelec / 2
+            self.ncore = ncorelec // 2
         else:
             assert(isinstance(ncore, int))
             self.ncore = ncore
@@ -92,7 +93,7 @@ class CASCI(object):
         self.ci = None
         self.e_tot = 0
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def dump_flags(self):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)

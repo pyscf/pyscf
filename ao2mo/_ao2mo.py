@@ -14,7 +14,7 @@ def _count_ij(istart, icount, jstart, jcount):
         ntri = 0
     else:
         noff = jstart+jcount - (istart + 1)
-        ntri = noff*(noff+1)/2
+        ntri = noff*(noff+1)//2
     return icount*jcount - ntri
 
 def _get_num_threads():
@@ -28,7 +28,7 @@ def nr_e1_(mo_coeff, shape, atm, bas, env, vout=None):
     assert(j0 <= i0)
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])
     nao = mo_coeff.shape[0]
-    nao_pair = nao*(nao+1)/2
+    nao_pair = nao*(nao+1)//2
 
     if vout is None:
         vout = numpy.empty((_count_ij(*shape),nao_pair))
@@ -72,7 +72,7 @@ def nr_e2_(eri, mo_coeff, shape, vout=None):
     assert(j0 <= i0)
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])
     nao = mo_coeff.shape[0]
-    nao_pair = nao*(nao+1)/2
+    nao_pair = nao*(nao+1)//2
     nrow = eri.shape[0]
     nij = _count_ij(*shape)
 
@@ -146,7 +146,7 @@ def nr_e1_incore_(eri_ao, mo_coeff, shape, vout=None):
     assert(j0+jc <= i0+ic <= mo_coeff.shape[1])
 
     nao = mo_coeff.shape[0]
-    nao_pair = nao*(nao+1)/2
+    nao_pair = nao*(nao+1)//2
 
     if vout is None:
         vout = numpy.empty((_count_ij(*shape),nao_pair))

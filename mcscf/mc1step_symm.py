@@ -10,17 +10,17 @@ import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
 import pyscf.scf
-import casci
-import aug_hessian
-import mc1step
-import mc2step
+from pyscf.mcscf import casci
+from pyscf.mcscf import aug_hessian
+from pyscf.mcscf import mc1step
+from pyscf.mcscf import mc2step
 
 
 class CASSCF(mc1step.CASSCF):
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
         assert(mol.symmetry)
 # Ag, A1 or A
-#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mmol.groupname][0][0]
+#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mol, mf, ncas, nelecas, ncore)
 
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     import pyscf.fci
-    import addons
+    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0

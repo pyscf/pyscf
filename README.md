@@ -23,11 +23,10 @@ Installation
 
 * Prerequisites
     - Cmake 2.8 or higher
-    - Python 2.6 or higher
+    - Python 2.6, 2.7, 3.2, 3.3, 3.4
     - Numpy 1.6.2 or higher (1.6.1 has bug in einsum)
     - Scipy 0.10 or higher
-    - HDF5 1.8.4 or higher
-    - h5py 1.3.0 or higher
+    - h5py 1.3.0 or higher (requires HDF5 1.8.4 or higher)
 
 * Compile core module
 
@@ -73,7 +72,7 @@ there are few rules to follow
 * New features first being placed in pyscf/future.
 * Code at least should work under python-2.7, gcc-4.8.
 * Not enforced, it's preferred
-  - Compatibile with 2.5 - 3.3 for Python code;
+  - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
   - Following C89 standard for C code;
   - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
   - Avoid using other program language, to keep package light-weight
@@ -136,3 +135,4 @@ Version 0.8 (2014-12-21):
 
 Version 0.9 (2015-1-?):
   * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
+  * Solve Python 3.x compatibility

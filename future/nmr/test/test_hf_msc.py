@@ -31,63 +31,63 @@ def finger(mat):
 
 class KnowValues(unittest.TestCase):
     def test_nr_common_gauge_ucpscf(self):
-        m = nmr.hf.MSC(nrhf)
-        m.is_cpscf = False
+        m = nmr.hf.NMR(nrhf)
+        m.cphf = False
         m.gauge_orig = (1,1,1)
-        m.is_giao = False
-        msc = m.msc()
+        m.giao = False
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1636.7415677000859, 8)
 
     def test_nr_common_gauge_cpscf(self):
-        m = nmr.hf.MSC(nrhf)
-        m.is_cpscf = True
+        m = nmr.hf.NMR(nrhf)
+        m.cphf = True
         m.gauge_orig = (1,1,1)
-        m.is_giao = False
-        msc = m.msc()
+        m.giao = False
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1562.3861566059275, 8)
 
     def test_nr_giao_ucpscf(self):
-        m = nmr.hf.MSC(nrhf)
-        m.is_cpscf = False
-        m.is_giao = True
-        msc = m.msc()
+        m = nmr.hf.NMR(nrhf)
+        m.cphf = False
+        m.giao = True
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1488.0951043100554, 8)
 
     def test_nr_giao_cpscf(self):
-        m = nmr.hf.MSC(nrhf)
-        m.is_cpscf = True
-        m.is_giao = True
-        msc = m.msc()
+        m = nmr.hf.NMR(nrhf)
+        m.cphf = True
+        m.giao = True
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1358.9828207216542, 8)
 
     def test_r_common_gauge_ucpscf(self):
-        m = nmr.dhf.MSC(rhf)
-        m.is_cpscf = False
+        m = nmr.dhf.NMR(rhf)
+        m.cphf = False
         m.gauge_orig = (1,1,1)
-        m.is_giao = False
-        msc = m.msc()
+        m.giao = False
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1642.1875087918286, 8)
 
     def test_r_common_gauge_cpscf(self):
-        m = nmr.dhf.MSC(rhf)
-        m.is_cpscf = True
+        m = nmr.dhf.NMR(rhf)
+        m.cphf = True
         m.gauge_orig = (1,1,1)
-        m.is_giao = False
-        msc = m.msc()
+        m.giao = False
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1569.0406406569753, 8)
 
     def test_r_giao_ucpscf(self):
-        m = nmr.dhf.MSC(rhf)
-        m.is_cpscf = False
-        m.is_giao = True
-        msc = m.msc()
+        m = nmr.dhf.NMR(rhf)
+        m.cphf = False
+        m.giao = True
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1493.7232146398119, 8)
 
     def test_r_giao_cpscf(self):
-        m = nmr.dhf.MSC(rhf)
-        m.is_cpscf = True
-        m.is_giao = True
-        msc = m.msc()
+        m = nmr.dhf.NMR(rhf)
+        m.cphf = True
+        m.giao = True
+        msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1365.4686193737755, 8)
 
 

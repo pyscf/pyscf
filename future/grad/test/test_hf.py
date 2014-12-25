@@ -22,16 +22,19 @@ def finger(mat):
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
+        rhf.scf()
         g = grad.hf.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_e(mol, rhf)), 7.9210392362911595, 9)
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(mol)
+        uhf.scf()
         g = grad.dhf.UHF(uhf)
         self.assertAlmostEqual(finger(g.grad_e(mol, uhf)), 7.9216825870803245, 9)
 
     def test_nuclear_repulsion(self):
         rhf = scf.RHF(mol)
+        rhf.scf()
         g = grad.hf.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_nuc(mol)), 8.2887823210941249, 9)
 

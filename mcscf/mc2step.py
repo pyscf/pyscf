@@ -8,7 +8,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
 import pyscf.scf
-import mc1step
+from pyscf.mcscf import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None, **cikwargs):
@@ -43,7 +43,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             t3m = log.timer('orbital rotation', *t3m)
 
             if _uhf_mo:
-                mo = map(numpy.dot, mo, u)
+                mo = list(map(numpy.dot, mo, u))
             else:
                 mo = numpy.dot(mo, u)
             #pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)

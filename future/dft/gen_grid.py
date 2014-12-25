@@ -10,9 +10,10 @@ Generate DFT grids and weights, based on the code provided by Gerald Knizia <>
 
 import os
 import ctypes
+from functools import reduce
 import numpy
-import radi
 import pyscf.lib
+from pyscf.dft import radi
 
 libdft = pyscf.lib.load_library('libdft')
 
@@ -135,70 +136,6 @@ class Grids(object):
         return numpy.vstack(coords_all), numpy.hstack(weights_all)
 
 
-#TODO: screen out insiginficant grids
-
-#TODO:
-NPOINTS_PER_BLOCK = 128
-def generate_blocks():
-    # FDftGridGenerator::BlockifyGridR
-    return block_list
-
-LEVEL = 3
-def default_num_radpt(charge):
-    n = (0.75 + (LEVEL-1)*0.2) * 14 * (charge+2.)**(1/3.)
-    return int(n)
-
-def default_num_angpt(charge):
-    atom_period = 0
-    tab = (2,8,8,18,18,32,32,50)
-    for i in range(7):
-        if charge < sum(tab[:i]):
-            break
-    atom_period = i
-
-    DefaultAngularGridLs = (9,11,17,23,29,35,47,59,71,89)
-    l = DefaultAngularGridLs[LEVEL-1 + atom_period-1]
-    l2npt = {
-          0:    1,
-          3:    6,
-          5:   14,
-          7:   26,
-          9:   38,
-         11:   50,
-         13:   74,
-         15:   86,
-         17:  110,
-         19:  146,
-         21:  170,
-         23:  194,
-         25:  230,
-         27:  266,
-         29:  302,
-         31:  350,
-         35:  434,
-         41:  590,
-         47:  770,
-         53:  974,
-         59: 1202,
-         65: 1454,
-         71: 1730,
-         77: 2030,
-         83: 2354,
-         89: 2702,
-         95: 3074,
-        101: 3470,
-        107: 3890,
-        113: 4334,
-        119: 4802,
-        125: 5294,
-        131: 5810}
-    return l2npt[l]
-
-def _allow_ang_grids(n):
-    return n in (1, 6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, 266,
-                 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354,
-                 2702, 3074, 3470, 3890, 4334, 4802, 5294, 5810)
-
 # Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996), eq.11
 def stratmann(g):
     '''Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996)'''
@@ -228,6 +165,71 @@ def original_becke(g):
     g = (3 - g*g) * g * .5
     return g
 
+
+#TODO: screen out insiginficant grids
+
+#TODO:
+NPOINTS_PER_BLOCK = 128
+def generate_blocks():
+    # FDftGridGenerator::BlockifyGridR
+    return block_list
+
+LEVEL = 3
+def default_num_radpt(charge):
+    n = (0.75 + (LEVEL-1)*0.2) * 14 * (charge+2.)**(1/3.)
+    return int(n)
+
+
+def default_num_angpt(charge):
+    atom_period = 0
+    tab = (2,8,8,18,18,32,32,50)
+    for i in range(7):
+        if charge < sum(tab[:i]):
+            break
+    atom_period = i
+
+    DefaultAngularGridLs = (9,11,17,23,29,35,47,59,71,89)
+    l = DefaultAngularGridLs[LEVEL-1 + atom_period-1]
+    return SPHERICAL_POINTS_ORDER[l]
+
+def _allow_ang_grids(n):
+    return n in SPHERICAL_POINTS_ORDER.values()
+
+SPHERICAL_POINTS_ORDER = {
+      0:    1,
+      3:    6,
+      5:   14,
+      7:   26,
+      9:   38,
+     11:   50,
+     13:   74,
+     15:   86,
+     17:  110,
+     19:  146,
+     21:  170,
+     23:  194,
+     25:  230,
+     27:  266,
+     29:  302,
+     31:  350,
+     35:  434,
+     41:  590,
+     47:  770,
+     53:  974,
+     59: 1202,
+     65: 1454,
+     71: 1730,
+     77: 2030,
+     83: 2354,
+     89: 2702,
+     95: 3074,
+    101: 3470,
+    107: 3890,
+    113: 4334,
+    119: 4802,
+    125: 5294,
+    131: 5810
+}
 
 if __name__ == '__main__':
     import gto

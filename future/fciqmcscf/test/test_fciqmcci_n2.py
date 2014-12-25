@@ -36,6 +36,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
 if __name__ == "__main__":
-    print "Full Tests for N2"
+    print("Full Tests for N2")
     unittest.main()
 

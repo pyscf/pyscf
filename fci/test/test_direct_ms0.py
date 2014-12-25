@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from functools import reduce
 import unittest
 import numpy
 from pyscf import gto
@@ -29,7 +30,7 @@ norb = m.mo_coeff.shape[1]
 nelec = mol.nelectron
 h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
 g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-na = fci.cistring.num_strings(norb, nelec/2)
+na = fci.cistring.num_strings(norb, nelec//2)
 numpy.random.seed(15)
 ci0 = numpy.random.random((na,na))
 ci0 = ci0
@@ -79,6 +80,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for ms0"
+    print("Full Tests for ms0")
     unittest.main()
 

@@ -73,7 +73,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
     if sym is None:
         sym = ['A']*nmo
     if ene is None:
-        ene = range(nmo)
+        ene = numpy.arange(nmo)
     if occ is None:
         occ = numpy.zeros(nmo)
     assert(spin == 'Alpha' or spin == 'Beta')
@@ -87,10 +87,10 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
             fout.write(' %3d    %18.14g\n' % (i, mo_coeff[j,imo]))
 
 def dump_scf(mf, filename):
-    from pyscf import scf
+    import pyscf.scf
     with open(filename, 'w') as f:
         header(mf.mol, f)
-        if isinstance(mf, scf.hf.UHF) or 'UHF' in str(mf.__class__):
+        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' in str(mf.__class__):
             orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha', \
                           ene=mf.mo_energy[0], occ=mf.mo_occ[0])
             orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta', \

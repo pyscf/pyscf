@@ -6,14 +6,15 @@
 import time
 import copy
 import tempfile
+from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
 import pyscf.scf
-import casci_uhf
-import mc1step
-import aug_hessian
-import mc_ao2mo_uhf
+from pyscf.mcscf import casci_uhf
+from pyscf.mcscf import mc1step
+from pyscf.mcscf import aug_hessian
+from pyscf.mcscf import mc_ao2mo_uhf
 
 #FIXME:  when the number of core orbitals are different for alpha and beta,
 # the convergence are very unstable and slow
@@ -242,7 +243,7 @@ def rotate_orb_ah(casscf, mo, fcivec, e_ci, eris, dx=0, verbose=None):
             dx1 = dx1 * (casscf.max_orb_stepsize/dxmax)
         dx = dx + dx1
         dr = casscf.unpack_uniq_var(dx1)
-        u = map(numpy.dot, u, map(mc1step.expmat, dr))
+        u = list(map(numpy.dot, u, map(mc1step.expmat, dr)))
 
         norm_gprev = numpy.linalg.norm(g_orb)
 # within few steps, g_orb + \sum_i h_op(dx_i) is a good approximation to the
@@ -350,7 +351,7 @@ class CASSCF(casci_uhf.CASCI):
         self.ci = None
         self.mo_coeff = mf.mo_coeff
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -404,7 +405,7 @@ class CASSCF(casci_uhf.CASCI):
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc2step(self, mo=None, ci0=None, macro=None, micro=None, **cikwargs):
-        import mc2step_uhf
+        from pyscf.mcscf import mc2step_uhf
         if mo is None:
             mo = self.mo_coeff
         else:
@@ -532,11 +533,12 @@ class CASSCF(casci_uhf.CASCI):
 #        return eris
         return mc_ao2mo_uhf._ERIS(self, mo)
 
-    def update_jk_in_ah(self, mo, (ra,rb), casdm1s, eris):
+    def update_jk_in_ah(self, mo, r, casdm1s, eris):
         ncas = self.ncas
         ncore = self.ncore
         nocc = (ncas + ncore[0], ncas + ncore[1])
         nmo = mo[0].shape[1]
+        ra, rb = r
         vhf3ca = numpy.einsum('srqp,sr->qp', eris.Icvcv, ra[:ncore[0],ncore[0]:])
         vhf3ca += numpy.einsum('qpsr,sr->qp', eris.cvCV, rb[:ncore[1],ncore[1]:]) * 2
         vhf3cb = numpy.einsum('srqp,sr->qp', eris.ICVCV, rb[:ncore[1],ncore[1]:])
@@ -591,7 +593,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    import addons
+    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0

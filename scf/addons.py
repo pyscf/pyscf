@@ -1,18 +1,21 @@
 #!/usr/bin/env python
 
+from functools import reduce
+import weakref
 import numpy
 import pyscf.gto.mole as mole
 import pyscf.gto.moleintor as moleintor
 import pyscf.lib.logger as log
 import pyscf.symm
-import hf
-import chkfile
+from pyscf.scf import hf
+from pyscf.scf import chkfile
 
 def frac_occ(mf, tol=1e-3):
+    mf = weakref.ref(mf)
     def set_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
-        nocc = mol.nelectron / 2
+        nocc = mol.nelectron // 2
         mo_occ[:nocc] = 2
         if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
             lst = abs(mo_energy - mo_energy[nocc-1]) < tol
@@ -31,10 +34,11 @@ def frac_occ(mf, tol=1e-3):
     return set_occ
 
 def dynamic_occ(mf, tol=1e-3):
+    mf = weakref.ref(mf)
     def set_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
-        nocc = mol.nelectron / 2
+        nocc = mol.nelectron // 2
         mo_occ[:nocc] = 2
         if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
             lst = abs(mo_energy - mo_energy[nocc-1]) < tol
@@ -53,11 +57,12 @@ def dynamic_occ(mf, tol=1e-3):
 def float_occ(uhf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
     assert(isinstance(uhf, hf.UHF))
+    uhf = weakref.ref(uhf)
     def set_occ(mo_energy, mo_coeff=None):
         mol = uhf.mol
         ee = sorted([(e,0) for e in mo_energy[0]] \
                     + [(e,1) for e in mo_energy[1]])
-        n_a = filter(lambda x: x[1]==0, ee[:mol.nelectron]).__len__()
+        n_a = len([x for x in ee[:mol.nelectron] if x[1]==0])
         n_b = mol.nelectron - n_a
         if n_a != uhf.nelectron_alpha:
             log.info(uhf, 'change num. alpha/beta electrons ' \
@@ -71,10 +76,11 @@ def float_occ(uhf):
 def symm_allow_occ(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
 break symmetry as the occupied orbitals'''
+    mf = weakref.ref(mf)
     def set_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
-        nocc = mol.nelectron / 2
+        nocc = mol.nelectron // 2
         mo_occ[:nocc] = 2
         if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
             lst = abs(mo_energy - mo_energy[nocc-1]) < tol
@@ -109,7 +115,7 @@ level = 2, HOMO_beta = LUMO_alpha
 level = 3, HOMO_beta = 0'''
     # break symmetry between alpha and beta
     mo_coeff = mo_coeff.copy()
-    nocc = mol.nelectron / 2
+    nocc = mol.nelectron // 2
     if opt == 1: # break spatial symmetry
         nmo = mo_coeff[0].shape[1]
         nvir = nmo - nocc

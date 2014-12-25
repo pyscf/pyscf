@@ -20,17 +20,24 @@ import scipy.linalg
 import pyscf.lib
 import pyscf.symm
 import pyscf.ao2mo
-import cistring
-import direct_ms0
-import direct_spin1
-import direct_spin1_symm
+from pyscf.fci import cistring
+from pyscf.fci import direct_ms0
+from pyscf.fci import direct_spin1
+from pyscf.fci import direct_spin1_symm
 
 libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return direct_ms0.contract_1e(f1e, fcivec, norb, nelec, link_index)
 
-# the input fcivec should be symmetrized
+# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
+# h2e = eri_{pq,rs} p^+ q r^+ s
+#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
+# so eri is defined as
+#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
+# to restore the symmetry between pq and rs,
+#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
+# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     if not orbsym:
         return direct_ms0.contract_2e(eri, fcivec, norb, nelec, link_index)
@@ -38,7 +45,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, int):
-            neleca = nelec/2
+            neleca = nelec//2
         else:
             neleca, nelecb = nelec
             assert(neleca == nelecb)
@@ -64,7 +71,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, orbsym=[],
            *kwargs):
     if isinstance(nelec, int):
-        neleca = nelec/2
+        neleca = nelec//2
     else:
         neleca, nelecb = nelec
         assert(neleca == nelecb)
@@ -192,6 +199,7 @@ class FCISolver(direct_ms0.FCISolver):
 
 if __name__ == '__main__':
     import time
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
@@ -214,7 +222,7 @@ if __name__ == '__main__':
     nelec = mol.nelectron
     h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.RHF.get_hcore(mol), m.mo_coeff))
     eri = ao2mo.incore.full(m._eri, m.mo_coeff)
-    link_index = cistring.gen_linkstr_index(range(norb), nelec/2)
+    link_index = cistring.gen_linkstr_index(range(norb), nelec//2)
     numpy.random.seed(1)
     na = link_index.shape[0]
     fcivec = numpy.random.random((na,na))
@@ -237,7 +245,7 @@ if __name__ == '__main__':
     norb = m.mo_coeff.shape[1]
     nelec = mol.nelectron
     eri = ao2mo.incore.full(m._eri, m.mo_coeff)
-    na = cistring.num_strings(norb, nelec/2)
+    na = cistring.num_strings(norb, nelec//2)
     fcivec = numpy.random.random((na,na))
     fcivec = fcivec + fcivec.T
     orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)

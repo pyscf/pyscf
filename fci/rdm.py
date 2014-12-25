@@ -5,7 +5,7 @@ import ctypes
 import _ctypes
 import numpy
 import pyscf.lib
-import cistring
+from pyscf.fci import cistring
 
 librdm = pyscf.lib.load_library('libmcscf')
 
@@ -19,7 +19,7 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
 # dm_pq = <|p^+ q|>
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
     if isinstance(nelec, int):
-        neleca = nelec/2
+        neleca = nelec//2
     else:
         neleca, nelecb = nelec
         assert(neleca == nelecb)
@@ -41,7 +41,7 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
 # fci_rdm.c call dsyrk_, which might have bug on Debian-6
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
     if isinstance(nelec, int):
-        neleca = nelec/2
+        neleca = nelec//2
     else:
         neleca, nelecb = nelec
         assert(neleca == nelecb)
@@ -73,7 +73,7 @@ def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None):
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec/2
+        neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
     if link_index is None:
@@ -100,7 +100,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec,
                      link_index=None, symm=0):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec/2
+        neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
     if link_index is None:

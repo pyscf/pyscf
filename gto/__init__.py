@@ -4,8 +4,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import mole
-from mole import Mole
-import basis
-
-#import cmd_args
+from pyscf.gto import mole
+from pyscf.gto import basis
+from pyscf.gto.mole import Mole

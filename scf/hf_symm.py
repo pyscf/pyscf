@@ -9,15 +9,16 @@ Non-relativistic Hartree-Fock
 
 import os
 import time
+from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import pyscf.symm
-import diis
-import hf
-import _vhf
+from pyscf.scf import diis
+from pyscf.scf import hf
+from pyscf.scf import _vhf
 
 
 
@@ -27,7 +28,7 @@ class RHF(hf.RHF):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nocc = {} # {'ir_name':int,...}
-        self._keys = self._keys | set(['_eri', 'irrep_nocc'])
+        self._keys = self._keys.union(['_eri', 'irrep_nocc'])
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
@@ -88,7 +89,7 @@ class RHF(hf.RHF):
             nso = mol.symm_orb[ir].shape[1]
             if irname in self.irrep_nocc:
                 n = self.irrep_nocc[irname]
-                mo_occ[p0:p0+n/2] = 2
+                mo_occ[p0:p0+n//2] = 2
                 nelec_fix += n
                 noccs.append(n)
             else:
@@ -99,7 +100,7 @@ class RHF(hf.RHF):
         assert(nelec_float >= 0)
         if nelec_float > 0:
             mo_e_left = sorted(numpy.hstack(mo_e_left))
-            elumo_float = mo_e_left[nelec_float/2]
+            elumo_float = mo_e_left[nelec_float//2]
 
         ehomo, irhomo = (-1e9, None)
         elumo, irlumo = ( 1e9, None)
@@ -108,7 +109,7 @@ class RHF(hf.RHF):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
             if irname in self.irrep_nocc:
-                nocc = self.irrep_nocc[irname] / 2
+                nocc = self.irrep_nocc[irname] // 2
             else:
                 nocc = int((mo_energy[p0:p0+nso]<elumo_float).sum())
                 mo_occ[p0:p0+nocc] = 2
@@ -202,7 +203,7 @@ class UHF(hf.UHF):
         # number of electrons for each irreps
         self.irrep_nocc_alpha = {}
         self.irrep_nocc_beta = {}
-        self._keys = self._keys | set(['_eri', 'irrep_nocc_alpha','irrep_nocc_beta'])
+        self._keys = self._keys.union(['_eri', 'irrep_nocc_alpha','irrep_nocc_beta'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -528,7 +529,7 @@ class ROHF(UHF):
 # occupied core orbitals
         self._core_mo_energy = None
         self._open_mo_energy = None
-        self._keys = self._keys | set(['_irrep_doccs', '_irrep_soccs',
+        self._keys = self._keys.union(['_irrep_doccs', '_irrep_soccs',
                                        '_core_mo_energy', '_open_mo_energy'])
 
     def build_(self, mol=None):
@@ -543,7 +544,7 @@ class ROHF(UHF):
 
     # same to RHF.eig
     def eig(self, h, s):
-        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         feff, fa, fb = h
@@ -590,7 +591,7 @@ class ROHF(UHF):
 # Fc = (Fa+Fb)/2
         fa0 = h1e + vhf[0]
         fb0 = h1e + vhf[1]
-        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         dmsf = dm[0]+dm[1]
@@ -645,7 +646,7 @@ class ROHF(UHF):
         if len(float_idx) > 0:
             float_idx = numpy.hstack(float_idx)
             nopen = mol.spin - (neleca_fix - nelecb_fix)
-            ncore = (nelec_float - nopen)/2
+            ncore = (nelec_float - nopen)//2
             ecore = self._core_mo_energy[float_idx]
             core_sort = numpy.argsort(ecore)
             core_idx = float_idx[core_sort][:ncore]

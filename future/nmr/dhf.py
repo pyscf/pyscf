@@ -12,10 +12,9 @@ import numpy
 import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import pyscf.lib.pycint as pycint
 import pyscf.scf as scf
-import pyscf.scf._vhf as _vhf
-import hf
+from pyscf.scf import _vhf
+from pyscf.nmr import hf
 
 class NMR(hf.NMR):
     __doc__ = 'magnetic shielding constants'
@@ -24,7 +23,7 @@ class NMR(hf.NMR):
         self.giao = True
         self.cphf = True
         self.mb = 'RMB'
-        self._keys = self._keys | set(['mb'])
+        self._keys = self._keys.union(['mb'])
 
     def dump_flags(self):
         hf.NMR.dump_flags(self)
@@ -70,7 +69,7 @@ class NMR(hf.NMR):
 
         t0 = (time.clock(), time.time())
         n4c = mo_coeff.shape[0]
-        n2c = n4c / 2
+        n2c = n4c // 2
         msc_dia = []
         dm0 = scf0.make_rdm1(mo_coeff, mo_occ)
         for n, nuc in enumerate(self.shielding_nuc):
@@ -98,7 +97,7 @@ class NMR(hf.NMR):
     def para(self, mol, mo10, mo_coeff, mo_occ):
         t0 = (time.clock(), time.time())
         n4c = mo_coeff.shape[1]
-        n2c = n4c / 2
+        n2c = n4c // 2
         msc_para = numpy.zeros((self.shielding_nuc.__len__(),3,3))
         para_neg = numpy.zeros((self.shielding_nuc.__len__(),3,3))
         para_occ = numpy.zeros((self.shielding_nuc.__len__(),3,3))
@@ -148,7 +147,7 @@ class NMR(hf.NMR):
         if not self.giao:
             mol.set_common_origin(self.gauge_orig)
         n4c = mo_coeff.shape[0]
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
         s1 = numpy.zeros((3, n4c, n4c), complex)
         if self.mb.upper() == 'RMB':
@@ -173,7 +172,7 @@ class NMR(hf.NMR):
         t0 = (time.clock(), time.time())
         log.info(self, 'first order Fock matrix / GIAOs')
         n4c = mo_coeff.shape[0]
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
 
         sg = mol.intor('cint1e_govlp', 3)
@@ -205,7 +204,7 @@ class NMR(hf.NMR):
         log.debug(self, 'first order Fock matrix / RKB')
         t0 = (time.clock(), time.time())
         n4c = mo_coeff.shape[0]
-        n2c = n4c / 2
+        n2c = n4c // 2
         if self.giao:
             t1 = mol.intor('cint1e_giao_sa10sp', 3)
         else:
@@ -226,7 +225,7 @@ class NMR(hf.NMR):
         log.debug(self, 'first order Fock matrix / RMB')
         t0 = (time.clock(), time.time())
         n4c = mo_coeff.shape[0]
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
         if self.giao:
             t1 = mol.intor('cint1e_giao_sa10sp', 3)
@@ -262,7 +261,7 @@ class NMR(hf.NMR):
 
 def _call_rmb_vhf1(mol, dm, key='giao'):
     c1 = .5/mol.light_speed
-    n2c = dm.shape[0] / 2
+    n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     dmls = dm[:n2c,n2c:].copy()
     dmsl = dm[n2c:,:n2c].copy()
@@ -296,7 +295,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
 
 def _call_giao_vhf1(mol, dm):
     c1 = .5/mol.light_speed
-    n2c = dm.shape[0] / 2
+    n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     dmls = dm[:n2c,n2c:].copy()
     dmsl = dm[n2c:,:n2c].copy()

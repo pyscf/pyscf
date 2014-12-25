@@ -9,14 +9,12 @@ Ref:
     F. Weinhold et al., J. Chem. Phys. 83(1985), 735-746
 '''
 
+from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf import gto
-from pyscf import lib
-from pyscf import scf
 import pyscf.lib.parameters
-import param
-import orth
+from pyscf.lo import param
+from pyscf.lo import orth
 
 
 def prenao(mol, dm):
@@ -31,7 +29,7 @@ def _prenao_sub(mol, p, s):
         ia = mol.atom_of_bas(ib)
         l = mol.angular_of_bas(ib)
         nc = mol.nctr_of_bas(ib)
-        idx[ia][l] = idx[ia][l] + range(k, k+nc*(l*2+1))
+        idx[ia][l] = idx[ia][l] + list(range(k, k+nc*(l*2+1)))
         k += nc * (l * 2 + 1)
 
     nao = mol.nao_nr()
@@ -58,7 +56,7 @@ def _prenao_sub(mol, p, s):
 
 def _spheric_average_mat(mat, l, lst):
     degen = l * 2 + 1
-    nd = len(lst) / degen
+    nd = len(lst) // degen
     t = scipy.linalg.block_diag(*([numpy.ones(degen)/numpy.sqrt(degen)]*nd))
     mat_frag = reduce(numpy.dot, (t,mat[lst,:][:,lst],t.T))
     return mat_frag
@@ -110,7 +108,7 @@ def core_val_ryd_list(mol):
     rydbg_lst = []
     k = 0
     valenceof = lambda nuc, l: \
-            int(numpy.ceil(lib.parameters.ELEMENTS[nuc][2][l]/(4*l+2.)))
+            int(numpy.ceil(pyscf.lib.parameters.ELEMENTS[nuc][2][l]/(4*l+2.)))
     for ib in range(mol.nbas):
         ia = mol.atom_of_bas(ib)
         nuc = mol.charge_of_atm(ia)
@@ -118,17 +116,19 @@ def core_val_ryd_list(mol):
         nc = mol.nctr_of_bas(ib)
         for n in range(nc):
             if count[ia,l]+n < param.CORESHELL[nuc][l]:
-                core_lst += range(k, k+(2*l+1))
+                core_lst += list(range(k, k+(2*l+1)))
             elif count[ia,l]+n < valenceof(nuc, l):
-                val_lst += range(k, k+(2*l+1))
+                val_lst += list(range(k, k+(2*l+1)))
             else:
-                rydbg_lst += range(k, k+(2*l+1))
+                rydbg_lst += list(range(k, k+(2*l+1)))
             k = k + 2*l+1
         count[ia,l] += nc
     return core_lst, val_lst, rydbg_lst
 
 
 if __name__ == "__main__":
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 1
     mol.output = 'out_nao'

@@ -36,7 +36,7 @@ import h5py
 from pyscf import ao2mo
 _eritmp = tempfile.NamedTemporaryFile()
 eritmp = _eritmp.name
-nocc = mol.nelectron / 2
+nocc = mol.nelectron // 2
 nvir = len(mf.mo_energy) - nocc
 co = mf.mo_coeff[:,:nocc]
 cv = mf.mo_coeff[:,nocc:]

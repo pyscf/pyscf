@@ -19,17 +19,17 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
-import cistring
-import rdm
-import direct_ms0
-import direct_spin1
+from pyscf.fci import cistring
+from pyscf.fci import rdm
+from pyscf.fci import direct_ms0
+from pyscf.fci import direct_spin1
 
 libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:
         if isinstance(nelec, int):
-            neleca = nelec/2
+            neleca = nelec//2
         else:
             neleca, nelecb = nelec
             assert(neleca == nelecb)
@@ -45,12 +45,20 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                                 link_index.ctypes.data_as(ctypes.c_void_p))
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
+# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
+# h2e = eri_{pq,rs} p^+ q r^+ s
+#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
+# so eri is defined as
+#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
+# to restore the symmetry between pq and rs,
+#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
+# Please refer to the treatment in direct_spin1.absorb_h1e
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, int):
-            neleca = nelec/2
+            neleca = nelec//2
         else:
             neleca, nelecb = nelec
             assert(neleca == nelecb)
@@ -71,7 +79,7 @@ def absorb_h1e(*args, **kwargs):
 
 def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, **kwargs):
     if isinstance(nelec, int):
-        neleca = nelec/2
+        neleca = nelec//2
     else:
         neleca, nelecb = nelec
         assert(neleca == nelecb)
@@ -133,7 +141,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None):
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
         if isinstance(nelec, int):
-            neleca = nelec/2
+            neleca = nelec//2
         else:
             neleca, nelecb = nelec
             assert(neleca == nelecb)
@@ -221,6 +229,7 @@ class FCISolver(direct_ms0.FCISolver):
 
 if __name__ == '__main__':
     import time
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

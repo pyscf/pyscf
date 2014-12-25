@@ -5,9 +5,9 @@ import ctypes
 import _ctypes
 import numpy
 import pyscf.lib
-import cistring
-import direct_spin1
-import rdm
+from pyscf.fci import cistring
+from pyscf.fci import direct_spin1
+from pyscf.fci import rdm
 
 librdm = pyscf.lib.load_library('libmcscf')
 
@@ -49,7 +49,7 @@ def spin_square(ci, norb, nelec):
 #                                       -Gamma_{kbib,laja} + Gamma_{kbib,lbjb})
 #               + (neleca+nelecb)/4
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
@@ -83,7 +83,7 @@ def spin_square_with_overlap(ovlp, ci, norb, nelec):
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_abba(ci, norb, nelec):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
     if neleca == norb: # no intermediate determinants
@@ -117,7 +117,7 @@ def make_rdm2_abba(ci, norb, nelec):
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def _make_rdm2_baab(ci, norb, nelec):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
     if nelecb == norb: # no intermediate determinants
@@ -148,6 +148,7 @@ def make_rdm2_baab(ci, norb, nelec):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

@@ -5,10 +5,11 @@
 
 import sys
 import tempfile
+from functools import reduce
 import numpy
 import scipy.linalg
 import h5py
-import logger
+from pyscf.lib import logger
 
 # default max_memory 2000 MB
 
@@ -257,7 +258,6 @@ if __name__ == '__main__':
         #idx = numpy.arange(20)
         m = idx.size
         if m > 2:
-            print m
             h0 = a[idx][:,idx] - numpy.eye(m)*e0
             h0x0 = x0 / (a.diagonal() - e0)
             h0x0[idx] = numpy.linalg.solve(h0, h0x0[idx])

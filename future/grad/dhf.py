@@ -9,9 +9,9 @@ Relativistic Dirac-Hartree-Fock
 
 import numpy
 import pyscf.lib
-import pyscf.scf._vhf as _vhf
 import pyscf.lib.logger as log
-import hf
+from pyscf.scf import _vhf
+from pyscf.grad import hf
 
 WITH_LLLL = 1
 WITH_L2SL = 2 # the response of the large and small components on the large component density
@@ -21,8 +21,8 @@ WITH_SSSS = 5
 
 class UHF(hf.RHF):
     '''Unrestricted Dirac-Hartree-Fock gradients'''
-    def __init__(self, scf_method, restart=False):
-        hf.RHF.__init__(self, scf_method, restart)
+    def __init__(self, scf_method):
+        hf.RHF.__init__(self, scf_method)
         if scf_method.with_ssss:
             self.vhf_level = WITH_SSSS
         else:
@@ -31,7 +31,7 @@ class UHF(hf.RHF):
     @pyscf.lib.omnimethod
     def get_hcore(self, mol):
         n4c = mol.num_4C_function()
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
 
         s  = mol.intor('cint1e_ipovlp', dim3=3)
@@ -48,7 +48,7 @@ class UHF(hf.RHF):
     @pyscf.lib.omnimethod
     def get_ovlp(self, mol):
         n4c = mol.num_4C_function()
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
 
         s  = mol.intor('cint1e_ipovlp', dim3=3)
@@ -60,7 +60,7 @@ class UHF(hf.RHF):
 
     def _grad_rinv(self, mol, ia):
         n4c = mol.num_4C_function()
-        n2c = n4c / 2
+        n2c = n4c // 2
         c = mol.light_speed
         v = numpy.zeros((3,n4c,n4c), numpy.complex)
         mol.set_rinv_orig(mol.coord_of_atm(ia))
@@ -111,7 +111,7 @@ class UHF(hf.RHF):
 
 def _call_vhf1_llll(mol, dm):
     c1 = .5/mol.light_speed
-    n2c = dm.shape[0] / 2
+    n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
@@ -123,7 +123,7 @@ def _call_vhf1_llll(mol, dm):
 
 def _call_vhf1(mol, dm):
     c1 = .5/mol.light_speed
-    n2c = dm.shape[0] / 2
+    n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     dmls = dm[:n2c,n2c:].copy()
     dmsl = dm[n2c:,:n2c].copy()
@@ -156,6 +156,7 @@ def _call_vhf1(mol, dm):
 
 if __name__ == "__main__":
     from pyscf import gto
+    from pyscf import scf
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None#"out_h2o"

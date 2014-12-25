@@ -47,9 +47,9 @@ class KnowValues(unittest.TestCase):
         v = ops.detect_mirror()
         self.assertAlmostEqual(numpy.dot(v[0],v[1]), 0., 14)
         self.assertAlmostEqual(numpy.dot(v[2],v[3]), 0., 14)
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(numpy.linalg.norm(c[1][1]-numpy.array((-1.,0.,1./6))), 0., 14)
+        #self.assertAlmostEqual(numpy.linalg.norm(c[1][1]-numpy.array((-1.,0.,1./6))), 0., 14)
 
     def test_detect_symm_d2h(self):
         atoms = [[1, (0., 0., 0.)],
@@ -59,9 +59,9 @@ class KnowValues(unittest.TestCase):
                  [1, (-1, 0., 0.)],
                  [1, (0.,-1., 0.)],
                  [1, (0., 0.,-1.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'D2h')
-        self.assertEqual(symm.symm_identical_atoms(l,c), \
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), \
                          [[0],[1,4],[2,5],[3,6]])
 
     def test_detect_symm_c2v(self):
@@ -69,18 +69,18 @@ class KnowValues(unittest.TestCase):
                  [2, (0., 1., 0.)],
                  [1, (-2.,0.,-1.)],
                  [2, (0.,-1., 0.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'C2v')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[0,2],[1,3]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
 
     def test_detect_symm_d2h_a(self):
         atoms = [[1, (1., 0., 2.)],
                  [2, (0., 1., 0.)],
                  [1, (-1.,0.,-2.)],
                  [2, (0.,-1., 0.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'D2h')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[0,2],[1,3]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
 
     def test_detect_symm_c2v(self):
         atoms = [[1, (1., 0., 2.)],
@@ -89,9 +89,9 @@ class KnowValues(unittest.TestCase):
                  [1, (-1.,0., 0.)],
                  [1, (-1.,0.,-2.)],
                  [2, (0.,-1., 0.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'C2h')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[0,4],[1,5],[2,3]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,4],[1,5],[2,3]])
 
         atoms = [[1, (1., 0., 1.)],
                  [1, (1., 0.,-1.)],
@@ -99,9 +99,9 @@ class KnowValues(unittest.TestCase):
                  [2, (2., 0.,-2.)],
                  [3, (1., 1., 0.)],
                  [3, (1.,-1., 0.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'C2h')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[0,1],[2,3],[4,5]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,1],[2,3],[4,5]])
 
     def test_detect_symm_d2(self):
         atoms = [[1, (1., 0., 1.)],
@@ -110,9 +110,9 @@ class KnowValues(unittest.TestCase):
                  [2, (2., 0., 2.)],
                  [2, (1., 1.,-2.)],
                  [2, (1.,-1.,-2.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'D2')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[0,1],[2,3,4,5]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,1],[2,3],[4,5]])
 
     def test_detect_symm_ci(self):
         atoms = [[1, ( 1., 0., 0.)],
@@ -123,27 +123,27 @@ class KnowValues(unittest.TestCase):
                  [2, ( 0.,-1., 0.)],
                  [3, ( 0., 0.,-1.)],
                  [4, (-.5,-.5,-.5)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'Ci')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[i,i+4] for i in range(4)])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[i,i+4] for i in range(4)])
 
     def test_detect_symm_cs(self):
         atoms = [[1, (1., 0., 2.)],
                  [2, (1., 0., 0.)],
                  [3, (2., 0.,-1.)],
                  [4, (0., 0., 1.)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'Cs')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [[0],[1],[2],[3]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0],[1],[2],[3]])
 
     def test_detect_symm_c1(self):
         atoms = [[1, ( 1., 0., 0.)],
                  [2, ( 0., 1., 0.)],
                  [3, ( 0., 0., 1.)],
                  [4, ( .5, .5, .5)]]
-        l,c = symm.detect_symm(atoms)
+        l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'C1')
-        self.assertEqual(symm.symm_identical_atoms(l,c), [(i,) for i in range(4)])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [(i,) for i in range(4)])
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ restart from previous calculation
 '''
 
 try:
-    import settings
+    from pyscf.dmrgci import settings
 except ImportError:
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
@@ -52,13 +52,6 @@ IRREP_MAP = {'D2h': (1,         # Ag
                      2),        # Au
              'C1' : (1,)}
 
-try:
-    import settings
-except ImportError:
-    import os, sys
-    msg = '''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py')
-    sys.stderr.write(msg)
 
 class DMRGCI(object):
     def __init__(self, mol):
@@ -135,7 +128,7 @@ class DMRGCI(object):
         if fciRestart is None:
             fciRestart = self.restart
         if isinstance(nelec, int):
-            neleca = nelec/2 + nelec%2
+            neleca = nelec//2 + nelec%2
             nelecb = nelec - neleca
         else :
             neleca, nelecb = nelec

@@ -5,6 +5,7 @@
 
 import tempfile
 import time
+from functools import reduce
 import numpy
 import h5py
 import pyscf.lib
@@ -77,7 +78,7 @@ class CASCI(object):
         self.max_memory = mf.max_memory
         self.ncas = ncas
         if isinstance(nelecas, int):
-            nelecb = (nelecas-mol.spin)/2
+            nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
             self.nelecas = (neleca, nelecb)
         else:
@@ -85,9 +86,9 @@ class CASCI(object):
         if ncore is None:
             ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
             if ncorelec % 2:
-                self.ncore = ((ncorelec+1)/2, (ncorelec-1)/2)
+                self.ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
             else:
-                self.ncore = (ncorelec/2, ncorelec/2)
+                self.ncore = (ncorelec//2, ncorelec//2)
         else:
             self.ncore = (ncore[0], ncore[1])
 
@@ -100,7 +101,7 @@ class CASCI(object):
         self.ci = None
         self.e_tot = 0
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def dump_flags(self):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)

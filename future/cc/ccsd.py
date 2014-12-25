@@ -8,8 +8,8 @@ import numpy
 import pyscf.lib as lib
 import pyscf.lib.logger
 import pyscf.ao2mo
-import _ccsd
-import ccdiis
+from pyscf.cc import _ccsd
+from pyscf.cc import ccdiis
 
 # t2 as ijba
 #TODO: optimize diis extrapolation
@@ -284,7 +284,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
     lib.dot(ft_ij.T, t2.reshape(nocc,-1),-1, t2new.reshape(nocc,-1), 1)
 
     #: t2new = t2new + t2new.transpose(1,0,3,2)
-    t2new_tril = numpy.empty((nocc*(nocc+1)/2,nvir,nvir))
+    t2new_tril = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
     ij = 0
     for i in range(nocc):
         for j in range(i+1):
@@ -351,7 +351,7 @@ class CC(object):
         self.diis_space = 6
         self.diis_start_cycle = 1
 
-        self.nocc = mol.nelectron / 2
+        self.nocc = mol.nelectron // 2
         self.nmo = mf.mo_energy.size
 
         self._conv = False
@@ -423,7 +423,7 @@ class CC(object):
         eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
         eris.oOVv = eri1[:nocc,nocc:,:nocc,nocc:].transpose(0,2,3,1).copy()
         ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-        eris.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)/2))
+        eris.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
         for i in range(nocc):
             for j in range(nvir):
                 eris.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
@@ -436,7 +436,7 @@ class CC(object):
         nvir = self.nmo - nocc
         #: tau = t2 + numpy.einsum('ia,jb->ijba', t1, t1)
         #: t2new += numpy.einsum('ijdc,bdca->ijba', tau, vvvv)
-        tau = numpy.empty((nocc*(nocc+1)/2,nvir,nvir))
+        tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
         p0 = 0
         for i in range(nocc):
             #: tau[p0:p0+i+1] += numpy.einsum('a,jb->jba', t1[i], t1[:i+1])
@@ -447,14 +447,14 @@ class CC(object):
         for b in range(nvir):
             buf = _ccsd.unpack_tril(eris.vvvv[p0:p0+b+1])
             #: t2new[i,:i+1, b] += numpy.einsum('xdc,dca->xa', tau[:,:b+1], buf)
-            lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)/2, nvir, (b+1)*nvir,
+            lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (b+1)*nvir,
                                     tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
                                     t2new.reshape(-1,nvir*nvir), 1, 1,
                                     0, 0, b*nvir)
 
             #: t2new[i,:i+1,:b] += numpy.einsum('xc,bac->xba', tau[:,b], buf[:b])
             if b > 0:
-                lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)/2, b*nvir, nvir,
+                lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, b*nvir, nvir,
                                         tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
                                         t2new.reshape(-1,nvir*nvir), 1, 1,
                                         b*nvir, 0, 0)
@@ -463,7 +463,7 @@ class CC(object):
     def add_wvvVV(self, t1, t2, eris, blksize=1):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        t2new = numpy.zeros((nocc*(nocc+1)/2,nvir,nvir))
+        t2new = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
         return self.add_wvvVV_(t1, t2, eris, t2new, blksize=1)
 
     def update_amps(self, *args, **kwargs):
@@ -475,7 +475,7 @@ class CC(object):
         nov = nocc*nvir
         damp = ccdiis.DIIS(self)
         damp.space = self.diis_space
-        damp.start_cycle = 1
+        damp.min_space = 1
         def fupdate(t1, t2, istep, normt, de):
             if istep > self.diis_start_cycle and \
                (abs(de) < 1e-3 and istep % 3 == 0):
@@ -500,7 +500,7 @@ def _memory_usage_inloop(nmo, nocc):
 def _memory_usage(nmo, nocc):
     nvir = nmo - nocc
     v = _memory_usage_inloop(nmo, nocc)*1e6/8
-    v = max(v, nocc*(nocc+1)/2*nvir**2) + (nocc*nvir)**2*2
+    v = max(v, nocc*(nocc+1)//2*nvir**2) + (nocc*nvir)**2*2
     return v*8/1e6
 
 def block_size(nmo, nocc, max_memory):
@@ -518,7 +518,6 @@ def prange(start, end, step):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    import ci.ccsd
 
     mol = gto.Mole()
     mol.verbose = 5
@@ -547,7 +546,6 @@ if __name__ == '__main__':
     print(energy(mcc, t1, t2, eris) - -0.212173678670510)
     print(abs(t1).sum() - 0.05470123093500083)
     print(abs(t2).sum() - 5.5605208391876539)
-    #print(energy(mcc, t1, ff(mcc.add_wvvVV(t1,t2,eris)), eris) - -0.17587676941189)
 
     mcc.ccsd()
     print(mcc.ecc - -0.2133432312951)

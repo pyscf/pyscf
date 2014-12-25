@@ -42,13 +42,13 @@ from pyscf import ao2mo
 f, eritmp = tempfile.mkstemp()
 os.close(f)
 
-nocc = mol.nelectron / 2
+nocc = mol.nelectron // 2
 co = rhf.mo_coeff[:,:nocc]
 cv = rhf.mo_coeff[:,nocc:]
 ao2mo.direct.general(mol, (co,cv,co,cv), eritmp, max_memory=100, dataname='mp2_bz')
 f = h5py.File(eritmp, 'r')
 
-print time.clock()
+print(time.clock())
 eia = rhf.mo_energy[:nocc].reshape(nocc,1) - rhf.mo_energy[nocc:]
 nvir = eia.shape[1]
 emp2 = 0
@@ -62,8 +62,8 @@ for i in range(nocc):
                 jb = j * nvir + b
                 emp2 += g_i[a,jb] * (g_i[a,jb]*2-g_i[b,ja]) \
                         / (eia[i,a]+eia[j,b])
-print 'E_MP2 =', emp2 # -0.80003653259
+print('E_MP2 =', emp2) # -0.80003653259
 f.close()
 os.remove(eritmp)
 
-print time.clock()
+print(time.clock())

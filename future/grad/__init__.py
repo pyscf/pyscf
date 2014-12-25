@@ -1,4 +1,4 @@
 #!/usr/bin/env python
 
-import hf
-import dhf
+from pyscf.grad import hf
+from pyscf.grad import dhf

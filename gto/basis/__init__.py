@@ -3,7 +3,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
 import os
-import parse_nwchem
+import imp
+import pyscf.gto.basis.parse_nwchem
+from pyscf.gto.basis.parse_nwchem import parse_str as parse
 
 def load(basis_name, symb):
     # dict to map the basis name and basis file
@@ -53,6 +55,9 @@ def load(basis_name, symb):
         'def2tzvppd' : 'def2-tzvppd.dat',
         'def2tzvpp'  : 'def2-tzvpp.dat' ,
         'def2tzvp'   : 'def2-tzvp.dat'  ,
+        'weigend'    : 'weigend_cfit.dat',
+        'demon'      : 'demon_cfit.dat' ,
+        'ahlrichs'   : 'ahlrichs_cfit.dat',
     }
     name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
     basmod = alias[name]
@@ -60,8 +65,9 @@ def load(basis_name, symb):
     if 'dat' in basmod:
         b = parse_nwchem.parse(os.path.join(os.path.dirname(__file__), basmod), symb)
     else:
-        #mod = __import__(basmod, globals())
-        mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
+        fp, pathname, description = imp.find_module('minao', __path__)
+        mod = imp.load_module(name, fp, pathname, description)
+        #mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
         b = mod.__getattribute__(symb)
     return b
 

@@ -1,1 +1,1 @@
-import ccsd
+from pyscf.cc import ccsd

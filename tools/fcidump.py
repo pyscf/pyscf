@@ -2,13 +2,14 @@
 
 import os, sys
 import tempfile
+from functools import reduce
 import numpy
 
 
 def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
     fout.write(' &FCI NORB=%4d,NELEC=%2d,MS2=%d,\n' % (nmo, nelec, ms))
     if orbsym:
-        fout.write('  ORBSYM=%s\n' % ','.join(map(str, orbsym)))
+        fout.write('  ORBSYM=%s\n' % ','.join([str(x) for x in orbsym]))
     else:
         fout.write('  ORBSYM=%s\n' % ('1,' * nmo))
     fout.write('  ISYM=1,\n')
@@ -16,7 +17,7 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
 
 # 4-fold symmetry
 def write_eri(fout, eri, nmo, tol=1e-15):
-    npair = nmo*(nmo+1)/2
+    npair = nmo*(nmo+1)//2
     if eri.size == npair**2: # 4-fold symmetry
         ij = 0
         for i in range(nmo):
@@ -77,7 +78,8 @@ def from_chkfile(output, chkfile, tol=1e-15):
         write_hcore(fout, h, nmo, tol=tol)
         fout.write(' %.16g  0  0  0  0\n' % mol.nuclear_repulsion())
 
-def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[], tol=1e-15):
+def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
+                   tol=1e-15):
     with open(output, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol)
@@ -87,4 +89,4 @@ def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[], tol=1e-
 
 if __name__ == '__main__':
     # molpro_fcidump.py chkfile output
-    fcidump(sys.argv[2], sys.argv[1])
+    from_chkfile(sys.argv[2], sys.argv[1])

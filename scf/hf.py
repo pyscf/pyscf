@@ -11,16 +11,16 @@ import os, sys
 import tempfile
 import ctypes
 import time
+from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.gto as gto
+import pyscf.gto
 import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import diis
-import chkfile
-import addons
-import _vhf
+from pyscf.scf import chkfile
+from pyscf.scf import diis
+from pyscf.scf import _vhf
 
 
 __doc__ = '''Options:
@@ -140,7 +140,7 @@ class SCF(object):
 
         self.opt = None
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def build(self, mol=None):
         return self.build_(mol)
@@ -219,6 +219,7 @@ class SCF(object):
         return init_guess_by_minao(self, mol)
 
     def make_init_guess(self, mol):
+        from pyscf.scf import addons
         if callable(self.init_guess):
             return self.init_guess(mol)
         elif self.init_guess.lower() == '1e':
@@ -238,7 +239,7 @@ class SCF(object):
 
     def set_occ(self, mo_energy, mo_coeff=None):
         mo_occ = numpy.zeros_like(mo_energy)
-        nocc = self.mol.nelectron / 2
+        nocc = self.mol.nelectron // 2
         mo_occ[:nocc] = 2
         if nocc < mo_occ.size:
             log.info(self, 'HOMO = %.12g, LUMO = %.12g,', \
@@ -335,11 +336,12 @@ class SCF(object):
 
 def init_guess_by_minao(dev, mol):
     '''Initial guess in terms of the overlap to minimal basis.'''
-    import atom_hf
+    from pyscf.scf import atom_hf
+    from pyscf.scf import addons
     log.info(dev, 'initial guess from MINAO')
 
     def minao_basis(symb):
-        basis_add = gto.basis.load('ano', symb)
+        basis_add = pyscf.gto.basis.load('ano', symb)
         occ = []
         basis_new = []
         for l in range(4):
@@ -353,7 +355,7 @@ def init_guess_by_minao(dev, mol):
                 basis_new.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
         return occ, basis_new
 
-    atmlst = set([gto.mole._rm_digit(gto.mole._symbol(k)) \
+    atmlst = set([pyscf.gto.mole._rm_digit(pyscf.gto.mole._symbol(k)) \
                   for k in mol.basis.keys()])
     basis = {}
     occdic = {}
@@ -367,7 +369,7 @@ def init_guess_by_minao(dev, mol):
         occ.append(occdic[symb])
     occ = numpy.hstack(occ)
 
-    pmol = gto.Mole()
+    pmol = pyscf.gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(mol.atom, basis, [])
     c = addons.project_mo_nr2nr(pmol, 1, mol)
 
@@ -473,7 +475,7 @@ class RHF(SCF):
         return vhf
 
     def analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff):
-        import pyscf.tools.dump_mat as dump_mat
+        from pyscf.tools import dump_mat
         SCF.analyze_scf_result(self, mol, mo_energy, mo_occ, mo_coeff)
         if self.verbose >= param.VERBOSE_DEBUG:
             log.debug(self, ' ** MO coefficients **')
@@ -500,7 +502,7 @@ class RHF(SCF):
 def rhf_mulliken_pop(mol, dm, s):
     '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
     m = dm * s
-    pop = numpy.array(map(sum, m))
+    pop = numpy.array([sum(x) for x in m])
     label = mol.spheric_labels()
 
     log.info(mol, ' ** Mulliken pop (on non-orthogonal input basis)  **')
@@ -555,9 +557,9 @@ class UHF(SCF):
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
         self.DIIS = UHF_DIIS
-        self.nelectron_alpha = (mol.nelectron + mol.spin) / 2
+        self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
         self._eri = None
-        self._keys = self._keys | set(['nelectron_alpha', '_eri'])
+        self._keys = self._keys.union(['nelectron_alpha', '_eri'])
 
     def dump_flags(self):
         SCF.dump_flags(self)
@@ -813,8 +815,8 @@ def uhf_mulliken_pop(mol, dm, s):
     '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
     m_a = dm[0] * s
     m_b = dm[1] * s
-    pop_a = numpy.array(map(sum, m_a))
-    pop_b = numpy.array(map(sum, m_b))
+    pop_a = numpy.array([sum(x) for x in m_a])
+    pop_b = numpy.array([sum(x) for x in m_b])
     label = mol.spheric_labels()
 
     log.info(mol, ' ** Mulliken pop alpha/beta (on non-orthogonal basis) **')
@@ -869,18 +871,18 @@ class ROHF(UHF):
     def __init__(self, mol):
         SCF.__init__(self, mol)
         self._eri = None
-        self._keys = self._keys | set(['_eri'])
+        self._keys = self._keys.union(['_eri'])
 
     def dump_flags(self):
         SCF.dump_flags(self)
         log.info(self, 'num. doubly occ = %d, num. singly occ = %d', \
-                 (self.mol.nelectron-self.mol.spin)/2, self.mol.spin)
+                 (self.mol.nelectron-self.mol.spin)//2, self.mol.spin)
 
     def eig(self, h, s):
 # Note Roothaan effective Fock do not provide correct orbital energy.
 # We use alpha # fock and beta fock to define orbital energy.
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
-        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         feff, fa, fb = h
@@ -903,7 +905,7 @@ class ROHF(UHF):
 # Fc = (Fa+Fb)/2
         fa0 = h1e + vhf[0]
         fb0 = h1e + vhf[1]
-        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         dmsf = dm[0]+dm[1]
@@ -937,7 +939,7 @@ class ROHF(UHF):
 
     def set_occ(self, mo_energy, mo_coeff=None):
         mo_occ = numpy.zeros_like(mo_energy)
-        ncore = (self.mol.nelectron-self.mol.spin) / 2
+        ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         mo_occ[:ncore] = 2
@@ -978,7 +980,7 @@ class ROHF(UHF):
 
 
 if __name__ == '__main__':
-    mol = gto.Mole()
+    mol = pyscf.gto.Mole()
     mol.verbose = 5
     mol.output = None#'out_hf'
 

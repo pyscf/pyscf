@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
+from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -21,6 +22,7 @@ mol.atom = [
 
 mol.basis = {'H': 'sto-3g'}
 mol.charge = 1
+mol.spin = 1
 mol.build()
 
 m = scf.UHF(mol)
@@ -28,8 +30,8 @@ ehf = m.scf()
 
 mo_a, mo_b = m.mo_coeff
 norb = mo_a.shape[1]
-nelecr = ((mol.nelectron+1)/2, (mol.nelectron+1)/2)
-h1er = reduce(numpy.dot, (mo_a.T, m.get_hcore()[0], mo_a))
+nelecr = ((mol.nelectron+1)//2, (mol.nelectron+1)//2)
+h1er = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
 g2er = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
 h1es = (h1er, h1er)
 g2es = (g2er, g2er, g2er)
@@ -39,11 +41,11 @@ numpy.random.seed(15)
 ci0 = numpy.random.random((na,nb))
 ci1 = numpy.random.random((na,nb))
 
-neleci = ((mol.nelectron+1)/2, (mol.nelectron-1)/2)
+neleci = ((mol.nelectron+1)//2, (mol.nelectron-1)//2)
 na = fci.cistring.num_strings(norb, neleci[0])
 nb = fci.cistring.num_strings(norb, neleci[1])
-h1ei = (reduce(numpy.dot, (mo_a.T, m.get_hcore()[0], mo_a)),
-        reduce(numpy.dot, (mo_b.T, m.get_hcore()[0], mo_b)))
+h1ei = (reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a)),
+        reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b)))
 g2ei = (ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False),
         ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False),
         ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False))
@@ -140,6 +142,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for uhf-based fci"
+    print("Full Tests for uhf-based fci")
     unittest.main()
 

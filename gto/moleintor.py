@@ -7,9 +7,9 @@ import os
 import numpy
 import ctypes
 import _ctypes
-import pyscf.lib as lib
+import pyscf.lib
 
-_cint = lib.load_library('libcvhf')
+_cint = pyscf.lib.load_library('libcvhf')
 _cint.CINTcgto_cart.restype = ctypes.c_int
 _cint.CINTcgto_spheric.restype = ctypes.c_int
 _cint.CINTcgto_spinor.restype = ctypes.c_int
@@ -29,9 +29,9 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, dim3=1, hermi=0):
     atm = numpy.array(atm, dtype=numpy.int32)
     bas = numpy.array(bas, dtype=numpy.int32)
     env = numpy.array(env, numpy.double)
-    c_atm = atm.ctypes.data_as(lib.c_int_p)
-    c_bas = bas.ctypes.data_as(lib.c_int_p)
-    c_env = env.ctypes.data_as(lib.c_double_p)
+    c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
+    c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
+    c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
     c_natm = ctypes.c_int(atm.shape[0])
     c_nbas = ctypes.c_int(bas.shape[0])
     nbra = len(bras)
@@ -68,10 +68,10 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, dim3=1, hermi=0):
         return mat
     else:
         if dim3 == 1:
-            lib.hermi_triu(mat, hermi=hermi)
+            pyscf.lib.hermi_triu(mat, hermi=hermi)
         else:
             for i in range(dim3):
-                lib.hermi_triu(mat[i], hermi=hermi)
+                pyscf.lib.hermi_triu(mat[i], hermi=hermi)
         return mat
 
 def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
@@ -93,7 +93,37 @@ def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
         dtype = numpy.complex
         num_cgto_of = lambda basid: _cint.CINTcgto_spinor(ctypes.c_int(basid),
                                                           c_bas)
-    if '2e' in intor_name:
+    if '3c2e' in intor_name or '2e3c' in intor_name:
+        assert(len(shls) == 3)
+        di, dj, dk = map(num_cgto_of, shls)
+        buf = numpy.empty((di,dj,dk,dim3), dtype, order='F')
+        fintor = getattr(_cint, intor_name)
+        nullopt = ctypes.c_void_p()
+        fintor(buf.ctypes.data_as(ctypes.c_void_p),
+               (ctypes.c_int*3)(*shls),
+               atm.ctypes.data_as(ctypes.c_void_p), natm,
+               bas.ctypes.data_as(ctypes.c_void_p), nbas,
+               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+        if dim3 == 1:
+            return buf.reshape(di,dj,dk)
+        else:
+            return buf.transpose(3,0,1,2)
+    elif '2c2e' in intor_name or '2e2c' in intor_name:
+        assert(len(shls) == 2)
+        di, dj = map(num_cgto_of, shls)
+        buf = numpy.empty((di,dj,dim3), dtype, order='F')
+        fintor = getattr(_cint, intor_name)
+        nullopt = ctypes.c_void_p()
+        fintor(buf.ctypes.data_as(ctypes.c_void_p),
+               (ctypes.c_int*2)(*shls),
+               atm.ctypes.data_as(ctypes.c_void_p), natm,
+               bas.ctypes.data_as(ctypes.c_void_p), nbas,
+               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+        if dim3 == 1:
+            return buf.reshape(di,dj)
+        else:
+            return buf.transpose(2,0,1)
+    elif '2e' in intor_name:
         assert(len(shls) == 4)
         di, dj, dk, dl = map(num_cgto_of, shls)
         buf = numpy.empty((di,dj,dk,dl,dim3), dtype, order='F')
@@ -125,7 +155,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
 
 
 if __name__ == '__main__':
-    import gto
+    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -139,5 +169,5 @@ if __name__ == '__main__':
     mol.set_rinv_orig(mol.coord_of_atm(0))
     for i in range(mol.nbas):
         for j in range(mol.nbas):
-            print i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),
-                                         mol._atm, mol._bas, mol._env, 3)
+            print(i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),
+                                         mol._atm, mol._bas, mol._env, 3))

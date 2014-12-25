@@ -12,7 +12,7 @@ import numpy
 import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import pyscf.scf._vhf as _vhf
+from pyscf.scf import _vhf
 
 class RHF:
     '''Non-relativistic restricted Hartree-Fock gradients'''
@@ -71,7 +71,7 @@ class RHF:
                 * mol.intor('cint1e_iprinv_sph', dim3=3)
 
     def atom_of_aos(self, mol):
-        return map(lambda s: s[0], mol.spheric_labels())
+        return list(map(lambda s: s[0], mol.spheric_labels()))
 
     def frac_atoms(self, mol, atm_id, mat):
         '''extract row band for each atom'''
@@ -135,8 +135,8 @@ class RHF:
 
 
 if __name__ == '__main__':
-        grads = self.grad_e(self.mol, self.scf) \
-                + self.grad_nuc(self.mol)
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

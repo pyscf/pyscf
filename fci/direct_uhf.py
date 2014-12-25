@@ -21,8 +21,8 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.ao2mo
-import cistring
-import direct_spin1
+from pyscf.fci import cistring
+from pyscf.fci import direct_spin1
 
 libfci = pyscf.lib.load_library('libmcscf')
 
@@ -33,7 +33,7 @@ libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -66,10 +66,17 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-# the input fcivec should be symmetrized
+# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
+# h2e = eri_{pq,rs} p^+ q r^+ s
+#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
+# so eri is defined as
+#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
+# to restore the symmetry between pq and rs,
+#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
+# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -102,7 +109,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
 def make_hdiag(h1e, eri, norb, nelec):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -162,7 +169,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -176,7 +183,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     addr = numpy.argsort(hdiag)[:np]
-    addra = addr / nb
+    addra = addr // nb
     addrb = addr % nb
     stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
                        dtype=numpy.long)
@@ -204,7 +211,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # eigvalue of first davidson iter being equal to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
     if isinstance(nelec, int):
-        nelecb = nelec/2
+        nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
@@ -337,6 +344,7 @@ class FCISolver(direct_spin1.FCISolver):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
@@ -365,8 +373,8 @@ if __name__ == '__main__':
 
     cis = FCISolver(mol)
     norb = m.mo_energy[0].size
-    nea = (mol.nelectron+1) / 2
-    neb = (mol.nelectron-1) / 2
+    nea = (mol.nelectron+1) // 2
+    neb = (mol.nelectron-1) // 2
     nelec = (nea, neb)
     mo_a = m.mo_coeff[0]
     mo_b = m.mo_coeff[1]

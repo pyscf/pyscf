@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
-import mc1step
-import mc1step_symm
-import casci
-import casci_symm
-import addons
-import casci_uhf
-import mc1step_uhf
-import pyscf.fci
-import pyscf.scf
+from pyscf.mcscf import mc1step
+from pyscf.mcscf import mc1step_symm
+from pyscf.mcscf import casci
+from pyscf.mcscf import casci_symm
+from pyscf.mcscf import addons
+from pyscf.mcscf import casci_uhf
+from pyscf.mcscf import mc1step_uhf
 
 def CASSCF(mol, mf, *args, **kwargs):
     if mol.symmetry:

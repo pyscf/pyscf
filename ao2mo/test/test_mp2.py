@@ -22,7 +22,7 @@ def rmp2_energy_incore(mf, verbose=None):
 
     tcpu0 = time.clock()
     log.debug('transform (ia|jb)')
-    nocc = mol.nelectron / 2
+    nocc = mol.nelectron // 2
     co = mf.mo_coeff[:,:nocc]
     cv = mf.mo_coeff[:,nocc:]
     g = ao2mo.incore.general(mf._eri, (co,cv,co,cv))
@@ -100,12 +100,12 @@ if __name__ == '__main__':
                  'O': 'cc-pvdz',}
     mol.build()
     rhf = scf.RHF(mol)
-    print rhf.scf()
+    print(rhf.scf())
 
-    print rmp2_energy(mol, rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2)
-    print rmp2_energy_incore(rhf)
+    print(rmp2_energy(mol, rhf.mo_coeff, rhf.mo_energy, mol.nelectron//2))
+    print(rmp2_energy_incore(rhf))
 
-    mo_coeff, mo_energy, nocc = rhf.mo_coeff, rhf.mo_energy, mol.nelectron/2
+    mo_coeff, mo_energy, nocc = rhf.mo_coeff, rhf.mo_energy, mol.nelectron//2
     n = mo_energy.size
     g = ao2mo.restore(1, rhf._eri, n)
     g = numpy.dot(g.reshape(n*n*n,n),mo_coeff)
@@ -124,5 +124,5 @@ if __name__ == '__main__':
                     emp2 += g[i,nocc+a,j,nocc+b] \
                             * (g[i,nocc+a,j,nocc+b]*2-g[j,nocc+a,i,nocc+b]) \
                             / (eia[i,a]+eia[j,b])
-    print emp2
+    print(emp2)
 

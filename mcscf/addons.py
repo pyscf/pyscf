@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib

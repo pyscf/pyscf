@@ -9,7 +9,7 @@ import numpy
 import h5py
 import pyscf.lib.logger as logger
 import pyscf.lib.parameters as param
-import _ao2mo
+from pyscf.ao2mo import _ao2mo
 
 # default max_memory (MB) is lib.parameters.MEMORY_MAX
 # default ioblk_size is 512 MB
@@ -25,8 +25,8 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
-    nao_pair = nao*(nao+1) / 2
-    nmo_pair = nmo*(nmo+1) / 2
+    nao_pair = nao*(nao+1) // 2
+    nmo_pair = nmo*(nmo+1) // 2
 
     mem_words, ioblk_words = _memory_and_ioblk_size(max_memory, ioblk_size,
                                                     nao_pair, nmo_pair)
@@ -34,7 +34,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
     feri = h5py.File(erifile, 'w')
     h5d_eri = feri.create_dataset(dataname, (nmo_pair,nmo_pair), 'f8')
 
-    blklen = int(mem_words/nao_pair)
+    blklen = int(mem_words//nao_pair)
     log.debug('num. eri in MO repr. = %.8g, require disk %.8g MB', \
               float(nmo_pair)**2, float(nmo_pair)**2*8/1e6)
     log.debug('nao = %d, block len = %d, mem cache size %.8g MB', \
@@ -59,7 +59,7 @@ def full(mol, mo_coeff, erifile, max_memory=None, ioblk_size=512, \
         ti1 = log.timer('step 1', *ti0)
 
         nrow = buf.shape[0]
-        ioblklen = min(nrow, int(ioblk_words/nmo_pair))
+        ioblklen = min(nrow, int(ioblk_words//nmo_pair))
         log.debug('transform MO %d:%d, [%d/%d] step 2, len(buf) = %d, ' \
                   'len(ioblk) = %d', \
                   ijshape[0], ijshape[0]+ijshape[1], block_id+1, num_block, \
@@ -101,8 +101,8 @@ def full_iofree(mol, mo_coeff, verbose=None):
     if mo_coeff.flags.c_contiguous:
         mo_coeff = numpy.array(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
-    nao_pair = nao*(nao+1) / 2
-    nmo_pair = nmo*(nmo+1) / 2
+    nao_pair = nao*(nao+1) // 2
+    nmo_pair = nmo*(nmo+1) // 2
 
     log.debug('num. eri in MO repr. = %.8g, require memory %.8g MB', \
               float(nmo_pair)**2, float(nmo_pair)**2*8/1e6)
@@ -122,11 +122,11 @@ def full_iofree(mol, mo_coeff, verbose=None):
 # n = i*(i+1)/2+j, n => (i,j)
 def _extract_pair_by_id(n):
     i = int(numpy.sqrt(2*n+.25) - .5 + 1e-7)
-    j = n - i*(i+1)/2
+    j = n - i*(i+1)//2
     return i,j
 
 def _int_ceiling(n, m):
-    return (n-1)/m + 1
+    return (n-1)//m + 1
 
 #############################
 # general AO to MO transformation takes four MO coefficients
@@ -159,13 +159,13 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
     nmol = mo_coeffs[3].shape[1]
     if ijsame:
         log.debug('i-mo == j-mo')
-        nij_pair = nmoi*(nmoi+1) / 2
+        nij_pair = nmoi*(nmoi+1) // 2
     else:
         nij_pair = nmoi*nmoj
 
     if klsame:
         log.debug('k-mo == l-mo')
-        nkl_pair = nmok*(nmok+1) / 2
+        nkl_pair = nmok*(nmok+1) // 2
     else:
         nkl_pair = nmok*nmol
 
@@ -182,8 +182,8 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         return None
 
     nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1) / 2
-    blklen = int(mem_words/nao_pair)
+    nao_pair = nao*(nao+1) // 2
+    blklen = int(mem_words//nao_pair)
     log.debug('num. eri in MO repr. = %.8g, require disk %.8g MB', \
               float(nij_pair)*nkl_pair, float(nij_pair)*nkl_pair*8/1e6)
     log.debug('nao = %d, block len = %d, mem cache size %.8g MB', \
@@ -200,8 +200,8 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         moji = numpy.array(numpy.hstack((mo_coeffs[1],mo_coeffs[0])), \
                            order='F')
         def f_ijshape(block_id):
-            istart = block_id*blklen / nmoj
-            icount = min(nmoi, (block_id*blklen+blklen)/nmoj) - istart
+            istart = block_id*blklen // nmoj
+            icount = min(nmoi, (block_id*blklen+blklen)//nmoj) - istart
             return (nmoj+istart, icount, 0, nmoj)
 
     if klsame:
@@ -225,7 +225,7 @@ def general(mol, mo_coeffs, erifile, max_memory=None, ioblk_size=512, \
         ti1 = log.timer('step 1', *ti0)
 
         nrow = buf.shape[0]
-        ioblklen = min(nrow, int(ioblk_words/nkl_pair))
+        ioblklen = min(nrow, int(ioblk_words//nkl_pair))
         log.debug('transform MO %d:%d, [%d/%d] step 2, len(buf) = %d, ' \
                   'len(ioblk) = %d', \
                   ijshape[0], ijshape[0]+ijshape[1], block_id+1, num_block, \
@@ -277,13 +277,13 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
     nmol = mo_coeffs[3].shape[1]
     if ijsame:
         log.debug('i-mo == j-mo')
-        nij_pair = nmoi*(nmoi+1) / 2
+        nij_pair = nmoi*(nmoi+1) // 2
     else:
         nij_pair = nmoi*nmoj
 
     if klsame:
         log.debug('k-mo == l-mo')
-        nkl_pair = nmok*(nmok+1) / 2
+        nkl_pair = nmok*(nmok+1) // 2
     else:
         nkl_pair = nmok*nmol
 
@@ -295,7 +295,7 @@ def general_iofree(mol, mo_coeffs, verbose=None, compact=True):
         log.warn('low efficiency for AO to MO trans!')
 
     nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1) / 2
+    nao_pair = nao*(nao+1) // 2
     log.debug('num. eri in MO repr. = %.8g, require memory %.8g MB', \
               float(nij_pair)*nkl_pair,
               float(nij_pair)*max(nao_pair,nkl_pair)*8/1e6)

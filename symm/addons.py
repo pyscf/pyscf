@@ -2,6 +2,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from functools import reduce
 import numpy
 import pyscf.lib.logger
 
@@ -43,4 +44,4 @@ if __name__ == "__main__":
     mf = scf.RHF(mol)
     mf.scf()
 
-    print label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff)
+    print(label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff))

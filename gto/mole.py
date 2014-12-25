@@ -10,12 +10,13 @@ import time
 import math
 import copy
 import itertools
+from functools import reduce
 import numpy
 import pyscf.lib.parameters as param
 import pyscf.lib.logger as log
-import cmd_args
-import basis
-import moleintor
+from pyscf.gto import cmd_args
+from pyscf.gto import basis
+from pyscf.gto import moleintor
 
 def gto_norm(l, expnt):
     ''' normalized factor for GTO   g=r^l e^(-a r^2)
@@ -162,7 +163,7 @@ mol.build(
         self.irrep_id = None
         self.irrep_name = None
         self._built = False
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def check_sanity(self, obj):
         if self.verbose > log.QUIET:
@@ -170,7 +171,7 @@ mol.build(
             if keysub:
                 log.warn(self, 'overwrite keys %s of %s',
                          ' '.join(keysub), str(obj.__class__))
-                keysub = keysub - set(dir(obj))
+                keysub = keysub - set(dir(obj.__class__))
                 if keysub:
                     sys.stderr.write('%s has no attributes %s\n' %
                                      (str(obj.__class__), ' '.join(keysub)))
@@ -477,7 +478,7 @@ mol.build(
         self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
         self.stdout.write('[INPUT] charge = %d\n' % self.charge)
-        self.stdout.write('[INPUT] spin (2S) = %d\n' % self.spin)
+        self.stdout.write('[INPUT] spin (2S+1) = %d\n' % (self.spin+1))
 
         for nuc,(rad,ang) in self.grids.items():
             self.stdout.write('[INPUT] %s (%d, %d)\n' % (nuc, rad, ang))
@@ -497,8 +498,8 @@ mol.build(
                 nucmod = ''
             self.stdout.write('[INPUT] %d %s %s AA, '\
                               '%s Bohr%s\n' \
-                              % (ia+1, _symbol(atom[0]), atom[1], \
-                                 map(lambda x: x/param.BOHR, atom[1]), \
+                              % (ia+1, _symbol(atom[0]), atom[1],
+                                 [x/param.BOHR for x in atom[1]],
                                  nucmod))
 
         self.stdout.write('[INPUT] basis\n')
@@ -631,7 +632,7 @@ mol.build(
 
     def len_cart_of_bas(self, bas_id):
         l = self._bas[bas_id][ANG_OF]
-        return (l + 1) * (l + 2) / 2
+        return (l + 1) * (l + 2) // 2
 
 
     def num_NR_pgto(self):
@@ -755,12 +756,13 @@ mol.build(
             return 0
         chargs = numpy.array([self.charge_of_atm(i) for i in range(len(self._atm))])
         coords = numpy.array([self.coord_of_atm(i) for i in range(len(self._atm))])
-        xx = coords[:,0].reshape(-1,1) - coords[:,0]
-        yy = coords[:,1].reshape(-1,1) - coords[:,1]
-        zz = coords[:,2].reshape(-1,1) - coords[:,2]
-        r = numpy.sqrt(xx**2 + yy**2 + zz**2 + 1e-60)
+        rr = numpy.dot(coords, coords.T)
+        rd = rr.diagonal()
+        rr = rd[:,None] + rd - rr*2
+        rr[numpy.diag_indices_from(rr)] = 1e-60
+        r = numpy.sqrt(rr)
         qq = chargs[:,None] * chargs[None,:]
-        qq[numpy.diag_indices(len(self._atm))] = 0
+        qq[numpy.diag_indices_from(qq)] = 0
         e = (qq/r).sum() * .5
         return e
 

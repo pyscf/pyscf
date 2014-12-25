@@ -1,7 +1,12 @@
 import numpy
 
 
-def make111(a, rads, pactive=None, plainvec=(1,1,1), pt0=(0,0,0)):
+def make111(a, rads, pactive=None, plainvec=(1,1,1), pt0=(0,0,0), axis=None):
+    if axis is None:
+        axis = numpy.eye(3)
+    else:
+        axis = numpy.array(axis)
+        axis = axis.T / numpy.linalg.norm(axis, axis=1)
     pt0 = numpy.array(pt0)
     plain = numpy.array(plainvec)/numpy.linalg.norm(plainvec)
     if pactive is None:
@@ -17,7 +22,8 @@ def make111(a, rads, pactive=None, plainvec=(1,1,1), pt0=(0,0,0)):
                     if rr < ri:
                         atms.append((nr,pt1))
                         break
-    return atms
+    coords = numpy.dot(numpy.array([x[1] for x in atms]), axis)
+    return [(at[0], coords[i]) for i,at in enumerate(atms)]
 
 def make100():
     pass

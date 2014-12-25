@@ -5,7 +5,7 @@
 
 import numpy
 import pyscf.gto
-import pyscf.lib as lib
+import pyscf.lib
 
 GEOM_THRESHOLD = 1e-5
 
@@ -32,7 +32,7 @@ def get_mass_center(atoms):
     for atm in atoms:
         symb = atm[0]
         charge = pyscf.gto.mole._charge(symb)
-        mass = lib.parameters.ELEMENTS[charge][1]
+        mass = pyscf.lib.parameters.ELEMENTS[charge][1]
         x,y,z = atm[1]
         xbar += mass * x
         ybar += mass * y
@@ -151,7 +151,7 @@ class SymmOperator(object):
         for atoms in atom_groups:
             for atm in atoms:
                 # check if op_test on atm can generate an atom of the mole
-                if not lib.member(op_test, atm, atoms):
+                if not pyscf.lib.member(op_test, atm, atoms):
                     return False
         return True
 
@@ -191,7 +191,7 @@ class SymmOperator(object):
                 atj = self.atoms[j]
                 vec = vector_perp_to_vectors(ati[1],atj[1])
                 maybe_c2.append(normalize(vec))
-        maybe_c2 = lib.remove_dup(parallel_vectors, maybe_c2, True)
+        maybe_c2 = pyscf.lib.remove_dup(parallel_vectors, maybe_c2, True)
         axes = []
         for axis in maybe_c2:
             def c2_is_proper(atm1,atm2):
@@ -219,7 +219,7 @@ class SymmOperator(object):
                         gj = g[j]
                         maybe_mirror.append(vector_perp_to_vectors(gi[1],gj[1]))
                         maybe_mirror.append(normalize(gj[1]-gi[1]))
-        maybe_mirror = lib.remove_dup(parallel_vectors, maybe_mirror, True)
+        maybe_mirror = pyscf.lib.remove_dup(parallel_vectors, maybe_mirror, True)
         mirrors = []
         for mir_vec in maybe_mirror:
             def mirror_is_proper(atm1, atm2):
@@ -243,20 +243,20 @@ def vector_parallel_z(vec):
             and abs(vec[1]) < GEOM_THRESHOLD
 def order_vectors(vecs):
     # ordering vectors, move (0,0,1),(1,0,0),(0,1,0) to the front
-    if filter(vector_parallel_y, vecs):
-        vecs = [numpy.array((0.,1.,0.))] + lib.remove_if(vector_parallel_y, vecs)
-    if filter(vector_parallel_x, vecs):
-        vecs = [numpy.array((1.,0.,0.))] + lib.remove_if(vector_parallel_x, vecs)
-    if filter(vector_parallel_z, vecs):
-        vecs = [numpy.array((0.,0.,1.))] + lib.remove_if(vector_parallel_z, vecs)
+    if list(filter(vector_parallel_y, vecs)):
+        vecs = [numpy.array((0.,1.,0.))] + pyscf.lib.remove_if(vector_parallel_y, vecs)
+    if list(filter(vector_parallel_x, vecs)):
+        vecs = [numpy.array((1.,0.,0.))] + pyscf.lib.remove_if(vector_parallel_x, vecs)
+    if list(filter(vector_parallel_z, vecs)):
+        vecs = [numpy.array((0.,0.,1.))] + pyscf.lib.remove_if(vector_parallel_z, vecs)
     return vecs
 
 def find_axis(vecs):
     nv = vecs.__len__()
     if nv < 3:
         return None
-    elif filter(vector_parallel_x, vecs) \
-         and filter(vector_parallel_z, vecs):
+    elif list(filter(vector_parallel_x, vecs)) \
+         and list(filter(vector_parallel_z, vecs)):
         return numpy.eye(3)
     else:
         orthtab = numpy.zeros((nv,nv),dtype=bool)

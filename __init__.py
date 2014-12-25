@@ -3,13 +3,13 @@ pyscf
 =====
 '''
 
-__version__ = '0.7'
+__version__ = '0.8.1'
 
 import os
-import gto
-import lib
-import scf
-import ao2mo
+from pyscf import gto
+from pyscf import lib
+from pyscf import scf
+from pyscf import ao2mo
 #import symm
 
 # modules in ./future are in test

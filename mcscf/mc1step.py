@@ -6,13 +6,14 @@
 import time
 import copy
 import tempfile
+from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
 import pyscf.scf
-import casci
-import aug_hessian
-import mc_ao2mo
+from pyscf.mcscf import casci
+from pyscf.mcscf import aug_hessian
+from pyscf.mcscf import mc_ao2mo
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
@@ -366,7 +367,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             u1, dx, g_orb, nin = casscf.rotate_orb(mo, ci1, e_ci, eris, dx)
             ci1 = None
             if _uhf_mo:
-                u = map(numpy.dot, u, u1)
+                u = list(map(numpy.dot, u, u1))
             else:
                 u = numpy.dot(u, u1)
             ninner += nin
@@ -387,7 +388,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
 
         if _uhf_mo:
-            mo = map(numpy.dot, mo, u)
+            mo = list(map(numpy.dot, mo, u))
         else:
             mo = numpy.dot(mo, u)
         casscf.save_mo_coeff(mo, imacro, imicro)
@@ -457,7 +458,7 @@ class CASSCF(casci.CASCI):
         self.ci = None
         self.mo_coeff = mf.mo_coeff
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -504,7 +505,7 @@ class CASSCF(casci.CASCI):
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc2step(self, mo=None, ci0=None, macro=None, micro=None, **cikwargs):
-        import mc2step
+        from pyscf.mcscf import mc2step
         if mo is None:
             mo = self.mo_coeff
         else:
@@ -551,10 +552,10 @@ class CASSCF(casci.CASCI):
         ncas = self.ncas
         nocc = ncore + ncas
         #TODO:if self.inner_rotation:
-        #TODO:    nvir = v.size / nocc - ncas
+        #TODO:    nvir = v.size // nocc - ncas
         #TODO:else:
-        #TODO:    nvir = (v.size-ncore*ncas) / nocc
-        nvir = (v.size-ncore*ncas) / nocc
+        #TODO:    nvir = (v.size-ncore*ncas) // nocc
+        nvir = (v.size-ncore*ncas) // nocc
         nmo = nocc + nvir
 
         mat = numpy.zeros((nmo,nmo))
@@ -650,7 +651,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     import pyscf.fci
-    import addons
+    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0

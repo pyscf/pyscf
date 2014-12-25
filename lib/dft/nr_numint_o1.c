@@ -116,7 +116,7 @@ static int _xc_has_gga(xc_func_type *func_x, xc_func_type *func_c)
            #define XC_FAMILY_HYB_GGA      32
            #define XC_FAMILY_HYB_MGGA     64 */
         int code = func_x->info->family & (~XC_FAMILY_LDA); // screen the LDA bit
-        if (!func_c->info) {
+        if (func_c->info) {
                 code |= func_c->info->family & (~XC_FAMILY_LDA);
         }
         return code;
@@ -294,7 +294,8 @@ double VXCnr_vxc(int x_id, int c_id, int spin, int relativity,
                  int num_grids, double *coords, double *weights,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
-        xc_func_type func_x, func_c;
+        xc_func_type func_x = {};
+        xc_func_type func_c = {};
         VXCinit_libxc(&func_x, &func_c, x_id, c_id, spin, relativity);
         struct _VXCEnvs envs = {natm, nbas, atm, bas, env,
                                 num_grids, CINTtot_cgto_spheric(bas, nbas),

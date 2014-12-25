@@ -3,10 +3,17 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import os, sys
+import imp
 import numpy
 import pyscf.ao2mo
-import settings
-import imp
+
+try:
+    from pyscf.dmrgci import settings
+except ImportError:
+    msg = '''settings.py not found.  Please create %s
+''' % os.path.join(os.path.dirname(__file__), 'settings.py')
+    sys.stderr.write(msg)
 
 # point group ID defined in CheMPS2, see
 # http://sebwouters.github.io/CheMPS2/classCheMPS2_1_1Irreps.html

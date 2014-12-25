@@ -33,14 +33,14 @@ def gen_strings4orblist(orb_list, nelec, ordering=True):
     if ordering:
         orb_list = sorted(orb_list, reverse=True)
     else:
-        orb_list = reversed(orb_list)
+        orb_list = list(reversed(orb_list))
     strings = gen_str_iter(orb_list, nelec)
     assert(strings.__len__() == num_strings(len(orb_list),nelec))
     return strings
 
 def num_strings(n, m):
     return math.factorial(n) \
-            / (math.factorial(n-m)*math.factorial(m))
+            // (math.factorial(n-m)*math.factorial(m))
 
 # Return an mapping-index for each string
 # For given string str0, index[str0] is (nocc+nocc*nvir) x 4 array.
@@ -93,9 +93,9 @@ def reform_linkstr_index(link_index):
     for k, tab in enumerate(link_index):
         for j, (a, i, str1, sign) in enumerate(tab):
             if a > i:
-                ai = a*(a+1)/2+i
+                ai = a*(a+1)//2+i
             else:
-                ai = i*(i+1)/2+a
+                ai = i*(i+1)//2+a
             link_new[k,j] = (ai,str1,sign,0)
     return link_new
 
@@ -128,7 +128,7 @@ def gen_cre_str_index(orb_list, nelec):
         for i in orb_list:
             if not str0 & (1<<i):
                 str1 = str0 | (1<<i)
-                pumpmap.append((i, i*(i+1)/2, credic[str1], parity(str0, i)))
+                pumpmap.append((i, i*(i+1)//2, credic[str1], parity(str0, i)))
         return pumpmap
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
@@ -147,7 +147,7 @@ def gen_des_str_index(orb_list, nelec):
         for i in orb_list:
             if str0 & (1<<i):
                 str1 = str0 ^ (1<<i)
-                pumpmap.append((i, i*(i+1)/2, desdic[str1], parity(str0, i)))
+                pumpmap.append((i, i*(i+1)//2, desdic[str1], parity(str0, i)))
         return pumpmap
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]

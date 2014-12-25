@@ -63,7 +63,7 @@ def remove_dup(test, lst, from_end=False):
         return set(lst)
     else:
         if from_end:
-            lst = reversed(lst)
+            lst = list(reversed(lst))
         seen = []
         for l in lst:
             if not member(test, l, seen):
@@ -71,7 +71,7 @@ def remove_dup(test, lst, from_end=False):
         return seen
 
 def remove_if(test, lst):
-    return filter(lambda x: not test(x), lst)
+    return list(filter(lambda x: not test(x), lst))
 
 def find_if(test, lst):
     for l in lst:
@@ -194,6 +194,6 @@ class omnimethod(object):
 
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):
-        print('base=30', i, j, j*(j+1)/2-i*(i+1)/2)
+        print('base=30', i, j, j*(j+1)//2-i*(i+1)//2)
     for i,j in tril_equal_pace(90, npace=5):
-        print('npace=5', i, j, j*(j+1)/2-i*(i+1)/2)
+        print('npace=5', i, j, j*(j+1)//2-i*(i+1)//2)

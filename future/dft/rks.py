@@ -9,26 +9,26 @@ Non-relativistic Kohn-Sham
 
 import time
 import numpy
-from pyscf import lib
-from pyscf import scf
+import pyscf.lib
 import pyscf.lib.logger as log
-import vxc
-import gen_grid
-import pyscf.scf._vhf
+import pyscf.scf
+from pyscf.scf import _vhf
+from pyscf.dft import vxc
+from pyscf.dft import gen_grid
 
 
-class RKS(scf.hf.RHF):
+class RKS(pyscf.scf.hf.RHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
-        scf.hf.RHF.__init__(self, mol)
+        pyscf.scf.hf.RHF.__init__(self, mol)
         self._ecoul = 0
         self._exc = 0
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(mol)
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def dump_flags(self):
-        scf.hf.RHF.dump_flags(self)
+        pyscf.scf.hf.RHF.dump_flags(self)
         log.info(self, 'XC functionals = %s', self.xc)
         log.info(self, 'DFT grids: %s', self.grids.becke_scheme.__doc__)
         #TODO:for k,v in self.mol.grids.items():
@@ -49,15 +49,15 @@ class RKS(scf.hf.RHF):
 
         if self._is_mem_enough():
             if self._eri is None:
-                self._eri = scf._vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj, vk = scf.hf.dot_eri_dm(self._eri, dm, hermi=hermi)
+                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+            vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi=hermi)
         else:
             if self.direct_scf:
-                vj, vk = scf._vhf.direct(dm-dm_last, mol._atm, \
+                vj, vk = _vhf.direct(dm-dm_last, mol._atm, \
                                          mol._bas, mol._env, self.opt, \
                                          hermi=hermi)
             else:
-                vj, vk = scf._vhf.direct(dm, mol._atm, mol._bas, mol._env, \
+                vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env, \
                                          hermi=hermi)
         log.timer(self, 'vj and vk', *t0)
         self._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
@@ -69,12 +69,11 @@ class RKS(scf.hf.RHF):
             vx -= vk
         return vj + vx
 
-    def calc_tot_elec_energy(self, veff, dm, mo_energy, mo_occ):
-        sum_mo_energy = numpy.dot(mo_energy, mo_occ)
-        coul_dup = numpy.einsum('ij,ji', dm, veff)
-        tot_e = sum_mo_energy - coul_dup + self._ecoul + self._exc
+    def calc_tot_elec_energy(self, h1e, vhf, dm):
+        e1 = numpy.einsum('ij,ji', h1e, dm).real
+        tot_e = e1 + self._ecoul + self._exc
         log.debug(self, 'Ecoul = %s  Exc = %s', self._ecoul, self._exc)
-        return tot_e, self._ecoul, self._exc
+        return tot_e, self._ecoul+self._exc
 
 
 

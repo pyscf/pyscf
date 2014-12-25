@@ -46,8 +46,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(s), 497.34740945610434, 11)
 
     def test_intor_nr_cross(self):
-        bra = range(mol.nbas/4)
-        ket = range(mol.nbas/4, mol.nbas)
+        bra = range(mol.nbas//4)
+        ket = range(mol.nbas//4, mol.nbas)
         s = mol.intor_cross('cint1e_ovlp_sph', bra, ket)
         self.assertAlmostEqual(finger(s), 80.608860927958361, 11)
 

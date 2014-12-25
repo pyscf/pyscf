@@ -9,12 +9,13 @@ Non-relativistic NMR shielding tensor
 
 
 import time
+from functools import reduce
 import numpy
 import pyscf.lib
 import pyscf.lib.logger as logger
 import pyscf.lib.parameters as param
 import pyscf.scf
-import pyscf.scf._vhf as _vhf
+from pyscf.scf import _vhf
 
 
 
@@ -35,7 +36,7 @@ class NMR(object):
 
         self.mo10 = None
         self.mo_e10 = None
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys()).union(['_keys'])
 
 ## ** default method **
 #        # RHF: exchange parts
@@ -313,7 +314,7 @@ if __name__ == '__main__':
     mol.atom.extend([
         [1   , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ])
-    #mol.nucmod = {'F':2}
+    mol.nucmod = {'F': 2} # gaussian nuclear model
     mol.basis = {'H': '6-31g',
                  'F': '6-31g',}
     mol.build()

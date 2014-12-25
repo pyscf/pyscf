@@ -2,11 +2,11 @@
 
 import sys
 import numpy
-import cistring
+from pyscf.fci import cistring
 
 def large_ci(ci, norb, nelec, tol=.1):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec/2
+        neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
     idx = numpy.argwhere(abs(ci) > tol)
@@ -19,7 +19,7 @@ def large_ci(ci, norb, nelec, tol=.1):
 
 def initguess_triplet(norb, nelec, binstring):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec/2
+        neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
     na = cistring.num_strings(norb, neleca)
@@ -36,7 +36,7 @@ def initguess_triplet(norb, nelec, binstring):
 # |N-1> = a_p |N>
 def des_a(ci0, norb, nelec, ap_id):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
 
@@ -57,7 +57,7 @@ def des_a(ci0, norb, nelec, ap_id):
 # N-electron wavefunction:
 def des_b(ci0, norb, nelec, ap_id):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
     des_index = cistring.gen_des_str_index(range(norb), nelecb)
@@ -76,7 +76,7 @@ def des_b(ci0, norb, nelec, ap_id):
 # |N+1> = a_p^+ |N>
 def cre_a(ci0, norb, nelec, ap_id):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
     cre_index = cistring.gen_cre_str_index(range(norb), neleca)
@@ -94,7 +94,7 @@ def cre_a(ci0, norb, nelec, ap_id):
 # N-electron wavefunction:
 def cre_b(ci0, norb, nelec, ap_id):
     if isinstance(nelec, int):
-        neleca = nelecb = nelec / 2
+        neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)
@@ -113,8 +113,8 @@ if __name__ == '__main__':
     a6 = 10*numpy.arange(6)[:,None]
     b4 = numpy.arange(4)
     b6 = numpy.arange(6)
-    print(map(bin, cistring.gen_strings4orblist(range(4), 3)))
-    print(map(bin, cistring.gen_strings4orblist(range(4), 2)))
+    print([bin(i) for i in cistring.gen_strings4orblist(range(4), 3)])
+    print([bin(i) for i in cistring.gen_strings4orblist(range(4), 2)])
     print(des_a(a4+b4, 4, 6, 0))
     print(des_a(a4+b4, 4, 6, 1))
     print(des_a(a4+b4, 4, 6, 2))

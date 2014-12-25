@@ -4,12 +4,12 @@
 
 import time
 import tempfile
+from functools import reduce
 import numpy
 import h5py
 
-from pyscf import lib
-from pyscf import ao2mo
-import pyscf.lib.logger as log
+import pyscf.ao2mo
+import pyscf.lib.logger as logger
 
 
 '''
@@ -86,16 +86,16 @@ class MP2(object):
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
         if nocc is None:
-            nocc = self.mol.nelectron / 2
+            nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
                 kernel(self, mo, mo_energy, nocc, verbose=self.verbose)
-        log.log(self, 'RMP2 energy = %.15g', self.emp2)
+        logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
     # return eri_ovov array[nocc*nvir,nocc*nvir]
     def ao2mo(self, mo, nocc):
-        log = lib.logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
         log.debug('transform (ia|jb)')
         nmo = mo.shape[1]
@@ -104,11 +104,11 @@ class MP2(object):
         cv = mo[:,nocc:]
         if nocc*nvir*nmo**2/2*8/1e6 < self.max_memory*.9 \
            and self._scf._eri is not None:
-            eri = ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
+            eri = pyscf.ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
         else:
             erifile = tempfile.NamedTemporaryFile()
-            ao2mo.direct.general(self.mol, (co,cv,co,cv), erifile.name, \
-                                 self.max_memory, verbose=self.verbose)
+            pyscf.ao2mo.direct.general(self.mol, (co,cv,co,cv), erifile.name,
+                                       self.max_memory, verbose=self.verbose)
             feri = h5py.File(erifile.name, 'r')
             eri = feri['eri_mo']
         time1 = log.timer('Integral transformation', *time0)
@@ -132,13 +132,13 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     print(mf.scf())
 
-    nocc = mol.nelectron/2
+    nocc = mol.nelectron//2
     nmo = mf.mo_energy.size
     nvir = nmo - nocc
 
     co = mf.mo_coeff[:,:nocc]
     cv = mf.mo_coeff[:,nocc:]
-    g = ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
+    g = pyscf.ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
     eia = mf.mo_energy[:nocc,None] - mf.mo_energy[nocc:]
     t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
     t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,3,1)

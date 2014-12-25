@@ -2,13 +2,12 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
-import hf
-import hf_symm
-import dhf
-import chkfile
-import addons
-import diis
-
+from pyscf.scf import hf
+from pyscf.scf import hf_symm
+from pyscf.scf import dhf
+from pyscf.scf import chkfile
+from pyscf.scf import diis
+from pyscf.scf import addons
 
 
 def RHF(mol, *args):
@@ -48,8 +47,4 @@ def DHF(mol, *args):
         return dhf.UHF(mol, *args)
 
 
-def RKS(mol, *args):
-    return dft.RKS(mol, *args)
 
-def RDKS(mol, *args):
-    return rdft.UKS(mol, *args)

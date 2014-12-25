@@ -8,15 +8,14 @@ Intrinsic Atomic Orbitals
 ref. JCTC, 9, 4834
 '''
 
+from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf import lib
+import pyscf.lib.parameters as param
 from pyscf import gto
-from pyscf import scf
-import pyscf.lib.parameters
 import pyscf.scf.addons
 import pyscf.scf.atom_hf
-import orth
+from pyscf.lo import orth
 
 
 # Alternately, use ANO for minao
@@ -28,15 +27,15 @@ def simple_preiao(mol, minao='minao'):
                   for k in mol.basis.keys()])
     basis = {}
     for symb in atmlst:
-        basis[symb] = minao_basis(symb)
+        basis[symb] = minao_basis(symb, minao)
 
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(mol.atom, basis, [])
-    c = addons.project_mo_nr2nr(pmol, 1, mol)
+    c = pyscf.scf.addons.project_mo_nr2nr(pmol, 1, mol)
     return c
 
 def pre_atm_scf_ao(mol):
-    atm_scf = scf.atom_hf.get_atm_nrhf_result(mol)
+    atm_scf = pyscf.scf.atom_hf.get_atm_nrhf_result(mol)
     cs = []
     for ia in range(mol.natm):
         symb = mol.symbol_of_atm(ia)
@@ -75,7 +74,7 @@ def minao_basis(symb, minao):
     basis_new = []
     for l in range(4):
         nuc = gto.mole._charge(symb)
-        ne = lib.parameters.ELEMENTS[nuc][2][l]
+        ne = param.ELEMENTS[nuc][2][l]
         nd = (l * 2 + 1) * 2
         nshell = int(numpy.ceil(float(ne)/nd))
         if nshell > 0:
@@ -107,7 +106,7 @@ def minao_mol(mol, minao='minao'):
 
 def simple_1iao(mol, atm_id, minao='minao'):
     atm = minao_atm(mol, atm_id, minao)
-    c1 = scf.addons.project_mo_nr2nr(atm, 1, mol)
+    c1 = pyscf.scf.addons.project_mo_nr2nr(atm, 1, mol)
     s = reduce(numpy.dot, (c1.T, mol.intor_symmetric('cint1e_ovlp_sph'), c1))
     return orth.lowdin_orth_coeff(s)
 
@@ -123,7 +122,7 @@ if __name__ == "__main__":
     mol.basis = {'H': 'cc-pvtz',
                  'O': 'cc-pvtz',}
     mol.build()
-    c = simple_preiao(mol, 0)
+    c = simple_preiao(mol)
     #print(c)
 
 #    mf = scf.RHF(mol)

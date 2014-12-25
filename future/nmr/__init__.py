@@ -1,4 +1,4 @@
 #!/usr/bin/env python
 
-import hf
-import dhf
+from pyscf.nmr import hf
+from pyscf.nmr import dhf
