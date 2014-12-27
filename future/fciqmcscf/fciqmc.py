@@ -66,9 +66,11 @@ class FCIQMCCI(object):
         self.configFile = "neci.inp"
         self.outputFile = "neci.out"
         self.maxwalkers = 10000
-        self.maxIter = 6000
+        self.maxIter = -1
+        self.RDMSamples = 5000
         self.restart = False
         self.time = 10
+        self.tau = -1.0
         self.orbsym = []
         if mol.symmetry:
             self.groupname = mol.groupname
@@ -167,7 +169,10 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     else :
         f.write('startsinglepart 500\n')
         f.write('diagshift 0.1\n')
+    f.write('rdmsamplingiters %i\n'%(FCIQMCCI.RDMSamples))
     f.write('shiftdamp 0.05\n')
+    if (FCIQMCCI.tau != -1.0):
+        f.write('tau 0.01\n')
     f.write('truncinitiator\n')
     f.write('addtoinitiator 3\n')
     f.write('allrealcoeff\n')
@@ -248,11 +253,15 @@ if __name__ == '__main__':
 
     mc = mcscf.CASSCF(mol, m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
-    mc.fcisolver.tol = 1e-9
+    mc.fcisolver.tau = 0.01
+    mc.fcisolver.RDMSamples = 1000
+    mc.max_cycle_macro = 10
     emc_1 = mc.mc2step()[0] + mol.nuclear_repulsion()
 
     mc = mcscf.CASCI(mol, m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
+    mc.fcisolver.tau = 0.01
+    mc.fcisolver.RDMSamples = 1000
     emc_0 = mc.casci()[0] + mol.nuclear_repulsion()
 
     b = 1.4

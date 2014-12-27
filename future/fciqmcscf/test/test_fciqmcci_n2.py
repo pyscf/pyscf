@@ -5,7 +5,7 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
-from pyscf import dmrgscf
+from pyscf import fciqmcscf
 
 b = 1.4
 mol = gto.Mole()
@@ -23,17 +23,26 @@ m.scf()
 
 
 class KnowValues(unittest.TestCase):
+    def test_mc2step_4o4e_fci(self):
+        mc = mcscf.CASSCF(mol, m, 4, 4)
+        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
+        self.assertAlmostEqual(emc,-108.91378640707609, 7)
+
     def test_mc2step_4o4e(self):
         mc = mcscf.CASSCF(mol, m, 4, 4)
-        mc.fcisolver = dmrgscf.FCIQMCCI(mol)
+        mc.max_cycle_macro = 10
+        mc.fcisolver = fciqmcscf.FCIQMCCI(mol)
+        mc.fcisolver.RDMSamples = 5000
         emc = mc.mc2step()[0] + mol.nuclear_repulsion()
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
+        self.assertAlmostEqual(emc,-108.91378666934476, 7)
 
     def test_mc2step_6o6e(self):
         mc = mcscf.CASSCF(mol, m, 6, 6)
-        mc.fcisolver = dmrgscf.FCIQMCCI(mol)
+        mc.max_cycle_macro = 10
+        mc.fcisolver = fciqmcscf.FCIQMCCI(mol)
+        mc.fcisolver.RDMSamples = 5000
         emc = mc.mc2step()[0] + mol.nuclear_repulsion()
-        self.assertAlmostEqual(emc, -108.980105451388, 7)
+        self.assertAlmostEqual(emc,-108.98028859357791, 7)
 
 if __name__ == "__main__":
     print("Full Tests for N2")
