@@ -25,7 +25,7 @@ static void store_ij(double *eri, int ish, int jsh,
         double *peri, *pbuf;
 
         CVHFfill_nr_s8(cint2e_sph, CVHFunpack_nrblock2tril, vhfopt->fprescreen,
-                       eribuf, ish, jsh, 1, cintopt, vhfopt, envs);
+                       eribuf, 1, ish, jsh, cintopt, vhfopt, envs);
         for (i0 = ao_loc[ish], i = 0; i < di; i++, i0++) {
         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                 if (i0 >= j0) {

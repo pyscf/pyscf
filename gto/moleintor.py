@@ -14,7 +14,7 @@ _cint.CINTcgto_cart.restype = ctypes.c_int
 _cint.CINTcgto_spheric.restype = ctypes.c_int
 _cint.CINTcgto_spinor.restype = ctypes.c_int
 
-def getints(intor_name, atm, bas, env, bras=None, kets=None, dim3=1, hermi=0):
+def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
     '''non-relativitic and relativitic integral generator.
     hermi=0 : plain
     hermi=1 : hermitian
@@ -54,30 +54,33 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, dim3=1, hermi=0):
 
     bralst = numpy.array(bras, dtype=numpy.int32)
     ketlst = numpy.array(kets, dtype=numpy.int32)
-    mat = numpy.empty((dim3,naoi,naoj), dtype)
+    mat = numpy.empty((comp,naoi,naoj), dtype)
     fnaddr = ctypes.c_void_p(_ctypes.dlsym(_cint._handle, intor_name))
-    c_intor(fnaddr, mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(dim3), \
+    c_intor(fnaddr, mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp), \
             ctypes.c_int(hermi), \
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbra),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nket),
             c_atm, c_natm, c_bas, c_nbas, c_env)
 
-    if dim3 == 1:
+    if comp == 1:
         mat = mat.reshape(naoi,naoj)
     if hermi == 0:
         return mat
     else:
-        if dim3 == 1:
+        if comp == 1:
             pyscf.lib.hermi_triu(mat, hermi=hermi)
         else:
-            for i in range(dim3):
+            for i in range(comp):
                 pyscf.lib.hermi_triu(mat[i], hermi=hermi)
         return mat
 
-def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
-    atm = numpy.array(atm, dtype=numpy.int32)
-    bas = numpy.array(bas, dtype=numpy.int32)
-    env = numpy.array(env, numpy.double)
+def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
+    if not (isinstance(atm, numpy.ndarray) and atm.dtype == numpy.int32):
+        atm = numpy.array(atm, dtype=numpy.int32)
+    if not (isinstance(bas, numpy.ndarray) and bas.dtype == numpy.int32):
+        bas = numpy.array(bas, dtype=numpy.int32)
+    if not (isinstance(env, numpy.ndarray) and env.dtype == numpy.double):
+        env = numpy.array(env, numpy.double)
     c_bas = bas.ctypes.data_as(ctypes.c_void_p)
     natm = ctypes.c_int(atm.shape[0])
     nbas = ctypes.c_int(bas.shape[0])
@@ -96,7 +99,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
     if '3c2e' in intor_name or '2e3c' in intor_name:
         assert(len(shls) == 3)
         di, dj, dk = map(num_cgto_of, shls)
-        buf = numpy.empty((di,dj,dk,dim3), dtype, order='F')
+        buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
@@ -104,14 +107,14 @@ def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
                env.ctypes.data_as(ctypes.c_void_p), nullopt)
-        if dim3 == 1:
+        if comp == 1:
             return buf.reshape(di,dj,dk)
         else:
             return buf.transpose(3,0,1,2)
     elif '2c2e' in intor_name or '2e2c' in intor_name:
         assert(len(shls) == 2)
         di, dj = map(num_cgto_of, shls)
-        buf = numpy.empty((di,dj,dim3), dtype, order='F')
+        buf = numpy.empty((di,dj,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
@@ -119,14 +122,14 @@ def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
                env.ctypes.data_as(ctypes.c_void_p), nullopt)
-        if dim3 == 1:
+        if comp == 1:
             return buf.reshape(di,dj)
         else:
             return buf.transpose(2,0,1)
     elif '2e' in intor_name:
         assert(len(shls) == 4)
         di, dj, dk, dl = map(num_cgto_of, shls)
-        buf = numpy.empty((di,dj,dk,dl,dim3), dtype, order='F')
+        buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
@@ -134,21 +137,21 @@ def getints_by_shell(intor_name, shls, atm, bas, env, dim3=1):
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
                env.ctypes.data_as(ctypes.c_void_p), nullopt)
-        if dim3 == 1:
+        if comp == 1:
             return buf.reshape(di,dj,dk,dl)
         else:
             return buf.transpose(4,0,1,2,3)
     else:
         assert(len(shls) == 2)
         di, dj = map(num_cgto_of, shls)
-        buf = numpy.empty((di,dj,dim3), dtype, order='F')
+        buf = numpy.empty((di,dj,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*2)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
                env.ctypes.data_as(ctypes.c_void_p))
-        if dim3 == 1:
+        if comp == 1:
             return buf.reshape(di,dj)
         else:
             return buf.transpose(2,0,1)

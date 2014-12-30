@@ -122,8 +122,6 @@ class CASCI(object):
             ftmp = tempfile.NamedTemporaryFile()
             pyscf.ao2mo.outcore.full(self.mol, mo, ftmp.name,
                                      verbose=self.verbose)
-            #pyscf.ao2mo.direct.full(self.mol, mo, ftmp.name, \
-            #                        max_memory=self.max_memory, verbose=self.verbose)
             with h5py.File(ftmp.name, 'r') as feri:
                 eri = numpy.array(feri['eri_mo'])
         else:

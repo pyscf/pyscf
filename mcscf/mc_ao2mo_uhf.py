@@ -7,6 +7,7 @@ import numpy
 import h5py
 import pyscf.lib
 import pyscf.lib.numpy_helper
+import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.mcscf import mc_ao2mo
 
@@ -29,21 +30,17 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
     c_nmo = ctypes.c_int(nmo)
 
-    moji = numpy.array(numpy.hstack((mo[1],mo[1][:,:nocc[1]])), order='F')
-    ijshape = (nmo, nocc[1], 0, nmo)
-    erib = _ao2mo.nr_e1_incore_(eri_ao, moji, ijshape)
-
+    erib = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[1][:,:nocc[1]],mo[1]),
+                                      compact=False)
     load_buf = lambda bufid: erib[bufid*nmo:bufid*nmo+nmo].copy()
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
             _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)
     jC_PP, jC_pp, kC_PP, ICVCV = \
             _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)[:4]
-    tmp = None
+    erib = tmp = None
 
-    moji = numpy.array(numpy.hstack((mo[0],mo[0][:,:nocc[0]])), order='F')
-    ijshape = (nmo, nocc[0], 0, nmo)
-    eria = _ao2mo.nr_e1_incore_(eri_ao, moji, ijshape)
-
+    eria = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[0][:,:nocc[0]],mo[0]),
+                                      compact=False)
     load_buf = lambda bufid: eria[bufid*nmo:bufid*nmo+nmo].copy()
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
             _trans_aapp_(mo, ncore, ncas, load_buf)
@@ -59,56 +56,27 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                      verbose=0):
-    mo = numpy.ascontiguousarray(mo)
-    log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     mol = casscf.mol
+    log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     ncore = casscf.ncore
     ncas = casscf.ncas
     nao, nmo = mo[0].shape
+    nao_pair = nao*(nao+1)//2
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
 
-    moji = numpy.array(numpy.hstack((mo[1],mo[1][:,:nocc[1]])), order='F')
-    ijshape = (nmo, nocc[1], 0, nmo)
-
-    nij_pair = nocc[1] * nmo
-    nao_pair = nao*(nao+1)//2
-    mem_words, ioblk_words = \
-            pyscf.ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
-                                                      nij_pair, nao_pair)
-    e1_buflen = min(int(mem_words//nij_pair), nao_pair)
-    ish_ranges = pyscf.ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
-
-    log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
-               nij_pair*nao_pair*8/1e6, e1_buflen, nmo,
-               max(e1_buflen*nij_pair,nmo*nao_pair)*8/1e6)
-
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    fswap = h5py.File(swapfile.name)
+    pyscf.ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), swapfile.name,
+                                verbose=log, compact=False)
 
-    for istep, sh_range in enumerate(ish_ranges):
-        log.debug1('step 1, AO %d:%d, [%d/%d], len(buf) = %d', \
-                  sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
-                  sh_range[2])
-        try:
-            buf = _ao2mo.nr_e1range_(moji, sh_range, ijshape, \
-                                     mol._atm, mol._bas, mol._env)
-        except MemoryError:
-            log.warn('not enough memory or limited virtual address space `ulimit -v`')
-            raise MemoryError
-        for ic in range(nocc[1]):
-            col0 = ic * nmo
-            col1 = ic * nmo + nmo
-            fswap['%d/%d'%(istep,ic)] = pyscf.lib.transpose(buf[:,col0:col1])
-        buf = None
-
-    ###########################
+    fswap = h5py.File(swapfile.name, 'r')
+    klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
         buf = numpy.empty((nmo,nao_pair))
         col0 = 0
-        for ic, _ in enumerate(ish_ranges):
-            dat = fswap['%d/%d'%(ic,bfn_id)]
+        for ic in range(klaoblks):
+            dat = fswap['0/%d'%ic]
             col1 = col0 + dat.shape[1]
-            buf[:nmo,col0:col1] = dat
+            buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
         return buf
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
@@ -119,48 +87,20 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     fswap.close()
 
     ###########################
-    moji = numpy.array(numpy.hstack((mo[0],mo[0][:,:nocc[0]])), order='F')
-    ijshape = (nmo, nocc[0], 0, nmo)
-
-    nij_pair = nocc[0] * nmo
-    nao_pair = nao*(nao+1)//2
-    mem_words, ioblk_words = \
-            pyscf.ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
-                                                      nij_pair, nao_pair)
-    e1_buflen = min(int(mem_words//nij_pair), nao_pair)
-    ish_ranges = pyscf.ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
-
-    log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
-               nij_pair*nao_pair*8/1e6, e1_buflen, nmo,
-               max(e1_buflen*nij_pair,nmo*nao_pair)*8/1e6)
 
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    fswap = h5py.File(swapfile.name)
+    pyscf.ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), swapfile.name,
+                                verbose=log, compact=False)
 
-    for istep, sh_range in enumerate(ish_ranges):
-        log.debug1('step 1, AO %d:%d, [%d/%d], len(buf) = %d', \
-                  sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
-                  sh_range[2])
-        try:
-            buf = _ao2mo.nr_e1range_(moji, sh_range, ijshape, \
-                                     mol._atm, mol._bas, mol._env)
-        except MemoryError:
-            log.warn('not enough memory or limited virtual address space `ulimit -v`')
-            raise MemoryError
-        for ic in range(nocc[0]):
-            col0 = ic * nmo
-            col1 = ic * nmo + nmo
-            fswap['%d/%d'%(istep,ic)] = pyscf.lib.transpose(buf[:,col0:col1])
-        buf = None
-
-    ###########################
+    fswap = h5py.File(swapfile.name, 'r')
+    klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
         buf = numpy.empty((nmo,nao_pair))
         col0 = 0
-        for ic, _ in enumerate(ish_ranges):
-            dat = fswap['%d/%d'%(ic,bfn_id)]
+        for ic in range(klaoblks):
+            dat = fswap['0/%d'%ic]
             col1 = col0 + dat.shape[1]
-            buf[:nmo,col0:col1] = dat
+            buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
         return buf
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
@@ -182,7 +122,6 @@ def _trans_aapp_(mo, ncore, ncas, fload):
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
-    molk = (numpy.asfortranarray(mo[0]), numpy.asfortranarray(mo[1]))
     klshape = (0, nmo, 0, nmo)
 
     japcv = numpy.empty((ncas,nmo,ncore[0],nmo-ncore[0]))
@@ -193,7 +132,8 @@ def _trans_aapp_(mo, ncore, ncas, fload):
     apCV = numpy.empty((ncas,nmo,ncore[1],nmo-ncore[1]))
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = _ao2mo.nr_e2_(fload(ncore[0]+i), molk[0], klshape)
+        buf = _ao2mo.nr_e2_(fload(ncore[0]+i), mo[0], klshape,
+                            aosym='s4', mosym='s2')
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -204,7 +144,8 @@ def _trans_aapp_(mo, ncore, ncas, fload):
                                        ppp.ctypes.data_as(ctypes.c_void_p),
                                        ctypes.c_int(ncore[0]), ctypes.c_int(ncas),
                                        ctypes.c_int(nmo))
-        buf = _ao2mo.nr_e2_(fload(ncore[0]+i), molk[1], klshape)
+        buf = _ao2mo.nr_e2_(fload(ncore[0]+i), mo[1], klshape,
+                            aosym='s4', mosym='s2')
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -220,9 +161,6 @@ def _trans_cvcv_(mo, ncore, ncas, fload):
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
-    molk =(numpy.array(numpy.hstack((mo[0],mo[0][:,:nocc[0]])), order='F'),
-           numpy.array(numpy.hstack((mo[1],mo[1][:,:nocc[1]])), order='F'))
-
     jc_pp = numpy.empty((ncore[0],nmo,nmo))
     jc_PP = numpy.zeros((nmo,nmo))
     kc_pp = numpy.empty((ncore[0],nmo,nmo))
@@ -230,24 +168,24 @@ def _trans_cvcv_(mo, ncore, ncas, fload):
     cvCV = numpy.empty((ncore[0],nmo-ncore[0],ncore[1],nmo-ncore[1]))
     vcp = numpy.empty((nmo-ncore[0],ncore[0],nmo))
     cpp = numpy.empty((ncore[0],nmo,nmo))
-    tmp = numpy.empty((nmo*nmo))
     for i in range(ncore[0]):
         buf = fload(i)
-        klshape = (nmo, ncore[1], ncore[1], nmo-ncore[1])
-        _ao2mo.nr_e2_(buf[ncore[0]:nmo], molk[1], klshape, cvCV[i])
+        klshape = (0, ncore[1], ncore[1], nmo-ncore[1])
+        _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[1], klshape,
+                      aosym='s4', mosym='s1', vout=cvCV[i])
 
         klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2_(buf[i:i+1], molk[1], klshape, tmp)
-        funpack(c_nmo, tmp.ctypes.data_as(ctypes.c_void_p),
-                cpp[0].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        jc_PP += cpp[0]
+        tmp = _ao2mo.nr_e2_(buf[i:i+1], mo[1], klshape, aosym='s4', mosym='s1')
+        jc_PP += tmp.reshape(nmo,nmo)
 
-        klshape = (nmo, ncore[0], 0, nmo)
-        _ao2mo.nr_e2_(buf[ncore[0]:nmo], molk[0], klshape, vcp)
+        klshape = (0, ncore[0], 0, nmo)
+        _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[0], klshape,
+                      aosym='s4', mosym='s1', vout=vcp)
         kc_pp[i,ncore[0]:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2_(buf[:ncore[0]], molk[0], klshape, buf[:ncore[0]])
+        _ao2mo.nr_e2_(buf[:ncore[0]], mo[0], klshape,
+                      aosym='s4', mosym='s2', vout=buf[:ncore[0]])
         for j in range(ncore[0]):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))

@@ -130,24 +130,27 @@ class CASCI(object):
         nao, nmo = mo[0].shape
         if self._scf._eri is not None:
             #and nao*nao*nmo*nmo*3/4*8/1e6 > self.max_memory
-            eri_aa = pyscf.ao2mo.incore.full(self._scf._eri, mo[0])
-            eri_ab = pyscf.ao2mo.incore.general(self._scf._eri,
-                                                (mo[0],mo[0],mo[1],mo[1]))
-            eri_bb = pyscf.ao2mo.incore.full(self._scf._eri, mo[1])
+            moab = numpy.hstack((mo[0], mo[1]))
+            na = mo[0].shape[1]
+            nab = moab.shape[1]
+            eri = pyscf.ao2mo.incore.full(self._scf._eri, moab)
+            eri = pyscf.ao2mo.restore(1, eri, nab)
+            eri_aa = eri[:na,:na,:na,:na].copy()
+            eri_ab = eri[:na,:na,na:,na:].copy()
+            eri_bb = eri[na:,na:,na:,na:].copy()
         else:
             ftmp = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.outcore.full(self.mol, mo[0], ftmp.name,
+            moab = numpy.hstack((mo[0], mo[1]))
+            pyscf.ao2mo.outcore.full(self.mol, moab, ftmp.name,
                                      verbose=self.verbose)
+            na = mo[0].shape[1]
+            nab = moab.shape[1]
             with h5py.File(ftmp.name, 'r') as feri:
-                eri_aa = numpy.array(feri['eri_mo'])
-            pyscf.ao2mo.outcore.general(self.mol, (mo[0],mo[0],mo[1],mo[1]),
-                                        ftmp.name, verbose=self.verbose)
-            with h5py.File(ftmp.name, 'r') as feri:
-                eri_ab = numpy.array(feri['eri_mo'])
-            pyscf.ao2mo.outcore.full(self.mol, mo[1], ftmp.name,
-                                     verbose=self.verbose)
-            with h5py.File(ftmp.name, 'r') as feri:
-                eri_bb = numpy.array(feri['eri_mo'])
+                eri = pyscf.ao2mo.restore(1, numpy.array(feri['eri_mo']), nab)
+            eri_aa = eri[:na,:na,:na,:na].copy()
+            eri_ab = eri[:na,:na,na:,na:].copy()
+            eri_bb = eri[na:,na:,na:,na:].copy()
+
         return (eri_aa, eri_ab, eri_bb)
 
     def casci(self, mo=None, ci0=None, **cikwargs):

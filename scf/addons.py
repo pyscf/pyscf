@@ -161,15 +161,15 @@ def project_mo_r2r(mol1, mo1, mol2):
                                   mol1._atm, mol1._bas, mol1._env)
     bras = kets = range(nbas2)
     s22 = moleintor.getints('cint1e_ovlp', atm, bas, env,
-                            bras, kets, dim3=1, hermi=1)
+                            bras, kets, comp=1, hermi=1)
     t22 = moleintor.getints('cint1e_spsp', atm, bas, env,
-                            bras, kets, dim3=1, hermi=1)
+                            bras, kets, comp=1, hermi=1)
     bras = range(nbas2)
     kets = range(nbas2, nbas1+nbas2)
     s21 = moleintor.getints('cint1e_ovlp', atm, bas, env,
-                            bras, kets, dim3=1, hermi=0)
+                            bras, kets, comp=1, hermi=0)
     t21 = moleintor.getints('cint1e_spsp', atm, bas, env,
-                            bras, kets, dim3=1, hermi=0)
+                            bras, kets, comp=1, hermi=0)
     n2c = s21.shape[1]
     pl = numpy.linalg.solve(s22, s21)
     ps = numpy.linalg.solve(t22, t21)

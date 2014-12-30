@@ -34,10 +34,10 @@ class UHF(hf.RHF):
         n2c = n4c // 2
         c = mol.light_speed
 
-        s  = mol.intor('cint1e_ipovlp', dim3=3)
-        t  = mol.intor('cint1e_ipkin', dim3=3)
-        vn = mol.intor('cint1e_ipnuc', dim3=3)
-        wn = mol.intor('cint1e_ipspnucsp', dim3=3)
+        s  = mol.intor('cint1e_ipovlp', comp=3)
+        t  = mol.intor('cint1e_ipkin', comp=3)
+        vn = mol.intor('cint1e_ipnuc', comp=3)
+        wn = mol.intor('cint1e_ipspnucsp', comp=3)
         h1e = numpy.zeros((3,n4c,n4c), numpy.complex)
         h1e[:,:n2c,:n2c] = vn
         h1e[:,n2c:,:n2c] = t
@@ -51,8 +51,8 @@ class UHF(hf.RHF):
         n2c = n4c // 2
         c = mol.light_speed
 
-        s  = mol.intor('cint1e_ipovlp', dim3=3)
-        t  = mol.intor('cint1e_ipkin', dim3=3)
+        s  = mol.intor('cint1e_ipovlp', comp=3)
+        t  = mol.intor('cint1e_ipkin', comp=3)
         s1e = numpy.zeros((3,n4c,n4c), numpy.complex)
         s1e[:,:n2c,:n2c] = s
         s1e[:,n2c:,n2c:] = t * (.5/c**2)
@@ -64,8 +64,8 @@ class UHF(hf.RHF):
         c = mol.light_speed
         v = numpy.zeros((3,n4c,n4c), numpy.complex)
         mol.set_rinv_orig(mol.coord_of_atm(ia))
-        vn = mol.charge_of_atm(ia) * mol.intor('cint1e_iprinv', dim3=3)
-        wn = mol.charge_of_atm(ia) * mol.intor('cint1e_ipsprinvsp', dim3=3)
+        vn = mol.charge_of_atm(ia) * mol.intor('cint1e_iprinv', comp=3)
+        wn = mol.charge_of_atm(ia) * mol.intor('cint1e_ipsprinvsp', comp=3)
         v[:,:n2c,:n2c] = vn
         v[:,n2c:,n2c:] = wn * (.25/c**2)
         return v

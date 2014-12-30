@@ -730,24 +730,24 @@ mol.build(
                         i += dj
         return tao
 
-    def intor(self, intor, dim3=1, hermi=0):
+    def intor(self, intor, comp=1, hermi=0):
         '''non-relativitic and relativitic integral generator.
         hermi=1 : hermitian, hermi=2 : anti-hermitian'''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 dim3=dim3, hermi=hermi)
+                                 comp=comp, hermi=hermi)
 
-    def intor_symmetric(self, intor, dim3=1):
+    def intor_symmetric(self, intor, comp=1):
         '''hermi integral generator.'''
-        return self.intor(intor, dim3, 1)
+        return self.intor(intor, comp, 1)
 
-    def intor_asymmetric(self, intor, dim3=1):
+    def intor_asymmetric(self, intor, comp=1):
         '''anti-hermi integral generator.'''
-        return self.intor(intor, dim3, 2)
+        return self.intor(intor, comp, 2)
 
-    def intor_cross(self, intor, bras, kets, dim3=1):
+    def intor_cross(self, intor, bras, kets, comp=1):
         '''bras: shell lists of bras, kets: shell lists of kets'''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 bras, kets, dim3, 0)
+                                 bras, kets, comp, 0)
 
     def get_enuc(self):
         return self.nuclear_repulsion()
@@ -872,14 +872,14 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     return atm1+atm2, bas1+bas2, env1+env2
 
 # <bas-of-mol1|intor|bas-of-mol2>
-def intor_cross(intor, mol1, mol2, dim3=1):
+def intor_cross(intor, mol1, mol2, comp=1):
     nbas1 = len(mol1._bas)
     nbas2 = len(mol2._bas)
     atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env, \
                                 mol2._atm, mol2._bas, mol2._env)
     bras = range(nbas1)
     kets = range(nbas1, nbas1+nbas2)
-    return moleintor.getints(intor, atmc, basc, envc, bras, kets, dim3, 0)
+    return moleintor.getints(intor, atmc, basc, envc, bras, kets, comp, 0)
 
 def tot_electrons(mol):
     nelectron = -mol.charge

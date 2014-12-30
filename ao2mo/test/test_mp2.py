@@ -3,8 +3,9 @@
 import os
 import ctypes
 import tempfile
-import numpy
 import time
+import numpy
+import h5py
 
 from pyscf import lib
 from pyscf import ao2mo
@@ -59,7 +60,11 @@ def rmp2_energy(mol, mo_coeff, mo_energy, nocc, verbose=None):
     log.debug('transform (ia|jb)')
     co = mo_coeff[:,:nocc]
     cv = mo_coeff[:,nocc:]
-    g = ao2mo.direct.general_iofree(mol, (co,cv,co,cv), verbose=verbose)
+    erifile = tempfile.NamedTemporaryFile()
+    ao2mo.outcore.general(mol, (co,cv,co,cv), erifile.name, verbose=verbose)
+    feri = h5py.File(erifile.name)
+    g = numpy.array(feri['eri_mo'])
+    feri.close()
     tcpu0, dt = time.clock(), time.clock()-tcpu0
     log.debug('integral transformation CPU time: %8.2f', dt)
 

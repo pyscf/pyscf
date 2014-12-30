@@ -5,99 +5,87 @@
  */
 
 #include <stdlib.h>
-#include <math.h>
-#include <string.h>
 #include <assert.h>
 //#include <omp.h>
 #include "config.h"
-#include "vhf/fblas.h"
+
 #include "np_helper/np_helper.h"
-#include "nr_ao2mo_o3.h"
-#include "nr_incore.h"
 
-#define MIN(X,Y)        ((X) < (Y) ? (X) : (Y))
-#define MAX(X,Y)        ((X) > (Y) ? (X) : (Y))
+struct _AO2MOEnvs {
+        int natm;
+        int nbas;
+        int *atm;
+        int *bas;
+        double *env;
+        int nao;
+        int ksh_start;
+        int ksh_count;
+        int bra_start;
+        int bra_count;
+        int ket_start;
+        int ket_count;
+        int ncomp;
+        int *ao_loc;
+        double *mo_coeff;
+};
 
-#define BLOCKDIM        56
+int AO2MOcount_ij(void (*fmmm)(), struct _AO2MOEnvs *envs);
 
-// 8 fold symmetry of eri_ao
-void AO2MOnr_incore8f_acc(double *vout, double *eri, double *mo_coeff,
-                          int row_start, int row_count, int nao,
-                          int i_start, int i_count, int j_start, int j_count,
-                          void (*ftrans)())
+void AO2MOtranse1_incore_s4(void (*fmmm)(),
+                            double *vout, double *eri_ao, int row_id,
+                            struct _AO2MOEnvs *envs)
 {
-        const int npair = nao*(nao+1)/2;
-        const int nij = AO2MOcount_ij(i_start, i_count, j_start, j_count);
-        double *buf1 = malloc(sizeof(double) * npair);
-        double *buf2 = malloc(sizeof(double) * nij*row_count);
-        int i, j, k, row_id;
+        int nao = envs->nao;
+        unsigned npair = nao * (nao+1) / 2;
+        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        double *buf = malloc(sizeof(double) * nao*nao);
+        double *buf1 = eri_ao + npair * (row_id+envs->ksh_start);
 
-        for (row_id = row_start, k = 0; k < row_count; row_id++, k++) {
-                NPdunpack_row(npair, row_id, eri, buf1);
-                (*ftrans)(buf2+nij*k, buf1, mo_coeff, nao,
-                          i_start, i_count, j_start, j_count);
-        }
-        for (i = 0; i < nij; i++) {
-                for (j = 0, k = row_start; j < row_count; k++, j++) {
-                        vout[k] = buf2[j*nij+i];
-                }
-                vout += npair;
-        }
-
-        free(buf1);
-        free(buf2);
+        NPdunpack_tril(nao, buf1, buf, 0);
+        (*fmmm)(vout+ij_pair*row_id, buf, envs);
+        free(buf);
 }
 
-// 4 fold symmetry of eri_ao
-void AO2MOnr_incore4f_acc(double *vout, double *eri, double *mo_coeff,
-                          int row_start, int row_count, int nao,
-                          int i_start, int i_count, int j_start, int j_count,
-                          void (*ftrans)())
+void AO2MOtranse1_incore_s8(void (*fmmm)(),
+                            double *vout, double *eri_ao, int row_id,
+                            struct _AO2MOEnvs *envs)
 {
-        const long npair = nao*(nao+1)/2;
-        const int nij = AO2MOcount_ij(i_start, i_count, j_start, j_count);
-        double *buf2 = malloc(sizeof(double) * nij*row_count);
-        int i, j, k, row_id;
+        int nao = envs->nao;
+        int npair = nao * (nao+1) / 2;
+        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        double *buf = malloc(sizeof(double) * nao*nao*2);
+        double *buf1 = buf + nao*nao;
 
-        for (row_id = row_start, k = 0; k < row_count; row_id++, k++) {
-                (*ftrans)(buf2+nij*k, eri+npair*row_id, mo_coeff, nao,
-                          i_start, i_count, j_start, j_count);
-        }
-        for (i = 0; i < nij; i++) {
-                for (j = 0, k = row_start; j < row_count; k++, j++) {
-                        vout[k] = buf2[j*nij+i];
-                }
-                vout += npair;
-        }
-
-        free(buf2);
+// Note AO2MOnr_e1incore_drv stores ij_start in envs.ksh_start
+        NPdunpack_row(npair, row_id+envs->ksh_start, eri_ao, buf1);
+        NPdunpack_tril(nao, buf1, buf, 0);
+        (*fmmm)(vout+ij_pair*row_id, buf, envs);
+        free(buf);
 }
 
-
-void AO2MOnr_e1incore_drv(double *eri_mo, double *eri_ao, double *mo_coeff,
-                          void (*facc)(), void (*ftrans)(), int nao,
+// ij_start and ij_count for the ij-AO-pair in eri_ao
+void AO2MOnr_e1incore_drv(void (*ftranse2_like)(), void (*fmmm)(),
+                          double *vout, double *eri_ao, double *mo_coeff,
+                          int ij_start, int ij_count, int nao,
                           int i_start, int i_count, int j_start, int j_count)
 {
-        assert(j_start <= i_start);
-        assert(j_start+j_count <= i_start+i_count);
+        struct _AO2MOEnvs envs;
+        envs.bra_start = i_start;
+        envs.bra_count = i_count;
+        envs.ket_start = j_start;
+        envs.ket_count = j_count;
+        envs.nao = nao;
+        envs.mo_coeff = mo_coeff;
 
-        const int npair = nao*(nao+1)/2;
-        int ij = 0;
+        envs.ksh_start = ij_start;
+
+        int i;
 #pragma omp parallel default(none) \
-        shared(eri_mo, eri_ao, mo_coeff, facc, ftrans, \
-               nao, i_start, i_count, j_start, j_count) \
-        private(ij)
-#pragma omp for nowait schedule(dynamic)
-        for (ij = 0; ij < npair-BLOCKDIM+1; ij+=BLOCKDIM) {
-                (*facc)(eri_mo, eri_ao, mo_coeff, ij, BLOCKDIM,
-                        nao, i_start, i_count, j_start, j_count,
-                        ftrans);
-        }
-        ij = npair - npair % BLOCKDIM;
-        if (ij < npair) {
-                (*facc)(eri_mo, eri_ao, mo_coeff, ij, npair-ij,
-                        nao, i_start, i_count, j_start, j_count,
-                        ftrans);
+        shared(ftranse2_like, fmmm, vout, eri_ao, ij_count, envs) \
+        private(i)
+#pragma omp for nowait schedule(static)
+        for (i = 0; i < ij_count; i++) {
+                (*ftranse2_like)(fmmm, vout, eri_ao, i, &envs);
         }
 }
 

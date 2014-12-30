@@ -136,3 +136,4 @@ Version 0.8 (2014-12-21):
 Version 0.9 (2015-1-?):
   * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
   * Solve Python 3.x compatibility
+  * general AO2MO integral transformation

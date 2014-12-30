@@ -7,6 +7,7 @@ import numpy
 import h5py
 import pyscf.lib
 import pyscf.lib.numpy_helper
+import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
 
 libmcscf = pyscf.lib.load_library('libmcscf')
@@ -26,78 +27,44 @@ libmcscf = pyscf.lib.load_library('libmcscf')
 def trans_e1_incore(eri_ao, mo, ncore, ncas):
     nmo = mo.shape[1]
     nocc = ncore + ncas
-    moji = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
-    ijshape = (nmo, nocc, 0, nmo)
-
-    eri1 = _ao2mo.nr_e1_incore_(eri_ao, moji, ijshape)
+    eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo), compact=False)
 
     load_buf = lambda bufid: eri1[bufid*nmo:bufid*nmo+nmo]
-    aapp, appa, Iapcv = \
-            _trans_aapp_(mo, ncore, ncas, load_buf)
-    jc_pp, kc_pp, Icvcv = \
-            _trans_cvcv_(mo, ncore, ncas, load_buf)
+    aapp, appa, Iapcv = _trans_aapp_(mo, ncore, ncas, load_buf)
+    jc_pp, kc_pp, Icvcv = _trans_cvcv_(mo, ncore, ncas, load_buf)
     return jc_pp, kc_pp, aapp, appa, Iapcv, Icvcv
 
 
 def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                      verbose=0):
-    mo = numpy.ascontiguousarray(mo)
-    log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     mol = casscf.mol
+    log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     ncore = casscf.ncore
     ncas = casscf.ncas
     nao, nmo = mo.shape
-    nocc = ncore + ncas
-    moji = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
-    ijshape = (nmo, nocc, 0, nmo)
-
-    nij_pair = nocc * nmo
     nao_pair = nao*(nao+1)//2
-    mem_words, ioblk_words = \
-            pyscf.ao2mo.direct._memory_and_ioblk_size(max_memory, ioblk_size,
-                                                      nij_pair, nao_pair)
-    e1_buflen = min(int(mem_words//nij_pair), nao_pair)
-    ish_ranges = pyscf.ao2mo.outcore._info_sh_ranges(mol, e1_buflen)
-
-    log.debug1('require disk %.8g MB, swap-block-shape (%d,%d), mem cache size %.8g MB',
-               nij_pair*nao_pair*8/1e6, e1_buflen, nmo,
-               max(e1_buflen*nij_pair,nmo*nao_pair)*8/1e6)
+    nocc = ncore + ncas
 
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    fswap = h5py.File(swapfile.name)
+    pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo), swapfile.name,
+                                verbose=log, compact=False)
 
-    for istep, sh_range in enumerate(ish_ranges):
-        log.debug1('step 1, AO %d:%d, [%d/%d], len(buf) = %d', \
-                  sh_range[0], sh_range[1], istep+1, len(ish_ranges), \
-                  sh_range[2])
-        try:
-            buf = _ao2mo.nr_e1range_(moji, sh_range, ijshape, \
-                                     mol._atm, mol._bas, mol._env)
-        except MemoryError:
-            log.warn('not enough memory or limited virtual address space `ulimit -v`')
-            raise MemoryError
-        for ic in range(nocc):
-            col0 = ic * nmo
-            col1 = ic * nmo + nmo
-            fswap['%d/%d'%(istep,ic)] = pyscf.lib.transpose(buf[:,col0:col1])
-        buf = None
-
-    ###########################
+    fswap = h5py.File(swapfile.name, 'r')
+    klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
         buf = numpy.empty((nmo,nao_pair))
         col0 = 0
-        for ic, _ in enumerate(ish_ranges):
-            dat = fswap['%d/%d'%(ic,bfn_id)]
+        for ic in range(klaoblks):
+            dat = fswap['0/%d'%ic]
             col1 = col0 + dat.shape[1]
-            buf[:nmo,col0:col1] = dat
+            buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
         return buf
-    aapp, appa, Iapcv = \
-            _trans_aapp_(mo, ncore, ncas, load_buf)
-    jc_pp, kc_pp, Icvcv = \
-            _trans_cvcv_(mo, ncore, ncas, load_buf)
+    aapp, appa, Iapcv = _trans_aapp_(mo, ncore, ncas, load_buf)
+    jc_pp, kc_pp, Icvcv = _trans_cvcv_(mo, ncore, ncas, load_buf)
     fswap.close()
     return jc_pp, kc_pp, aapp, appa, Iapcv, Icvcv
+
 
 def _trans_aapp_(mo, ncore, ncas, fload):
     nmo = mo.shape[1]
@@ -105,7 +72,6 @@ def _trans_aapp_(mo, ncore, ncas, fload):
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
-    molk = numpy.asfortranarray(mo)
     klshape = (0, nmo, 0, nmo)
 
     japcv = numpy.empty((ncas,nmo,ncore,nmo-ncore))
@@ -113,7 +79,7 @@ def _trans_aapp_(mo, ncore, ncas, fload):
     appa = numpy.empty((ncas,nmo,nmo,ncas))
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = _ao2mo.nr_e2_(fload(ncore+i), molk, klshape)
+        buf = _ao2mo.nr_e2_(fload(ncore+i), mo, klshape, aosym='s4',mosym='s2')
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -132,8 +98,6 @@ def _trans_cvcv_(mo, ncore, ncas, fload):
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
-    molk = numpy.array(numpy.hstack((mo,mo[:,:nocc])), order='F')
-
     jc_pp = numpy.empty((ncore,nmo,nmo))
     kc_pp = numpy.empty((ncore,nmo,nmo))
     jcvcv = numpy.zeros((ncore,nmo-ncore,ncore,nmo-ncore))
@@ -141,12 +105,14 @@ def _trans_cvcv_(mo, ncore, ncas, fload):
     cpp = numpy.empty((ncore,nmo,nmo))
     for i in range(ncore):
         buf = fload(i)
-        klshape = (nmo, ncore, 0, nmo)
-        _ao2mo.nr_e2_(buf[ncore:nmo], molk, klshape, vcp)
+        klshape = (0, ncore, 0, nmo)
+        _ao2mo.nr_e2_(buf[ncore:nmo], mo, klshape,
+                      aosym='s4', mosym='s1', vout=vcp)
         kc_pp[i,ncore:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2_(buf[:ncore], molk, klshape, buf[:ncore])
+        _ao2mo.nr_e2_(buf[:ncore], mo, klshape,
+                      aosym='s4', mosym='s2', vout=buf[:ncore])
         for j in range(ncore):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))

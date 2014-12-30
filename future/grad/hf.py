@@ -33,13 +33,13 @@ class RHF:
 
     @pyscf.lib.omnimethod
     def get_hcore(self, mol):
-        h = mol.intor('cint1e_ipkin_sph', dim3=3) \
-                + mol.intor('cint1e_ipnuc_sph', dim3=3)
+        h = mol.intor('cint1e_ipkin_sph', comp=3) \
+                + mol.intor('cint1e_ipnuc_sph', comp=3)
         return h
 
     @pyscf.lib.omnimethod
     def get_ovlp(self, mol):
-        return mol.intor('cint1e_ipovlp_sph', dim3=3)
+        return mol.intor('cint1e_ipovlp_sph', comp=3)
 
     def get_coulomb_hf(self, mol, dm):
         '''NR Hartree-Fock Coulomb repulsion'''
@@ -68,7 +68,7 @@ class RHF:
         ''' for given atom, <|\\nabla r^{-1}|> '''
         mol.set_rinv_orig(mol.coord_of_atm(ia))
         return mol.charge_of_atm(ia) \
-                * mol.intor('cint1e_iprinv_sph', dim3=3)
+                * mol.intor('cint1e_iprinv_sph', comp=3)
 
     def atom_of_aos(self, mol):
         return list(map(lambda s: s[0], mol.spheric_labels()))

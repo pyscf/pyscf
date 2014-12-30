@@ -63,8 +63,8 @@ class KnowValues(unittest.TestCase):
         s = mol.intor_asymmetric('cint1e_ovlp')
         self.assertAlmostEqual(finger(s), 1282.9000123790504, 11)
 
-    def test_intor_r_dim3(self):
-        s = mol.intor('cint1e_ipkin', dim3=3)
+    def test_intor_r_comp(self):
+        s = mol.intor('cint1e_ipkin', comp=3)
         self.assertAlmostEqual(finger(s), 3070.844024815065, 11)
 
 

@@ -45,7 +45,7 @@ os.close(f)
 nocc = mol.nelectron // 2
 co = rhf.mo_coeff[:,:nocc]
 cv = rhf.mo_coeff[:,nocc:]
-ao2mo.direct.general(mol, (co,cv,co,cv), eritmp, max_memory=100, dataname='mp2_bz')
+ao2mo.outcore.general(mol, (co,cv,co,cv), eritmp, max_memory=100, dataname='mp2_bz')
 f = h5py.File(eritmp, 'r')
 
 print(time.clock())

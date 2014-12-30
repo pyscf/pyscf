@@ -2,6 +2,9 @@
  *
  */
 
+#include "cint.h"
+#include "optimizer.h"
+
 struct _VHFEnvs {
         int natm;
         int nbas;
@@ -14,25 +17,25 @@ struct _VHFEnvs {
 };
 
 void CVHFunpack_nrblock2rect (double *buf, double *eri,
-                              int ish, int jsh, int dkl, struct _VHFEnvs *envs);
+                              int ish, int jsh, int dkl, int nao, int *ao_loc);
 void CVHFunpack_nrblock2tril (double *buf, double *eri,
-                              int ish, int jsh, int dkl, struct _VHFEnvs *envs);
+                              int ish, int jsh, int dkl, int nao, int *ao_loc);
 void CVHFunpack_nrblock2trilu(double *buf, double *eri,
-                              int ish, int jsh, int dkl, struct _VHFEnvs *envs);
+                              int ish, int jsh, int dkl, int nao, int *ao_loc);
 int CVHFfill_nr_s1(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
 int CVHFfill_nr_s2ij(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                     double *eri, int ksh, int lsh, int ncomp,
+                     double *eri, int ncomp, int ksh, int lsh,
                      CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
 int CVHFfill_nr_s2kl(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                     double *eri, int ksh, int lsh, int ncomp,
+                     double *eri, int ncomp, int ksh, int lsh,
                      CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
 int CVHFfill_nr_s4(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
 int CVHFfill_nr_s8(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
 void CVHFfill_dot_nrs8(int (*intor)(), void (*funpack)(), void (**fjk)(),
                        double **dms, double *vjk,

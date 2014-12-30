@@ -20,36 +20,22 @@
  * distribute a 4-shell-eris' block to 2d-array (C-contiguous), no symmetry
  */
 void CVHFunpack_nrblock2rect(double *buf, double *eri,
-                             int ish, int jsh, int dkl, struct _VHFEnvs *envs)
+                             int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
-        int nao = envs->nao;
-        int iloc = envs->ao_loc[ish];
-        int jloc = envs->ao_loc[jsh];
-        int di = envs->ao_loc[ish+1] - iloc;
-        int dj = envs->ao_loc[jsh+1] - jloc;
+        int iloc = ao_loc[ish];
+        int jloc = ao_loc[jsh];
+        int di = ao_loc[ish+1] - iloc;
+        int dj = ao_loc[jsh+1] - jloc;
         int i, j, kl;
         eri += iloc * nao + jloc;
-        double *eri0 = eri;
-        double *eri1 = eri + nao*nao;
-        double *buf0 = buf;
-        double *buf1 = buf + di*dj;
 
-        for (kl = 0; kl < dkl-1; kl+=2) {
+        for (kl = 0; kl < dkl; kl++) {
                 for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
-                        eri0[i*nao+j] = buf0[j*di+i];
-                        eri1[i*nao+j] = buf1[j*di+i];
+                        eri[i*nao+j] = buf[j*di+i];
                 } }
-                eri0 += nao*nao * 2;
-                eri1 += nao*nao * 2;
-                buf0 += di*dj * 2;
-                buf1 += di*dj * 2;
-        }
-        if (kl < dkl) {
-                for (i = 0; i < di; i++) {
-                for (j = 0; j < dj; j++) {
-                        eri0[i*nao+j] = buf0[j*di+i];
-                } }
+                eri += nao*nao;
+                buf += di*dj;
         }
 }
 /*
@@ -57,10 +43,8 @@ void CVHFunpack_nrblock2rect(double *buf, double *eri,
  * hermitian is assumed
  */
 void CVHFunpack_nrblock2tril(double *buf, double *eri,
-                             int ish, int jsh, int dkl, struct _VHFEnvs *envs)
+                             int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
-        int nao = envs->nao;
-        int *ao_loc = envs->ao_loc;
         int iloc = ao_loc[ish];
         int jloc = ao_loc[jsh];
         int di = ao_loc[ish+1] - iloc;
@@ -68,30 +52,29 @@ void CVHFunpack_nrblock2tril(double *buf, double *eri,
         int i, j, kl;
         eri += iloc*(iloc+1)/2 + jloc;
         double *eri0 = eri;
-        double *buf0 = buf;
 
         if (ish > jsh) {
                 for (kl = 0; kl < dkl; kl++) {
                         eri0 = eri + nao*nao * kl;
                         for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
-                                        eri0[j] = buf0[j*di+i];
+                                        eri0[j] = buf[j*di+i];
                                 }
                                 eri0 += ao_loc[ish] + i + 1;
                         }
-                        buf0 += di*dj;
+                        buf += di*dj;
                 }
         } else { // ish == jsh
                 for (kl = 0; kl < dkl; kl++) {
                         eri0 = eri + nao*nao * kl;
                         for (i = 0; i < di; i++) {
                                 for (j = 0; j <= i; j++) {
-                                        eri0[j] = buf0[j*di+i];
+                                        eri0[j] = buf[j*di+i];
                                 }
                                 // row ao_loc[ish]+i has ao_loc[ish]+i+1 elements
                                 eri0 += ao_loc[ish] + i + 1;
                         }
-                        buf0 += di*dj;
+                        buf += di*dj;
                 }
         }
 }
@@ -100,58 +83,54 @@ void CVHFunpack_nrblock2tril(double *buf, double *eri,
  * hermitian is assumed
  */
 void CVHFunpack_nrblock2trilu(double *buf, double *eri,
-                              int ish, int jsh, int dkl, struct _VHFEnvs *envs)
+                              int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
-        int nao = envs->nao;
-        int iloc = envs->ao_loc[ish];
-        int jloc = envs->ao_loc[jsh];
-        int di = envs->ao_loc[ish+1] - iloc;
-        int dj = envs->ao_loc[jsh+1] - jloc;
+        int iloc = ao_loc[ish];
+        int jloc = ao_loc[jsh];
+        int di = ao_loc[ish+1] - iloc;
+        int dj = ao_loc[jsh+1] - jloc;
         int i, j, kl;
         double *eril = eri + iloc * nao + jloc;
         double *eriu = eri + jloc * nao + iloc;
-        double *buf0 = buf;
 
         for (kl = 0; kl < dkl; kl++) {
                 for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
-                        eril[i*nao+j] = buf0[j*di+i];
-                        eriu[j*nao+i] = buf0[j*di+i];
+                        eril[i*nao+j] = buf[j*di+i];
+                        eriu[j*nao+i] = buf[j*di+i];
                 } }
                 eril += nao*nao;
                 eriu += nao*nao;
-                buf0 += di*dj;
+                buf += di*dj;
         }
 }
 /*
  * like CVHFunpack_nrblock2trilu, but anti-hermitian between ij is assumed
  */
 void CVHFunpack_nrblock2trilu_anti(double *buf, double *eri,
-                                   int ish, int jsh, int dkl, struct _VHFEnvs *envs)
+                                   int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
-        int nao = envs->nao;
-        int iloc = envs->ao_loc[ish];
-        int jloc = envs->ao_loc[jsh];
-        int di = envs->ao_loc[ish+1] - iloc;
-        int dj = envs->ao_loc[jsh+1] - jloc;
+        int iloc = ao_loc[ish];
+        int jloc = ao_loc[jsh];
+        int di = ao_loc[ish+1] - iloc;
+        int dj = ao_loc[jsh+1] - jloc;
         int i, j, kl;
         double *eril = eri + iloc * nao + jloc;
         double *eriu = eri + jloc * nao + iloc;
-        double *buf0 = buf;
 
         if (ish > jsh) {
                 for (kl = 0; kl < dkl; kl++) {
                         for (i = 0; i < di; i++) {
                         for (j = 0; j < dj; j++) {
-                                eril[i*nao+j] = buf0[j*di+i];
-                                eriu[j*nao+i] =-buf0[j*di+i];
+                                eril[i*nao+j] = buf[j*di+i];
+                                eriu[j*nao+i] =-buf[j*di+i];
                         } }
                         eril += nao*nao;
                         eriu += nao*nao;
-                        buf0 += di*dj;
+                        buf += di*dj;
                 }
         } else {
-                CVHFunpack_nrblock2rect(buf, eri, ish, jsh, dkl, envs);
+                CVHFunpack_nrblock2rect(buf, eri, ish, jsh, dkl, nao, ao_loc);
         }
 }
 
@@ -161,7 +140,7 @@ void CVHFunpack_nrblock2trilu_anti(double *buf, double *eri,
  * for given ksh, lsh, loop all ish, jsh
  */
 int CVHFfill_nr_s1(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
         const int nao = envs->nao;
@@ -191,7 +170,7 @@ int CVHFfill_nr_s1(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
                 } else {
                         memset(buf, 0, sizeof(double)*di*dj*dk*dl*ncomp);
                 }
-                (*funpack)(buf, eri, ish, jsh, dk*dl*ncomp, envs);
+                (*funpack)(buf, eri, ish, jsh, dk*dl*ncomp, nao, ao_loc);
         } }
 
         free(buf);
@@ -201,7 +180,7 @@ int CVHFfill_nr_s1(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
  * for given ksh, lsh, loop all ish > jsh
  */
 static int fill_s2(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ish_count, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh, int ish_count,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
         const int nao = envs->nao;
@@ -231,49 +210,49 @@ static int fill_s2(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
                 } else {
                         memset(buf, 0, sizeof(double)*di*dj*dk*dl*ncomp);
                 }
-                (*funpack)(buf, eri, ish, jsh, dk*dl*ncomp, envs);
+                (*funpack)(buf, eri, ish, jsh, dk*dl*ncomp, nao, ao_loc);
         } }
 
         free(buf);
         return !empty;
 }
 int CVHFfill_nr_s2ij(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                     double *eri, int ksh, int lsh, int ncomp,
+                     double *eri, int ncomp, int ksh, int lsh,
                      CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
-        return fill_s2(intor, funpack, fprescreen, eri, ksh, lsh, envs->nbas,
-                       ncomp, cintopt, vhfopt, envs);
+        return fill_s2(intor, funpack, fprescreen, eri, ncomp,
+                       ksh, lsh, envs->nbas, cintopt, vhfopt, envs);
 }
 int CVHFfill_nr_s2kl(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                     double *eri, int ksh, int lsh, int ncomp,
+                     double *eri, int ncomp, int ksh, int lsh,
                      CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
         if (ksh >= lsh) {
-                return CVHFfill_nr_s1(intor, funpack, fprescreen, eri, ksh, lsh,
-                                      ncomp, cintopt, vhfopt, envs);
+                return CVHFfill_nr_s1(intor, funpack, fprescreen, eri, ncomp,
+                                      ksh, lsh, cintopt, vhfopt, envs);
         } else {
                 return 0;
         }
 }
 int CVHFfill_nr_s4(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
         if (ksh >= lsh) {
-                return fill_s2(intor, funpack, fprescreen, eri, ksh, lsh,
-                               envs->nbas, ncomp, cintopt, vhfopt, envs);
+                return fill_s2(intor, funpack, fprescreen, eri, ncomp,
+                               ksh, lsh, envs->nbas, cintopt, vhfopt, envs);
         } else {
                 return 0;
         }
 }
 int CVHFfill_nr_s8(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ksh, int lsh, int ncomp,
+                   double *eri, int ncomp, int ksh, int lsh,
                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
         if (ksh >= lsh) {
                 // 8-fold symmetry, k>=l, k>=i>=j, 
-                return fill_s2(intor, funpack, fprescreen, eri, ksh, lsh,
-                               ksh+1, ncomp, cintopt, vhfopt, envs);
+                return fill_s2(intor, funpack, fprescreen, eri, ncomp,
+                               ksh, lsh, ksh+1, cintopt, vhfopt, envs);
         } else {
                 return 0;
         }
@@ -307,7 +286,7 @@ static void filldot_kgtl(int (*intor)(), void (*funpack)(), int (*fill)(),
         }
 
         if ((*fill)(intor, funpack, fprescreen,
-                    eri, ksh, lsh, ncomp, cintopt, vhfopt, envs)) {
+                    eri, ncomp, ksh, lsh, cintopt, vhfopt, envs)) {
                 for (idm = 0; idm < n_dm; idm++) {
                         pf = fjk[idm];
                         dm = dms[idm];
@@ -350,7 +329,7 @@ static void filldot_keql(int (*intor)(), void (*funpack)(), int (*fill)(),
         }
 
         if ((*fill)(intor, funpack, fprescreen,
-                    eri, ksh, lsh, ncomp, cintopt, vhfopt, envs)) {
+                    eri, ncomp, ksh, lsh, cintopt, vhfopt, envs)) {
                 for (idm = 0; idm < n_dm; idm++) {
                         pf = fjk[idm];
                         dm = dms[idm];
