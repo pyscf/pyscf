@@ -34,17 +34,16 @@ import tempfile
 import numpy
 import h5py
 from pyscf import ao2mo
-_eritmp = tempfile.NamedTemporaryFile()
-eritmp = _eritmp.name
+eritmp = tempfile.NamedTemporaryFile()
 nocc = mol.nelectron // 2
 nvir = len(mf.mo_energy) - nocc
 co = mf.mo_coeff[:,:nocc]
 cv = mf.mo_coeff[:,nocc:]
-ao2mo.outcore.general(mol, (co,cv,co,cv), eritmp, max_memory=500,
+ao2mo.outcore.general(mol, (co,cv,co,cv), eritmp.name, max_memory=500,
                       dataname='mp2_bz', verbose=5)
 
 eia = mf.mo_energy[:nocc,None] - mf.mo_energy[None,nocc:]
-f = h5py.File(eritmp, 'r')
+f = h5py.File(eritmp.name, 'r')
 eri = f['mp2_bz']
 emp2 = 0
 for i in range(nocc):

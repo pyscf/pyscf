@@ -11,13 +11,6 @@
 #include "np_helper/np_helper.h"
 #include "fblas.h"
 
-void CVHFnr_eri8fold_vj_o2(double *tri_vj, const int ij,
-                           const double *eri, const double *tri_dm);
-void CVHFnr_eri8fold_vk_o0(double *vk, int i, int j, int n,
-                           const double *eri, const double *dm);
-void CVHFnr_eri8fold_vk_sse3(double *vk, int i, int j, int n,
-                             const double *eri, const double *dm);
-
 /*
  * J
  */
@@ -396,7 +389,6 @@ void CVHFnrs8_tridm_vj(double *eri, double *tri_dm, double *vj,
 void CVHFnrs8_jk_s1il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        //CVHFnr_eri8fold_vk_o0(vk, ic, jc, nao, eri, dm);
         CVHFnrs8_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
 }
 /*
@@ -407,7 +399,6 @@ void CVHFnrs8_jk_s2il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
         CVHFnrs8_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
-        //CVHFnr_eri8fold_vk_sse3(vk, ic, jc, nao, eri, dm);
 }
 
 

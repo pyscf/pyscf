@@ -1,5 +1,6 @@
 /*
- *      Modified from CxLebedevGrid.cpp
+ * Modified from CxLebedevGrid.cpp (from Gerald Knizia)
+ *
  */
 #include <math.h> // for sqrt.
 #include <assert.h>
