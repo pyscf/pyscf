@@ -69,7 +69,7 @@ def from_chkfile(output, chkfile, tol=1e-15):
         else:
             write_head(fout, nmo, mol.nelectron, mol.spin)
 
-        eri = pyscf.ao2mo.direct.full_iofree(mol, mo_coeff, verbose=0)
+        eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
         write_eri(fout, pyscf.ao2mo.restore(8, eri, nmo), nmo, tol=tol)
 
         t = mol.intor_symmetric('cint1e_kin_sph')

@@ -51,6 +51,8 @@ def make_rdm1(casscf, fcivec=None, mo=None):
         fcivec = casscf.ci
     if mo is None:
         mo = casscf.mo_coeff
+    if _is_uhf_mo(mo):
+        return sum(make_rdm1s(casscf, fcivec, mo))
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
@@ -66,16 +68,28 @@ def make_rdm1s(casscf, fcivec=None, mo=None):
         fcivec = casscf.ci
     if mo is None:
         mo = casscf.mo_coeff
+    if _is_uhf_mo(mo):
+        nmo = mo[0].shape[1]
+    else:
+        nmo = mo.shape[1]
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
-    nmo = mo.shape[1]
     rdm1a, rdm1b = casscf.fcisolver.make_rdm1s(fcivec, ncas, nelecas)
-    rdm1a = _make_rdm1_on_mo(rdm1a, ncore, ncas, nmo, False)
-    rdm1b = _make_rdm1_on_mo(rdm1b, ncore, ncas, nmo, False)
-    rdm1a = reduce(numpy.dot, (mo, rdm1a, mo.T))
-    rdm1b = reduce(numpy.dot, (mo, rdm1b, mo.T))
+    if _is_uhf_mo(mo):
+        rdm1a = _make_rdm1_on_mo(rdm1a, ncore[0], ncas, nmo, False)
+        rdm1b = _make_rdm1_on_mo(rdm1b, ncore[1], ncas, nmo, False)
+        rdm1a = reduce(numpy.dot, (mo[0], rdm1a, mo[0].T))
+        rdm1b = reduce(numpy.dot, (mo[1], rdm1b, mo[1].T))
+    else:
+        rdm1a = _make_rdm1_on_mo(rdm1a, ncore, ncas, nmo, False)
+        rdm1b = _make_rdm1_on_mo(rdm1b, ncore, ncas, nmo, False)
+        rdm1a = reduce(numpy.dot, (mo, rdm1a, mo.T))
+        rdm1b = reduce(numpy.dot, (mo, rdm1b, mo.T))
     return rdm1a, rdm1b
+
+def _is_uhf_mo(mo):
+    return not (isinstance(mo, numpy.ndarray) and mo.ndim == 2)
 
 def _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo):
     nocc = ncas + ncore
@@ -100,6 +114,7 @@ def make_rdm12(casscf, fcivec=None, mo=None):
         fcivec = casscf.ci
     if mo is None:
         mo = casscf.mo_coeff
+    assert(not _is_uhf_mo(mo))
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
@@ -124,15 +139,29 @@ def make_fock(casscf, fcivec=None, mo=None):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
 
-    casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
-    eris = casscf.update_ao2mo(mo)
-    vj = numpy.einsum('ipq->pq', eris['jc_pp']) * 2 \
-       + numpy.einsum('ij,ijpq->pq', casdm1, eris['aapp'])
-    vk = numpy.einsum('ipqi->pq', eris['kc_pp']) * 2 \
-       + numpy.einsum('ij,ipqj->pq', casdm1, eris['appa'])
-
-    h1 = reduce(numpy.dot, (mo.T, casscf.get_hcore(), mo))
-    fock = h1 + vj - vk * .5
+    if _is_uhf_mo(mo):
+        casdm1 = casscf.fcisolver.make_rdm1s(fcivec, ncas, nelecas)
+        eris = casscf.update_ao2mo(mo)
+        vhf = (numpy.einsum('ipq->pq', eris.jkcpp) + eris.jC_pp \
+               + numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1[0]) \
+               - numpy.einsum('upqv,uv->pq', eris.appa, casdm1[0]) \
+               + numpy.einsum('uvpq,uv->pq', eris.AApp, casdm1[1]),
+               numpy.einsum('ipq->pq', eris.jkcPP) + eris.jc_PP \
+                + numpy.einsum('uvpq,uv->pq', eris.aaPP, casdm1[0]) \
+                + numpy.einsum('uvpq,uv->pq', eris.AAPP, casdm1[1]) \
+                - numpy.einsum('upqv,uv->pq', eris.APPA, casdm1[1]),)
+        h1 =(reduce(numpy.dot, (mo[0].T, casscf.get_hcore()[0], mo[0])),
+             reduce(numpy.dot, (mo[1].T, casscf.get_hcore()[1], mo[1])))
+        fock = (h1[0] + vhf[0], h1[1] + vhf[1])
+    else:
+        casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
+        eris = casscf.update_ao2mo(mo)
+        vj = numpy.einsum('ipq->pq', eris.jc_pp) * 2 \
+           + numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
+        vk = numpy.einsum('ipqi->pq', eris.kc_pp) * 2 \
+           + numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
+        h1 = reduce(numpy.dot, (mo.T, casscf.get_hcore(), mo))
+        fock = h1 + vj - vk * .5
     return fock
 
 def restore_cas_natorb(casscf, fcivec=None, mo=None):
@@ -144,19 +173,33 @@ def restore_cas_natorb(casscf, fcivec=None, mo=None):
     ncore = casscf.ncore
     ncas = casscf.ncas
     nelecas = casscf.nelecas
-    nocc = ncore + ncas
-    casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
-    occ, ucas = scipy.linalg.eigh(-casdm1)
-    occ = -occ
-    log.info('Natural occs')
-    log.info(str(occ))
-    # restore phase
-    for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
-        if ucas[k,i] < 0:
-            ucas[:,i] *= -1
-    mo = mo.copy()
-    mo[:,ncore:nocc] = numpy.dot(mo[:,ncore:nocc], ucas)
-    fcivec = casscf.casci(mo, fcivec)[2]
+
+    def rotate(casdm1, mo, ncore, nocc, title):
+        occ, ucas = scipy.linalg.eigh(-casdm1)
+        occ = -occ
+        log.info(title)
+        log.info(str(occ))
+        # restore phase
+        for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
+            if ucas[k,i] < 0:
+                ucas[:,i] *= -1
+        mo = mo.copy()
+        mo[:,ncore:nocc] = numpy.dot(mo[:,ncore:nocc], ucas)
+        return mo
+
+    if _is_uhf_mo(mo):
+        casdm1 = casscf.fcisolver.make_rdm1s(fcivec, ncas, nelecas)
+        moa = rotate(casdm1[0], mo[0], ncore[0], ncore[0]+ncas,
+                     'Natural occs alpha')
+        mob = rotate(casdm1[1], mo[1], ncore[1], ncore[1]+ncas,
+                     'Natural occs beta')
+        mo = (moa, mob)
+        fcivec = casscf.casci(mo, fcivec)[2]
+    else:
+        casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
+        mo = rotate(casdm1, mo, ncore, ncore+ncas,
+                    'Natural occs')
+        fcivec = casscf.casci(mo, fcivec)[2]
     return fcivec, mo
 
 def map2hf(casscf, base=1, threshold=.5):

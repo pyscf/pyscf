@@ -303,12 +303,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     log.debug('Start 1-step CASSCF')
 
     mo = mo_coeff
-    if isinstance(mo, numpy.ndarray) and mo.ndim == 2:
-        _uhf_mo = False
-        nmo = mo.shape[1]
-    else:
-        _uhf_mo = True
-        nmo = mo[0].shape[1]
+    nmo = mo.shape[1]
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
@@ -366,10 +361,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
             u1, dx, g_orb, nin = casscf.rotate_orb(mo, ci1, e_ci, eris, dx)
             ci1 = None
-            if _uhf_mo:
-                u = list(map(numpy.dot, u, u1))
-            else:
-                u = numpy.dot(u, u1)
+            u = numpy.dot(u, u1)
             ninner += nin
             t3m = log.timer('orbital rotation', *t3m)
             norm_dt = numpy.linalg.norm(u-numpy.eye(nmo))
@@ -387,10 +379,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
         totinner += ninner
 
-        if _uhf_mo:
-            mo = list(map(numpy.dot, mo, u))
-        else:
-            mo = numpy.dot(mo, u)
+        mo = numpy.dot(mo, u)
         casscf.save_mo_coeff(mo, imacro, imicro)
 
         eris = None # to avoid using too much memory

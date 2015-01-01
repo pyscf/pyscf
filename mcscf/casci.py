@@ -118,15 +118,13 @@ class CASCI(object):
         nao, nmo = mo.shape
         if self._scf._eri is not None:
             eri = pyscf.ao2mo.incore.full(self._scf._eri, mo)
-        elif nao*nao*nmo*nmo/4*8/1e6 > self.max_memory:
+        else:
             ftmp = tempfile.NamedTemporaryFile()
             pyscf.ao2mo.outcore.full(self.mol, mo, ftmp.name,
                                      verbose=self.verbose)
-            with h5py.File(ftmp.name, 'r') as feri:
-                eri = numpy.array(feri['eri_mo'])
-        else:
-            eri = pyscf.ao2mo.direct.full_iofree(self.mol, mo,
-                                                 verbose=self.verbose)
+            feri = h5py.File(ftmp.name, 'r')
+            eri = numpy.array(feri['eri_mo'])
+            feri.close()
         return eri
 
     def casci(self, mo=None, ci0=None, **cikwargs):

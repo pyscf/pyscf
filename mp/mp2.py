@@ -75,7 +75,6 @@ class MP2(object):
         self._scf = mf
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
 
         self.emp2 = None
         self.t2 = None
@@ -102,13 +101,14 @@ class MP2(object):
         nvir = nmo - nocc
         co = mo[:,:nocc]
         cv = mo[:,nocc:]
-        if nocc*nvir*nmo**2/2*8/1e6 < self.max_memory*.9 \
-           and self._scf._eri is not None:
+        if self._scf._eri is not None and \
+           (nocc*nvir*nmo**2/2*8 + (nocc*nvir)**2*8 \
+            + self._scf._eri.nbytes)/1e6 < self.mol.max_memory:
             eri = pyscf.ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
         else:
             erifile = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.direct.general(self.mol, (co,cv,co,cv), erifile.name,
-                                       self.max_memory, verbose=self.verbose)
+            pyscf.ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
+                                        verbose=self.verbose)
             feri = h5py.File(erifile.name, 'r')
             eri = feri['eri_mo']
         time1 = log.timer('Integral transformation', *time0)
@@ -147,8 +147,8 @@ if __name__ == '__main__':
     emp2, t2 = pt.run()
     print(emp2 - -0.204019967288338)
     print('incore', numpy.allclose(t2, t2ref0))
-    pt.max_memory = 1
-    print('direct', numpy.allclose(pt.run()[1], t2ref0))
+    mol.max_memory = 1
+    print('outcore', numpy.allclose(pt.run()[1], t2ref0))
 
     t2s = numpy.zeros((nocc*2,nocc*2,nvir*2,nvir*2))
     t2s[ ::2, ::2, ::2, ::2] = t2ref0 - t2ref0.transpose(0,1,3,2)

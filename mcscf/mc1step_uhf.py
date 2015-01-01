@@ -319,8 +319,123 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     return hc
 
 
-def kernel(*args, **kwargs):
-    return mc1step.kernel(*args, **kwargs)
+def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
+           ci0=None, verbose=None, **cikwargs):
+    if verbose is None:
+        verbose = casscf.verbose
+    log = logger.Logger(casscf.stdout, verbose)
+    cput0 = (time.clock(), time.time())
+    log.debug('Start 1-step CASSCF')
+
+    mo = mo_coeff
+    nmo = mo[0].shape[1]
+    #TODO: lazy evaluate eris, to leave enough memory for FCI solver
+    eris = casscf.update_ao2mo(mo)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
+    log.info('CASCI E = %.15g', e_tot)
+    elast = e_tot
+    conv = False
+    toloose = casscf.conv_threshold_grad
+    totmicro = totinner = 0
+    imicro = 0
+    norm_gorb = norm_gci = 0
+
+    t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
+    for imacro in range(macro):
+        u, dx, g_orb, ninner = casscf.rotate_orb(mo, fcivec, e_ci, eris, 0)
+        norm_gorb = numpy.linalg.norm(g_orb)
+        t3m = log.timer('orbital rotation', *t2m)
+        totmicro += 1
+# dynamic ci_stepsize
+# ci graidents may change the CI vector too much, which causes oscillation in
+# macro iterations
+        max_ci_stepsize = min(norm_gorb*50, casscf.max_ci_stepsize)
+
+        for imicro in range(micro):
+
+# approximate newton step, fcivec is not updated during micro iters
+            #dr = casscf.unpack_uniq_var(dx)
+            dr = u - numpy.eye(nmo)
+            gci = casscf.hessian_co(mo, dr, fcivec, e_ci, eris)
+            t3m = log.timer('ci gradient', *t3m)
+
+# Perturbation updating   gci/(e_ci-hci_diag), gci = H^1 ci^0  is the way
+# davidson.dsyev generate new trial vector.  Numerically,
+# * Perturbation updating is worse than the simple gradeint.
+# * Restorsing the davidson.dsyev hessian from previous FCI solver as the
+#   approx CI hessian then solving  (H-E*1)dc = g or aug-hessian or H dc = g
+#   has not obvious advantage than simple gradeint.
+            dc = gci.ravel()
+            dcmax = numpy.max(abs(dc))
+
+            #norm_dc = numpy.linalg.norm(dc)
+            #if norm_dc > casscf.max_ci_stepsize:
+            #    dc = dc * (casscf.max_ci_stepsize/norm_dc)
+            #if dcmax > casscf.max_ci_stepsize:
+            #    ci1 = fcivec.ravel() - dc * (casscf.max_ci_stepsize/dcmax)
+            #else:
+            #    ci1 = fcivec.ravel() - dc
+            if dcmax > max_ci_stepsize:
+                ci1 = fcivec.ravel() - dc * (max_ci_stepsize/dcmax)
+            else:
+                ci1 = fcivec.ravel() - dc
+            ci1 *= 1/numpy.linalg.norm(ci1)
+
+            ovlp_ci = numpy.dot(ci1.ravel(), fcivec.ravel())
+            norm_gci = numpy.linalg.norm(gci)
+
+            u1, dx, g_orb, nin = casscf.rotate_orb(mo, ci1, e_ci, eris, dx)
+            ci1 = None
+            u = list(map(numpy.dot, u, u1))
+            ninner += nin
+            t3m = log.timer('orbital rotation', *t3m)
+            norm_dt = numpy.linalg.norm(u-numpy.eye(nmo))
+            norm_gorb = numpy.linalg.norm(g_orb)
+            totmicro += 1
+
+            log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
+                      '|g[c]|=%4.3g, max|dc|=%4.3g, <c|c+dc>=%.8g',
+                      imicro, e_ci, norm_dt, norm_gorb, \
+                      norm_gci, dcmax, ovlp_ci)
+            t2m = log.timer('micro iter %d'%imicro, *t2m)
+            if (norm_dt < toloose or norm_gorb < toloose or norm_gci < toloose) \
+               or dcmax < toloose or 1-ovlp_ci < 1e-8:
+                break
+
+        totinner += ninner
+
+        mo = list(map(numpy.dot, mo, u))
+        casscf.save_mo_coeff(mo, imacro, imicro)
+
+        eris = None # to avoid using too much memory
+        eris = casscf.update_ao2mo(mo)
+        t3m = log.timer('update eri', *t3m)
+
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
+        log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
+                 imacro, ninner, imicro+1, e_tot, e_tot-elast)
+        norm_gorb = numpy.linalg.norm(g_orb)
+        log.info('                        |grad[o]| = %6.5g, |grad[c]| = %6.5g',
+                 norm_gorb, norm_gci)
+        log.timer('CASCI solver', *t3m)
+        t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
+
+        if abs(e_tot - elast) < tol \
+           and (norm_gorb < toloose and norm_gci < toloose):
+            conv = True
+            break
+        else:
+            elast = e_tot
+
+    if conv:
+        log.info('1-step CASSCF converged in %d macro (%d JK %d micro) steps',
+                 imacro+1, totinner, totmicro)
+    else:
+        log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
+                 imacro+1, totinner, totmicro)
+    log.log('1-step CASSCF, energy = %.15g', e_tot)
+    log.timer('1-step CASSCF', *cput0)
+    return e_tot, e_ci, fcivec, mo
 
 
 class CASSCF(casci_uhf.CASCI):
