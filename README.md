@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry
 
-version 0.8
+version 0.9
 
-2014-12-21
+2015-1-4
 
 Pyscf is a python module for quantum chemistry program.  The module
 aims to provide a simple, light-weight and efficient platform for
@@ -133,7 +133,10 @@ Version 0.8 (2014-12-21):
   * Add 2-step DMRGSCF, using Block and ChemPS2 as FCI solver
   * Add ROHF
 
-Version 0.9 (2015-1-?):
+Version 0.9 (2015-1-4):
   * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
   * Solve Python 3.x compatibility
   * general AO2MO integral transformation
+  * Add density fitting HF, DF-MP2
+
+Version 0.10 (2015-2-?):

@@ -86,10 +86,9 @@ def _trans_aapp_(mo, ncore, ncas, fload):
         aapp[i] = ppp[ncore:nocc]
         appa[i] = ppp[:,:,ncore:nocc]
         #japcv = apcv * 4 - acpv.transpose(0,2,1,3) - avcp.transpose(0,3,2,1)
-        libmcscf.MCSCFinplace_apcv(japcv[i].ctypes.data_as(ctypes.c_void_p),
-                                   ppp.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(ncore), ctypes.c_int(ncas),
-                                   ctypes.c_int(nmo))
+        japcv[i] = ppp[:,:ncore,ncore:] * 4 \
+                 - ppp[:ncore,:,ncore:].transpose(1,0,2) \
+                 - ppp[ncore:,:ncore,:].transpose(2,1,0)
     return aapp, appa, japcv
 
 def _trans_cvcv_(mo, ncore, ncas, fload):
@@ -119,12 +118,10 @@ def _trans_cvcv_(mo, ncore, ncas, fload):
         jc_pp[i] = cpp[i]
         kc_pp[i,:ncore] = cpp[:,i]
 
-        #jcvcv = cvcv * 4 - cvcv.transpose(2,1,0,3) - ccvv.transpose(0,2,1,3)
-        libmcscf.MCSCFinplace_cvcv(jcvcv[i].ctypes.data_as(ctypes.c_void_p),
-                                   vcp.ctypes.data_as(ctypes.c_void_p),
-                                   cpp.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(ncore), ctypes.c_int(ncas),
-                                   ctypes.c_int(nmo))
+        #jcvcv = cvcv * 4 - cvcv.transpose(0,3,2,1) - ccvv.transpose(0,2,1,3)
+        jcvcv[i] = vcp[:,:,ncore:] * 4 \
+                 - vcp[:,:,ncore:].transpose(2,1,0) \
+                 - cpp[:,ncore:,ncore:].transpose(1,0,2)
     return jc_pp, kc_pp, jcvcv
 
 

@@ -67,4 +67,5 @@ add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(dft)
 add_subdirectory(cc)
+add_subdirectory(ri)
 

@@ -420,9 +420,7 @@ def dot_eri_dm(eri, dm, hermi=0):
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         vj, vk = _vhf.incore(eri, dm, hermi=hermi)
     else:
-        vjk = []
-        for dmi in dm:
-            vjk.append(_vhf.incore(eri, dmi, hermi=hermi))
+        vjk = [_vhf.incore(eri, dmi, hermi=hermi) for dmi in dm]
         vj = numpy.array([v[0] for v in vjk])
         vk = numpy.array([v[1] for v in vjk])
     return vj, vk
@@ -639,31 +637,36 @@ class UHF(SCF):
         hf, dm = init_guess_by_minao(self, mol)
         return hf, numpy.array((dm*.5,dm*.5))
 
+    # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''NR UHF Coulomb repulsion'''
         t0 = (time.clock(), time.time())
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
+        def makevhf(vj, vk):
+            nd = len(dm) // 2
+            if nd == 1:
+                vj = vj[0] + vj[1]
+                v_a = vj - vk[0]
+                v_b = vj - vk[1]
+            else:
+                vj = vj[:nd] + vj[nd:]
+                v_a = vj - vk[:nd]
+                v_b = vj - vk[nd:]
+            return numpy.array((v_a,v_b))
         if self._is_mem_enough() or self._eri is not None:
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj0, vk0 = dot_eri_dm(self._eri, dm[0], hermi=hermi)
-            vj1, vk1 = dot_eri_dm(self._eri, dm[1], hermi=hermi)
-            v_a = vj0 + vj1 - vk0
-            v_b = vj0 + vj1 - vk1
-            vhf = numpy.array((v_a,v_b))
+            vj, vk = dot_eri_dm(self._eri, dm, hermi=hermi)
+            vhf = makevhf(vj, vk)
         elif self.direct_scf:
             ddm = dm - dm_last
             vj, vk = _vhf.direct(ddm, mol._atm, mol._bas, mol._env, \
                                  self.opt, hermi=hermi)
-            v_a = vj[0] + vj[1] - vk[0]
-            v_b = vj[0] + vj[1] - vk[1]
-            vhf = vhf_last + numpy.array((v_a,v_b))
+            vhf = makevhf(vj, vk) + numpy.array(vhf_last, copy=False)
         else:
             vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env, hermi=hermi)
-            v_a = vj[0] + vj[1] - vk[0]
-            v_b = vj[0] + vj[1] - vk[1]
-            vhf = numpy.array((v_a,v_b))
+            vhf = makevhf(vj, vk)
         log.timer(self, 'vj and vk', *t0)
         return vhf
 

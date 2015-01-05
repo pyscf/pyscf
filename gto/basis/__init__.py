@@ -47,6 +47,8 @@ def load(basis_name, symb):
         'dzp'        : 'dzp.dat'        ,
         'tzp'        : 'tzp.dat'        ,
         'qzp'        : 'qzp.dat'        ,
+        'def2svp'    : 'def2-svp.dat'   ,
+        'def2svpd'   : 'def2-svpd.dat'  ,
         'def2qzvpd'  : 'def2-qzvpd.dat' ,
         'def2qzvppd' : 'def2-qzvppd.dat',
         'def2qzvpp'  : 'def2-qzvpp.dat' ,

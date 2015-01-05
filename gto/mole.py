@@ -169,12 +169,15 @@ mol.build(
         if self.verbose > log.QUIET:
             keysub = set(obj.__dict__.keys()) - set(obj._keys)
             if keysub:
-                log.warn(self, 'overwrite keys %s of %s',
-                         ' '.join(keysub), str(obj.__class__))
-                keysub = keysub - set(dir(obj.__class__))
-                if keysub:
+                keyin = keysub.intersection(dir(obj.__class__))
+                if keyin:
+                    log.warn(self, 'overwrite keys %s of %s',
+                             ' '.join(keyin), str(obj.__class__))
+
+                keydiff = keysub - set(dir(obj.__class__))
+                if keydiff:
                     sys.stderr.write('%s has no attributes %s\n' %
-                                     (str(obj.__class__), ' '.join(keysub)))
+                                     (str(obj.__class__), ' '.join(keydiff)))
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged

@@ -4,16 +4,17 @@ import numpy
 
 # Clebsch Gordon coefficient of <l,m,1/2,spin|j,mj>
 def cg_spin(l, jdouble, mjdouble, spin):
+    ll1 = 2 * l + 1
     if jdouble == 2*l+1:
         if spin > 0:
-            c = numpy.sqrt(.5*(jdouble+mjdouble)/jdouble)
+            c = numpy.sqrt(.5*(ll1+mjdouble)/ll1)
         else:
-            c = numpy.sqrt(.5*(jdouble-mjdouble)/jdouble)
+            c = numpy.sqrt(.5*(ll1-mjdouble)/ll1)
     elif jdouble == 2*l-1:
         if spin > 0:
-            c = -numpy.sqrt(.5*(jdouble+2-mjdouble)/(jdouble+2))
+            c =-numpy.sqrt(.5*(ll1-mjdouble)/ll1)
         else:
-            c = numpy.sqrt(.5*(jdouble+2+mjdouble)/(jdouble+2))
+            c = numpy.sqrt(.5*(ll1+mjdouble)/ll1)
     else:
         c = 0
     return c

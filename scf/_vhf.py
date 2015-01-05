@@ -25,13 +25,12 @@ class VHFOpt(object):
         libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
 
     def init_cvhf_direct(self, mol, intor, prescreen, qcondname):
-        self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
-
         c_atm = numpy.array(mol._atm, dtype=numpy.int32)
         c_bas = numpy.array(mol._bas, dtype=numpy.int32)
         c_env = numpy.array(mol._env)
         natm = ctypes.c_int(c_atm.shape[0])
         nbas = ctypes.c_int(c_bas.shape[0])
+        self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
 #        libcvhf.CVHFnr_optimizer(ctypes.byref(self._this),
 #                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
@@ -86,9 +85,9 @@ class _CVHFOpt(ctypes.Structure):
                 ('r_vkscreen', ctypes.c_void_p)]
 
 def make_cintopt(atm, bas, env, intor):
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.array(atm, dtype=numpy.int32, copy=False)
+    c_bas = numpy.array(bas, dtype=numpy.int32, copy=False)
+    c_env = numpy.array(env, copy=False)
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
     cintopt = ctypes.c_void_p()
@@ -170,7 +169,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
 
     if vhfopt is None:
         cintor = _fpointer('cint2e_sph')
-        cintopt = make_cintopt(atm, bas, env, 'cint2e_sph')
+        cintopt = make_cintopt(c_atm, c_bas, c_env, 'cint2e_sph')
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
@@ -239,7 +238,7 @@ def direct_mapdm(intor, cfdot, cunpack, namefjk,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(atm, bas, env, intor)
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
@@ -301,7 +300,7 @@ def direct_bindm(intor, cfdot, cunpack, namefjk,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(atm, bas, env, intor)
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
@@ -401,7 +400,7 @@ def rdirect_mapdm(intor, cfdot, namefjk,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(atm, bas, env, intor)
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
@@ -462,7 +461,7 @@ def rdirect_bindm(intor, cfdot, namefjk,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(atm, bas, env, intor)
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = ctypes.c_void_p()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)

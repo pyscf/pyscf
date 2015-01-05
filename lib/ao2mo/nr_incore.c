@@ -29,15 +29,13 @@ struct _AO2MOEnvs {
         double *mo_coeff;
 };
 
-int AO2MOcount_ij(void (*fmmm)(), struct _AO2MOEnvs *envs);
-
-void AO2MOtranse1_incore_s4(void (*fmmm)(),
+void AO2MOtranse1_incore_s4(int (*fmmm)(),
                             double *vout, double *eri_ao, int row_id,
                             struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
         unsigned npair = nao * (nao+1) / 2;
-        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         double *buf = malloc(sizeof(double) * nao*nao);
         double *buf1 = eri_ao + npair * (row_id+envs->ksh_start);
 
@@ -46,13 +44,13 @@ void AO2MOtranse1_incore_s4(void (*fmmm)(),
         free(buf);
 }
 
-void AO2MOtranse1_incore_s8(void (*fmmm)(),
+void AO2MOtranse1_incore_s8(int (*fmmm)(),
                             double *vout, double *eri_ao, int row_id,
                             struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
         int npair = nao * (nao+1) / 2;
-        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         double *buf = malloc(sizeof(double) * nao*nao*2);
         double *buf1 = buf + nao*nao;
 
@@ -64,7 +62,7 @@ void AO2MOtranse1_incore_s8(void (*fmmm)(),
 }
 
 // ij_start and ij_count for the ij-AO-pair in eri_ao
-void AO2MOnr_e1incore_drv(void (*ftranse2_like)(), void (*fmmm)(),
+void AO2MOnr_e1incore_drv(void (*ftranse2_like)(), int (*fmmm)(),
                           double *vout, double *eri_ao, double *mo_coeff,
                           int ij_start, int ij_count, int nao,
                           int i_start, int i_count, int j_start, int j_count)

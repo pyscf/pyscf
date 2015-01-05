@@ -220,6 +220,26 @@ def half_e1(mol, mo_coeffs, swapfile,
         buf = None
     return swapfile
 
+# not really IO free, this function is used to replace the non-existed
+# function direct.full_iofree.
+def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
+                verbose=0, compact=True):
+    erifile = tempfile.NamedTemporaryFile()
+    general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
+            intor=intor, aosym=aosym, comp=comp,
+            verbose=verbose, compact=compact)
+    feri = h5py.File(erifile, 'r')
+    return numpy.array(feri['eri_mo'])
+
+def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
+                   verbose=0, compact=True):
+    erifile = tempfile.NamedTemporaryFile()
+    general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
+            intor=intor, aosym=aosym, comp=comp,
+            verbose=verbose, compact=compact)
+    feri = h5py.File(erifile, 'r')
+    return numpy.array(feri['eri_mo'])
+
 
 def iden_coeffs(mo1, mo2):
     return (id(mo1) == id(mo2)) \

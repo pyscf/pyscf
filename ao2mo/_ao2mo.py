@@ -17,13 +17,13 @@ class AO2MOpt(object):
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = _fpointer(intor)
-        self._cintopt = _vhf.make_cintopt(mol._atm, mol._bas, mol._env, intor)
 
         c_atm = numpy.array(mol._atm, dtype=numpy.int32)
         c_bas = numpy.array(mol._bas, dtype=numpy.int32)
         c_env = numpy.array(mol._env)
         natm = ctypes.c_int(c_atm.shape[0])
         nbas = ctypes.c_int(c_bas.shape[0])
+        self._cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
         libao2mo.CVHFinit_optimizer(ctypes.byref(self._this),
                                     c_atm.ctypes.data_as(ctypes.c_void_p), natm,
@@ -62,8 +62,8 @@ def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
-    i0, ic, j0, jc = shape
-    ij_count = ic * jc
+    i0, icount, j0, jcount = shape
+    ij_count = icount * jcount
 
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
@@ -86,14 +86,14 @@ def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     if aosym in ('s4', 's2ij'):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
-            assert(ic == jc)
-            ij_count = ic * (ic+1) / 2
-        elif ic <= jc:
+            assert(icount == jcount)
+            ij_count = icount * (icount+1) / 2
+        elif icount <= jcount:
             fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
         else:
             fmmm = _fpointer('AO2MOmmm_nr_s2_igtj')
     else:
-        if ic <= jc:
+        if icount <= jcount:
             fmmm = _fpointer('AO2MOmmm_nr_s1_iltj')
         else:
             fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
@@ -111,7 +111,7 @@ def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     else:
         cao2mopt = ctypes.c_void_p()
         cintor = _fpointer(intor)
-        cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e1_drv')
     ftrans = _fpointer('AO2MOtranse1_nr_' + aosym)
@@ -119,8 +119,8 @@ def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
          vout.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(ksh0), ctypes.c_int(ksh1-ksh0),
-         ctypes.c_int(i0), ctypes.c_int(ic),
-         ctypes.c_int(j0), ctypes.c_int(jc),
+         ctypes.c_int(i0), ctypes.c_int(icount),
+         ctypes.c_int(j0), ctypes.c_int(jcount),
          ctypes.c_int(comp), cintopt, cao2mopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,

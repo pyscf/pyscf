@@ -75,11 +75,12 @@ class MP2(object):
         self._scf = mf
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
+        self.max_memory = mf.max_memory
 
         self.emp2 = None
         self.t2 = None
 
-    def run(self, mo=None, mo_energy=None, nocc=None):
+    def kernel(self, mo=None, mo_energy=None, nocc=None):
         if mo is None:
             mo = self._scf.mo_coeff
         if mo_energy is None:
@@ -103,7 +104,7 @@ class MP2(object):
         cv = mo[:,nocc:]
         if self._scf._eri is not None and \
            (nocc*nvir*nmo**2/2*8 + (nocc*nvir)**2*8 \
-            + self._scf._eri.nbytes)/1e6 < self.mol.max_memory:
+            + self._scf._eri.nbytes)/1e6 < self.max_memory:
             eri = pyscf.ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
         else:
             erifile = tempfile.NamedTemporaryFile()
@@ -144,11 +145,11 @@ if __name__ == '__main__':
     t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,3,1)
 
     pt = MP2(mf)
-    emp2, t2 = pt.run()
+    emp2, t2 = pt.kernel()
     print(emp2 - -0.204019967288338)
     print('incore', numpy.allclose(t2, t2ref0))
-    mol.max_memory = 1
-    print('outcore', numpy.allclose(pt.run()[1], t2ref0))
+    pt.max_memory = 1
+    print('direct', numpy.allclose(pt.kernel()[1], t2ref0))
 
     t2s = numpy.zeros((nocc*2,nocc*2,nvir*2,nvir*2))
     t2s[ ::2, ::2, ::2, ::2] = t2ref0 - t2ref0.transpose(0,1,3,2)

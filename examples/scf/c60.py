@@ -5,7 +5,7 @@ from pyscf import tools
 import pyscf.tools.c60struct
 
 mol = gto.Mole()
-mol.verbose = 4
+mol.verbose = 5
 mol.output = 'out_c60'
 mol.atom = [('C', c) for c in tools.c60struct.make60(1.46,1.38)]
 

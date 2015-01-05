@@ -8,6 +8,7 @@ from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import diis
 from pyscf.scf import addons
+from pyscf.scf import dfhf
 
 
 def RHF(mol, *args):

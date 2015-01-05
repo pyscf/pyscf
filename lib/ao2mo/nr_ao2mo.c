@@ -22,14 +22,14 @@
 /*
  * driver
  */
-void AO2MOnr_e1_drv(int (*intor)(), void (*ftranse1)(), void (*fmmm)(),
+void AO2MOnr_e1_drv(int (*intor)(), void (*ftranse1)(), int (*fmmm)(),
                     double *eri, double *mo_coeff,
                     int ksh_start, int ksh_count,
                     int i_start, int i_count, int j_start, int j_count,
                     int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt,
                     int *atm, int natm, int *bas, int nbas, double *env);
 
-void AO2MOnr_e2_drv(void (*ftranse2)(), void (*fmmm)(),
+void AO2MOnr_e2_drv(void (*ftranse2)(), int (*fmmm)(),
                     double *vout, double *vin, double *mo_coeff,
                     int nijcount, int nao,
                     int i_start, int i_count, int j_start, int j_count);
@@ -54,6 +54,16 @@ void AO2MOnr_e2_drv(void (*ftranse2)(), void (*fmmm)(),
  *
  * fmmm
  * ----
+ * fmmm dim requirements:
+ *                      | vout                          | eri
+ * ---------------------+-------------------------------+-------------------
+ *  AO2MOmmm_nr_s2_s2   | [:,bra_count*(bra_count+1)/2] | [:,nao*(nao+1)/2]
+ *                      |    and bra_count==ket_count   |
+ *  AO2MOmmm_nr_s2_iltj | [:,bra_count*ket_count]       | [:,nao*nao]
+ *  AO2MOmmm_nr_s2_igtj | [:,bra_count*ket_count]       | [:,nao*nao]
+ *  AO2MOmmm_nr_s1_iltj | [:,bra_count*ket_count]       | [:,nao*nao]
+ *  AO2MOmmm_nr_s1_igtj | [:,bra_count*ket_count]       | [:,nao*nao]
+ *
  * AO2MOmmm_nr_s1_iltj, AO2MOmmm_nr_s1_igtj, AO2MOmmm_nr_s2_s2,
  * AO2MOmmm_nr_s2_iltj, AO2MOmmm_nr_s2_igtj
  * Pick a proper function from the 5 kinds of AO2MO transformation.
@@ -78,6 +88,7 @@ void AO2MOnr_e2_drv(void (*ftranse2)(), void (*fmmm)(),
  *  AO2MOtranse2_nr_s2ij |  AO2MOmmm_nr_s2_igtj
  *  AO2MOtranse2_nr_s1   |  AO2MOmmm_nr_s1_iltj
  *                       |  AO2MOmmm_nr_s1_igtj
+ *
  */
 
 struct _AO2MOEnvs {
@@ -165,9 +176,17 @@ void AO2MOdtriumm_o2(int m, int n, int k, int diag_off,
 
 /*
  * s1-AO integrals to s1-MO integrals, efficient for i_count < j_count
+ * shape requirements:
+ *      vout[:,bra_count*ket_count], eri[:,nao*nao]
+ * s1, s2 here to label the AO symmetry
  */
-void AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs)
+int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
+                        int seekdim)
 {
+        switch (seekdim) {
+                case 1: return envs->bra_count * envs->ket_count;
+                case 2: return envs->nao * envs->nao;
+        }
         const double D0 = 0;
         const double D1 = 1;
         const char TRANS_T = 'T';
@@ -188,12 +207,20 @@ void AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs)
                &D1, mo_coeff+j_start*nao, &nao, buf, &nao,
                &D0, vout, &j_count);
         free(buf);
+        return 0;
 }
 /*
  * s1-AO integrals to s1-MO integrals, efficient for i_count > j_count
+ * shape requirements:
+ *      vout[:,bra_count*ket_count], eri[:,nao*nao]
  */
-void AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs)
+int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
+                        int seekdim)
 {
+        switch (seekdim) {
+                case 1: return envs->bra_count * envs->ket_count;
+                case 2: return envs->nao * envs->nao;
+        }
         const double D0 = 0;
         const double D1 = 1;
         const char TRANS_T = 'T';
@@ -214,13 +241,24 @@ void AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs)
                &D1, buf, &j_count, mo_coeff+i_start*nao, &nao,
                &D0, vout, &j_count);
         free(buf);
+        return 0;
 }
 
 /*
  * s2-AO integrals to s2-MO integrals
+ * shape requirements:
+ *      vout[:,bra_count*(bra_count+1)/2] and bra_count==ket_count,
+ *      eri[:,nao*(nao+1)/2]
+ * first s2 is the AO symmetry, second s2 is the MO symmetry
  */
-void AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs)
+int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
+                        int seekdim)
 {
+        switch (seekdim) {
+                case 1: assert(envs->bra_count == envs->ket_count);
+                        return envs->bra_count * (envs->bra_count+1) / 2;
+                case 2: return envs->nao * (envs->nao+1) / 2;
+        }
         const double D0 = 0;
         const double D1 = 1;
         const char SIDE_L = 'L';
@@ -249,13 +287,21 @@ void AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs)
                 buf1 += j_count;
         }
         free(buf);
+        return 0;
 }
 
 /*
  * s2-AO integrals to s1-MO integrals, efficient for i_count < j_count
+ * shape requirements:
+ *      vout[:,bra_count*ket_count], eri[:,nao*(nao+1)/2]
  */
-void AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs)
+int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
+                        int seekdim)
 {
+        switch (seekdim) {
+                case 1: return envs->bra_count * envs->ket_count;
+                case 2: return envs->nao * (envs->nao+1) / 2;
+        }
         const double D0 = 0;
         const double D1 = 1;
         const char SIDE_L = 'L';
@@ -279,13 +325,21 @@ void AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs)
                &D1, mo_coeff+j_start*nao, &nao, buf, &nao,
                &D0, vout, &j_count);
         free(buf);
+        return 0;
 }
 
 /*
  * s2-AO integrals to s1-MO integrals, efficient for i_count > j_count
+ * shape requirements:
+ *      vout[:,bra_count*ket_count], eri[:,nao*(nao+1)/2]
  */
-void AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs)
+int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
+                        int seekdim)
 {
+        switch (seekdim) {
+                case 1: return envs->bra_count * envs->ket_count;
+                case 2: return envs->nao * (envs->nao+1) / 2;
+        }
         const double D0 = 0;
         const double D1 = 1;
         const char SIDE_L = 'L';
@@ -309,9 +363,13 @@ void AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs)
                &D1, buf, &nao, mo_coeff+i_start*nao, &nao,
                &D0, vout, &j_count);
         free(buf);
+        return 0;
 }
 
 
+/*
+ * s1, s2ij, s2kl, s4 here to label the AO symmetry
+ */
 int AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
                     double *eri, int ncomp, int ksh, int lsh,
                     CINTOpt *cintopt, CVHFOpt *vhfopt, struct _AO2MOEnvs *envs)
@@ -431,21 +489,8 @@ static int step_tril(i, j, nao, ioff)
 {
         return (i*(i+1)/2 + j) - (ioff*(ioff+1)/2);
 }
-int AO2MOcount_ij(void (*fmmm)(), struct _AO2MOEnvs *envs)
-{
-        int i_count = envs->bra_count;
-        int j_count = envs->ket_count;
-        int ij_pair;
-        if (fmmm == AO2MOmmm_nr_s2_s2) {
-                assert(i_count == j_count);
-                ij_pair = i_count*(i_count+1)/2;
-        } else {
-                ij_pair = i_count * j_count;
-        }
-        return ij_pair;
-}
 
-static void trans_kgtl(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fstep)(),
+static void trans_kgtl(int (*intor)(), int (*fmmm)(), int (*fill)(), int (*fstep)(),
                        double *eri_mo, int ksh, int lsh,
                        CINTOpt *cintopt, CVHFOpt *vhfopt,
                        struct _AO2MOEnvs *envs)
@@ -460,7 +505,7 @@ static void trans_kgtl(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fste
         int kstart = envs->ao_loc[envs->ksh_start];
         int kend = envs->ao_loc[envs->ksh_start+envs->ksh_count];
         int k, l, k0, l0, icomp;
-        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         unsigned long neri_mo = (*fstep)(kend, 0, nao, kstart) * ij_pair; // size of one component
         unsigned long off;
         double *eri = malloc(sizeof(double)*dk*dl*nao2*ncomp);
@@ -480,7 +525,7 @@ static void trans_kgtl(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fste
                         for (l0 = lloc, l = 0; l < dl; l++, l0++) {
                         for (k0 = kloc, k = 0; k < dk; k++, k0++) {
                                 off = ij_pair * (*fstep)(k0, l0, nao, kstart);
-                                (*fmmm)(eri_mo+off, peri, envs);
+                                (*fmmm)(eri_mo+off, peri, envs, 0);
                                 peri += nao2;
                         } }
                         eri_mo += neri_mo;
@@ -489,7 +534,7 @@ static void trans_kgtl(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fste
         free(eri);
 }
 
-static void trans_keql(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fstep)(),
+static void trans_keql(int (*intor)(), int (*fmmm)(), int (*fill)(), int (*fstep)(),
                        double *eri_mo, int ksh, int lsh,
                        CINTOpt *cintopt, CVHFOpt *vhfopt,
                        struct _AO2MOEnvs *envs)
@@ -504,7 +549,7 @@ static void trans_keql(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fste
         int kstart = envs->ao_loc[envs->ksh_start];
         int kend = envs->ao_loc[envs->ksh_start+envs->ksh_count];
         int k, l, k0, l0, icomp;
-        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         unsigned long neri_mo = (*fstep)(kend, 0, nao, kstart) * ij_pair;
         unsigned long off;
         double *eri = malloc(sizeof(double)*dk*dl*nao2*ncomp);
@@ -524,7 +569,7 @@ static void trans_keql(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fste
                         for (k0 = kloc, k = 0; k < dk; k++, k0++) {
                         for (l0 = lloc, l = 0; l0 <= k0; l++, l0++) {
                                 off = ij_pair * (*fstep)(k0, l0, nao, kstart);
-                                (*fmmm)(eri_mo+off, peri+nao2*(l*dk+k), envs);
+                                (*fmmm)(eri_mo+off, peri+nao2*(l*dk+k), envs,0);
                         } }
                         eri_mo += neri_mo;
                 }
@@ -532,9 +577,11 @@ static void trans_keql(int (*intor)(), void (*fmmm)(), int (*fill)(), int (*fste
         free(eri);
 }
 
-
+/*
+ * s1, s2ij, s2kl, s4 here to label the AO symmetry
+ */
 // fmmm can be AO2MOmmm_nr_s2_s2, AO2MOmmm_nr_s2_iltj, AO2MOmmm_nr_s2_igtj
-void AO2MOtranse1_nr_s4(int (*intor)(), void (*fmmm)(),
+void AO2MOtranse1_nr_s4(int (*intor)(), int (*fmmm)(),
                         double *eri_mo, int ksh, int lsh,
                         CINTOpt *cintopt, CVHFOpt *vhfopt,
                         struct _AO2MOEnvs *envs)
@@ -550,7 +597,7 @@ void AO2MOtranse1_nr_s4(int (*intor)(), void (*fmmm)(),
         }
 }
 // fmmm can be AO2MOmmm_nr_s2_s2, AO2MOmmm_nr_s2_iltj, AO2MOmmm_nr_s2_igtj
-void AO2MOtranse1_nr_s2ij(int (*intor)(), void (*fmmm)(),
+void AO2MOtranse1_nr_s2ij(int (*intor)(), int (*fmmm)(),
                           double *eri_mo, int ksh, int lsh,
                           CINTOpt *cintopt, CVHFOpt *vhfopt,
                           struct _AO2MOEnvs *envs)
@@ -561,7 +608,7 @@ void AO2MOtranse1_nr_s2ij(int (*intor)(), void (*fmmm)(),
 // AO2MOmmm_nr_s1_iltj, AO2MOmmm_nr_s1_igtj
 // fmmm can be AO2MOmmm_nr_s2_s2, AO2MOmmm_nr_s2_iltj, AO2MOmmm_nr_s2_igtj
 // However, for the last three, AO2MOtranse2_nr_s4 is more efficient
-void AO2MOtranse1_nr_s2kl(int (*intor)(), void (*fmmm)(),
+void AO2MOtranse1_nr_s2kl(int (*intor)(), int (*fmmm)(),
                           double *eri_mo, int ksh, int lsh,
                           CINTOpt *cintopt, CVHFOpt *vhfopt,
                           struct _AO2MOEnvs *envs)
@@ -579,7 +626,7 @@ void AO2MOtranse1_nr_s2kl(int (*intor)(), void (*fmmm)(),
 // AO2MOmmm_nr_s1_iltj, AO2MOmmm_nr_s1_igtj
 // fmmm can be AO2MOmmm_nr_s2_s2, AO2MOmmm_nr_s2_iltj, AO2MOmmm_nr_s2_igtj
 // However, for the last three, AO2MOtranse2_nr_s2ij is more efficient
-void AO2MOtranse1_nr_s1(int (*intor)(), void (*fmmm)(),
+void AO2MOtranse1_nr_s1(int (*intor)(), int (*fmmm)(),
                         double *eri_mo, int ksh, int lsh,
                         CINTOpt *cintopt, CVHFOpt *vhfopt,
                         struct _AO2MOEnvs *envs)
@@ -591,29 +638,30 @@ void AO2MOtranse1_nr_s1(int (*intor)(), void (*fmmm)(),
 
 /*
  * ************************************************
+ * s1, s2ij, s2kl, s4 here to label the AO symmetry
  */
-void AO2MOtranse2_nr_s1(void (*fmmm)(),
+void AO2MOtranse2_nr_s1(int (*fmmm)(),
                         double *vout, double *vin, int row_id,
                         struct _AO2MOEnvs *envs)
 {
-        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         unsigned long nao2 = envs->nao * envs->nao;
         (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs);
 }
 
-void AO2MOtranse2_nr_s2ij(void (*fmmm)(),
+void AO2MOtranse2_nr_s2ij(int (*fmmm)(),
                           double *vout, double *vin, int row_id,
                           struct _AO2MOEnvs *envs)
 {
         AO2MOtranse2_nr_s1(fmmm, vout, vin, row_id, envs);
 }
 
-void AO2MOtranse2_nr_s2kl(void (*fmmm)(),
+void AO2MOtranse2_nr_s2kl(int (*fmmm)(),
                           double *vout, double *vin, int row_id,
                           struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        unsigned long ij_pair = AO2MOcount_ij(fmmm, envs);
+        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         unsigned long nao2 = nao*(nao+1)/2;
         double *buf = malloc(sizeof(double) * nao*nao);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
@@ -621,7 +669,7 @@ void AO2MOtranse2_nr_s2kl(void (*fmmm)(),
         free(buf);
 }
 
-void AO2MOtranse2_nr_s4(void (*fmmm)(),
+void AO2MOtranse2_nr_s4(int (*fmmm)(),
                         double *vout, double *vin, int row_id,
                         struct _AO2MOEnvs *envs)
 {
@@ -639,7 +687,7 @@ void AO2MOtranse2_nr_s4(void (*fmmm)(),
  * The output eri is an 2D array, ordered as (kl-AO-pair,ij-MO-pair) in
  * C-order.  Transposing is needed before calling AO2MOnr_e2_drv.
  */
-void AO2MOnr_e1_drv(int (*intor)(), void (*ftranse1)(), void (*fmmm)(),
+void AO2MOnr_e1_drv(int (*intor)(), void (*ftranse1)(), int (*fmmm)(),
                     double *eri, double *mo_coeff,
                     int ksh_start, int ksh_count,
                     int i_start, int i_count, int j_start, int j_count,
@@ -674,7 +722,7 @@ void AO2MOnr_e1_drv(int (*intor)(), void (*ftranse1)(), void (*fmmm)(),
         free(ao_loc);
 }
 
-void AO2MOnr_e2_drv(void (*ftranse2)(), void (*fmmm)(),
+void AO2MOnr_e2_drv(void (*ftranse2)(), int (*fmmm)(),
                     double *vout, double *vin, double *mo_coeff,
                     int nijcount, int nao,
                     int i_start, int i_count, int j_start, int j_count)
