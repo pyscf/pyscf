@@ -13,20 +13,52 @@
 #define SQRT2           1.4142135623730950488
 
 
+typedef struct {
+        unsigned int addr;
+        unsigned char a;
+        unsigned char i;
+        char sign;
+        char _padding;
+} _LinkT;
+#define EXTRACT_I(I)    (I.i)
+#define EXTRACT_A(I)    (I.a)
+#define EXTRACT_SIGN(I) (I.sign)
+#define EXTRACT_ADDR(I) (I.addr)
+
+static void compress_link(_LinkT *clink, int *link_index,
+                          int norb, int nstr, int nlink)
+{
+        int i, j, k, a, str1, sign;
+        for (k = 0; k < nstr; k++) {
+                for (j = 0; j < nlink; j++) {
+                        a    = link_index[j*4+0];
+                        i    = link_index[j*4+1];
+                        str1 = link_index[j*4+2];
+                        sign = link_index[j*4+3];
+                        clink[j].a = a;
+                        clink[j].i = i;
+                        clink[j].sign = sign;
+                        clink[j].addr = str1;
+                }
+                clink += nlink;
+                link_index += nlink * 4;
+        }
+}
+
 static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
-                        int norb, int nstrb, int nlinka, short *link_indexa)
+                        int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
 {
         const int nnorb = norb * norb;
         int i, j, k, a, str1, sign;
-        const short *tab = link_indexa + stra_id * nlinka * 4;
+        const _LinkT *tab = clink_indexa + stra_id * nlinka;
         double *pt1, *pci;
         double csum = 0;
 
         for (j = 0; j < nlinka; j++) {
-                a = tab[j*4+0];
-                i = tab[j*4+1];
-                str1 = tab[j*4+2];
-                sign = tab[j*4+3];
+                i    = EXTRACT_I   (tab[j]);
+                a    = EXTRACT_A   (tab[j]);
+                str1 = EXTRACT_ADDR(tab[j]);
+                sign = EXTRACT_SIGN(tab[j]);
                 pci = ci0 + str1*nstrb;
                 pt1 = t1 + i*norb+a;
                 if (sign > 0) {
@@ -44,40 +76,64 @@ static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
         return csum;
 }
 
-static double rdm2_0b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
-                         int norb, int nstrb, int nlinkb, short *link_indexb)
+/*
+static double rdm2_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+                        int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
 {
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
-        const short *tab = link_indexb;
+        const _LinkT *tab = clink_indexb;
+        double *pci = ci0 + stra_id*nstrb;
+        double csum = 0;
+
+        for (str0 = 0; str0 < fillcnt; str0++) {
+                for (j = 0; j < nlinkb; j++) {
+                        i    = EXTRACT_I   (tab[j]);
+                        a    = EXTRACT_A   (tab[j]);
+                        str1 = EXTRACT_ADDR(tab[j]);
+                        sign = EXTRACT_SIGN(tab[j]);
+                        t1[i*norb+a] += sign * pci[str1];
+                        csum += pci[str1] * pci[str1];
+                }
+                t1 += nnorb;
+                tab += nlinkb;
+        }
+        return csum;
+} */
+static double rdm2_0b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+                         int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
+{
+        const int nnorb = norb * norb;
+        int i, j, a, str0, str1, sign;
+        const _LinkT *tab = clink_indexb;
         double *pci = ci0 + stra_id*nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < fillcnt; str0++) {
                 memset(t1, 0, sizeof(double) * nnorb);
                 for (j = 0; j < nlinkb; j++) {
-                        a = tab[j*4+0];
-                        i = tab[j*4+1];
-                        str1 = tab[j*4+2];
-                        sign = tab[j*4+3];
+                        i    = EXTRACT_I   (tab[j]);
+                        a    = EXTRACT_A   (tab[j]);
+                        str1 = EXTRACT_ADDR(tab[j]);
+                        sign = EXTRACT_SIGN(tab[j]);
                         t1[i*norb+a] += sign * pci[str1];
                         csum += pci[str1] * pci[str1];
                 }
                 t1 += nnorb;
-                tab += nlinkb * 4;
+                tab += nlinkb;
         }
         return csum;
 }
 
 static double kern_ms0_ab(double *ci0, double *t1, int fillcnt,
                           int stra_id, int strb_id,
-                          int norb, int na, int nlink, short *link_index)
+                          int norb, int na, int nlink, _LinkT *clink_index)
 {
         double csum;
         csum = rdm2_0b_t1(ci0, t1, fillcnt, stra_id,
-                          norb, na, nlink, link_index+strb_id*nlink*4)
+                          norb, na, nlink, clink_index+strb_id*nlink)
              + rdm2_a_t1 (ci0+strb_id, t1, fillcnt, stra_id,
-                          norb, na, nlink, link_index);
+                          norb, na, nlink, clink_index);
         return csum;
 }
 
@@ -98,7 +154,7 @@ static double kern_ms0_ab(double *ci0, double *t1, int fillcnt,
 void FCIrdm12_drv(void (*dm12kernel)(),
                   double *rdm1, double *rdm2, double *bra, double *ket,
                   int norb, int na, int nb, int nlinka, int nlinkb,
-                  short *link_indexa, short *link_indexb, int symm)
+                  int *link_indexa, int *link_indexb, int symm)
 {
         const int nnorb = norb * norb;
         const int bufbase = MIN(BUFBASE, nb);
@@ -107,9 +163,14 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         memset(rdm1, 0, sizeof(double) * nnorb);
         memset(rdm2, 0, sizeof(double) * nnorb*nnorb);
 
+        _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
+        _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
+        compress_link(clinka, link_indexa, norb, na, nlinka);
+        compress_link(clinkb, link_indexb, norb, nb, nlinkb);
+
 #pragma omp parallel default(none) \
         shared(dm12kernel, bra, ket, norb, na, nb, nlinka, \
-               nlinkb, link_indexa, link_indexb, rdm1, rdm2), \
+               nlinkb, clinka, clinkb, rdm1, rdm2), \
         private(strk, i, ib, blen, pdm1, pdm2)
 {
         pdm1 = (double *)malloc(sizeof(double) * nnorb);
@@ -122,7 +183,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                 for (strk = 0; strk < na; strk++) {
                         (*dm12kernel)(pdm1, pdm2, bra, ket, blen, strk, ib,
                                       norb, na, nb, nlinka, nlinkb,
-                                      link_indexa, link_indexb);
+                                      clinka, clinkb);
                 }
         }
 #pragma omp critical
@@ -134,6 +195,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                 rdm2[i] += pdm2[i];
         }
 }
+        free(clinka);
+        free(clinkb);
         free(pdm1);
         free(pdm2);
 }
@@ -158,7 +221,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
                       int fillcnt, int stra_id, int strb_id,
                       int norb, int na, int nb, int nlinka, int nlinkb,
-                      short *link_indexa, short *link_indexb)
+                      _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int INC1 = 1;
         const char UP = 'U';
@@ -169,7 +232,7 @@ void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
         double *buf = malloc(sizeof(double) * nnorb * fillcnt);
 
         csum = kern_ms0_ab(ket, buf, fillcnt, stra_id, strb_id,
-                           norb, na, nlinka, link_indexa);
+                           norb, na, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
                        ket+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
@@ -180,7 +243,7 @@ void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
 }
 
 void FCImake_rdm12_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
-                       int norb, int na, int nlink, short *link_index)
+                       int norb, int na, int nlink, int *link_index)
 {
         FCIrdm12_drv(FCIrdm12kern_ms0,
                      rdm1, rdm2, ket, ket, norb, na, na, nlink, nlink,
@@ -193,7 +256,7 @@ void FCImake_rdm12_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
                         int fillcnt, int stra_id, int strb_id,
                         int norb, int na, int nb, int nlinka, int nlinkb,
-                        short *link_indexa, short *link_indexb)
+                        _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         if (stra_id < strb_id) {
                 return;
@@ -212,17 +275,17 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
                 fill0 = fillcnt;
                 fill1 = fillcnt;
                 csum = rdm2_0b_t1(ket, buf, fill0, stra_id, norb, na,
-                                  nlinka, link_indexa+strb_id*nlinka*4)
+                                  nlinka, clink_indexa+strb_id*nlinka)
                      + rdm2_a_t1 (ket+strb_id, buf, fill1, stra_id, norb, na,
-                                  nlinka, link_indexa);
+                                  nlinka, clink_indexa);
         } else {
                 fill0 = stra_id - strb_id;
                 fill1 = stra_id - strb_id + 1;
                 memset(buf+fill0*nnorb, 0, sizeof(double)*nnorb);
                 csum = rdm2_0b_t1(ket, buf, fill0, stra_id, norb, na,
-                                  nlinka, link_indexa+strb_id*nlinka*4)
+                                  nlinka, clink_indexa+strb_id*nlinka)
                      + rdm2_a_t1 (ket+strb_id, buf, fill1, stra_id, norb, na,
-                                  nlinka, link_indexa);
+                                  nlinka, clink_indexa);
         }
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fill1, &D2, buf, &nnorb,
@@ -248,7 +311,7 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
 }
 
 void FCImake_rdm12_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
-                         int norb, int na, int nlink, short *link_index)
+                         int norb, int na, int nlink, int *link_index)
 {
         FCIrdm12_drv(FCIrdm12kern_spin0,
                      rdm1, rdm2, ket, ket, norb, na, na, nlink, nlink,
@@ -265,7 +328,7 @@ void FCImake_rdm12_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
                       int fillcnt, int stra_id, int strb_id,
                       int norb, int na, int nb, int nlinka, int nlinkb,
-                      short *link_indexa, short *link_indexb)
+                      _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int INC1 = 1;
         const char TRANS_N = 'N';
@@ -277,10 +340,10 @@ void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
         double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
 
         csum = kern_ms0_ab(bra, buf1, fillcnt, stra_id, strb_id,
-                           norb, na, nlinka, link_indexa);
+                           norb, na, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto end; }
         csum = kern_ms0_ab(ket, buf0, fillcnt, stra_id, strb_id,
-                           norb, na, nlinka, link_indexa);
+                           norb, na, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto end; }
         dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
                bra+stra_id*na+strb_id, &INC1, &D1, tdm1, &INC1);
@@ -294,7 +357,7 @@ end:
 
 void FCItrans_rdm12_ms0(double *rdm1, double *rdm2,
                         double *bra, double *ket,
-                        int norb, int na, int nlink, short *link_index)
+                        int norb, int na, int nlink, int *link_index)
 {
         FCIrdm12_drv(FCItdm12kern_ms0,
                      rdm1, rdm2, bra, ket, norb, na, na, nlink, nlink,
@@ -310,7 +373,7 @@ void FCItrans_rdm12_ms0(double *rdm1, double *rdm2,
 void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    short *link_indexa, short *link_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int INC1 = 1;
         const char UP = 'U';
@@ -322,7 +385,7 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
 
         memset(buf, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(ket+strb_id, buf, fillcnt, stra_id,
-                         norb, nb, nlinka, link_indexa);
+                         norb, nb, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
@@ -334,7 +397,7 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    short *link_indexa, short *link_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int INC1 = 1;
         const char UP = 'U';
@@ -345,7 +408,7 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
         double *buf = malloc(sizeof(double) * nnorb*fillcnt);
 
         csum = rdm2_0b_t1(ket, buf, fillcnt, stra_id,
-                          norb, nb, nlinkb, link_indexb+strb_id*nlinkb*4);
+                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
@@ -358,7 +421,7 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    short *link_indexa, short *link_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int INC1 = 1;
         const char TRANS_N = 'N';
@@ -371,11 +434,11 @@ void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
 
         memset(buf1, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(bra+strb_id, buf1, fillcnt, stra_id,
-                         norb, nb, nlinka, link_indexa);
+                         norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto end; }
         memset(buf0, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(ket+strb_id, buf0, fillcnt, stra_id,
-                         norb, nb, nlinka, link_indexa);
+                         norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto end; }
         dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
@@ -390,7 +453,7 @@ end:
 void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    short *link_indexa, short *link_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int INC1 = 1;
         const char TRANS_N = 'N';
@@ -402,10 +465,10 @@ void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
         double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
 
         csum = rdm2_0b_t1(bra, buf1, fillcnt, stra_id,
-                          norb, nb, nlinkb, link_indexb+strb_id*nlinkb*4);
+                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
         if (csum < CSUMTHR) { goto end; }
         csum = rdm2_0b_t1(ket, buf0, fillcnt, stra_id,
-                          norb, nb, nlinkb, link_indexb+strb_id*nlinkb*4);
+                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
         if (csum < CSUMTHR) { goto end; }
         dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
@@ -420,7 +483,7 @@ end:
 void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
                      int fillcnt, int stra_id, int strb_id,
                      int norb, int na, int nb, int nlinka, int nlinkb,
-                     short *link_indexa, short *link_indexb)
+                     _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const char TRANS_N = 'N';
         const char TRANS_T = 'T';
@@ -432,10 +495,10 @@ void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
 
         memset(bufa, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(bra+strb_id, bufa, fillcnt, stra_id,
-                         norb, nb, nlinka, link_indexa);
+                         norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto end; }
         csum = rdm2_0b_t1(ket, bufb, fillcnt, stra_id,
-                          norb, nb, nlinkb, link_indexb+strb_id*nlinkb*4);
+                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
         if (csum < CSUMTHR) { goto end; }
 
         dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
@@ -453,38 +516,43 @@ end:
  */
 void FCItrans_rdm1a(double *rdm1, double *bra, double *ket,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    short *link_indexa, short *link_indexb)
+                    int *link_indexa, int *link_indexb)
 {
         int i, a, j, k, str0, str1, sign;
-        short *tab;
         double *pket, *pbra;
+        _LinkT *tab;
+        _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * na);
+        compress_link(clink, link_indexa, norb, na, nlinka);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
-                tab = link_indexa + str0 * nlinka * 4;
+                tab = clink + str0 * nlinka;
                 pket = ket + str0 * nb;
                 for (j = 0; j < nlinka; j++) {
-                        a = tab[j*4+0];
-                        i = tab[j*4+1];
-                        str1 = tab[j*4+2];
-                        sign = tab[j*4+3];
+                        i    = EXTRACT_I   (tab[j]);
+                        a    = EXTRACT_A   (tab[j]);
+                        str1 = EXTRACT_ADDR(tab[j]);
+                        sign = EXTRACT_SIGN(tab[j]);
                         pbra = bra + str1 * nb;
                         for (k = 0; k < nb; k++) {
                                 rdm1[a*norb+i] += sign*pbra[k]*pket[k];
                         }
                 }
         }
+        free(clink);
 }
 
 void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    short *link_indexa, short *link_indexb)
+                    int *link_indexa, int *link_indexb)
 {
         int i, a, j, k, str0, str1, sign;
-        short *tab;
         double *pket, *pbra;
         double tmp;
+        _LinkT *tab;
+        _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nb);
+        compress_link(clink, link_indexb, norb, nb, nlinkb);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
@@ -492,17 +560,18 @@ void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
                 pbra = bra + str0 * nb;
                 pket = ket + str0 * nb;
                 for (k = 0; k < nb; k++) {
-                        tab = link_indexb + k * nlinkb * 4;
+                        tab = clink + k * nlinkb;
                         tmp = pket[k];
                         for (j = 0; j < nlinkb; j++) {
-                                a = tab[j*4+0];
-                                i = tab[j*4+1];
-                                str1 = tab[j*4+2];
-                                sign = tab[j*4+3];
+                                i    = EXTRACT_I   (tab[j]);
+                                a    = EXTRACT_A   (tab[j]);
+                                str1 = EXTRACT_ADDR(tab[j]);
+                                sign = EXTRACT_SIGN(tab[j]);
                                 rdm1[a*norb+i] += sign*pbra[str1]*tmp;
                         }
                 }
         }
+        free(clink);
 }
 
 /*
@@ -510,23 +579,25 @@ void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
  */
 void FCImake_rdm1a(double *rdm1, double *cibra, double *ciket,
                    int norb, int na, int nb, int nlinka, int nlinkb,
-                   short *link_indexa, short *link_indexb)
+                   int *link_indexa, int *link_indexb)
 {
         int i, a, j, k, str0, str1, sign;
-        short *tab;
         double *pci0, *pci1;
         double *ci0 = ciket;
+        _LinkT *tab;
+        _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * na);
+        compress_link(clink, link_indexa, norb, na, nlinka);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
-                tab = link_indexa + str0 * nlinka * 4;
+                tab = clink + str0 * nlinka;
                 pci0 = ci0 + str0 * nb;
                 for (j = 0; j < nlinka; j++) {
-                        a = tab[j*4+0];
-                        i = tab[j*4+1];
-                        str1 = tab[j*4+2];
-                        sign = tab[j*4+3];
+                        i    = EXTRACT_I   (tab[j]);
+                        a    = EXTRACT_A   (tab[j]);
+                        str1 = EXTRACT_ADDR(tab[j]);
+                        sign = EXTRACT_SIGN(tab[j]);
                         pci1 = ci0 + str1 * nb;
                         if (a >= i) {
                                 if (sign > 0) {
@@ -546,30 +617,33 @@ void FCImake_rdm1a(double *rdm1, double *cibra, double *ciket,
                         rdm1[k*norb+j] = rdm1[j*norb+k];
                 }
         }
+        free(clink);
 }
 
 void FCImake_rdm1b(double *rdm1, double *cibra, double *ciket,
                    int norb, int na, int nb, int nlinka, int nlinkb,
-                   short *link_indexa, short *link_indexb)
+                   int *link_indexa, int *link_indexb)
 {
         int i, a, j, k, str0, str1, sign;
-        short *tab;
         double *pci0;
         double *ci0 = ciket;
         double tmp;
+        _LinkT *tab;
+        _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nb);
+        compress_link(clink, link_indexb, norb, nb, nlinkb);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
                 pci0 = ci0 + str0 * nb;
                 for (k = 0; k < nb; k++) {
-                        tab = link_indexb + k * nlinkb * 4;
+                        tab = clink + k * nlinkb;
                         tmp = pci0[k];
                         for (j = 0; j < nlinkb; j++) {
-                                a = tab[j*4+0];
-                                i = tab[j*4+1];
-                                str1 = tab[j*4+2];
-                                sign = tab[j*4+3];
+                                i    = EXTRACT_I   (tab[j]);
+                                a    = EXTRACT_A   (tab[j]);
+                                str1 = EXTRACT_ADDR(tab[j]);
+                                sign = EXTRACT_SIGN(tab[j]);
                                 if (a >= i) {
                                         if (sign > 0) {
                                                 rdm1[a*norb+i] += pci0[str1]*tmp;
@@ -585,5 +659,6 @@ void FCImake_rdm1b(double *rdm1, double *cibra, double *ciket,
                         rdm1[k*norb+j] = rdm1[j*norb+k];
                 }
         }
+        free(clink);
 }
 

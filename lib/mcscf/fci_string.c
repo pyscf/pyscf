@@ -97,7 +97,7 @@ int FCIstr2addr(int norb, int nelec, unsigned long string)
 }
 
 
-void FCIlinkstr_index(short *link_index, int norb, int na, int nocc,
+void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                       unsigned long *strs, int store_trilidx)
 {
         int occ[norb];
@@ -106,7 +106,7 @@ void FCIlinkstr_index(short *link_index, int norb, int na, int nocc,
         int nlink = nocc * nvir + nocc;
         int str_id, io, iv, i, a, k, ia;
         unsigned long str0, str1;
-        short *tab;
+        int *tab;
 
         for (str_id = 0; str_id < na; str_id++) {
                 str0 = strs[str_id];

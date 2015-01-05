@@ -130,7 +130,7 @@ Version 0.8 (2014-12-21):
   * MCSCF for triplet
   * Add symmetry support for MCSCF
   * Add UHF-MCSCF
-  * Add 2-step DMRGSCF, using Block and ChemPS2 as FCI solver
+  * Add 2-step DMRGSCF, using Block and CheMPS2 as FCI solver
   * Add ROHF
 
 Version 0.9 (2015-1-4):

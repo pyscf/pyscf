@@ -9,11 +9,6 @@
 #include "vhf/fblas.h"
 #define CSUMTHR         1e-28
 
-void FCIrdm12_drv(void (*dm12kernel)(),
-                  double *rdm1, double *rdm2, double *bra, double *ket,
-                  int norb, int na, int nb, int nlinka, int nlinkb,
-                  short *link_indexa, short *link_indexb, int symm);
-
 /*
  * the intermediate determinants ~ (norb,neleca+1;norb,nelecb-1)
  * Annihilating one alpha electron and creating one beta electron lead
@@ -24,13 +19,13 @@ void FCIrdm12_drv(void (*dm12kernel)(),
  */
 static double ades_bcre_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                            int norb, int nstrb, int neleca, int nelecb,
-                           short *ades_index, short *bcre_index)
+                           int *ades_index, int *bcre_index)
 {
         const int nnorb = norb * norb;
         const int inelec = neleca + 1;
         const int invir  = norb - nelecb + 1;
         int ic, id, i, j, k, str1, sign, signa;
-        const short *tab;
+        const int *tab;
         double *pt1, *pci;
         double csum = 0;
 
@@ -40,14 +35,14 @@ static double ades_bcre_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 str1  = ades_index[id*4+2];
                 signa = ades_index[id*4+3];
                 pci = ci0 + str1 * (unsigned long)nstrb;
-                pt1 = t1 + j;
+                pt1 = t1 + j*norb;
                 for (k = 0; k < fillcnt; k++) {
                         tab = bcre_index + k * invir * 4;
                         for (ic = 0; ic < invir; ic++) {
                                 i    = tab[ic*4+0];
                                 str1 = tab[ic*4+2];
                                 sign = tab[ic*4+3] * signa;
-                                pt1[i*norb] += pci[str1] * sign;
+                                pt1[i] += pci[str1] * sign;
                                 csum += pci[str1] * pci[str1];
                         }
                         pt1 += nnorb;
@@ -66,13 +61,13 @@ static double ades_bcre_t1(double *ci0, double *t1, int fillcnt, int stra_id,
  */
 static double acre_bdes_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                            int norb, int nstrb, int neleca, int nelecb,
-                           short *acre_index, short *bdes_index)
+                           int *acre_index, int *bdes_index)
 {
         const int nnorb = norb * norb;
         const int inelec = nelecb + 1;
         const int invir  = norb - neleca + 1;
         int ic, id, i, j, str0, str1, sign, signa;
-        const short *tab;
+        const int *tab;
         double *pci, *pt1;
         double csum = 0;
 
@@ -82,14 +77,14 @@ static double acre_bdes_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 str1  = acre_index[ic*4+2];
                 signa = acre_index[ic*4+3];
                 pci = ci0 + str1 * (unsigned long)nstrb;
-                pt1 = t1 + i*norb;
+                pt1 = t1 + i;
                 tab = bdes_index;
                 for (str0 = 0; str0 < fillcnt; str0++) {
                         for (id = 0; id < inelec; id++) {
                                 j    = tab[id*4+0];
                                 str1 = tab[id*4+2];
                                 sign = tab[id*4+3] * signa;
-                                pt1[j] += sign * pci[str1];
+                                pt1[j*norb] += sign * pci[str1];
                                 csum += pci[str1] * pci[str1];
                         }
                         tab += inelec * 4;
@@ -113,7 +108,7 @@ static double acre_bdes_t1(double *ci0, double *t1, int fillcnt, int stra_id,
 void FCIspindm12_drv(void (*dm12kernel)(),
                      double *rdm1, double *rdm2, double *bra, double *ket,
                      int norb, int na, int nb, int neleca, int nelecb,
-                     short *link_indexa, short *link_indexb, int symm)
+                     int *link_indexa, int *link_indexb, int symm)
 {
         const int nnorb = norb * norb;
         int strk, i, j;
@@ -169,7 +164,7 @@ void FCIspindm12_drv(void (*dm12kernel)(),
 void FCIdm2_baab_kern(double *rdm1, double *rdm2, double *bra, double *ket,
                       int stra_id, int norb, int na, int nb,
                       int neleca, int nelecb,
-                      short *acre_index, short *bdes_index)
+                      int *acre_index, int *bdes_index)
 {
         const char UP = 'U';
         const char TRANS_N = 'N';
@@ -194,7 +189,7 @@ void FCIdm2_baab_kern(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCIdm2_abba_kern(double *rdm1, double *rdm2, double *bra, double *ket,
                       int stra_id, int norb, int na, int nb,
                       int neleca, int nelecb,
-                      short *ades_index, short *bcre_index)
+                      int *ades_index, int *bcre_index)
 {
         const char UP = 'U';
         const char TRANS_N = 'N';

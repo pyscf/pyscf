@@ -93,7 +93,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
     e2buflen = min(int(max_memory*1e6/8)//nao_pair,
-                   int(ioblk_size*1e6/8)//nkl_pair)
+                   int(ioblk_size*1e6/8)//nkl_pair, nij_pair)
     log.debug('step2: kl-pair (ao %d, mo %d), mem cache %.8g MB, ioblock %.8g MB', \
               nao_pair, nkl_pair,
               e2buflen*nao_pair*8/1e6, e2buflen*nkl_pair*8/1e6)
@@ -105,10 +105,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     buf = numpy.empty((e2buflen, nao_pair))
     istep = 0
     for row0, row1 in prange(0, nij_pair, e2buflen):
-        istep += 1
         nrow = row1 - row0
 
         for icomp in range(comp):
+            istep += 1
             tioi = 0
             log.debug('step 2 [%d/%d], [%d,%d:%d], row = %d', \
                       istep, ijmoblks, icomp, row0, row1, nrow)

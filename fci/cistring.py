@@ -70,7 +70,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
         return pumpmap
 
     t = [pump1e(s) for s in strs]
-    return numpy.array(t, dtype=numpy.int16)
+    return numpy.array(t, dtype=numpy.int32)
 
 def gen_linkstr_index(orb_list, nocc, strs=None):
     if strs is None:
@@ -79,7 +79,7 @@ def gen_linkstr_index(orb_list, nocc, strs=None):
     norb = len(orb_list)
     nvir = norb - nocc
     na = num_strings(norb, nocc)
-    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int16)
+    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
                             ctypes.c_int(nocc),
@@ -107,7 +107,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
     norb = len(orb_list)
     nvir = norb - nocc
     na = num_strings(norb, nocc)
-    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int16)
+    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
                             ctypes.c_int(nocc),
@@ -132,7 +132,7 @@ def gen_cre_str_index(orb_list, nelec):
         return pumpmap
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
-    return numpy.array(t, dtype=numpy.int16)
+    return numpy.array(t, dtype=numpy.int32)
 
 # a mapping between N electron string to N-1 electron string.
 # annihilation of an electron for the given string -> the address of the
@@ -151,7 +151,7 @@ def gen_des_str_index(orb_list, nelec):
         return pumpmap
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
-    return numpy.array(t, dtype=numpy.int16)
+    return numpy.array(t, dtype=numpy.int32)
 
 
 
