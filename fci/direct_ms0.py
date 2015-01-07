@@ -151,7 +151,8 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, **kwargs):
     if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]
-        return pw[0], ci0.reshape(na,na)
+        if abs(pw[0]-pw[1]) > 1e-12:
+            return pw[0], ci0.reshape(na,na)
 
     precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
     #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
@@ -243,7 +244,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None):
     if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]
-        return pw[0], ci0.reshape(na,na)
+        if abs(pw[0]-pw[1]) > 1e-12:
+# The degenerated wfn can break symmetry.  The davidson iteration with proper
+# initial guess doesn't have this issue
+            return pw[0], ci0.reshape(na,na)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 

@@ -23,6 +23,23 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_a:]       )
     return mo_core, mo_cas, mo_vir
 
+def h1e_for_cas(casci, mo_core, mo_cas):
+    hcore = casci.get_hcore()
+    if mo_core[0].size == 0 and mo_core[1].size == 0:
+        corevhf = (0,0)
+        energy_core = 0
+    else:
+        core_dm = (numpy.dot(mo_core[0], mo_core[0].T),
+                   numpy.dot(mo_core[1], mo_core[1].T))
+        corevhf = casci.get_veff(casci.mol, core_dm)
+        energy_core = numpy.einsum('ij,ji', core_dm[0], hcore[0]) \
+                    + numpy.einsum('ij,ji', core_dm[1], hcore[1]) \
+                    + numpy.einsum('ij,ji', core_dm[0], corevhf[0]) * .5 \
+                    + numpy.einsum('ij,ji', core_dm[1], corevhf[1]) * .5
+    h1eff = (reduce(numpy.dot, (mo_cas[0].T, hcore[0]+corevhf[0], mo_cas[0])),
+             reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
+    return h1eff, energy_core
+
 def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
     if verbose is None:
         verbose = casci.verbose
@@ -36,20 +53,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    hcore = casci.get_hcore()
-    if mo_core[0].size == 0 and mo_core[1].size == 0:
-        corevhf = (0,0)
-        energy_core = 0
-    else:
-        core_dm = (numpy.dot(mo_core[0], mo_core[0].T),
-                   numpy.dot(mo_core[1], mo_core[1].T))
-        corevhf = casci.get_veff(core_dm)
-        energy_core = numpy.einsum('ij,ji', core_dm[0], hcore[0]) \
-                    + numpy.einsum('ij,ji', core_dm[1], hcore[1]) \
-                    + numpy.einsum('ij,ji', core_dm[0], corevhf[0]) * .5 \
-                    + numpy.einsum('ij,ji', core_dm[1], corevhf[1]) * .5
-    h1eff = (reduce(numpy.dot, (mo_cas[0].T, hcore[0]+corevhf[0], mo_cas[0])),
-             reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
+    h1eff, energy_core = h1e_for_cas(casci, mo_core, mo_cas)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
@@ -123,8 +127,8 @@ class CASCI(object):
         hcore = self._scf.get_hcore(mol)
         return (hcore,hcore)
 
-    def get_veff(self, dm):
-        return self._scf.get_veff(self.mol, dm)
+    def get_veff(self, mol, dm):
+        return self._scf.get_veff(mol, dm)
 
     def ao2mo(self, mo):
         nao, nmo = mo[0].shape

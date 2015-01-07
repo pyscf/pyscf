@@ -86,7 +86,8 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, orbsym=[],
     if len(addr) == na*na:
         ci0 = numpy.empty((na*na))
         ci0[addr] = pv[:,0]
-        return pw[0], ci0.reshape(na,na)
+        if abs(pw[0]-pw[1]) > 1e-12:
+            return pw[0], ci0.reshape(na,na)
 
     precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
     #precond = lambda x, e, *args: x/(hdiag-(e-eshift))

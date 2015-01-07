@@ -13,6 +13,7 @@ libfci = pyscf.lib.load_library('libmcscf')
 
 # refer to ci.rdm3.gen_strings
 def gen_strings4orblist(orb_list, nelec, ordering=True):
+    assert(nelec >= 0)
     if nelec == 0:
         return [0]
     def gen_str_iter(orb_list, nelec):
