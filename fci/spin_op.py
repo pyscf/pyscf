@@ -36,13 +36,16 @@ librdm = pyscf.lib.load_library('libmcscf')
 #
 # Sz*Sz = Msz^2 = (neleca-nelecb)^2
 # 1) same electron
-#       <p|ss|q>\gamma_qp = (neleca+nelecb)/4
+#       <p|ss|q>\gamma_qp = <p|q>\gamma_qp = (neleca+nelecb)/4
 # 2) different electrons
 #       <ij|2s1s2|kl>Gamma_{ki,lj}/2
 #       =(<ia|ka><ja|la>Gamma_{kaia,laja} - <ia|ka><jb|lb>Gamma_{kaia,lbjb}
 #       - <ib|kb><ja|la>Gamma_{kbib,laja} + <ib|kb><jb|lb>Gamma_{kbib,lbjb})/4
 
-def spin_square(ci, norb, nelec):
+# set aolst for local spin expectation value, which is defined as
+#       <CI|ao><ao|S^2|CI>
+# For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
+def spin_square(ci, norb, nelec, mo=None, ovlp=1):
 # <CI|S+*S-|CI> = neleca + \delta_{ik}\delta_{jl}Gamma_{kbia,lajb}
 # <CI|S-*S+|CI> = nelecb + \delta_{ik}\delta_{jl}Gamma_{kaib,lbja}
 # <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{kaia,laja} - Gamma_{kaia,lbjb}
@@ -52,31 +55,69 @@ def spin_square(ci, norb, nelec):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
+
+    if isinstance(mo, numpy.ndarray) and mo.ndim == 2:
+        mo = (mo, mo)
+    elif mo is None:
+        mo = (numpy.eye(norb),) * 2
+
+# projected overlap matrix elements for partial trace
+    if isinstance(ovlp, numpy.ndarray):
+        ovlpaa = reduce(numpy.dot, (mo[0].T, ovlp, mo[0]))
+        ovlpbb = reduce(numpy.dot, (mo[1].T, ovlp, mo[1]))
+        ovlpab = reduce(numpy.dot, (mo[0].T, ovlp, mo[1]))
+        ovlpba = reduce(numpy.dot, (mo[1].T, ovlp, mo[0]))
+    else:
+        ovlpaa = numpy.dot(mo[0].T, mo[0])
+        ovlpbb = numpy.dot(mo[1].T, mo[1])
+        ovlpab = numpy.dot(mo[0].T, mo[1])
+        ovlpba = numpy.dot(mo[1].T, mo[0])
+
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
             direct_spin1.make_rdm12s(ci, norb, nelec)
-    ssz =(_bi_trace(dm2aa) - _bi_trace(dm2ab) \
-        + _bi_trace(dm2bb) - _bi_trace(dm2ab)) * .25 \
-        + (neleca + nelecb) *.25
+    ssz =(_bi_trace(dm2aa, ovlpaa, ovlpaa)
+        - _bi_trace(dm2ab, ovlpaa, ovlpbb)
+        + _bi_trace(dm2bb, ovlpbb, ovlpbb)
+        - _bi_trace(dm2ab, ovlpaa, ovlpbb)) * .25 \
+        +(_trace(dm1a, ovlpaa)
+        + _trace(dm1b, ovlpbb)) *.25
 
     dm2baab = _make_rdm2_baab(ci, norb, nelec)
     dm2abba = _make_rdm2_abba(ci, norb, nelec)
     dm2baab = rdm.reorder_rdm(dm1a, dm2baab, inplace=True)[1]
     dm2abba = rdm.reorder_rdm(dm1b, dm2abba, inplace=True)[1]
-    ssxy = (_bi_trace(dm2baab) + _bi_trace(dm2abba) + neleca + nelecb) * .5
+    ssxy =(_bi_trace(dm2baab, ovlpab, ovlpba)
+         + _bi_trace(dm2abba, ovlpba, ovlpab) \
+         + _trace(dm1a, ovlpaa)
+         + _trace(dm1b, ovlpbb)) * .5
     ss = ssxy + ssz
 
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
 
-# sum_ij A(i,i,j,j)
-def _bi_trace(a):
-    atmp = numpy.einsum('iipq->pq', a)
-    return numpy.einsum('ii', atmp)
+def _trace(dm1, ovlp):
+    return numpy.einsum('ij,ji->', dm1, ovlp)
 
-#TODO
-def spin_square_with_overlap(ovlp, ci, norb, nelec):
-    return -1, -1
+def _bi_trace(dm2, ovlp1, ovlp2):
+    return numpy.einsum('jilk,ij,kl->', dm2, ovlp1, ovlp2)
+
+def local_spin(ci, norb, nelec, mo=None, ovlp=1, aolst=[]):
+    if isinstance(ovlp, numpy.ndarray):
+        nao = ovlp.shape[0]
+        if len(aolst) == 0:
+            lstnot = []
+        else:
+            lstnot = [i for i in range(nao) if i not in aolst]
+        s = ovlp.copy()
+        s[lstnot] = 0
+        s[:,lstnot] = 0
+    else:
+        if len(aolst) == 0:
+            aolst = range(norb)
+        s = numpy.zeros((norb,norb))
+        s[aolst,aolst] = 1
+    return spin_square(ci, norb, nelec, mo, s)
 
 # for S+*S-
 # dm(pq,rs) * [q(beta)^+ p(alpha) s(alpha)^+ r(beta)]
@@ -86,7 +127,7 @@ def _make_rdm2_abba(ci, norb, nelec):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
-    if neleca == norb: # no intermediate determinants
+    if neleca == norb or nelecb == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     ades_index = cistring.gen_des_str_index(range(norb), neleca+1)
     bcre_index = cistring.gen_cre_str_index(range(norb), nelecb-1)
@@ -120,7 +161,7 @@ def _make_rdm2_baab(ci, norb, nelec):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
-    if nelecb == norb: # no intermediate determinants
+    if nelecb == norb or neleca == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     acre_index = cistring.gen_cre_str_index(range(norb), neleca-1)
     bdes_index = cistring.gen_des_str_index(range(norb), nelecb+1)
@@ -152,7 +193,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
-    import fci
+    from pyscf import fci
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -185,6 +226,39 @@ if __name__ == '__main__':
     e, ci0 = cis.kernel(h1e, eri, norb, nelec)
     ss = spin_square(ci0, norb, nelec)
     print(ss)
+    ss = local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5))
+    print('local spin for H1..H5 = 0.998988389', ss[0])
     ci1 = numpy.zeros((4,4))
     ci1[0,0] = 1
     print(spin_square(ci1, 4, (3,1)))
+
+
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = [
+        ['H', ( 0 ,  0    , 0.   )],
+        ['H', ( 0 ,  0    , 8.   )],
+    ]
+
+    mol.basis = {'H': 'cc-pvdz'}
+    mol.spin = 0
+    mol.build()
+
+    m = scf.RHF(mol)
+    ehf = m.scf()
+
+    cis = fci.direct_spin0.FCISolver(mol)
+    cis.verbose = 5
+    norb = m.mo_coeff.shape[1]
+    nelec = (mol.nelectron, 0)
+    nelec = mol.nelectron
+    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
+    eri = ao2mo.incore.full(m._eri, m.mo_coeff)
+    e, ci0 = cis.kernel(h1e, eri, norb, nelec)
+    ss = spin_square(ci0, norb, nelec, m.mo_coeff, m.get_ovlp())
+    print('local spin for H1+H2 = 0', ss[0])
+    ss = local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5))
+    print('local spin for H1 = 0.75', ss[0])
+    ss = local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5,10))
+    print('local spin for H2 = 0.75', ss[0])

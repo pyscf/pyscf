@@ -27,7 +27,7 @@ from pyscf.fci import rdm
 from pyscf.fci import spin_op
 from pyscf.fci.cistring import num_strings
 from pyscf.fci.rdm import reorder_rdm
-from pyscf.fci.spin_op import spin_square, spin_square_with_overlap
+from pyscf.fci.spin_op import spin_square
 
 def solver(mol, singlet=True):
     if mol.symmetry:

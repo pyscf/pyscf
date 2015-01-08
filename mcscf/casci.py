@@ -9,6 +9,7 @@ from functools import reduce
 import numpy
 import h5py
 import pyscf.lib
+import pyscf.scf
 import pyscf.ao2mo
 import pyscf.fci.direct_spin0
 
@@ -19,6 +20,19 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_cas = mo_coeff[:,ncore:nocc]
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
+
+def h1e_for_cas(casci, mo_core, mo_cas):
+    hcore = casci.get_hcore()
+    if mo_core.size == 0:
+        corevhf = 0
+        energy_core = 0
+    else:
+        core_dm = numpy.dot(mo_core, mo_core.T) * 2
+        corevhf = casci.get_veff(casci.mol, core_dm)
+        energy_core = numpy.einsum('ij,ji', core_dm, hcore) \
+                    + numpy.einsum('ij,ji', core_dm, corevhf) * .5
+    h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
+    return h1eff, energy_core
 
 def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
     if verbose is None:
@@ -33,16 +47,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    hcore = casci.get_hcore()
-    if mo_core.size == 0:
-        corevhf = 0
-        energy_core = 0
-    else:
-        core_dm = numpy.dot(mo_core, mo_core.T) * 2
-        corevhf = casci.get_veff(core_dm)
-        energy_core = numpy.einsum('ij,ji', core_dm, hcore) \
-                    + numpy.einsum('ij,ji', core_dm, corevhf) * .5
-    h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
+    h1eff, energy_core = h1e_for_cas(casci, mo_core, mo_cas)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
@@ -111,8 +116,9 @@ class CASCI(object):
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
 
-    def get_veff(self, dm):
-        return self._scf.get_veff(self.mol, dm)
+# if self._scf is ROHF?
+    def get_veff(self, mol, dm):
+        return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
 
     def ao2mo(self, mo):
         nao, nmo = mo.shape

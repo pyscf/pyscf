@@ -54,9 +54,6 @@ class CASCI(casci.CASCI):
           + self.mol.intor_symmetric('cint1e_nuc_sph')
         return h
 
-    def get_veff(self, dm):
-        return pyscf.scf.hf.RHF.get_veff(self._scf, self.mol, dm)
-
 
 
 if __name__ == '__main__':

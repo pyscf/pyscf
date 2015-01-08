@@ -23,6 +23,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
+    if casscf.ncas == nmo:
+        return e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
     toloose = casscf.conv_threshold_grad

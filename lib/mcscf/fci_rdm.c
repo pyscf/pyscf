@@ -195,11 +195,11 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                 rdm2[i] += pdm2[i];
         }
 }
-        free(clinka);
-        free(clinkb);
         free(pdm1);
         free(pdm2);
 }
+        free(clinka);
+        free(clinkb);
         if (symm) {
                 for (i = 0; i < norb; i++) {
                         for (j = 0; j < i; j++) {
@@ -290,22 +290,15 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fill1, &D2, buf, &nnorb,
                        ket+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
-// dsyrk_ of debian-6 libf77blas.so.3gf causes NaN in pdm2, libblas bug?
-//                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill0,
-//                               &D1, buf, &nnorb, buf, &nnorb,
-//                               &D1, rdm2, &nnorb);
-//                dsyrk_(&UP, &TRANS_N, &nnorb, &fill0,
-//                       &D2, buf, &nnorb, &D1, rdm2, &nnorb);
-//                if (fill1 > fill0) {
-//                        const double D4 = 4;
-//                        dsyr_(&UP, &nnorb, &D4, buf+nnorb*fill0, &INC1,
-//                              rdm2, &nnorb);
-//                }
                 for (i = fill0*nnorb; i < fill1*nnorb; i++) {
                         buf[i] *= SQRT2;
                 }
                 dsyrk_(&UP, &TRANS_N, &nnorb, &fill1,
                        &D2, buf, &nnorb, &D1, rdm2, &nnorb);
+// dsyrk_ of debian-6 libf77blas.so.3gf causes NaN in pdm2, libblas bug?
+//                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill1,
+//                               &D2, buf, &nnorb, buf, &nnorb,
+//                               &D1, rdm2, &nnorb);
         }
         free(buf);
 }
