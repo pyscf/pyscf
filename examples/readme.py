@@ -76,5 +76,5 @@ print(rhf.mo_coeff.shape)
 print(rhf.mo_energy)
 print(rhf.mo_occ)
 print(rhf.hf_energy)
-print(rhf.scf_conv)
+print(rhf.converged)
 # For more detail of class RHF or UHF, see pyscf/scf/hf.py
