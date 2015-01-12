@@ -32,7 +32,7 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        log.info(self, '%s with symmetry adpated basis', self.__doc__)
+        log.info(self, '%s with symmetry adapted basis', self.__doc__)
         float_irname = []
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
@@ -207,7 +207,7 @@ class UHF(hf.UHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        log.info(self, '%s with symmetry adpated basis', self.__doc__)
+        log.info(self, '%s with symmetry adapted basis', self.__doc__)
         float_irname = []
         fix_na = 0
         fix_nb = 0
