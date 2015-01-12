@@ -190,7 +190,7 @@ class RHF(hf.RHF):
                 molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
                                                  irorbcnt[j]+1))
             log.debug(self, ' ** MO coefficients **')
-            dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
+            dump_mat.dump_rec(mol.stdout, mo_coeff[:,idx], label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp())
@@ -451,13 +451,13 @@ class UHF(hf.UHF):
                 molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
                                                   irorbcnt[j]+1))
             log.debug(self, ' ** alpha MO coefficients **')
-            dump_mat.dump_rec(mol.stdout, mo_coeff[0], label, molabel, start=1)
+            dump_mat.dump_rec(mol.stdout, mo_coeff[0][:,idxa], label, molabel, start=1)
             molabel = []
             for k, j in enumerate(idxb):
                 molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
                                                   irorbcnt[j]+1))
             log.debug(self, ' ** beta MO coefficients **')
-            dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
+            dump_mat.dump_rec(mol.stdout, mo_coeff[1][:,idxb], label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp())
@@ -776,7 +776,7 @@ class ROHF(UHF):
                 molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
                                                  irorbcnt[j]+1))
             log.debug(self, ' ** MO coefficients **')
-            dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
+            dump_mat.dump_rec(mol.stdout, mo_coeff[:,idx], label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         self.mulliken_pop(mol, dm, self.get_ovlp())
