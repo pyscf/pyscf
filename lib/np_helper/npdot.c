@@ -59,7 +59,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = (int)(k/nthread) + 1;
+                        nblk = (int)((k-1)/nthread) + 1;
                         cpriv = malloc(sizeof(double) * m * n);
 
 #pragma omp for nowait schedule(static)
@@ -97,7 +97,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = (int)(m/nthread) + 1;
+                        nblk = (int)((m-1)/nthread) + 1;
 
 #pragma omp for nowait schedule(static)
                         for (i = 0; i < nthread; i++) {
@@ -123,7 +123,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = (int)(n/nthread) + 1;
+                        nblk = (int)((n-1)/nthread) + 1;
 
 #pragma omp for nowait schedule(static)
                         for (i = 0; i < nthread; i++) {

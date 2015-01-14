@@ -27,7 +27,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         return e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
-    toloose = casscf.conv_threshold_grad
+    toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
@@ -36,7 +36,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = t2m
         for imicro in range(micro):
 
-            u, dx, g_orb, nin = casscf.rotate_orb(mo, fcivec, e_ci, eris, 0)
+            casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, casscf.ncas,
+                                                          casscf.nelecas)
+            u, dx, g_orb, nin = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = list(map(numpy.dot, mo, u))
@@ -112,7 +114,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    emc = kernel(mc1step_uhf.CASSCF(mol, m, 4, (2,1)), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
+    emc = kernel(mc1step_uhf.CASSCF(mol, m, 4, (2,1)), m.mo_coeff, verbose=4)[0]
     print(ehf, emc, emc-ehf)
     print(emc - -2.9782774463926618)
 
@@ -132,7 +134,7 @@ if __name__ == '__main__':
     mc = mc1step_uhf.CASSCF(mol, m, 4, (2,1))
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7), 1)
-    emc = mc.mc2step(mo)[0] + mol.nuclear_repulsion()
+    emc = mc.mc2step(mo)[0]
     print(ehf, emc, emc-ehf)
     #-75.631870606190233, -75.573930418500652, 0.057940187689581535
     print(emc - -75.573930418500652, emc - -75.648547447838951)

@@ -26,8 +26,9 @@ def pick_large_mode(e, v):
 # IJQC, 109, 2178
 # use davidson algorithm to solve augmented hessian  Ac = ce
 # c is the trial vector = (1, xtrial)
-def davidson(h_op, g, precond, x0, log, tol=1e-7, max_cycle=10, max_stepsize=.6,
-             lindep=1e-14, pick_mode=pick_large_mode, dot=numpy.dot):
+def davidson(h_op, g, precond, x0, log, tol=1e-7,
+             max_cycle=10, max_stepsize=.6, lindep=1e-14,
+             pick_mode=pick_large_mode, dot=numpy.dot):
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = []
     ax = []
@@ -76,8 +77,8 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7, max_cycle=10, max_stepsize=.6,
     return w_t, xtrial
 
 def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
-                max_cycle=10, max_stepsize=.6,
-                lindep=1e-14, pick_mode=pick_large_mode, dot=numpy.dot):
+                max_cycle=10, max_stepsize=.6, lindep=1e-14, start_cycle=0,
+                pick_mode=pick_large_mode, dot=numpy.dot):
 
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = []
@@ -102,7 +103,7 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)
-        if norm_dx < toloose:
+        if norm_dx < toloose and istep+1 >= start_cycle:
             yield istep, w_t, xtrial
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, |dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \

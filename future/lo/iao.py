@@ -19,7 +19,7 @@ from pyscf.lo import orth
 
 
 # Alternately, use ANO for minao
-# orthogonalize iao by orth.lowdin_orth_coeff(c.T*mol.intor(ovlp)*c)
+# orthogonalize iao by orth.lowdin(c.T*mol.intor(ovlp)*c)
 
 # simply project free atom into the given space
 def simple_preiao(mol, minao='minao'):
@@ -35,14 +35,14 @@ def simple_preiao(mol, minao='minao'):
     return c
 
 def pre_atm_scf_ao(mol):
-    atm_scf = pyscf.scf.atom_hf.get_atm_nrhf_result(mol)
+    atm_scf = pyscf.scf.atom_hf.get_atm_nrhf(mol)
     cs = []
     for ia in range(mol.natm):
-        symb = mol.symbol_of_atm(ia)
+        symb = mol.atom_symbol(ia)
         if atm_scf.has_key(symb):
             cs.append(atm_scf[symb][3])
         else:
-            symb = mol.pure_symbol_of_atm(ia)
+            symb = mol.atom_pure_symbol(ia)
             cs.append(atm_scf[symb][3])
     return scipy.linalg.block_diag(*cs)
 
@@ -82,7 +82,7 @@ def minao_basis(symb, minao):
     return basis_new
 
 def minao_atm(mol, atm_id, minao='minao'):
-    symb = mol.pure_symbol_of_atm(atm_id)
+    symb = mol.atom_pure_symbol(atm_id)
     atm = gto.Mole()
     atm._atm, atm._bas, atm._env = \
             atm.make_env([mol.atom[atm_id]],
@@ -108,7 +108,7 @@ def simple_1iao(mol, atm_id, minao='minao'):
     atm = minao_atm(mol, atm_id, minao)
     c1 = pyscf.scf.addons.project_mo_nr2nr(atm, 1, mol)
     s = reduce(numpy.dot, (c1.T, mol.intor_symmetric('cint1e_ovlp_sph'), c1))
-    return orth.lowdin_orth_coeff(s)
+    return orth.lowdin(s)
 
 
 if __name__ == "__main__":

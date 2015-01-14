@@ -134,45 +134,14 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, **kwargs):
-    if isinstance(nelec, int):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = numpy.ascontiguousarray(eri)
-    link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na = link_index.shape[0]
-    hdiag = make_hdiag(h1e, eri, norb, nelec)
-
-    addr, h0 = pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*na:
-        ci0 = numpy.empty((na*na))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
-            return pw[0], ci0.reshape(na,na)
-
-    precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
-    #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
-
-    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = contract_2e(h2e, c, norb, nelec, link_index)
-        return hc.ravel()
-
-#TODO: check spin of initial guess
-    if ci0 is None:
-        # we need better initial guess
-        ci0 = numpy.zeros(na*na)
-        #ci0[addr] = pv[:,0]
-        ci0[0] = 1
-    else:
-        ci0 = ci0.ravel()
-
-    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=1e-8, lindep=1e-8)
-    return e, c.reshape(na,na)
+def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, tol=1e-8,
+           lindep=1e-8, max_cycle=50, **kwargs):
+    cis = FCISolver(None)
+    cis.level_shift = eshift
+    cis.conv_tol = tol
+    cis.lindep = lindep
+    cis.max_cycle = max_cycle
+    return kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 # alpha and beta 1pdm
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
@@ -265,7 +234,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None):
     else:
         ci0 = ci0.ravel()
 
-    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,na)
 
@@ -288,9 +257,9 @@ class FCISolver(direct_spin1.FCISolver):
         return contract_2e(eri, fcivec, norb, nelec, link_index)
 
     def eig(self, op, x0, precond):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, log=self.verbose)
+                                  self.max_memory, verbose=self.verbose)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,

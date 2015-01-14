@@ -457,7 +457,7 @@ void CVHFfill_dot_nrs1(int (*intor)(), void (*funpack)(), void (**fjk)(),
 
 /*
  * drv loop over kl, generate eris of ij for given kl, call fjk to
- * calculate vj, vk.  There is an implicit TRANSPOSING between ij,kl in
+ * calculate vj, vk. Note the implicit TRANSPOSING between ij,kl in
  * funpack.  So fdot of s2kl should call fjk of s2ij and fdot of
  * s2ij should call fjk of s2kl
  * 

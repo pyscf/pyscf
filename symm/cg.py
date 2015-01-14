@@ -93,7 +93,7 @@ def real2spinor(l):
 
 # U_{sph,spinor}
 def real2spinor_whole(mol):
-    lmax = max([mol.angular_of_bas(i) for i in range(mol.nbas)])
+    lmax = max([mol.bas_angular(i) for i in range(mol.nbas)])
     ualst = []
     ublst = []
     for l in range(lmax+1):
@@ -101,13 +101,13 @@ def real2spinor_whole(mol):
         ualst.append(u1)
         ublst.append(u2)
 
-    ua = numpy.zeros((mol.num_NR_cgto(),mol.num_2C_cgto()), dtype=complex)
+    ua = numpy.zeros((mol.nao_nr(),mol.nao_2c()), dtype=complex)
     ub = numpy.zeros_like(ua)
     p0 = 0
     p1 = 0
     for ib in range(mol.nbas):
-        l = mol.angular_of_bas(ib)
-        nctr = mol.nctr_of_bas(ib)
+        l = mol.bas_angular(ib)
+        nctr = mol.bas_nctr(ib)
         n, m = ualst[l].shape
         for ic in range(nctr):
             ua[p0:p0+n,p1:p1+m] = ualst[l]

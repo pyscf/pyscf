@@ -133,8 +133,8 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     if not isinstance(nelec, int):
         nelec = sum(nelec)
     eri = eri.copy()
-    h2e = pyscf.ao2mo.restore(1, eri, norb)
-    f1e = h1e - numpy.einsum('...,jiik->jk', .5, h2e)
+    h2e = pyscf.ao2mo.restore(1, eri, norb).copy()
+    f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./nelec)
     for k in range(norb):
         h2e[k,k,:,:] += f1e
@@ -173,47 +173,16 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
 
-# be careful with single determinant initial guess. It may lead to the
-# eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
-    if isinstance(nelec, int):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-        nelec = (neleca, nelecb)
-    else:
-        neleca, nelecb = nelec
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = numpy.ascontiguousarray(eri)
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
-    hdiag = make_hdiag(h1e, eri, norb, nelec)
-
-    addr, h0 = pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*nb:
-        ci0 = numpy.empty((na*nb))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
-            return pw[0], ci0.reshape(na,nb)
-
-    precond = make_pspace_precond(hdiag, pw, pv, addr, eshift)
-    #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
-
-    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
-        return hc.ravel()
-
-    if ci0 is None:
-        ci0 = numpy.zeros(na*nb)
-        ci0[0] = 1
-    else:
-        ci0 = ci0.ravel()
-
-    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=1e-8, lindep=1e-8)
-    return e, c.reshape(na,nb)
+# be careful with single determinant initial guess. It may diverge the
+# preconditioner when the eigvalue of first davidson iter equals to hdiag
+def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, tol=1e-8,
+           lindep=1e-8, max_cycle=50, **kwargs):
+    cis = FCISolver(None)
+    cis.level_shift = eshift
+    cis.conv_tol = tol
+    cis.lindep = lindep
+    cis.max_cycle = max_cycle
+    return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -327,7 +296,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
     else:
         ci0 = ci0.ravel()
 
-    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.tol, lindep=fci.lindep)
+    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond)
     return e, c.reshape(na,nb)
 
@@ -362,7 +331,7 @@ class FCISolver(object):
         self.verbose = 0
         self.max_cycle = 50
         self.max_space = 12
-        self.conv_threshold = 1e-8
+        self.conv_tol = 1e-8
         self.lindep = 1e-8
         self.max_memory = 1200 # MB
 # level shift in precond
@@ -376,7 +345,7 @@ class FCISolver(object):
         log = pyscf.lib.logger.Logger(self.mol.stdout, verbose)
         log.info('******** CI flags ********')
         log.info('max. cycles = %d', self.max_cycle)
-        log.info('conv_threshold = %g', self.conv_threshold)
+        log.info('conv_tol = %g', self.conv_tol)
         log.info('linear dependence = %g', self.lindep)
         log.info('level shift = %d', self.level_shift)
         log.info('max iter space = %d', self.max_space)
@@ -399,9 +368,9 @@ class FCISolver(object):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0, precond):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, log=self.verbose)
+                                  self.max_memory, verbose=self.verbose)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,

@@ -26,7 +26,7 @@ print('HF     = %.15g' % m.scf())
 mc = mcscf.CASSCF(mol, m, 4, (4,2))
 mc.stdout.write('** Triplet, using spin1 ci solver **\n')
 emc1 = mc.mc1step()[0]
-print('CASSCF = %.15g' % (emc1 + mol.get_enuc()))
+print('CASSCF = %.15g' % emc1)
 print('s^2 = %.6f, 2s+1 = %.6f' % fci.spin_square(mc.ci, 4, (4,2)))
 
 # analysis of MCSCF results 
@@ -63,7 +63,7 @@ ci0[0,addr] =-numpy.sqrt(.5)
 ci0 = None
 emc1 = mc.mc1step(ci0=ci0)[0]
 print('s^2 = %.6f, 2s+1 = %.6f' % fci.spin_square(mc.ci, 4, (4,2)))
-print('CASSCF = %.15g' % (emc1 + mol.get_enuc()))
+print('CASSCF = %.15g' % emc1)
 
 # analysis of MCSCF results 
 dm1a, dm1b = mcscf.addons.make_rdm1s(mc, mc.ci, mc.mo_coeff)
@@ -97,7 +97,7 @@ emc1 = mc.mc1step(mo)[0]
 
 # analysis of MCSCF results 
 print('s^2 = %.6f, 2s+1 = %.6f' % fci.spin_square(mc.ci, 6, 6))
-print('CASSCF = %.15g' % (emc1 + mol.get_enuc()))
+print('CASSCF = %.15g' % emc1)
 dm1a, dm1b = mcscf.addons.make_rdm1s(mc, mc.ci, mc.mo_coeff)
 mc.stdout.write('spin alpha\n')
 dump_mat.dump_tri(m.stdout, dm1a, label)

@@ -25,7 +25,7 @@ mol.build(
 )
 
 mf = scf.RHF(mol)
-mf.conv_threshold = 1e-8
+mf.conv_tol = 1e-8
 e = mf.scf()
 print('E = %.15g, ref -230.776765415' % e)
 

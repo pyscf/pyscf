@@ -70,6 +70,8 @@ class KnowValues(unittest.TestCase):
         e, c = fci.direct_uhf.kernel(h1es, g2es, norb, nelecr)
         self.assertAlmostEqual(e, eref, 8)
         self.assertAlmostEqual(e, -8.9347029192929, 8)
+        e = fci.direct_uhf.energy(h1es, g2es, c, norb, nelecr)
+        self.assertAlmostEqual(e, -8.9347029192929, 8)
         e, c = fci.direct_uhf.kernel(h1es, g2es, norb, neleci)
         self.assertAlmostEqual(e, -8.7498253981782, 8)
 

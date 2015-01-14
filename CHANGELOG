@@ -1,0 +1,62 @@
+Version 0.10 (2015-1-?):
+* Refactoring:
+  - Expose class member functions to module level
+  - Rename member function of class Mole,
+    xxx_of_atm -> atom_xxx, xxx_of_bas -> bas_xxx
+  - Rename scf.hf.scf_cycle to scf.hf.kernel
+  - Rename conv_threshold to conv_tol
+  - Rename hf.calc_tot_elec_energy to hf.energy_tot
+  - Rename hf.set_mo_occ to hf.get_occ
+  - unify variable names, mo -> mo_coeff, log -> verbose
+  - Include nuclear repulsion in mcscf.e_tot
+  - Add tests for most module level functions
+  - Define update_casdm for CASSCF
+* Add tests, cover ~ 90% of code
+* Support molecular geometry string as input for Mole.atom
+* Add documents for whole package
+
+Version 0.9 (2015-1-4):
+* Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
+* Solve Python 3.x compatibility
+* general AO2MO integral transformation
+* Add density fitting HF, DF-MP2
+
+Version 0.8 (2014-12-21):
+* Support OS X
+* MCSCF for triplet
+* Add symmetry support for MCSCF
+* Add UHF-MCSCF
+* Add 2-step DMRGSCF, using Block and CheMPS2 as FCI solver
+* Add ROHF
+
+Version 0.7 (2014-11-12):
+* Fix memory leaks
+* Runtime keywords checking
+* Add MP2 density matrix
+* Add FCI based on uhf integrals
+* Add CCSD
+
+Version 0.6 (2014-10-17):
+* Fix bug in dhf
+* add future/lo for localized orbital
+
+Version 0.5 (2014-10-01):
+* Change basis format
+* Remove Cython dependence
+* Upgrade dft to use libxc-2.0.0
+* Add DFT, FCI, CASSCF, HF-gradients (NR and R), HF-NMR (NR and R)
+
+Version 0.4 (2014-08-17):
+* Module "future" for upcoming functions
+* One-line command to run QC calculation with pyscf
+* Fix bug of AO to MO transformation in OpenMP environment
+
+Version 0.3 (2014-07-03):
+* Change import layout
+
+Version 0.2 (2014-05-08):
+* Integral transformation
+
+Version 0.1 (2014-05-03):
+* Setup pyscf
+

@@ -53,12 +53,13 @@ class RKS(pyscf.scf.hf.RHF):
             vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi=hermi)
         else:
             if self.direct_scf:
-                vj, vk = _vhf.direct(dm-dm_last, mol._atm, \
-                                         mol._bas, mol._env, self.opt, \
-                                         hermi=hermi)
+                vj, vk = _vhf.direct(numpy.array(dm, copy=False),
+                                     mol._atm, mol._bas, mol._env,
+                                     self.opt, hermi=hermi)
             else:
-                vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env, \
-                                         hermi=hermi)
+                vj, vk = _vhf.direct(numpy.array(dm, copy=False),
+                                     mol._atm, mol._bas, mol._env,
+                                     hermi=hermi)
         log.timer(self, 'vj and vk', *t0)
         self._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
 
@@ -69,8 +70,10 @@ class RKS(pyscf.scf.hf.RHF):
             vx -= vk
         return vj + vx
 
-    def calc_tot_elec_energy(self, h1e, vhf, dm):
-        e1 = numpy.einsum('ij,ji', h1e, dm).real
+    def energy_elec(self, dm, h1e=None, vhf=None):
+        if h1e is None:
+            h1e = mf.get_hcore()
+        e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
         tot_e = e1 + self._ecoul + self._exc
         log.debug(self, 'Ecoul = %s  Exc = %s', self._ecoul, self._exc)
         return tot_e, self._ecoul+self._exc
@@ -89,8 +92,6 @@ if __name__ == '__main__':
     mol.grids = { 'He': (10, 14),}
     mol.build()
 
-##############
-# SCF result
     m = RKS(mol)
     m.xc = 'LDA,VWN_RPA'
     #m.init_guess = '1e'

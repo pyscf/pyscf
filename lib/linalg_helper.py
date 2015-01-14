@@ -15,11 +15,11 @@ from pyscf.lib import logger
 
 def davidson(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
              max_memory=2000, eig_pick=None, dot=numpy.dot, callback=None,
-             log=None):
-    if log is None:
-        log = logger.Logger(sys.stdout, logger.WARN)
-    elif isinstance(log, int):
-        log = logger.Logger(sys.stdout, log)
+             verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
     toloose = numpy.sqrt(tol)
     # if trial vectors are held in memory, store as many as possible
     maxspace = max(int((max_memory-1e3)*1e6/x0.nbytes/2), maxspace)
@@ -154,11 +154,11 @@ class _TrialXs(list):
 #      Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 # solve (1+aop) x = b
 def krylov(aop, b, x0=None, tol=1e-10, maxiter=30, dot=numpy.dot, \
-           lindep=1e-16, callback=None, log=None):
-    if log is None:
-        log = logger.Logger(sys.stdout, logger.WARN)
-    elif isinstance(log, int):
-        log = logger.Logger(sys.stdout, log)
+           lindep=1e-16, callback=None, verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
 
     if x0 is not None:
         b = b - (x0 + aop(x0))
@@ -290,8 +290,8 @@ if __name__ == '__main__':
     a_diag = a.diagonal()
     log = logger.Logger(sys.stdout, 5)
     aop = lambda x: numpy.dot(a-numpy.diag(a_diag), x)/a_diag
-    x1 = krylov(aop, b/a_diag, maxiter=50, log=log)
+    x1 = krylov(aop, b/a_diag, maxiter=50, verbose=log)
     print(abs(x - x1).sum())
-    x1 = krylov(aop, b/a_diag, None, maxiter=10, log=log)
-    x1 = krylov(aop, b/a_diag, x1, maxiter=30, log=log)
+    x1 = krylov(aop, b/a_diag, None, maxiter=10, verbose=log)
+    x1 = krylov(aop, b/a_diag, x1, maxiter=30, verbose=log)
     print(abs(x - x1).sum())

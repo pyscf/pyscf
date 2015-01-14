@@ -29,7 +29,7 @@ diis.min_space is the minimal number of vectors to store before damping'''
         self.verbose = dev.verbose
         self.stdout = dev.stdout
         self._vec_stack = []
-        self.threshold = 1e-6
+        self.conv_tol = 1e-6
         self.space = 6
         self.min_space = 1
 

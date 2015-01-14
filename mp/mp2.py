@@ -42,7 +42,8 @@ def kernel(mp, mo_coeff, mo_energy, nocc, verbose=None):
 
 def make_rdm1(mp, mo_coeff, mo_energy, nocc, verbose=None):
     ovov = mp.ao2mo(mo_coeff, nocc)
-    nvir = len(mo_energy) - nocc
+    nmo = len(mo_energy)
+    nvir = nmo - nocc
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
@@ -66,7 +67,7 @@ def make_rdm1(mp, mo_coeff, mo_energy, nocc, verbose=None):
     rdm1[:nocc,:nocc] =-dm1occ * 2
     rdm1[nocc:,nocc:] = dm1vir * 2
     rdm1 = reduce(numpy.dot, (mo_coeff, rdm1, mo_coeff.T))
-    return emp2, rdm1
+    return rdm1
 
 
 class MP2(object):
@@ -80,28 +81,28 @@ class MP2(object):
         self.emp2 = None
         self.t2 = None
 
-    def kernel(self, mo=None, mo_energy=None, nocc=None):
-        if mo is None:
-            mo = self._scf.mo_coeff
+    def kernel(self, mo_coeff=None, mo_energy=None, nocc=None):
+        if mo_coeff is None:
+            mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
         if nocc is None:
             nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
-                kernel(self, mo, mo_energy, nocc, verbose=self.verbose)
+                kernel(self, mo_coeff, mo_energy, nocc, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
     # return eri_ovov array[nocc*nvir,nocc*nvir]
-    def ao2mo(self, mo, nocc):
+    def ao2mo(self, mo_coeff, nocc):
         log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
         log.debug('transform (ia|jb)')
-        nmo = mo.shape[1]
+        nmo = mo_coeff.shape[1]
         nvir = nmo - nocc
-        co = mo[:,:nocc]
-        cv = mo[:,nocc:]
+        co = mo_coeff[:,:nocc]
+        cv = mo_coeff[:,nocc:]
         if self._scf._eri is not None and \
            (nocc*nvir*nmo**2/2*8 + (nocc*nvir)**2*8 \
             + self._scf._eri.nbytes)/1e6 < self.max_memory:
@@ -164,5 +165,5 @@ if __name__ == '__main__':
     dm1ref[:nocc,:nocc] = dm1occ[ ::2, ::2]+dm1occ[1::2,1::2]
     dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
     dm1ref = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
-    rdm1 = make_rdm1(pt, mf.mo_coeff, mf.mo_energy, nocc)[1]
+    rdm1 = make_rdm1(pt, mf.mo_coeff, mf.mo_energy, nocc)
     print(numpy.allclose(rdm1, dm1ref))

@@ -39,28 +39,13 @@ def tot_parity_odd(op, l, m):
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
         return (ox and gx)^(oy and gy)^(oz and gz)
 
-def basis_offset_for_atoms(atoms, basis_tab):
-    basoff = [0]
-    n = 0
-    for at in atoms:
-        symb = pyscf.gto.mole._symbol(at[0])
-        for b in basis_tab[symb]:
-            angl = b[0]
-            if isinstance(b[1], int):
-                nctr = b[2].__len__() - 1
-            else:
-                nctr = b[1].__len__() - 1
-            n += nctr * (angl*2+1)
-        basoff.append(n)
-    return n, basoff
-
 def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
     atoms = [(a[0], numpy.array(a[1])) for a in atoms]
     ops = param.OPERATOR_TABLE[gpname]
     chartab = param.CHARACTER_TABLE[gpname]
     nirrep = chartab.__len__()
     so = [[] for i in range(nirrep)]
-    nfn, basoff = basis_offset_for_atoms(atoms, basis_tab)
+    nfn, basoff = _basis_offset_for_atoms(atoms, basis_tab)
 
     for atom_ids in eql_atom_ids:
         at0 = atoms[atom_ids[0]]
@@ -70,13 +55,13 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                  for op in ops]
 
         ib = 0
-        for b in basis_tab[symb]:
+        if symb in basis_tab:
+            bas0 = basis_tab[symb]
+        else:
+            bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
+        for b in bas0:
             angl = b[0]
-            if isinstance(b[1], int):
-                nctr = b[2].__len__() - 1
-            else:
-                nctr = b[1].__len__() - 1
-            for i in range(nctr):
+            for i in range(_num_contract(b)):
                 for m in range(-angl,angl+1):
                     sign = [-1 if tot_parity_odd(op,angl,m) else 1 \
                                      for op in ops]
@@ -94,7 +79,7 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
         if len(c) > 0:
             so[ir] = numpy.array(c).T
         else:
-            so[ir] = numpy.empty((nfn,0))
+            so[ir] = numpy.zeros((nfn,0))
     return so
 
 def dump_symm_adapted_basis(mol, so):
@@ -106,6 +91,28 @@ def irrep_name(pgname, irrep_id):
 def symmetrize_matrix(mat, so):
     return [reduce(numpy.dot, (c.T,mat,c)) for c in so]
 
+def _basis_offset_for_atoms(atoms, basis_tab):
+    basoff = [0]
+    n = 0
+    for at in atoms:
+        symb = pyscf.gto.mole._symbol(at[0])
+        if symb in basis_tab:
+            bas0 = basis_tab[symb]
+        else:
+            bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
+        for b in bas0:
+            angl = b[0]
+            n += _num_contract(b) * (angl*2+1)
+        basoff.append(n)
+    return n, basoff
+
+def _num_contract(basis):
+    if isinstance(basis[1], int):
+# This branch should never be reached if basis_tab is formated by function mole.format_basis
+        nctr = len(basis[2]) - 1
+    else:
+        nctr = len(basis[1]) - 1
+    return nctr
 
 if __name__ == "__main__":
     h2o = pyscf.gto.Mole()

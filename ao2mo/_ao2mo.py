@@ -43,18 +43,6 @@ class AO2MOpt(object):
         libao2mo.CINTdel_optimizer(ctypes.byref(self._cintopt))
         libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
 
-def _count_ij(icount, jcount, symm=0):
-    if symm:
-        assert(icount == jcount)
-        return icount * (icount+1) / 2
-    else:
-        return icount*jcount
-
-def _get_num_threads():
-    libao2mo.omp_get_num_threads.restype = ctypes.c_int
-    nthreads = libao2mo.omp_get_num_threads()
-    return nthreads
-
 # if vout is not None, transform AO to MO in-place
 def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
            aosym='s1', mosym='s1', comp=1, ao2mopt=None, vout=None):

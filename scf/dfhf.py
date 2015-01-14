@@ -8,6 +8,7 @@ import scipy.linalg
 import pyscf.lib
 import pyscf.lib.logger as log
 from pyscf.scf import hf
+from pyscf.scf import uhf
 
 
 class RHF(hf.RHF):
@@ -29,21 +30,21 @@ class RHF(hf.RHF):
             self._ovlp = self.get_ovlp(mol)
             self._cderi = pyscf.df.incore.cholesky_eri(mol, auxbasis=self.auxbasis,
                                                        verbose=self.verbose)
-        vj = _make_vj(self, dm, hermi)
-        vk = _make_vk(self, dm, hermi)
+        vj = _make_j(self, dm, hermi)
+        vk = _make_k(self, dm, hermi)
         vhf = vj - vk * .5
         log.timer(self, 'vj and vk', *t0)
         return vhf
 
-class UHF(hf.UHF):
+class UHF(uhf.UHF):
     def __init__(self, *args, **kwargs):
-        hf.UHF.__init__(self, *args, **kwargs)
+        uhf.UHF.__init__(self, *args, **kwargs)
         self.auxbasis = 'weigend'
         self._cderi = None
         self._keys = self._keys.union(['auxbasis', '_cderi'])
 
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-        return _get_veff_uhf_(self, mol, dm, dm_last, vhf_last, hermi)
+        return _veff_uhf_(self, mol, dm, dm_last, vhf_last, hermi)
 
 
 class ROHF(hf.ROHF):
@@ -54,10 +55,10 @@ class ROHF(hf.ROHF):
         self._keys = self._keys.union(['auxbasis', '_cderi'])
 
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-        return _get_veff_uhf_(self, mol, dm, dm_last, vhf_last, hermi)
+        return _veff_uhf_(self, mol, dm, dm_last, vhf_last, hermi)
 
 
-def _get_veff_uhf_(mf, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+def _veff_uhf_(mf, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     t0 = (time.clock(), time.time())
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         mf._ovlp = mf.get_ovlp(mol)
@@ -65,19 +66,19 @@ def _get_veff_uhf_(mf, mol, dm, dm_last=0, vhf_last=0, hermi=1):
                                                  verbose=mf.verbose)
     naoaux,nao = mf._cderi.shape[:2]
     if len(dm) == 2:
-        vj = _make_vj(mf, dm[0]+dm[1], hermi)
-        vk = _make_vk(mf, dm, hermi)
+        vj = _make_j(mf, dm[0]+dm[1], hermi)
+        vk = _make_k(mf, dm, hermi)
         vhf = numpy.array((vj-vk[0], vj-vk[1]))
     else:
         dm = numpy.array(dm, copy=False)
         nd = len(dm) // 2
-        vj = _make_vj(mf, dm[:nd]+dm[nd:], hermi)
-        vk = _make_vk(mf, dm, hermi)
+        vj = _make_j(mf, dm[:nd]+dm[nd:], hermi)
+        vk = _make_k(mf, dm, hermi)
         vhf = numpy.array((vj-vk[:nd], vj-vk[nd:]))
     log.timer(mf, 'vj and vk', *t0)
     return vhf
 
-def _make_vj(mf, dms, hermi):
+def _make_j(mf, dms, hermi):
     cderi = mf._cderi
     def fvj(dm):
         nao = dm.shape[0]
@@ -87,7 +88,7 @@ def _make_vj(mf, dms, hermi):
         for i in range(nao):
             dmtril[i*(i+1)//2+i] *= .5
         vj = reduce(numpy.dot, (cderi, dmtril, cderi))
-        vj = pyscf.lib.unpack_tril(vj, hermi)
+        vj = pyscf.lib.unpack_tril(vj, 1)
         return vj
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         vj = fvj(dms)
@@ -97,7 +98,7 @@ def _make_vj(mf, dms, hermi):
 
 OCCDROP = 1e-8
 BLOCKDIM = 160
-def _make_vk(mf, dms, hermi):
+def _make_k(mf, dms, hermi):
     import pyscf.df
     from pyscf.ao2mo import _ao2mo
     s = mf._ovlp

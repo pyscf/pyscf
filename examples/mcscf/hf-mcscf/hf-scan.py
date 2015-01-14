@@ -23,14 +23,14 @@ def run(b, caslst):
     m = scf.RHF(mol)
     m.chkfile = 'hf-scan.chk'
     m.init_guess = 'chkfile'
-    m.set_mo_occ = scf.addons.dynamic_occ(m, 1e-3)
+    m.get_occ = scf.addons.dynamic_occ(m, 1e-3)
     ehf.append(m.scf())
 
     mc = mcscf.CASSCF(mol, m, 6, 6)
     mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caslst, 1)
     e1 = mc.mc1step(mo)[0]
     mcscf.addons.map2hf(mc)
-    emc.append(e1+mol.nuclear_repulsion())
+    emc.append(e1+mol.energy_nuc())
     return ehf, emc
 
 for b in numpy.arange(4.0,3.1-.01,-.1):

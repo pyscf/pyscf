@@ -50,10 +50,10 @@ class VHFOpt(object):
                       c_env.ctypes.data_as(ctypes.c_void_p))
 
     @property
-    def direct_scf_threshold(self):
+    def direct_scf_tol(self):
         return self._this.contents.direct_scf_cutoff
-    @direct_scf_threshold.setter
-    def direct_scf_threshold(self, v):
+    @direct_scf_tol.setter
+    def direct_scf_tol(self, v):
         self._this.contents.direct_scf_cutoff = v
 
     def set_dm_(self, dm, atm, bas, env):
@@ -181,7 +181,10 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
     funpack = _fpointer('CVHFunpack_nrblock2tril')
     fdot = _fpointer('CVHFfill_dot_nrs8')
     fvj = _fpointer('CVHFnrs8_tridm_vj')
-    fvk = _fpointer('CVHFnrs8_jk_s2il')
+    if hermi == 1:
+        fvk = _fpointer('CVHFnrs8_jk_s2il')
+    else:
+        fvk = _fpointer('CVHFnrs8_jk_s1il')
     fjk = (ctypes.c_void_p*(2*n_dm))()
     dm1 = (ctypes.c_void_p*(2*n_dm))()
     for i in range(n_dm):
@@ -214,9 +217,12 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
         vjk = vjk.reshape(2,nao,nao)
     return vjk
 
-# call all fjk for each dm, the return array has len(dms)*len(namefjk)*ncomp components
-def direct_mapdm(intor, cfdot, cunpack, namefjk,
+# call all fjk for each dm, the return array has len(dms)*len(jkdescript)*ncomp components
+# jkdescript: 'ij->s1kl', 'kl->s2ij', ...
+def direct_mapdm(intor, intsymm, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None):
+    assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
+                       'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
@@ -230,11 +236,11 @@ def direct_mapdm(intor, cfdot, cunpack, namefjk,
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-    if isinstance(namefjk, str):
+    if isinstance(jkdescript, str):
         njk = 1
-        namefjk = (namefjk,)
+        jkdescript = (jkdescript,)
     else:
-        njk = len(namefjk)
+        njk = len(jkdescript)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -247,12 +253,25 @@ def direct_mapdm(intor, cfdot, cunpack, namefjk,
         cintor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-    fdot = _fpointer(cfdot)
-    funpack = _fpointer(cunpack)
+    dotsym = _INTSYMAP[intsymm]
+    fdot = _fpointer('CVHFfill_dot_nr'+dotsym)
+
+# nr_direct driver loop over kl pair. For each kl, funpack fills ij
+    unpackname, unpackijas = _INTUNPACKMAP_NR[intsymm]
+    funpack = _fpointer(unpackname)
+
+    if isinstance(jkdescript, str):
+        descr_sym = [[jkdescript.split('->')]]
+    else:
+        descr_sym = [x.split('->') for x in jkdescript]
+# _swap_ik_jl because the implicit transposing in funpack.
+# the resulting CVHFnr??_??_s??? can match the funpack function
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dm1 = (ctypes.c_void_p*(njk*n_dm))()
-    for i, symb in enumerate(namefjk):
-        f1 = _fpointer(symb)
+    for i, (dmsym, vsym) in enumerate(descr_sym):
+        f1 = _fpointer('CVHFnr%s_%s_%s'%(unpackijas,
+                                         _swap_ik_jl(dmsym),
+                                         _swap_ik_jl(vsym).replace('kj','jk')))
         for j in range(n_dm):
             assert(dms[j].flags.c_contiguous)
             dm1[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
@@ -270,6 +289,9 @@ def direct_mapdm(intor, cfdot, cunpack, namefjk,
     if vhfopt is None:
         libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
+    for i, (dmsym, vsym) in enumerate(descr_sym):
+        if 's1il' == vsym: # which is computed as CVHFnr?_?_s1jk
+            vjk[i] = vjk[i].transpose(0,2,1)
     if n_dm * ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
     if njk == 1:
@@ -277,8 +299,11 @@ def direct_mapdm(intor, cfdot, cunpack, namefjk,
     return vjk
 
 # for density matrices in dms, bind each dm to a jk operator
-def direct_bindm(intor, cfdot, cunpack, namefjk,
+# jkdescript: 'ij->s1kl', 'kl->s2ij', ...
+def direct_bindm(intor, intsymm, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None):
+    assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
+                       'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
@@ -291,11 +316,11 @@ def direct_bindm(intor, cfdot, cunpack, namefjk,
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-    if isinstance(namefjk, str):
+    if isinstance(jkdescript, str):
         njk = 1
-        namefjk = (namefjk,)
+        jkdescript = (jkdescript,)
     else:
-        njk = len(namefjk)
+        njk = len(jkdescript)
     assert(njk == n_dm)
 
     if vhfopt is None:
@@ -309,18 +334,31 @@ def direct_bindm(intor, cfdot, cunpack, namefjk,
         cintor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-    fdot = _fpointer(cfdot)
-    funpack = _fpointer(cunpack)
+    dotsym = _INTSYMAP[intsymm]
+    fdot = _fpointer('CVHFfill_dot_nr'+dotsym)
+
+# nr_direct driver loop over kl pair. For each kl, funpack fills ij
+    unpackname, unpackijas = _INTUNPACKMAP_NR[intsymm]
+    funpack = _fpointer(unpackname)
+
+    if isinstance(jkdescript, str):
+        descr_sym = [[jkdescript.split('->')]]
+    else:
+        descr_sym = [x.split('->') for x in jkdescript]
+# _swap_ik_jl because the implicit transposing in nr_direct driver
+# swap ik, jl, then the resulting CVHFnr??_??_s??? can handle it
     fjk = (ctypes.c_void_p*(n_dm))()
     dm1 = (ctypes.c_void_p*(n_dm))()
-    for i, symb in enumerate(namefjk):
-        f1 = _fpointer(symb)
+    for i, (dmsym, vsym) in enumerate(descr_sym):
+        f1 = _fpointer('CVHFnr%s_%s_%s'%(unpackijas,
+                                         _swap_ik_jl(dmsym),
+                                         _swap_ik_jl(vsym).replace('kj','jk')))
         assert(dms[i].flags.c_contiguous)
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
     vjk = numpy.empty((njk,ncomp,nao,nao))
 
-    fdrv(cintor, funpack, fdot, fjk, dm1,
+    fdrv(cintor, fdot, funpack, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(n_dm), ctypes.c_int(ncomp),
          cintopt, cvhfopt,
@@ -331,6 +369,9 @@ def direct_bindm(intor, cfdot, cunpack, namefjk,
     if vhfopt is None:
         libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
+    for i, (dmsym, vsym) in enumerate(descr_sym):
+        if 's1il' == vsym: # which is computed as CVHFnr?_?_s1jk
+            vjk[i] = vjk[i].transpose(0,2,1)
     if ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
     if njk == 1:
@@ -377,8 +418,10 @@ def incore_o2(eri, dm, hermi=1):
 
 ################################################################
 # relativistic
-def rdirect_mapdm(intor, cfdot, namefjk,
+def rdirect_mapdm(intor, intsymm, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None):
+    assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
+                       'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
@@ -392,11 +435,11 @@ def rdirect_mapdm(intor, cfdot, namefjk,
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-    if isinstance(namefjk, str):
+    if isinstance(jkdescript, str):
         njk = 1
-        namefjk = (namefjk,)
+        jkdescript = (jkdescript,)
     else:
-        njk = len(namefjk)
+        njk = len(jkdescript)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -409,11 +452,20 @@ def rdirect_mapdm(intor, cfdot, namefjk,
         cintor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
-    fdot = _fpointer(cfdot)
+    dotsym = _INTSYMAP[intsymm]
+    fdot = _fpointer('CVHFdot_r'+dotsym)
+
+    unpackas = _INTUNPACKMAP_R[intsymm]
+    if isinstance(jkdescript, str):
+        descr_sym = [[jkdescript.split('->')]]
+    else:
+        descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dm1 = (ctypes.c_void_p*(njk*n_dm))()
-    for i, symb in enumerate(namefjk):
-        f1 = _fpointer(symb)
+    for i, (dmsym, vsym) in enumerate(descr_sym):
+# Unlike nr_direct driver, there are no funpack in r_direct driver. ik, jl
+# should not be swapped
+        f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         for j in range(n_dm):
             assert(dms[j].flags.c_contiguous)
             dm1[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
@@ -438,8 +490,10 @@ def rdirect_mapdm(intor, cfdot, namefjk,
     return vjk
 
 # for density matrices in dms, bind each dm to a jk operator
-def rdirect_bindm(intor, cfdot, namefjk,
+def rdirect_bindm(intor, intsymm, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None):
+    assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
+                       'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
@@ -452,11 +506,11 @@ def rdirect_bindm(intor, cfdot, namefjk,
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-    if isinstance(namefjk, str):
+    if isinstance(jkdescript, str):
         njk = 1
-        namefjk = (namefjk,)
+        jkdescript = (jkdescript,)
     else:
-        njk = len(namefjk)
+        njk = len(jkdescript)
     assert(njk == n_dm)
 
     if vhfopt is None:
@@ -470,11 +524,20 @@ def rdirect_bindm(intor, cfdot, namefjk,
         cintor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
-    fdot = _fpointer(cfdot)
+    dotsym = _INTSYMAP[intsymm]
+    fdot = _fpointer('CVHFdot_r'+dotsym)
+
+    unpackas = _INTUNPACKMAP_R[intsymm]
+    if isinstance(jkdescript, str):
+        descr_sym = [[jkdescript.split('->')]]
+    else:
+        descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(n_dm))()
     dm1 = (ctypes.c_void_p*(n_dm))()
-    for i, symb in enumerate(namefjk):
-        f1 = _fpointer(symb)
+    for i, (dmsym, vsym) in enumerate(descr_sym):
+# Unlike nr_direct driver, there are no funpack in r_direct driver. ik, jl
+# should not be swapped
+        f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         assert(dms[i].flags.c_contiguous)
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
@@ -497,3 +560,47 @@ def rdirect_bindm(intor, cfdot, namefjk,
         vjk = vjk.reshape(vjk.shape[1:])
     return vjk
 
+# 'a4ij': anti-symm between ij, symm between kl
+# 'a4kl': anti-symm between kl, symm between ij
+# 'a2ij': anti-symm between ij,
+# 'a2kl': anti-symm between kl,
+_INTSYMAP= {
+    's8'  : 's8'  ,
+    's4'  : 's4'  ,
+    's2ij': 's2ij',
+    's2kl': 's2kl',
+    's1'  : 's1'  ,
+    'a4ij': 's4'  ,
+    'a4kl': 's4'  ,
+    'a2ij': 's2ij',
+    'a2kl': 's2kl',
+}
+
+_INTUNPACKMAP_R = {
+    's8'  : 's8'  ,
+    's4'  : 's4'  ,
+    's2ij': 's2ij',
+    's2kl': 's2kl',
+    's1'  : 's1'  ,
+    'a4ij': 'ah4'  ,
+    'a4kl': 'ha4'  ,
+    'a2ij': 'ah2ij',
+    'a2kl': 'ha2kl',
+}
+
+_INTUNPACKMAP_NR = {
+    's8  ': ('CVHFunpack_nrblock2tril'      , 's8'  ),
+    's4  ': ('CVHFunpack_nrblock2trilu'     , 's2ij'),
+    's2ij': ('CVHFunpack_nrblock2trilu'     , 's1'  ),
+    's2kl': ('CVHFunpack_nrblock2rect'      , 's2ij'),
+    's1'  : ('CVHFunpack_nrblock2rect'      , 's1'  ),
+    'a4ij': ('CVHFunpack_nrblock2trilu_anti', 's2ij'),
+    'a2ij': ('CVHFunpack_nrblock2trilu_anti', 's1'  ),
+    'a4kl': ('CVHFunpack_nrblock2trilu'     , 's2ij'),
+    'a2kl': ('CVHFunpack_nrblock2rect'      , 's2ij'),
+}
+
+def _swap_ik_jl(s):
+    s = s.replace('i','@').replace('k','i').replace('@','k')
+    s = s.replace('j','@').replace('l','j').replace('@','l')
+    return s

@@ -7,6 +7,7 @@ from pyscf.mcscf import casci_symm
 from pyscf.mcscf import addons
 from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step_uhf
+from pyscf.mcscf.addons import *
 
 def CASSCF(mol, mf, *args, **kwargs):
     if mol.symmetry:

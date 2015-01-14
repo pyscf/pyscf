@@ -22,11 +22,11 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
 
-    def casci(self, mo=None, ci0=None, **cikwargs):
-        if mo is None:
-            mo = self.mo_coeff
+    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
         else:
-            self.mo_coeff = mo
+            self.mo_coeff = mo_coeff
         if ci0 is None:
             ci0 = self.ci
 
@@ -46,7 +46,7 @@ class CASCI(casci.CASCI):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci = \
-                casci.kernel(self, mo, ci0=ci0, verbose=self.verbose, **cikwargs)
+                casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci
 
     def get_hcore(self, mol=None):
@@ -76,12 +76,12 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
     mc = CASCI(mol, m, 4, (3,1))
     mc.fcisolver = pyscf.fci.direct_spin1
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(emc - -75.439016172976)

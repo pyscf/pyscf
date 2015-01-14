@@ -292,9 +292,7 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
 
 /*
  * drv loop over kl, generate eris of ij for given kl, call fjk to
- * calculate vj, vk.  There is an implicit TRANSPOSING between ij,kl in
- * funpack.  So fdot of s2kl should call fjk of s2ij and fdot of
- * s2ij should call fjk of s2kl
+ * calculate vj, vk.
  * 
  * n_dm is the number of dms for one [array(ij|kl)],
  * ncomp is the number of components that produced by intor

@@ -145,6 +145,31 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(l, 'C1')
         self.assertEqual(symm.symm_identical_atoms(l,atoms), [(i,) for i in range(4)])
 
+    def test_detect_symm_line(self):
+        atoms = [[1, ( 0., 0., 0.)],
+                 [2, ( 0., 2., 0.)], ]
+        l = symm.detect_symm(atoms)[0]
+        self.assertEqual(l, 'C2v')
+        atoms = [[1, ( 0., 0., 0.)],
+                 [2, ( 0., 2., 0.)],
+                 [2, ( 0., 4., 0.)],
+                 [1, ( 0., 6., 0.)], ]
+        l = symm.detect_symm(atoms)[0]
+        self.assertEqual(l, 'D2h')
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,3],[1,2]])
+
+    def test_detect_symm_c2(self):
+        atoms = [[1, ( 1., 0., 1.)],
+                 [1, ( 1., 0.,-1.)],
+                 [4, ( 0.,-3., 2.)],
+                 [4, ( 0., 3.,-2.)]]
+        l,center,axis = symm.detect_symm(atoms)
+        coord = numpy.array([x[1] for x in atoms])
+        coord = numpy.einsum('ij,kj->ki', axis, coord-center)
+        atoms = [[atoms[i][0],coord[i]] for i in range(len(atoms))]
+        self.assertEqual(l, 'C2')
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,1],[2,3]])
+
 
 if __name__ == "__main__":
     print("Full Tests geom")

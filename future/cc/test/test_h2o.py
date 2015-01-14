@@ -24,8 +24,8 @@ rhf.scf()
 class KnowValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(mol, rhf)
-        mcc.conv_threshold = 1e-9
-        mcc.conv_threshold_normt = 1e-7
+        mcc.conv_tol = 1e-9
+        mcc.conv_tol_normt = 1e-7
         eris = mcc.ao2mo()
         emp2, t1, t2 = mcc.init_amps(eris)
         self.assertAlmostEqual(abs(t2).sum(), 4.9556571218177, 12)

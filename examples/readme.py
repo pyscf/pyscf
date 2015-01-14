@@ -60,7 +60,7 @@ rhf = scf.RHF(mol)
 # RHF.max_memory        copy from Mole.verbose. It canNOT be controled by
 #                       command line options directly
 # RHF.chkfile           file to store MO coefficients, orbital energies
-# RHF.conv_threshold     default is 1e-10
+# RHF.conv_tol     default is 1e-10
 # RHF.max_cycle     default is 50
 # RHF.init_guess = 'name'  'name' is case-insensitivecan. It be one of
 #                       '1e': first density matrix from Hcore

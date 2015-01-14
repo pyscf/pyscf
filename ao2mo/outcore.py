@@ -26,10 +26,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             intor='cint2e_sph', aosym='s4', comp=1,
             max_memory=1000, ioblk_size=256, verbose=0, compact=True):
     time_0pass = (time.clock(), time.time())
-    if isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
+    elif isinstance(verbose, int):
+        log = logger.Logger(mol.stdout, verbose)
     else:
         log = logger.Logger(mol.stdout, mol.verbose)
 
@@ -47,12 +47,12 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         nao_pair = nao * nao
 
-    if compact and ijsame:
+    if compact and ijsame and aosym in ('s4', 's2ij'):
         nij_pair = nmoi*(nmoi+1) // 2
     else:
         nij_pair = nmoi*nmoj
 
-    if compact and klsame:
+    if compact and klsame and aosym in ('s4', 's2kl'):
         log.debug('k-mo == l-mo')
         klmosym = 's2'
         nkl_pair = nmok*(nmok+1) // 2
@@ -148,10 +148,10 @@ def half_e1(mol, mo_coeffs, swapfile,
             max_memory=1000, ioblk_size=256, verbose=0, compact=True,
             ao2mopt=None):
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
+    elif isinstance(verbose, int):
+        log = logger.Logger(mol.stdout, verbose)
     else:
         log = logger.Logger(mol.stdout, mol.verbose)
 
@@ -166,7 +166,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     else:
         nao_pair = nao * nao
 
-    if compact and ijsame:
+    if compact and ijsame and aosym in ('s4', 's2ij'):
         log.debug('i-mo == j-mo')
         ijmosym = 's2'
         nij_pair = nmoi*(nmoi+1) // 2
@@ -264,7 +264,7 @@ def info_swap_block(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 
 # based on the size of buffer, dynamic range of AO-shells for each buffer
 def info_shell_ranges(mol, buflen, aosym):
-    bas_dim = [(mol.angular_of_bas(i)*2+1)*(mol.nctr_of_bas(i)) \
+    bas_dim = [(mol.bas_angular(i)*2+1)*(mol.bas_nctr(i)) \
                for i in range(mol.nbas)]
     ao_loc = [0]
     for i in bas_dim:
@@ -317,7 +317,7 @@ if __name__ == '__main__':
     mol.basis = {'H': 'cc-pvtz',
                  'O': 'cc-pvtz',}
     mol.build()
-    nao = mol.num_NR_cgto()
+    nao = mol.nao_nr()
     npair = nao*(nao+1)//2
 
     rhf = scf.RHF(mol)

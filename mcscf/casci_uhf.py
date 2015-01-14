@@ -65,7 +65,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
                                            ci0=ci0, **cikwargs)
 
     t1 = log.timer('FCI solver', *t1)
-    e_tot = e_cas + energy_core
+    e_tot = e_cas + energy_core + casci.mol.energy_nuc()
     log.info('CASCI E = %.15g', e_tot)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
@@ -99,7 +99,7 @@ class CASCI(object):
         self.fcisolver = pyscf.fci.direct_uhf.FCISolver(mol)
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 30
-        self.fcisolver.conv_threshold = 1e-8
+        self.fcisolver.conv_tol = 1e-8
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
@@ -130,12 +130,12 @@ class CASCI(object):
     def get_veff(self, mol, dm):
         return self._scf.get_veff(mol, dm)
 
-    def ao2mo(self, mo):
-        nao, nmo = mo[0].shape
+    def ao2mo(self, mo_coeff):
+        nao, nmo = mo_coeff[0].shape
         if self._scf._eri is not None:
             #and nao*nao*nmo*nmo*3/4*8/1e6 > self.max_memory
-            moab = numpy.hstack((mo[0], mo[1]))
-            na = mo[0].shape[1]
+            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
+            na = mo_coeff[0].shape[1]
             nab = moab.shape[1]
             eri = pyscf.ao2mo.incore.full(self._scf._eri, moab)
             eri = pyscf.ao2mo.restore(1, eri, nab)
@@ -144,10 +144,10 @@ class CASCI(object):
             eri_bb = eri[na:,na:,na:,na:].copy()
         else:
             ftmp = tempfile.NamedTemporaryFile()
-            moab = numpy.hstack((mo[0], mo[1]))
+            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
             pyscf.ao2mo.outcore.full(self.mol, moab, ftmp.name,
                                      verbose=self.verbose)
-            na = mo[0].shape[1]
+            na = mo_coeff[0].shape[1]
             nab = moab.shape[1]
             with h5py.File(ftmp.name, 'r') as feri:
                 eri = pyscf.ao2mo.restore(1, numpy.array(feri['eri_mo']), nab)
@@ -157,9 +157,9 @@ class CASCI(object):
 
         return (eri_aa, eri_ab, eri_bb)
 
-    def casci(self, mo=None, ci0=None, **cikwargs):
-        if mo is None:
-            mo = self.mo_coeff
+    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
         if ci0 is None:
             ci0 = self.ci
 
@@ -168,8 +168,15 @@ class CASCI(object):
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci = \
-                kernel(self, mo, ci0=ci0, verbose=self.verbose, **cikwargs)
+                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci
+
+    def cas_natorb(self, mo_coeff=None, ci0=None):
+        return self.cas_natorb(mo_coeff, ci0)
+    def cas_natorb_(self, mo_coeff=None, ci0=None):
+        from pyscf.mcscf import addons
+        self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
+        return self.ci, self.mo_coeff
 
 
 
@@ -191,7 +198,7 @@ if __name__ == '__main__':
     m = scf.UHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 4, (2,2))
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
@@ -220,6 +227,6 @@ if __name__ == '__main__':
     m = scf.UHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 9, (4,4))
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)

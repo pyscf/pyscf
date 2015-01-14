@@ -10,6 +10,8 @@ from math import sqrt, factorial
 from functools import reduce
 import numpy
 
+import os; os.stderr.write('TODO: test Dmatrix\n')
+
 def dmatrix(l, alpha, beta, gamma):
     if l == 0:
         return numpy.eye(1)

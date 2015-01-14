@@ -149,11 +149,11 @@ def make_hdiag(h1e, eri, norb, nelec):
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     h1e_a, h1e_b = h1e
-    h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb)
-    h2e_ab = pyscf.ao2mo.restore(1, eri[1], norb)
-    h2e_bb = pyscf.ao2mo.restore(1, eri[2], norb)
-    f1e_a = h1e_a - numpy.einsum('...,jiik->jk', .5, h2e_aa)
-    f1e_b = h1e_b - numpy.einsum('...,jiik->jk', .5, h2e_bb)
+    h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
+    h2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
+    h2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
+    f1e_a = h1e_a - numpy.einsum('jiik->jk', h2e_aa) * .5
+    f1e_b = h1e_b - numpy.einsum('jiik->jk', h2e_bb) * .5
     f1e_a *= 1./(nelec[0]+nelec[1])
     f1e_b *= 1./(nelec[0]+nelec[1])
     for k in range(norb):
@@ -209,45 +209,14 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, **kwargs):
-    if isinstance(nelec, int):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
-    eri = (numpy.ascontiguousarray(eri[0]),
-           numpy.ascontiguousarray(eri[1]),
-           numpy.ascontiguousarray(eri[2]))
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
-
-    hdiag = make_hdiag(h1e, eri, norb, nelec)
-    addr, h0 = pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*nb:
-        ci0 = numpy.empty((na*nb))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
-            return pw[0], ci0.reshape(na,nb)
-
-    precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
-    #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
-
-    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
-        return hc.reshape(-1)
-
-    if ci0 is None:
-        ci0 = numpy.zeros(na*nb)
-        ci0[0] = 1
-    else:
-        ci0 = ci0.reshape(-1)
-
-    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=1e-8, lindep=1e-8)
-    return e, c.reshape(na,nb)
+def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, tol=1e-8,
+           lindep=1e-8, max_cycle=50, **kwargs):
+    cis = FCISolver(None)
+    cis.level_shift = eshift
+    cis.conv_tol = tol
+    cis.lindep = lindep
+    cis.max_cycle = max_cycle
+    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -298,9 +267,9 @@ class FCISolver(direct_spin1.FCISolver):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0, precond):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, log=self.verbose)
+                                  self.max_memory, verbose=self.verbose)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -316,7 +285,7 @@ class FCISolver(direct_spin1.FCISolver):
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
-        return direct_spin1.numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+        return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)

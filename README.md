@@ -86,57 +86,30 @@ Known problems
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  DYLD_LIBRARY_PATH
 
+* On debian-6, the system default BLAS library (libf77blas.so.3gf) might
+  have bug in dsyrk function.  It occasionally results in NaN in mcscf
+  solver.  To fix this, change to other BLAS vendors e.g. to MKL
+
+        BLA_VENDOR=Intel10_64lp cmake ..
+
+* tests fail
+  mcscf/test/test_addons.py    test_spin_square
+  mcscf/test/test_c2h4.py      test_mc1step_4o4e
+  mcscf/test/test_c2h4.py      test_mc2step_4o4e
+
+
+* Program exits with
+```
+Exception AttributeError: "'NoneType' object has no attribute 'byref'" in
+<bound method VHFOpt.__del__ of <pyscf.scf._vhf.VHFOpt object at 0x2b52390>> ignored
+```
+  It was observed when pyscf is used with other inspectors like
+  profiler, pdb etc.
+
+
+
 
 Bug report
 ----------
 Qiming Sun <osirpt.sun@gmail.com>
 
-
-Changes log
------------
-Version 0.1 (2014-05-03):
-  * Setup pyscf
-
-Version 0.2 (2014-05-08):
-  * Integral transformation
-
-Version 0.3 (2014-07-03):
-  * Change import layout
-
-Version 0.4 (2014-08-17):
-  * Module "future" for upcoming functions
-  * One-line command to run QC calculation with pyscf
-  * Fix bug of AO to MO transformation in OpenMP environment
-
-Version 0.5 (2014-10-01):
-  * Change basis format
-  * Remove Cython dependence
-  * Upgrade dft to use libxc-2.0.0
-  * Add DFT, FCI, CASSCF, HF-gradients (NR and R), HF-NMR (NR and R)
-
-Version 0.6 (2014-10-17):
-  * Fix bug in dhf
-  * add future/lo for localized orbital
-
-Version 0.7 (2014-11-12):
-  * Fix memory leaks
-  * Runtime keywords checking
-  * Add MP2 density matrix
-  * Add FCI based on uhf integrals
-  * Add CCSD
-
-Version 0.8 (2014-12-21):
-  * Support OS X
-  * MCSCF for triplet
-  * Add symmetry support for MCSCF
-  * Add UHF-MCSCF
-  * Add 2-step DMRGSCF, using Block and CheMPS2 as FCI solver
-  * Add ROHF
-
-Version 0.9 (2015-1-4):
-  * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
-  * Solve Python 3.x compatibility
-  * general AO2MO integral transformation
-  * Add density fitting HF, DF-MP2
-
-Version 0.10 (2015-2-?):

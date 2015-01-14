@@ -255,7 +255,7 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
         double tmp;
         _LinkT *tab;
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nstrb);
-        compress_link(clink, link_indexa, nstrb, nlinkb);
+        compress_link(clink, link_indexb, nstrb, nlinkb);
 
         for (str0 = 0; str0 < nstra; str0++) {
                 pci1 = ci1 + str0 * (unsigned long)nstrb;

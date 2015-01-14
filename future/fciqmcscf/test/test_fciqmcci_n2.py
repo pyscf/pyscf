@@ -10,7 +10,7 @@ from pyscf import fciqmcscf
 b = 1.4
 mol = gto.Mole()
 mol.build(
-verbose = 5,
+verbose = 0,
 output = None,
 atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
@@ -18,7 +18,7 @@ atom = [
 basis = {'N': 'ccpvdz', },
 )
 m = scf.RHF(mol)
-m.conv_threshold = 1e-9
+m.conv_tol = 1e-9
 m.scf()
 
 

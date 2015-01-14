@@ -3,6 +3,7 @@
 import ctypes
 import unittest
 from functools import reduce
+import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -34,6 +35,8 @@ nbas = ctypes.c_int(c_bas.shape[0])
 
 class KnowValues(unittest.TestCase):
     def test_nroutcore_grad(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        erifile = ftmp.name
         eri_ao = numpy.empty((3,nao,nao,nao,nao))
         ip = 0
         for i in range(mol.nbas):
@@ -56,9 +59,7 @@ class KnowValues(unittest.TestCase):
         eriref = numpy.einsum('nipkl,pj->nijkl', eriref, mo)
         eriref = numpy.einsum('nijpl,pk->nijkl', eriref, mo)
         eriref = numpy.einsum('nijkp,pl->nijkl', eriref, mo)
-        eriref = eriref.transpose(0,1,2,3,4)
 
-        erifile = 'h2oeri.h5'
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
                            intor='cint2e_ip1_sph', aosym='s2kl', comp=3,
                            max_memory=10, ioblk_size=5, compact=False)
@@ -66,6 +67,68 @@ class KnowValues(unittest.TestCase):
         eri1 = numpy.array(feri['eri_mo']).reshape(3,nao,nao,nao,nao)
         self.assertTrue(numpy.allclose(eri1, eriref))
 
+    def test_nroutcore_eri(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        erifile = ftmp.name
+        eri_ao = numpy.empty((nao,nao,nao,nao))
+        ip = 0
+        for i in range(mol.nbas):
+            jp = 0
+            for j in range(mol.nbas):
+                kp = 0
+                for k in range(mol.nbas):
+                    lp = 0
+                    for l in range(mol.nbas):
+                        buf = gto.moleintor.getints_by_shell('cint2e_sph',
+                                                             (i,j,k,l), c_atm,
+                                                             c_bas, c_env, 1)
+                        di,dj,dk,dl = buf.shape
+                        eri_ao[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
+                        lp += dl
+                    kp += dk
+                jp += dj
+            ip += di
+        eriref = numpy.einsum('pjkl,pi->ijkl', eri_ao, mo)
+        eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)
+        eriref = numpy.einsum('ijpl,pk->ijkl', eriref, mo)
+        eriref = numpy.einsum('ijkp,pl->ijkl', eriref, mo)
+
+        ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
+                           intor='cint2e_sph', aosym='s1', comp=1,
+                           max_memory=10, ioblk_size=5)
+        feri = h5py.File(erifile)
+        eri1 = numpy.array(feri['eri_mo']).reshape(nao,nao,nao,nao)
+        self.assertTrue(numpy.allclose(eri1, eriref))
+
+        ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
+                           intor='cint2e_sph', aosym='s2ij', comp=1,
+                           max_memory=10, ioblk_size=5)
+        feri = h5py.File(erifile)
+        eri1 = s2ij_s1(1, numpy.array(feri['eri_mo']), nao)
+        eri1 = eri1.reshape(nao,nao,nao,nao)
+        self.assertTrue(numpy.allclose(eri1, eriref))
+
+        ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
+                           intor='cint2e_sph', aosym='s2kl', comp=1,
+                           max_memory=10, ioblk_size=5)
+        feri = h5py.File(erifile)
+        eri1 = s2kl_s1(1, numpy.array(feri['eri_mo']), nao)
+        eri1 = eri1.reshape(nao,nao,nao,nao)
+        self.assertTrue(numpy.allclose(eri1, eriref))
+
+def s2ij_s1(symmetry, eri, norb):
+    idx = numpy.tril_indices(norb)
+    eri1 = numpy.empty((norb,norb,norb,norb))
+    eri1[idx] = eri.reshape(-1,norb,norb)
+    eri1[idx[1],idx[0]] = eri.reshape(-1,norb,norb)
+    return eri1
+
+def s2kl_s1(symmetry, eri, norb):
+    idx = numpy.tril_indices(norb)
+    eri1 = numpy.empty((norb,norb,norb,norb))
+    eri1[:,:,idx[0],idx[1]] = eri.reshape(norb,norb,-1)
+    eri1[:,:,idx[1],idx[0]] = eri.reshape(norb,norb,-1)
+    return eri1
 
 if __name__ == '__main__':
     print 'Full Tests for outcore'

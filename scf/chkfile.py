@@ -53,6 +53,8 @@ def dump_scf(mol, chkfile, hf_energy, mo_energy, mo_occ, mo_coeff):
             del(fh5['scf'])
     else:
         fh5 = h5py.File(chkfile, 'w')
+    if 'mol' not in fh5:
+        fh5['mol'] = format(mol.pack())
     fh5['scf/hf_energy'] = hf_energy
     fh5['scf/mo_energy'] = mo_energy
     fh5['scf/mo_occ'   ] = mo_occ

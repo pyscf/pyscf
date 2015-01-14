@@ -16,12 +16,10 @@ def full(eri_ao, mo_coeff, verbose=0, compact=True):
 
 # It consumes two times of the memory needed by MO integrals
 def general(eri_ao, mo_coeffs, verbose=0, compact=True):
-    if isinstance(verbose, int):
-        log = logger.Logger(sys.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(sys.stdout, 0)
+        log = logger.Logger(sys.stdout, verbose)
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])

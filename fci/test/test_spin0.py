@@ -53,6 +53,8 @@ class KnowValues(unittest.TestCase):
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
         self.assertAlmostEqual(e, -9.1491239692, 8)
+        e = fci.direct_spin0.energy(h1e, g2e, c, norb, nelec)
+        self.assertAlmostEqual(e, -9.1491239692, 8)
 
     def test_rdm1(self):
         dm1ref = fci.direct_ms0.make_rdm1(ci0, norb, nelec)
