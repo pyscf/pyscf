@@ -19,22 +19,22 @@ class AtomSphericAverageRHF(hf.RHF):
     def dump_flags(self):
         hf.RHF.dump_flags(self)
         log.debug(self.mol, 'occupation averaged SCF for atom  %s', \
-                  self.mol.symbol_of_atm(0))
+                  self.mol.atom_symbol(0))
 
     def eig(self, f, s):
         atm = self.mol
-        symb = atm.symbol_of_atm(0)
+        symb = atm.atom_symbol(0)
         nuc = gto.mole._charge(symb)
         idx_by_l = [[] for i in range(6)]
         i0 = 0
         for ib in range(atm.nbas):
-            l = atm.angular_of_bas(ib)
-            nc = atm.nctr_of_bas(ib)
+            l = atm.bas_angular(ib)
+            nc = atm.bas_nctr(ib)
             i1 = i0 + nc * (l*2+1)
             idx_by_l[l].extend(range(i0, i1, l*2+1))
             i0 = i1
 
-        nbf = atm.num_NR_function()
+        nbf = atm.nao_nr()
         self._occ = numpy.zeros(nbf)
         mo_c = numpy.zeros((nbf, nbf))
         mo_e = numpy.zeros(nbf)
@@ -67,19 +67,19 @@ class AtomSphericAverageRHF(hf.RHF):
                     idx += 1
         return mo_e, mo_c
 
-    def set_occ(self, mo_energy, mo_coeff):
+    def get_occ(self, mo_energy, mo_coeff):
         return self._occ
 
     def make_rdm1(self, mo_coeff, mo_occ):
         mo = mo_coeff[:,mo_occ>0]
         return numpy.dot(mo*mo_occ[mo_occ>0], mo.T)
 
-    def scf_cycle(self, mol, *args, **keys):
+    def scf(self, *args, **keys):
         self.build()
-        res = hf.scf_cycle(mol, self, *args, dump_chk=False, **keys)
+        res = hf.kernel(self, *args, dump_chk=False, **keys)
         return res
 
-def get_atm_nrhf_result(mol):
+def get_atm_nrhf(mol):
     atm_scf_result = {}
     for a, b in mol.basis.items():
         atm = gto.Mole()
@@ -92,9 +92,10 @@ def get_atm_nrhf_result(mol):
                 atm.make_env(atm.atom, atm.basis, atm._env)
         atm.natm = atm._atm.__len__()
         atm.nbas = atm._bas.__len__()
+        atm._built = True
         atm_hf = AtomSphericAverageRHF(atm)
         atm_hf.verbose = 0
-        atm_scf_result[a] = atm_hf.scf_cycle(atm)[1:]
+        atm_scf_result[a] = atm_hf.scf()[1:]
         atm_hf._eri = None
     mol.stdout.flush()
     return atm_scf_result
@@ -124,4 +125,4 @@ if __name__ == '__main__':
 
     mol.basis = {"N": '6-31g'}
     mol.build()
-    print(get_atm_nrhf_result(mol))
+    print(get_atm_nrhf(mol))

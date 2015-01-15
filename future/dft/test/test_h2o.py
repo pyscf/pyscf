@@ -42,6 +42,14 @@ class KnowValues(unittest.TestCase):
         method.xc = 'b3lyp'
         self.assertAlmostEqual(method.scf(), -76.384948370970577, 9)
 
+    def test_nr_b3lyp_direct(self):
+        method.xc = 'b3lyp'
+        method.max_memory = 0
+        method.direct_scf = True
+        self.assertAlmostEqual(method.scf(), -76.384948370970577, 9)
+        method.direct_scf = False
+        self.assertAlmostEqual(method.scf(), -76.384948370970577, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

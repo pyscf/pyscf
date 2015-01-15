@@ -49,6 +49,8 @@ class KnowValues(unittest.TestCase):
     def test_kernel(self):
         e, c = fci.direct_ms0.kernel(h1e, g2e, norb, nelec)
         self.assertAlmostEqual(e, -9.1491239692, 8)
+        e = fci.direct_ms0.energy(h1e, g2e, c, norb, nelec)
+        self.assertAlmostEqual(e, -9.1491239692, 8)
 
     def test_hdiag(self):
         hdiag = fci.direct_ms0.make_hdiag(h1e, g2e, norb, nelec)

@@ -59,7 +59,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
                                            ci0=ci0, **cikwargs)
 
     t1 = log.timer('FCI solver', *t1)
-    e_tot = e_cas + energy_core
+    e_tot = e_cas + energy_core + casci.mol.energy_nuc()
     log.info('CASCI E = %.15g, E(CI) = %.15g', e_tot, e_cas)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
@@ -92,7 +92,7 @@ class CASCI(object):
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 30
-        self.fcisolver.conv_threshold = 1e-8
+        self.fcisolver.conv_tol = 1e-8
 
         self.mo_coeff = mf.mo_coeff
         self.ci = None
@@ -116,28 +116,30 @@ class CASCI(object):
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
 
-# if self._scf is ROHF?
     def get_veff(self, mol, dm):
-        return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
+        if isinstance(self._scf, pyscf.scf.hf.RHF):
+            return self._scf.get_veff(mol, dm)
+        else: # ROHF
+            return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
 
-    def ao2mo(self, mo):
-        nao, nmo = mo.shape
-        if self._scf._eri is not None:
-            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo)
+    def ao2mo(self, mo_coeff):
+        nao, nmo = mo_coeff.shape
+        if self._scf._eri is not None and \
+           (nao**2*nmo**2+nmo**4*2)/4*8/1e6 > self.max_memory:
+            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
         else:
             ftmp = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.outcore.full(self.mol, mo, ftmp.name,
+            pyscf.ao2mo.outcore.full(self.mol, mo_coeff, ftmp.name,
                                      verbose=self.verbose)
             feri = h5py.File(ftmp.name, 'r')
             eri = numpy.array(feri['eri_mo'])
-            feri.close()
         return eri
 
-    def casci(self, mo=None, ci0=None, **cikwargs):
-        if mo is None:
-            mo = self.mo_coeff
+    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
         else:
-            self.mo_coeff = mo
+            self.mo_coeff = mo_coeff
         if ci0 is None:
             ci0 = self.ci
 
@@ -146,8 +148,15 @@ class CASCI(object):
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci = \
-                kernel(self, mo, ci0=ci0, verbose=self.verbose, **cikwargs)
+                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci
+
+    def cas_natorb(self, mo_coeff=None, ci0=None):
+        return self.cas_natorb(mo_coeff, ci0)
+    def cas_natorb_(self, mo_coeff=None, ci0=None):
+        from pyscf.mcscf import addons
+        self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
+        return self.ci, self.mo_coeff
 
 
 
@@ -170,7 +179,7 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
     mc.fcisolver = pyscf.fci.solver(mol)
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
@@ -178,7 +187,7 @@ if __name__ == '__main__':
     mc = CASCI(mol, m, 4, (3,1))
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(emc - -75.439016172976)
 
     mol = gto.Mole()
@@ -206,12 +215,12 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASCI(mol, m, 9, 8)
     mc.fcisolver = pyscf.fci.solver(mol)
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)
 
     mc = CASCI(mol, m, 9, (5,3))
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
-    emc = mc.casci()[0] + mol.nuclear_repulsion()
+    emc = mc.casci()[0]
     print(emc - -227.7674519720)

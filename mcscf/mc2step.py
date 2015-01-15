@@ -20,14 +20,17 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     mo = mo_coeff
     nmo = mo.shape[1]
+    ncore = casscf.ncore
+    ncas = casscf.ncas
+    nocc = ncore + ncas
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
-    if casscf.ncas == nmo:
+    if ncas == nmo:
         return e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
-    toloose = casscf.conv_threshold_grad
+    toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
@@ -36,20 +39,25 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = t2m
         for imicro in range(micro):
 
-            u, dx, g_orb, nin = casscf.rotate_orb(mo, fcivec, e_ci, eris, 0)
+            casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
+            u, dx, g_orb, nin = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
+            ninner += nin
+            norm_dt = numpy.linalg.norm(u-numpy.eye(nmo))
+            norm_gorb = numpy.linalg.norm(g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
+            if norm_dt < toloose or norm_gorb < toloose:
+                if casscf.natorb:
+                    natocc, natorb = scipy.linalg.eigh(-casdm1)
+                    u[:,ncore:nocc] = numpy.dot(u[:,ncore:nocc], natorb)
+                    log.debug1('natural occ = %s', str(natocc))
             mo = numpy.dot(mo, u)
-            #pyscf.scf.chkfile.dump(casscf.chkfile, 'mcscf/mo_coeff', mo)
             casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None # to avoid using too much memory
             eris = casscf.update_ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            ninner += nin
-            norm_dt = numpy.linalg.norm(u-numpy.eye(nmo))
-            norm_gorb = numpy.linalg.norm(g_orb)
             log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g', \
                       imicro, norm_dt, norm_gorb)
             t2m = log.timer('micro iter %d'%imicro, *t2m)
@@ -110,7 +118,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0] + mol.nuclear_repulsion()
+    emc = kernel(mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0]
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 
@@ -129,9 +137,8 @@ if __name__ == '__main__':
     mc.verbose = 4
     mo = m.mo_coeff.copy()
     mo[:,2:5] = m.mo_coeff[:,[4,2,3]]
-    emc = mc.mc2step(mo)[0] + mol.nuclear_repulsion()
+    emc = mc.mc2step(mo)[0]
     print(ehf, emc, emc-ehf)
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print(emc - -76.0873923174, emc - -76.0926176464)
-
 

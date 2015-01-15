@@ -48,6 +48,7 @@ def restore(symmetry, eri, norb, tao=None):
 
 def _call_restore(fname, eri, eri1, norb, tao=None):
     if numpy.iscomplexobj(eri):
+        raise RuntimeError('TODO')
         #if tao is None:
         #    raise RuntimeError('need time-reversal mapping')
         fn = getattr(libao2mo, 'AO2MOrestore_r'+fname)

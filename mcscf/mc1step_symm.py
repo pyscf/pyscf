@@ -24,11 +24,11 @@ class CASSCF(mc1step.CASSCF):
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mol, mf, ncas, nelecas, ncore)
 
-    def mc1step(self, mo=None, ci0=None, macro=None, micro=None, **cikwargs):
-        if mo is None:
-            mo = self.mo_coeff
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
         else:
-            self.mo_coeff = mo
+            self.mo_coeff = mo_coeff
         if macro is None:
             macro = self.max_cycle_macro
         if micro is None:
@@ -38,6 +38,7 @@ class CASSCF(mc1step.CASSCF):
 
         self.dump_flags()
 
+        #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
@@ -50,16 +51,16 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc1step.kernel(self, mo, \
-                               tol=self.conv_threshold, macro=macro, micro=micro, \
+                mc1step.kernel(self, mo_coeff, \
+                               tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo=None, ci0=None, macro=None, micro=None, **cikwargs):
-        if mo is None:
-            mo = self.mo_coeff
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
         else:
-            self.mo_coeff = mo
+            self.mo_coeff = mo_coeff
         if macro is None:
             macro = self.max_cycle_macro
         if micro is None:
@@ -69,6 +70,7 @@ class CASSCF(mc1step.CASSCF):
 
         self.dump_flags()
 
+        #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
@@ -80,8 +82,8 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc2step.kernel(self, mo, \
-                               tol=self.conv_threshold, macro=macro, micro=micro, \
+                mc2step.kernel(self, mo_coeff, \
+                               tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
@@ -99,9 +101,9 @@ class CASSCF(mc1step.CASSCF):
         return self.pack_uniq_var(g_orb), sym_h_op, \
                self.pack_uniq_var(h_diag)
 
-    def rotate_orb(self, mo, fcivec, e_ci, eris, dx=0):
+    def rotate_orb(self, mo, casdm1, casdm2, eris, dx=0):
         u, dx, g_orb, jkcnt = \
-                mc1step.rotate_orb_ah(self, mo, fcivec, e_ci, eris, dx,
+                mc1step.rotate_orb_ah(self, mo, casdm1, casdm2, eris, dx,
                                       self.verbose)
         u = _symmetrize(u, self.orbsym, self.mol.groupname)
         dx = _symmetrize(self.unpack_uniq_var(dx), self.orbsym,
@@ -113,8 +115,8 @@ class CASSCF(mc1step.CASSCF):
           + self.mol.intor_symmetric('cint1e_nuc_sph')
         return h
 
-    def get_veff(self, dm):
-        return pyscf.scf.hf.RHF.get_veff(self._scf, self.mol, dm)
+    def get_veff(self, mol, dm):
+        return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
 
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):
     irreptab = pyscf.symm.param.IRREP_ID_TABLE[groupname]
@@ -155,7 +157,7 @@ if __name__ == '__main__':
     mc.fcisolver = pyscf.fci.solver(mol)
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
-    emc = mc.mc1step(mo)[0] + mol.nuclear_repulsion()
+    emc = mc.mc1step(mo)[0]
     print(ehf, emc, emc-ehf)
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print(emc - -76.0873923174, emc - -76.0926176464)
@@ -165,4 +167,4 @@ if __name__ == '__main__':
     mc.fcisolver = pyscf.fci.solver(mol, False)
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
-    print(emc - -84.9038216713284)
+    print(emc - -75.7155632535814)

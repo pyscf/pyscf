@@ -93,46 +93,16 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return ci1
 
 
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, orbsym=[],
-           **kwargs):
-    if isinstance(nelec, int):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-        nelec = (neleca, nelecb)
-    else:
-        neleca, nelecb = nelec
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = numpy.ascontiguousarray(eri)
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
-    hdiag = direct_spin1.make_hdiag(h1e, eri, norb, nelec)
-
-    addr, h0 = direct_spin1.pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*nb:
-        ci0 = numpy.empty((na*nb))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
-            return pw[0], ci0.reshape(na,nb)
-
-    precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
-    #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
-
-    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = contract_2e(h2e, c, norb, nelec, link_index, orbsym)
-        return hc.ravel()
-
-    if ci0 is None:
-        ci0 = numpy.zeros(na*nb)
-        ci0[0] = 1
-    else:
-        ci0 = ci0.ravel()
-
-    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=tol, lindep=1e-8)
-    return e, c.reshape(na,nb)
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
+           lindep=1e-8, max_cycle=50, orbsym=[], **kwargs):
+    cis = FCISolver(None)
+    cis.level_shift = level_shift
+    cis.orbsym = orbsym
+    cis.conv_tol = tol
+    cis.lindep = lindep
+    cis.max_cycle = max_cycle
+    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0,
+                                   **kwargs)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
@@ -189,10 +159,11 @@ class FCISolver(direct_spin1.FCISolver):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
-    def eig(self, op, x0, precond):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+    def eig(self, op, x0, precond, **kwargs):
+        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, log=self.verbose)
+                                  self.max_memory, verbose=self.verbose,
+                                  **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -203,12 +174,13 @@ class FCISolver(direct_spin1.FCISolver):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
-        return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0)
+        return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
+                                       **kwargs)
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
-        return direct_spin1.numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+        return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)
@@ -258,7 +230,7 @@ if __name__ == '__main__':
 
     norb = m.mo_coeff.shape[1]
     nelec = mol.nelectron-1
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.RHF.get_hcore(mol), m.mo_coeff))
+    h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
     eri = ao2mo.incore.full(m._eri, m.mo_coeff)
     numpy.random.seed(1)
     na = cistring.num_strings(norb, nelec//2+1)

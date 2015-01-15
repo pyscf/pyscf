@@ -24,15 +24,15 @@ def run(b, caslst):
     m.chkfile = 'cr2.chk'
     m.init_guess = 'chkfile'
     m.level_shift_factor = .5
-    m.set_mo_occ = scf.addons.frac_occ(m)
+    m.get_occ = scf.addons.frac_occ(m)
     m.diis_space = 25
     m.max_cycle = 100
-    m.conv_threshold = 1e-9
+    m.conv_tol = 1e-9
     ehf.append(m.scf())
 
     mc = mcscf.CASSCF(mol, m, 12, 12)
     mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caslst, 1)
-    emc.append(mc.mc1step(mo)[0]+mol.nuclear_repulsion())
+    emc.append(mc.mc1step(mo)[0]+mol.energy_nuc())
 
     label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
     dm1a, dm1b = mcscf.addons.make_rdm1s(mc, mc.ci, mc.mo_coeff)

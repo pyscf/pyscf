@@ -76,7 +76,7 @@ def from_chkfile(output, chkfile, tol=1e-15):
         v = mol.intor_symmetric('cint1e_nuc_sph')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
         write_hcore(fout, h, nmo, tol=tol)
-        fout.write(' %.16g  0  0  0  0\n' % mol.nuclear_repulsion())
+        fout.write(' %.16g  0  0  0  0\n' % mol.energy_nuc())
 
 def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
                    tol=1e-15):

@@ -23,12 +23,13 @@ def parse_str(string):
 
     basis_add = []
     for dat in bastxt:
-        key = dat.split()[1].upper()
-        if key == 'SP':
-            basis_add.append([0])
-            basis_add.append([1])
-        elif key in MAPSPDF:
-            basis_add.append([MAPSPDF[key]])
+        if dat.strip()[0].isalpha():
+            key = dat.split()[1].upper()
+            if key == 'SP':
+                basis_add.append([0])
+                basis_add.append([1])
+            else:
+                basis_add.append([MAPSPDF[key]])
         else:
             line = [float(x) for x in dat.replace('D','e').split()]
             if key == 'SP':

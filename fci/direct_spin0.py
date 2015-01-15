@@ -77,35 +77,18 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 def absorb_h1e(*args, **kwargs):
     return direct_spin1.absorb_h1e(*args, **kwargs)
 
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, **kwargs):
-    if isinstance(nelec, int):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = numpy.ascontiguousarray(eri)
-    link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na = link_index.shape[0]
-    hdiag = direct_ms0.make_hdiag(h1e, eri, norb, nelec)
-
-    addr, h0 = direct_ms0.pspace(h1e, eri, norb, nelec, hdiag)
-    pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*na:
-        ci0 = numpy.empty((na*na))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
-            return pw[0], pyscf.lib.transpose_sum(ci0.reshape(na,na),True)*.5
-
-    precond = direct_spin1.make_pspace_precond(hdiag, pw, pv, addr, eshift)
-    #precond = lambda x, e, *args: x/(hdiag-(e-eshift))
-
-    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = contract_2e(h2e, c, norb, nelec, link_index)
-        return hc.ravel()
-
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
+           lindep=1e-8, max_cycle=50, **kwargs):
+    cis = FCISolver(None)
+    cis.level_shift = level_shift
+    cis.conv_tol = tol
+    cis.lindep = lindep
+    cis.max_cycle = max_cycle
     if ci0 is None:
+        if isinstance(nelec, int):
+            na = cistring.num_strings(norb, nelec//2)
+        else:
+            na = cistring.num_strings(norb, nelec[0])
         ci0 = numpy.zeros(na*na)
 # For alpha/beta symmetrized contract_2e subroutine, it's necessary to
 # symmetrize the initial guess, otherwise got strange numerical noise after
@@ -116,11 +99,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.1, tol=1e-8, **kwargs):
 # spin problems.  The 'ground state' of psapce vector may have different spin
 # state to the true ground state.
         ci0[0] = 1
-    else:
-        ci0 = ci0.ravel()
-
-    e, c = pyscf.lib.davidson(hop, ci0, precond, tol=tol, lindep=1e-8)
-    return e, pyscf.lib.transpose_sum(c.reshape(na,na)) * .5
+    return direct_ms0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
@@ -185,10 +164,11 @@ class FCISolver(direct_ms0.FCISolver):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_threshold,
+    def eig(self, op, x0, precond, **kwargs):
+        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, log=self.verbose)
+                                  self.max_memory, verbose=self.verbose,
+                                  **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -196,7 +176,8 @@ class FCISolver(direct_ms0.FCISolver):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
-        e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0)
+        e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
+                                      **kwargs)
 # when norb is small, ci is obtained by exactly diagonalization. It can happen
 # that the ground state is triplet (ci = -ci.T), symmetrize the coefficients
 # will lead to ci = 0

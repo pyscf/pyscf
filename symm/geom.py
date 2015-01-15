@@ -270,7 +270,6 @@ def find_axis(vecs):
                 for j in lst:
                     if orthtab[j,lst].sum() > 0:
                         return gen_new_axis(vecs[i], axisx=vecs[j])
-        return None
 
 ####################################
 def atoms_in_line(atoms):
@@ -384,9 +383,8 @@ def symm_identical_atoms(gpname, atoms):
     return eql_atom_ids
 
 def check_given_symm(gpname, atoms):
+    raise RuntimeError('TODO')
     eql_atoms = symm_identical_atoms(gpname, atoms)
-    #fixme
-    pass
 
 if __name__ == "__main__":
     atom = [["O" , (1. , 0.    , 0.   ,)],

@@ -18,7 +18,7 @@ atom = [
 basis = {'N': 'ccpvdz', },
 )
 m = scf.RHF(mol)
-m.conv_threshold = 1e-9
+m.conv_tol = 1e-9
 m.scf()
 
 

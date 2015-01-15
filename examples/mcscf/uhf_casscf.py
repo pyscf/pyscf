@@ -24,28 +24,21 @@ print('UHF     = %.15g' % m.scf())
 mc = mcscf.CASSCF(mol, m, 4, (4,2))
 mc.stdout.write('** Triplet with UHF-CASSCF**\n')
 emc1 = mc.mc1step()[0]
-print('CASSCF = %.15g' % (emc1 + mol.get_enuc()))
-ncore = mc.ncore
-nocc = (ncore[0] + mc.ncas, ncore[1] + mc.ncas)
-ovlp = reduce(numpy.dot, (mc.mo_coeff[0][:,ncore[0]:nocc[0]].T, m.get_ovlp(),
-                          mc.mo_coeff[1][:,ncore[1]:nocc[1]]))
-ss,s2 = fci.spin_square_with_overlap(ovlp, mc.ci, 4, (4,2))
-print('s^2 = %.6f, 2s+1 = %.6f' % (ss,s2))
+print('CASSCF = %.15g' % emc1)
+# Generally, 2s+1 is not 3
+print('s^2 = %.6f, 2s+1 = %.6f' % mcscf.spin_square(mc))
 
 
 mol.spin = 0
 mol.build()
 m = scf.UHF(mol)
+print('\n')
 print('UHF     = %.15g' % m.scf())
 
 mc = mcscf.CASSCF(mol, m, 4, 6)
 mc.stdout.write('** Singlet with UHF-CASSCF **\n')
 emc1 = mc.mc1step()[0]
 
-print('CASSCF = %.15g' % (emc1 + mol.get_enuc()))
-ncore = mc.ncore
-nocc = (ncore[0] + mc.ncas, ncore[1] + mc.ncas)
-ovlp = reduce(numpy.dot, (mc.mo_coeff[0][:,ncore[0]:nocc[0]].T, m.get_ovlp(),
-                          mc.mo_coeff[1][:,ncore[1]:nocc[1]]))
-ss,s2 = fci.spin_square_with_overlap(ovlp, mc.ci, 4, (4,2))
-print('s^2 = %.6f, 2s+1 = %.6f' % (ss,s2))
+print('CASSCF = %.15g' % emc1)
+# Generally, 2s+1 is not 1
+print('s^2 = %.6f, 2s+1 = %.6f' % mcscf.spin_square(mc))

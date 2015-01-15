@@ -32,7 +32,7 @@ mol.build()
 nrscf = scf.RHF(mol)
 nrscf.level_shift_factor = .5
 nrscf.diis_start_cycle = 2
-nrscf.conv_threshold = 1e-9
+nrscf.conv_tol = 1e-9
 e = nrscf.scf()
 print('E = %.15g, ref = -1719.915851708' % e)
 
@@ -41,7 +41,7 @@ g = grad.hf.RHF(nrscf)
 print(g.grad())
 
 m = nmr.hf.MSC(nrscf)
-m.is_cpscf = False
-m.is_giao = True
+m.cphf = False
+m.gauge_origin = None
 print(m.msc())
 

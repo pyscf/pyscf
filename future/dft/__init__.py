@@ -1,6 +1,8 @@
 import sys
 from pyscf.dft import vxc
 from pyscf.dft import rks
+from pyscf.dft import gen_grid as grid
+from pyscf.dft import radi
 
 # register the XC keywords in module
 curmod = sys.modules[__name__]

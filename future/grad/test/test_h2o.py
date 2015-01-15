@@ -26,25 +26,26 @@ class KnowValues(unittest.TestCase):
         rhf = scf.RHF(h2o)
         rhf.scf()
         g = grad.hf.RHF(rhf)
-        self.assertAlmostEqual(finger(g.grad_e(h2o,rhf)), 10.126405944938071, 9)
+        self.assertAlmostEqual(finger(g.grad_elec()), 10.126405944938071, 7)
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(h2o)
         uhf.scf()
         g = grad.dhf.UHF(uhf)
-        self.assertAlmostEqual(finger(g.grad_e(h2o,uhf)), 10.126445561598123, 9)
+        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445561598123, 7)
 
 #    def test_nr_uhf(self):
 #        uhf = scf.UHF(h2o)
-#        self.assertAlmostEqual(uhf.scf(g.grad_e(h2o)), 0, 9)
+#        self.assertAlmostEqual(uhf.scf(g.grad_elec()), 0, 9)
 
-    def test_nuclear_repulsion(self):
+    def test_energy_nuc(self):
         rhf = scf.RHF(h2o)
         rhf.scf()
         g = grad.hf.RHF(rhf)
-        self.assertAlmostEqual(finger(g.grad_nuc(h2o)), 10.086972893020102, 9)
+        self.assertAlmostEqual(finger(g.grad_nuc()), 10.086972893020102, 9)
 
 
 if __name__ == "__main__":
     print("Full Tests for H2O")
     unittest.main()
+

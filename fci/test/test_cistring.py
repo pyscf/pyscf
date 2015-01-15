@@ -38,6 +38,27 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(fci.cistring.str2addr(6, 3, int('0b11010' ,2)), 8)
         self.assertEqual(fci.cistring.str2addr(7, 4, int('0b110011',2)), 9)
 
+    def test_gen_cre_str_index(self):
+        idx = fci.cistring.gen_cre_str_index(range(4), 2)
+        idx0 = [[[ 2, 3, 0, 1], [ 3, 6, 1, 1]],
+                [[ 1, 1, 0,-1], [ 3, 6, 2, 1]],
+                [[ 0, 0, 0, 1], [ 3, 6, 3, 1]],
+                [[ 1, 1, 1,-1], [ 2, 3, 2,-1]],
+                [[ 0, 0, 1, 1], [ 2, 3, 3,-1]],
+                [[ 0, 0, 2, 1], [ 1, 1, 3, 1]]]
+        self.assertTrue(numpy.allclose(idx, idx0))
+
+    def test_gen_des_str_index(self):
+        idx = fci.cistring.gen_des_str_index(range(4), 2)
+        idx0 = [[[ 0, 0, 1,-1], [ 1, 1, 0, 1]],
+                [[ 0, 0, 2,-1], [ 2, 3, 0, 1]],
+                [[ 1, 1, 2,-1], [ 2, 3, 1, 1]],
+                [[ 0, 0, 3,-1], [ 3, 6, 0, 1]],
+                [[ 1, 1, 3,-1], [ 3, 6, 1, 1]],
+                [[ 2, 3, 3,-1], [ 3, 6, 2, 1]]],
+        self.assertTrue(numpy.allclose(idx, idx0))
+
+
 if __name__ == "__main__":
     print("Full Tests for CI string")
     unittest.main()

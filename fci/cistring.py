@@ -169,19 +169,19 @@ def parity(string0, string1):
     else:
         return (-1) ** (count_bit1(string0&(-ss)))
 
-def addr2str_o0(norb, nelec, addr):
-    assert(num_strings(norb, nelec) > addr)
-    if addr == 0 or nelec == 0:
-        return (1<<nelec) - 1   # ..0011..11
-    else:
-        for i in reversed(range(norb)):
-            addrcum = num_strings(i, nelec)
-            if addrcum <= addr:
-                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
+#def addr2str_o0(norb, nelec, addr):
+#    assert(num_strings(norb, nelec) > addr)
+#    if addr == 0 or nelec == norb or nelec == 0:
+#        return (1<<nelec) - 1   # ..0011..11
+#    else:
+#        for i in reversed(range(norb)):
+#            addrcum = num_strings(i, nelec)
+#            if addrcum <= addr:
+#                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
 def addr2str_o1(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
-    if nelec == norb:
-        return 0
+    if addr == 0 or nelec == norb or nelec == 0:
+        return (1<<nelec) - 1   # ..0011..11
     str1 = 0
     nelec_left = nelec
     for norb_left in reversed(range(norb)):
@@ -199,25 +199,25 @@ def addr2str_o1(norb, nelec, addr):
 def addr2str(norb, nelec, addr):
     return addr2str_o1(norb, nelec, addr)
 
-def str2addr_o0(norb, nelec, string):
-    if norb <= nelec or nelec == 0:
-        return 0
-    elif (1<<(norb-1)) & string:  # remove the first bit
-        return num_strings(norb-1, nelec) \
-                + str2addr_o0(norb-1, nelec-1, string^(1<<(norb-1)))
-    else:
-        return str2addr_o0(norb-1, nelec, string)
-def str2addr_o1(norb, nelec, string):
-    #TODO: assert norb > first-bit-in-string, nelec == num-1-in-string
-    addr = 0
-    nelec_left = nelec
-    for norb_left in reversed(range(norb)):
-        if nelec_left == 0 or norb_left < nelec_left:
-            break
-        elif (1<<norb_left) & string:
-            addr += num_strings(norb_left, nelec_left)
-            nelec_left -= 1
-    return addr
+#def str2addr_o0(norb, nelec, string):
+#    if norb <= nelec or nelec == 0:
+#        return 0
+#    elif (1<<(norb-1)) & string:  # remove the first bit
+#        return num_strings(norb-1, nelec) \
+#                + str2addr_o0(norb-1, nelec-1, string^(1<<(norb-1)))
+#    else:
+#        return str2addr_o0(norb-1, nelec, string)
+#def str2addr_o1(norb, nelec, string):
+#    #TODO: assert norb > first-bit-in-string, nelec == num-1-in-string
+#    addr = 0
+#    nelec_left = nelec
+#    for norb_left in reversed(range(norb)):
+#        if nelec_left == 0 or norb_left < nelec_left:
+#            break
+#        elif (1<<norb_left) & string:
+#            addr += num_strings(norb_left, nelec_left)
+#            nelec_left -= 1
+#    return addr
 def str2addr(norb, nelec, string):
     if isinstance(string, str):
         string = int(string, 2)

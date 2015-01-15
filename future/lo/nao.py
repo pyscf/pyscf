@@ -22,13 +22,27 @@ def prenao(mol, dm):
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
 
+def nao(mol, mf, restore=True):
+    dm = mf.make_rdm1()
+    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    p = reduce(numpy.dot, (s, dm, s))
+    pre_occ, pre_nao = _prenao_sub(mol, p, s)
+    cnao = _nao_sub(mol, pre_occ, pre_nao)
+    if restore:
+        # restore natural character
+        p_nao = reduce(numpy.dot, (cnao.T, p, cnao))
+        s_nao = numpy.eye(p_nao.shape[0])
+        cnao = numpy.dot(cnao, _prenao_sub(mol, p_nao, s_nao)[1])
+    return cnao
+
+
 def _prenao_sub(mol, p, s):
     idx = [[[]]*8 for i in range(mol.natm)]
     k = 0
     for ib in range(mol.nbas):
-        ia = mol.atom_of_bas(ib)
-        l = mol.angular_of_bas(ib)
-        nc = mol.nctr_of_bas(ib)
+        ia = mol.bas_atom(ib)
+        l = mol.bas_angular(ib)
+        nc = mol.bas_nctr(ib)
         idx[ia][l] = idx[ia][l] + list(range(k, k+nc*(l*2+1)))
         k += nc * (l * 2 + 1)
 
@@ -54,29 +68,8 @@ def _prenao_sub(mol, p, s):
                     cao[i0,ilst] = v[i]
     return occ, cao
 
-def _spheric_average_mat(mat, l, lst):
-    degen = l * 2 + 1
-    nd = len(lst) // degen
-    t = scipy.linalg.block_diag(*([numpy.ones(degen)/numpy.sqrt(degen)]*nd))
-    mat_frag = reduce(numpy.dot, (t,mat[lst,:][:,lst],t.T))
-    return mat_frag
-
-
-def nao(mol, mf, restore=True):
-    dm = mf.make_rdm1()
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
-    p = reduce(numpy.dot, (s, dm, s))
-    pre_occ, pre_nao = _prenao_sub(mol, p, s)
-    cnao = _nao_sub(mol, pre_occ, pre_nao)
-    if restore:
-        # restore natural character
-        p_nao = reduce(numpy.dot, (cnao.T, p, cnao))
-        s_nao = numpy.eye(p_nao.shape[0])
-        cnao = numpy.dot(cnao, _prenao_sub(mol, p_nao, s_nao)[1])
-    return cnao
-
 def _nao_sub(mol, pre_occ, pre_nao):
-    core_lst, val_lst, rydbg_lst = core_val_ryd_list(mol)
+    core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     nao = mol.nao_nr()
     cnao = numpy.zeros((nao,nao))
@@ -84,24 +77,24 @@ def _nao_sub(mol, pre_occ, pre_nao):
     if core_lst:
         c = pre_nao[:,core_lst]
         s1 = reduce(numpy.dot, (c.T, s, c))
-        cnao[:,core_lst] = numpy.dot(c, orth.lowdin_orth_coeff(s1))
+        cnao[:,core_lst] = numpy.dot(c, orth.lowdin(s1))
 
     c1 = cnao[:,core_lst]
     rm_core = numpy.eye(nao) - reduce(numpy.dot, (c1, c1.T, s))
     c = numpy.dot(rm_core, pre_nao[:,val_lst])
     s1 = reduce(numpy.dot, (c.T.conj(), s, c))
     wt = pre_occ[val_lst]
-    cnao[:,val_lst] = numpy.dot(c, orth.weight_orthogonal(s1, wt))
+    cnao[:,val_lst] = numpy.dot(c, orth.weight_orth(s1, wt))
 
     if rydbg_lst:
         c1 = cnao[:,val_lst]
         rm_val = numpy.eye(nao)-reduce(numpy.dot, (c1, c1.T, s))
         c = reduce(numpy.dot, (rm_core, rm_val, pre_nao[:,rydbg_lst]))
         s1 = reduce(numpy.dot, (c.T.conj(), s, c))
-        cnao[:,rydbg_lst] = numpy.dot(c, orth.lowdin_orth_coeff(s1))
+        cnao[:,rydbg_lst] = numpy.dot(c, orth.lowdin(s1))
     return cnao
 
-def core_val_ryd_list(mol):
+def _core_val_ryd_list(mol):
     count = numpy.zeros((mol.natm, 9), dtype=int)
     core_lst = []
     val_lst = []
@@ -110,10 +103,10 @@ def core_val_ryd_list(mol):
     valenceof = lambda nuc, l: \
             int(numpy.ceil(pyscf.lib.parameters.ELEMENTS[nuc][2][l]/(4*l+2.)))
     for ib in range(mol.nbas):
-        ia = mol.atom_of_bas(ib)
-        nuc = mol.charge_of_atm(ia)
-        l = mol.angular_of_bas(ib)
-        nc = mol.nctr_of_bas(ib)
+        ia = mol.bas_atom(ib)
+        nuc = mol.atom_charge(ia)
+        l = mol.bas_angular(ib)
+        nc = mol.bas_nctr(ib)
         for n in range(nc):
             if count[ia,l]+n < param.CORESHELL[nuc][l]:
                 core_lst += list(range(k, k+(2*l+1)))
@@ -124,6 +117,13 @@ def core_val_ryd_list(mol):
             k = k + 2*l+1
         count[ia,l] += nc
     return core_lst, val_lst, rydbg_lst
+
+def _spheric_average_mat(mat, l, lst):
+    degen = l * 2 + 1
+    nd = len(lst) // degen
+    t = scipy.linalg.block_diag(*([numpy.ones(degen)/numpy.sqrt(degen)]*nd))
+    mat_frag = reduce(numpy.dot, (t,mat[lst,:][:,lst],t.T))
+    return mat_frag
 
 
 if __name__ == "__main__":
@@ -151,4 +151,4 @@ if __name__ == "__main__":
 
     c = nao(mol, mf)
     print(reduce(numpy.dot, (c.T, p, c)).diagonal())
-    print(core_val_ryd_list(mol))
+    print(_core_val_ryd_list(mol))

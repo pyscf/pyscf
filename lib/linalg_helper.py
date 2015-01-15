@@ -13,13 +13,13 @@ from pyscf.lib import logger
 
 # default max_memory 2000 MB
 
-def davidson(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
+def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
              max_memory=2000, eig_pick=None, dot=numpy.dot, callback=None,
-             log=None):
-    if log is None:
-        log = logger.Logger(sys.stdout, logger.WARN)
-    elif isinstance(log, int):
-        log = logger.Logger(sys.stdout, log)
+             verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
     toloose = numpy.sqrt(tol)
     # if trial vectors are held in memory, store as many as possible
     maxspace = max(int((max_memory-1e3)*1e6/x0.nbytes/2), maxspace)
@@ -36,11 +36,11 @@ def davidson(a, x0, precond, tol=1e-14, maxiter=50, maxspace=12, lindep=1e-16,
     #    e0_hist.append(w[idx])
     #    return idx
 
-    heff = numpy.zeros((maxiter+1,maxiter+1), dtype=x0.dtype)
-    ovlp = numpy.zeros((maxiter+1,maxiter+1), dtype=x0.dtype)
+    heff = numpy.zeros((max_cycle+1,max_cycle+1), dtype=x0.dtype)
+    ovlp = numpy.zeros((max_cycle+1,max_cycle+1), dtype=x0.dtype)
     v_prev = numpy.eye(1, dtype=x0.dtype)
     e = 0
-    for istep in range(min(maxiter,x0.size)):
+    for istep in range(min(max_cycle,x0.size)):
         subspace = len(xs)
         if subspace == 0:
             ax0 = dx = None
@@ -153,12 +153,12 @@ class _TrialXs(list):
 # ref: J. A. Pople, R. Krishnan, H. B. Schlegel, and J. S. Binkley,
 #      Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 # solve (1+aop) x = b
-def krylov(aop, b, x0=None, tol=1e-10, maxiter=30, dot=numpy.dot, \
-           lindep=1e-16, callback=None, log=None):
-    if log is None:
-        log = logger.Logger(sys.stdout, logger.WARN)
-    elif isinstance(log, int):
-        log = logger.Logger(sys.stdout, log)
+def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
+           lindep=1e-16, callback=None, verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
 
     if x0 is not None:
         b = b - (x0 + aop(x0))
@@ -167,8 +167,8 @@ def krylov(aop, b, x0=None, tol=1e-10, maxiter=30, dot=numpy.dot, \
     ax = [aop(xs[0])]
     innerprod = [dot(xs[0].conj(), xs[0])]
 
-    h = numpy.empty((maxiter,maxiter), dtype=b.dtype)
-    for cycle in range(maxiter):
+    h = numpy.empty((max_cycle,max_cycle), dtype=b.dtype)
+    for cycle in range(max_cycle):
         x1 = ax[-1].copy()
 # Schmidt orthogonalization
         for i in range(cycle+1):
@@ -205,7 +205,7 @@ def krylov(aop, b, x0=None, tol=1e-10, maxiter=30, dot=numpy.dot, \
     return x
 
 # Davidson-like linear eq solver.  It does not work well.
-def dsolve(a, b, precond, tol=1e-14, maxiter=30, dot=numpy.dot, \
+def dsolve(a, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot, \
            lindep=1e-16, verbose=0):
 
     toloose = numpy.sqrt(tol)
@@ -213,9 +213,9 @@ def dsolve(a, b, precond, tol=1e-14, maxiter=30, dot=numpy.dot, \
     xs = [precond(b)]
     ax = [a(xs[-1])]
 
-    aeff = numpy.zeros((maxiter,maxiter), dtype=b.dtype)
-    beff = numpy.zeros((maxiter), dtype=b.dtype)
-    for istep in range(maxiter):
+    aeff = numpy.zeros((max_cycle,max_cycle), dtype=b.dtype)
+    beff = numpy.zeros((max_cycle), dtype=b.dtype)
+    for istep in range(max_cycle):
         beff[istep] = dot(xs[istep], b)
         for i in range(istep+1):
             aeff[istep,i] = dot(xs[istep], ax[i])
@@ -274,7 +274,7 @@ if __name__ == '__main__':
     #x0 = (u[:,0]+.01)/numpy.linalg.norm(u[:,0]+.01)
     #print(dsyev(aop, x0, precond, eig_pick=lambda w,y: numpy.argmax(abs(w)<1e-4))[0])
     #print(dsyev(aop, x0, precond)[0] - -42.8144765196)
-    e0,x0 = dsyev(aop, x0, precond, maxiter=30, maxspace=6, max_memory=.0001)
+    e0,x0 = dsyev(aop, x0, precond, max_cycle=30, maxspace=6, max_memory=.0001)
     print(e0 - e[0])
 
 ##########
@@ -285,13 +285,13 @@ if __name__ == '__main__':
     def precond(x, *args):
         return x / a.diagonal()
     x = numpy.linalg.solve(a, b)
-    x1 = dsolve(aop, b, precond, maxiter=50)
+    x1 = dsolve(aop, b, precond, max_cycle=50)
     print(abs(x - x1).sum())
     a_diag = a.diagonal()
     log = logger.Logger(sys.stdout, 5)
     aop = lambda x: numpy.dot(a-numpy.diag(a_diag), x)/a_diag
-    x1 = krylov(aop, b/a_diag, maxiter=50, log=log)
+    x1 = krylov(aop, b/a_diag, max_cycle=50, verbose=log)
     print(abs(x - x1).sum())
-    x1 = krylov(aop, b/a_diag, None, maxiter=10, log=log)
-    x1 = krylov(aop, b/a_diag, x1, maxiter=30, log=log)
+    x1 = krylov(aop, b/a_diag, None, max_cycle=10, verbose=log)
+    x1 = krylov(aop, b/a_diag, x1, max_cycle=30, verbose=log)
     print(abs(x - x1).sum())

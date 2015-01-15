@@ -174,8 +174,8 @@ if __name__ == '__main__':
         ['O', ( 0., 0.    , 0.   )],
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
+    mol.basis = {'H': 'cc-pvtz',
+                 'O': 'cc-pvtz',}
     mol.build()
 
     m = scf.RHF(mol)

@@ -94,6 +94,7 @@ def error(rec, msg, *args):
 def warn(rec, msg, *args):
     if rec.verbose >= WARN:
         flush(rec, 'Warn: '+msg, *args)
+    #if rec.stdout is not sys.stdout:
         sys.stderr.write('Warn: ' + (msg%args) + '\n')
 
 def info(rec, msg, *args):

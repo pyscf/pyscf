@@ -424,7 +424,7 @@ void CVHFnrs4_jk_s2il(double *eri, double *dm, double *vk,
 {
         CVHFnrs4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
 }
-void CVHFnrs4_il_s2kj(double *eri, double *dm, double *vk,
+void CVHFnrs4_il_s2jk(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
         CVHFnrs4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);

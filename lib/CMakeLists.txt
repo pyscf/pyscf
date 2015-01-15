@@ -33,8 +33,8 @@ include_directories(${PROJECT_SOURCE_DIR} ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE
 
 include(ExternalProject)
 # remove the following comment for if ... eles, to bypass the compilation of libcint
-#if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
-#else()
+if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+else()
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
     GIT_TAG origin/master
@@ -42,7 +42,7 @@ include(ExternalProject)
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
   )
-#endif()
+endif()
 if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
 else()
   ExternalProject_Add(libxc

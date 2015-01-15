@@ -60,6 +60,8 @@ class KnowValues(unittest.TestCase):
         e, c = fci.direct_spin1.kernel(h1e, g2e, norb, nelec)
         self.assertAlmostEqual(e, eref, 8)
         self.assertAlmostEqual(e, -8.9347029192929, 8)
+        e = fci.direct_spin1.energy(h1e, g2e, c, norb, nelec)
+        self.assertAlmostEqual(e, -8.9347029192929, 8)
         e, c = fci.direct_spin1.kernel(h1e, g2e, norb, neleci)
         self.assertAlmostEqual(e, -8.7498253981782, 8)
 

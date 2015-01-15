@@ -346,8 +346,8 @@ class CC(object):
         self.max_memory = mf.max_memory
 
         self.max_cycle = 50
-        self.conv_threshold = 1e-7
-        self.conv_threshold_normt = 1e-5
+        self.conv_tol = 1e-7
+        self.conv_tol_normt = 1e-5
         self.diis_space = 6
         self.diis_start_cycle = 1
 
@@ -395,18 +395,18 @@ class CC(object):
         cput0 = (time.clock(), time.time())
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, t1, t2, eris, max_cycle=self.max_cycle,
-                       tol=self.conv_threshold,
-                       tolnormt=self.conv_threshold_normt,
+                       tol=self.conv_tol,
+                       tolnormt=self.conv_tol_normt,
                        verbose=self.verbose)
         if self._conv:
             lib.logger.info(self, 'CCSD converged')
             lib.logger.info(self, ' E(CCSD) = %.16g, E_corr = %.16g',
-                            self.ecc+self._scf.hf_energy+self.mol.get_enuc(),
+                            self.ecc+self._scf.hf_energy+self.mol.energy_nuc(),
                             self.ecc)
         else:
             lib.logger.info(self, 'CCSD does converge')
             lib.logger.info(self, ' E(CCSD) = %.16g, E_corr = %.16g',
-                            self.ecc+self._scf.hf_energy+self.mol.get_enuc(),
+                            self.ecc+self._scf.hf_energy+self.mol.energy_nuc(),
                             self.ecc)
         lib.logger.timer(self, 'CCSD', *cput0)
         return self.ecc, self.t1, self.t2

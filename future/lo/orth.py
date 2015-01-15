@@ -4,24 +4,63 @@
 
 from functools import reduce
 import numpy
+import scipy.linalg
+import pyscf.lib.logger as log
 
-def lowdin_orth_coeff(s):
+def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
     e, v = numpy.linalg.eigh(s)
     return numpy.dot(v/numpy.sqrt(e), v.T.conj())
 
-def schmidt_orth_coeff(s):
+def schmidt(s):
     c = numpy.linalg.cholesky(s)
-    return numpy.linalg.inv(c).T.conj()
+    return scipy.linalg.solve_triangular(c, numpy.eye(c.shape[1]), lower=True,
+                                         overwrite_b=False).T.conj()
 
-def weight_orthogonal(s, weight):
+def vec_lowdin(c, metric=1):
+    ''' lowdin orth for the metric c.T*metric*c and get x, then c*x'''
+    #u, w, vh = numpy.linalg.svd(c)
+    #return numpy.dot(u, vh)
+    # svd is slower than eigh
+    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,metric,c))))
+
+def vec_schmidt(c, metric=1):
+    ''' schmidt orth for the metric c.T*metric*c and get x, then c*x'''
+    if isinstance(metric, numpy.ndarray):
+        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,metric,c))))
+    else:
+        return numpy.linalg.qr(c)[0]
+
+def weight_orth(s, weight):
     ''' new basis is |mu> c_{mu i}, c = w[(wsw)^{-1/2}]'''
     s1 = weight[:,None] * s * weight
-    c = lowdin_orth_coeff(s1)
+    c = lowdin(s1)
     return weight[:,None] * c
 
 
-def orth_ao(mol, pre_orth_ao=None, method='meta_lowdin', scf_method=None):
+def pre_orth_ao(mol):
+    return pre_orth_ao_atm_scf(mol)
+def pre_orth_ao_atm_scf(mol):
+    from pyscf.scf import atom_hf
+    atm_scf = atom_hf.get_atm_nrhf(mol)
+    nbf = mol.nao_nr()
+    c = numpy.zeros((nbf, nbf))
+    p0 = 0
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb in atm_scf:
+            e_hf, mo_e, mo_occ, mo_c = atm_scf[symb]
+        else:
+            symb = mol.atom_pure_symbol(ia)
+            e_hf, mo_e, mo_occ, mo_c = atm_scf[symb]
+        p1 = p0 + mo_e.size
+        c[p0:p1,p0:p1] = mo_c
+        p0 = p1
+    log.debug(mol, 'use SCF AO instead of input basis')
+    return c
+
+
+def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None):
     from pyscf.lo import nao
     s = mol.intor_symmetric('cint1e_ovlp_sph')
 
@@ -31,7 +70,7 @@ def orth_ao(mol, pre_orth_ao=None, method='meta_lowdin', scf_method=None):
 
     if method == 'lowdin':
         s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
-        c_orth = numpy.dot(pre_orth_ao, lowdin_orth_coeff(s1))
+        c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method == 'nao':
         c_orth = nao.nao(mol, scf_method)
     else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
@@ -64,7 +103,7 @@ if __name__ == '__main__':
     mf.scf()
 
     c0 = nao.prenao(mol, mf.make_rdm1())
-    c = orth_ao(mol, c0, 'meta_lowdin')
+    c = orth_ao(mol, 'meta_lowdin', c0)
 
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     p = reduce(numpy.dot, (s, mf.make_rdm1(), s))

@@ -186,7 +186,6 @@ if __name__ == '__main__':
     mf._eri = ao2mo.restore(8, eri0, nao)
     ehf1 = mf.scf()
 
-    import pyscf.scf.dfhf
-    mf = pyscf.scf.dfhf.RHF(mol)
+    mf = scf.density_fit(scf.RHF(mol))
     ehf2 = mf.scf()
     print(ehf0, ehf1, ehf2)

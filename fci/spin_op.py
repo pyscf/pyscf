@@ -45,7 +45,7 @@ librdm = pyscf.lib.load_library('libmcscf')
 # set aolst for local spin expectation value, which is defined as
 #       <CI|ao><ao|S^2|CI>
 # For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
-def spin_square(ci, norb, nelec, mo=None, ovlp=1):
+def spin_square(ci, norb, nelec, mo_coeff=None, ovlp=1):
 # <CI|S+*S-|CI> = neleca + \delta_{ik}\delta_{jl}Gamma_{kbia,lajb}
 # <CI|S-*S+|CI> = nelecb + \delta_{ik}\delta_{jl}Gamma_{kaib,lbja}
 # <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{kaia,laja} - Gamma_{kaia,lbjb}
@@ -56,22 +56,22 @@ def spin_square(ci, norb, nelec, mo=None, ovlp=1):
     else:
         neleca, nelecb = nelec
 
-    if isinstance(mo, numpy.ndarray) and mo.ndim == 2:
-        mo = (mo, mo)
-    elif mo is None:
-        mo = (numpy.eye(norb),) * 2
+    if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+        mo_coeff = (mo_coeff, mo_coeff)
+    elif mo_coeff is None:
+        mo_coeff = (numpy.eye(norb),) * 2
 
 # projected overlap matrix elements for partial trace
     if isinstance(ovlp, numpy.ndarray):
-        ovlpaa = reduce(numpy.dot, (mo[0].T, ovlp, mo[0]))
-        ovlpbb = reduce(numpy.dot, (mo[1].T, ovlp, mo[1]))
-        ovlpab = reduce(numpy.dot, (mo[0].T, ovlp, mo[1]))
-        ovlpba = reduce(numpy.dot, (mo[1].T, ovlp, mo[0]))
+        ovlpaa = reduce(numpy.dot, (mo_coeff[0].T, ovlp, mo_coeff[0]))
+        ovlpbb = reduce(numpy.dot, (mo_coeff[1].T, ovlp, mo_coeff[1]))
+        ovlpab = reduce(numpy.dot, (mo_coeff[0].T, ovlp, mo_coeff[1]))
+        ovlpba = reduce(numpy.dot, (mo_coeff[1].T, ovlp, mo_coeff[0]))
     else:
-        ovlpaa = numpy.dot(mo[0].T, mo[0])
-        ovlpbb = numpy.dot(mo[1].T, mo[1])
-        ovlpab = numpy.dot(mo[0].T, mo[1])
-        ovlpba = numpy.dot(mo[1].T, mo[0])
+        ovlpaa = numpy.dot(mo_coeff[0].T, mo_coeff[0])
+        ovlpbb = numpy.dot(mo_coeff[1].T, mo_coeff[1])
+        ovlpab = numpy.dot(mo_coeff[0].T, mo_coeff[1])
+        ovlpba = numpy.dot(mo_coeff[1].T, mo_coeff[0])
 
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
             direct_spin1.make_rdm12s(ci, norb, nelec)
@@ -102,7 +102,7 @@ def _trace(dm1, ovlp):
 def _bi_trace(dm2, ovlp1, ovlp2):
     return numpy.einsum('jilk,ij,kl->', dm2, ovlp1, ovlp2)
 
-def local_spin(ci, norb, nelec, mo=None, ovlp=1, aolst=[]):
+def local_spin(ci, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
     if isinstance(ovlp, numpy.ndarray):
         nao = ovlp.shape[0]
         if len(aolst) == 0:
@@ -117,7 +117,7 @@ def local_spin(ci, norb, nelec, mo=None, ovlp=1, aolst=[]):
             aolst = range(norb)
         s = numpy.zeros((norb,norb))
         s[aolst,aolst] = 1
-    return spin_square(ci, norb, nelec, mo, s)
+    return spin_square(ci, norb, nelec, mo_coeff, s)
 
 # for S+*S-
 # dm(pq,rs) * [q(beta)^+ p(alpha) s(alpha)^+ r(beta)]

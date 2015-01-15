@@ -17,6 +17,5 @@ m = scf.RHF(mol)
 m.scf()
 
 mol.symmetry = True
-
 mc = mcscf.CASSCF(mol, m, 6, 6)
 mc.mc1step()

@@ -14,16 +14,16 @@ def header(mol, fout):
     fout.write('''[Molden Format]
 [Atoms] (AU)\n''')
     for ia in range(mol.natm):
-        symb = mol.pure_symbol_of_atm(ia)
-        chg = mol.charge_of_atm(ia)
+        symb = mol.atom_pure_symbol(ia)
+        chg = mol.atom_charge(ia)
         fout.write('%s   %d   %d' % (symb, ia+1, chg))
-        coord = mol.coord_of_atm(ia)
+        coord = mol.atom_coord(ia)
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
     fout.write('[GTO]\n')
     lbl = mol.spheric_labels()
     for ia in range(mol.natm):
         fout.write('%d 0\n' %(ia+1))
-        for b in mol.basis[mol.symbol_of_atm(ia)]:
+        for b in mol.basis[mol.atom_symbol(ia)]:
             l = b[0]
             if isinstance(b[1], int):
                 b_coeff = b[2:]
@@ -41,8 +41,8 @@ def order_ao_index(mol):
     idx = []
     off = 0
     for ib in range(mol.nbas):
-        l = mol.angular_of_bas(ib)
-        nc = mol.nctr_of_bas(ib)
+        l = mol.bas_angular(ib)
+        nc = mol.bas_nctr(ib)
         for n in range(nc):
             if l == 1:
                 idx.extend([off+2,off+0,off+1])

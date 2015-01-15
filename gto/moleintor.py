@@ -1,7 +1,7 @@
+#!/usr/bin/env python
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-
 
 import os
 import numpy
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     ])
     mol.basis = {"H": 'cc-pvdz'}
     mol.build()
-    mol.set_rinv_orig(mol.coord_of_atm(0))
+    mol.set_rinv_orig_(mol.atom_coord(0))
     for i in range(mol.nbas):
         for j in range(mol.nbas):
             print(i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),

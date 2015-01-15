@@ -48,33 +48,33 @@ class MP2(object):
         self.emp2 = None
         self.t2 = None
 
-    def kernel(self, mo=None, mo_energy=None, nocc=None):
-        if mo is None:
-            mo = self._scf.mo_coeff
+    def kernel(self, mo_coeff=None, mo_energy=None, nocc=None):
+        if mo_coeff is None:
+            mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
         if nocc is None:
             nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
-                kernel(self, mo, mo_energy, nocc, verbose=self.verbose)
+                kernel(self, mo_coeff, mo_energy, nocc, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
     # Note return cderi_pov array[auxbas,nocc*nvir]
-    def ao2mo(self, mo, nocc):
+    def ao2mo(self, mo_coeff, nocc):
         import pyscf.df
         log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
         log.debug('transform (L|ia)')
-        nmo = mo.shape[1]
+        nmo = mo_coeff.shape[1]
         if hasattr(self._scf, '_cderi') and self._scf._cderi is not None:
             cderi = self._scf._cderi
         else:
             cderi = pyscf.df.incore.cholesky_eri(mol, auxbasis=self.auxbasis,
                                                  verbose=self.verbose)
         klshape = (0, nocc, nocc, nmo-nocc)
-        cderimo = _ao2mo.nr_e2_(cderi, mo, klshape, aosym='s2kl', mosym='s1')
+        cderimo = _ao2mo.nr_e2_(cderi, mo_coeff, klshape, aosym='s2kl', mosym='s1')
         time1 = log.timer('Integral transformation', *time0)
         return cderimo.reshape(-1,nocc,nmo-nocc)
 
