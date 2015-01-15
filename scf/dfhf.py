@@ -24,11 +24,12 @@ def density_fit(mf):
     return HF()
 
 def get_jk_(mf, mol, dm, hermi=1):
+    from pyscf import df
     t0 = (time.clock(), time.time())
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         mf._ovlp = mf.get_ovlp(mol)
-        mf._cderi = pyscf.df.incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
-                                                 verbose=mf.verbose)
+        mf._cderi = df.incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
+                                           verbose=mf.verbose)
     vj = _make_j(mf, dm, hermi)
     vk = _make_k(mf, dm, hermi)
     log.timer(mf, 'vj and vk', *t0)
@@ -54,14 +55,14 @@ def _make_j(mf, dms, hermi):
 OCCDROP = 1e-12
 BLOCKDIM = 160
 def _make_k(mf, dms, hermi):
-    import pyscf.df
+    from pyscf import df
     from pyscf.ao2mo import _ao2mo
     s = mf._ovlp
     cderi = mf._cderi
     def fvk(dm):
         nao = dm.shape[0]
         naoaux = cderi.shape[0]
-        fmmm = pyscf.df.incore._fpointer('RIhalfmmm_nr_s2_bra')
+        fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
 
@@ -106,7 +107,7 @@ def _make_k(mf, dms, hermi):
         else:
             #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
             #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
-            fcopy = pyscf.df.incore._fpointer('RImmm_nr_s2_copy')
+            fcopy = df.incore._fpointer('RImmm_nr_s2_copy')
             rargs = (ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(0))
