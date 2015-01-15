@@ -63,7 +63,7 @@ def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
             molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
                                              irorbcnt[j]+1))
         log.debug(mf, ' ** MO coefficients **')
-        dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
+        dump_mat.dump_rec(mol.stdout, mo_coeff[:,idx], label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_pop(mol, dm, mf.get_ovlp())
@@ -83,7 +83,7 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        log.info(self, '%s with symmetry adpated basis', self.__doc__)
+        log.info(self, '%s with symmetry adapted basis', self.__doc__)
         float_irname = []
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
@@ -226,7 +226,7 @@ class ROHF(hf.ROHF):
 
     def dump_flags(self):
         hf.ROHF.dump_flags(self)
-        log.info(self, '%s with symmetry adpated basis', self.__doc__)
+        log.info(self, '%s with symmetry adapted basis', self.__doc__)
         float_irname = []
         fix_na = 0
         fix_nb = 0
@@ -521,7 +521,7 @@ class ROHF(hf.ROHF):
                 molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
                                                  irorbcnt[j]+1))
             log.debug(self, ' ** MO coefficients **')
-            dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
+            dump_mat.dump_rec(mol.stdout, mo_coeff[:,idx], label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         return self.mulliken_pop(mol, dm, self.get_ovlp())

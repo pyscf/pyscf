@@ -11,6 +11,7 @@ Pyscf is a python module for quantum chemistry program.  The module
 aims to provide a simple, light-weight and efficient platform for
 quantum chemistry code developing and calculation.  The program is
 developed in the principle of
+
 * Easy to install, to use, to extend and to be embedded;
 * Minimal requirements on libraries (No Boost, MPI) and computing
   resources (perhaps losing efficiency to reduce I/O);
@@ -30,26 +31,26 @@ Installation
 
 * Compile core module
 
-    cd lib
-    mkdir build; cd build
-    cmake ..
-    make
+        cd lib
+        mkdir build; cd build
+        cmake ..
+        make
 
 * To make python be able to find pyscf, edit environment variable
-  PYTHONPATH, e.g.  if pyscf is installed in /opt/pyscf
+  `PYTHONPATH`, e.g.  if pyscf is installed in /opt/pyscf
 
-    export PYTHONPATH=/opt:$PYTHONPATH
+        export PYTHONPATH=/opt:$PYTHONPATH
 
-* Use Intel MKL as BLAS library.  cmake with options -DBLA_VENDOR=Intel10_64lp
+* Use Intel MKL as BLAS library.  cmake with options `-DBLA_VENDOR=Intel10_64lp`
 
-    BLA_VENDOR=Intel10_64lp cmake ..
+        BLA_VENDOR=Intel10_64lp cmake ..
 
   If cmake is still not able to find MKL, just define BLAS_LIBRARIES in CMakeLists.txt
 
-    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
-    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
-    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
-    set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
+        set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
+        set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
+        set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
+        set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
 * Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
   interfaces avaialbe in pyscf.
@@ -82,9 +83,10 @@ there are few rules to follow
 
 Known problems
 --------------
+
 * Error message "Library not loaded: libcint.2.5.0.dylib" On OS X
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
-  "/path/to/pyscf/lib/deps/lib"  to  DYLD_LIBRARY_PATH
+  "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
 * On debian-6, the system default BLAS library (libf77blas.so.3gf) might
   have bug in dsyrk function.  It occasionally results in NaN in mcscf
