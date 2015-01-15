@@ -19,15 +19,26 @@ mol.build(
         H     0    0.757    0.587''',
     basis = 'cc-pvdz',
 )
+symol = gto.Mole()
+symol.build(
+    verbose = 5,
+    output = '/dev/null',
+    atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+    basis = 'cc-pvdz',
+    symmetry = 1,
+)
 
 
 class KnowValues(unittest.TestCase):
     def test_rhf(self):
-        mf = scf.dfhf.RHF(mol)
+        mf = scf.density_fit(scf.RHF(mol))
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
     def test_uhf(self):
-        mf = scf.dfhf.UHF(mol)
+        mf = scf.density_fit(scf.UHF(mol))
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
     def test_rohf(self):
@@ -35,14 +46,31 @@ class KnowValues(unittest.TestCase):
         pmol.charge = 1
         pmol.spin = 1
         pmol.build(False, False)
-        mf = scf.dfhf.ROHF(pmol)
+        mf = scf.density_fit(scf.ROHF(pmol))
+        self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
+
+    def test_rhf_symm(self):
+        mf = scf.density_fit(scf.RHF(symol))
+        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+
+    def test_uhf_symm(self):
+        mf = scf.density_fit(scf.UHF(symol))
+        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+
+    def test_rohf_symm(self):
+        pmol = mol.copy()
+        pmol.charge = 1
+        pmol.spin = 1
+        pmol.symmetry = 1
+        pmol.build(False, False)
+        mf = scf.density_fit(scf.ROHF(pmol))
         self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
 
     def test_rhf_veff(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
-        mf = scf.dfhf.RHF(mol)
+        mf = scf.density_fit(scf.RHF(mol))
         vhf1 = mf.get_veff(mol, dm, hermi=0)
         naux = mf._cderi.shape[0]
         cderi = numpy.empty((naux,nao,nao))
@@ -60,11 +88,10 @@ class KnowValues(unittest.TestCase):
         vk1 = scf.dfhf._make_k(mf, dm, 0)
         self.assertTrue(numpy.allclose(numpy.array(vk0), vk1))
         vhf0 = vj1 - vk1 * .5
-        print abs(vhf0-vhf1).sum()
-        self.assertTrue(numpy.allclose(vhf0, vhf1), 9)
+        self.assertTrue(numpy.allclose(vhf0, vhf1))
 
     def test_uhf_veff(self):
-        mf = scf.dfhf.UHF(mol)
+        mf = scf.density_fit(scf.UHF(mol))
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((4,nao,nao))

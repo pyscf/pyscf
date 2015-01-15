@@ -47,20 +47,7 @@ class RKS(pyscf.scf.hf.RHF):
         log.debug(self, 'nelec by numeric integration = %s', n)
         t0 = log.timer(self, 'vxc', *t0)
 
-        if self._is_mem_enough():
-            if self._eri is None:
-                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi=hermi)
-        else:
-            if self.direct_scf:
-                vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                                     mol._atm, mol._bas, mol._env,
-                                     self.opt, hermi=hermi)
-            else:
-                vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                                     mol._atm, mol._bas, mol._env,
-                                     hermi=hermi)
-        log.timer(self, 'vj and vk', *t0)
+        vj, vk = self.get_jk(mol, dm, hermi)
         self._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
 
         hyb = vxc.hybrid_coeff(x_code, spin=1)

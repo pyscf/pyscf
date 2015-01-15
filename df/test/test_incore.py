@@ -6,8 +6,6 @@ import unittest
 import ctypes
 import numpy
 from pyscf import gto
-from pyscf import scf
-from pyscf import ao2mo
 from pyscf import df
 
 mol = gto.Mole()

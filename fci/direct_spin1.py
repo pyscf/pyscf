@@ -175,14 +175,14 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may diverge the
 # preconditioner when the eigvalue of first davidson iter equals to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, tol=1e-8,
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
            lindep=1e-8, max_cycle=50, **kwargs):
     cis = FCISolver(None)
-    cis.level_shift = eshift
+    cis.level_shift = level_shift
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+    return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -260,7 +260,7 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
 # direct-CI driver
 ###############################################################
 
-def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
+def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
     if isinstance(nelec, int):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -297,7 +297,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None):
         ci0 = ci0.ravel()
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
-    e, c = fci.eig(hop, ci0, precond)
+    e, c = fci.eig(hop, ci0, precond, **kwargs)
     return e, c.reshape(na,nb)
 
 def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
@@ -367,10 +367,11 @@ class FCISolver(object):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond):
+    def eig(self, op, x0, precond, **kwargs):
         return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, verbose=self.verbose)
+                                  self.max_memory, verbose=self.verbose,
+                                  **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -381,7 +382,7 @@ class FCISolver(object):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
-        return kernel_ms1(self, h1e, eri, norb, nelec, ci0)
+        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, **kwargs)
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)

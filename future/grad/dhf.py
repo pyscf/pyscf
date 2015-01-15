@@ -14,8 +14,8 @@ from pyscf.scf import _vhf
 from pyscf.grad import hf
 
 
-def grad_elec(mfg):
-    return hf.grad_elec(mfg)
+def grad_elec(mfg, mo_energy=None, mo_occ=None, mo_coeff=None):
+    return hf.grad_elec(mfg, mo_energy, mo_occ, mo_coeff)
 
 def grad_nuc(mol):
     return hf.grad_nuc(mol)

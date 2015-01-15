@@ -6,7 +6,6 @@ import numpy
 import unittest
 from pyscf import gto
 from pyscf import scf
-from pyscf.scf import dfhf
 
 mol = gto.Mole()
 mol.build(

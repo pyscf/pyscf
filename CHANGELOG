@@ -13,6 +13,7 @@ Version 0.10 (2015-1-?):
   - Define update_casdm for CASSCF
 * Add tests, cover ~ 90% of code
 * Support molecular geometry string as input for Mole.atom
+* Improve density fitting model for non-relativistic SCF
 * Add documents for whole package
 
 Version 0.9 (2015-1-4):

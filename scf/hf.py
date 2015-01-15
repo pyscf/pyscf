@@ -272,15 +272,16 @@ def dot_eri_dm(eri, dm, hermi=0):
         vk = numpy.array([v[1] for v in vjk])
     return vj, vk
 
-def get_jk(mol, dm, hermi=1):
+def get_jk(mol, dm, hermi=1, vhfopt=None):
     vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                         mol._atm, mol._bas, mol._env, hermi=hermi)
+                         mol._atm, mol._bas, mol._env,
+                         vhfopt=vhfopt, hermi=hermi)
     return vj, vk
 
-def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     '''NR Hartree-Fock Coulomb repulsion'''
     ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
-    vj, vk = get_jk(mol, ddm, hermi=hermi)
+    vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     return numpy.array(vhf_last, copy=False) + vj - vk * .5
 
 def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
@@ -543,17 +544,20 @@ class SCF(object):
             self.analyze(self.mo_energy, self.mo_occ, self.mo_coeff)
         return self.hf_energy
 
+    def get_jk(self, mol, dm, hermi=1):
+        t0 = (time.clock(), time.time())
+        vj, vk = get_jk(mol, dm, hermi, self.opt)
+        log.timer(self, 'vj and vk', *t0)
+        return vj, vk
+
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''NR Hartree-Fock Coulomb repulsion'''
         if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
-            vj, vk = _vhf.direct(ddm, mol._atm, mol._bas, mol._env,
-                                 self.opt, hermi=hermi)
+            vj, vk = self.get_jk(mol, ddm, hermi=hermi)
             return numpy.array(vhf_last, copy=False) + vj - vk * .5
         else:
-            vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                                 mol._atm, mol._bas, mol._env,
-                                 self.opt, hermi=hermi)
+            vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
 
     def dump_energy(self, hf_energy, converged):
@@ -607,19 +611,24 @@ class RHF(SCF):
         self._eri = None
         self._keys = self._keys.union(['_eri'])
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-        '''NR RHF Coulomb repulsion'''
+    def get_jk(self, mol, dm, hermi=1):
         t0 = (time.clock(), time.time())
         if self._is_mem_enough() or self._eri is not None:
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj, vk = dot_eri_dm(self._eri, dm, hermi=hermi)
-            vhf = vj - vk * .5
+            vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
-            vhf = SCF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
+            vj, vk = get_jk(mol, dm, hermi, self.opt)
         log.timer(self, 'vj and vk', *t0)
-        return vhf
+        return vj, vk
 
+    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+        '''NR RHF Coulomb repulsion'''
+        if self._is_mem_enough() or self._eri is not None:
+            vj, vk = self.get_jk(mol, dm, hermi)
+            return vj - vk * .5
+        else:
+            return SCF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
 
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
@@ -799,26 +808,20 @@ class ROHF(RHF):
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         import pyscf.scf.uhf
-        t0 = (time.clock(), time.time())
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
         if self._is_mem_enough() or self._eri is not None:
-            if self._eri is None:
-                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj, vk = dot_eri_dm(self._eri, dm, hermi=hermi)
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
-        elif self.direct_scf:
+        if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
-            vj, vk = _vhf.direct(ddm, mol._atm, mol._bas, mol._env,
-                                 self.opt, hermi=hermi)
+            vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset) \
                 + numpy.array(vhf_last, copy=False)
         else:
-            vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                                 mol._atm, mol._bas, mol._env, hermi=hermi)
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
-        log.timer(self, 'vj and vk', *t0)
         return vhf
 
 def _hack_mol_log(mol, dev, fn, *args, **kwargs):

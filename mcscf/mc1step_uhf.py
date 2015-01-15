@@ -229,12 +229,13 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, dx=0, verbose=None):
 
     g_op = lambda: g_orb
     imic = 0
-    for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0, log, \
-                                                tol=casscf.ah_conv_tol, \
-                                                toloose=1e-4,#casscf.conv_tol_grad, \
-                                                max_cycle=casscf.ah_max_cycle, \
-                                                max_stepsize=1.5, \
-                                                lindep=casscf.ah_lindep):
+    for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0, log,
+                                                tol=casscf.ah_conv_tol,
+                                                toloose=casscf.ah_start_tol,
+                                                max_cycle=casscf.ah_max_cycle,
+                                                max_stepsize=1.5,
+                                                lindep=casscf.ah_lindep,
+                                                start_cycle=casscf.ah_start_cycle):
         imic += 1
         dx1 = dxi
         dxmax = numpy.max(abs(dx1))
@@ -328,11 +329,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     mo = mo_coeff
     nmo = mo[0].shape[1]
+    ncore = casscf.ncore
+    ncas = casscf.ncas
+    nocc = (ncas + ncore[0], ncas + ncore[1])
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
-    if casscf.ncas == nmo:
+    if ncas == nmo:
         return e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
@@ -343,8 +347,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, casscf.ncas,
-                                                      casscf.nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
         u, dx, g_orb, ninner = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
         norm_gorb = numpy.linalg.norm(g_orb)
         t3m = log.timer('orbital rotation', *t2m)
@@ -357,7 +360,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         for imicro in range(micro):
 # approximate newton step, fcivec is not updated during micro iters
             casdm1new, casdm2, gci = \
-                    casscf.update_casdm(mo, u, fcivec, e_ci, eris, max_ci_step)
+                    casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             norm_gci = numpy.linalg.norm(gci)
             norm_dm1 = numpy.linalg.norm(casdm1new[0] - casdm1[0]) \
                      + numpy.linalg.norm(casdm1new[1] - casdm1[1])
@@ -378,6 +381,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if (norm_dt < toloose or norm_gorb < toloose or
                 norm_gci < toloose or norm_dm1 < toloose):
+                if casscf.natorb:
+                    natocc, natorb = scipy.linalg.eigh(-casdm1[0])
+                    u[0][:,ncore[0]:nocc[0]] = \
+                            numpy.dot(u[0][:,ncore[0]:nocc[0]], natorb)
+                    log.debug1('natural occ alpha = %s', str(natocc))
+                    natocc, natorb = scipy.linalg.eigh(-casdm1[1])
+                    u[1][:,ncore[1]:nocc[1]] = \
+                            numpy.dot(u[1][:,ncore[1]:nocc[1]], natorb)
+                    log.debug1('natural occ beta = %s', str(natocc))
                 break
 
         totinner += ninner
@@ -439,7 +451,11 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_max_cycle = 15
         self.ah_lindep = self.ah_conv_tol**2
         self.chkfile = mf.chkfile
+        self.ah_start_tol = 1e-4
+        self.ah_start_cycle = 0
+        self.natorb = False
 
+        self.fcisolver.max_cycle = 20
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
@@ -653,15 +669,16 @@ class CASSCF(casci_uhf.CASCI):
         vc = (vhf3ca + vhf4a, vhf3cb + vhf4b)
         return va, vc
 
-    def update_casdm(self, mo, u, fcivec, e_ci, eris, max_ci_stepsize):
+    def update_casdm(self, mo, u, fcivec, e_ci, eris):
         nmo = mo[0].shape[1]
         rmat = u - numpy.eye(nmo)
         g = hessian_co(self, mo, rmat, fcivec, e_ci, eris)
 
         dc = -g.ravel()
         dcmax = numpy.max(abs(dc))
-        if dcmax > max_ci_stepsize:
-            ci1 = fcivec.ravel() + dc * (max_ci_stepsize/dcmax)
+        max_step = min(numpy.linalg.norm(rmat)/rmat.shape[0], self.max_ci_stepsize)
+        if dcmax > max_step:
+            ci1 = fcivec.ravel() + dc * (max_step/dcmax)
         else:
             ci1 = fcivec.ravel() + dc
         ci1 *= 1/numpy.linalg.norm(ci1)

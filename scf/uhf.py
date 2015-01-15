@@ -203,24 +203,10 @@ def mulliken_pop_meta_lowdin_ao(mol, dm_ao):
 def map_rhf_to_uhf(rhf):
     assert(isinstance(rhf, hf.RHF))
     uhf = UHF(rhf.mol)
-    uhf.verbose               = rhf.verbose
-    uhf.mo_energy             = numpy.array((rhf.mo_energy,rhf.mo_energy))
-    uhf.mo_coeff              = numpy.array((rhf.mo_coeff,rhf.mo_coeff))
-    uhf.mo_occ                = numpy.array((rhf.mo_occ,rhf.mo_occ))
-    uhf.hf_energy             = rhf.hf_energy
-
-    uhf.diis_space            = rhf.diis_space
-    uhf.diis_start_cycle      = rhf.diis_start_cycle
-    uhf.damp_factor           = rhf.damp_factor
-    uhf.level_shift_factor    = rhf.level_shift_factor
-    uhf.converged             = rhf.converged
-    uhf.direct_scf            = rhf.direct_scf
-    uhf.direct_scf_tol        = rhf.direct_scf_tol
-
-    uhf.chkfile               = rhf.chkfile
-    uhf.stdout                = rhf.stdout
-    uhf.conv_tol              = rhf.conv_tol
-    uhf.max_cycle             = rhf.max_cycle
+    uhf.__dict__.update(rhf.__dict__)
+    uhf.mo_energy = numpy.array((rhf.mo_energy,rhf.mo_energy))
+    uhf.mo_coeff  = numpy.array((rhf.mo_coeff,rhf.mo_coeff))
+    uhf.mo_occ    = numpy.array((rhf.mo_occ,rhf.mo_occ))
     return uhf
 
 class UHF(hf.SCF):
@@ -320,28 +306,33 @@ class UHF(hf.SCF):
         return _hack_mol_log(mol, self, init_guess_by_chkfile, chkfile,
                              project=project)
 
+    def get_jk(self, mol, dm, hermi=1):
+        t0 = (time.clock(), time.time())
+        if self._is_mem_enough() or self._eri is not None:
+            if self._eri is None:
+                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+        else:
+            vj, vk = hf.get_jk(mol, dm, hermi, self.opt)
+        log.timer(self, 'vj and vk', *t0)
+        return vj, vk
+
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''NR UHF Coulomb repulsion'''
-        t0 = (time.clock(), time.time())
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
         if self._is_mem_enough() or self._eri is not None:
-            if self._eri is None:
-                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi=hermi)
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = _makevhf(vj, vk, nset)
-        elif self.direct_scf:
+        if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
-            vj, vk = _vhf.direct(ddm, mol._atm, mol._bas, mol._env, \
-                                 self.opt, hermi=hermi)
+            vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
         else:
-            vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                                 mol._atm, mol._bas, mol._env, hermi=hermi)
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = _makevhf(vj, vk, nset)
-        log.timer(self, 'vj and vk', *t0)
         return vhf
 
     def scf(self, dm0=None):

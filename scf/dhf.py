@@ -373,22 +373,23 @@ class UHF(hf.SCF):
 #TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
 #TODO        return -vj, -vk
 
+    def get_jk(self, mol, dm, hermi=1):
+        t0 = (time.clock(), time.time())
+        vj, vk = _hack_mol_log(mol, self, get_jk_coulomb,
+                               dm, hermi, self._coulomb_now,
+                               self.opt_llll, self.opt_ssll, self.opt_ssss)
+        log.timer(self, 'vj and vk', *t0)
+        return vj, vk
+
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''Dirac-Coulomb'''
-        t0 = (time.clock(), time.time())
         if self.direct_scf:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
-            vj, vk = _hack_mol_log(mol, self, get_jk_coulomb,
-                                   ddm, hermi, self._coulomb_now,
-                                   self.opt_llll, self.opt_ssll, self.opt_ssss)
-            vhf = numpy.array(vhf_last, copy=False) + vj - vk
+            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+            vj, vk = self.get_jk(mol, ddm, hermi=hermi)
+            return numpy.array(vhf_last, copy=False) + vj - vk
         else:
-            vj, vk = _hack_mol_log(mol, self, get_jk_coulomb,
-                                   numpy.array(dm, copy=False), hermi,
-                                   self._coulomb_now)
-            vhf = vj - vk
-        log.timer(self, 'vj and vk', *t0)
-        return vhf
+            vj, vk = self.get_jk(mol, dm, hermi=hermi)
+            return vj - vk
 
 #TODO    def get_veff_with_gaunt(self, mol, dm, dm_last=0, vhf_last=0):
 #TODO        if self.direct_scf:

@@ -9,7 +9,6 @@ import tempfile
 from pyscf import gto
 from pyscf import scf
 from pyscf.scf import dhf
-from pyscf.scf import dfhf
 
 mol = gto.Mole()
 mol.build(
@@ -52,7 +51,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_nr_df_rhf(self):
-        rhf = dfhf.RHF(mol)
+        rhf = scf.density_fit(scf.RHF(mol))
         rhf.conv_tol = 1e-11
         self.assertAlmostEqual(rhf.scf(), -75.983210886950, 9)
 
@@ -69,12 +68,12 @@ class KnowValues(unittest.TestCase):
             charge = 1,
             spin = 1,
         )
-        mf = dfhf.ROHF(mol)
+        mf = scf.density_fit(scf.ROHF(mol))
         mf.conv_tol = 1e-11
         self.assertAlmostEqual(mf.scf(), -75.5775921401438, 9)
 
     def test_nr_df_uhf(self):
-        uhf = dfhf.UHF(mol)
+        uhf = scf.density_fit(scf.UHF(mol))
         uhf.conv_tol = 1e-11
         self.assertAlmostEqual(uhf.scf(), -75.983210886950, 9)
 

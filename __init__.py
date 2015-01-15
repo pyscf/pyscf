@@ -1,9 +1,6 @@
+''' A Python module for quantum chemistry
+.. moduleauthor:: Qiming Sun <osirpt.sun@gmail.com>
 '''
-pyscf
-=====
-'''
-
-__version__ = '0.10'
 
 import os
 from pyscf import gto

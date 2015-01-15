@@ -7,76 +7,32 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.lib.logger as log
-from pyscf.scf import hf
-from pyscf.scf import uhf
 
 
-class RHF(hf.RHF):
-    def __init__(self, *args, **kwargs):
-        hf.RHF.__init__(self, *args, **kwargs)
-        self.auxbasis = 'weigend'
-        self._cderi = None
-        self._keys = self._keys.union(['auxbasis', '_cderi'])
+def density_fit(mf):
+    class HF(mf.__class__):
+        def __init__(self):
+            self.__dict__.update(mf.__dict__)
+            self.auxbasis = 'weigend'
+            self._cderi = None
+            self._ovlp = None
+            self.direct_scf = False
+            self._keys = self._keys.union(['auxbasis', '_ovlp', '_cderi'])
 
-    def build_(self, mol):
-        if mol is None:
-            mol = self.mol
-        mol.check_sanity(self)
+        def get_jk(self, mol, dm, hermi=1):
+            return get_jk_(self, mol, dm, hermi)
+    return HF()
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-        import pyscf.df
-        t0 = (time.clock(), time.time())
-        if not hasattr(self, '_cderi') or self._cderi is None:
-            self._ovlp = self.get_ovlp(mol)
-            self._cderi = pyscf.df.incore.cholesky_eri(mol, auxbasis=self.auxbasis,
-                                                       verbose=self.verbose)
-        vj = _make_j(self, dm, hermi)
-        vk = _make_k(self, dm, hermi)
-        vhf = vj - vk * .5
-        log.timer(self, 'vj and vk', *t0)
-        return vhf
-
-class UHF(uhf.UHF):
-    def __init__(self, *args, **kwargs):
-        uhf.UHF.__init__(self, *args, **kwargs)
-        self.auxbasis = 'weigend'
-        self._cderi = None
-        self._keys = self._keys.union(['auxbasis', '_cderi'])
-
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-        return _veff_uhf_(self, mol, dm, dm_last, vhf_last, hermi)
-
-
-class ROHF(hf.ROHF):
-    def __init__(self, *args, **kwargs):
-        hf.ROHF.__init__(self, *args, **kwargs)
-        self.auxbasis = 'weigend'
-        self._cderi = None
-        self._keys = self._keys.union(['auxbasis', '_cderi'])
-
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-        return _veff_uhf_(self, mol, dm, dm_last, vhf_last, hermi)
-
-
-def _veff_uhf_(mf, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+def get_jk_(mf, mol, dm, hermi=1):
     t0 = (time.clock(), time.time())
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         mf._ovlp = mf.get_ovlp(mol)
         mf._cderi = pyscf.df.incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
                                                  verbose=mf.verbose)
-    naoaux,nao = mf._cderi.shape[:2]
-    if len(dm) == 2:
-        vj = _make_j(mf, dm[0]+dm[1], hermi)
-        vk = _make_k(mf, dm, hermi)
-        vhf = numpy.array((vj-vk[0], vj-vk[1]))
-    else:
-        dm = numpy.array(dm, copy=False)
-        nd = len(dm) // 2
-        vj = _make_j(mf, dm[:nd]+dm[nd:], hermi)
-        vk = _make_k(mf, dm, hermi)
-        vhf = numpy.array((vj-vk[:nd], vj-vk[nd:]))
+    vj = _make_j(mf, dm, hermi)
+    vk = _make_k(mf, dm, hermi)
     log.timer(mf, 'vj and vk', *t0)
-    return vhf
+    return vj, vk
 
 def _make_j(mf, dms, hermi):
     cderi = mf._cderi
@@ -91,12 +47,11 @@ def _make_j(mf, dms, hermi):
         vj = pyscf.lib.unpack_tril(vj, 1)
         return vj
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        vj = fvj(dms)
+        return fvj(dms)
     else:
-        vj = numpy.array([fvj(dm) for dm in dms])
-    return vj
+        return numpy.array([fvj(dm) for dm in dms])
 
-OCCDROP = 1e-8
+OCCDROP = 1e-12
 BLOCKDIM = 160
 def _make_k(mf, dms, hermi):
     import pyscf.df
@@ -111,25 +66,43 @@ def _make_k(mf, dms, hermi):
         ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
 
         if hermi == 1:
+# I cannot assume dm is positive definite because it is the density matrix
+# difference when the mf.direct_scf flag is set.
             e, c = scipy.linalg.eigh(dm, s, type=2)
-            c = numpy.einsum('ij,j->ij', c[:,e>OCCDROP],
-                             numpy.sqrt(e[e>OCCDROP]))
-            c = numpy.asfortranarray(c)
-            #:vk = numpy.einsum('pij,jk->kpi', cderi, c)
-            #:vk = numpy.dot(vk.reshape(-1,nao).T, vk.reshape(-1,nao))
-            rargs = (ctypes.c_int(nao),
-                     ctypes.c_int(0), ctypes.c_int(c.shape[1]),
-                     ctypes.c_int(0), ctypes.c_int(0))
+            pos = e > OCCDROP
+            neg = e < -OCCDROP
             vk = numpy.zeros_like(dm)
-            for b0, b1 in prange(0, naoaux, BLOCKDIM):
-                buf = numpy.empty((b1-b0,c.shape[1],nao))
-                eri1 = numpy.ascontiguousarray(cderi[b0:b1])
-                fdrv(ftrans, fmmm,
-                     buf.ctypes.data_as(ctypes.c_void_p),
-                     eri1.ctypes.data_as(ctypes.c_void_p),
-                     c.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(b1-b0), *rargs)
-                vk += numpy.dot(buf.reshape(-1,nao).T, buf.reshape(-1,nao))
+            if sum(pos)+sum(neg) > 0:
+                #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
+                #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
+                cpos = numpy.einsum('ij,j->ij', c[:,pos], numpy.sqrt(e[pos]))
+                cpos = numpy.asfortranarray(cpos)
+                cneg = numpy.einsum('ij,j->ij', c[:,neg], numpy.sqrt(-e[neg]))
+                cneg = numpy.asfortranarray(cneg)
+                cposargs = (ctypes.c_int(nao),
+                            ctypes.c_int(0), ctypes.c_int(cpos.shape[1]),
+                            ctypes.c_int(0), ctypes.c_int(0))
+                cnegargs = (ctypes.c_int(nao),
+                            ctypes.c_int(0), ctypes.c_int(cneg.shape[1]),
+                            ctypes.c_int(0), ctypes.c_int(0))
+                for b0, b1 in prange(0, naoaux, BLOCKDIM):
+                    eri1 = numpy.ascontiguousarray(cderi[b0:b1])
+                    if cpos.shape[1] > 0:
+                        buf = numpy.empty(((b1-b0)*cpos.shape[1],nao))
+                        fdrv(ftrans, fmmm,
+                             buf.ctypes.data_as(ctypes.c_void_p),
+                             eri1.ctypes.data_as(ctypes.c_void_p),
+                             cpos.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(b1-b0), *cposargs)
+                        vk += numpy.dot(buf.T, buf)
+                    if cneg.shape[1] > 0:
+                        buf = numpy.empty(((b1-b0)*cneg.shape[1],nao))
+                        fdrv(ftrans, fmmm,
+                             buf.ctypes.data_as(ctypes.c_void_p),
+                             eri1.ctypes.data_as(ctypes.c_void_p),
+                             cneg.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(b1-b0), *cnegargs)
+                        vk -= numpy.dot(buf.T, buf)
         else:
             #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
             #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
@@ -156,12 +129,9 @@ def _make_k(mf, dms, hermi):
                 vk += numpy.dot(buf.reshape(-1,nao).T, buf1.reshape(-1,nao))
         return vk
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        nao = dms.shape[0]
-        vk = fvk(dms)
+        return fvk(dms)
     else:
-        nao = dms[0].shape[0]
-        vk = numpy.array([fvk(dm) for dm in dms])
-    return vk
+        return numpy.array([fvk(dm) for dm in dms])
 
 def prange(start, end, step):
     for i in range(start, end, step):
@@ -170,6 +140,7 @@ def prange(start, end, step):
 
 if __name__ == '__main__':
     import pyscf.gto
+    import pyscf.scf
     mol = pyscf.gto.Mole()
     mol.build(
         verbose = 0,
@@ -179,7 +150,7 @@ if __name__ == '__main__':
         basis = 'ccpvdz',
     )
 
-    method = RHF(mol)
+    method = density_fit(pyscf.scf.RHF(mol))
     energy = method.scf()
     print(energy) # -76.0259362997
 
@@ -193,6 +164,6 @@ if __name__ == '__main__':
         charge = 1,
     )
 
-    method = UHF(mol)
+    method = density_fit(pyscf.scf.UHF(mol))
     energy = method.scf()
     print(energy) # -75.6310072359

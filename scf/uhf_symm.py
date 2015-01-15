@@ -92,26 +92,7 @@ def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
     return mf.mulliken_pop(mol, dm, mf.get_ovlp())
 
 def map_rhf_to_uhf(rhf):
-    assert(isinstance(rhf, hf_symm.RHF))
-    uhf = UHF(mol)
-    uhf.verbose               = rhf.verbose
-    uhf.mo_energy             = numpy.array((rhf.mo_energy,rhf.mo_energy))
-    uhf.mo_coeff              = numpy.array((rhf.mo_coeff,rhf.mo_coeff))
-    uhf.mo_occ                = numpy.array((rhf.mo_occ,rhf.mo_occ))
-    uhf.hf_energy             = rhf.hf_energy
-    uhf.diis_space            = rhf.diis_space
-    uhf.diis_start_cycle      = rhf.diis_start_cycle
-    uhf.damp_factor           = rhf.damp_factor
-    uhf.level_shift_factor    = rhf.level_shift_factor
-    uhf.converged             = rhf.converged
-    uhf.direct_scf            = rhf.direct_scf
-    uhf.direct_scf_tol        = rhf.direct_scf_tol
-
-    uhf.chkfile               = rhf.chkfile
-    uhf.stdout                = rhf.stdout
-    uhf.conv_tol              = rhf.conv_tol
-    uhf.max_cycle             = rhf.max_cycle
-    return uhf
+    return uhf.map_rhf_to_uhf(rhf)
 
 
 class UHF(uhf.UHF):

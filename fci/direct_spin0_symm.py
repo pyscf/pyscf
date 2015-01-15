@@ -70,15 +70,15 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, tol=1e-8,
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
            lindep=1e-8, max_cycle=50, orbsym=[], **kwargs):
     cis = FCISolver(None)
-    cis.level_shift = eshift
+    cis.level_shift = level_shift
     cis.orbsym = orbsym
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return direct_ms0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0)
+    return direct_ms0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
@@ -135,10 +135,11 @@ class FCISolver(direct_spin0.FCISolver):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
-    def eig(self, op, x0, precond):
+    def eig(self, op, x0, precond, **kwargs):
         return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, verbose=self.verbose)
+                                  self.max_memory, verbose=self.verbose,
+                                  **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -146,7 +147,8 @@ class FCISolver(direct_spin0.FCISolver):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
-        e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0)
+        e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
+                                      **kwargs)
 # when norb is small, ci is obtained by exactly diagonalization. It can happen
 # that the ground state is triplet (ci = -ci.T), symmetrize the coefficients
 # will lead to ci = 0

@@ -209,14 +209,15 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, eshift=.001, tol=1e-8,
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
            lindep=1e-8, max_cycle=50, **kwargs):
     cis = FCISolver(None)
-    cis.level_shift = eshift
+    cis.level_shift = level_shift
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0,
+                                   **kwargs)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -266,10 +267,11 @@ class FCISolver(direct_spin1.FCISolver):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond):
+    def eig(self, op, x0, precond, **kwargs):
         return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
                                   self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, verbose=self.verbose)
+                                  self.max_memory, verbose=self.verbose,
+                                  **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -280,7 +282,8 @@ class FCISolver(direct_spin1.FCISolver):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
-        return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0)
+        return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
+                                       **kwargs)
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)

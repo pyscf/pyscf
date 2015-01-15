@@ -12,7 +12,7 @@ from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import diis
 from pyscf.scf import addons
-from pyscf.scf import dfhf
+from pyscf.scf.dfhf import density_fit
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *

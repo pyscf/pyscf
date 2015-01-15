@@ -15,10 +15,13 @@ import pyscf.lib.parameters as param
 from pyscf.scf import _vhf
 
 
-def grad_elec(mfg):
+def grad_elec(mfg, mo_energy=None, mo_occ=None, mo_coeff=None):
     t0 = (time.clock(), time.time())
     mf = mfg._scf
     mol = mfg.mol
+    if mo_energy is None: mo_energy = mf.mo_energy
+    if mo_occ is None:    mo_occ = mf.mo_occ
+    if mo_coeff is None:  mo_coeff = mf.mo_coeff
     h1 = mfg.get_hcore(mol)
     s1 = mfg.get_ovlp(mol)
     dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
@@ -139,17 +142,18 @@ class RHF:
     def matblock_by_atom(self, mol, atm_id, mat):
         return matblock_by_atom(mol, atm_id, mat)
 
-    def grad_elec(self):
-        return grad_elec(self)
+    def grad_elec(self, mo_energy=None, mo_occ=None, mo_coeff=None):
+        return grad_elec(self, mo_energy, mo_occ, mo_coeff)
 
-    def grad_nuc(self):
-        return _hack_mol_log(self.mol, self, grad_nuc)
+    def grad_nuc(self, mol=None):
+        if mol is None: mol = self.mol
+        return _hack_mol_log(mol, self, grad_nuc)
 
-    def grad(self):
+    def grad(self, mo_energy=None, mo_occ=None, mo_coeff=None):
         cput0 = (time.clock(), time.time())
         if self.verbose >= param.VERBOSE_INFO:
             self.dump_flags()
-        grads = self.grad_elec() + self.grad_nuc()
+        grads = self.grad_elec(mo_energy, mo_occ, mo_coeff) + self.grad_nuc()
         for ia in range(self.mol.natm):
             log.log(self, 'atom %d %s, force = (%.14g, %.14g, %.14g)', \
                     ia, self.mol.atom_symbol(ia), *grads[ia])

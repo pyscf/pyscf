@@ -82,7 +82,7 @@ there are few rules to follow
 
 Known problems
 --------------
-* Error message "Library not loaded: libcint.2.3.0.dylib" On OS X
+* Error message "Library not loaded: libcint.2.5.0.dylib" On OS X
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  DYLD_LIBRARY_PATH
 
@@ -91,6 +91,10 @@ Known problems
   solver.  To fix this, change to other BLAS vendors e.g. to MKL
 
         BLA_VENDOR=Intel10_64lp cmake ..
+
+* AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
+  It is caused by old version of libcint.  Remove the directory
+  "pyscf/lib/deps" and rebuild pyscf to fix this problem.
 
 * tests fail
   mcscf/test/test_addons.py    test_spin_square

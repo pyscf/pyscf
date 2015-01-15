@@ -621,7 +621,7 @@ mol.build(
         log.debug2(self, 'arg.env = %s', self._env)
 
         self._built = True
-        return self._atm, self._bas, self._env
+        #return self._atm, self._bas, self._env
 
     def format_atom(self, atom, origin=0, axes=1):
         return format_atom(atom, origin, axes)

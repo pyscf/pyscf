@@ -258,13 +258,6 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     hc += ecore * fcivec.ravel()
     return hc
 
-    vj0 = numpy.einsum('ipq->pq', eris.jc_pp[:,ncore:nocc,ncore:nocc])
-    vk0 = numpy.einsum('ipq->pq', eris.kc_pp[:,ncore:nocc,ncore:nocc])
-    h1 = h1e_mo[ncore:nocc,ncore:nocc] + vj0*2-vk0 + h1cas
-    h2 = eris.aapp[:,:,ncore:nocc,ncore:nocc] + aaaa
-    ci1 = casscf.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=fcivec)[1]
-    #x1 = hc + fcivec * e_ci
-
 # dr = h_{oc} * dc
 def hessian_oc(casscf, mo, dci, fcivec, eris):
     ncas = casscf.ncas
@@ -311,11 +304,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     mo = mo_coeff
     nmo = mo.shape[1]
+    ncore = casscf.ncore
+    ncas = casscf.ncas
+    nocc = ncore + ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.update_ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
-    if casscf.ncas == nmo:
+    if ncas == nmo:
         return e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
@@ -326,21 +322,16 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas,
-                                                     casscf.nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         u, dx, g_orb, ninner = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
         norm_gorb = numpy.linalg.norm(g_orb)
         t3m = log.timer('orbital rotation', *t2m)
         totmicro += 1
-# dynamic ci_stepsize
-# ci graidents may change the CI vector too much, which causes oscillation in
-# macro iterations
-        max_ci_step = min(norm_gorb*50, casscf.max_ci_stepsize)
 
         for imicro in range(micro):
 # approximate newton step, fcivec is not updated during micro iters
             casdm1new, casdm2, gci = \
-                    casscf.update_casdm(mo, u, fcivec, e_ci, eris, max_ci_step)
+                    casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             norm_gci = numpy.linalg.norm(gci)
             norm_dm1 = numpy.linalg.norm(casdm1new - casdm1)
             casdm1 = casdm1new
@@ -360,6 +351,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if (norm_dt < toloose or norm_gorb < toloose or
                 norm_gci < toloose or norm_dm1 < toloose):
+# When close to convergence, rotate the CAS space to natural orbital.
+# Because the casdm1 is only an approximation, it's not neccesary to transform to
+# the natural orbitals at the beginning of optimization
+                if casscf.natorb:
+                    natocc, natorb = scipy.linalg.eigh(-casdm1)
+                    u[:,ncore:nocc] = numpy.dot(u[:,ncore:nocc], natorb)
+                    log.debug1('natural occ = %s', str(natocc))
                 break
 
         totinner += ninner
@@ -426,6 +424,7 @@ class CASSCF(casci.CASCI):
         self.ah_conv_tol = 1e-8
         self.ah_max_cycle = 20
         self.ah_lindep = self.ah_conv_tol**2
+        self.chkfile = mf.chkfile
 # ah_start_tol and ah_start_cycle control the start point to use AH step.
 # In function rotate_orb_ah, the orbital rotation is carried out with the
 # approximate aug_hessian step after a few davidson updates of the AH eigen
@@ -433,8 +432,9 @@ class CASSCF(casci.CASCI):
 # start point of orbital rotation.
         self.ah_start_tol = 1e-4
         self.ah_start_cycle = 0
-        self.chkfile = mf.chkfile
+        self.natorb = False # CAS space in natural orbital
 
+        self.fcisolver.max_cycle = 20
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
@@ -601,7 +601,7 @@ class CASSCF(casci.CASCI):
         vc = 2 * vhf3c + vhf4
         return va, vc
 
-    def update_casdm(self, mo, u, fcivec, e_ci, eris, max_ci_stepsize):
+    def update_casdm(self, mo, u, fcivec, e_ci, eris):
         nmo = mo.shape[1]
         rmat = u - numpy.eye(nmo)
 
@@ -669,11 +669,13 @@ class CASSCF(casci.CASCI):
 
 # * minimal subspace is identical to simple gradient updates
         g = hc - (e_ci-ecore) * fcivec.ravel()  # hc-eci*fcivec equals to eqs. (@)
-        max_ci_stepsize = min(numpy.linalg.norm(rmat), self.max_ci_stepsize)
+        # dynamic ci_stepsize: ci graidents may change the CI vector too much,
+        # which causes oscillation in macro iterations
+        max_step = min(numpy.linalg.norm(rmat)/rmat.shape[0], self.max_ci_stepsize)
         dc = -g.ravel()
         dcmax = numpy.max(abs(dc))
-        if dcmax > max_ci_stepsize:
-            ci1 = fcivec.ravel() + dc * (max_ci_stepsize/dcmax)
+        if dcmax > max_step:
+            ci1 = fcivec.ravel() + dc * (max_step/dcmax)
         else:
             ci1 = fcivec.ravel() + dc
         ci1 *= 1/numpy.linalg.norm(ci1)
