@@ -226,7 +226,7 @@ class ROHF(hf.ROHF):
 
     def dump_flags(self):
         hf.ROHF.dump_flags(self)
-        log.info(self, '%s with symmetry adpated basis', self.__doc__)
+        log.info(self, '%s with symmetry adapted basis', self.__doc__)
         float_irname = []
         fix_na = 0
         fix_nb = 0
