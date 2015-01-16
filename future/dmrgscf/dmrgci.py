@@ -17,7 +17,7 @@ restart from previous calculation
 '''
 
 try:
-    from pyscf.dmrgci import settings
+    from pyscf.dmrgscf import settings
 except ImportError:
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
