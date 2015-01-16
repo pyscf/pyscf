@@ -228,11 +228,12 @@ def copy(mol):
     newmol._env = copy.deepcopy(mol._env)
     newmol.atom    = copy.deepcopy(mol.atom)
     newmol.basis   = copy.deepcopy(mol.basis)
+    newmol._basis  = copy.deepcopy(mol._basis)
     return newmol
 
 def pack(mol):
     return {'atom'    : mol.atom,
-            'basis'   : mol.basis,
+            'basis'   : mol._basis,
             'charge'  : mol.charge,
             'spin'    : mol.spin,
             'symmetry': mol.symmetry,
@@ -494,6 +495,7 @@ mol.build(
         self.symm_orb = None
         self.irrep_id = None
         self.irrep_name = None
+        self._basis = None
         self._built = False
         self._keys = set(self.__dict__.keys()).union(['_keys'])
 
@@ -521,18 +523,6 @@ mol.build(
     def copy(self):
         return copy(self)
 
-    # cannot use __getstate__ for pickle here, because it affects copy.copy()
-    #def __getstate__(self):
-    #    return {'atom'    : self.atom, \
-    #            'basis'   : self.basis, \
-    #            'charge'  : self.charge, \
-    #            'spin'    : self.spin, \
-    #            'symmetry': self.symmetry, \
-    #            'nucmod'  : self.nucmod, \
-    #            'mass'    : self.mass, \
-    #            'grids'   : self.grids }
-    #def __setstate__(self, moldic):
-    #    self.__dict__.update(moldic)
     def pack(self):
         return pack(self)
     def unpack(self, moldic):
@@ -590,12 +580,14 @@ mol.build(
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
             uniq_atoms = set([a[0] for a in self.atom])
-            self.basis = dict([(a, self.basis) for a in uniq_atoms])
-        self.basis = self.format_basis(self.basis)
+            self._basis = self.format_basis(dict([(a, self.basis)
+                                                  for a in uniq_atoms]))
+        else:
+            self._basis = self.format_basis(self.basis)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
         self._atm, self._bas, self._env = \
-                self.make_env(self.atom, self.basis, self._env, \
+                self.make_env(self.atom, self._basis, self._env, \
                               self.nucmod, self.mass)
         self.natm = self._atm.__len__()
         self.nbas = self._bas.__len__()
@@ -606,7 +598,7 @@ mol.build(
             import pyscf.symm
             eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
             symm_orb = pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,\
-                                                     self.atom, self.basis)
+                                                     self.atom, self._basis)
             self.irrep_id = [ir for ir in range(len(symm_orb)) \
                              if symm_orb[ir].size > 0]
             self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir) \
@@ -712,7 +704,7 @@ mol.build(
         self.stdout.write('[INPUT] basis\n')
         self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
                           'expnt,             c_1 c_2 ...\n')
-        for atom, basis in self.basis.items():
+        for atom, basis in self._basis.items():
             self.stdout.write('[INPUT] %s\n' % atom)
             for b in basis:
                 if isinstance(b[1], int):
@@ -775,7 +767,7 @@ mol.build(
 
     def atom_nshells(self, atm_id):
         symb = self.atom_symbol(atm_id)
-        return self.basis[symb].__len__()
+        return len(self._basis[symb])
 
     def atom_shell_ids(self, atm_id):
         return [ib for ib in range(len(self._bas)) \
