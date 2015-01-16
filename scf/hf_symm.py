@@ -9,7 +9,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.lib.logger as log
-import pyscf.lib.parameters as param
+from pyscf.lib import logger
 import pyscf.symm
 from pyscf.scf import diis
 from pyscf.scf import hf
@@ -21,52 +21,47 @@ from pyscf.scf import _vhf
 
 # mo_coeff, mo_occ, mo_energy are all in nosymm representation
 
-def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
+def analyze(mf, verbose=logger.DEBUG):
     from pyscf.tools import dump_mat
-    if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_occ is None: mo_occ = mf.mo_occ
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    log = pyscf.lib.logger.Logger(mf.stdout, verbose)
     mol = mf.mol
-    nirrep = mol.symm_orb.__len__()
-    if mf.verbose >= param.VERBOSE_INFO:
-        tot_sym = 0
-        noccs = []
-        irlabels = []
-        irorbcnt = []
-        p0 = 0
-        for ir in range(nirrep):
-            nso = mol.symm_orb[ir].shape[1]
-            nocc = int(mo_occ[p0:p0+nso].sum())
-            #if nocc % 2:
-            #    tot_sym ^= mol.irrep_id[ir]
-            noccs.append(nocc)
-            irlabels.extend([mol.irrep_name[ir]]*nso)
-            irorbcnt.extend(range(nso))
-            p0 += nso
-        log.info(mf, 'total symmetry = %s', \
-                 pyscf.symm.irrep_name(mol.groupname, tot_sym))
-        log.info(mf, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
-                 *mol.irrep_name)
-        log.info(mf, 'double occ                 ' + (' %4d'*nirrep), \
-                 *noccs)
-        log.info(mf, '**** MO energy ****')
-        idx = numpy.argsort(mo_energy)
-        for k, j in enumerate(idx):
-            log.info(mf, 'MO #%d (%s #%d), energy= %.15g occ= %g', \
-                     k+1, irlabels[j], irorbcnt[j]+1,
-                     mo_energy[j], mo_occ[j])
+    nirrep = len(mol.irrep_id)
+    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                       mo_coeff)
+    orbsym = numpy.array(orbsym)
+    tot_sym = 0
+    noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
+    log.info('total symmetry = %s', \
+             pyscf.symm.irrep_name(mol.groupname, tot_sym))
+    log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), \
+             *mol.irrep_name)
+    log.info('double occ                 ' + (' %4d'*nirrep), \
+             *noccs)
+    log.info('**** MO energy ****')
+    irorbcnt = [0] * 8
+    irname_full = [0] * 8
+    for k,ir in enumerate(mol.irrep_id):
+        irname_full[ir] = mol.irrep_name[k]
+    for k, j in enumerate(orbsym):
+        irorbcnt[j] += 1
+        log.info('MO #%d (%s #%d), energy= %.15g occ= %g', \
+                 k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
-    if mf.verbose >= param.VERBOSE_DEBUG:
+    if verbose >= logger.DEBUG:
         label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
         molabel = []
-        for k, j in enumerate(idx):
-            molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
-                                             irorbcnt[j]+1))
-        log.debug(mf, ' ** MO coefficients **')
-        dump_mat.dump_rec(mol.stdout, mo_coeff[:,idx], label, molabel, start=1)
+        irorbcnt = [0] * 8
+        for k, j in enumerate(orbsym):
+            irorbcnt[j] += 1
+            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
+        log.debug(' ** MO coefficients **')
+        dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, mf.get_ovlp())
+    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), verbose)
 
 def so2ao_mo_coeff(so, irrep_mo_coeff):
     return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir]) \
@@ -172,7 +167,7 @@ class RHF(hf.RHF):
             p0 += nso
         log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
                  irhomo, ehomo, irlumo, elumo)
-        if self.verbose >= param.VERBOSE_DEBUG:
+        if self.verbose >= logger.DEBUG:
             log.debug(self, 'irrep_nocc = %s', noccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
         return mo_occ
@@ -188,7 +183,6 @@ class RHF(hf.RHF):
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
-        self.analyze(self.mo_energy, self.mo_occ, self.mo_coeff)
 
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
@@ -200,10 +194,14 @@ class RHF(hf.RHF):
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
+
+# analyze at last, in terms of the ordered orbital energies
+        if self.verbose >= logger.INFO:
+            self.analyze(self.verbose)
         return self.hf_energy
 
-    def analyze(self, mo_energy=None, mo_occ=None, mo_coeff=None):
-        return analyze(self, mo_energy, mo_occ, mo_coeff)
+    def analyze(self, verbose=logger.DEBUG):
+        return analyze(self, verbose)
 
 
 class ROHF(hf.ROHF):
@@ -422,7 +420,7 @@ class ROHF(hf.ROHF):
 
         log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
                  irhomo, ehomo, irlumo, elumo)
-        if self.verbose >= param.VERBOSE_DEBUG:
+        if self.verbose >= logger.DEBUG:
             log.debug(self, 'double occ irrep_nocc = %s', ndoccs)
             log.debug(self, 'single occ irrep_nocc = %s', nsoccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
@@ -459,7 +457,6 @@ class ROHF(hf.ROHF):
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
-        self.analyze(self.mo_energy, self.mo_occ, self.mo_coeff)
 
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
@@ -471,60 +468,60 @@ class ROHF(hf.ROHF):
         nocc = len(o_sort)
         self.mo_occ[:nocc] = self.mo_occ[self.mo_occ>0][o_sort]
         self.mo_occ[nocc:] = 0
+
+        if self.verbose >= logger.INFO:
+            self.analyze(self.verbose)
         return self.hf_energy
 
-    def analyze(self, mo_energy=None, mo_occ=None, mo_coeff=None):
+    def analyze(self, verbose=logger.DEBUG):
         from pyscf.tools import dump_mat
-        if mo_energy is None: mo_energy = self.mo_energy
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
+        mo_energy = self.mo_energy
+        mo_occ = self.mo_occ
+        mo_coeff = self.mo_coeff
+        log = logger.Logger(self.stdout, verbose)
         mol = self.mol
-        nirrep = mol.symm_orb.__len__()
-        if self.verbose >= param.VERBOSE_INFO:
-            tot_sym = 0
-            noccs = []
-            irlabels = []
-            irorbcnt = []
-            ndoccs = []
-            nsoccs = []
-            p0 = 0
-            for ir in range(nirrep):
-                nso = mol.symm_orb[ir].shape[1]
-                ndocc = (mo_occ[p0:p0+nso]==2).sum()
-                nsocc = int(mo_occ[p0:p0+nso].sum()) - ndocc*2
-                if nsocc % 2:
-                    tot_sym ^= mol.irrep_id[ir]
-                ndoccs.append(ndocc)
-                nsoccs.append(nsocc)
-                irlabels.extend([mol.irrep_name[ir]]*nso)
-                irorbcnt.extend(range(nso))
-                p0 += nso
-            log.info(self, 'total symmetry = %s', \
-                     pyscf.symm.irrep_name(mol.groupname, tot_sym))
-            log.info(self, 'occupancy for each irrep:  ' + (' %4s'*nirrep), \
-                     *mol.irrep_name)
-            log.info(self, 'double occ                 ' + (' %4d'*nirrep), \
-                     *ndoccs)
-            log.info(self, 'single occ                 ' + (' %4d'*nirrep), \
-                     *nsoccs)
-            log.info(self, '**** MO energy ****')
-            idx = numpy.argsort(mo_energy)
-            for k, j in enumerate(idx):
-                log.info(self, 'MO #%d (%s #%d), energy= %.15g occ= %g', \
-                         k+1, irlabels[j], irorbcnt[j]+1,
-                         mo_energy[j], mo_occ[j])
+        nirrep = len(mol.irrep_id)
+        orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                           mo_coeff)
+        orbsym = numpy.array(orbsym)
+        tot_sym = 0
+        ndoccs = []
+        nsoccs = []
+        for k,ir in enumerate(mol.irrep_id):
+            ndoccs.append(sum(orbsym[mo_occ==2] == ir))
+            nsoccs.append(sum(orbsym[mo_occ==1] == ir))
+            if nsoccs[k] % 2:
+                tot_sym ^= ir
+        log.info('total symmetry = %s', \
+                 pyscf.symm.irrep_name(mol.groupname, tot_sym))
+        log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), \
+                 *mol.irrep_name)
+        log.info('double occ                 ' + (' %4d'*nirrep), \
+                 *ndoccs)
+        log.info('single occ                 ' + (' %4d'*nirrep), \
+                 *nsoccs)
+        log.info('**** MO energy ****')
+        irorbcnt = [0] * 8
+        irname_full = [0] * 8
+        for k,ir in enumerate(mol.irrep_id):
+            irname_full[ir] = mol.irrep_name[k]
+        for k, j in enumerate(orbsym):
+            irorbcnt[j] += 1
+            log.info('MO #%d (%s #%d), energy= %.15g occ= %g', \
+                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
-        if self.verbose >= param.VERBOSE_DEBUG:
+        if verbose >= logger.DEBUG:
             label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
             molabel = []
-            for k, j in enumerate(idx):
-                molabel.append('#%-d(%s #%d)' % (k+1, irlabels[j],
-                                                 irorbcnt[j]+1))
-            log.debug(self, ' ** MO coefficients **')
-            dump_mat.dump_rec(mol.stdout, mo_coeff[:,idx], label, molabel, start=1)
+            irorbcnt = [0] * 8
+            for k, j in enumerate(orbsym):
+                irorbcnt[j] += 1
+                molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
+            log.debug(' ** MO coefficients **')
+            dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_pop(mol, dm, self.get_ovlp())
+        return self.mulliken_pop(mol, dm, self.get_ovlp(), verbose)
 
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):

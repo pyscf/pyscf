@@ -48,7 +48,7 @@ class KnowValues(unittest.TestCase):
     def test_analyze(self):
         numpy.random.seed(5)
         nao = mol.nao_nr()
-        pop, chg = mf.analyze(mo_coeff=mf.mo_coeff)
+        pop, chg = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 2.2649896039590094, 9)
 
     def test_scf(self):

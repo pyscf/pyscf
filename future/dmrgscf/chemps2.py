@@ -164,11 +164,11 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(mol, m, 4, 4)
     mc.fcisolver = CheMPS2(mol)
     mc.fcisolver.dmrg_e_convergence = 1e-8
-    emc_1 = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1 = mc.mc2step()[0]
 
     mc = mcscf.CASCI(mol, m, 4, 4)
     mc.fcisolver = CheMPS2(mol)
-    emc_0 = mc.casci()[0] + mol.nuclear_repulsion()
+    emc_0 = mc.casci()[0]
 
     b = 1.4
     mol = gto.Mole()
@@ -183,10 +183,10 @@ if __name__ == '__main__':
     m.scf()
 
     mc = mcscf.CASSCF(mol, m, 4, 4)
-    emc_1ref = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1ref = mc.mc2step()[0]
 
     mc = mcscf.CASCI(mol, m, 4, 4)
-    emc_0ref = mc.casci()[0] + mol.nuclear_repulsion()
+    emc_0ref = mc.casci()[0]
 
     print('CheMPS2-CI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))
     print('CheMPS2-SCF = %.15g CASSCF = %.15g' % (emc_1, emc_1ref))

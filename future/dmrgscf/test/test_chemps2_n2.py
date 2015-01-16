@@ -26,13 +26,13 @@ class KnowValues(unittest.TestCase):
     def test_mc2step_4o4e(self):
         mc = mcscf.CASSCF(mol, m, 4, 4)
         mc.fcisolver = dmrgscf.DMRGCI(mol)
-        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
+        emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
 
     def test_mc2step_6o6e(self):
         mc = mcscf.CASSCF(mol, m, 6, 6)
         mc.fcisolver = dmrgscf.DMRGCI(mol)
-        emc = mc.mc2step()[0] + mol.nuclear_repulsion()
+        emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
 if __name__ == "__main__":

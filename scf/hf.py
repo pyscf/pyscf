@@ -17,7 +17,7 @@ import scipy.linalg
 import pyscf.gto
 import pyscf.lib
 import pyscf.lib.logger as log
-import pyscf.lib.parameters as param
+from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import diis
 from pyscf.scf import _vhf
@@ -41,7 +41,7 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
     cput0 = (time.clock(), time.time())
     mol = mf.mol
     if init_dm is None:
-        dm = mf.get_init_guess(mol=mol, key=mf.init_guess)
+        dm = mf.get_init_guess(key=mf.init_guess)
     else:
         dm = init_dm
 
@@ -284,41 +284,43 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     return numpy.array(vhf_last, copy=False) + vj - vk * .5
 
-def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
+def analyze(mf, verbose=logger.DEBUG):
     from pyscf.tools import dump_mat
-    if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_occ is None: mo_occ = mf.mo_occ
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    log.info(mf, '**** MO energy ****')
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    log = logger.Logger(mf.stdout, verbose)
+    log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info(mf, 'occupied MO #%d energy= %.15g occ= %g', \
+            log.info('occupied MO #%d energy= %.15g occ= %g', \
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info(mf, 'virtual MO #%d energy= %.15g occ= %g', \
+            log.info('virtual MO #%d energy= %.15g occ= %g', \
                      i+1, mo_energy[i], mo_occ[i])
-    if mf.verbose >= param.VERBOSE_DEBUG:
-        log.debug(mf, ' ** MO coefficients **')
+    if verbose >= logger.DEBUG:
+        log.debug(' ** MO coefficients **')
         label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp())
+    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), verbose)
 
-def mulliken_pop(mol, dm, ovlp=None):
+def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
     if ovlp is None:
         ovlp = get_ovlp(mol)
+    log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         pop = numpy.einsum('ij->i', dm*ovlp).real
     else: # ROHF
         pop = numpy.einsum('ij->i', (dm[0]+dm[1])*ovlp).real
     label = mol.spheric_labels()
 
-    log.info(mol, ' ** Mulliken pop  **')
+    log.info(' ** Mulliken pop  **')
     for i, s in enumerate(label):
-        log.info(mol, 'pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
+        log.info('pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
 
-    log.info(mol, ' ** Mulliken atomic charges  **')
+    log.info(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
     for i, s in enumerate(label):
         chg[s[0]] += pop[i]
@@ -326,13 +328,14 @@ def mulliken_pop(mol, dm, ovlp=None):
         symb = mol.atom_symbol(ia)
         nuc = mol.atom_charge(ia)
         chg[ia] = nuc - chg[ia]
-        log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
-def mulliken_pop_meta_lowdin_ao(mol, dm):
+def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG):
     '''divede ao into core, valence and Rydberg sets,
     orthonalizing within each set'''
     from pyscf.lo import orth
+    log = logger.Logger(mol.stdout, verbose)
     c = orth.pre_orth_ao_atm_scf(mol)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
     c_inv = numpy.linalg.inv(orth_coeff)
@@ -341,8 +344,8 @@ def mulliken_pop_meta_lowdin_ao(mol, dm):
     else: # ROHF
         dm = reduce(numpy.dot, (c_inv, dm[0]+dm[1], c_inv.T.conj()))
 
-    log.info(mol, ' ** Mulliken pop on meta-lowdin orthogonal AOs  **')
-    return mulliken_pop(mol, dm, numpy.eye(orth_coeff.shape[0]))
+    log.info(' ** Mulliken pop on meta-lowdin orthogonal AOs  **')
+    return mulliken_pop(mol, dm, numpy.eye(orth_coeff.shape[0]), verbose)
 
 
 class SCF(object):
@@ -540,8 +543,8 @@ class SCF(object):
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
-        if self.verbose >= param.VERBOSE_INFO:
-            self.analyze(self.mo_energy, self.mo_occ, self.mo_coeff)
+        if self.verbose >= logger.INFO:
+            self.analyze(self.verbose)
         return self.hf_energy
 
     def get_jk(self, mol, dm, hermi=1):
@@ -569,16 +572,16 @@ class SCF(object):
             log.log(self, 'SCF energy = %.15g after %d cycles',
                     hf_energy, self.max_cycle)
 
-    def analyze(self, mo_energy=None, mo_occ=None, mo_coeff=None):
-        return analyze(self, mo_energy, mo_occ, mo_coeff)
+    def analyze(self, verbose=logger.DEBUG):
+        return analyze(self, verbose)
 
-    def mulliken_pop(self, mol, dm, ovlp=None):
+    def mulliken_pop(self, mol, dm, ovlp=None, verbose=logger.DEBUG):
         if ovlp is None:
             ovlp = self.get_ovlp(mol)
-        return _hack_mol_log(mol, self, mulliken_pop, dm, ovlp)
+        return _hack_mol_log(mol, self, mulliken_pop, dm, ovlp, verbose)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol, dm):
-        return _hack_mol_log(mol, self, mulliken_pop_meta_lowdin_ao, dm)
+    def mulliken_pop_meta_lowdin_ao(self, mol, dm, verbose=logger.DEBUG):
+        return _hack_mol_log(mol, self, mulliken_pop_meta_lowdin_ao, dm, verbose)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()

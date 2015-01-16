@@ -54,6 +54,8 @@ class CASSCF(mc1step.CASSCF):
                 mc1step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
@@ -85,6 +87,8 @@ class CASSCF(mc1step.CASSCF):
                 mc2step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def gen_g_hop(self, mo, casdm1, casdm2, eris):

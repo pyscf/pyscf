@@ -51,8 +51,8 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
-        pop, chg = mf.analyze(mo_coeff=mo)
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 24.150823594648081, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.2031790165528986, 9)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)

@@ -652,16 +652,18 @@ mol.build(
 
 
     def dump_input(self):
-        try:
-            filename = os.path.join(os.getcwd(), sys.argv[0])
-            finput = open(filename, 'r')
-            self.stdout.write('\n')
-            self.stdout.write('INFO: **** input file is %s ****\n' % filename)
-            self.stdout.write(finput.read())
-            self.stdout.write('INFO: ******************** input file end ********************\n')
-            self.stdout.write('\n')
-        except:
-            log.warn(self, 'input file does not exist')
+        import __main__
+        if hasattr(__main__, '__file__'):
+            try:
+                filename = os.path.abspath(__main__.__file__)
+                finput = open(filename, 'r')
+                self.stdout.write('\n')
+                self.stdout.write('INFO: **** input file is %s ****\n' % filename)
+                self.stdout.write(finput.read())
+                self.stdout.write('INFO: ******************** input file end ********************\n')
+                self.stdout.write('\n')
+            except:
+                log.warn(self, 'input file does not exist')
 
         self.stdout.write('System: %s\n' % str(os.uname()))
         self.stdout.write('Date: %s\n' % time.ctime())

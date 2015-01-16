@@ -8,7 +8,7 @@ import scipy.linalg
 import pyscf.gto
 import pyscf.lib
 import pyscf.lib.logger as log
-import pyscf.lib.parameters as param
+from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import chkfile
 from pyscf.scf import diis
@@ -131,54 +131,56 @@ def spin_square(mo, ovlp=1):
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
+def analyze(mf, verbose=logger.DEBUG):
     from pyscf.tools import dump_mat
-    if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_occ is None: mo_occ = mf.mo_occ
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    log = logger.Logger(mf.stdout, verbose)
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
-    log.info(mf, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+    log.info('multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
 
-    log.info(mf, '**** MO energy ****')
+    log.info('**** MO energy ****')
     for i in range(mo_energy[0].__len__()):
         if mo_occ[0][i] > 0:
-            log.info(mf, "alpha occupied MO #%d energy = %.15g occ= %g",
+            log.info("alpha occupied MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[0][i], mo_occ[0][i])
         else:
-            log.info(mf, "alpha virtual MO #%d energy = %.15g occ= %g",
+            log.info("alpha virtual MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[0][i], mo_occ[0][i])
     for i in range(mo_energy[1].__len__()):
         if mo_occ[1][i] > 0:
-            log.info(mf, "beta occupied MO #%d energy = %.15g occ= %g",
+            log.info("beta occupied MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[1][i], mo_occ[1][i])
         else:
-            log.info(mf, "beta virtual MO #%d energy = %.15g occ= %g",
+            log.info("beta virtual MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[1][i], mo_occ[1][i])
-    if mf.verbose >= param.VERBOSE_DEBUG:
-        log.debug(mf, ' ** MO coefficients for alpha spin **')
+    if mf.verbose >= logger.DEBUG:
+        log.debug(' ** MO coefficients for alpha spin **')
         label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
         dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1)
-        log.debug(mf, ' ** MO coefficients for beta spin **')
+        log.debug(' ** MO coefficients for beta spin **')
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp())
+    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), verbose)
 
-def mulliken_pop(mol, dm, ovlp=None):
+def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     '''Mulliken M_ij = D_ij S_ji, Mulliken chg_i = \sum_j M_ij'''
     if ovlp is None:
         ovlp = hf.get_ovlp(mol)
+    log = logger.Logger(mol.stdout, verbose)
     pop_a = numpy.einsum('ij->i', dm[0]*ovlp)
     pop_b = numpy.einsum('ij->i', dm[1]*ovlp)
     label = mol.spheric_labels()
 
-    log.info(mol, ' ** Mulliken pop alpha/beta **')
+    log.info(' ** Mulliken pop alpha/beta **')
     for i, s in enumerate(label):
-        log.info(mol, 'pop of  %s %10.5f  / %10.5f', \
+        log.info('pop of  %s %10.5f  / %10.5f', \
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
 
-    log.info(mol, ' ** Mulliken atomic charges  **')
+    log.info(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
     for i, s in enumerate(label):
         chg[s[0]] += pop_a[i] + pop_b[i]
@@ -186,19 +188,20 @@ def mulliken_pop(mol, dm, ovlp=None):
         symb = mol.atom_symbol(ia)
         nuc = mol.atom_charge(ia)
         chg[ia] = nuc - chg[ia]
-        log.info(mol, 'charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
 
-def mulliken_pop_meta_lowdin_ao(mol, dm_ao):
+def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG):
     from pyscf.lo import orth
+    log = logger.Logger(mol.stdout, verbose)
     c = orth.pre_orth_ao_atm_scf(mol)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
     c_inv = numpy.linalg.inv(orth_coeff)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
 
-    log.info(mol, ' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]))
+    log.info(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
+    return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), verbose)
 
 def map_rhf_to_uhf(rhf):
     assert(isinstance(rhf, hf.RHF))
@@ -350,22 +353,23 @@ class UHF(hf.SCF):
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
-        if self.verbose >= param.VERBOSE_INFO:
-            self.analyze(self.mo_energy, self.mo_occ, self.mo_coeff)
+        if self.verbose >= logger.INFO:
+            self.analyze(self.verbose)
         return self.hf_energy
 
-    def analyze(self, mo_energy=None, mo_occ=None, mo_coeff=None):
-        return analyze(self, mo_energy, mo_occ, mo_coeff)
+    def analyze(self, verbose=logger.DEBUG):
+        return analyze(self, verbose)
 
-    def mulliken_pop(self, mol, dm, ovlp=None):
-        return _hack_mol_log(mol, self, mulliken_pop, dm, ovlp)
+    def mulliken_pop(self, mol, dm, ovlp=None, verbose=logger.DEBUG):
+        return _hack_mol_log(mol, self, mulliken_pop, dm, ovlp, verbose)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol, dm):
-        return _hack_mol_log(mol, self, mulliken_pop_meta_lowdin_ao, dm)
+    def mulliken_pop_meta_lowdin_ao(self, mol, dm, verbose=logger.DEBUG):
+        return _hack_mol_log(mol, self, mulliken_pop_meta_lowdin_ao, dm, verbose)
 
     def spin_square(self, mo_coeff=None, ovlp=None):
         if mo_coeff is None:
-            mo_coeff = self.mo_coeff
+            mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
+                        self.mo_coeff[1][:,self.mo_occ[1]>0])
         if ovlp is None:
             ovlp = self.get_ovlp()
         return spin_square(mo_coeff, ovlp)

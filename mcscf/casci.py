@@ -9,9 +9,11 @@ from functools import reduce
 import numpy
 import h5py
 import pyscf.lib
+from pyscf.lib import logger
 import pyscf.scf
 import pyscf.ao2mo
-import pyscf.fci.direct_spin0
+from pyscf import fci
+from pyscf.mcscf import addons
 
 
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
@@ -87,8 +89,8 @@ class CASCI(object):
         else:
             assert(isinstance(ncore, int))
             self.ncore = ncore
-        #self.fcisolver = pyscf.fci.direct_spin0.FCISolver(mol)
-        self.fcisolver = pyscf.fci.solver(mol, self.nelecas[0]==self.nelecas[1])
+        #self.fcisolver = fci.direct_spin0.FCISolver(mol)
+        self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1])
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 30
@@ -149,14 +151,39 @@ class CASCI(object):
 
         self.e_tot, e_cas, self.ci = \
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
         return self.cas_natorb(mo_coeff, ci0)
     def cas_natorb_(self, mo_coeff=None, ci0=None):
-        from pyscf.mcscf import addons
         self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
         return self.ci, self.mo_coeff
+
+    def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG):
+        from pyscf.tools import dump_mat
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if verbose >= logger.INFO:
+            log = logger.Logger(self.stdout, verbose)
+            dm1a, dm1b = addons.make_rdm1s(self, ci, mo_coeff)
+            label = ['%d%3s %s%-4s' % x for x in self.mol.spheric_labels()]
+            log.info('alpha density matrix (on AO)')
+            dump_mat.dump_tri(self.stdout, dm1a, label)
+            log.info('beta density matrix (on AO)')
+            dump_mat.dump_tri(self.stdout, dm1b, label)
+
+            s = reduce(numpy.dot, (mo_coeff.T, self._scf.get_ovlp(),
+                                   self._scf.mo_coeff))
+            idx = numpy.argwhere(abs(s)>.5)
+            for i,j in idx:
+                log.info('<mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+            log.info('** Largest CI components **')
+            log.info(' string alpha, string beta, CI coefficients')
+            for c,ia,ib in fci.addons.large_ci(ci, self.ncas, self.nelecas):
+                log.info('  %9s    %9s    %.12f', ia, ib, c)
+        return dm1a, dm1b
 
 
 
@@ -178,15 +205,15 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 4, 4)
-    mc.fcisolver = pyscf.fci.solver(mol)
+    mc.fcisolver = fci.solver(mol)
     emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
     mc = CASCI(mol, m, 4, (3,1))
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = mc.casci()[0]
     print(emc - -75.439016172976)
 
@@ -214,13 +241,13 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASCI(mol, m, 9, 8)
-    mc.fcisolver = pyscf.fci.solver(mol)
+    mc.fcisolver = fci.solver(mol)
     emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)
 
     mc = CASCI(mol, m, 9, (5,3))
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = mc.casci()[0]
     print(emc - -227.7674519720)

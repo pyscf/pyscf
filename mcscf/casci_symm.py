@@ -8,6 +8,7 @@ import time
 import numpy
 import h5py
 import pyscf.lib
+from pyscf.lib import logger
 import pyscf.symm
 import pyscf.scf
 import pyscf.ao2mo
@@ -47,6 +48,9 @@ class CASCI(casci.CASCI):
 
         self.e_tot, e_cas, self.ci = \
                 casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
     def get_hcore(self, mol=None):

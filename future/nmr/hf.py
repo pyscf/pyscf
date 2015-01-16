@@ -163,7 +163,7 @@ def solve_cphf(fvind, mo_energy, mo_occ, h1, s1,
 
     t0 = (time.clock(), time.time())
     mo1 = pyscf.lib.krylov(vind_vo, raw_mo1.ravel(),
-                           tol=tol, maxiter=max_cycle, verbose=log)
+                           tol=tol, max_cycle=max_cycle, verbose=log)
     mo1 = mo1.reshape(raw_mo1.shape)
     log.timer('krylov solver in CPHF', *t0)
 
