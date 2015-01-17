@@ -877,7 +877,7 @@ class Mole(object):
             obj : this object should have attribute _keys to store all the
             name of the attributes of the object
         '''
-        if hasattr(obj, _keys):
+        if hasattr(obj, '_keys'):
             if self.verbose > log.QUIET:
                 keysub = set(obj.__dict__.keys()) - set(obj._keys)
                 if keysub:
