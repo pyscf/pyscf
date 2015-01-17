@@ -133,7 +133,7 @@ def init_guess_by_minao(mol):
         return occ, basis_new
 
     atmlst = set([pyscf.gto.mole._rm_digit(pyscf.gto.mole._symbol(k)) \
-                  for k in mol.basis.keys()])
+                  for k in mol._basis.keys()])
     basis = {}
     occdic = {}
     for symb in atmlst:

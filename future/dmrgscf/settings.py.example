@@ -17,4 +17,4 @@ BLOCKSCRATCHDIR = './scratch'
 #       /path/to/ChemPS2/build/PyChemPS2
 # see more details in the ChemPS2 document
 #       https://github.com/SebWouters/CheMPS2
-PYCHEMPS2BIN = '/path/to/ChemPS2/build/PyChemPS2/PyChemPS2.so'
+PYCHEMPS2BIN = '/path/to/CheMPS2/build/PyCheMPS2/PyCheMPS2.so'
