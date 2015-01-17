@@ -11,6 +11,49 @@ import pyscf.lib
 libao2mo = pyscf.lib.load_library('libao2mo')
 
 def restore(symmetry, eri, norb, tao=None):
+    r'''Transfer the 2e integrals between different level of permutation symmetry
+    (8-fold, 4-fold, or no symmetry)
+
+    Args:
+        symmetry : int or str
+            code to present the target symmetry of 2e integrals
+
+            | 8 : 8-fold symmetry
+            | 4 : 4-fold symmetry
+            | 1 : no symmetry
+            | '2ij' : symmetric ij pair for (ij|kl) (TODO)
+            | '2kl' : symmetric kl pair for (ij|kl) (TODO)
+
+        eri : ndarray
+            The symmetry of eri is determined by the size of eri and norb
+        norb : int
+            The symmetry of eri is determined by the size of eri and norb
+
+    Returns:
+        ndarray.  The shape depends on the target symmetry.
+
+            | 8 : (norb*(norb+1)/2)*(norb*(norb+1)/2+1)/2
+            | 4 : (norb*(norb+1)/2, norb*(norb+1)/2)
+            | 1 : (norb, norb, norb, norb)
+
+    Examples:
+
+    >>> from pyscf import gto
+    >>> from pyscf.scf import _vhf
+    >>> from pyscf import ao2mo
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> eri1 = ao2mo.restore(1, eri, mol.nao_nr())
+    >>> eri4 = ao2mo.restore(4, eri, mol.nao_nr())
+    >>> eri8 = ao2mo.restore(8, eri, mol.nao_nr())
+    >>> print(eri1.shape)
+    (7, 7, 7, 7)
+    >>> print(eri1.shape)
+    (28, 28)
+    >>> print(eri1.shape)
+    (406,)
+    '''
     if symmetry not in (8, 4, 1):
         raise ValueError('symmetry = %s' % symmetry)
 

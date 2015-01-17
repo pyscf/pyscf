@@ -752,6 +752,7 @@ class Mole(object):
 
         atom : list or str
             To define molecluar structure.  The internal format is
+
             | atom = [[atom1, (x, y, z)],
             |         [atom2, (x, y, z)],
             |         ...
@@ -1445,13 +1446,14 @@ class Mole(object):
         Args:
             intor : str
                 Name of the 1-electron integral.  Ref to :func:`getints` for the
-                full list of available 1-electron integral names
+                complete list of available 1-electron integral names
 
         Kwargs:
             comp : int
                 Components of the integrals, e.g. cint1e_ipovlp has 3 components.
             hermi : int
                 Symmetry of the integrals
+
                 | 0 : no symmetry assumed (default)
                 | 1 : hermitian
                 | 2 : anti-hermitian
@@ -1483,9 +1485,8 @@ class Mole(object):
 
         Args:
             intor : str
-                Name of the 1-electron integral, such as cint1e_ovlp_sph (spherical overlap),
-                cint1e_nuc_cart (cartesian nuclear attraction), cint1e_ipovlp
-                (spinor overlap gradients), etc
+                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                complete list of available 1-electron integral names
 
         Kwargs:
             comp : int
@@ -1511,7 +1512,7 @@ class Mole(object):
         Args:
             intor : str
                 Name of the 1-electron integral.  Ref to :func:`getints` for the
-                full list of available 1-electron integral names
+                complete list of available 1-electron integral names
 
         Kwargs:
             comp : int
