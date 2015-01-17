@@ -137,7 +137,7 @@ mol.basis = {'GHOST': gto.basis.load('cc-pvdz', 'O'), 'H': 'sto3g'}
 # (case-insensitive), the atomic nuclear charge, as the key of the mol.basis
 # dict.  Prefix and suffix of numbers and special characters are allowed.
 # If the decorated atomic symbol is appeared in mol.atom but not mol.basis,
-# the basis parser will remove all decorations are seek the pure atomic symbol
+# the basis parser will remove all decorations and seek the pure atomic symbol
 # in mol.basis dict, e.g.  in the following example, 6-31G basis will be
 # assigned to the second H atom, but STO-3G will be used for the third atom.
 mol.atom = [[8,(0, 0, 0)], ['h1',(0, 1, 0)], ['H2',(0, 0, 1)]]

@@ -18,11 +18,28 @@ from pyscf.gto import basis
 from pyscf.gto import moleintor
 
 def gto_norm(l, expnt):
-    ''' normalized factor for GTO   g=r^l e^(-a r^2)
-    norm = 1/sqrt( \int_0^\infty g**2 r^2 dr )
-         = sqrt( (2^(2l+3) (l+1)! (2a)^(l+1.5)) / (2l+2)!sqrt(\pi))
-    Ref:
-      H. B. Schlegel and M. J. Frisch, Int. J. Quant.  Chem., 54(1955), 83-87.
+    r'''Normalized factor for GTO   :math:`g=r^l e^{-\alpha r^2}`
+
+    .. math::
+
+        \frac{1}{\sqrt{\int g^2 r^2 dr}}
+        = \sqrt{\frac{2^{2l+3} (l+1)! (2a)^{l+1.5}}{(2l+2)!\sqrt{\pi}}}
+
+    Ref: H. B. Schlegel and M. J. Frisch, Int. J. Quant.  Chem., 54(1955), 83-87.
+
+    Args:
+        l (int):
+            angular momentum
+        expnt :
+            exponent :math:`\alpha`
+
+    Returns:
+        normalization factor
+
+    Examples:
+
+    >>> print gto_norm(0, 1)
+    2.5264751109842591
     '''
     if l >= 0:
         f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
@@ -33,10 +50,29 @@ def gto_norm(l, expnt):
 
 
 def format_atom(atoms, origin=0, axes=1):
-    '''
-    change nuclear charge to atom symbol, rotate and shift molecule
-    if the molecule "atoms" is a string, atoms are separated by ";" or "\\n"
-    the coordinates and atom symbols are separated by "," or blank space
+    '''Convert the input :attr:`Mole.atom` to the internal data format.
+    Including, changing the nuclear charge to atom symbol, rotate and shift
+    molecule.  If the :attr:`~Mole.atom` is a string, it takes ";" and "\\n"
+    for the mark to separate atoms;  "," and arbitrary length of blank space
+    to spearate the individual terms for an atom.  Blank line will be ignored.
+
+    Args:
+        atoms : list or str
+            the same to :attr:`Mole.atom`
+
+    Kwargs:
+        origin : ndarray
+            new axis origin.
+        axes : ndarray
+            (new_x, new_y, new_z), each entry is a length-3 array
+
+    Returns:
+        formated :attr:`~Mole.atom`
+
+    Examples:
+
+    >>> gto.format_atom('9,0,0,0; h 0 0 1', origin=(1,1,1))
+    [['F', [-1.0, -1.0, -1.0]], ['H', [-1.0, -1.0, 0.0]]]
     '''
     elementdic = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
     fmt_atoms = []
@@ -67,9 +103,28 @@ def format_atom(atoms, origin=0, axes=1):
 
 #TODO: sort exponents
 def format_basis(basis_tab):
-    '''
-    transform the basis to standard format
-    { atom: (l, kappa, ((-exp, c_1, c_2, ..), ..)), ... }
+    '''Convert the input :attr:`Mole.basis` to the internal data format.
+
+    ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
+
+    Args:
+        basis_tab : list
+            Similar to :attr:`Mole.basis`, it **cannot** be a str
+
+    Returns:
+        Formated :attr:`~Mole.basis`
+
+    Examples:
+
+    >>> gto.format_basis({'H':'sto-3g', 'H^2': '3-21g'})
+    {'H': [[0,
+        [3.4252509099999999, 0.15432897000000001],
+        [0.62391373000000006, 0.53532813999999995],
+        [0.16885539999999999, 0.44463454000000002]]],
+     'H^2': [[0,
+        [5.4471780000000001, 0.15628500000000001],
+        [0.82454700000000003, 0.90469100000000002]],
+        [0, [0.18319199999999999, 1.0]]]}
     '''
     elementdic = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
     fmt_basis = {}
@@ -87,30 +142,101 @@ def format_basis(basis_tab):
 
 # transform etb to basis format
 def expand_etb(l, n, alpha, beta):
-    '''
-    expand even-tempered basis, alpha*beta**i, for i = 0..n
+    r'''Generate the exponents of even tempered basis for :attr:`Mole.basis`.
+    .. math::
+
+        e = e^{-\alpha * \beta^{i-1}} for i = 1 .. n
+
+    Args:
+        l : int
+            Angular momentum
+        n : int
+            Number of GTOs
+
+    Returns:
+        Formated :attr:`~Mole.basis`
+
+    Examples:
+
+    >>> gto.expand_etb(1, 3, 1.5, 2)
+    [[1, [6.0, 1]], [1, [3.0, 1]], [1, [1.5, 1]]]
     '''
     return [[l, [alpha*beta**i, 1]] for i in reversed(range(n))]
 def expand_etbs(etbs):
     basis = [expand_etb(*etb) for etb in etbs]
     return list(itertools.chain.from_iterable(basis))
 
-def shift_ptr(atm, bas, off):
-    atm0 = numpy.array(atm)
-    bas0 = numpy.array(bas)
-    atm0[:,PTR_COORD] += off
-    atm0[:,PTR_MASS ] += off
-    bas0[:,PTR_EXP  ] += off
-    bas0[:,PTR_COEFF] += off
-    return atm0.tolist(), bas0.tolist()
-
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):
-    atm2, bas2 = shift_ptr(atm2, bas2, len(env1))
-    return atm1+atm2, bas1+bas2, env1+env2
+    r'''Concatenate two Mole's integral parameters.  This function can be used
+    to construct the environment for cross integrals like
+
+    .. math::
+
+        \langle \mu | \nu \rangle, \mu \in mol1, \nu \in mol2
+
+    Returns:
+        Concatenated atm, bas, env
+
+    Examples:
+        Compute the overlap between H2 molecule and O atom
+
+    >>> mol1 = gto.Mole()
+    >>> mol1.build(atom='H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol2 = gto.Mole()
+    >>> mol2.build(atom='O 0 0 0', basis='sto3g')
+    >>> atm3, bas3, env3 = gto.conc_env(mol1._atm, mol1._bas, mol1._env,
+    ...                                 mol2._atm, mol2._bas, mol2._env)
+    >>> gto.moleintor.getints('cint1e_ovlp_sph', atm3, bas3, env3, range(2), range(2,5))
+    [[ 0.04875181  0.44714688  0.          0.37820346  0.        ]
+     [ 0.04875181  0.44714688  0.          0.          0.37820346]]
+    '''
+    off = len(env1)
+    natm_off = len(atm1)
+    atm2 = numpy.array(atm2)
+    bas2 = numpy.array(bas2)
+    atm2[:,PTR_COORD] += off
+    atm2[:,PTR_MASS ] += off
+    bas2[:,ATOM_OF  ] += natm_off
+    bas2[:,PTR_EXP  ] += off
+    bas2[:,PTR_COEFF] += off
+    return atm1+atm2.tolist(), bas1+bas2.tolist(), env1+env2
 
 # <bas-of-mol1|intor|bas-of-mol2>
 def intor_cross(intor, mol1, mol2, comp=1):
+    r'''Cross 1-electron integrals like
+
+    .. math::
+
+        \langle \mu | intor | \nu \rangle, \mu \in mol1, \nu \in mol2
+
+    Args:
+        intor : str
+            Name of the 1-electron integral, such as cint1e_ovlp_sph (spherical overlap),
+            cint1e_nuc_cart (cartesian nuclear attraction), cint1e_ipovlp
+            (spinor overlap gradients), etc.  Ref to :func:`getints` for the
+            full list of available 1-electron integral names
+        mol1, mol2:
+            :class:`Mole` objects
+
+    Kwargs:
+        comp : int
+            Components of the integrals, e.g. cint1e_ipovlp has 3 components
+
+    Returns:
+        ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
+
+    Examples:
+        Compute the overlap between H2 molecule and O atom
+
+    >>> mol1 = gto.Mole()
+    >>> mol1.build(atom='H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol2 = gto.Mole()
+    >>> mol2.build(atom='O 0 0 0', basis='sto3g')
+    >>> gto.intor_cross('cint1e_ovlp_sph', mol1, mol2)
+    [[ 0.04875181  0.44714688  0.          0.37820346  0.        ]
+     [ 0.04875181  0.44714688  0.          0.          0.37820346]]
+    '''
     nbas1 = len(mol1._bas)
     nbas2 = len(mol2._bas)
     atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env, \
@@ -121,6 +247,8 @@ def intor_cross(intor, mol1, mol2, comp=1):
 
 # append (charge, pointer to coordinates, nuc_mod) to _atm
 def make_atm_env(atom, ptr=0):
+    '''Convert :attr:`Mole.atom` to the argument ``atm`` for ``libcint`` integrals
+    '''
     _atm = [0] * 6
     _env = [x/param.BOHR for x in atom[1]]
     _env.append(param.ELEMENTS[_atm[CHARGE_OF]][1])
@@ -133,6 +261,8 @@ def make_atm_env(atom, ptr=0):
 # append (atom, l, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0) to bas
 # absorb normalization into GTO contraction coefficients
 def make_bas_env(basis_add, atom_id=0, ptr=0):
+    '''Convert :attr:`Mole.basis` to the argument ``bas`` for ``libcint`` integrals
+    '''
     _bas = []
     _env = []
     for b in basis_add:
@@ -161,7 +291,9 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     return _bas, _env
 
 def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
-    ''' generate arguments for integrals '''
+    '''Generate the input arguments for ``libcint`` library in terms of
+    :attr:`Mole.atoms` and :attr:`Mole.basis`
+    '''
     _atm = []
     _bas = []
     _env = []
@@ -215,12 +347,26 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
     return _atm, _bas, pre_env+_env
 
 def tot_electrons(mol):
+    '''Total number of electrons for the given molecule
+
+    Returns:
+        electron number in integer
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 1 0; C 0 0 1', charge=1)
+    >>> gto.tot_electrons(mol)
+    6
+    '''
     nelectron = -mol.charge
     for ia in range(mol.natm):
         nelectron += mol.atom_charge(ia)
     return nelectron
 
 def copy(mol):
+    '''Deepcopy of the given :class:`Mole` object
+    '''
     import copy
     newmol = copy.copy(mol)
     newmol._atm = copy.deepcopy(mol._atm)
@@ -231,6 +377,8 @@ def copy(mol):
     return newmol
 
 def pack(mol):
+    '''Pack the given :class:`Mole` to a dict, which can be serialized with :mod:`pickle`
+    '''
     return {'atom'    : mol.atom,
             'basis'   : mol.basis,
             'charge'  : mol.charge,
@@ -241,11 +389,16 @@ def pack(mol):
             'grids'   : mol.grids,
             'light_speed': mol.light_speed}
 def unpack(moldic):
+    '''Unpack a dict which is packed by :func:`pack`, return a :class:`Mole` object.
+    '''
     mol = Mole()
     mol.__dict__.update(moldic)
     return mol
 
 def len_spinor(l, kappa):
+    '''The number of spinor associated with given angular momentum and kappa.  If kappa is 0,
+    return 4l+2
+    '''
     if kappa == 0:
         n = (l * 4 + 2)
     elif kappa < 0:
@@ -255,20 +408,43 @@ def len_spinor(l, kappa):
     return n
 
 def len_cart(l):
+    '''The number of Cartesian function associated with given angular momentum.
+    '''
     return (l + 1) * (l + 2) // 2
 
 def npgto_nr(mol):
-    ''' total number of primitive GTOs'''
+    '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
     return reduce(lambda n, b: n + (mol.bas_angular(b) * 2 + 1) \
                                 * mol.bas_nprim(b),
                   range(len(mol._bas)), 0)
 def nao_nr(mol):
-    ''' total number of contracted GTOs'''
+    '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
     return sum([(mol.bas_angular(b) * 2 + 1) * mol.bas_nctr(b) \
                 for b in range(len(mol._bas))])
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_nr_range(mol, bas_id0, bas_id1):
+    '''Lower and upper boundary of contracted spherical basis functions associated
+    with the given shell range
+
+    Args:
+        mol :
+            :class:`Mole` object
+        bas_id0 : int
+            start shell id
+        bas_id1 : int
+            stop shell id
+
+    Returns:
+        tupel of start basis function id and the stop function id
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> gto.nao_nr_range(mol, 2, 4)
+    (2, 6)
+    '''
     nao_id0 = sum([(mol.bas_angular(b) * 2 + 1) * mol.bas_nctr(b) \
                    for b in range(bas_id0)])
     n = sum([(mol.bas_angular(b) * 2 + 1) * mol.bas_nctr(b) \
@@ -276,12 +452,33 @@ def nao_nr_range(mol, bas_id0, bas_id1):
     return nao_id0, nao_id0+n
 
 def nao_2c(mol):
-    ''' total number of spinors'''
+    '''Total number of contracted spinor GTOs for the given :class:`Mole` object'''
     return sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
                 for b in range(len(mol._bas))])
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_2c_range(mol, bas_id0, bas_id1):
+    '''Lower and upper boundary of contracted spinor basis functions associated
+    with the given shell range
+
+    Args:
+        mol :
+            :class:`Mole` object
+        bas_id0 : int
+            start shell id, 0-based
+        bas_id1 : int
+            stop shell id, 0-based
+
+    Returns:
+        tupel of start basis function id and the stop function id
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> gto.nao_2c_range(mol, 2, 4)
+    (4, 12)
+    '''
     nao_id0 = sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
                    for b in range(bas_id0)])
     n = sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
@@ -289,6 +486,18 @@ def nao_2c_range(mol, bas_id0, bas_id1):
     return nao_id0, nao_id0+n
 
 def ao_loc_nr(mol):
+    '''Offset of every shell in the spherical basis function spectrum
+
+    Returns:
+        list, each entry is the corresponding start basis function id
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> gto.ao_loc_nr(mol)
+    [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
+    '''
     off = 0
     ao_loc = []
     for i in range(len(mol._bas)):
@@ -298,6 +507,18 @@ def ao_loc_nr(mol):
     return ao_loc
 
 def ao_loc_2c(mol):
+    '''Offset of every shell in the spinor basis function spectrum
+
+    Returns:
+        list, each entry is the corresponding start id of spinor function
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> gto.ao_loc_2c(mol)
+    [0, 2, 4, 6, 12, 18, 20, 22, 24, 30, 36]
+    '''
     off = 0
     ao_loc = []
     for i in range(len(mol._bas)):
@@ -307,9 +528,11 @@ def ao_loc_2c(mol):
     return ao_loc
 
 def time_reversal_map(mol):
-    '''tao = time_reversal_map(bas)
-    tao(i) = -j  means  T(f_i) = -f_j
-    tao(i) =  j  means  T(f_i) =  f_j'''
+    r'''The index to map the spinor functions and its time reversal counterpart.
+    The returned indices have postive and negative value.  For the i-th basis function,
+    if the returned j = idx[i] < 0, it means :math:`T|i\rangle = -|j\rangle`,
+    otherwise :math:`T|i\rangle = |j\rangle`
+    '''
     tao = []
     i = 0
     for b in mol._bas:
@@ -337,6 +560,11 @@ def time_reversal_map(mol):
     return tao
 
 def energy_nuc(mol):
+    '''Nuclear repulsion energy, (AU)
+
+    Returns
+        float
+    '''
     if mol.natm == 0:
         return 0
     #e = 0
@@ -363,6 +591,18 @@ def energy_nuc(mol):
     return e
 
 def spheric_labels(mol):
+    '''Labels for spheric GTO functions
+
+    Returns:
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
+    >>> gto.spheric_labels(mol)
+    [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
+    '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
     label = []
     for ib in range(len(mol._bas)):
@@ -382,6 +622,27 @@ def spinor_labels(mol):
     raise RuntimeError('TODO')
 
 def search_shell_id(mol, atm_id, l):
+    '''Search the first basis/shell id (**not** the basis function id) which
+    matches the given atom-id and angular momentum
+
+    Args:
+        atm_id : int
+            atom id, 0-based
+        l : int
+            angular momentum
+
+    Returns:
+        basis id, 0-based.  If not found, return None
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
+    >>> mol.search_shell_id(1, 1) # Cl p shell
+    4
+    >>> mol.search_shell_id(1, 2) # Cl d shell
+    None
+    '''
     for ib in range(len(mol._bas)):
         ia = mol.bas_atom(ib)
         l1 = mol.bas_angular(ib)
@@ -389,6 +650,29 @@ def search_shell_id(mol, atm_id, l):
             return ib
 
 def search_ao_nr(mol, atm_id, l, m, atmshell):
+    '''Search the first basis function id (**not** the shell id) which matches
+    the given atom-id, angular momentum magnetic angular momentum, principal shell.
+
+    Args:
+        atm_id : int
+            atom id, 0-based
+        l : int
+            angular momentum
+        m : int
+            magnetic angular momentum
+        atmshell : int
+            principal quantum number
+
+    Returns:
+        basis function id, 0-based.  If not found, return None
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
+    >>> mol.search_ao_nr(1, 1, -1, 3) # Cl 3px
+    7
+    '''
     ibf = 0
     for ib in range(len(mol._bas)):
         ia = mol.bas_atom(ib)
@@ -447,15 +731,102 @@ PTR_ENV_START   = 20
 
 
 class Mole(object):
-    '''Define molecular system
-mol = Mole()
-mol.build(
-    verbose,
-    output,
-    max_memory,
-    charge,
-    spin,  # 2j
-)
+    '''Basic class to hold molecular structure and global options
+
+    Attributes:
+        verbose : int
+            Print level
+        output : str or None
+            Output file, default is None which dumps msg to sys.stdout
+        max_memory : int, float
+            Allowd memory in MB
+        light_speed :
+            Default is set in lib.parameters.LIGHTSPEED
+        charge : int
+            Charge of molecule. It affects the electron numbers
+        spin : int
+            2S, num. alpha electrons - num. beta electrons
+        symmetry : bool
+            The parameter controls whether to use symmetry in calculation
+
+        atom : list or str
+            To define molecluar structure.  The internal format is
+            | atom = [[atom1, (x, y, z)],
+            |         [atom2, (x, y, z)],
+            |         ...
+            |         [atomN, (x, y, z)]]
+
+        basis : dict or str
+            To define basis set.
+        nucmod : dict or str
+            Nuclear model
+        mass : dict
+            Similar struct as :attr:`Mole.nucmod`
+        grids : dict
+            Define (radial grids, angular grids) for given atom or symbol
+
+        ** Following attributes are generated by :func:`Mole.build` **
+
+        stdout : file object
+            Default is sys.stdout if :attr:`Mole.output` is not set
+        groupname : str
+            One of D2h, C2h, C2v, D2, Cs, Ci, C2, C1
+        nelectron : int
+            sum of nuclear charges - :attr:`Mole.charge`
+        symm_orb : a list of numpy.ndarray
+            Symmetry adapted basis.  Each element is a set of symm-adapted orbitals
+            for one irreducible representation.  The list index does **not** correspond
+            to the id of irreducible representation.
+        irrep_id : a list of int
+            Each element is one irreducible representation id associated with the basis
+            stored in symm_orb.  One irrep id stands for one irreducible representation
+            symbol.  The irrep symbol and the relevant id are defined in
+            :attr:`symm.parameters.IRREP_ID_TABLE`
+        irrep_name : a list of str
+            Each element is one irreducible representation symbol associated with the basis
+            stored in symm_orb.  The irrep symbols are defined in
+            :attr:`symm.parameters.IRREP_ID_TABLE`
+        _built : bool
+            To label whether :func:`Mole.build` has been called.  It ensures some functions
+            being initialized once.
+        _basis : dict
+            like :attr:`Mole.basis`, the internal format which is returned from the
+            parser :func:`format_basis`
+        _keys : a set of str
+            Store the keys appeared in the module.  It is used to check misinput attributes
+
+        ** Following attributes are arguments used by ``libcint`` library **
+
+        _atm :
+            :code:`[[charge, ptr-of-coord, nuc-model, mass, 0, 0], [...]]`
+            each element reperesents one atom
+        natm :
+            number of atoms
+        _bas :
+            :code:`[[atom-id, angular-momentum, num-primitive-GTO, num-contracted-GTO, 0, ptr-of-exps, ptr-of-contract-coeff, 0], [...]]`
+            each element reperesents one shell
+        nbas :
+            number of shells
+        _env :
+            list of floats to store the coordinates, GTO exponents, contract-coefficients
+
+    Examples:
+
+    >>> mol = Mole()
+    >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
+    >>> print(mol.atom_symbol(0))
+    H^2
+    >>> print(mol.atom_pure_symbol(0))
+    H
+    >>> print(mol.nao_nr())
+    2
+    >>> print(mol.intor('cint1e_ovlp_sph'))
+    [[ 0.99999999  0.43958641]
+     [ 0.43958641  0.99999999]]
+    >>> mol.Charge = 1
+    >>> mol.build()
+    <class 'pyscf.gto.mole.Mole'> has no attributes Charge
+
     '''
     def __init__(self):
         self.verbose = log.ERROR
@@ -471,7 +842,7 @@ mol.build(
 # self.atom = [(symb/nuc_charge, (coord(Angstrom):0.,0.,0.)), ...]
         self.atom = []
 # self.basis = {atom_type/nuc_charge: [l, kappa, (expnt, c_1, c_2,..),..]}
-        self.basis = {}
+        self.basis = 'sto-3g'
 # self.nucmod = {atom_symbol: nuclear_model, atom_id: nuc_mod}, atom_id is 1-based
         self.nucmod = {}
 # self.mass = {atom_symbol: mass, atom_id: mass}, atom_id is 1-based
@@ -480,8 +851,6 @@ mol.build(
         self.grids = {}
 ##################################################
 # don't modify the following private variables, they are not input options
-# _atm, _bas, _env save the formated inputs
-# arguments of integrals
         self._atm = []
         self.natm = 0
         self._bas = []
@@ -498,18 +867,26 @@ mol.build(
         self._keys = set(self.__dict__.keys()).union(['_keys'])
 
     def check_sanity(self, obj):
-        if self.verbose > log.QUIET:
-            keysub = set(obj.__dict__.keys()) - set(obj._keys)
-            if keysub:
-                keyin = keysub.intersection(dir(obj.__class__))
-                if keyin:
-                    log.warn(self, 'overwrite keys %s of %s',
-                             ' '.join(keyin), str(obj.__class__))
+        '''Check misinput of a class attribute due to typos, check whether a
+        class method is overwritten
 
-                keydiff = keysub - set(dir(obj.__class__))
-                if keydiff:
-                    sys.stderr.write('%s has no attributes %s\n' %
-                                     (str(obj.__class__), ' '.join(keydiff)))
+        Args:
+            obj : this object should have attribute _keys to store all the
+            name of the attributes of the object
+        '''
+        if hasattr(obj, _keys):
+            if self.verbose > log.QUIET:
+                keysub = set(obj.__dict__.keys()) - set(obj._keys)
+                if keysub:
+                    keyin = keysub.intersection(dir(obj.__class__))
+                    if keyin:
+                        log.warn(self, 'overwrite keys %s of %s',
+                                 ' '.join(keyin), str(obj.__class__))
+
+                    keydiff = keysub - set(dir(obj.__class__))
+                    if keydiff:
+                        sys.stderr.write('%s has no attributes %s\n' %
+                                         (str(obj.__class__), ' '.join(keydiff)))
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -548,6 +925,44 @@ mol.build(
                verbose=None, output=None, max_memory=None, \
                atom=None, basis=None, nucmod=None, mass=None, grids=None, \
                charge=None, spin=None, symmetry=None, light_speed=None):
+        '''Setup moleclue and initialize some control parameters.  Whenever you
+        change the value of the attributes of :class:`Mole`, you need call
+        this function to refresh the internal data of Mole.
+
+        Kwargs:
+            dump_input : bool
+                whether to dump the contents of input file in the output file
+            parse_arg : bool
+                whether to read the sys.argv and overwrite the relevant parameters
+            verbose : int
+                Print level.  If given, overwrite :attr:`Mole.verbose`
+            output : str or None
+                Output file.  If given, overwrite :attr:`Mole.output`
+            max_memory : int, float
+                Allowd memory in MB.  If given, overwrite :attr:`Mole.max_memory`
+            atom : list or str
+                To define molecluar structure.  If given, overwrite :attr:`Mole.atom`
+            basis : dict or str
+                To define basis set.  If given, overwrite :attr:`Mole.basis`
+            nucmod : dict or str
+                Nuclear model.  If given, overwrite :attr:`Mole.nucmod`
+            mass : dict
+                If given, overwrite :attr:`Mole.mass`
+            grids : dict
+                Define (radial grids, angular grids) for given atom or symbol
+                If given, overwrite :attr:`Mole.grids`
+            charge : int
+                Charge of molecule. It affects the electron numbers
+                If given, overwrite :attr:`Mole.charge`
+            spin : int
+                2S, num. alpha electrons - num. beta electrons
+                If given, overwrite :attr:`Mole.spin`
+            symmetry : bool
+                Whether to use symmetry.  If given, overwrite :attr:`Mole.symmetry`
+            light_speed :
+                If given, overwrite :attr:`Mole.light_speed`
+
+        '''
 # release circular referred objs
 # Note obj.x = obj.member_function causes circular referrence
         gc.collect()
@@ -600,7 +1015,9 @@ mol.build(
         self.natm = self._atm.__len__()
         self.nbas = self._bas.__len__()
         self.nelectron = self.tot_electrons()
-        assert((self.nelectron+self.spin) % 2 == 0)
+        if (self.nelectron+self.spin) % 2 != 0:
+            sys.stderr.write('Electron number %d and spin %d are not consistent\n' %
+                             (self.nelectron, self.nspin))
 
         if self.symmetry:
             import pyscf.symm
@@ -635,9 +1052,6 @@ mol.build(
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
 
-    def shift_ptr(self, atm, bas, off):
-        return shift_ptr(atm, bas, off)
-
     def make_env(self, atoms, basis, pre_env=[], nucmod={}, mass={}):
         return make_env(atoms, basis, pre_env, nucmod, mass)
 
@@ -649,6 +1063,9 @@ mol.build(
 
     def tot_electrons(self):
         return tot_electrons(self)
+
+    def gto_norm(self, l, expnt):
+        return gto_norm(l, expnt)
 
 
     def dump_input(self):
@@ -750,74 +1167,257 @@ mol.build(
         log.info(self, 'CPU time: %12.2f', time.clock())
 
     def set_common_origin_(self, coord):
+        '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
+
+        Examples:
+
+        >>> mol.set_common_origin_((0,0,0))
+        '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
 
     def set_rinv_orig_(self, coord):
-        # unit of input coord BOHR
+        r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
+
+        Examples:
+
+        >>> mol.set_rinv_orig_((0,0,0))
+        '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
 
 #NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):
-        # a molecule can contain different symbols (C1,C2,..) for same type of
-        # atoms
+        r'''For the given atom id, return the input symbol (without striping special characters)
+
+        Args:
+            atm_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1')
+        >>> mol.atom_symbol(0)
+        H^2
+        '''
         return _symbol(self.atom[atm_id][0])
 
     def atom_pure_symbol(self, atm_id):
-        # symbol without index, so (C1,C2,...) just return the same symbol 'C'
+        r'''For the given atom id, return the standard symbol (striping special characters)
+
+        Args:
+            atm_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1')
+        >>> mol.atom_symbol(0)
+        H
+        '''
         return _symbol(self.atom_charge(atm_id))
 
     def atom_charge(self, atm_id):
+        r'''Nuclear charge of the given atom id
+
+        Args:
+            atm_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1')
+        >>> mol.atom_charge(1)
+        17
+        '''
         return self._atm[atm_id][CHARGE_OF]
 
     def atom_coord(self, atm_id):
+        r'''Coordinates (ndarray) of the given atom id
+
+        Args:
+            atm_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1')
+        >>> mol.atom_coord(1)
+        [ 0.          0.          2.07869874]
+        '''
         ptr = self._atm[atm_id][PTR_COORD]
         return numpy.array(self._env[ptr:ptr+3])
 
     def atom_nshells(self, atm_id):
+        r'''Number of basis/shells of the given atom
+
+        Args:
+            atm_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1')
+        >>> mol.atom_nshells(1)
+        5
+        '''
         symb = self.atom_symbol(atm_id)
         return self.basis[symb].__len__()
 
     def atom_shell_ids(self, atm_id):
+        r'''A list of the shell-ids of the given atom
+
+        Args:
+            atm_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.atom_nshells(1)
+        [3, 4, 5, 6, 7]
+        '''
         return [ib for ib in range(len(self._bas)) \
                 if self.bas_atom(ib) == atm_id]
 
     def bas_coord(self, bas_id):
+        r'''Coordinates (ndarray) associated with the given basis id
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1')
+        >>> mol.bas_coord(2)
+        [ 0.          0.          2.07869874]
+        '''
         atm_id = self.bas_atom(bas_id) - 1
         ptr = self._atm[atm_id][PTR_COORD]
         return numpy.array(self._env[ptr:ptr+3])
 
     def bas_atom(self, bas_id):
+        r'''The atom (0-based id) that the given basis sits on
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_atom(7)
+        1
+        '''
         return self._bas[bas_id][ATOM_OF]
 
     def bas_angular(self, bas_id):
+        r'''The angular momentum associated with the given basis
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_atom(7)
+        2
+        '''
         return self._bas[bas_id][ANG_OF]
 
     def bas_nctr(self, bas_id):
+        r'''The number of contracted GTOs for the given shell
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_atom(3)
+        3
+        '''
         return self._bas[bas_id][NCTR_OF]
 
     def bas_nprim(self, bas_id):
+        r'''The number of primitive GTOs for the given shell
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_atom(3)
+        11
+        '''
         return self._bas[bas_id][NPRIM_OF]
 
     def bas_kappa(self, bas_id):
+        r'''Kappa (if l < j, -l-1, else l) of the given shell
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_kappa(3)
+        0
+        '''
         return self._bas[bas_id][KAPPA_OF]
 
     def bas_exp(self, bas_id):
+        r'''exponents (ndarray) of the given shell
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_kappa(0)
+        [ 13.01     1.962    0.4446]
+        '''
         nprim = self.bas_nprim(bas_id)
         ptr = self._bas[bas_id][PTR_EXP]
         return numpy.array(self._env[ptr:ptr+nprim])
 
     def bas_ctr_coeff(self, bas_id):
+        r'''Contract coefficients (ndarray) of the given shell
+
+        Args:
+            bas_id : int
+                0-based
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_ctr_coeff(3)
+        [[ 0.34068924]
+         [ 0.57789106]
+         [ 0.65774031]]
+        '''
         nprim = self.bas_nprim(bas_id)
         nctr = self.bas_nctr(bas_id)
         ptr = self._bas[bas_id][PTR_COEFF]
         return numpy.array(self._env[ptr:ptr+nprim*nctr]).reshape(nprim,nctr)
 
     def bas_len_spinor(self, bas_id):
+        '''The number of spinor associated with given basis
+        If kappa is 0, return 4l+2
+        '''
         l = self.bas_angular(bas_id)
         k = self.bas_kappa(bas_id)
         return len_spinor(l, k)
 
     def bas_len_cart(self, bas_id):
+        '''The number of Cartesian function associated with given basis
+        '''
         return len_cart(self._bas[bas_id][ANG_OF])
 
 
@@ -848,21 +1448,132 @@ mol.build(
         return time_reversal_map(self)
 
     def intor(self, intor, comp=1, hermi=0):
-        '''non-relativitic and relativitic integral generator.
-        hermi=1 : hermitian, hermi=2 : anti-hermitian'''
+        '''One-electron integral generator.
+
+        Args:
+            intor : str
+                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                full list of available 1-electron integral names
+
+        Kwargs:
+            comp : int
+                Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+            hermi : int
+                Symmetry of the integrals
+                | 0 : no symmetry assumed (default)
+                | 1 : hermitian
+                | 2 : anti-hermitian
+
+        Returns:
+            ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
+        >>> mol.intor('cint1e_ipnuc_sph', comp=3) # <nabla i | V_nuc | j>
+        [[[ 0.          0.        ]
+          [ 0.          0.        ]]
+         [[ 0.          0.        ]
+          [ 0.          0.        ]]
+         [[ 0.10289944  0.48176097]
+          [-0.48176097 -0.10289944]]]
+        >>> mol.intor('cint1e_nuc')
+        [[-1.69771092+0.j  0.00000000+0.j -0.67146312+0.j  0.00000000+0.j]
+         [ 0.00000000+0.j -1.69771092+0.j  0.00000000+0.j -0.67146312+0.j]
+         [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
+         [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
+        '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
                                  comp=comp, hermi=hermi)
 
     def intor_symmetric(self, intor, comp=1):
-        '''hermi integral generator.'''
+        '''One-electron integral generator. The integrals are assumed to be hermitian
+
+        Args:
+            intor : str
+                Name of the 1-electron integral, such as cint1e_ovlp_sph (spherical overlap),
+                cint1e_nuc_cart (cartesian nuclear attraction), cint1e_ipovlp
+                (spinor overlap gradients), etc
+
+        Kwargs:
+            comp : int
+                Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+
+        Returns:
+            ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
+        >>> mol.intor_symmetric('cint1e_nuc')
+        [[-1.69771092+0.j  0.00000000+0.j -0.67146312+0.j  0.00000000+0.j]
+         [ 0.00000000+0.j -1.69771092+0.j  0.00000000+0.j -0.67146312+0.j]
+         [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
+         [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
+        '''
         return self.intor(intor, comp, 1)
 
     def intor_asymmetric(self, intor, comp=1):
-        '''anti-hermi integral generator.'''
+        '''One-electron integral generator. The integrals are assumed to be anti-hermitian
+
+        Args:
+            intor : str
+                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                full list of available 1-electron integral names
+
+        Kwargs:
+            comp : int
+                Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+
+        Returns:
+            ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
+
+        Examples:
+
+        >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
+        >>> mol.intor_asymmetric('cint1e_nuc')
+        [[-1.69771092+0.j  0.00000000+0.j  0.67146312+0.j  0.00000000+0.j]
+         [ 0.00000000+0.j -1.69771092+0.j  0.00000000+0.j  0.67146312+0.j]
+         [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
+         [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
+        '''
         return self.intor(intor, comp, 2)
 
     def intor_cross(self, intor, bras, kets, comp=1):
-        '''bras: shell lists of bras, kets: shell lists of kets'''
+        r'''Cross 1-electron integrals like
+
+        .. math::
+
+            \langle \mu | intor | \nu \rangle, \mu \in bras, \nu \in kets
+
+        Args:
+            intor : str
+                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                full list of available 1-electron integral names
+            bras : list of int
+                A list of shell ids for bra
+            kets : list of int
+                A list of shell ids for ket
+
+        Kwargs:
+            comp : int
+                Components of the integrals, e.g. cint1e_ipovlp has 3 components
+
+        Returns:
+            ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
+
+        Examples:
+            Compute the overlap between H2 molecule and O atom
+
+        >>> mol = gto.Mole()
+        >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mol.intor_cross('cint1e_ovlp_sph', range(0,3), range(3,5))
+        [[ 0.04875181  0.04875181]
+         [ 0.44714688  0.44714688]
+         [ 0.          0.        ]
+         [ 0.37820346  0.        ]
+         [ 0.          0.37820346]]
+        '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
                                  bras, kets, comp, 0)
 
