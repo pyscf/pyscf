@@ -540,7 +540,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
-    feri = h5py.File(erifile, 'r')
+    feri = h5py.File(erifile.name, 'r')
     return numpy.array(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
