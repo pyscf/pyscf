@@ -30,7 +30,7 @@ def format_aux_basis(mol, auxbasis='weigend'):
 
 
 # get (ij|L)
-def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', ncomp=1, hermi=0):
+def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
     assert(aosym in ('s1', 's2ij'))
     atm, bas, env = \
             pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
@@ -61,10 +61,11 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', ncomp=1, hermi=0):
                               c_env.ctypes.data_as(ctypes.c_void_p))
     return eri
 
-## get (L|ij)
-#def aux_e1(mol, auxbasis='weigend', intor='cint3c2e_sph', aosym='s1',
-#           ncomp=1, hermi=0):
-#    pass
+
+# get (L|ij)
+def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
+    eri = aux_e2(mol, auxmol, intor, aosym, comp, hermi)
+    return eri.transpose(2,0,1).copy()
 
 
 def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):

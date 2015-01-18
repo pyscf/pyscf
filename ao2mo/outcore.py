@@ -43,17 +43,17 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
-        aosym : str
+        aosym : int or str
             Permutation symmetry for the AO integrals
 
-            | s4 : 4-fold symmetry (default)
-            | s2ij : symmetry between i, j in (ij|kl)
-            | s2kl : symmetry between k, l in (ij|kl)
-            | s1 : no symmetry
-            | a4ij : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
-            | a4kl : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
-            | s2ij : anti-symmetry between i, j in (ij|kl) (TODO)
-            | s2kl : anti-symmetry between k, l in (ij|kl) (TODO)
+            | 4 or '4' or 's4': 4-fold symmetry (default)
+            | '2ij' or 's2ij' : symmetry between i, j in (ij|kl)
+            | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
+            | 1 or '1' or 's1': no symmetry
+            | 'a4ij' : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a4kl' : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
+            | 'a2ij' : anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
@@ -134,17 +134,17 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
-        aosym : str
+        aosym : int or str
             Permutation symmetry for the AO integrals
 
-            | s4 : 4-fold symmetry (default)
-            | s2ij : symmetry between i, j in (ij|kl)
-            | s2kl : symmetry between k, l in (ij|kl)
-            | s1 : no symmetry
-            | a4ij : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
-            | a4kl : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
-            | s2ij : anti-symmetry between i, j in (ij|kl) (TODO)
-            | s2kl : anti-symmetry between k, l in (ij|kl) (TODO)
+            | 4 or '4' or 's4': 4-fold symmetry (default)
+            | '2ij' or 's2ij' : symmetry between i, j in (ij|kl)
+            | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
+            | 1 or '1' or 's1': no symmetry
+            | 'a4ij' : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a4kl' : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
+            | 'a2ij' : anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
@@ -218,8 +218,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     nmoj = mo_coeffs[1].shape[1]
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
-
     nao = mo_coeffs[0].shape[0]
+    aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
         nao_pair = nao*(nao+1)//2
     else:
@@ -341,17 +341,17 @@ def half_e1(mol, mo_coeffs, swapfile,
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
-        aosym : str
+        aosym : int or str
             Permutation symmetry for the AO integrals
 
-            | s4 : 4-fold symmetry (default)
-            | s2ij : symmetry between i, j in (ij|kl)
-            | s2kl : symmetry between k, l in (ij|kl)
-            | s1 : no symmetry
-            | a4ij : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
-            | a4kl : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
-            | s2ij : anti-symmetry between i, j in (ij|kl) (TODO)
-            | s2kl : anti-symmetry between k, l in (ij|kl) (TODO)
+            | 4 or '4' or 's4': 4-fold symmetry (default)
+            | '2ij' or 's2ij' : symmetry between i, j in (ij|kl)
+            | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
+            | 1 or '1' or 's1': no symmetry
+            | 'a4ij' : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a4kl' : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
+            | 'a2ij' : anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
@@ -388,8 +388,8 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
-
     nao = mo_coeffs[0].shape[0]
+    aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
         nao_pair = nao*(nao+1)//2
     else:
@@ -479,17 +479,17 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
-        aosym : str
+        aosym : int or str
             Permutation symmetry for the AO integrals
 
-            | s4 : 4-fold symmetry (default)
-            | s2ij : symmetry between i, j in (ij|kl)
-            | s2kl : symmetry between k, l in (ij|kl)
-            | s1 : no symmetry
-            | a4ij : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
-            | a4kl : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
-            | s2ij : anti-symmetry between i, j in (ij|kl) (TODO)
-            | s2kl : anti-symmetry between k, l in (ij|kl) (TODO)
+            | 4 or '4' or 's4': 4-fold symmetry (default)
+            | '2ij' or 's2ij' : symmetry between i, j in (ij|kl)
+            | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
+            | 1 or '1' or 's1': no symmetry
+            | 'a4ij' : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a4kl' : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
+            | 'a2ij' : anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
@@ -562,17 +562,17 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
-        aosym : str
+        aosym : int or str
             Permutation symmetry for the AO integrals
 
-            | s4 : 4-fold symmetry (default)
-            | s2ij : symmetry between i, j in (ij|kl)
-            | s2kl : symmetry between k, l in (ij|kl)
-            | s1 : no symmetry
-            | a4ij : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
-            | a4kl : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
-            | s2ij : anti-symmetry between i, j in (ij|kl) (TODO)
-            | s2kl : anti-symmetry between k, l in (ij|kl) (TODO)
+            | 4 or '4' or 's4': 4-fold symmetry (default)
+            | '2ij' or 's2ij' : symmetry between i, j in (ij|kl)
+            | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
+            | 1 or '1' or 's1': no symmetry
+            | 'a4ij' : 4-fold symmetry with anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a4kl' : 4-fold symmetry with anti-symmetry between k, l in (ij|kl) (TODO)
+            | 'a2ij' : anti-symmetry between i, j in (ij|kl) (TODO)
+            | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
@@ -689,6 +689,13 @@ def info_shell_ranges(mol, buflen, aosym):
     sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
     return sh_ranges
 
+def _stand_sym_code(sym):
+    if isinstance(sym, int):
+        return 's%d' % sym
+    elif 's' == sym[0] or 'a' == sym[0]:
+        return sym
+    else:
+        return 's' + sym
 
 if __name__ == '__main__':
     import scf

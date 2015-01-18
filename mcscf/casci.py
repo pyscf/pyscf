@@ -118,11 +118,10 @@ class CASCI(object):
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
 
-    def get_veff(self, mol, dm):
-        if isinstance(self._scf, pyscf.scf.hf.RHF):
-            return self._scf.get_veff(mol, dm)
-        else: # ROHF
-            return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
+    def get_veff(self, mol, dm, hermi=1):
+# don't call self._scf.get_veff, because ROHF return alpha,beta potential separately
+        vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
+        return vj - vk * .5
 
     def ao2mo(self, mo_coeff):
         nao, nmo = mo_coeff.shape

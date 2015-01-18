@@ -11,18 +11,18 @@ import pyscf.lib
 libao2mo = pyscf.lib.load_library('libao2mo')
 
 def restore(symmetry, eri, norb, tao=None):
-    r'''Transfer the 2e integrals between different level of permutation symmetry
+    r'''Convert the 2e integrals between different level of permutation symmetry
     (8-fold, 4-fold, or no symmetry)
 
     Args:
         symmetry : int or str
             code to present the target symmetry of 2e integrals
 
-            | 8 : 8-fold symmetry
-            | 4 : 4-fold symmetry
-            | 1 : no symmetry
-            | '2ij' : symmetric ij pair for (ij|kl) (TODO)
-            | '2kl' : symmetric kl pair for (ij|kl) (TODO)
+            | 's8' or '8' or 8 : 8-fold symmetry
+            | 's4' or '4' or 4 : 4-fold symmetry
+            | 's1' or '1' or 1 : no symmetry
+            | 's2ij' or '2ij' : symmetric ij pair for (ij|kl) (TODO)
+            | 's2ij' or '2kl' : symmetric kl pair for (ij|kl) (TODO)
 
         eri : ndarray
             The symmetry of eri is determined by the size of eri and norb
@@ -54,51 +54,75 @@ def restore(symmetry, eri, norb, tao=None):
     >>> print(eri1.shape)
     (406,)
     '''
-    if symmetry not in (8, 4, 1):
+    targetsym = _stand_sym_code(symmetry)
+    if targetsym not in ('8', '4', '1', '2kl', '2ij'):
         raise ValueError('symmetry = %s' % symmetry)
 
     eri = numpy.ascontiguousarray(eri)
     npair = norb*(norb+1)//2
     if eri.size == norb**4:
-        if symmetry == 1:
-            return eri.reshape(norb,norb,norb,norb)
-        elif symmetry == 4:
-            eri1 = numpy.empty((npair,npair), dtype=eri.dtype)
-            return _call_restore('1to4', eri, eri1, norb)
-        else: # 8-fold
-            eri1 = numpy.empty(npair*(npair+1)//2, dtype=eri.dtype)
-            return _call_restore('1to8', eri, eri1, norb)
+        origsym = '1'
+        if targetsym == '1':
+            eri = eri.reshape(norb,norb,norb,norb)
+        elif targetsym == '2kl':
+            raise KeyError('TODO')
+        elif targetsym == '2ij':
+            raise KeyError('TODO')
     elif eri.size == npair**2:
-        if symmetry == 1:
-            eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
-            return _call_restore('4to1', eri, eri1, norb)
-        elif symmetry == 4:
-            return eri.reshape(npair,npair)
-        else: # 8-fold
-            #return _ao2mo.restore_4to8(eri, norb)
+        origsym = '4'
+        if targetsym == '4':
+            eri = eri.reshape(npair,npair)
+        elif targetsym == '8':
             return pyscf.lib.pack_tril(eri.reshape(npair,-1))
+        elif targetsym == '2kl':
+            raise KeyError('TODO')
+        elif targetsym == '2ij':
+            raise KeyError('TODO')
     elif eri.size == npair*(npair+1)//2: # 8-fold
-        if symmetry == 1:
-            eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
-            return _call_restore('8to1', eri, eri1, norb)
-        elif symmetry == 4:
-            #return _ao2mo.restore_8to4(eri, norb)
+        origsym = '8'
+        if targetsym == '4':
             return pyscf.lib.unpack_tril(eri.ravel())
-        else: # 8-fold
-            return eri
+        elif targetsym == '2kl':
+            raise KeyError('TODO')
+        elif targetsym == '2ij':
+            raise KeyError('TODO')
+    elif eri.size == npair*norb**2 and eri.shape[0] == npair:
+            raise KeyError('TODO')
+    elif eri.size == npair*norb**2 and eri.shape[-1] == npair:
+            raise KeyError('TODO')
     else:
         raise ValueError('eri.size = %d, norb = %d' % (eri.size, norb))
 
-def _call_restore(fname, eri, eri1, norb, tao=None):
+    if origsym == targetsym:
+        return eri
+
+    if targetsym == '1':
+        eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
+    elif targetsym == '4':
+        eri1 = numpy.empty((npair,npair), dtype=eri.dtype)
+    elif targetsym == '8':
+        eri1 = numpy.empty(npair*(npair+1)//2, dtype=eri.dtype)
+
+    return _call_restore(origsym, targetsym, eri, eri1, norb)
+
+def _call_restore(origsym, targetsym, eri, eri1, norb, tao=None):
     if numpy.iscomplexobj(eri):
         raise RuntimeError('TODO')
         #if tao is None:
         #    raise RuntimeError('need time-reversal mapping')
-        fn = getattr(libao2mo, 'AO2MOrestore_r'+fname)
+        #fn = getattr(libao2mo, 'AO2MOrestore_r'+fname)
     else:
-        fn = getattr(libao2mo, 'AO2MOrestore_nr'+fname)
+        fn = getattr(libao2mo, 'AO2MOrestore_nr%sto%s'%(origsym,targetsym))
     fn(eri.ctypes.data_as(ctypes.c_void_p),
        eri1.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(norb))
     return eri1
+
+def _stand_sym_code(sym):
+    if isinstance(sym, int):
+        return '%d' % sym
+    elif 's' == sym[0] or 'a' == sym[0]:
+        return sym[1:]
+    else:
+        return sym
 

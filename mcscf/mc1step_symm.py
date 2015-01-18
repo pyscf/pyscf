@@ -114,14 +114,6 @@ class CASSCF(mc1step.CASSCF):
                          self.mol.groupname)
         return u, self.pack_uniq_var(dx), g_orb, jkcnt
 
-    def get_hcore(self, mol=None):
-        h = self.mol.intor_symmetric('cint1e_kin_sph') \
-          + self.mol.intor_symmetric('cint1e_nuc_sph')
-        return h
-
-    def get_veff(self, mol, dm):
-        return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
-
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):
     irreptab = pyscf.symm.param.IRREP_ID_TABLE[groupname]
     if isinstance(wfnsym, str):

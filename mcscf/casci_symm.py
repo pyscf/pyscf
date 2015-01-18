@@ -53,11 +53,6 @@ class CASCI(casci.CASCI):
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
-    def get_hcore(self, mol=None):
-        h = self.mol.intor_symmetric('cint1e_kin_sph') \
-          + self.mol.intor_symmetric('cint1e_nuc_sph')
-        return h
-
 
 
 if __name__ == '__main__':

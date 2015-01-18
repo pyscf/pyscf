@@ -127,6 +127,18 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nocc_beta = {'B1':1}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
 
+    def test_dot_eri_dm(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        j0, k0 = scf.hf.dot_eri_dm(mf._eri, dm+dm.T, hermi=0)
+        j1, k1 = scf.hf.dot_eri_dm(mf._eri, dm+dm.T, hermi=1)
+        self.assertTrue(numpy.allclose(j0,j1))
+        self.assertTrue(numpy.allclose(k0,k1))
+        j1, k1 = scf.hf.dot_eri_dm(mf._eri, dm, hermi=0)
+        self.assertAlmostEqual(numpy.linalg.norm(j1), 48.395346241533758, 0)
+        self.assertAlmostEqual(numpy.linalg.norm(k1), 26.760108454035048, 0)
+
 if __name__ == "__main__":
     print("Full Tests for rhf")
     unittest.main()
