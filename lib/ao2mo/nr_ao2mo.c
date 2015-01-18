@@ -646,7 +646,7 @@ void AO2MOtranse2_nr_s1(int (*fmmm)(),
 {
         unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         unsigned long nao2 = envs->nao * envs->nao;
-        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs);
+        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
 }
 
 void AO2MOtranse2_nr_s2ij(int (*fmmm)(),
@@ -665,7 +665,7 @@ void AO2MOtranse2_nr_s2kl(int (*fmmm)(),
         unsigned long nao2 = nao*(nao+1)/2;
         double *buf = malloc(sizeof(double) * nao*nao);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs);
+        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
         free(buf);
 }
 
