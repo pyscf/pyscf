@@ -232,7 +232,7 @@ class UHF(hf.SCF):
         self.opt_llll = None
         self.opt_ssll = None
         self.opt_ssss = None
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def eig(self, h, s):
         e, c = scipy.linalg.eigh(h, s)

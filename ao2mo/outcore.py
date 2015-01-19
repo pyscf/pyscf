@@ -259,7 +259,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     if nij_pair == 0 or nkl_pair == 0:
         feri.close()
-        return None
+        return erifile
     log.debug('num. MO ints = %.8g, require disk %.8g', \
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
@@ -419,11 +419,11 @@ def half_e1(mol, mo_coeffs, swapfile,
         else:
             ao2mopt = _ao2mo.AO2MOpt(mol, intor)
 
-    log.debug('tmpfile %.8g MB', nij_pair*nao_pair*8/1e6)
-    log.debug1('shranges = %s', shranges)
+    log.debug('step1: tmpfile %.8g MB', nij_pair*nao_pair*8/1e6)
     log.debug('step1: (ij,kl) shape (%d,%d), swap-block-shape (%d,%d), mem cache %.8g MB', \
               nij_pair, nao_pair, e2buflen, e1buflen,
               comp*e1buflen*nij_pair*8/1e6)
+    log.debug1('shranges = %s', shranges)
 
     fswap = h5py.File(swapfile, 'w')
     for icomp in range(comp):

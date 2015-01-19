@@ -103,7 +103,7 @@ class UHF(uhf.UHF):
         # number of electrons for each irreps
         self.irrep_nocc_alpha = {}
         self.irrep_nocc_beta = {}
-        self._keys = self._keys.union(['_eri', 'irrep_nocc_alpha','irrep_nocc_beta'])
+        self._keys = self._keys.union(['irrep_nocc_alpha','irrep_nocc_beta'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)

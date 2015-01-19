@@ -74,7 +74,7 @@ class RHF(hf.RHF):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nocc = {} # {'ir_name':int,...}
-        self._keys = self._keys.union(['_eri', 'irrep_nocc'])
+        self._keys = self._keys.union(['irrep_nocc'])
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)

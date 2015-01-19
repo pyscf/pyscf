@@ -190,7 +190,7 @@ class NMR(object):
 
         self.mo10 = None
         self.mo_e10 = None
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
 ## ** default method **
 #        # RHF: exchange parts

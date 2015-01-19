@@ -223,7 +223,7 @@ class UHF(hf.SCF):
         self.DIIS = UHF_DIIS
         self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
         self._eri = None
-        self._keys = self._keys.union(['nelectron_alpha', '_eri'])
+        self._keys = self._keys.union(['nelectron_alpha'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)

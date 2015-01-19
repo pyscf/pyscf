@@ -77,7 +77,7 @@ class FCIQMCCI(object):
         else:
             self.groupname = None
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         if verbose is None:

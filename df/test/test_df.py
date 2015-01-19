@@ -4,8 +4,12 @@
 
 import unittest
 import ctypes
+import tempfile
 import numpy
+import h5py
 from pyscf import gto
+from pyscf import scf
+from pyscf import ao2mo
 from pyscf import df
 
 mol = gto.Mole()
@@ -71,8 +75,49 @@ class KnowValues(unittest.TestCase):
         eri1 = numpy.einsum('ip,kp->ik', eri1, j3c)
         self.assertTrue(numpy.allclose(eri1, eri0))
 
+    def test_outcore(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        cderi0 = df.incore.cholesky_eri(mol)
+        df.outcore.cholesky_eri(mol, ftmp.name)
+        cderi1 = df.load_buf(ftmp.name, 0, 1000)
+        self.assertTrue(numpy.allclose(cderi1, cderi0))
+
+        df.outcore.cholesky_eri(mol, ftmp.name, ioblk_size=.05)
+        cderi1 = df.load_buf(ftmp.name, 0, 1000)
+        self.assertTrue(numpy.allclose(cderi1, cderi0))
+
+        nao = mol.nao_nr()
+        naux = cderi0.shape[0]
+        df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
+                           max_memory=.05, ioblk_size=.02)
+        feri = h5py.File(ftmp.name)
+        cderi1 = numpy.array(feri['eri_mo'])
+        feri.close()
+        self.assertTrue(numpy.allclose(cderi1, cderi0.T))
+
+        ####
+        buf = numpy.zeros((naux,nao,nao))
+        idx = numpy.tril_indices(nao)
+        buf[:,idx[0],idx[1]] = cderi0
+        buf[:,idx[1],idx[0]] = cderi0
+        cderi0 = buf
+        df.outcore.cholesky_eri(mol, ftmp.name, aosym='s1', ioblk_size=.05)
+        cderi1 = df.load_buf(ftmp.name, 0, 1000).reshape(-1,nao,nao)
+        self.assertTrue(numpy.allclose(cderi1, cderi0))
+
+        numpy.random.seed(1)
+        co = numpy.random.random((nao,4))
+        cv = numpy.random.random((nao,25))
+        cderi0 = numpy.einsum('kpq,pi,qj->kij', cderi0, co, cv)
+        df.outcore.general(mol, (co,cv), ftmp.name, ioblk_size=.05)
+        feri = h5py.File(ftmp.name)
+        cderi1 = numpy.array(feri['eri_mo'])
+        feri.close()
+        self.assertTrue(numpy.allclose(cderi1.T, cderi0.reshape(naux,-1)))
+
+
 
 if __name__ == "__main__":
-    print("Full Tests for df.incore")
+    print("Full Tests for df")
     unittest.main()
 

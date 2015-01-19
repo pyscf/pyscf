@@ -383,7 +383,7 @@ class SCF(object):
 
         self.opt = None
 
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def build(self, mol=None):
         return self.build_(mol)
@@ -517,10 +517,14 @@ class SCF(object):
             mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-    def energy_elec(self, dm, h1e=None, vhf=None):
+    def energy_elec(self, dm=None, h1e=None, vhf=None):
+        if dm is None:
+            dm = self.make_rdm1()
         return energy_elec(self, dm, h1e, vhf)
 
-    def energy_tot(self, dm, h1e=None, vhf=None):
+    def energy_tot(self, dm=None, h1e=None, vhf=None):
+        if dm is None:
+            dm = self.make_rdm1()
         return self.energy_elec(dm, h1e, vhf)[0] + self.mol.energy_nuc()
 
     def check_dm_conv(self, dm, dm_last, conv_tol):
@@ -612,7 +616,6 @@ class RHF(SCF):
 # Note: self._eri requires large mount of memory
         SCF.__init__(self, mol)
         self._eri = None
-        self._keys = self._keys.union(['_eri'])
 
     def get_jk(self, mol, dm, hermi=1):
         t0 = (time.clock(), time.time())
@@ -641,7 +644,6 @@ class ROHF(RHF):
     def __init__(self, mol):
         SCF.__init__(self, mol)
         self._eri = None
-        self._keys = self._keys.union(['_eri'])
 
     def dump_flags(self):
         SCF.dump_flags(self)

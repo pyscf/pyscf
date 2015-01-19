@@ -867,11 +867,12 @@ class Mole(object):
         self.irrep_name = None
         self._basis = None
         self._built = False
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def check_sanity(self, obj):
         '''Check misinput of a class attribute due to typos, check whether a
-        class method is overwritten
+        class method is overwritten.  It does not check the attributes which
+        are prefixed with "_".
 
         Args:
             obj : this object should have attribute _keys to store all the
@@ -879,7 +880,8 @@ class Mole(object):
         '''
         if hasattr(obj, '_keys'):
             if self.verbose > log.QUIET:
-                keysub = set(obj.__dict__.keys()) - set(obj._keys)
+                objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
+                keysub = set(objkeys) - set(obj._keys)
                 if keysub:
                     keyin = keysub.intersection(dir(obj.__class__))
                     if keyin:

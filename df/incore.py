@@ -22,6 +22,8 @@ def format_aux_basis(mol, auxbasis='weigend'):
     pmol.verbose = 0
     pmol.atom = mol.atom
     pmol.basis = auxbasis
+    pmol.spin = mol.spin
+    pmol.charge = mol.charge
     pmol.build(False, False)
     pmol.verbose = mol.verbose
     logger.debug(mol, 'aux basis %s, num shells = %d, num cGTO = %d',
@@ -59,13 +61,15 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
                               c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                               c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                               c_env.ctypes.data_as(ctypes.c_void_p))
+    libri.CINTdel_optimizer(ctypes.byref(cintopt))
     return eri
 
 
 # get (L|ij)
 def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
     eri = aux_e2(mol, auxmol, intor, aosym, comp, hermi)
-    return eri.transpose(2,0,1).copy()
+    naux = eri.shape[1]
+    return pyscf.lib.transpose(eri.reshape(-1,naux))
 
 
 def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
@@ -86,6 +90,10 @@ def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
 
 
 def cholesky_eri(mol, auxbasis='weigend', verbose=None):
+    '''
+    Returns:
+        2D array of (naux,nao*(nao+1)/2) in C-contiguous
+    '''
     t0 = (time.clock(), time.time())
     if isinstance(verbose, int):
         log = logger.Logger(mol.stdout, verbose)

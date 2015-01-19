@@ -100,7 +100,7 @@ class CASCI(object):
         self.ci = None
         self.e_tot = 0
 
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)

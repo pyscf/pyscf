@@ -439,7 +439,7 @@ class CASSCF(casci.CASCI):
         self.ci = None
         self.mo_coeff = mf.mo_coeff
 
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
