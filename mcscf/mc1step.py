@@ -405,7 +405,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 # 2e-hamiltonain) in 1-step CASSCF solver, and two member functions "kernel"
 # and "make_rdm12" in 2-step CASSCF solver
 class CASSCF(casci.CASCI):
-    __doc__ = casci.CASCI + '''CASSCF
+    __doc__ = casci.CASCI.__doc__ + '''CASSCF
 
     Extra attributes for CASSCF:
 
