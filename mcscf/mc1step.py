@@ -524,7 +524,7 @@ class CASSCF(casci.CASCI):
         self.ah_start_cycle = 0
         self.natorb = False # CAS space in natural orbital
 
-        self.fcisolver.max_cycle = 20
+        self.fcisolver.max_cycle = 50
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff

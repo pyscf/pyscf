@@ -200,7 +200,6 @@ class NMR(object):
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** NMR flags ********')
-        logger.info(self, 'potential = %s', self._scf.get_veff.__doc__)
         if self.gauge_orig is None:
             logger.info(self, 'gauge = GIAO')
         else:

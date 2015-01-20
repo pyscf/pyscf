@@ -165,7 +165,7 @@ class UHF(uhf.UHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        log.info(self, '%s with symmetry adapted basis', self.__doc__)
+        log.info(self, '%s with symmetry adapted basis', str(self.__class__))
         float_irname = []
         fix_na = 0
         fix_nb = 0

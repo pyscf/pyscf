@@ -709,8 +709,7 @@ class SCF(object):
     def dump_flags(self):
         log.info(self, '\n')
         log.info(self, '******** SCF flags ********')
-        log.info(self, 'method = %s', self.__doc__)
-        log.info(self, 'potential = %s', self.get_veff.__doc__)
+        log.info(self, 'method = %s', str(self.__class__))
         log.info(self, 'initial guess = %s', self.init_guess)
         log.info(self, 'damping factor = %g', self.damp_factor)
         log.info(self, 'level shift factor = %g', self.level_shift_factor)
