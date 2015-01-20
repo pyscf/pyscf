@@ -90,7 +90,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
                  imacro+1, totinner, totmicro)
     log.log('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)
-    return e_tot, e_ci, fcivec, mo
+    return conv, e_tot, e_ci, fcivec, mo
 
 
 
@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0]
+    emc = kernel(mc1step.CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[1]
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 

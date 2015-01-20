@@ -24,6 +24,20 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     return mo_core, mo_cas, mo_vir
 
 def h1e_for_cas(casci, mo_core, mo_cas):
+    '''CAS sapce one-electron hamiltonian
+
+    Args:
+        casci : an :class:`CASSCF` or :class:`CASCI` object
+
+        mo_core : ndarray
+            Core orbitals
+        mo_cas : ndarray
+            CAS orbitals
+
+    Returns:
+        Effective one-electron hamiltonian defined in CAS space, and the electronic
+        energy from core.
+    '''
     hcore = casci.get_hcore()
     if mo_core.size == 0:
         corevhf = 0
@@ -37,6 +51,8 @@ def h1e_for_cas(casci, mo_core, mo_cas):
     return h1eff, energy_core
 
 def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
+    '''CASCI solver
+    '''
     if verbose is None:
         verbose = casci.verbose
     log = pyscf.lib.logger.Logger(casci.stdout, verbose)
@@ -68,6 +84,56 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
 
 
 class CASCI(object):
+    '''CASCI
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`.
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`.
+        ncas : int
+            Active space size.
+        nelecas : tuple of int
+            Active (nelec_alpha, nelec_beta)
+        ncore : int or tuple of int
+            Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+        fcisolver : an instance of :class:`FCISolver`
+            The pyscf.fci module provides several FCISolver for different scenario.  Generally,
+            fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
+            can provide better performance and better numerical stability.  One can either use
+            :func:`fci.solver` function to pick the FCISolver by the program or manually assigen
+            the FCISolver to this attribute, e.g.
+
+            >>> from pyscf import fci
+            >>> mc = mcscf.CASSCF(mol, mf, 4, 4)
+            >>> mc.fcisolver = fci.solver(mol, singlet=True)
+            >>> mc.fcisolver = fci.direct_spin1.FCISolver(mol)
+
+            You can control FCISolver by setting e.g.::
+
+                >>> mc.fcisolver.max_cycle = 30
+                >>> mc.fcisolver.conv_tol = 1e-7
+
+            For more details of the parameter for FCISolver, See :mod:`fci`.
+
+    Saved results
+
+        e_tot : float
+            Total MCSCF energy (electronic energy plus nuclear repulsion)
+        ci : ndarray
+            CAS space FCI coefficients
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    >>> mc = mcscf.CASCI(mol, mf, 6, 6)
+    >>> mc.kernel()[0]
+    -108.980200816243354
+    '''
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
         self.mol = mol
         self._scf = mf
@@ -93,7 +159,7 @@ class CASCI(object):
         self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1])
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
-        self.fcisolver.max_cycle = 30
+        self.fcisolver.max_cycle = 50
         self.fcisolver.conv_tol = 1e-8
 
         self.mo_coeff = mf.mo_coeff

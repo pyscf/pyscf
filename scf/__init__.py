@@ -66,6 +66,19 @@ to control the SCF method.
     with_gaunt : bool, for Dirac-Hartree-Fock only
         If False, ignore Gaunt interaction.  Default is False.
 
+Saved results
+
+    converged : bool
+        SCF converged or not
+    hf_energy : float
+        Total HF energy (electronic energy plus nuclear repulsion)
+    mo_energy : 
+        Orbital energies
+    mo_occ
+        Orbital occupancy
+    mo_coeff
+        Orbital coefficients
+
 '''
 
 from pyscf.scf import hf

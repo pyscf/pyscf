@@ -425,7 +425,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
                  imacro+1, totinner, totmicro)
     log.log('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
-    return e_tot, e_ci, fcivec, mo
+    return conv, e_tot, e_ci, fcivec, mo
 
 
 class CASSCF(casci_uhf.CASCI):
@@ -459,6 +459,7 @@ class CASSCF(casci_uhf.CASCI):
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
+        self.converged = False
 
         self._keys = set(self.__dict__.keys())
 
@@ -493,6 +494,8 @@ class CASSCF(casci_uhf.CASCI):
         except:
             pass
 
+    def kernel(self, *args, **kwargs):
+        return self.mc1step(*args, **kwargs)
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -507,7 +510,7 @@ class CASSCF(casci_uhf.CASCI):
 
         self.dump_flags()
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 kernel(self, mo_coeff, \
                        tol=self.conv_tol, macro=macro, micro=micro, \
                        ci0=ci0, verbose=self.verbose, **cikwargs)
@@ -530,7 +533,7 @@ class CASSCF(casci_uhf.CASCI):
 
         self.dump_flags()
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step_uhf.kernel(self, mo_coeff, \
                                    tol=self.conv_tol, macro=macro, micro=micro, \
                                    ci0=ci0, verbose=self.verbose, **cikwargs)
@@ -538,8 +541,6 @@ class CASSCF(casci_uhf.CASCI):
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def kernel(self, *args, **kwargs):
-        return self.casci(*args, **kwargs)
     def casci(self, mo_coeff, ci0=None, eris=None, **cikwargs):
         if eris is None:
             fcasci = self
@@ -747,7 +748,7 @@ if __name__ == '__main__':
     mc = CASSCF(mol, m, 4, (2,1))
     #mo = m.mo_coeff
     mo = addons.sort_mo(mc, m.mo_coeff, [(3,4,5,6),(3,4,6,7)], 1)
-    emc = kernel(mc, mo, micro=4, verbose=4)[0]
+    emc = kernel(mc, mo, micro=4, verbose=4)[1]
     print(ehf, emc, emc-ehf)
     print(emc - -2.9782774463926618)
 

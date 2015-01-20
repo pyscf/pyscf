@@ -50,7 +50,7 @@ class CASSCF(mc1step.CASSCF):
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc1step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
@@ -83,7 +83,7 @@ class CASSCF(mc1step.CASSCF):
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)

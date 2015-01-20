@@ -26,6 +26,8 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     return mo_core, mo_cas, mo_vir
 
 def h1e_for_cas(casci, mo_core, mo_cas):
+    '''CAS sapce one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
+    '''
     hcore = casci.get_hcore()
     if mo_core[0].size == 0 and mo_core[1].size == 0:
         corevhf = (0,0)
@@ -43,6 +45,8 @@ def h1e_for_cas(casci, mo_core, mo_cas):
     return h1eff, energy_core
 
 def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
+    '''UHF-CASCI solver
+    '''
     if verbose is None:
         verbose = casci.verbose
     log = pyscf.lib.logger.Logger(casci.stdout, verbose)
@@ -212,6 +216,9 @@ class CASCI(object):
             for c,ia,ib in fci.addons.large_ci(ci, self.ncas, self.nelecas):
                 log.info('  %9s    %9s    %.12f', ia, ib, c)
         return dm1a, dm1b
+
+    def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
+        return addons.spin_square(self, fcivec, mo_coeff, ovlp)
 
 
 

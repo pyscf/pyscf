@@ -82,10 +82,14 @@ tools
 
 Pure function and Class
 -----------------------
-The class in each method are designed to hold only the control parameters such
-as maximum number of iterations, convergence threshold, etc.  The status are
-not saved in the class.  Most useful functions are implemented at module level,
-and can be accessed in class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
+The class in each method are designed to hold only the final results and the
+control parameters such as maximum number of iterations, convergence
+threshold, etc.  The intermediate status are not saved in the class.  If the
+class.kernel() function is finished without any errors,  the solution will be
+saved in the class (see documentation for each class).
+
+Most useful functions are implemented at module level, and can be accessed in
+both class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
 ``SCF(mol).get_jk(mol, dm)`` have the same functionality.  As a result, most
 functions and class are **pure**, i.e. no status are saved, and the argument
 are not changed inplace.  Exception to this rule is suffixed with underscore

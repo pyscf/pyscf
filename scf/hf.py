@@ -635,6 +635,19 @@ class SCF(object):
         direct_scf_tol : float
             Direct SCF cutoff threshold.  Default is 1e-13.
 
+    Saved results
+
+        converged : bool
+            SCF converged or not
+        hf_energy : float
+            Total HF energy (electronic energy plus nuclear repulsion)
+        mo_energy : 
+            Orbital energies
+        mo_occ
+            Orbital occupancy
+        mo_coeff
+            Orbital coefficients
+
     Examples:
 
     >>> mol = gto.Mole()
