@@ -11,6 +11,30 @@ from pyscf.lib import logger
 
 
 def density_fit(mf):
+    '''For the given SCF object, update the J, K matrix constructor with
+    corresponding density fitting integrals.
+
+    Args:
+        mf : an SCF object
+
+    Returns:
+        An SCF object with a modified J, K matrix constructor which uses density
+        fitting integrals to compute J and K
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.density_fit(scf.RHF(mol))
+    >>> mf.scf()
+    -100.005306000435510
+
+    >>> mol.symmetry = 1
+    >>> mol.build(0, 0)
+    >>> mf = scf.density_fit(scf.UHF(mol))
+    >>> mf.scf()
+    -100.005306000435510
+    '''
     class HF(mf.__class__):
         def __init__(self):
             self.__dict__.update(mf.__dict__)

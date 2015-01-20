@@ -83,8 +83,7 @@ class KnowValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.uhf_symm.UHF(pmol)
-        mf.irrep_nocc_alpha = {'B1':2}
-        mf.irrep_nocc_beta = {'B1':1}
+        mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.010623169610966, 9)
 
 

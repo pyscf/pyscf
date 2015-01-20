@@ -159,6 +159,8 @@ class CASCI(object):
 
         return (eri_aa, eri_ab, eri_bb)
 
+    def kernel(self, *args, **kwargs):
+        return self.casci(*args, **kwargs)
     def casci(self, mo_coeff=None, ci0=None, **cikwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff

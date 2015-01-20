@@ -465,6 +465,8 @@ class CASSCF(casci.CASCI):
         except:
             pass
 
+    def kernel(self, *args, **kwargs):
+        return self.mc1step(*args, **kwargs)
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff

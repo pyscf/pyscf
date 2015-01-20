@@ -740,7 +740,7 @@ class Mole(object):
         output : str or None
             Output file, default is None which dumps msg to sys.stdout
         max_memory : int, float
-            Allowd memory in MB
+            Allowed memory in MB
         light_speed :
             Default is set in lib.parameters.LIGHTSPEED
         charge : int

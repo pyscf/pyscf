@@ -36,7 +36,7 @@ def analyze(mf, verbose=logger.DEBUG):
     orbsymb = numpy.array(orbsymb)
     tot_sym = 0
     noccsa = [sum(orbsyma[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
-    noccsb = [sum(orbsyma[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
+    noccsb = [sum(orbsymb[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
     for ir in range(nirrep):
         if (noccsa[ir]+noccsb[ir]) % 2:
             tot_sym ^= mol.irrep_id[ir]
@@ -92,18 +92,76 @@ def analyze(mf, verbose=logger.DEBUG):
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_pop(mol, dm, mf.get_ovlp(), verbose)
 
+def get_irrep_nelec(mol, mo_occ, mo_coeff):
+    '''Alpha/beta electron numbers for each irreducible representation.
+
+    Args:
+        mol : an instance of :class:`Mole`
+            To provide irrep_id, and spin-adapted basis
+        mo_occ : a list of 1D ndarray
+            Regular occupancy, without grouping for irreps
+        mo_coeff : a list of 2D ndarray
+            Regular orbital coefficients, without grouping for irreps
+
+    Returns:
+        irrep_nelec : dict
+            The number of alpha/beta electrons for each irrep {'ir_name':(int,int), ...}.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
+    >>> mf = scf.UHF(mol)
+    >>> mf.scf()
+    -75.623975516256721
+    >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_occ, mf.mo_coeff)
+    {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
+    '''
+    orbsyma = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                        mo_coeff[0])
+    orbsymb = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                        mo_coeff[1])
+    orbsyma = numpy.array(orbsyma)
+    orbsymb = numpy.array(orbsymb)
+    irrep_nelec = dict([(mol.irrep_name[k], (int(sum(mo_occ[0][orbsyma==ir])),
+                                             int(sum(mo_occ[1][orbsymb==ir]))))
+                        for k, ir in enumerate(mol.irrep_id)])
+    return irrep_nelec
+
 def map_rhf_to_uhf(rhf):
+    '''Take the settings from RHF object'''
     return uhf.map_rhf_to_uhf(rhf)
 
 
 class UHF(uhf.UHF):
-    '''UHF'''
+    __doc__ = uhf.UHF.__doc__ + '''
+    Attributes for symmetry allowed UHF:
+        irrep_nelec : dict
+            Specify the number of alpha/beta electrons for particular irrep
+            {'ir_name':(int,int), ...}.
+            For the irreps not listed in these dicts, the program will choose the
+            occupancy based on the orbital energies.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    -75.623975516256692
+    >>> mf.get_irrep_nelec()
+    {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
+    >>> mf.irrep_nelec = {'B1': (1, 0)}
+    >>> mf.scf()
+    -75.429189192031131
+    >>> mf.get_irrep_nelec()
+    {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
+    '''
     def __init__(self, mol):
         uhf.UHF.__init__(self, mol)
         # number of electrons for each irreps
-        self.irrep_nocc_alpha = {}
-        self.irrep_nocc_beta = {}
-        self._keys = self._keys.union(['irrep_nocc_alpha','irrep_nocc_beta'])
+        self.irrep_nelec = {}
+        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -113,44 +171,32 @@ class UHF(uhf.UHF):
         fix_nb = 0
         for ir in range(self.mol.symm_orb.__len__()):
             irname = self.mol.irrep_name[ir]
-            if irname in self.irrep_nocc_alpha:
-                fix_na += self.irrep_nocc_alpha[irname]
-            else:
-                float_irname.append(irname)
-            if irname in self.irrep_nocc_beta:
-                fix_nb += self.irrep_nocc_beta[irname]
+            if irname in self.irrep_nelec:
+                fix_na += self.irrep_nelec[irname][0]
+                fix_nb += self.irrep_nelec[irname][1]
             else:
                 float_irname.append(irname)
         float_irname = set(float_irname)
         if fix_na+fix_nb > 0:
-            log.info(self, 'fix %d electrons in irreps:\n' \
-                     '   alpha %s,\n   beta  %s', \
-                     fix_na+fix_nb, self.irrep_nocc_alpha.items(), \
-                     self.irrep_nocc_beta.items())
-            if fix_na+fix_nb > self.mol.nelectron \
-               or ((fix_na>self.nelectron_alpha) or \
-                   (fix_nb+self.nelectron_alpha>self.mol.nelectron)):
-                log.error(self, 'number of electrons error in irrep_nocc\n' \
-                        '   alpha %s,\n   beta  %s', \
-                        self.irrep_nocc_alpha.items(), \
-                        self.irrep_nocc_beta.items())
-                raise ValueError('irrep_nocc')
+            log.info(self, 'fix %d electrons in irreps: %s',
+                     fix_na+fix_nb, str(self.irrep_nelec.items()))
+            if ((fix_na+fix_nb > self.mol.nelectron) or
+                (fix_na>self.nelectron_alpha) or
+                (fix_nb+self.nelectron_alpha>self.mol.nelectron)):
+                log.error(self, 'electron number error in irrep_nelec %s',
+                          self.irrep_nelec.items())
+                raise ValueError('irrep_nelec')
         if float_irname:
-            log.info(self, '%d free electrons in irreps %s', \
+            log.info(self, '%d free electrons in irreps %s',
                      self.mol.nelectron-fix_na-fix_nb,
                      ' '.join(float_irname))
         elif fix_na+fix_nb != self.mol.nelectron:
-            log.error(self, 'number of electrons error in irrep_nocc \n' \
-                    '   alpha %s,\n   beta  %s', \
-                    self.irrep_nocc_alpha.items(), \
-                    self.irrep_nocc_beta.items())
-            raise ValueError('irrep_nocc')
+            log.error(self, 'electron number error in irrep_nelec %d',
+                      self.irrep_nelec.items())
+            raise ValueError('irrep_nelec')
 
     def build_(self, mol=None):
-        for irname in self.irrep_nocc_alpha.keys():
-            if irname not in self.mol.irrep_name:
-                log.warn(self, '!! No irrep %s', irname)
-        for irname in self.irrep_nocc_beta.keys():
+        for irname in self.irrep_nelec.keys():
             if irname not in self.mol.irrep_name:
                 log.warn(self, '!! No irrep %s', irname)
         return uhf.UHF.build_(self, mol)
@@ -190,17 +236,15 @@ class UHF(uhf.UHF):
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
-            if irname in self.irrep_nocc_alpha:
-                n = self.irrep_nocc_alpha[irname]
+            if irname in self.irrep_nelec:
+                n = self.irrep_nelec[irname][0]
                 mo_occ[0][p0:p0+n] = 1
                 neleca_fix += n
-            else:
-                idx_ea_left.append(range(p0,p0+nso))
-            if irname in self.irrep_nocc_beta:
-                n = self.irrep_nocc_beta[irname]
+                n = self.irrep_nelec[irname][1]
                 mo_occ[1][p0:p0+n] = 1
                 nelecb_fix += n
             else:
+                idx_ea_left.append(range(p0,p0+nso))
                 idx_eb_left.append(range(p0,p0+nso))
             p0 += nso
 
@@ -251,8 +295,8 @@ class UHF(uhf.UHF):
         if self.verbose >= logger.DEBUG:
             ehomo = max(ehomoa,ehomob)
             elumo = min(elumoa,elumob)
-            log.debug(self, 'alpha irrep_nocc = %s', noccsa)
-            log.debug(self, 'beta  irrep_nocc = %s', noccsb)
+            log.debug(self, 'alpha irrep_nelec = %s', noccsa)
+            log.debug(self, 'beta  irrep_nelec = %s', noccsb)
             hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo, 'alpha-')
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
         return mo_occ
@@ -298,5 +342,11 @@ class UHF(uhf.UHF):
 
     def analyze(self, mo_verbose=logger.DEBUG):
         return analyze(self, mo_verbose)
+
+    def get_irrep_nelec(self, mol=None, mo_occ=None, mo_coeff=None):
+        if mol is None: mol = self.mol
+        if mo_occ is None: mo_occ = self.mo_occ
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return get_irrep_nelec(mol, mo_occ, mo_coeff)
 
 

@@ -22,6 +22,9 @@ from pyscf.scf import _vhf
 # mo_coeff, mo_occ, mo_energy are all in nosymm representation
 
 def analyze(mf, verbose=logger.DEBUG):
+    '''Analyze the given SCF object:  print orbital energies, occupancies;
+    print orbital coefficients; Occupancy for each irreps; Mulliken population analysis
+    '''
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -63,18 +66,73 @@ def analyze(mf, verbose=logger.DEBUG):
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_pop(mol, dm, mf.get_ovlp(), verbose)
 
+def get_irrep_nelec(mol, mo_occ, mo_coeff):
+    '''Electron numbers for each irreducible representation.
+
+    Args:
+        mol : an instance of :class:`Mole`
+            To provide irrep_id, and spin-adapted basis
+        mo_occ : 1D ndarray
+            Regular occupancy, without grouping for irreps
+        mo_coeff : 2D ndarray
+            Regular orbital coefficients, without grouping for irreps
+
+    Returns:
+        irrep_nelec : dict
+            The number of electrons for each irrep {'ir_name':int,...}.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    -76.016789472074251
+    >>> scf.hf_symm.get_irrep_nelec(mol, mf.mo_occ, mf.mo_coeff)
+    {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
+    '''
+    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                       mo_coeff)
+    orbsym = numpy.array(orbsym)
+    irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
+                        for k, ir in enumerate(mol.irrep_id)])
+    return irrep_nelec
+
 def so2ao_mo_coeff(so, irrep_mo_coeff):
+    '''Transfer the basis of MO coefficients, from spin-adapted basis to AO basis
+    '''
     return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir]) \
                          for ir in range(so.__len__())])
 
 
 class RHF(hf.RHF):
-    '''RHF'''
+    __doc__ = hf.SCF.__doc__ + '''
+    Attributes for symmetry allowed RHF:
+        irrep_nelec : dict
+            Specify the number of electrons for particular irrep {'ir_name':int,...}.
+            For the irreps not listed in this dict, the program will choose the
+            occupancy based on the orbital energies.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    -76.016789472074251
+    >>> mf.get_irrep_nelec()
+    {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
+    >>> mf.irrep_nelec = {'A2': 2}
+    >>> mf.scf()
+    -72.768201804695622
+    >>> mf.get_irrep_nelec()
+    {'A1': 6, 'A2': 2, 'B1': 2, 'B2': 0}
+    '''
     def __init__(self, mol):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
-        self.irrep_nocc = {} # {'ir_name':int,...}
-        self._keys = self._keys.union(['irrep_nocc'])
+        self.irrep_nelec = {} # {'ir_name':int,...}
+        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
@@ -83,27 +141,27 @@ class RHF(hf.RHF):
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
             irname = self.mol.irrep_name[ir]
-            if irname in self.irrep_nocc:
-                fix_ne += self.irrep_nocc[irname]
+            if irname in self.irrep_nelec:
+                fix_ne += self.irrep_nelec[irname]
             else:
                 float_irname.append(irname)
         if fix_ne > 0:
             log.info(self, 'fix %d electrons in irreps %s', \
-                     fix_ne, self.irrep_nocc.items())
+                     fix_ne, self.irrep_nelec.items())
             if fix_ne > self.mol.nelectron:
-                log.error(self, 'number of electrons error in irrep_nocc %s', \
-                          self.irrep_nocc.items())
-                raise ValueError('irrep_nocc')
+                log.error(self, 'number of electrons error in irrep_nelec %s', \
+                          self.irrep_nelec.items())
+                raise ValueError('irrep_nelec')
         if float_irname:
             log.info(self, '%d free electrons in irreps %s', \
                      self.mol.nelectron-fix_ne, ' '.join(float_irname))
         elif fix_ne != self.mol.nelectron:
-            log.error(self, 'number of electrons error in irrep_nocc %s', \
-                      self.irrep_nocc.items())
-            raise ValueError('irrep_nocc')
+            log.error(self, 'number of electrons error in irrep_nelec %s', \
+                      self.irrep_nelec.items())
+            raise ValueError('irrep_nelec')
 
     def build_(self, mol=None):
-        for irname in self.irrep_nocc.keys():
+        for irname in self.irrep_nelec.keys():
             if irname not in self.mol.irrep_name:
                 log.warn(self, '!! No irrep %s', irname)
         return hf.RHF.build_(self, mol)
@@ -133,8 +191,8 @@ class RHF(hf.RHF):
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
-            if irname in self.irrep_nocc:
-                n = self.irrep_nocc[irname]
+            if irname in self.irrep_nelec:
+                n = self.irrep_nelec[irname]
                 mo_occ[p0:p0+n//2] = 2
                 nelec_fix += n
                 noccs.append(n)
@@ -154,8 +212,8 @@ class RHF(hf.RHF):
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
-            if irname in self.irrep_nocc:
-                nocc = self.irrep_nocc[irname] // 2
+            if irname in self.irrep_nelec:
+                nocc = self.irrep_nelec[irname]
             else:
                 nocc = int((mo_energy[p0:p0+nso]<elumo_float).sum())
                 mo_occ[p0:p0+nocc] = 2
@@ -168,7 +226,7 @@ class RHF(hf.RHF):
         log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
                  irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
-            log.debug(self, 'irrep_nocc = %s', noccs)
+            log.debug(self, 'irrep_nelec = %s', noccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
         return mo_occ
 
@@ -203,13 +261,40 @@ class RHF(hf.RHF):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
+    def get_irrep_nelec(self, mol=None, mo_occ=None, mo_coeff=None):
+        if mol is None: mol = self.mol
+        if mo_occ is None: mo_occ = self.mo_occ
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return get_irrep_nelec(mol, mo_occ, mo_coeff)
+
 
 class ROHF(hf.ROHF):
-    '''ROHF'''
+    __doc__ = hf.SCF.__doc__ + '''
+    Attributes for symmetry allowed ROHF:
+        irrep_nelec : dict
+            Specify the number of alpha/beta electrons for particular irrep
+            {'ir_name':(int,int), ...}.
+            For the irreps not listed in these dicts, the program will choose the
+            occupancy based on the orbital energies.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    -75.619358861084052
+    >>> mf.get_irrep_nelec()
+    {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
+    >>> mf.irrep_nelec = {'B1': (1, 0)}
+    >>> mf.scf()
+    -75.425669486776457
+    >>> mf.get_irrep_nelec()
+    {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
+    '''
     def __init__(self, mol):
         hf.ROHF.__init__(self, mol)
-        self.irrep_nocc_alpha = {}
-        self.irrep_nocc_beta = {}
+        self.irrep_nelec = {}
 # use _irrep_doccs and _irrep_soccs help self.eig to compute orbital energy,
 # do not overwrite them
         self._irrep_doccs = []
@@ -218,69 +303,54 @@ class ROHF(hf.ROHF):
 # occupied core orbitals
         self._core_mo_energy = None
         self._open_mo_energy = None
-        self._keys = self._keys.union(['irrep_nocc_alpha','irrep_nocc_beta',
+        self._keys = self._keys.union(['irrep_nelec',
                                        '_irrep_doccs', '_irrep_soccs',
                                        '_core_mo_energy', '_open_mo_energy'])
 
     def dump_flags(self):
         hf.ROHF.dump_flags(self)
         log.info(self, '%s with symmetry adapted basis', self.__doc__)
+#TODO: improve the sainity check
         float_irname = []
         fix_na = 0
         fix_nb = 0
-#FIXME        for ir in range(self.mol.symm_orb.__len__()):
-#FIXME            irname = self.mol.irrep_name[ir]
-#FIXME            if irname in self.irrep_nocc_alpha:
-#FIXME                fix_na += self.irrep_nocc_alpha[irname]
-#FIXME            else:
-#FIXME                float_irname.append(irname)
-#FIXME            if irname in self.irrep_nocc_beta:
-#FIXME                fix_nb += self.irrep_nocc_beta[irname]
-#FIXME            else:
-#FIXME                float_irname.append(irname)
-#FIXME        float_irname = set(float_irname)
-#FIXME        if fix_na+fix_nb > 0:
-#FIXME            log.info(self, 'fix %d electrons in irreps:\n' \
-#FIXME                     '   alpha %s,\n   beta  %s', \
-#FIXME                     fix_na+fix_nb, self.irrep_nocc_alpha.items(), \
-#FIXME                     self.irrep_nocc_beta.items())
-#FIXME            if fix_na+fix_nb > self.mol.nelectron \
-#FIXME               or ((fix_na>self.nelectron_alpha) or \
-#FIXME                   (fix_nb+self.nelectron_alpha>self.mol.nelectron)):
-#FIXME                log.error(self, 'number of electrons error in irrep_nocc\n' \
-#FIXME                        '   alpha %s,\n   beta  %s', \
-#FIXME                        self.irrep_nocc_alpha.items(), \
-#FIXME                        self.irrep_nocc_beta.items())
-#FIXME                raise ValueError('irrep_nocc')
-#FIXME        if float_irname:
-#FIXME            log.info(self, '%d free electrons in irreps %s', \
-#FIXME                     self.mol.nelectron-fix_na-fix_nb,
-#FIXME                     ' '.join(float_irname))
-#FIXME        elif fix_na+fix_nb != self.mol.nelectron:
-#FIXME            log.error(self, 'number of electrons error in irrep_nocc \n' \
-#FIXME                    '   alpha %s,\n   beta  %s', \
-#FIXME                    self.irrep_nocc_alpha.items(), \
-#FIXME                    self.irrep_nocc_beta.items())
-#FIXME            raise ValueError('irrep_nocc')
+        nelectron_alpha = (self.mol.nelectron+self.mol.spin) // 2
+        for ir in range(self.mol.symm_orb.__len__()):
+            irname = self.mol.irrep_name[ir]
+            if irname in self.irrep_nelec:
+                fix_na += self.irrep_nelec[irname][0]
+                fix_nb += self.irrep_nelec[irname][1]
+            else:
+                float_irname.append(irname)
+        float_irname = set(float_irname)
+        if fix_na+fix_nb > 0:
+            log.info(self, 'fix %d electrons in irreps: %s',
+                     fix_na+fix_nb, str(self.irrep_nelec.items()))
+            if ((fix_na+fix_nb > self.mol.nelectron) or
+                (fix_na>nelectron_alpha) or
+                (fix_nb+nelectron_alpha>self.mol.nelectron)):
+                log.error(self, 'electron number error in irrep_nelec %s',
+                          self.irrep_nelec.items())
+                raise ValueError('irrep_nelec')
+        if float_irname:
+            log.info(self, '%d free electrons in irreps %s',
+                     self.mol.nelectron-fix_na-fix_nb,
+                     ' '.join(float_irname))
+        elif fix_na+fix_nb != self.mol.nelectron:
+            log.error(self, 'electron number error in irrep_nelec %d',
+                      self.irrep_nelec.items())
+            raise ValueError('irrep_nelec')
 
     def build_(self, mol=None):
         # specify alpha,beta for same irreps
-        assert(set(self.irrep_nocc_alpha.keys()) == \
-               set(self.irrep_nocc_beta.keys()))
-        na = sum(self.irrep_nocc_alpha.values())
-        nb = sum(self.irrep_nocc_beta.values())
+        na = sum([x[0] for x in self.irrep_nelec.values()])
+        nb = sum([x[1] for x in self.irrep_nelec.values()])
         nopen = self.mol.spin
         assert(na >= nb and nopen >= na-nb)
-        for irname in self.irrep_nocc_alpha.keys():
-            if irname not in self.mol.irrep_name:
-                log.warn(self, '!! No irrep %s', irname)
-        for irname in self.irrep_nocc_beta.keys():
+        for irname in self.irrep_nelec.keys():
             if irname not in self.mol.irrep_name:
                 log.warn(self, '!! No irrep %s', irname)
         return hf.RHF.build_(self, mol)
-
-#TODO:    def dump_flags(self):
-#TODO:        pass
 
     # same to RHF.eig
     def eig(self, h, s):
@@ -306,8 +376,8 @@ class ROHF(hf.ROHF):
                 idx = ea.argsort()
                 e[ncore:] = ea[idx]
                 c[:,ncore:] = c[:,ncore:][:,idx]
-            elif self.mol.irrep_name[ir] in self.irrep_nocc_beta:
-                ncore = self.irrep_nocc_beta[self.mol.irrep_name[ir]]
+            elif self.mol.irrep_name[ir] in self.irrep_nelec:
+                ncore = self.irrep_nelec[self.mol.irrep_name[ir]][1]
                 ea = eopen[ir][ncore:]
                 idx = ea.argsort()
                 e[ncore:] = ea[idx]
@@ -370,9 +440,9 @@ class ROHF(hf.ROHF):
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
-            if irname in self.irrep_nocc_alpha:
-                ncore = self.irrep_nocc_beta[irname]
-                nocc = self.irrep_nocc_alpha[irname]
+            if irname in self.irrep_nelec:
+                ncore = self.irrep_nelec[irname][1]
+                nocc = self.irrep_nelec[irname][0]
                 mo_occ[p0:p0+ncore] = 2
                 mo_occ[p0+ncore:p0+nocc] = 1
                 neleca_fix += nocc
@@ -421,8 +491,8 @@ class ROHF(hf.ROHF):
         log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
                  irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
-            log.debug(self, 'double occ irrep_nocc = %s', ndoccs)
-            log.debug(self, 'single occ irrep_nocc = %s', nsoccs)
+            log.debug(self, 'double occ irrep_nelec = %s', ndoccs)
+            log.debug(self, 'single occ irrep_nelec = %s', nsoccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
             p0 = 0
             for ir in range(nirrep):
@@ -523,6 +593,13 @@ class ROHF(hf.ROHF):
         dm = self.make_rdm1(mo_coeff, mo_occ)
         return self.mulliken_pop(mol, dm, self.get_ovlp(), verbose)
 
+    def get_irrep_nelec(self, mol=None, mo_occ=None, mo_coeff=None):
+        from pyscf.scf import uhf_symm
+        if mol is None: mol = self.mol
+        if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
+        if mo_coeff is None: mo_coeff = (self.mo_coeff,self.mo_coeff)
+        return uhf_symm.get_irrep_nelec(mol, mo_occ, mo_coeff)
+
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):
     nirrep = mol.symm_orb.__len__()
@@ -565,6 +642,6 @@ if __name__ == '__main__':
     )
 
     method = RHF(mol)
-    #method.irrep_nocc['B2u'] = 2
+    #method.irrep_nelec['B2u'] = 2
     energy = method.scf()
     print(energy)

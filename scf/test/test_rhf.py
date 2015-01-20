@@ -104,7 +104,7 @@ class KnowValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
-        mf.irrep_nocc = {'B1':4}
+        mf.irrep_nelec = {'B1':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
 
     def test_hf_symm_rohf(self):
@@ -123,8 +123,7 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 1
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
-        mf.irrep_nocc_alpha = {'B1':2}
-        mf.irrep_nocc_beta = {'B1':1}
+        mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
 
     def test_dot_eri_dm(self):

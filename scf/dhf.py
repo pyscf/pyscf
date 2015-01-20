@@ -22,20 +22,14 @@ from pyscf.scf import diis
 from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
-__doc__ = '''Options:
-self.chkfile = '/dev/shm/...'
-self.stdout = '...'
-self.diis_space = 6
-self.diis_start_cycle = 1
-self.damp_factor = 1
-self.level_shift_factor = 0
-self.conv_tol = 1e-10
-self.max_cycle = 50
-self.with_ssss = False   # pass (SS|SS) integral
-'''
-
 
 def kernel(mf, conv_tol=1e-9, dump_chk=True, init_dm=None):
+    '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
+    SCF is carried out in three steps.  First the 2-electron part is
+    approximated by large component integrals (LL|LL); Next, (SS|LL) the
+    interaction between large and small components are added; Finally,
+    converge the SCF with the small component contributions (SS|SS)
+    '''
     mol = mf.mol
     if init_dm is None:
         dm = mf.get_init_guess()
@@ -220,7 +214,24 @@ def analyze(mf, verbose=logger.DEBUG):
 
 
 class UHF(hf.SCF):
-    __doc__ = 'Dirac-UHF'
+    __doc__ = hf.SCF.__doc__ + '''
+    Attributes for Dirac-Hartree-Fock
+        with_ssss : bool, for Dirac-Hartree-Fock only
+            If False, ignore small component integrals (SS|SS).  Default is True.
+        with_gaunt : bool, for Dirac-Hartree-Fock only
+            If False, ignore Gaunt interaction.  Default is False.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> e0 = mf.scf()
+    >>> mf = scf.DHF(mol)
+    >>> e1 = mf.scf()
+    >>> print('Relativistic effects = %.12f' % (e1-e0))
+    Relativistic effects = -0.000008854205
+    '''
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8

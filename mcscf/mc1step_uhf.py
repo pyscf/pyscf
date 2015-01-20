@@ -538,6 +538,8 @@ class CASSCF(casci_uhf.CASCI):
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
+    def kernel(self, *args, **kwargs):
+        return self.casci(*args, **kwargs)
     def casci(self, mo_coeff, ci0=None, eris=None, **cikwargs):
         if eris is None:
             fcasci = self
