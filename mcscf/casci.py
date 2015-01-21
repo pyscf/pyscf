@@ -27,7 +27,7 @@ def h1e_for_cas(casci, mo_core, mo_cas):
     '''CAS sapce one-electron hamiltonian
 
     Args:
-        casci : an :class:`CASSCF` or :class:`CASCI` object
+        casci : a CASSCF/CASCI object or RHF object
 
         mo_core : ndarray
             Core orbitals
@@ -65,7 +65,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    h1eff, energy_core = h1e_for_cas(casci, mo_core, mo_cas)
+    h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
@@ -201,6 +201,13 @@ class CASCI(object):
             feri = h5py.File(ftmp.name, 'r')
             eri = numpy.array(feri['eri_mo'])
         return eri
+
+    def h1e_for_cas(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, self.ncas,
+                                               self.nelecas, self.ncore)
+        return h1e_for_cas(self, mo_core, mo_cas)
 
     def kernel(self, *args, **kwargs):
         return self.casci(*args, **kwargs)
