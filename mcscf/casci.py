@@ -202,10 +202,10 @@ class CASCI(object):
             eri = numpy.array(feri['eri_mo'])
         return eri
 
-    def h1e_for_cas(self, mo_coeff=None, ncas=None, nelecas=None):
+    def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        return h1e_for_cas(self, mo_coeff, ncas, nelecas)
+        return h1e_for_cas(self, mo_coeff, ncas, ncore)
 
     def kernel(self, *args, **kwargs):
         return self.casci(*args, **kwargs)

@@ -76,9 +76,10 @@ def project_init_guess(casscf, init_mo):
     Args:
         casscf : an :class:`CASSCF` or :class:`CASCI` object
 
-        init_mo : ndarray
+        init_mo : ndarray or list of ndarray
             Initial guess orbitals which are not orth-normal for the current
-            molecule
+            molecule.  When the casscf is UHF-CASSCF, the init_mo needs to be
+            a list of two ndarrays, for alpha and beta orbitals
 
     Returns:
         New orthogonal initial guess orbitals with the core taken from
@@ -111,19 +112,27 @@ def project_init_guess(casscf, init_mo):
     '''
     from pyscf import scf
     from pyscf import lo
+
+    def project(mfmo, init_mo, ncore, s):
+        mo0core = init_mo[:,:ncore]
+        s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
+        idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
+        mocore = mfmo[:,idx[-ncore:][::-1]]
+        mou = init_mo[:,ncore:] \
+            - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
+        mo = numpy.hstack((mocore, mou))
+        mo = lo.orth.vec_lowdin(mo, s)
+
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff
-    assert(mfmo.shape[0] == init_mo.shape[0])
-
-    mo0core = init_mo[:,:ncore]
     s = casscf._scf.get_ovlp()
-    s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
-    idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
-    mocore = mfmo[:,idx[-ncore:][::-1]]
-    mou = init_mo[:,ncore:] \
-        - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
-    mo = numpy.hstack((mocore,mou))
-    mo = lo.orth.vec_lowdin(mo, s)
+    if isinstance(ncore, int):
+        assert(mfmo.shape[0] == init_mo.shape[0])
+        mo = project(mfmo, init_mo, ncore, s)
+    else: # UHF-based CASSCF
+        assert(mfmo[0].shape[0] == init_mo[0].shape[0])
+        mo = (project(mfmo[0], init_mo[0], ncore[0], s),
+              project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
 
 def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
