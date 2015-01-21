@@ -25,7 +25,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_a:]       )
     return mo_core, mo_cas, mo_vir
 
-def h1e_for_cas(casci, mo_coeff, ncas=None, nelecas=None):
+def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
     '''CAS sapce one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
 
     Args:
@@ -33,8 +33,10 @@ def h1e_for_cas(casci, mo_coeff, ncas=None, nelecas=None):
 
     '''
     if ncas is None: ncas = casci.ncas
-    if nelecas is None: nelecas = casci.nelecas
-    mo_core, mo_cas = extract_orbs(mo_coeff, ncas, nelecas, ncore)[:2]
+    if ncore is None: ncore = casci.ncore
+    mo_core =(mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
+    mo_cas = (mo_coeff[0][:,ncore[0]:ncore[0]+ncas],
+              mo_coeff[1][:,ncore[1]:ncore[1]+ncas])
 
     hcore = casci.get_hcore()
     if mo_core[0].size == 0 and mo_core[1].size == 0:

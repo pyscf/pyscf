@@ -23,7 +23,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
 
-def h1e_for_cas(casci, mo_coeff, ncas=None, nelecas=None):
+def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
     '''CAS sapce one-electron hamiltonian
 
     Args:
@@ -34,8 +34,9 @@ def h1e_for_cas(casci, mo_coeff, ncas=None, nelecas=None):
         the second is the electronic energy from core.
     '''
     if ncas is None: ncas = casci.ncas
-    if nelecas is None: nelecas = casci.nelecas
-    mo_core, mo_cas = extract_orbs(mo_coeff, ncas, nelecas, ncore)[:2]
+    if ncore is None: ncore = casci.ncore
+    mo_core = mo_coeff[:,:ncore]
+    mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
     hcore = casci.get_hcore()
     if mo_core.size == 0:
