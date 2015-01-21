@@ -23,21 +23,20 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
 
-def h1e_for_cas(casci, mo_core, mo_cas):
+def h1e_for_cas(casci, mo_coeff, ncas=None, nelecas=None):
     '''CAS sapce one-electron hamiltonian
 
     Args:
         casci : a CASSCF/CASCI object or RHF object
 
-        mo_core : ndarray
-            Core orbitals
-        mo_cas : ndarray
-            CAS orbitals
-
     Returns:
-        Effective one-electron hamiltonian defined in CAS space, and the electronic
-        energy from core.
+        A tuple, the first is the effective one-electron hamiltonian defined in CAS space,
+        the second is the electronic energy from core.
     '''
+    if ncas is None: ncas = casci.ncas
+    if nelecas is None: nelecas = casci.nelecas
+    mo_core, mo_cas = extract_orbs(mo_coeff, ncas, nelecas, ncore)[:2]
+
     hcore = casci.get_hcore()
     if mo_core.size == 0:
         corevhf = 0
@@ -202,12 +201,10 @@ class CASCI(object):
             eri = numpy.array(feri['eri_mo'])
         return eri
 
-    def h1e_for_cas(self, mo_coeff=None):
+    def h1e_for_cas(self, mo_coeff=None, ncas=None, nelecas=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, self.ncas,
-                                               self.nelecas, self.ncore)
-        return h1e_for_cas(self, mo_core, mo_cas)
+        return h1e_for_cas(self, mo_coeff, ncas, nelecas)
 
     def kernel(self, *args, **kwargs):
         return self.casci(*args, **kwargs)
