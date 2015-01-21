@@ -202,12 +202,12 @@ class CASCI(object):
             dump_mat.dump_tri(self.stdout, dm1b, label)
 
             s = reduce(numpy.dot, (mo_coeff[0].T, self._scf.get_ovlp(),
-                                   self._scf.mo_coeff)[0])
+                                   self._scf.mo_coeff[0]))
             idx = numpy.argwhere(abs(s)>.5)
             for i,j in idx:
                 log.info('alpha <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
             s = reduce(numpy.dot, (mo_coeff[1].T, self._scf.get_ovlp(),
-                                   self._scf.mo_coeff)[1])
+                                   self._scf.mo_coeff[1]))
             idx = numpy.argwhere(abs(s)>.5)
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))

@@ -330,28 +330,27 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = log.timer('orbital rotation', *t2m)
         totmicro += 1
 
+        casdm1_old = casdm1
         for imicro in range(micro):
 # approximate newton step, fcivec is not updated during micro iters
-            casdm1new, casdm2, gci = \
-                    casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+            casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             norm_gci = numpy.linalg.norm(gci)
-            norm_dm1 = numpy.linalg.norm(casdm1new - casdm1)
-            casdm1 = casdm1new
+            norm_dm1 = numpy.linalg.norm(casdm1 - casdm1_old)
             t3m = log.timer('update CAS DM', *t3m)
 
             u1, dx, g_orb, nin = casscf.rotate_orb(mo, casdm1, casdm2, eris, dx)
             u = numpy.dot(u, u1)
             ninner += nin
             t3m = log.timer('orbital rotation', *t3m)
-            norm_dt = numpy.linalg.norm(u-numpy.eye(nmo))
+            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
             totmicro += 1
 
             log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
                       '|g[c]|=%4.3g, |dm1|=%4.3g',
-                      imicro, e_ci, norm_dt, norm_gorb, norm_gci, norm_dm1)
+                      imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if (norm_dt < toloose or norm_gorb < toloose or
+            if (norm_t < toloose or norm_gorb < toloose or
                 norm_gci < toloose or norm_dm1 < toloose):
 # When close to convergence, rotate the CAS space to natural orbital.
 # Because the casdm1 is only an approximation, it's not neccesary to transform to
@@ -375,13 +374,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         norm_gorb = numpy.linalg.norm(g_orb)
-        log.info('                        |grad[o]| = %6.5g, |grad[c]| = %6.5g',
-                 norm_gorb, norm_gci)
+        log.info('               |grad[o]|=%4.3g, |grad[c]|=%4.3g, |dm1|=%4.3g',
+                 norm_gorb, norm_gci, norm_dm1)
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if abs(e_tot - elast) < tol \
-           and (norm_gorb < toloose and norm_gci < toloose):
+           and (norm_gorb < toloose and norm_dm1 < toloose):
             conv = True
             break
         else:
@@ -448,7 +447,7 @@ class CASSCF(casci.CASCI):
             This value is to control the start point. Default is 1e-4.
         ah_start_cycle : int, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 1e-4.
+            This value is to control the start point. Default is 3.
 
             ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
             can affect the accuracy and performance of CASSCF solver.  Lower
@@ -514,14 +513,14 @@ class CASSCF(casci.CASCI):
         self.ah_conv_tol = 1e-8
         self.ah_max_cycle = 20
         self.ah_lindep = self.ah_conv_tol**2
-        self.chkfile = mf.chkfile
 # ah_start_tol and ah_start_cycle control the start point to use AH step.
 # In function rotate_orb_ah, the orbital rotation is carried out with the
 # approximate aug_hessian step after a few davidson updates of the AH eigen
 # problem.  Reducing ah_start_tol or increasing ah_start_cycle will delay the
 # start point of orbital rotation.
         self.ah_start_tol = 1e-4
-        self.ah_start_cycle = 0
+        self.ah_start_cycle = 3
+        self.chkfile = mf.chkfile
         self.natorb = False # CAS space in natural orbital
 
         self.fcisolver.max_cycle = 50

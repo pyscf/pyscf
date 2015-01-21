@@ -85,6 +85,10 @@ class KnowValues(unittest.TestCase):
                 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]]
         self.assertTrue(numpy.allclose(mo2, (ref,ref1)))
 
+    def test_project_init_guess(self)
+        print('todo')
+
+
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")
     unittest.main()

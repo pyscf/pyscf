@@ -67,6 +67,65 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
                              mo_coeff[1][:,idx[ncore[1]:]]))
         return (mo_a, mo_b)
 
+def project_init_guess(casscf, init_mo):
+    '''Project the given initial guess to the current CASSCF problem.  The
+    projected initial guess has two parts.  The core orbitals are directly
+    taken from the Hartree-Fock orbitals, and the active orbitals are
+    projected from the given initial guess.
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+        init_mo : ndarray
+            Initial guess orbitals which are not orth-normal for the current
+            molecule
+
+    Returns:
+        New orthogonal initial guess orbitals with the core taken from
+        Hartree-Fock orbitals and projected active space from original initial
+        guess orbitals
+
+    Examples:
+
+    .. code:: python
+
+        import numpy
+        from pyscf import gto, scf, mcscf
+        mol = gto.Mole()
+        mol.build(atom='H 0 0 0; F 0 0 0.8', basis='ccpvdz', verbose=0)
+        mf = scf.RHF(mol)
+        mf.scf()
+        mc = mcscf.CASSCF(mol, mf, 6, 6)
+        mo = mcscf.sort_mo(mc, mf.mo_coeff, [3,4,5,6,8,9])
+        print('E(0.8) = %.12f' % mc.kernel(mo)[0])
+        init_mo = mc.mo_coeff
+        for b in numpy.arange(1.0, 3., .2):
+            mol.atom = [['H', (0, 0, 0)], ['F', (0, 0, b)]]
+            mol.build(0, 0)
+            mf = scf.RHF(mol)
+            mf.scf()
+            mc = mcscf.CASSCF(mol, mf, 6, 6)
+            mo = mcscf.project_init_guess(mc, init_mo)
+            print('E(%2.1f) = %.12f' % (b, mc.kernel(mo)[0]))
+            init_mo = mc.mo_coeff
+    '''
+    from pyscf import scf
+    from pyscf import lo
+    ncore = casscf.ncore
+    mfmo = casscf._scf.mo_coeff
+    assert(mfmo.shape[0] == init_mo.shape[0])
+
+    mo0core = init_mo[:,:ncore]
+    s = casscf._scf.get_ovlp()
+    s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
+    idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
+    mocore = mfmo[:,idx[-ncore:][::-1]]
+    mou = init_mo[:,ncore:] \
+        - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
+    mo = numpy.hstack((mocore,mou))
+    mo = lo.orth.vec_lowdin(mo, s)
+    return mo
+
 def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
     nocc = ncas + ncore
     dm1 = numpy.zeros((nmo,nmo))
