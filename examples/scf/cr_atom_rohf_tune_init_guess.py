@@ -31,8 +31,7 @@ mol.build(False,False)
 
 m = scf.RHF(mol)
 m.chkfile = 'cr_atom.chk'
-m.irrep_nocc_alpha = {'Ag': 6, 'B1g': 1, 'B2g': 1, 'B3g': 1,}
-m.irrep_nocc_beta  = {'Ag': 3, 'B1g': 0, 'B2g': 0, 'B3g': 0,}
+m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 # init guess by atom or 1e cannot make ROHF converge due to symmetry broken
 # during the iteration. Using the closed RHF ion to guide the ROHF works well
 #rdm1 = scf.init_guess_by_atom(mol)
@@ -47,8 +46,7 @@ mol.basis = 'aug-cc-pvdz'
 mol.build(False, False)
 m = scf.RHF(mol)
 m.level_shift_factor = .2
-m.irrep_nocc_alpha = {'Ag': 6, 'B1g': 1, 'B2g': 1, 'B3g': 1,}
-m.irrep_nocc_beta  = {'Ag': 3, 'B1g': 0, 'B2g': 0, 'B3g': 0,}
+m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 # init guess can also be read from chkfile
 m.make_init_guess = scf.hf.init_guess_by_chkfile(mol, 'cr_atom.chk')
 m.scf()
@@ -64,12 +62,10 @@ mol.basis = 'aug-cc-pvdz'
 mol.build(False,False)
 
 m = scf.UHF(mol)
-m.irrep_nocc_alpha = {'Ag': 6, 'B1g': 1, 'B2g': 1, 'B3g': 1,}
-m.irrep_nocc_beta  = {'Ag': 3, 'B1g': 0, 'B2g': 0, 'B3g': 0,}
+m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 m.scf()
 rdm1 = m.make_rdm1()
 
 m = scf.RHF(mol)
-m.irrep_nocc_alpha = {'Ag': 6, 'B1g': 1, 'B2g': 1, 'B3g': 1,}
-m.irrep_nocc_beta  = {'Ag': 3, 'B1g': 0, 'B2g': 0, 'B3g': 0,}
+m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 m.scf(rdm1)

@@ -48,7 +48,7 @@ class KnowValues(unittest.TestCase):
     def test_analyze(self):
         numpy.random.seed(5)
         nao = mol.nao_nr()
-        pop, chg = mf.analyze(mo_coeff=mf.mo_coeff)
+        pop, chg = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 2.2649896039590094, 9)
 
     def test_scf(self):
@@ -83,8 +83,7 @@ class KnowValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.uhf_symm.UHF(pmol)
-        mf.irrep_nocc_alpha = {'B1':2}
-        mf.irrep_nocc_beta = {'B1':1}
+        mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.010623169610966, 9)
 
 

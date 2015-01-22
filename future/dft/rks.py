@@ -25,7 +25,7 @@ class RKS(pyscf.scf.hf.RHF):
         self._exc = 0
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(mol)
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)

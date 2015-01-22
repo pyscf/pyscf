@@ -5,10 +5,46 @@
 import os
 import imp
 import pyscf.gto.basis.parse_nwchem
-from pyscf.gto.basis.parse_nwchem import parse_str as parse
+
+def parse(string):
+    '''Parse the basis text which is in NWChem format, return an internal
+    basis format which can be assigned to :attr:`Mole.basis`
+
+    Args:
+        string : Blank linke and the lines of "BASIS SET" and "END" will be ignored
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.basis = {'O': gto.basis.parse("""
+    ... #BASIS SET: (6s,3p) -> [2s,1p]
+    ... C    S
+    ...      71.6168370              0.15432897
+    ...      13.0450960              0.53532814
+    ...       3.5305122              0.44463454
+    ... C    SP
+    ...       2.9412494             -0.09996723             0.15591627
+    ...       0.6834831              0.39951283             0.60768372
+    ...       0.2222899              0.70011547             0.39195739
+    ... """)}
+    '''
+    return pyscf.gto.basis.parse_nwchem.parse_str(string)
 
 def load(basis_name, symb):
-    # dict to map the basis name and basis file
+    '''Convert the basis of the given symbol to internal format
+
+    Args:
+        basis_name : str
+            Case insensitive basis set name. Special characters will be removed.
+        symb : str
+            Atomic symbol, Special characters will be removed.
+
+    Examples:
+        Load STO 3G basis of carbon to oxygen atom
+
+    >>> mol = gto.Mole()
+    >>> mol.basis = {'O': load('sto-3g', 'C')}
+    '''
     alias = {
         'ano'        : 'ano.dat'        ,
         'ccpv5z'     : 'cc-pv5z.dat'    ,
@@ -60,10 +96,12 @@ def load(basis_name, symb):
         'weigend'    : 'weigend_cfit.dat',
         'demon'      : 'demon_cfit.dat' ,
         'ahlrichs'   : 'ahlrichs_cfit.dat',
+        'ccpvtzfit'  : 'cc-pvtz_fit.dat',
+        'ccpvdzfit'  : 'cc-pvdz_fit.dat',
     }
     name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
     basmod = alias[name]
-    symb = ''.join(i for i in symb if not i.isdigit())
+    symb = ''.join(i for i in symb if i.isalpha())
     if 'dat' in basmod:
         b = parse_nwchem.parse(os.path.join(os.path.dirname(__file__), basmod), symb)
     else:

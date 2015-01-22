@@ -77,7 +77,7 @@ class FCIQMCCI(object):
         else:
             self.groupname = None
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         if verbose is None:
@@ -256,13 +256,13 @@ if __name__ == '__main__':
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000
     mc.max_cycle_macro = 10
-    emc_1 = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1 = mc.mc2step()[0]
 
     mc = mcscf.CASCI(mol, m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000
-    emc_0 = mc.casci()[0] + mol.nuclear_repulsion()
+    emc_0 = mc.casci()[0]
 
     b = 1.4
     mol = gto.Mole()
@@ -277,10 +277,10 @@ if __name__ == '__main__':
     m.scf()
 
     mc = mcscf.CASSCF(mol, m, 4, 4)
-    emc_1ref = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1ref = mc.mc2step()[0]
 
     mc = mcscf.CASCI(mol, m, 4, 4)
-    emc_0ref = mc.casci()[0] + mol.nuclear_repulsion()
+    emc_0ref = mc.casci()[0]
 
     print('FCIQMCCI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))
     print('FCIQMCSCF = %.15g CASSCF = %.15g' % (emc_1, emc_1ref))

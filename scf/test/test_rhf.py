@@ -51,8 +51,8 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
-        pop, chg = mf.analyze(mo_coeff=mo)
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 24.150823594648081, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.2031790165528986, 9)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)
@@ -104,7 +104,7 @@ class KnowValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
-        mf.irrep_nocc = {'B1':4}
+        mf.irrep_nelec = {'B1':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
 
     def test_hf_symm_rohf(self):
@@ -123,9 +123,20 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 1
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
-        mf.irrep_nocc_alpha = {'B1':2}
-        mf.irrep_nocc_beta = {'B1':1}
+        mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
+
+    def test_dot_eri_dm(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        j0, k0 = scf.hf.dot_eri_dm(mf._eri, dm+dm.T, hermi=0)
+        j1, k1 = scf.hf.dot_eri_dm(mf._eri, dm+dm.T, hermi=1)
+        self.assertTrue(numpy.allclose(j0,j1))
+        self.assertTrue(numpy.allclose(k0,k1))
+        j1, k1 = scf.hf.dot_eri_dm(mf._eri, dm, hermi=0)
+        self.assertAlmostEqual(numpy.linalg.norm(j1), 48.395346241533758, 0)
+        self.assertAlmostEqual(numpy.linalg.norm(k1), 26.760108454035048, 0)
 
 if __name__ == "__main__":
     print("Full Tests for rhf")

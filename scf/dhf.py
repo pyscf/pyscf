@@ -15,27 +15,21 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.lib.logger as log
-import pyscf.lib.parameters as param
+from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import addons
 from pyscf.scf import diis
 from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
-__doc__ = '''Options:
-self.chkfile = '/dev/shm/...'
-self.stdout = '...'
-self.diis_space = 6
-self.diis_start_cycle = 1
-self.damp_factor = 1
-self.level_shift_factor = 0
-self.conv_tol = 1e-10
-self.max_cycle = 50
-self.with_ssss = False   # pass (SS|SS) integral
-'''
-
 
 def kernel(mf, conv_tol=1e-9, dump_chk=True, init_dm=None):
+    '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
+    SCF is carried out in three steps.  First the 2-electron part is
+    approximated by large component integrals (LL|LL); Next, (SS|LL) the
+    interaction between large and small components are added; Finally,
+    converge the SCF with the small component contributions (SS|SS)
+    '''
     mol = mf.mol
     if init_dm is None:
         dm = mf.get_init_guess()
@@ -197,29 +191,47 @@ def time_reversal_matrix(mol, mat):
             tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
     return tmat.conjugate()
 
-def analyze(mf, mo_energy=None, mo_occ=None, mo_coeff=None):
+def analyze(mf, verbose=logger.DEBUG):
     from pyscf.tools import dump_mat
-    if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_occ is None: mo_occ = mf.mo_occ
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    log.info(mf, '**** MO energy ****')
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    log = logger.Logger(mf.stdout, verbose)
+    log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info(mf, 'occupied MO #%d energy= %.15g occ= %g', \
+            log.info('occupied MO #%d energy= %.15g occ= %g', \
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info(mf, 'virtual MO #%d energy= %.15g occ= %g', \
+            log.info('virtual MO #%d energy= %.15g occ= %g', \
                      i+1, mo_energy[i], mo_occ[i])
-#TODO    if mf.verbose >= param.VERBOSE_DEBUG:
-#TODO        log.debug(mf, ' ** MO coefficients **')
+#TODO    if mf.verbose >= logger.DEBUG:
+#TODO        log.debug(' ** MO coefficients **')
 #TODO        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
 #TODO        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp())
+    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), verbose)
 
 
 class UHF(hf.SCF):
-    __doc__ = 'Dirac-UHF'
+    __doc__ = hf.SCF.__doc__ + '''
+    Attributes for Dirac-Hartree-Fock
+        with_ssss : bool, for Dirac-Hartree-Fock only
+            If False, ignore small component integrals (SS|SS).  Default is True.
+        with_gaunt : bool, for Dirac-Hartree-Fock only
+            If False, ignore Gaunt interaction.  Default is False.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> e0 = mf.scf()
+    >>> mf = scf.DHF(mol)
+    >>> e1 = mf.scf()
+    >>> print('Relativistic effects = %.12f' % (e1-e0))
+    Relativistic effects = -0.000008854205
+    '''
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8
@@ -231,7 +243,7 @@ class UHF(hf.SCF):
         self.opt_llll = None
         self.opt_ssll = None
         self.opt_ssss = None
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def eig(self, h, s):
         e, c = scipy.linalg.eigh(h, s)
@@ -413,12 +425,12 @@ class UHF(hf.SCF):
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
-        if self.verbose >= param.VERBOSE_INFO:
-            self.analyze(self.mo_energy, self.mo_occ, self.mo_coeff)
+        if self.verbose >= logger.INFO:
+            self.analyze(self.verbose)
         return self.hf_energy
 
-    def analyze(self, mo_energy=None, mo_occ=None, mo_coeff=None):
-        return analyze(self, mo_energy, mo_occ, mo_coeff)
+    def analyze(self, verbose=logger.DEBUG):
+        return analyze(self, verbose)
 
 class HF1e(UHF):
     def scf(self, *args):

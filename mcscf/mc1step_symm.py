@@ -50,10 +50,12 @@ class CASSCF(mc1step.CASSCF):
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc1step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
@@ -81,10 +83,12 @@ class CASSCF(mc1step.CASSCF):
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def gen_g_hop(self, mo, casdm1, casdm2, eris):
@@ -109,14 +113,6 @@ class CASSCF(mc1step.CASSCF):
         dx = _symmetrize(self.unpack_uniq_var(dx), self.orbsym,
                          self.mol.groupname)
         return u, self.pack_uniq_var(dx), g_orb, jkcnt
-
-    def get_hcore(self, mol=None):
-        h = self.mol.intor_symmetric('cint1e_kin_sph') \
-          + self.mol.intor_symmetric('cint1e_nuc_sph')
-        return h
-
-    def get_veff(self, mol, dm):
-        return pyscf.scf.hf.RHF.get_veff(self._scf, mol, dm)
 
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):
     irreptab = pyscf.symm.param.IRREP_ID_TABLE[groupname]

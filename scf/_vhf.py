@@ -127,7 +127,10 @@ def incore(eri, dm, hermi=0):
     else: # 8-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
         fvj = _fpointer('CVHFnrs8_tridm_vj')
-        fvk = _fpointer('CVHFnrs8_jk_s2il')
+        if hermi == 1:
+            fvk = _fpointer('CVHFnrs8_jk_s2il')
+        else:
+            fvk = _fpointer('CVHFnrs8_jk_s1il')
         tridm = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dm))
         for i in range(nao):
             tridm[i*(i+1)//2+i] *= .5

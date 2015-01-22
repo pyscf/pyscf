@@ -41,7 +41,7 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
         const int nbasnaux = auxstart + auxcount;
-        const int naoaux = ao_loc[nbasnaux] - nao;
+        const int naoaux = ao_loc[nbasnaux] - ao_loc[auxstart];
         double *eribuf = (double *)malloc(sizeof(double)*di*dj*naoaux);
 
         int ksh, dk;
@@ -61,7 +61,7 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
                         for (i = 0; i < di; i++, i0++) {
                         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                                 ij0 = i0 * nao + j0;
-                                k0 = ao_loc[ksh] - nao;
+                                k0 = ao_loc[ksh] - ao_loc[auxstart];;
                                 peri = eri + ij0 * naoaux + k0;
                                 pbuf = eribuf + j * di + i;
                                 for (k = 0; k < dk; k++) {
@@ -81,14 +81,13 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
                 return;
         }
 
-        const int nao = envs->nao;
         const int *ao_loc = envs->ao_loc;
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
         const int ijoff = ao_loc[bastart] * (ao_loc[bastart] + 1) / 2;
         const int nbasnaux = auxstart + auxcount;
-        const int naoaux = ao_loc[nbasnaux] - nao;
+        const int naoaux = ao_loc[nbasnaux] - ao_loc[auxstart];
         double *eribuf = (double *)malloc(sizeof(double)*di*dj*naoaux);
 
         int ksh, dk;
@@ -108,7 +107,7 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
                                 for (i0 = ao_loc[ish],i = 0; i < di; i++, i0++) {
                                 for (j0 = ao_loc[jsh],j = 0; j0 <= i0; j++, j0++) {
                                         ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        k0 = ao_loc[ksh] - nao;
+                                        k0 = ao_loc[ksh] - ao_loc[auxstart];
                                         peri = eri + ij0 * naoaux + k0;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
@@ -119,7 +118,7 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
                                 for (i0 = ao_loc[ish], i = 0; i < di; i++,i0++) {
                                 for (j0 = ao_loc[jsh], j = 0; j < dj; j++,j0++) {
                                         ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        k0 = ao_loc[ksh] - nao;
+                                        k0 = ao_loc[ksh] - ao_loc[auxstart];
                                         peri = eri + ij0 * naoaux + k0;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
@@ -135,7 +134,8 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
 
 /*
  * fill can be one of RIfill_s1_auxe2 and RIfill_s2ij_auxe2
- * NOTE nbas is the number of normal basis, the number of auxiliary basis is auxcount;
+ * NOTE nbas is the number of normal AO basis, the number of auxiliary
+ * basis is given by auxcount;
  * bastart and bascount to fill a range of basis;
  * auxstart is the end of normal basis, so it equals to the number of
  * normal basis
@@ -150,7 +150,6 @@ void RInr_3c2e_auxe2_drv(int (*intor)(), void (*fill)(), double *eri,
         CINTshells_spheric_offset(ao_loc, bas, nbasnaux);
         ao_loc[nbasnaux] = ao_loc[nbasnaux-1] + CINTcgto_spheric(nbasnaux-1, bas);
         const int nao = ao_loc[auxstart];
-        const int nshell = auxstart;
 
         struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao, ao_loc};
 
@@ -158,12 +157,12 @@ void RInr_3c2e_auxe2_drv(int (*intor)(), void (*fill)(), double *eri,
 
 #pragma omp parallel default(none) \
         shared(eri, intor, fill, bastart, bascount, auxstart, auxcount, \
-               envs, cintopt) \
+               nbas, envs, cintopt) \
         private(ij, i, j)
 #pragma omp for nowait schedule(dynamic, 2)
-        for (ij = 0; ij < nshell*bascount; ij++) {
-                i = ij / nshell;
-                j = ij - i * nshell;
+        for (ij = bastart*nbas; ij < (bastart+bascount)*nbas; ij++) {
+                i = ij / nbas;
+                j = ij - i * nbas;
                 (*fill)(intor, eri,
                         i, j, bastart, auxstart, auxcount,
                         cintopt, &envs);
@@ -178,17 +177,6 @@ void RInr_int3c2e_auxe1(int (*intor)(), void (*fill)(), double *eri,
                         int ncomp, CINTOpt *cintopt,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nbasnaux = auxstart + auxcount;
-        int *ao_loc = malloc(sizeof(int)*(nbasnaux+1));
-        CINTshells_spheric_offset(ao_loc, bas, nbasnaux);
-        ao_loc[nbasnaux] = ao_loc[nbasnaux-1] + CINTcgto_spheric(nbasnaux-1, bas);
-        const int nao = ao_loc[auxstart];
-        const int nshell = auxstart;
-
-        struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao, ao_loc};
-
-        int i, j, ij;
-
 #pragma omp parallel default(none) \
         shared(eri, intor, fill, bastart, bascount, auxstart, auxcount, \
                envs, cintopt) \

@@ -26,24 +26,10 @@ print('HF     = %.15g' % m.scf())
 mc = mcscf.CASSCF(mol, m, 4, (4,2))
 mc.stdout.write('** Triplet, using spin1 ci solver **\n')
 emc1 = mc.mc1step()[0]
+
+mc.analyze()
 print('CASSCF = %.15g' % emc1)
-print('s^2 = %.6f, 2s+1 = %.6f' % fci.spin_square(mc.ci, 4, (4,2)))
-
-# analysis of MCSCF results 
-label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-dm1a, dm1b = mcscf.addons.make_rdm1s(mc, mc.ci, mc.mo_coeff)
-mc.stdout.write('spin alpha\n')
-dump_mat.dump_tri(m.stdout, dm1a, label)
-mc.stdout.write('spin beta\n')
-dump_mat.dump_tri(m.stdout, dm1b, label)
-
-s = reduce(numpy.dot, (mc.mo_coeff.T, m.get_ovlp(), m.mo_coeff))
-idx = numpy.argwhere(abs(s)>.5)
-for i,j in idx:
-    mol.stdout.write('<mo-mcscf|mo-hf> %d, %d, %12.8f\n' % (i,j,s[i,j]))
-mc.stdout.write('** Largest CI components **\n')
-mol.stdout.write('%s\n' % str(fci.addons.large_ci(mc.ci, 4, (4,2))))
-
+print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
 
 mc.stdout.write('** Triplet,  using MS0 ci solver **\n')
 
@@ -62,22 +48,9 @@ ci0[addr,0] = numpy.sqrt(.5)
 ci0[0,addr] =-numpy.sqrt(.5)
 ci0 = None
 emc1 = mc.mc1step(ci0=ci0)[0]
-print('s^2 = %.6f, 2s+1 = %.6f' % fci.spin_square(mc.ci, 4, (4,2)))
+mc.analyze()
+print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
 print('CASSCF = %.15g' % emc1)
-
-# analysis of MCSCF results 
-dm1a, dm1b = mcscf.addons.make_rdm1s(mc, mc.ci, mc.mo_coeff)
-mc.stdout.write('spin alpha\n')
-dump_mat.dump_tri(m.stdout, dm1a, label)
-mc.stdout.write('spin beta\n')
-dump_mat.dump_tri(m.stdout, dm1b, label)
-
-s = reduce(numpy.dot, (mc.mo_coeff.T, m.get_ovlp(), m.mo_coeff))
-idx = numpy.argwhere(abs(s)>.5)
-for i,j in idx:
-    mol.stdout.write('<mo-mcscf|mo-hf> %d, %d, %12.8f\n' % (i,j,s[i,j]))
-mc.stdout.write('** Largest CI components **\n')
-mol.stdout.write('%s\n' % str(fci.addons.large_ci(mc.ci, 4, (4,2))))
 
 
 mc.stdout.write('** Symmetry-broken singlet, using spin0 ci solver **\n')
@@ -95,19 +68,7 @@ caspace = [6,7,8,9,10,12]
 mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caspace, 1)
 emc1 = mc.mc1step(mo)[0]
 
-# analysis of MCSCF results 
-print('s^2 = %.6f, 2s+1 = %.6f' % fci.spin_square(mc.ci, 6, 6))
+mc.analyze()
+print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
 print('CASSCF = %.15g' % emc1)
-dm1a, dm1b = mcscf.addons.make_rdm1s(mc, mc.ci, mc.mo_coeff)
-mc.stdout.write('spin alpha\n')
-dump_mat.dump_tri(m.stdout, dm1a, label)
-mc.stdout.write('spin beta\n')
-dump_mat.dump_tri(m.stdout, dm1b, label)
-
-s = reduce(numpy.dot, (mc.mo_coeff.T, m.get_ovlp(), m.mo_coeff))
-idx = numpy.argwhere(abs(s)>.5)
-for i,j in idx:
-    mol.stdout.write('<mo-mcscf|mo-hf> %d, %d, %12.8f\n' % (i,j,s[i,j]))
-mc.stdout.write('** Largest CI components **\n')
-mol.stdout.write('%s\n' % str(fci.addons.large_ci(mc.ci, 6, 6)))
 

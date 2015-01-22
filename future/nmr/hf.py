@@ -163,7 +163,7 @@ def solve_cphf(fvind, mo_energy, mo_occ, h1, s1,
 
     t0 = (time.clock(), time.time())
     mo1 = pyscf.lib.krylov(vind_vo, raw_mo1.ravel(),
-                           tol=tol, maxiter=max_cycle, verbose=log)
+                           tol=tol, max_cycle=max_cycle, verbose=log)
     mo1 = mo1.reshape(raw_mo1.shape)
     log.timer('krylov solver in CPHF', *t0)
 
@@ -190,7 +190,7 @@ class NMR(object):
 
         self.mo10 = None
         self.mo_e10 = None
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
 ## ** default method **
 #        # RHF: exchange parts
@@ -200,7 +200,6 @@ class NMR(object):
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** NMR flags ********')
-        logger.info(self, 'potential = %s', self._scf.get_veff.__doc__)
         if self.gauge_orig is None:
             logger.info(self, 'gauge = GIAO')
         else:

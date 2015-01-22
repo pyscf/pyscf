@@ -81,6 +81,13 @@ there are few rules to follow
   - Reinventing-wheel is encouraged if it reduces the coupling to the rest of the package.
 
 
+Documentation
+-------------
+
+There is an online documentation  http://sunqm.net/pyscf.  And you can
+also download the PDF version from  http://sunqm.net/pyscf/PySCF-0.10.pdf
+
+
 Known problems
 --------------
 

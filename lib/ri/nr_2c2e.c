@@ -14,8 +14,7 @@ void RInr_fill2c2e_sph(double *eri, int auxstart, int auxcount,
         int *ao_loc = malloc(sizeof(int)*(nbasnaux+1));
         CINTshells_spheric_offset(ao_loc, bas, nbasnaux);
         ao_loc[nbasnaux] = ao_loc[nbasnaux-1] + CINTcgto_spheric(nbasnaux-1, bas);
-        const int nao = ao_loc[auxstart];
-        const int naoaux = ao_loc[nbasnaux] - nao;
+        const int naoaux = ao_loc[nbasnaux] - ao_loc[auxstart];
         double *buf;
 
         int ish, jsh, di, dj;
@@ -38,8 +37,8 @@ void RInr_fill2c2e_sph(double *eri, int auxstart, int auxcount,
                 buf = (double *)malloc(sizeof(double) * di * dj);
                 if (cint2c2e_sph(buf, shls, atm, natm, bas, nbas, env,
                                  cintopt)) {
-                        for (i0 = ao_loc[ish]-nao, i = 0; i < di; i++, i0++) {
-                        for (j0 = ao_loc[jsh]-nao, j = 0; j < dj; j++, j0++) {
+                        for (i0 = ao_loc[ish]-ao_loc[auxstart], i = 0; i < di; i++, i0++) {
+                        for (j0 = ao_loc[jsh]-ao_loc[auxstart], j = 0; j < dj; j++, j0++) {
                                 eri[i0*naoaux+j0] = buf[j*di+i];
                         } }
                 }

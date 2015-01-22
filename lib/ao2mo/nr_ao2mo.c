@@ -197,7 +197,7 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*nao);
+        double *buf = malloc(sizeof(double)*nao*i_count);
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
         dgemm_(&TRANS_N, &TRANS_N, &nao, &i_count, &nao,
@@ -231,7 +231,7 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*nao);
+        double *buf = malloc(sizeof(double)*nao*j_count);
 
         // C_qj (pq| = (pj|, where (pq| is in C-order
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &nao, &nao,
@@ -269,8 +269,8 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*nao*2);
-        double *buf1 = buf + nao*nao;
+        double *buf = malloc(sizeof(double)*(nao*i_count+i_count*j_count));
+        double *buf1 = buf + nao*i_count;
         int i, j, ij;
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
@@ -314,7 +314,7 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*nao);
+        double *buf = malloc(sizeof(double)*nao*i_count);
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
         dsymm_(&SIDE_L, &UPLO_U, &nao, &i_count,
@@ -352,7 +352,7 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*nao);
+        double *buf = malloc(sizeof(double)*nao*j_count);
 
         // C_qj (pq| = (pj|, where (pq| is in C-order
         dsymm_(&SIDE_L, &UPLO_U, &nao, &j_count,
@@ -646,7 +646,7 @@ void AO2MOtranse2_nr_s1(int (*fmmm)(),
 {
         unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         unsigned long nao2 = envs->nao * envs->nao;
-        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs);
+        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
 }
 
 void AO2MOtranse2_nr_s2ij(int (*fmmm)(),
@@ -665,7 +665,7 @@ void AO2MOtranse2_nr_s2kl(int (*fmmm)(),
         unsigned long nao2 = nao*(nao+1)/2;
         double *buf = malloc(sizeof(double) * nao*nao);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs);
+        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
         free(buf);
 }
 

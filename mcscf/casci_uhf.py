@@ -9,8 +9,10 @@ from functools import reduce
 import numpy
 import h5py
 import pyscf.lib
+from pyscf.lib import logger
 import pyscf.ao2mo
-import pyscf.fci
+from pyscf import fci
+from pyscf.mcscf import addons
 
 # TODO, different ncas space for alpha and beta
 
@@ -23,7 +25,19 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_a:]       )
     return mo_core, mo_cas, mo_vir
 
-def h1e_for_cas(casci, mo_core, mo_cas):
+def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
+    '''CAS sapce one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
+
+    Args:
+        casci : a U-CASSCF/U-CASCI object or UHF object
+
+    '''
+    if ncas is None: ncas = casci.ncas
+    if ncore is None: ncore = casci.ncore
+    mo_core =(mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
+    mo_cas = (mo_coeff[0][:,ncore[0]:ncore[0]+ncas],
+              mo_coeff[1][:,ncore[1]:ncore[1]+ncas])
+
     hcore = casci.get_hcore()
     if mo_core[0].size == 0 and mo_core[1].size == 0:
         corevhf = (0,0)
@@ -41,6 +55,8 @@ def h1e_for_cas(casci, mo_core, mo_cas):
     return h1eff, energy_core
 
 def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
+    '''UHF-CASCI solver
+    '''
     if verbose is None:
         verbose = casci.verbose
     log = pyscf.lib.logger.Logger(casci.stdout, verbose)
@@ -53,7 +69,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    h1eff, energy_core = h1e_for_cas(casci, mo_core, mo_cas)
+    h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
@@ -96,7 +112,7 @@ class CASCI(object):
         else:
             self.ncore = (ncore[0], ncore[1])
 
-        self.fcisolver = pyscf.fci.direct_uhf.FCISolver(mol)
+        self.fcisolver = fci.direct_uhf.FCISolver(mol)
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 30
         self.fcisolver.conv_tol = 1e-8
@@ -105,7 +121,7 @@ class CASCI(object):
         self.ci = None
         self.e_tot = 0
 
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
@@ -157,6 +173,13 @@ class CASCI(object):
 
         return (eri_aa, eri_ab, eri_bb)
 
+    def h1e_for_cas(self, mo_coeff=None, ncas=None, nelecas=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        return h1e_for_cas(self, mo_coeff, ncas, nelecas)
+
+    def kernel(self, *args, **kwargs):
+        return self.casci(*args, **kwargs)
     def casci(self, mo_coeff=None, ci0=None, **cikwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -169,6 +192,8 @@ class CASCI(object):
 
         self.e_tot, e_cas, self.ci = \
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
@@ -177,6 +202,38 @@ class CASCI(object):
         from pyscf.mcscf import addons
         self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
         return self.ci, self.mo_coeff
+
+    def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG):
+        from pyscf.tools import dump_mat
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if verbose >= logger.INFO:
+            log = logger.Logger(self.stdout, verbose)
+            dm1a, dm1b = addons.make_rdm1s(self, ci, mo_coeff)
+            label = ['%d%3s %s%-4s' % x for x in self.mol.spheric_labels()]
+            log.info('alpha density matrix (on AO)')
+            dump_mat.dump_tri(self.stdout, dm1a, label)
+            log.info('beta density matrix (on AO)')
+            dump_mat.dump_tri(self.stdout, dm1b, label)
+
+            s = reduce(numpy.dot, (mo_coeff[0].T, self._scf.get_ovlp(),
+                                   self._scf.mo_coeff[0]))
+            idx = numpy.argwhere(abs(s)>.5)
+            for i,j in idx:
+                log.info('alpha <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+            s = reduce(numpy.dot, (mo_coeff[1].T, self._scf.get_ovlp(),
+                                   self._scf.mo_coeff[1]))
+            idx = numpy.argwhere(abs(s)>.5)
+            for i,j in idx:
+                log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+            log.info('** Largest CI components **')
+            log.info(' string alpha, string beta, CI coefficients')
+            for c,ia,ib in fci.addons.large_ci(ci, self.ncas, self.nelecas):
+                log.info('  %9s    %9s    %.12f', ia, ib, c)
+        return dm1a, dm1b
+
+    def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
+        return addons.spin_square(self, fcivec, mo_coeff, ovlp)
 
 
 
@@ -228,5 +285,6 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASCI(mol, m, 9, (4,4))
     emc = mc.casci()[0]
+    mc.analyze()
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)

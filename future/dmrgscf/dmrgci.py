@@ -17,7 +17,7 @@ restart from previous calculation
 '''
 
 try:
-    from pyscf.dmrgci import settings
+    from pyscf.dmrgscf import settings
 except ImportError:
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
@@ -81,7 +81,7 @@ class DMRGCI(object):
         else:
             self.groupname = None
 
-        self._keys = set(self.__dict__.keys() + ['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         if verbose is None:
@@ -270,11 +270,11 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(mol, m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
     mc.fcisolver.tol = 1e-9
-    emc_1 = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1 = mc.mc2step()[0]
 
     mc = mcscf.CASCI(mol, m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
-    emc_0 = mc.casci()[0] + mol.nuclear_repulsion()
+    emc_0 = mc.casci()[0]
 
     b = 1.4
     mol = gto.Mole()
@@ -289,10 +289,10 @@ if __name__ == '__main__':
     m.scf()
 
     mc = mcscf.CASSCF(mol, m, 4, 4)
-    emc_1ref = mc.mc2step()[0] + mol.nuclear_repulsion()
+    emc_1ref = mc.mc2step()[0]
 
     mc = mcscf.CASCI(mol, m, 4, 4)
-    emc_0ref = mc.casci()[0] + mol.nuclear_repulsion()
+    emc_0ref = mc.casci()[0]
 
     print('DMRGCI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))
     print('DMRGSCF = %.15g CASSCF = %.15g' % (emc_1, emc_1ref))

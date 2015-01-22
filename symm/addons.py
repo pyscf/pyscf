@@ -7,6 +7,12 @@ import numpy
 import pyscf.lib.logger
 
 def label_orb_symm(mol, irrep_name, symm_orb, mo):
+    ''' Label the symmetry of given orbitals
+
+    irrep_name can be either the symbol or the ID of the irreducible
+    representation.  If the ID is provided, it returns the numeric code
+    associated with XOR operator, see :py:meth:`symm.param.IRREP_ID_TABLE`
+    '''
     nmo = mo.shape[1]
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     mo_s = numpy.dot(mo.T, s)

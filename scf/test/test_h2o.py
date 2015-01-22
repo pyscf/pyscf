@@ -12,7 +12,8 @@ from pyscf.scf import dhf
 
 mol = gto.Mole()
 mol.build(
-    verbose = 0,
+    verbose = 5,
+    output = '/dev/null',
     atom = [
     ["O" , (0. , 0.     , 0.)],
     [1   , (0. , -0.757 , 0.587)],

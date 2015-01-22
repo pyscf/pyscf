@@ -12,10 +12,103 @@ from pyscf.ao2mo import _ao2mo
 BLOCK = 56
 
 def full(eri_ao, mo_coeff, verbose=0, compact=True):
+    r'''MO integral transformation for the given orbital.
+
+    Args:
+        eri_ao : ndarray
+            AO integrals, can be either 8-fold or 4-fold symmetry.
+        mo_coeff : ndarray
+            Transform (ij|kl) with the same set of orbitals.
+
+    Kwargs:
+        verbose : int
+            Print level
+        compact : bool
+            When compact is True, the returned MO integrals have 4-fold
+            symmetry.  otherwise, the "plain" MO integrals without symmetry
+            will be returned
+
+    Returns:
+        ndarray of transformed MO integrals.  The MO integrals may or may not
+        have the permutation symmetry (controlled by the kwargs compact)
+
+
+    Examples:
+
+    >>> from pyscf import gto
+    >>> from pyscf.scf import _vhf
+    >>> from pyscf import ao2mo
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+    >>> eri1 = ao2mo.incore.full(eri, mo1)
+    >>> print(eri1.shape)
+    (55, 55)
+    >>> eri1 = ao2mo.incore.full(eri, mo1, compact=False)
+    >>> print(eri1.shape)
+    (100, 100)
+
+    '''
     return general(eri_ao, (mo_coeff,)*4, verbose, compact)
 
 # It consumes two times of the memory needed by MO integrals
 def general(eri_ao, mo_coeffs, verbose=0, compact=True):
+    r'''For the given four sets of orbitals, transfer the 8-fold or 4-fold 2e
+    AO integrals to MO integrals.
+
+    Args:
+        eri_ao : ndarray
+            AO integrals, can be either 8-fold or 4-fold symmetry.
+        mo_coeffs : 4-item list of ndarray
+            Four sets of orbital coefficients, corresponding to the four
+            indices of (ij|kl)
+
+    Kwargs:
+        verbose : int
+            Print level
+        compact : bool
+            When compact is True, depending on the four oribital sets, the
+            returned MO integrals has (up to 4-fold) permutation symmetry.
+            If it's False, the function will abandon any permutation symmetry,
+            and return the "plain" MO integrals
+
+    Returns:
+        ndarray of transformed MO integrals.  The MO integrals may or may not
+        have the permutation symmetry, depending on the given orbitals, and
+        the kwargs compact.  If the four sets of orbitals are identical, the
+        MO integrals will at most have 4-fold symmetry.
+
+
+    Examples:
+
+    >>> from pyscf import gto
+    >>> from pyscf.scf import _vhf
+    >>> from pyscf import ao2mo
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+    >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+    >>> mo3 = numpy.random.random((mol.nao_nr(), 6))
+    >>> mo4 = numpy.random.random((mol.nao_nr(), 4))
+    >>> eri1 = ao2mo.incore.general(eri, (mo1,mo2,mo3,mo4))
+    >>> print(eri1.shape)
+    (80, 24)
+    >>> eri1 = ao2mo.incore.general(eri, (mo1,mo2,mo3,mo3))
+    >>> print(eri1.shape)
+    (80, 21)
+    >>> eri1 = ao2mo.incore.general(eri, (mo1,mo2,mo3,mo3), compact=False)
+    >>> print(eri1.shape)
+    (80, 36)
+    >>> eri1 = ao2mo.incore.general(eri, (mo1,mo1,mo2,mo2))
+    >>> print(eri1.shape)
+    (55, 36)
+    >>> eri1 = ao2mo.incore.general(eri, (mo1,mo2,mo1,mo2))
+    >>> print(eri1.shape)
+    (80, 80)
+
+    '''
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -64,6 +157,48 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
     return eri1
 
 def half_e1(eri_ao, mo_coeffs, compact=True):
+    r'''Given two set of orbitals, half transform the (ij| pair of 8-fold or
+    4-fold AO integrals (ij|kl)
+
+    Args:
+        eri_ao : ndarray
+            AO integrals, can be either 8-fold or 4-fold symmetry.
+        mo_coeffs : list of ndarray
+            Two sets of orbital coefficients, corresponding to the i, j
+            indices of (ij|kl)
+
+    Kwargs:
+        compact : bool
+            When compact is True, the returned MO integrals uses the highest
+            possible permutation symmetry.  If it's False, the function will
+            abandon any permutation symmetry, and return the "plain" MO
+            integrals
+
+    Returns:
+        ndarray of transformed MO integrals.  The MO integrals may or may not
+        have the permutation symmetry, depending on the given orbitals, and
+        the kwargs compact.
+
+    Examples:
+
+    >>> from pyscf import gto
+    >>> from pyscf import ao2mo
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+    >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+    >>> eri1 = ao2mo.incore.half_e1(eri, (mo1,mo2))
+    >>> eri1 = ao2mo.incore.half_e1(eri, (mo1,mo2))
+    >>> print(eri1.shape)
+    (80, 28)
+    >>> eri1 = ao2mo.incore.half_e1(eri, (mo1,mo2), compact=False)
+    >>> print(eri1.shape)
+    (80, 28)
+    >>> eri1 = ao2mo.incore.half_e1(eri, (mo1,mo1))
+    >>> print(eri1.shape)
+    (55, 28)
+    '''
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
 
     nmoi = mo_coeffs[0].shape[1]

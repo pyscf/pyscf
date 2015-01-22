@@ -7,6 +7,38 @@ import pyscf.lib
 import pyscf.lib.logger as log
 
 def sort_mo(casscf, mo_coeff, caslst, base=1):
+    '''Pick orbitals for CAS space
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+        mo_coeff : ndarray or a list of ndarray
+            Orbitals for CASSCF initial guess.  In the UHF-CASSCF, it's a list
+            of two orbitals, for alpha and beta spin.
+        caslst : list of int or nested list of int
+            A list of orbital indices to represent the CAS space.  In the UHF-CASSCF,
+            it's consist of two lists, for alpha and beta spin.
+
+    Kwargs:
+        base : int
+            0-based (C-like) or 1-based (Fortran-like) caslst
+
+    Returns:
+        An reoreded mo_coeff, which put the orbitals given by caslst in the CAS space
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    >>> mc = mcscf.CASSCF(mol, mf, 4, 4)
+    >>> cas_list = [5,6,8,9] # pi orbitals
+    >>> mo = mcscf.sort_mo(mc, mf.mo_coeff, cas_list)
+    >>> mc.kernel(mo)[0]
+    -109.007378939813691
+    '''
     ncore = casscf.ncore
     if isinstance(ncore, int):
         assert(casscf.ncas == len(caslst))
@@ -35,6 +67,74 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
                              mo_coeff[1][:,idx[ncore[1]:]]))
         return (mo_a, mo_b)
 
+def project_init_guess(casscf, init_mo):
+    '''Project the given initial guess to the current CASSCF problem.  The
+    projected initial guess has two parts.  The core orbitals are directly
+    taken from the Hartree-Fock orbitals, and the active orbitals are
+    projected from the given initial guess.
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+        init_mo : ndarray or list of ndarray
+            Initial guess orbitals which are not orth-normal for the current
+            molecule.  When the casscf is UHF-CASSCF, the init_mo needs to be
+            a list of two ndarrays, for alpha and beta orbitals
+
+    Returns:
+        New orthogonal initial guess orbitals with the core taken from
+        Hartree-Fock orbitals and projected active space from original initial
+        guess orbitals
+
+    Examples:
+
+    .. code:: python
+
+        import numpy
+        from pyscf import gto, scf, mcscf
+        mol = gto.Mole()
+        mol.build(atom='H 0 0 0; F 0 0 0.8', basis='ccpvdz', verbose=0)
+        mf = scf.RHF(mol)
+        mf.scf()
+        mc = mcscf.CASSCF(mol, mf, 6, 6)
+        mo = mcscf.sort_mo(mc, mf.mo_coeff, [3,4,5,6,8,9])
+        print('E(0.8) = %.12f' % mc.kernel(mo)[0])
+        init_mo = mc.mo_coeff
+        for b in numpy.arange(1.0, 3., .2):
+            mol.atom = [['H', (0, 0, 0)], ['F', (0, 0, b)]]
+            mol.build(0, 0)
+            mf = scf.RHF(mol)
+            mf.scf()
+            mc = mcscf.CASSCF(mol, mf, 6, 6)
+            mo = mcscf.project_init_guess(mc, init_mo)
+            print('E(%2.1f) = %.12f' % (b, mc.kernel(mo)[0]))
+            init_mo = mc.mo_coeff
+    '''
+    from pyscf import scf
+    from pyscf import lo
+
+    def project(mfmo, init_mo, ncore, s):
+        mo0core = init_mo[:,:ncore]
+        s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
+        idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
+        mocore = mfmo[:,idx[-ncore:][::-1]]
+        mou = init_mo[:,ncore:] \
+            - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
+        mo = numpy.hstack((mocore, mou))
+        mo = lo.orth.vec_lowdin(mo, s)
+
+    ncore = casscf.ncore
+    mfmo = casscf._scf.mo_coeff
+    s = casscf._scf.get_ovlp()
+    if isinstance(ncore, int):
+        assert(mfmo.shape[0] == init_mo.shape[0])
+        mo = project(mfmo, init_mo, ncore, s)
+    else: # UHF-based CASSCF
+        assert(mfmo[0].shape[0] == init_mo[0].shape[0])
+        mo = (project(mfmo[0], init_mo[0], ncore[0], s),
+              project(mfmo[1], init_mo[1], ncore[1], s))
+    return mo
+
 def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
     nocc = ncas + ncore
     dm1 = numpy.zeros((nmo,nmo))
@@ -48,6 +148,32 @@ def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
 
 # on AO representation
 def make_rdm1(casscf, fcivec=None, mo_coeff=None):
+    '''One-particle densit matrix in AO representation
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+    Kwargs:
+        fcivec : ndarray
+            CAS space FCI coefficients. If not given, take casscf.ci.
+        mo_coeff : ndarray
+            Orbital coefficients. If not given, take casscf.mo_coeff.
+
+    Examples:
+
+    >>> import scipy.linalg
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='sto-3g', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> res = mf.scf()
+    >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+    >>> res = mc.kernel()
+    >>> natocc = numpy.linalg.eigh(mcscf.make_rdm1(mc), mf.get_ovlp(), type=2)[0]
+    >>> print(natocc)
+    [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
+      2.          2.          2.          2.        ]
+    '''
     if fcivec is None:
         fcivec = casscf.ci
     if mo_coeff is None:
@@ -65,6 +191,8 @@ def make_rdm1(casscf, fcivec=None, mo_coeff=None):
 
 # make both alpha and beta density matrices
 def make_rdm1s(casscf, fcivec=None, mo_coeff=None):
+    '''Alpha and beta one-particle densit matrices in AO representation
+    '''
     if fcivec is None:
         fcivec = casscf.ci
     if mo_coeff is None:
@@ -130,8 +258,9 @@ def make_rdm12(casscf, fcivec=None, mo_coeff=None):
     rdm2 = numpy.dot(rdm2.reshape(-1,nmo), mo_coeff.T)
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
-# generalized fock matrix
 def get_fock(casscf, fcivec=None, mo_coeff=None):
+    '''Generalized Fock matrix
+    '''
     if fcivec is None:
         fcivec = casscf.ci
     if mo_coeff is None:
@@ -166,6 +295,8 @@ def get_fock(casscf, fcivec=None, mo_coeff=None):
     return fock
 
 def cas_natorb(casscf, fcivec=None, mo_coeff=None):
+    '''Restore natrual orbitals
+    '''
     log = pyscf.lib.logger.Logger(casscf.stdout, casscf.verbose)
     if fcivec is None:
         fcivec = casscf.ci
@@ -204,9 +335,13 @@ def cas_natorb(casscf, fcivec=None, mo_coeff=None):
         fcivec = casscf.casci(mo_coeff, fcivec)[2]
     return fcivec, mo_coeff, mo_occ
 
-def map2hf(casscf, base=1, tol=.5):
+def map2hf(casscf, mf_mo=None, base=1, tol=.5):
+    '''The overlap between the CASSCF optimized orbitals and the canonical HF orbitals.
+    '''
+    if mf_mo is None:
+        mf_mo = casscf._scf.mo_coeff
     s = casscf.mol.intor_symmetric('cint1e_ovlp_sph')
-    s = reduce(numpy.dot, (casscf.mo_coeff.T, s, casscf._scf.mo_coeff))
+    s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
     for i,j in idx:
         log.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %d  %d  %12.8f',
@@ -215,19 +350,32 @@ def map2hf(casscf, base=1, tol=.5):
     return idx
 
 def spin_square(casscf, fcivec=None, mo_coeff=None, ovlp=None):
+    '''Spin square of the UHF-CASSCF wavefunction
+
+    Returns:
+        A list of two floats.  The first is the expectation value of S^2.
+        The second is the corresponding 2S+1
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='O 0 0 0; O 0 0 1', basis='sto-3g', spin=2, verbose=0)
+    >>> mf = scf.UHF(mol)
+    >>> res = mf.scf()
+    >>> mc = mcscf.CASSCF(mol, mf, 4, 6)
+    >>> res = mc.kernel()
+    >>> print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
+    S^2 = 3.9831589, 2S+1 = 4.1149284
+    '''
     from pyscf import scf
     from pyscf import fci
-    if fcivec is None:
-        fcivec = casscf.ci
-    if mo_coeff is None:
-        mo_coeff = casscf.mo_coeff
-    fcivec   = casscf.ci
+    if fcivec is None: fcivec = casscf.ci
+    if mo_coeff is None: mo_coeff = casscf.mo_coeff
+    if ovlp is None: ovlp = casscf._scf.get_ovlp()
     ncore    = casscf.ncore
     ncas     = casscf.ncas
     nelecas  = casscf.nelecas
-    mo_coeff = casscf.mo_coeff
-    if ovlp is None:
-        ovlp = casscf._scf.get_ovlp()
     if isinstance(ncore, int):
         nocc = ncore + ncas
         mocas = mo_coeff[:,ncore:nocc]

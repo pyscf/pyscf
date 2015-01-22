@@ -296,6 +296,8 @@ def hessian_oc(casscf, mo, dci, fcivec, eris):
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
            ci0=None, verbose=None, **cikwargs):
+    '''CASSCF solver
+    '''
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -328,28 +330,27 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         t3m = log.timer('orbital rotation', *t2m)
         totmicro += 1
 
+        casdm1_old = casdm1
         for imicro in range(micro):
 # approximate newton step, fcivec is not updated during micro iters
-            casdm1new, casdm2, gci = \
-                    casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+            casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             norm_gci = numpy.linalg.norm(gci)
-            norm_dm1 = numpy.linalg.norm(casdm1new - casdm1)
-            casdm1 = casdm1new
+            norm_dm1 = numpy.linalg.norm(casdm1 - casdm1_old)
             t3m = log.timer('update CAS DM', *t3m)
 
             u1, dx, g_orb, nin = casscf.rotate_orb(mo, casdm1, casdm2, eris, dx)
             u = numpy.dot(u, u1)
             ninner += nin
             t3m = log.timer('orbital rotation', *t3m)
-            norm_dt = numpy.linalg.norm(u-numpy.eye(nmo))
+            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
             totmicro += 1
 
             log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
                       '|g[c]|=%4.3g, |dm1|=%4.3g',
-                      imicro, e_ci, norm_dt, norm_gorb, norm_gci, norm_dm1)
+                      imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if (norm_dt < toloose or norm_gorb < toloose or
+            if (norm_t < toloose or norm_gorb < toloose or
                 norm_gci < toloose or norm_dm1 < toloose):
 # When close to convergence, rotate the CAS space to natural orbital.
 # Because the casdm1 is only an approximation, it's not neccesary to transform to
@@ -373,13 +374,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         norm_gorb = numpy.linalg.norm(g_orb)
-        log.info('                        |grad[o]| = %6.5g, |grad[c]| = %6.5g',
-                 norm_gorb, norm_gci)
+        log.info('               |grad[o]|=%4.3g, |grad[c]|=%4.3g, |dm1|=%4.3g',
+                 norm_gorb, norm_gci, norm_dm1)
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if abs(e_tot - elast) < tol \
-           and (norm_gorb < toloose and norm_gci < toloose):
+           and (norm_gorb < toloose and norm_dm1 < toloose):
             conv = True
             break
         else:
@@ -393,7 +394,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
                  imacro+1, totinner, totmicro)
     log.log('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
-    return e_tot, e_ci, fcivec, mo
+    return conv, e_tot, e_ci, fcivec, mo
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
@@ -403,6 +404,98 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 # 2e-hamiltonain) in 1-step CASSCF solver, and two member functions "kernel"
 # and "make_rdm12" in 2-step CASSCF solver
 class CASSCF(casci.CASCI):
+    __doc__ = casci.CASCI.__doc__ + '''CASSCF
+
+    Extra attributes for CASSCF:
+
+        conv_tol : float
+            Converge threshold.  Default is 1e-7
+        conv_tol_grad : float
+            Converge threshold for CI gradients and orbital rotation gradients.
+            Default is 1e-4
+        max_orb_stepsize : float
+            The step size for orbital rotation.  Small step size is prefered.
+            Default is 0.03.
+        max_ci_stepsize : float
+            The max size for approximate CI updates.  The approximate updates are
+            used in 1-step algorithm, to estimate the change of CI wavefunction wrt
+            the orbital rotation.  Small step size is prefered.  Default is 0.01.
+        max_cycle_macro : int
+            Max number of macro iterations.  Default is 50.
+        max_cycle_micro : int
+            Max number of micro iterations in each macro iteration.  Depending on
+            systems, increasing this value might reduce the total macro
+            iterations.  Generally, 2 - 3 steps should be enough.  Default is 2.
+        max_cycle_micro_inner : int
+            Max number of steps for the orbital rotations allowed for the augmented
+            hessian solver.  It can affect the actual size of orbital rotation.
+            Even with a small max_orb_stepsize, a few max_cycle_micro_inner can
+            accumulate the rotation and leads to a significant change of the CAS
+            space.  Depending on systems, increasing this value migh reduce the
+            total number of macro iterations.  The value between 2 - 8 is preferred.
+            Default is 4.
+        ah_level_shift : float, for AH solver.
+            Level shift for the Davidson diagonalization in AH solver.  Default is 0.
+        ah_conv_tol : float, for AH solver.
+            converge threshold for Davidson diagonalization in AH solver.  Default is 1e-8.
+        ah_max_cycle : float, for AH solver.
+            Max number of iterations allowd in AH solver.  Default is 20.
+        ah_lindep : float, for AH solver.
+            Linear dependence threshold for AH solver.  Default is 1e-16.
+        ah_start_tol : flat, for AH solver.
+            In AH solver, the orbital rotation is started without completely solving the AH problem.
+            This value is to control the start point. Default is 1e-4.
+        ah_start_cycle : int, for AH solver.
+            In AH solver, the orbital rotation is started without completely solving the AH problem.
+            This value is to control the start point. Default is 3.
+
+            ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
+            can affect the accuracy and performance of CASSCF solver.  Lower
+            ``ah_conv_tol`` and ``ah_lindep`` can improve the accuracy of CASSCF
+            optimization, but decrease the performance.
+            
+            >>> from pyscf import gto, scf, mcscf
+            >>> mol = gto.Mole()
+            >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+            >>> mf = scf.UHF(mol)
+            >>> mf.scf()
+            >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+            >>> mc.conv_tol = 1e-10
+            >>> mc.ah_conv_tol = 1e-5
+            >>> mc.kernel()
+            -109.044401898486001
+            >>> mc.ah_conv_tol = 1e-10
+            >>> mc.kernel()
+            -109.044401887945668
+
+        chkfile : str
+            Checkpoint file to save the intermediate orbitals during the CASSCF optimization.
+            Default is the checkpoint file of mean field object.
+        natorb : bool
+            Whether to restore the natural orbital during CASSCF optimization. Default is not.
+
+    Saved results
+
+        e_tot : float
+            Total MCSCF energy (electronic energy plus nuclear repulsion)
+        ci : ndarray
+            CAS space FCI coefficients
+        converged : bool
+            It indicates CASSCF optimization converged or not.
+        mo_coeff : ndarray
+            Optimized CASSCF orbitals coefficients
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.Mole()
+    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+    >>> mc.kernel()[0]
+    -109.044401882238134
+    '''
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
         casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
 # the max orbital rotation and CI increment, prefer small step size
@@ -412,10 +505,6 @@ class CASSCF(casci.CASCI):
 #TODO:self.inner_rotation = False # active-active rotation
         self.max_cycle_macro = 50
         self.max_cycle_micro = 2
-# num steps to approx orbital rotation without integral transformation.
-# Increasing steps do not help converge since the approx gradient might be
-# very diff to real gradient after few steps. If the step predicted by AH is
-# good enough, it can be set to 1 or 2 steps.
         self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
@@ -424,22 +513,23 @@ class CASSCF(casci.CASCI):
         self.ah_conv_tol = 1e-8
         self.ah_max_cycle = 20
         self.ah_lindep = self.ah_conv_tol**2
-        self.chkfile = mf.chkfile
 # ah_start_tol and ah_start_cycle control the start point to use AH step.
 # In function rotate_orb_ah, the orbital rotation is carried out with the
 # approximate aug_hessian step after a few davidson updates of the AH eigen
 # problem.  Reducing ah_start_tol or increasing ah_start_cycle will delay the
 # start point of orbital rotation.
         self.ah_start_tol = 1e-4
-        self.ah_start_cycle = 0
+        self.ah_start_cycle = 3
+        self.chkfile = mf.chkfile
         self.natorb = False # CAS space in natural orbital
 
-        self.fcisolver.max_cycle = 20
+        self.fcisolver.max_cycle = 50
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
+        self.converged = False
 
-        self._keys = set(self.__dict__.keys()).union(['_keys'])
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -465,6 +555,8 @@ class CASSCF(casci.CASCI):
         except:
             pass
 
+    def kernel(self, *args, **kwargs):
+        return self.mc1step(*args, **kwargs)
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -479,10 +571,12 @@ class CASSCF(casci.CASCI):
 
         self.dump_flags()
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 kernel(self, mo_coeff, \
                        tol=self.conv_tol, macro=macro, micro=micro, \
                        ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
@@ -500,10 +594,12 @@ class CASSCF(casci.CASCI):
 
         self.dump_flags()
 
-        self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo_coeff, \
                                tol=self.conv_tol, macro=macro, micro=micro, \
                                ci0=ci0, verbose=self.verbose, **cikwargs)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def casci(self, mo_coeff, ci0=None, eris=None, **cikwargs):
@@ -752,7 +848,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[0]
+    emc = kernel(CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[1]
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 
@@ -760,7 +856,7 @@ if __name__ == '__main__':
     mc.verbose = 4
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
-    emc = kernel(mc, m.mo_coeff, verbose=4)[0]
+    emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -15.950852049859)
 
 
