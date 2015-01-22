@@ -136,7 +136,8 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        log.info(self, '%s with symmetry adapted basis', str(self.__class__))
+        log.info(self, '%s with symmetry adapted basis',
+                 self.__class__.__name__)
         float_irname = []
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
@@ -303,13 +304,12 @@ class ROHF(hf.ROHF):
 # occupied core orbitals
         self._core_mo_energy = None
         self._open_mo_energy = None
-        self._keys = self._keys.union(['irrep_nelec',
-                                       '_irrep_doccs', '_irrep_soccs',
-                                       '_core_mo_energy', '_open_mo_energy'])
+        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
         hf.ROHF.dump_flags(self)
-        log.info(self, '%s with symmetry adapted basis', str(self.__class__))
+        log.info(self, '%s with symmetry adapted basis',
+                 self.__class__.__name__)
 #TODO: improve the sainity check
         float_irname = []
         fix_na = 0

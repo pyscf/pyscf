@@ -90,7 +90,7 @@ def dump_scf(mf, filename):
     import pyscf.scf
     with open(filename, 'w') as f:
         header(mf.mol, f)
-        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' in str(mf.__class__):
+        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' == mf.__class__.__name__:
             orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha', \
                           ene=mf.mo_energy[0], occ=mf.mo_occ[0])
             orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta', \

@@ -90,7 +90,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
 class CASCI(object):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-#TODO:        assert('RHF' not in str(mf.__class__))
+#TODO:        assert('RHF'  == mf.__class__.__name__)
         self.mol = mol
         self._scf = mf
         self.verbose = mol.verbose

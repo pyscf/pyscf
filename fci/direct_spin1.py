@@ -344,6 +344,7 @@ class FCISolver(object):
             verbose = self.verbose
         log = pyscf.lib.logger.Logger(self.mol.stdout, verbose)
         log.info('******** CI flags ********')
+        log.info('fci module = %s', self.__module__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('linear dependence = %g', self.lindep)

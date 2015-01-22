@@ -16,20 +16,19 @@ def run(b, mo0=None, dm0=None):
             ['O', (0, 0, -b/2)],],
         basis = 'cc-pvdz',
         spin = 2,
+        symmetry = 1,
     )
 
     mf = scf.RHF(mol)
     mf.scf(dm0)
 
-    mc = mcscf.CASSCF(mol, mf, 6, (4,2))
-    if mo0 is None:
-        mc.kernel()
+    mc = mcscf.CASSCF(mol, mf, 12, 8)
+    if mo0 is not None:
+        mo0 = lo.orth.vec_lowdin(mo0, mf.get_ovlp())
     else:
-        #caslst = numpy.argmax(numpy.dot(mo0.T, mf.mo_coeff), 1)
-        #print caslst
-        #mo = mcscf.sort_mo(mc, mf.mo_coeff, caslst, base=0)
-        mo = lo.orth.vec_lowdin(mo0, mf.get_ovlp())
-        mc.kernel(mo)
+        mo0 = mcscf.sort_mo(mc, mf.mo_coeff, [5,6,7,8,9,11,12,13,14,15,16,17])
+        mc.max_orb_stepsize = .02
+    mc.kernel(mo0)
     mc.analyze()
     return mf, mc
 
@@ -49,14 +48,11 @@ def urun(b, mo0=None, dm0=None):
     mf = scf.UHF(mol)
     mf.scf(dm0)
 
-    mc = mcscf.CASSCF(mol, mf, 4, (4,2))
-    if mo0 is None:
-        mo = mcscf.sort_mo(mc, mf.mo_coeff, [[7,8,12,11],[6,7,9,10]], base=1)
-        mc.kernel()
-    else:
-        mo =(lo.orth.vec_lowdin(mo0[0], mf.get_ovlp()),
-             lo.orth.vec_lowdin(mo0[1], mf.get_ovlp()))
-        mc.kernel(mo)
+    mc = mcscf.CASSCF(mol, mf, 12, 8)
+    if mo0 is not None:
+        mo0 =(lo.orth.vec_lowdin(mo0[0], mf.get_ovlp()),
+              lo.orth.vec_lowdin(mo0[1], mf.get_ovlp()))
+    mc.kernel(mo0)
     mc.analyze()
     return mf, mc
 
@@ -66,20 +62,19 @@ x = numpy.hstack((numpy.arange(0.9, 2.01, 0.1),
 dm0 = mo0 = None
 eumc = []
 euhf = []
-#s = []
+s = []
 for b in reversed(x):
     mf, mc = urun(b, mo0, dm0)
     mo0 = mc.mo_coeff
     dm0 = mf.make_rdm1()
-    #s.append(mc.spin_square()[1])
+    s.append(mc.spin_square()[1])
     euhf.append(mf.hf_energy)
     eumc.append(mc.e_tot)
 
 euhf.reverse()
 eumc.reverse()
-print x
-print euhf
-print eumc
+s.reverse()
+#print s
 
 dm0 = mo0 = None
 ermc = []
@@ -92,7 +87,7 @@ for b in x:
     ermc.append(mc.e_tot)
 
 with open('o2-scan.txt', 'w') as fout:
-    fout.write('  ROHF 0.9->4.0   RCAS(6,6)     UHF 4.0->0.9  UCAS(6,6)  \n')
+    fout.write('  ROHF 0.9->4.0   RCAS(12,8)    UHF 4.0->0.9  UCAS(12,8) \n')
     for i, xi in enumerate(x):
         fout.write('%2.1f  %12.8f  %12.8f  %12.8f  %12.8f\n'
                    % (xi, erhf[i], ermc[i], euhf[i], eumc[i]))
