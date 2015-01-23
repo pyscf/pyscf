@@ -150,9 +150,12 @@ from pyscf.mcscf.addons import *
 
 def CASSCF(mol, mf, *args, **kwargs):
     if mol.symmetry:
-        mc = mc1step_symm.CASSCF(mol, mf, *args, **kwargs)
+        if mf.__class__.__name__ in ('RHF', 'ROHF'):
+            mc = mc1step_symm.CASSCF(mol, mf, *args, **kwargs)
+        else:
+            mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
     else:
-        if 'RHF' in str(mf.__class__) or 'ROHF' in str(mf.__class__):
+        if mf.__class__.__name__ in ('RHF', 'ROHF'):
             mc = mc1step.CASSCF(mol, mf, *args, **kwargs)
         else:
             mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
@@ -160,9 +163,12 @@ def CASSCF(mol, mf, *args, **kwargs):
 
 def CASCI(mol, mf, *args, **kwargs):
     if mol.symmetry:
-        mc = casci_symm.CASCI(mol, mf, *args, **kwargs)
+        if mf.__class__.__name__ in ('RHF', 'ROHF'):
+            mc = casci_symm.CASCI(mol, mf, *args, **kwargs)
+        else:
+            mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)
     else:
-        if 'RHF' in str(mf.__class__) or 'ROHF' in str(mf.__class__):
+        if mf.__class__.__name__ in ('RHF', 'ROHF'):
             mc = casci.CASCI(mol, mf, *args, **kwargs)
         else:
             mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)

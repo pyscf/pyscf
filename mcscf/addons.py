@@ -122,6 +122,7 @@ def project_init_guess(casscf, init_mo):
             - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
         mo = numpy.hstack((mocore, mou))
         mo = lo.orth.vec_lowdin(mo, s)
+        return mo
 
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff

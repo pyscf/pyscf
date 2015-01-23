@@ -56,9 +56,6 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
         heff[subspace,subspace] = dot(xt.conj(), axt)
         ovlp[subspace,subspace] = dot(xt.conj(), xt)
 
-        seig = scipy.linalg.eigh(ovlp[:subspace+1,:subspace+1])[0]
-        if seig[0] < lindep:
-            break
         w, v = scipy.linalg.eigh(heff[:subspace+1,:subspace+1], \
                                  ovlp[:subspace+1,:subspace+1])
         index = eig_pick(w, v)
@@ -81,10 +78,14 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
             x0  += v[i,index] * xs[i]
             ax0 += v[i,index] * ax[i]
 
+        seig = scipy.linalg.eigh(ovlp[:subspace+1,:subspace+1])[0]
         dx = ax0 - e * x0
         rr = numpy.linalg.norm(dx)
         log.debug('davidson %d %d, rr=%g, e=%.12g, seig=%g',
                   istep, subspace, rr, e, seig[0])
+
+        if rr < toloose or abs(de) < tol or seig[0] < lindep:
+            break
 
 # floating size of subspace, prevent the new intital guess going too bad
         if subspace < maxspace \
@@ -100,10 +101,6 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
             ax = _TrialXs(x0.nbytes, maxspace, max_memory)
             e = 0
         v_prev = v[:,index]
-
-
-        if rr < toloose or abs(de) < tol or seig[0] < lindep:
-            break
 
         if callable(callback):
             callback(istep, xs, ax)
