@@ -9,7 +9,7 @@ from pyscf import lo
 ehf = []
 emc = []
 
-def run(b, dm, mo):
+def run(b, dm, mo, ci=None):
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'cr2-%2.1f.out' % b
@@ -33,17 +33,17 @@ def run(b, dm, mo):
         caslst = [19,20,21,22,23,24,25,28,29,30,32,33]
         mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caslst, 1)
     else:
-        mo = mcscf.project_init_guess(mc, mo)
+        mo = mcscf.project_init_guess(mc, mo, ci)
     emc.append(mc.kernel(mo)[0])
     mc.analyze()
-    return m.make_rdm1(), mc.mo_coeff
+    return m.make_rdm1(), mc.mo_coeff, mc.ci
 
-dm = mo = None
+dm = mo = ci = None
 for b in numpy.arange(1.5, 3.01, .1):
-    dm, mo = run(b, dm, mo)
+    dm, mo, ci = run(b, dm, mo, ci)
 
 for b in reversed(numpy.arange(1.5, 3.01, .1)):
-    dm, mo = run(b, dm, mo)
+    dm, mo, ci = run(b, dm, mo, ci)
 
 x = numpy.arange(1.5, 3.01, .1)
 ehf1 = ehf[:len(x)]

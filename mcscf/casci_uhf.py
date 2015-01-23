@@ -199,7 +199,6 @@ class CASCI(object):
     def cas_natorb(self, mo_coeff=None, ci0=None):
         return self.cas_natorb(mo_coeff, ci0)
     def cas_natorb_(self, mo_coeff=None, ci0=None):
-        from pyscf.mcscf import addons
         self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
         return self.ci, self.mo_coeff
 
@@ -226,7 +225,11 @@ class CASCI(object):
             idx = numpy.argwhere(abs(s)>.5)
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
-            log.info('** Largest CI components **')
+
+            ss = self.spin_square(ci, mo_coeff, self._scf.get_ovlp())
+            log.info('\nS^2 = %.7f, 2S+1 = %7.f', ss[0], ss[1])
+
+            log.info('\n** Largest CI components **')
             log.info(' string alpha, string beta, CI coefficients')
             for c,ia,ib in fci.addons.large_ci(ci, self.ncas, self.nelecas):
                 log.info('  %9s    %9s    %.12f', ia, ib, c)

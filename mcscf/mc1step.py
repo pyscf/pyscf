@@ -327,7 +327,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         u, dx, g_orb, ninner = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
         norm_gorb = numpy.linalg.norm(g_orb)
-        t3m = log.timer('orbital rotation', *t2m)
+        t3m = log.timer('CAS DM + orbital rotation', *t2m)
         totmicro += 1
 
         casdm1_old = casdm1

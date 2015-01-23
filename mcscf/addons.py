@@ -117,11 +117,20 @@ def project_init_guess(casscf, init_mo):
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
+        log.debug(casscf, 'Core indices %s', str(idx[-ncore:][::-1]))
         mocore = mfmo[:,idx[-ncore:][::-1]]
         mou = init_mo[:,ncore:] \
             - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
         mo = numpy.hstack((mocore, mou))
         mo = lo.orth.vec_lowdin(mo, s)
+
+        if casscf.verbose >= log.DEBUG:
+            nocc = ncore + casscf.ncas
+            s = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
+            idx = numpy.argwhere(abs(s) > 0.5)
+            for i,j in idx:
+                log.debug(casscf, 'Init guess <mo-CAS|mo-hf>  %d  %d  %12.8f',
+                          ncore+i+1, j+1, s[i,j])
         return mo
 
     ncore = casscf.ncore
@@ -347,7 +356,6 @@ def map2hf(casscf, mf_mo=None, base=1, tol=.5):
     for i,j in idx:
         log.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %d  %d  %12.8f',
                  i+base, j+base, s[i,j])
-    casscf.stdout.flush()
     return idx
 
 def spin_square(casscf, fcivec=None, mo_coeff=None, ovlp=None):
