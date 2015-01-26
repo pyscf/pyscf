@@ -66,7 +66,21 @@ The Following attributes are used for CASSCF
         Default is 1e-4
     max_orb_stepsize : float
         The step size for orbital rotation.  Small step size is prefered.
-        Default is 0.03.
+        Default is 0.03.  
+        (NOTE although the default step size is small enough for many systems,
+        it happens that the orbital optimizor crosses the barriar of local
+        minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
+        C2H4 in the test files.  In these cases, one need to fine the
+        optimization by reducing max_orb_stepsize, max_ci_stepsize and
+        max_cycle_micro, max_cycle_micro_inner and ah_start_tol.)
+
+        >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+        >>> mc.max_orb_stepsize = .01
+        >>> mc.max_cycle_micro = 1
+        >>> mc.max_cycle_macro = 100
+        >>> mc.max_cycle_micro_inner = 1
+        >>> mc.ah_start_tol = 1e-6
+
     max_ci_stepsize : float
         The max size for approximate CI updates.  The approximate updates are
         used in 1-step algorithm, to estimate the change of CI wavefunction wrt
@@ -103,7 +117,7 @@ The Following attributes are used for CASSCF
         ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
         can affect the accuracy and performance of CASSCF solver.  Lower
         ``ah_conv_tol`` and ``ah_lindep`` can improve the accuracy of CASSCF
-        optimization, but decrease the performance.
+        optimization, but slow down the performance.
         
         >>> from pyscf import gto, scf, mcscf
         >>> mol = gto.Mole()

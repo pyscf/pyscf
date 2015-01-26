@@ -5,30 +5,24 @@
 
 import numpy
 import scipy.linalg
+from pyscf.lib import logger
 
-def pick_large_mode(e, v):
-    # pick the first mode, so that davidson can stay on one mode
-    #index = numpy.argmax(abs(v[0]) > .01)
-    for index in range(v.shape[1]):
-        if abs(v[0,index]) > .1:
-            break
-#FIXME should I pick the most siginificant mode of hessian? instable
-    #for index in reversed(range(v.shape[1])):
-    #    if abs(v[0,index]) > .1:
-    #        break
-#FIXME: should I ignore the smallest mode as it may increase the energy?
-    #index = numpy.argmax(abs(v[0,1:]) > .01) + 1
-    if abs(v[0,index]) < .1:
-        return -1
-    else:
-        return index
+# AH shifts the hessian eigenvalues.  But occasionally the shifted hessian is
+# singular.  Although the next mode might lead to negative hessian, it's very
+# likely that the optimization path is affected but the CASSCF result is
+# unchanged.
+def avoid_singular(e, v):
+    for index, x in enumerate(v[0]):
+        if abs(x) > .1:
+            return index
+    raise RuntimeError('aug_hess-pick_mode fail')
 
 # IJQC, 109, 2178
 # use davidson algorithm to solve augmented hessian  Ac = ce
 # c is the trial vector = (1, xtrial)
 def davidson(h_op, g, precond, x0, log, tol=1e-7,
              max_cycle=10, max_stepsize=.6, lindep=1e-14,
-             pick_mode=pick_large_mode, dot=numpy.dot):
+             pick_mode=avoid_singular, dot=numpy.dot):
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = []
     ax = []
@@ -49,12 +43,8 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7,
 #                _opt_step_as_orz_lambda(heff[:nvec,:nvec],ovlp[:nvec,:nvec], \
 #                                        xs, pick_mode, lambda0, max_stepsize)
         xtrial, w_t, v_t, index = \
-                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, pick_mode)
-        if index == -1:
-            # use previous trial vector
-            xtrial = _regular_step(heff[:nvec-1,:nvec-1], ovlp[:nvec-1,:nvec-1],
-                                   xs[:-1], pick_mode)[0]
-            break
+                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
+                              pick_mode, log)
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
@@ -78,7 +68,7 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7,
 
 def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
                 max_cycle=10, max_stepsize=.6, lindep=1e-14, start_cycle=0,
-                pick_mode=pick_large_mode, dot=numpy.dot):
+                pick_mode=avoid_singular, dot=numpy.dot):
 
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = []
@@ -96,9 +86,8 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
             ovlp[istep+1,i+1] = ovlp[i+1,istep+1] = dot(xs[istep], xs[i])
         nvec = len(xs) + 1
         xtrial, w_t, v_t, index = \
-                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, pick_mode)
-        if index == -1:
-            break
+                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
+                              pick_mode, log)
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
@@ -130,8 +119,6 @@ def _opt_step_as_orz_lambda(heff, ovlp, xs, pick_mode, lambda0,
         # should it be < 1.1, like orz did?
         # unless the ovlp is quite singular, v > 1.1 is not likely to happen
         index = pick_mode(w, v)
-        if index == -1:
-            return xtrial, w_t, v[:,0], index, lambdas[-1]
 
         w_t = w[index]
         xtrial = _dgemv(v[1:,index]/v[0,index], xs)
@@ -150,12 +137,17 @@ def _opt_step_as_orz_lambda(heff, ovlp, xs, pick_mode, lambda0,
             htest[1:,1:] *= 1/lambdax
     return xtrial, w_t, v[:,index], index, lambdax
 
-def _regular_step(heff, ovlp, xs, pick_mode):
+def _regular_step(heff, ovlp, xs, pick_mode, log):
     w, v = scipy.linalg.eigh(heff, ovlp)
+    if log.verbose >= logger.DEBUG2:
+        log.debug2('AH eigs %s', str(w))
+    if w[1] < 0:
+        log.debug('Negative hessian eigenvalue found %s',
+                  str(scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])[0][:5]))
+
     index = pick_mode(w, v)
-    if index == -1:
-        #return 0, 0, v[:,0], index
-        raise ValueError('aug_hess-pick_mode fail')
+    if abs(v[0,index]) < 1e-4:
+        raise RuntimeError('aug_hess diverge')
     else:
         w_t = w[index]
         xtrial = _dgemv(v[1:,index]/v[0,index], xs)
@@ -175,5 +167,4 @@ if __name__ == '__main__':
     seff = numpy.eye(5)
     xs = numpy.random.random((4,20))
     seff[1:,1:] = numpy.dot(xs, xs.T)
-    print(_opt_step_as_orz_lambda(heff, seff, xs, pick_large_mode, 1,
-                                  max_stepsize=.9))
+    print(_opt_step_as_orz_lambda(heff, seff, xs, lambda0=1, max_stepsize=.9))
