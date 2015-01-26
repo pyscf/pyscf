@@ -74,13 +74,14 @@ static void _dot_vmv(int n, int nv, double *v1, double *mat, double *v2,
         const double D0 = 0;
         const double D1 = 1;
         const char TRANS_N = 'N';
-        double mv[n*nv];
+        double *mv = malloc(sizeof(double) * n*nv);
         int i;
         dgemm_(&TRANS_N, &TRANS_N, &n, &nv, &n,
                &D1, mat, &n, v2, &n, &D0, mv, &n);
         for (i = 0; i < nv; i++) {
                 res[i] = ddot_(&n, v1+n*i, &INC1, mv+n*i, &INC1);
         }
+        free(mv);
 }
 
 /* v1 is n x nv matrix, m1 is n x n matrix, m2 is n x nv x nvs matrix
@@ -94,7 +95,7 @@ static void _dot_vmm(int n, int nv, int nvs,
         const double D1 = 1;
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
-        double vm[n*nv];
+        double *vm = malloc(sizeof(double) * n*nv);
         int i;
         int nnv = n * nv;
         dgemm_(&TRANS_T, &TRANS_N, &n, &nv, &n,
@@ -103,6 +104,7 @@ static void _dot_vmm(int n, int nv, int nvs,
                 dgemv_(&TRANS_T, &n, &nvs, &D1, m2+n*i, &nnv,
                        vm+n*i, &INC1, &D0, v+i, &nv);
         }
+        free(vm);
 }
 
 static int _xc_has_gga(xc_func_type *func_x, xc_func_type *func_c)
@@ -161,7 +163,7 @@ static double nr_vmat_sf(int id, int np, struct _VXCEnvs *envs, double *ao,
         int nao = envs->nao;
         int i, j;
         double weight;
-        double aow[envs->nao*np];
+        double *aow = malloc(sizeof(double)* nao*np);
         for (j = 0; j < np; j++) {
                 // *.5 since dsyr2k_ x*y'+y*x'
                 weight = envs->weights[id+j] * vrho[j] * .5;
@@ -196,6 +198,7 @@ static double nr_vmat_sf(int id, int np, struct _VXCEnvs *envs, double *ao,
                 *e += envs->weights[id+i] * rho[i] * exc[i];
                 nelec += rho[i] * envs->weights[id+i];
         }
+        free(aow);
 
         return nelec;
 }
@@ -233,12 +236,14 @@ static double nr_spin0(int id, int np, struct _VXCEnvs *envs,
         double rho[8*np], sigma[3*np];
         double vrho[2*np], vcrho[2*np], vsigma[3*np], vcsigma[3*np];
         double exc[np], ec[np];
-        double ao[nao*np*4];
+        double *ao = malloc(sizeof(double)* nao*np*4);
+        double nelec;
         int i;
 
         nr_rho_sf(id, np, envs, dm, ao, rho, sigma);
         if (dasum_(&np, rho, &INC1) < 1e-14) {
-                return 0;
+                nelec = 0;
+                goto _normal_end;
         }
 
         switch (envs->func_x->info->family) {
@@ -283,8 +288,11 @@ static double nr_spin0(int id, int np, struct _VXCEnvs *envs,
                 }
         }
 
+        nelec = nr_vmat_sf(id, np, envs, ao, exc, rho, vrho, vsigma, e, v);
 
-        return nr_vmat_sf(id, np, envs, ao, exc, rho, vrho, vsigma, e, v);
+_normal_end:
+        free(ao);
+        return nelec;
 }
 
 

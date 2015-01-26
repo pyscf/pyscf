@@ -94,6 +94,24 @@ static double acre_bdes_t1(double *ci0, double *t1, int fillcnt, int stra_id,
         return csum;
 }
 
+
+static void _transpose_jikl(double *dm2, int norb)
+{
+        int nnorb = norb * norb;
+        int i, j;
+        double *p0, *p1;
+        double *tmp = malloc(sizeof(double)*nnorb*nnorb);
+        memcpy(tmp, dm2, sizeof(double)*nnorb*nnorb);
+        for (i = 0; i < norb; i++) {
+                for (j = 0; j < norb; j++) {
+                        p0 = tmp + (j*norb+i) * nnorb;
+                        p1 = dm2 + (i*norb+j) * nnorb;
+                        memcpy(p1, p0, sizeof(double)*nnorb);
+                }
+        }
+        free(tmp);
+}
+
 /*
  * If symm != 0, symmetrize rdm1 and rdm2
  * For spin density matrix, return rdm2 e.g.
@@ -155,13 +173,14 @@ void FCIspindm12_drv(void (*dm12kernel)(),
                         }
                 }
         }
+        _transpose_jikl(rdm2, norb);
 }
 
 
 /*
- * dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
+ * dm(pq,rs) * [p(alpha)^+ q(beta) r(beta)^+ s(alpha)]
  */
-void FCIdm2_baab_kern(double *rdm1, double *rdm2, double *bra, double *ket,
+void FCIdm2_abba_kern(double *rdm1, double *rdm2, double *bra, double *ket,
                       int stra_id, int norb, int na, int nb,
                       int neleca, int nelecb,
                       int *acre_index, int *bdes_index)
@@ -184,9 +203,9 @@ void FCIdm2_baab_kern(double *rdm1, double *rdm2, double *bra, double *ket,
         free(buf);
 }
 /*
- * dm(pq,rs) * [q(beta)^+ p(alpha) s(alpha)^+ r(beta)]
+ * dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
  */
-void FCIdm2_abba_kern(double *rdm1, double *rdm2, double *bra, double *ket,
+void FCIdm2_baab_kern(double *rdm1, double *rdm2, double *bra, double *ket,
                       int stra_id, int norb, int na, int nb,
                       int neleca, int nelecb,
                       int *ades_index, int *bcre_index)

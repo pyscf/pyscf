@@ -71,34 +71,42 @@ def format_atom(atoms, origin=0, axes=1):
 
     Examples:
 
-    >>> gto.format_atom('9,0,0,0; h 0 0 1', origin=(1,1,1))
-    [['F', [-1.0, -1.0, -1.0]], ['H', [-1.0, -1.0, 0.0]]]
+    >>> gto.format_atom('9,0,0,0; h@1 0 0 1', origin=(1,1,1))
+    [['F', [-1.0, -1.0, -1.0]], ['H@1', [-1.0, -1.0, 0.0]]]
+    >>> gto.format_atom(['9,0,0,0', (1, (0, 0, 1))], origin=(1,1,1))
+    [['F', [-1.0, -1.0, -1.0]], ['H', [-1, -1, 0]]]
     '''
     elementdic = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
     fmt_atoms = []
+    def str2atm(line):
+        dat = line.split()
+        if dat[0].isdigit():
+            symb = param.ELEMENTS[int(dat[0])][0]
+        else:
+            rawsymb = _rm_digit(dat[0])
+            stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
+            symb = dat[0].replace(rawsymb, stdsymb)
+        c = numpy.array([float(x) for x in dat[1:4]]) - origin
+        return [symb, numpy.dot(axes, c).tolist()]
+
     if isinstance(atoms, str):
         atoms = atoms.replace(';','\n').replace(',',' ')
         for line in atoms.split('\n'):
             if line.strip():
-                dat = line.split()
-                if dat[0].isdigit():
-                    symb = param.ELEMENTS[int(dat[0])][0]
-                else:
-                    rawsymb = _rm_digit(dat[0])
-                    stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
-                    symb = dat[0].replace(rawsymb, stdsymb)
-                c = numpy.array([float(x) for x in dat[1:4]]) - origin
-                fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
+                fmt_atoms.append(str2atm(line))
     else:
         for atom in atoms:
-            if isinstance(atom[0], int):
-                symb = param.ELEMENTS[atom[0]][0]
+            if isinstance(atom, str):
+                fmt_atoms.append(str2atm(atom.replace(',',' ')))
             else:
-                rawsymb = _rm_digit(atom[0])
-                stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
-                symb = atom[0].replace(rawsymb, stdsymb)
-            c = numpy.array(atom[1]) - origin
-            fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
+                if isinstance(atom[0], int):
+                    symb = param.ELEMENTS[atom[0]][0]
+                else:
+                    rawsymb = _rm_digit(atom[0])
+                    stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
+                    symb = atom[0].replace(rawsymb, stdsymb)
+                c = numpy.array(atom[1]) - origin
+                fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
     return fmt_atoms
 
 #TODO: sort exponents
@@ -1638,5 +1646,4 @@ def _update_from_cmdargs_(mol):
         else:
             if mol.verbose > log.QUIET:
                 print('output file: %s' % mol.output)
-
 

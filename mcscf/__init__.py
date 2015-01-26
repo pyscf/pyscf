@@ -98,7 +98,7 @@ The Following attributes are used for CASSCF
         This value is to control the start point. Default is 1e-4.
     ah_start_cycle : int, for AH solver.
         In AH solver, the orbital rotation is started without completely solving the AH problem.
-        This value is to control the start point. Default is 1e-4.
+        This value is to control the start point. Default is 3.
 
         ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
         can affect the accuracy and performance of CASSCF solver.  Lower

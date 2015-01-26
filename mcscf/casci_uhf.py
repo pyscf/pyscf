@@ -227,7 +227,7 @@ class CASCI(object):
                 log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
 
             ss = self.spin_square(ci, mo_coeff, self._scf.get_ovlp())
-            log.info('\nS^2 = %.7f, 2S+1 = %7.f', ss[0], ss[1])
+            log.info('\nS^2 = %.7f, 2S+1 = %.7f', ss[0], ss[1])
 
             log.info('\n** Largest CI components **')
             log.info(' string alpha, string beta, CI coefficients')
