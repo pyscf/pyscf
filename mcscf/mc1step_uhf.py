@@ -350,12 +350,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
         u, dx, g_orb, ninner = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
         norm_gorb = numpy.linalg.norm(g_orb)
-        t3m = log.timer('orbital rotation', *t2m)
+        t3m = log.timer('CAS DM + orbital rotation', *t2m)
         totmicro += 1
-# dynamic ci_stepsize
-# ci graidents may change the CI vector too much, which causes oscillation in
-# macro iterations
-        max_ci_step = min(norm_gorb*50, casscf.max_ci_stepsize)
 
         casdm1_old = casdm1
         for imicro in range(micro):
@@ -364,7 +360,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             norm_gci = numpy.linalg.norm(gci)
             norm_dm1 = numpy.linalg.norm(casdm1[0] - casdm1_old[0]) \
                      + numpy.linalg.norm(casdm1[1] - casdm1_old[1])
-            t3m = log.timer('ci gradient', *t3m)
+            t3m = log.timer('update CAS DM', *t3m)
 
             u1, dx, g_orb, nin = casscf.rotate_orb(mo, casdm1, casdm2, eris, dx)
             u = list(map(numpy.dot, u, u1))

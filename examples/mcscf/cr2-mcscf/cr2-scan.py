@@ -9,7 +9,7 @@ from pyscf import lo
 ehf = []
 emc = []
 
-def run(b, dm, mo):
+def run(b, dm, mo, ci=None):
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'cr2-%2.1f.out' % b
@@ -36,14 +36,14 @@ def run(b, dm, mo):
         mo = mcscf.project_init_guess(mc, mo)
     emc.append(mc.kernel(mo)[0])
     mc.analyze()
-    return m.make_rdm1(), mc.mo_coeff
+    return m.make_rdm1(), mc.mo_coeff, mc.ci
 
-dm = mo = None
+dm = mo = ci = None
 for b in numpy.arange(1.5, 3.01, .1):
-    dm, mo = run(b, dm, mo)
+    dm, mo, ci = run(b, dm, mo, ci)
 
 for b in reversed(numpy.arange(1.5, 3.01, .1)):
-    dm, mo = run(b, dm, mo)
+    dm, mo, ci = run(b, dm, mo, ci)
 
 x = numpy.arange(1.5, 3.01, .1)
 ehf1 = ehf[:len(x)]

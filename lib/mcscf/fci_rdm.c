@@ -12,6 +12,8 @@
 #define BUFBASE         320
 #define SQRT2           1.4142135623730950488
 
+#define BRAKETSYM       1
+#define PARTICLESYM     2
 
 typedef struct {
         unsigned int addr;
@@ -44,6 +46,13 @@ static void compress_link(_LinkT *clink, int *link_index,
                 link_index += nlink * 4;
         }
 }
+
+/*
+ * i is the index of the annihilation operator, a is the index of
+ * creation operator.  t1[I,i*norb+a] because it represents that
+ * starting from the intermediate I, removing i and creating a leads to
+ * determinant of str1
+ */
 
 static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                         int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
@@ -125,9 +134,9 @@ static double rdm2_0b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
         return csum;
 }
 
-static double kern_ms0_ab(double *ci0, double *t1, int fillcnt,
-                          int stra_id, int strb_id,
-                          int norb, int na, int nlink, _LinkT *clink_index)
+double FCI_t1ci_ms0(double *ci0, double *t1, int fillcnt,
+                    int stra_id, int strb_id,
+                    int norb, int na, int nlink, _LinkT *clink_index)
 {
         double csum;
         csum = rdm2_0b_t1(ci0, t1, fillcnt, stra_id,
@@ -137,10 +146,61 @@ static double kern_ms0_ab(double *ci0, double *t1, int fillcnt,
         return csum;
 }
 
+static void tril_particle_symm(double *rdm2, double *tbra, double *tket,
+                               int fillcnt, int norb,
+                               double alpha, double beta)
+{
+        const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
+        int nnorb = norb * norb;
+        int i, j, k, m, n;
+        int blk = MIN(((int)(48/norb))*norb, nnorb);
+        double *buf = malloc(sizeof(double) * nnorb*fillcnt);
+        double *p1;
+
+        for (n = 0, k = 0; k < fillcnt; k++) {
+                p1 = tbra + k * nnorb;
+                for (i = 0; i < norb; i++) {
+                for (j = 0; j < norb; j++, n++) {
+                        buf[n] = p1[j*norb+i];
+                } }
+        }
+
+//        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+//               &alpha, tket, &nnorb, buf, &nnorb, &beta, rdm2, &nnorb);
+        for (m = 0; m < nnorb-blk; m+=blk) {
+                n = nnorb - m;
+                dgemm_(&TRANS_N, &TRANS_T, &blk, &n, &fillcnt,
+                       &alpha, tket+m, &nnorb, buf+m, &nnorb,
+                       &beta, rdm2+m*nnorb+m, &nnorb);
+        }
+        n = nnorb - m;
+        dgemm_(&TRANS_N, &TRANS_T, &n, &n, &fillcnt,
+               &alpha, tket+m, &nnorb, buf+m, &nnorb,
+               &beta, rdm2+m*nnorb+m, &nnorb);
+
+        free(buf);
+}
+
+static void _transpose_jikl(double *dm2, int norb)
+{
+        int nnorb = norb * norb;
+        int i, j;
+        double *p0, *p1;
+        double *tmp = malloc(sizeof(double)*nnorb*nnorb);
+        memcpy(tmp, dm2, sizeof(double)*nnorb*nnorb);
+        for (i = 0; i < norb; i++) {
+                for (j = 0; j < norb; j++) {
+                        p0 = tmp + (j*norb+i) * nnorb;
+                        p1 = dm2 + (i*norb+j) * nnorb;
+                        memcpy(p1, p0, sizeof(double)*nnorb);
+                }
+        }
+        free(tmp);
+}
 
 /*
- * If symm != 0, symmetrize rdm1 and rdm2
- * Note! The returned rdm2 corresponds to
+ * Note! The returned rdm2 from FCI*kern* function corresponds to
  *      [(p^+ q on <bra|) r^+ s] = [p q^+ r^+ s]
  * in FCIrdm12kern_ms0, FCIrdm12kern_spin0, FCIrdm12kern_a, ...
  * t1 is calculated as |K> = i^+ j|0>. by doing dot(t1.T,t1) to get "rdm2",
@@ -148,8 +208,13 @@ static double kern_ms0_ab(double *ci0, double *t1, int fillcnt,
  * two indices kl of rdm2(i,j,k,l), But the bra part (i^+ j|0>)^dagger
  * will generate an order of (i,j), which is identical to call a bra of
  * (<0|i j^+).  The so-obtained rdm2(i,j,k,l) corresponds to the
- * operator sequence i j^+ k^+ l.  In these cases, be sure transpose i,j
- * for rdm2(i,j,k,l) after calling FCIrdm12_drv.
+ * operator sequence i j^+ k^+ l. 
+ *
+ * symm = 1: symmetrizes the 1pdm, and 2pdm.  This is true only if bra == ket,
+ * and the operators on bra are equivalent to those on ket, like
+ *      FCIrdm12kern_a, FCIrdm12kern_b, FCIrdm12kern_ms0, FCIrdm12kern_spin0
+ * sym = 2: consider the particle permutation symmetry:
+ *      E^j_l E^i_k = E^i_k E^j_l - \delta_{il}E^j_k + \dleta_{jk}E^i_l
  */
 void FCIrdm12_drv(void (*dm12kernel)(),
                   double *rdm1, double *rdm2, double *bra, double *ket,
@@ -158,7 +223,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 {
         const int nnorb = norb * norb;
         const int bufbase = MIN(BUFBASE, nb);
-        int strk, i, j, ib, blen;
+        int strk, i, j, k, l, ib, blen;
         double *pdm1, *pdm2;
         memset(rdm1, 0, sizeof(double) * nnorb);
         memset(rdm2, 0, sizeof(double) * nnorb*nnorb);
@@ -170,7 +235,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 
 #pragma omp parallel default(none) \
         shared(dm12kernel, bra, ket, norb, na, nb, nlinka, \
-               nlinkb, clinka, clinkb, rdm1, rdm2), \
+               nlinkb, clinka, clinkb, rdm1, rdm2, symm), \
         private(strk, i, ib, blen, pdm1, pdm2)
 {
         pdm1 = (double *)malloc(sizeof(double) * nnorb);
@@ -183,7 +248,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                 for (strk = 0; strk < na; strk++) {
                         (*dm12kernel)(pdm1, pdm2, bra, ket, blen, strk, ib,
                                       norb, na, nb, nlinka, nlinkb,
-                                      clinka, clinkb);
+                                      clinka, clinkb, symm);
                 }
         }
 #pragma omp critical
@@ -200,7 +265,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 }
         free(clinka);
         free(clinkb);
-        if (symm) {
+        switch (symm) {
+        case BRAKETSYM:
                 for (i = 0; i < norb; i++) {
                         for (j = 0; j < i; j++) {
                                 rdm1[j*norb+i] = rdm1[i*norb+j];
@@ -211,6 +277,27 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                                 rdm2[j*nnorb+i] = rdm2[i*nnorb+j];
                         }
                 }
+                _transpose_jikl(rdm2, norb);
+                break;
+        case PARTICLESYM:
+// right 2pdm order is required here,  which transposes the cre/des on bra
+                for (i = 0; i < norb; i++) {
+                for (j = 0; j < i; j++) {
+                        pdm1 = rdm2 + (i*nnorb+j)*norb;
+                        pdm2 = rdm2 + (j*nnorb+i)*norb;
+                        for (k = 0; k < norb; k++) {
+                        for (l = 0; l < norb; l++) {
+                                pdm2[l*nnorb+k] = pdm1[k*nnorb+l];
+                        } }
+// E^j_lE^i_k = E^i_kE^j_l + \delta_{il}E^j_k - \dleta_{jk}E^i_l
+                        for (k = 0; k < norb; k++) {
+                                pdm2[i*nnorb+k] += rdm1[j*norb+k];
+                                pdm2[k*nnorb+j] -= rdm1[i*norb+k];
+                        }
+                } }
+                break;
+        default:
+                _transpose_jikl(rdm2, norb);
         }
 }
 
@@ -221,23 +308,35 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
                       int fillcnt, int stra_id, int strb_id,
                       int norb, int na, int nb, int nlinka, int nlinkb,
-                      _LinkT *clink_indexa, _LinkT *clink_indexb)
+                      _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const int INC1 = 1;
         const char UP = 'U';
         const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
         double *buf = malloc(sizeof(double) * nnorb * fillcnt);
 
-        csum = kern_ms0_ab(ket, buf, fillcnt, stra_id, strb_id,
-                           norb, na, nlinka, clink_indexa);
+        csum = FCI_t1ci_ms0(ket, buf, fillcnt, stra_id, strb_id,
+                            norb, na, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
                        ket+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
-                dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
-                       &D1, buf, &nnorb, &D1, rdm2, &nnorb);
+                switch (symm) {
+                case BRAKETSYM:
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
+                               &D1, buf, &nnorb, &D1, rdm2, &nnorb);
+                        break;
+                case PARTICLESYM:
+                        tril_particle_symm(rdm2, buf, buf, fillcnt, norb, 1, 1);
+                        break;
+                default:
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                               &D1, buf, &nnorb, buf, &nnorb,
+                               &D1, rdm2, &nnorb);
+                }
         }
         free(buf);
 }
@@ -247,7 +346,7 @@ void FCImake_rdm12_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
 {
         FCIrdm12_drv(FCIrdm12kern_ms0,
                      rdm1, rdm2, ket, ket, norb, na, na, nlink, nlink,
-                     link_index, link_index, 1);
+                     link_index, link_index, BRAKETSYM);
 }
 
 /*
@@ -256,7 +355,7 @@ void FCImake_rdm12_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
                         int fillcnt, int stra_id, int strb_id,
                         int norb, int na, int nb, int nlinka, int nlinkb,
-                        _LinkT *clink_indexa, _LinkT *clink_indexb)
+                        _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         if (stra_id < strb_id) {
                 return;
@@ -264,6 +363,7 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
         const int INC1 = 1;
         const char UP = 'U';
         const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
         const double D1 = 1;
         const double D2 = 2;
         const int nnorb = norb * norb;
@@ -293,12 +393,19 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
                 for (i = fill0*nnorb; i < fill1*nnorb; i++) {
                         buf[i] *= SQRT2;
                 }
-                dsyrk_(&UP, &TRANS_N, &nnorb, &fill1,
-                       &D2, buf, &nnorb, &D1, rdm2, &nnorb);
-// dsyrk_ of debian-6 libf77blas.so.3gf causes NaN in pdm2, libblas bug?
-//                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill1,
-//                               &D2, buf, &nnorb, buf, &nnorb,
-//                               &D1, rdm2, &nnorb);
+                switch (symm) {
+                case BRAKETSYM:
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &fill1,
+                               &D2, buf, &nnorb, &D1, rdm2, &nnorb);
+                        break;
+                case PARTICLESYM:
+                        tril_particle_symm(rdm2, buf, buf, fill1, norb, D2, D1);
+                        break;
+                default:
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill1,
+                               &D2, buf, &nnorb, buf, &nnorb,
+                               &D1, rdm2, &nnorb);
+                }
         }
         free(buf);
 }
@@ -308,7 +415,7 @@ void FCImake_rdm12_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
 {
         FCIrdm12_drv(FCIrdm12kern_spin0,
                      rdm1, rdm2, ket, ket, norb, na, na, nlink, nlink,
-                     link_index, link_index, 1);
+                     link_index, link_index, BRAKETSYM);
 }
 
 
@@ -321,7 +428,7 @@ void FCImake_rdm12_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
                       int fillcnt, int stra_id, int strb_id,
                       int norb, int na, int nb, int nlinka, int nlinkb,
-                      _LinkT *clink_indexa, _LinkT *clink_indexb)
+                      _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const int INC1 = 1;
         const char TRANS_N = 'N';
@@ -332,18 +439,24 @@ void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
         double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
         double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
 
-        csum = kern_ms0_ab(bra, buf1, fillcnt, stra_id, strb_id,
-                           norb, na, nlinka, clink_indexa);
-        if (csum < CSUMTHR) { goto end; }
-        csum = kern_ms0_ab(ket, buf0, fillcnt, stra_id, strb_id,
-                           norb, na, nlinka, clink_indexa);
-        if (csum < CSUMTHR) { goto end; }
+        csum = FCI_t1ci_ms0(bra, buf1, fillcnt, stra_id, strb_id,
+                            norb, na, nlinka, clink_indexa);
+        if (csum < CSUMTHR) { goto _normal_end; }
+        csum = FCI_t1ci_ms0(ket, buf0, fillcnt, stra_id, strb_id,
+                            norb, na, nlinka, clink_indexa);
+        if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
                bra+stra_id*na+strb_id, &INC1, &D1, tdm1, &INC1);
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
-               &D1, buf0, &nnorb, buf1, &nnorb,
-               &D1, tdm2, &nnorb);
-end:
+        switch (symm) {
+        case PARTICLESYM:
+                tril_particle_symm(tdm2, buf1, buf0, fillcnt, norb, D1, D1);
+                break;
+        default:
+                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                       &D1, buf0, &nnorb, buf1, &nnorb,
+                       &D1, tdm2, &nnorb);
+        }
+_normal_end:
         free(buf0);
         free(buf1);
 }
@@ -354,7 +467,7 @@ void FCItrans_rdm12_ms0(double *rdm1, double *rdm2,
 {
         FCIrdm12_drv(FCItdm12kern_ms0,
                      rdm1, rdm2, bra, ket, norb, na, na, nlink, nlink,
-                     link_index, link_index, 0);
+                     link_index, link_index, 2);
 }
 
 
@@ -366,11 +479,12 @@ void FCItrans_rdm12_ms0(double *rdm1, double *rdm2,
 void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    _LinkT *clink_indexa, _LinkT *clink_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const int INC1 = 1;
         const char UP = 'U';
         const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
@@ -382,19 +496,31 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
-                dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
-                       &D1, buf, &nnorb, &D1, rdm2, &nnorb);
+                switch (symm) {
+                case BRAKETSYM:
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
+                               &D1, buf, &nnorb, &D1, rdm2, &nnorb);
+                        break;
+                case PARTICLESYM:
+                        tril_particle_symm(rdm2, buf, buf, fillcnt, norb, 1, 1);
+                        break;
+                default:
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                               &D1, buf, &nnorb, buf, &nnorb,
+                               &D1, rdm2, &nnorb);
+                }
         }
         free(buf);
 }
 void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    _LinkT *clink_indexa, _LinkT *clink_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const int INC1 = 1;
         const char UP = 'U';
         const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
@@ -405,8 +531,19 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
-                dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
-                       &D1, buf, &nnorb, &D1, rdm2, &nnorb);
+                switch (symm) {
+                case BRAKETSYM:
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
+                               &D1, buf, &nnorb, &D1, rdm2, &nnorb);
+                        break;
+                case PARTICLESYM:
+                        tril_particle_symm(rdm2, buf, buf, fillcnt, norb, 1, 1);
+                        break;
+                default:
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                               &D1, buf, &nnorb, buf, &nnorb,
+                               &D1, rdm2, &nnorb);
+                }
         }
         free(buf);
 }
@@ -414,7 +551,7 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
 void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    _LinkT *clink_indexa, _LinkT *clink_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const int INC1 = 1;
         const char TRANS_N = 'N';
@@ -428,17 +565,22 @@ void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
         memset(buf1, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(bra+strb_id, buf1, fillcnt, stra_id,
                          norb, nb, nlinka, clink_indexa);
-        if (csum < CSUMTHR) { goto end; }
+        if (csum < CSUMTHR) { goto _normal_end; }
         memset(buf0, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(ket+strb_id, buf0, fillcnt, stra_id,
                          norb, nb, nlinka, clink_indexa);
-        if (csum < CSUMTHR) { goto end; }
+        if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
-               &D1, buf0, &nnorb, buf1, &nnorb,
-               &D1, tdm2, &nnorb);
-end:
+        switch (symm) {
+        case PARTICLESYM:
+                tril_particle_symm(tdm2, buf1, buf0, fillcnt, norb, D1, D1);
+                break;
+        default:
+                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                       &D1, buf0, &nnorb, buf1, &nnorb, &D1, tdm2, &nnorb);
+        }
+_normal_end:
         free(buf0);
         free(buf1);
 }
@@ -446,7 +588,7 @@ end:
 void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
                     int fillcnt, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
-                    _LinkT *clink_indexa, _LinkT *clink_indexb)
+                    _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const int INC1 = 1;
         const char TRANS_N = 'N';
@@ -459,16 +601,21 @@ void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
 
         csum = rdm2_0b_t1(bra, buf1, fillcnt, stra_id,
                           norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
-        if (csum < CSUMTHR) { goto end; }
+        if (csum < CSUMTHR) { goto _normal_end; }
         csum = rdm2_0b_t1(ket, buf0, fillcnt, stra_id,
                           norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
-        if (csum < CSUMTHR) { goto end; }
+        if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
-               &D1, buf0, &nnorb, buf1, &nnorb,
-               &D1, tdm2, &nnorb);
-end:
+        switch (symm) {
+        case PARTICLESYM:
+                tril_particle_symm(tdm2, buf1, buf0, fillcnt, norb, D1, D1);
+                break;
+        default:
+                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                       &D1, buf0, &nnorb, buf1, &nnorb, &D1, tdm2, &nnorb);
+        }
+_normal_end:
         free(buf0);
         free(buf1);
 }
@@ -476,7 +623,7 @@ end:
 void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
                      int fillcnt, int stra_id, int strb_id,
                      int norb, int na, int nb, int nlinka, int nlinkb,
-                     _LinkT *clink_indexa, _LinkT *clink_indexb)
+                     _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
         const char TRANS_N = 'N';
         const char TRANS_T = 'T';
@@ -489,15 +636,14 @@ void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
         memset(bufa, 0, sizeof(double)*nnorb*fillcnt);
         csum = rdm2_a_t1(bra+strb_id, bufa, fillcnt, stra_id,
                          norb, nb, nlinka, clink_indexa);
-        if (csum < CSUMTHR) { goto end; }
+        if (csum < CSUMTHR) { goto _normal_end; }
         csum = rdm2_0b_t1(ket, bufb, fillcnt, stra_id,
                           norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
-        if (csum < CSUMTHR) { goto end; }
-
+        if (csum < CSUMTHR) { goto _normal_end; }
+// no particle symmetry between alpha-alpha-beta-beta 2pdm
         dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
-               &D1, bufb, &nnorb, bufa, &nnorb,
-               &D1, tdm2, &nnorb);
-end:
+               &D1, bufb, &nnorb, bufa, &nnorb, &D1, tdm2, &nnorb);
+_normal_end:
         free(bufb);
         free(bufa);
 }

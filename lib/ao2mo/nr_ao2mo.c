@@ -161,7 +161,7 @@ void AO2MOdtriumm_o2(int m, int n, int k, int diag_off,
         int nstart, nleft;
         int mend = diag_off;
 
-        for (nstart = 0; nstart+BLK < m-diag_off; nstart+=BLK) {
+        for (nstart = 0; nstart < m-diag_off-BLK; nstart+=BLK) {
                 mend += BLK;
                 dgemm_(&TRANS_T, &TRANS_N, &mend, &BLK, &k,
                        &D1, a, &k, b+nstart*k, &k,

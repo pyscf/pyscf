@@ -40,29 +40,53 @@ class KnowValues(unittest.TestCase):
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -77.9804561351, 7)
 
-    def test_mc2step_4o4e(self):
-        mc = mcscf.CASSCF(mol, mf, 4, 4)
-        mc.conv_tol = 1e-8
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -78.0103838390, 7)
-
     def test_mc2step_6o6e(self):
         mc = mcscf.CASSCF(mol, mf, 6, 6)
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -78.0390051207, 7)
 
-    def test_mc1step_4o4e(self):
-        mc = mcscf.CASSCF(mol, mf, 4, 4)
-        mc.conv_tol = 1e-8
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -78.0103838390, 7)
-
     def test_mc1step_6o6e(self):
         mc = mcscf.CASSCF(mol, mf, 6, 6)
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -78.0390051207, 7)
+
+    def test_mc2step_4o4e(self):
+        mc = mcscf.CASSCF(mol, mf, 4, 4)
+        mc.conv_tol = 1e-8
+        emc = mc.mc2step()[0]
+        self.assertAlmostEqual(emc, -77.9916207, 6)
+
+    def test_mc1step_4o4e(self):
+        mc = mcscf.CASSCF(mol, mf, 4, 4)
+        mc.conv_tol = 1e-8
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -77.9916207, 6)
+
+    def test_mc1step_4o4e_smallstep(self):
+        mc = mcscf.CASSCF(mol, mf, 4, 4)
+        mc.conv_tol = 1e-8
+        mc.max_orb_stepsize = .01
+        mc.max_ci_stepsize = .01
+        mc.max_cycle_micro = 1
+        mc.max_cycle_macro = 100
+        mc.max_cycle_micro_inner = 1
+        mc.ah_start_tol = 1e-7
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -78.0103838390, 7)
+
+    def test_mc2step_4o4e_smallstep(self):
+        mc = mcscf.CASSCF(mol, mf, 4, 4)
+        mc.conv_tol = 1e-8
+        mc.max_orb_stepsize = .01
+        mc.max_ci_stepsize = .01
+        mc.max_cycle_micro = 1
+        mc.max_cycle_macro = 100
+        mc.max_cycle_micro_inner = 1
+        mc.ah_start_tol = 1e-7
+        emc = mc.mc2step()[0]
+        self.assertAlmostEqual(emc, -78.0103838390, 7)
 
 
 if __name__ == "__main__":

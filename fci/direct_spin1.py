@@ -237,9 +237,9 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None):
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCItdm12kern_a', cibra, ciket,
-                                       norb, nelec, link_index, 0)
+                                       norb, nelec, link_index, 2)
     dm1b, dm2bb = rdm.make_rdm12_spin1('FCItdm12kern_b', cibra, ciket,
-                                       norb, nelec, link_index, 0)
+                                       norb, nelec, link_index, 2)
     _, dm2ab = rdm.make_rdm12_spin1('FCItdm12kern_ab', cibra, ciket,
                                     norb, nelec, link_index, 0)
     _, dm2ba = rdm.make_rdm12_spin1('FCItdm12kern_ab', ciket, cibra,

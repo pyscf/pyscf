@@ -85,7 +85,7 @@ class KnowValues(unittest.TestCase):
                 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]]
         self.assertTrue(numpy.allclose(mo2, (ref,ref1)))
 
-    def test_project_init_guess(self)
+    def test_project_init_guess(self):
         print('todo')
 
 

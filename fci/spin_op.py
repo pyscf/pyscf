@@ -22,34 +22,34 @@ librdm = pyscf.lib.load_library('libmcscf')
 #       <p|s+s-|q> \gammalpha_qp = trace(\gammalpha) = neleca
 # 2) different electrons for \sum s_i+*s_j- (i\neq j, n*(n-1) terms)
 # As a two-particle operator S+*S-
-#       = <ij|s+s-|kl>Gamma_{ki,lj} = <iajb|s+s-|kbla>Gamma_{kbia,lajb}
-#       = <ia|s+|kb><jb|s-|la>Gamma_{kbia,lajb}
-# <CI|S+*S-|CI> = neleca + <ia|s+|kb><jb|s-|la>Gamma_{kbia,lajb}
+#       = <ij|s+s-|kl>Gamma_{ik,jl} = <iajb|s+s-|kbla>Gamma_{iakb,jbla}
+#       = <ia|s+|kb><jb|s-|la>Gamma_{iakb,jbla}
+# <CI|S+*S-|CI> = neleca + <ia|s+|kb><jb|s-|la>Gamma_{iakb,jbla}
 #
 # There are two cases for S-*S+
 # 1) same electron \sum_i s_i-*s_i+
 #       <p|s+s-|q> \gammabeta_qp = trace(\gammabeta) = nelecb
 # 2) different electrons
-#       = <ij|s-s+|kl>Gamma_{ki,lj} = <ibja|s-s+|kalb>Gamma_{kaib,lbja}
-#       = <ib|s+|ka><ja|s-|lb>Gamma_{kaib,lbja}
-# <CI|S-*S+|CI> = nelecb + <ib|s+|ka><ja|s-|lb>Gamma_{kaib,lbja}
+#       = <ij|s-s+|kl>Gamma_{ik,jl} = <ibja|s-s+|kalb>Gamma_{ibka,jalb}
+#       = <ib|s+|ka><ja|s-|lb>Gamma_{ibka,jalb}
+# <CI|S-*S+|CI> = nelecb + <ib|s+|ka><ja|s-|lb>Gamma_{ibka,jalb}
 #
 # Sz*Sz = Msz^2 = (neleca-nelecb)^2
 # 1) same electron
 #       <p|ss|q>\gamma_qp = <p|q>\gamma_qp = (neleca+nelecb)/4
 # 2) different electrons
-#       <ij|2s1s2|kl>Gamma_{ki,lj}/2
-#       =(<ia|ka><ja|la>Gamma_{kaia,laja} - <ia|ka><jb|lb>Gamma_{kaia,lbjb}
-#       - <ib|kb><ja|la>Gamma_{kbib,laja} + <ib|kb><jb|lb>Gamma_{kbib,lbjb})/4
+#       <ij|2s1s2|kl>Gamma_{ik,jl}/2
+#       =(<ia|ka><ja|la>Gamma_{iaka,jala} - <ia|ka><jb|lb>Gamma_{iaka,jblb}
+#       - <ib|kb><ja|la>Gamma_{ibkb,jala} + <ib|kb><jb|lb>Gamma_{ibkb,jblb})/4
 
 # set aolst for local spin expectation value, which is defined as
 #       <CI|ao><ao|S^2|CI>
 # For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
 def spin_square(ci, norb, nelec, mo_coeff=None, ovlp=1):
-# <CI|S+*S-|CI> = neleca + \delta_{ik}\delta_{jl}Gamma_{kbia,lajb}
-# <CI|S-*S+|CI> = nelecb + \delta_{ik}\delta_{jl}Gamma_{kaib,lbja}
-# <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{kaia,laja} - Gamma_{kaia,lbjb}
-#                                       -Gamma_{kbib,laja} + Gamma_{kbib,lbjb})
+# <CI|S+*S-|CI> = neleca + \delta_{ik}\delta_{jl}Gamma_{iakb,jbla}
+# <CI|S-*S+|CI> = nelecb + \delta_{ik}\delta_{jl}Gamma_{ibka,jalb}
+# <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
+#                                       -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb})
 #               + (neleca+nelecb)/4
     if isinstance(nelec, int):
         neleca = nelecb = nelec // 2
@@ -84,10 +84,10 @@ def spin_square(ci, norb, nelec, mo_coeff=None, ovlp=1):
 
     dm2baab = _make_rdm2_baab(ci, norb, nelec)
     dm2abba = _make_rdm2_abba(ci, norb, nelec)
-    dm2baab = rdm.reorder_rdm(dm1a, dm2baab, inplace=True)[1]
-    dm2abba = rdm.reorder_rdm(dm1b, dm2abba, inplace=True)[1]
-    ssxy =(_bi_trace(dm2baab, ovlpab, ovlpba)
-         + _bi_trace(dm2abba, ovlpba, ovlpab) \
+    dm2baab = rdm.reorder_rdm(dm1b, dm2baab, inplace=True)[1]
+    dm2abba = rdm.reorder_rdm(dm1a, dm2abba, inplace=True)[1]
+    ssxy =(_bi_trace(dm2abba, ovlpab, ovlpba)
+         + _bi_trace(dm2baab, ovlpba, ovlpab) \
          + _trace(dm1a, ovlpaa)
          + _trace(dm1b, ovlpbb)) * .5
     ss = ssxy + ssz
@@ -120,9 +120,9 @@ def local_spin(ci, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
     return spin_square(ci, norb, nelec, mo_coeff, s)
 
 # for S+*S-
-# dm(pq,rs) * [q(beta)^+ p(alpha) s(alpha)^+ r(beta)]
+# dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
-def _make_rdm2_abba(ci, norb, nelec):
+def _make_rdm2_baab(ci, norb, nelec):
     if isinstance(nelec, int):
         neleca = nelecb = nelec // 2
     else:
@@ -135,7 +135,7 @@ def _make_rdm2_abba(ci, norb, nelec):
     nb = cistring.num_strings(norb, nelecb)
     dm1 = numpy.empty((norb,norb))
     dm2 = numpy.empty((norb,norb,norb,norb))
-    fn = _ctypes.dlsym(librdm._handle, 'FCIdm2_abba_kern')
+    fn = _ctypes.dlsym(librdm._handle, 'FCIdm2_baab_kern')
     librdm.FCIspindm12_drv(ctypes.c_void_p(fn),
                            dm1.ctypes.data_as(ctypes.c_void_p),
                            dm2.ctypes.data_as(ctypes.c_void_p),
@@ -146,9 +146,9 @@ def _make_rdm2_abba(ci, norb, nelec):
                            ctypes.c_int(neleca), ctypes.c_int(nelecb),
                            ades_index.ctypes.data_as(ctypes.c_void_p),
                            bcre_index.ctypes.data_as(ctypes.c_void_p))
-    return dm2.transpose(1,0,2,3).copy('C')
-def make_rdm2_abba(ci, norb, nelec):
-    dm2 = _make_rdm2_abba(ci, norb, nelec)
+    return dm2
+def make_rdm2_baab(ci, norb, nelec):
+    dm2 = _make_rdm2_baab(ci, norb, nelec)
     dm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', ci, ci, norb, nelec)
     dm1b, dm2 = rdm.reorder_rdm(dm1b, dm2, inplace=True)
     return dm2
@@ -156,7 +156,7 @@ def make_rdm2_abba(ci, norb, nelec):
 # for S-*S+
 # dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
-def _make_rdm2_baab(ci, norb, nelec):
+def _make_rdm2_abba(ci, norb, nelec):
     if isinstance(nelec, int):
         neleca = nelecb = nelec // 2
     else:
@@ -169,7 +169,7 @@ def _make_rdm2_baab(ci, norb, nelec):
     nb = cistring.num_strings(norb, nelecb)
     dm1 = numpy.empty((norb,norb))
     dm2 = numpy.empty((norb,norb,norb,norb))
-    fn = _ctypes.dlsym(librdm._handle, 'FCIdm2_baab_kern')
+    fn = _ctypes.dlsym(librdm._handle, 'FCIdm2_abba_kern')
     librdm.FCIspindm12_drv(ctypes.c_void_p(fn),
                            dm1.ctypes.data_as(ctypes.c_void_p),
                            dm2.ctypes.data_as(ctypes.c_void_p),
@@ -180,9 +180,9 @@ def _make_rdm2_baab(ci, norb, nelec):
                            ctypes.c_int(neleca), ctypes.c_int(nelecb),
                            acre_index.ctypes.data_as(ctypes.c_void_p),
                            bdes_index.ctypes.data_as(ctypes.c_void_p))
-    return dm2.transpose(1,0,2,3).copy('C')
-def make_rdm2_baab(ci, norb, nelec):
-    dm2 = _make_rdm2_baab(ci, norb, nelec)
+    return dm2
+def make_rdm2_abba(ci, norb, nelec):
+    dm2 = _make_rdm2_abba(ci, norb, nelec)
     dm1a = rdm.make_rdm1_spin1('FCImake_rdm1a', ci, ci, norb, nelec)
     dm1a, dm2 = rdm.reorder_rdm(dm1a, dm2, inplace=True)
     return dm2
