@@ -313,6 +313,8 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             "cint3c2e_ip1_sph"          spheric    (nabla \, \| ))
             "cint3c2e_ip2_sph"          spheric    ( \, \| nabla))
             "cint2c2e_ip1_sph"          spheric    (nabla \| r12 \| ))
+            "cint3c2e_spinor"           spinor     (nabla \, \| ))
+            "cint3c2e_spsp1_spinor"     spinor     (nabla \, \| ))
             "cint3c2e_ip1_spinor"       spinor     (nabla \, \| ))
             "cint3c2e_ip2_spinor"       spinor     ( \, \| nabla))
             "cint3c2e_ipspsp1_spinor"   spinor     (nabla sigma dot p \, sigma dot p \| ))
@@ -368,7 +370,10 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
                                                           c_bas)
     if '3c2e' in intor_name or '2e3c' in intor_name:
         assert(len(shls) == 3)
-        di, dj, dk = map(num_cgto_of, shls)
+        #di, dj, dk = map(num_cgto_of, shls)
+        di = num_cgto_of(shls[0])
+        dj = num_cgto_of(shls[1])
+        dk = _cint.CINTcgto_spheric(ctypes.c_int(shls[2]), c_bas) # spheric-GTO for aux function?
         buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
@@ -383,8 +388,11 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.transpose(3,0,1,2)
     elif '2c2e' in intor_name or '2e2c' in intor_name:
         assert(len(shls) == 2)
-        di, dj = map(num_cgto_of, shls)
-        buf = numpy.empty((di,dj,comp), dtype, order='F')
+        #di, dj = map(num_cgto_of, shls)
+        #buf = numpy.empty((di,dj,comp), dtype, order='F')
+        di = _cint.CINTcgto_spheric(ctypes.c_int(shls[0]), c_bas)
+        dj = _cint.CINTcgto_spheric(ctypes.c_int(shls[1]), c_bas)
+        buf = numpy.empty((di,dj,comp), order='F') # no complex?
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),

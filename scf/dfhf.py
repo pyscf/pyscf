@@ -35,6 +35,8 @@ def density_fit(mf):
     >>> mf.scf()
     -100.005306000435510
     '''
+
+    import pyscf.scf
     class HF(mf.__class__):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
@@ -44,7 +46,10 @@ def density_fit(mf):
             self._keys = self._keys.union(['auxbasis'])
 
         def get_jk(self, mol, dm, hermi=1):
-            return get_jk_(self, mol, dm, hermi)
+            if isinstance(self, pyscf.scf.dhf.UHF):
+                return r_get_jk_(self, mol, dm, hermi)
+            else:
+                return get_jk_(self, mol, dm, hermi)
     return HF()
 
 
@@ -76,10 +81,6 @@ def get_jk_(mf, mol, dms, hermi=1):
     def fjk(dm):
         #:vj = reduce(numpy.dot, (cderi.reshape(-1,nao*nao), dm.reshape(-1),
         #:                        cderi.reshape(-1,nao*nao))).reshape(nao,nao)
-        dmtril = pyscf.lib.pack_tril(dm+dm.T)
-        for i in range(nao):
-            dmtril[i*(i+1)//2+i] *= .5
-
         fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
@@ -92,6 +93,10 @@ def get_jk_(mf, mol, dms, hermi=1):
             pos = e > OCCDROP
             neg = e < -OCCDROP
             if sum(pos)+sum(neg) > 0:
+                dmtril = pyscf.lib.pack_tril(dm+dm.T)
+                for i in range(nao):
+                    dmtril[i*(i+1)//2+i] *= .5
+
                 #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
                 #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
                 cpos = numpy.einsum('ij,j->ij', c[:,pos], numpy.sqrt(e[pos]))
@@ -131,17 +136,18 @@ def get_jk_(mf, mol, dms, hermi=1):
             rargs = (ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(0))
-            dm = numpy.asfortranarray(dm)
+            dm = numpy.asarray(dm, order='C')
             for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = df.load_buf(cderi, b0, b1-b0)
-                buf = reduce(numpy.dot, (eri1, dmtril, eri1))
-                vj += pyscf.lib.unpack_tril(buf, 1)
                 buf = numpy.empty((b1-b0,nao,nao))
                 fdrv(ftrans, fmmm,
                      buf.ctypes.data_as(ctypes.c_void_p),
                      eri1.ctypes.data_as(ctypes.c_void_p),
                      dm.ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(b1-b0), *rargs)
+                rho = numpy.einsum('kii->k', buf)
+                vj += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
+
                 buf1 = numpy.empty((b1-b0,nao,nao))
                 fdrv(ftrans, fcopy,
                      buf1.ctypes.data_as(ctypes.c_void_p),
@@ -159,6 +165,152 @@ def get_jk_(mf, mol, dms, hermi=1):
         vk = numpy.array([x[1] for x in vjk])
     logger.timer(mf, 'vj and vk', *t0)
     return vj, vk
+
+
+def r_get_jk_o0_(mf, mol, dms, hermi=1):
+    '''Relativistic density fitting JK'''
+    from pyscf import df
+    t0 = (time.clock(), time.time())
+    if not hasattr(mf, '_cderi') or mf._cderi is None:
+        log = logger.Logger(mf.stdout, mf.verbose)
+        auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
+        mf._naoaux = auxmol.nao_nr()
+        mf._cderi = df.r_incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
+                                             verbose=log)
+    n2c = mol.nao_2c()
+    c1 = .5 / mol.light_speed
+    def fjk(dm):
+        # dm is 4C density matrix
+        cderi_ll = mf._cderi[0].reshape(-1,n2c,n2c)
+        cderi_ss = mf._cderi[1].reshape(-1,n2c,n2c)
+        vj = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
+        vk = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
+
+        rho =(numpy.dot(mf._cderi[0], dm[:n2c,:n2c].T.reshape(-1))
+            + numpy.dot(mf._cderi[1], dm[n2c:,n2c:].T.reshape(-1)*c1**2))
+        vj[:n2c,:n2c] = numpy.dot(rho, mf._cderi[0]).reshape(n2c,n2c)
+        vj[n2c:,n2c:] = numpy.dot(rho, mf._cderi[1]).reshape(n2c,n2c) * c1**2
+
+        v1 = numpy.einsum('pij,ki->pkj', cderi_ll, dm[:n2c,:n2c])
+        vk[:n2c,:n2c] = numpy.einsum('pik,pkj->ij', cderi_ll, v1)
+        v1 = numpy.einsum('pij,ki->pkj', cderi_ss, dm[n2c:,n2c:])
+        vk[n2c:,n2c:] = numpy.einsum('pik,pkj->ij', cderi_ss, v1) * c1**4
+        v1 = numpy.einsum('pij,ki->pkj', cderi_ll, dm[:n2c,n2c:])
+        vk[:n2c,n2c:] = numpy.einsum('pik,pkj->ij', cderi_ss, v1) * c1**2
+        vk[n2c:,:n2c] = vk[:n2c,n2c:].T.conj()
+        return vj, vk
+
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        vj, vk = fjk(dms)
+    else:
+        vjk = [fjk(dm) for dm in dms]
+        vj = numpy.array([x[0] for x in vjk])
+        vk = numpy.array([x[1] for x in vjk])
+    logger.timer(mf, 'vj and vk', *t0)
+    return vj, vk
+
+def r_get_jk_o1_(mf, mol, dms, hermi=1):
+    '''Relativistic density fitting JK'''
+    from pyscf import df
+    from pyscf.ao2mo import _ao2mo
+    t0 = (time.clock(), time.time())
+    if not hasattr(mf, '_cderi') or mf._cderi is None:
+        log = logger.Logger(mf.stdout, mf.verbose)
+        n2c = mol.nao_2c()
+        auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
+        mf._naoaux = auxmol.nao_nr()
+        if n2c*(n2c+1)/2*mf._naoaux*16 < mf.max_memory*1e6:
+            mf._cderi = df.r_incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
+                                                 aosym='s2', verbose=log)
+        else:
+            assert(0)
+            mf._cderi_file = tempfile.NamedTemporaryFile()
+            mf._cderi = mf._cderi_file.name
+            mf._cderi = df.r_outcore.cholesky_eri(mol, mf._cderi,
+                                                  auxbasis=mf.auxbasis,
+                                                  verbose=log)
+    n2c = mol.nao_2c()
+    c1 = .5 / mol.light_speed
+
+    def fjk(dm):
+        fmmm = df.r_incore._fpointer('RIhalfmmm_r_s2_bra_noconj')
+        fdrv = _ao2mo.libao2mo.AO2MOr_e2_drv
+        ftrans = df.r_incore._fpointer('RItranse2_r_s2')
+        vj = numpy.zeros_like(dm)
+        vk = numpy.zeros_like(dm)
+        fcopy = df.incore._fpointer('RImmm_r_s2_transpose')
+        rargs = (ctypes.c_int(n2c),
+                 ctypes.c_int(0), ctypes.c_int(n2c),
+                 ctypes.c_int(0), ctypes.c_int(0))
+        dmll = numpy.asarray(dm[:n2c,:n2c], order='C')
+        dmls = numpy.asarray(dm[:n2c,n2c:], order='C') * c1
+        dmsl = numpy.asarray(dm[n2c:,:n2c], order='C') * c1
+        dmss = numpy.asarray(dm[n2c:,n2c:], order='C') * c1**2
+        for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+            erill = df.load_buf(mf._cderi[0], b0, b1-b0)
+            eriss = df.load_buf(mf._cderi[1], b0, b1-b0)
+            buf = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)
+            buf1 = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)
+
+            fdrv(ftrans, fmmm,
+                 buf.ctypes.data_as(ctypes.c_void_p),
+                 erill.ctypes.data_as(ctypes.c_void_p),
+                 dmll.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(b1-b0), *rargs) # buf == (P|LL)
+            rho = numpy.einsum('kii->k', buf)
+
+            fdrv(ftrans, fcopy,
+                 buf1.ctypes.data_as(ctypes.c_void_p),
+                 erill.ctypes.data_as(ctypes.c_void_p),
+                 dmll.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(b1-b0), *rargs) # buf1 == (P|LL)
+            vk[:n2c,:n2c] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c))
+
+            fdrv(ftrans, fmmm,
+                 buf.ctypes.data_as(ctypes.c_void_p),
+                 eriss.ctypes.data_as(ctypes.c_void_p),
+                 dmls.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(b1-b0), *rargs) # buf == (P|LS)
+            vk[:n2c,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c)) * c1
+
+            fdrv(ftrans, fmmm,
+                 buf.ctypes.data_as(ctypes.c_void_p),
+                 eriss.ctypes.data_as(ctypes.c_void_p),
+                 dmss.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(b1-b0), *rargs) # buf == (P|SS)
+            rho += numpy.einsum('kii->k', buf)
+            vj[:n2c,:n2c] += pyscf.lib.unpack_tril(numpy.dot(rho, erill), 1)
+            vj[n2c:,n2c:] += pyscf.lib.unpack_tril(numpy.dot(rho, eriss), 1) * c1**2
+
+            fdrv(ftrans, fcopy,
+                 buf1.ctypes.data_as(ctypes.c_void_p),
+                 eriss.ctypes.data_as(ctypes.c_void_p),
+                 dmss.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(b1-b0), *rargs) # buf == (P|SS)
+            vk[n2c:,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c)) * c1**2
+
+            if not hermi == 1:
+                fdrv(ftrans, fmmm,
+                     buf.ctypes.data_as(ctypes.c_void_p),
+                     erill.ctypes.data_as(ctypes.c_void_p),
+                     dmsl.ctypes.data_as(ctypes.c_void_p),
+                     ctypes.c_int(b1-b0), *rargs) # buf == (P|SL)
+                vk[n2c:,:n2c] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c)) * c1
+        if hermi == 1:
+            vk[n2c:,:n2c] = vk[:n2c,n2c:].T.conj()
+        return vj, vk
+
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        vj, vk = fjk(dms)
+    else:
+        vjk = [fjk(dm) for dm in dms]
+        vj = numpy.array([x[0] for x in vjk])
+        vk = numpy.array([x[1] for x in vjk])
+    logger.timer(mf, 'vj and vk', *t0)
+    return vj, vk
+
+def r_get_jk_(mf, mol, dms, hermi=1):
+    return r_get_jk_o1_(mf, mol, dms, hermi)
 
 
 def prange(start, end, step):
@@ -182,6 +334,10 @@ if __name__ == '__main__':
     method.max_memory = 0
     energy = method.scf()
     print(energy), -76.0259362997
+
+    method = density_fit(pyscf.scf.DHF(mol))
+    energy = method.scf()
+    print(energy), -76.0807386852 # normal DHF energy is -76.0815679438127
 
     mol.build(
         verbose = 0,

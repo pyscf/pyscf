@@ -227,11 +227,13 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, dx=0, verbose=None):
         x0 = dx
         g_orb = g_orb0 + h_op(dx)
 
+    norm_gprev = numpy.linalg.norm(g_orb)
+    ah_start_tol = min(norm_gprev, casscf.ah_start_tol)
     g_op = lambda: g_orb
     imic = 0
     for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0, log,
                                                 tol=casscf.ah_conv_tol,
-                                                toloose=casscf.ah_start_tol,
+                                                start_tol=ah_start_tol,
                                                 max_cycle=casscf.ah_max_cycle,
                                                 max_stepsize=1.5,
                                                 lindep=casscf.ah_lindep,
@@ -245,7 +247,6 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, dx=0, verbose=None):
         dr = casscf.unpack_uniq_var(dx1)
         u = list(map(numpy.dot, u, map(mc1step.expmat, dr)))
 
-        norm_gprev = numpy.linalg.norm(g_orb)
 # within few steps, g_orb + \sum_i h_op(dx_i) is a good approximation to the
 # exact gradients. After few updates, decreasing the approx gradients may
 # result in the increase of the real gradient.
@@ -258,6 +259,7 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, dx=0, verbose=None):
            or norm_gorb > norm_gprev \
            or norm_gorb < casscf.conv_tol_grad:
             break
+        norm_gprev = numpy.linalg.norm(g_orb)
 
     t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
     return u, dx, g_orb, imic+ihop
@@ -344,12 +346,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = 0
+    casdm1_old = (0, 0)
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
         u, dx, g_orb, ninner = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
         norm_gorb = numpy.linalg.norm(g_orb)
+        norm_dm1 = numpy.linalg.norm(casdm1[0] - casdm1_old[0]) \
+                 + numpy.linalg.norm(casdm1[1] - casdm1_old[1])
         t3m = log.timer('CAS DM + orbital rotation', *t2m)
         totmicro += 1
 
@@ -399,7 +404,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
-        norm_gorb = numpy.linalg.norm(g_orb)
         log.info('               |grad[o]|=%4.3g, |grad[c]|=%4.3g, |dm1|=%4.3g',
                  norm_gorb, norm_gci, norm_dm1)
         log.timer('CASCI solver', *t3m)

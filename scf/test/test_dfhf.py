@@ -49,6 +49,12 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(scf.ROHF(pmol))
         self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
 
+    def test_dhf(self):
+        pmol = mol.copy()
+        pmol.build(False, False)
+        mf = scf.density_fit(scf.DHF(pmol))
+        self.assertAlmostEqual(mf.scf(), -76.080738685142961, 9)
+
     def test_rhf_symm(self):
         mf = scf.density_fit(scf.RHF(symol))
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)

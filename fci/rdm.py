@@ -134,19 +134,8 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 ##############################
 #
 # 3-particle and 4-particle density matrix for RHF-FCI wfn
-
 #
-# NOTE: this rdm3 is defined as
-# rdm3(p,q,r,s,t,u) = <p^+ q r^+ s t^+ u>
-def make_dm3_o0(fcivec, norb, nelec):
-    # <0|p^+ q r^+ s|i> <i|t^+ u|0>
-    t1 = _trans1(fcivec, norb, nelec)
-    t2 = _trans2(fcivec, norb, nelec)
-    na = t1.shape[0]
-    rdm3 = numpy.dot(t1.reshape(na*na,-1).T, t2.reshape(na*na,-1))
-    return rdm3.reshape((norb,)*6).transpose(1,0,2,3,4,5)
-
-def make_dm3_o1(fcivec, norb, nelec):
+def make_dm123(fcivec, norb, nelec):
     if isinstance(nelec, int):
         neleca = nelecb = nelec//2
     else:
@@ -157,7 +146,9 @@ def make_dm3_o1(fcivec, norb, nelec):
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
-    librdm.FCIrdm3_drv(rdm1.ctypes.data_as(ctypes.c_void_p),
+    kernel = _ctypes.dlsym(librdm._handle, 'FCI3pdm_kern_spin0')
+    librdm.FCIrdm3_drv(ctypes.c_void_p(kernel),
+                       rdm1.ctypes.data_as(ctypes.c_void_p),
                        rdm2.ctypes.data_as(ctypes.c_void_p),
                        rdm3.ctypes.data_as(ctypes.c_void_p),
                        fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -174,13 +165,13 @@ def _complete_dm3_(dm2, dm3):
 # Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
 # complete the full 3-pdm
     def transpose01(ijk, i, j, k):
-        jik = ijk.transpose(1,0,2).copy()
+        jik = ijk.transpose(1,0,2)
         jik[:,j] -= dm2[i,:,k,:]
         jik[i,:] += dm2[j,:,k,:]
         dm3[j,:,i,:,k,:] = jik
         return jik
     def transpose12(ijk, i, j, k):
-        ikj = ijk.transpose(0,2,1).copy()
+        ikj = ijk.transpose(0,2,1)
         ikj[:,:,k] -= dm2[i,:,j,:]
         ikj[:,j,:] += dm2[i,:,k,:]
         dm3[i,:,k,:,j,:] = ikj
@@ -191,25 +182,14 @@ def _complete_dm3_(dm2, dm3):
     for i in range(norb):
         for j in range(i+1):
             for k in range(j+1):
-                tmp = transpose01(dm3[i,:,j,:,k,:], i, j, k)
+                tmp = transpose01(dm3[i,:,j,:,k,:].copy(), i, j, k)
                 tmp = transpose12(tmp, j, i, k)
                 tmp = transpose01(tmp, j, k, i)
                 tmp = transpose12(tmp, k, j, i)
                 tmp = transpose01(tmp, k, i, j)
     return dm3
 
-def make_dm3(fcivec, norb, nelec):
-    #return make_dm3_o0(fcivec, norb, nelec)
-    return make_dm3_o1(fcivec, norb, nelec)[2]
-
-def make_dm4_o0(fcivec, norb, nelec):
-    # <0|p^+ q r^+ s|i> <i|t^+ u|0>
-    t2 = _trans2(fcivec, norb, nelec)
-    na = t2.shape[0]
-    rdm4 = numpy.dot(t2.reshape(na*na,-1).T, t2.reshape(na*na,-1))
-    return rdm4.reshape((norb,)*8).transpose(3,2,1,0,4,5,6,7)
-
-def make_dm4_o1(fcivec, norb, nelec):
+def make_dm1234(fcivec, norb, nelec):
     if isinstance(nelec, int):
         neleca = nelecb = nelec//2
     else:
@@ -221,7 +201,9 @@ def make_dm4_o1(fcivec, norb, nelec):
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
     rdm4 = numpy.empty((norb,)*8)
-    librdm.FCIrdm4_drv(rdm1.ctypes.data_as(ctypes.c_void_p),
+    kernel = _ctypes.dlsym(librdm._handle, 'FCI4pdm_kern_spin0')
+    librdm.FCIrdm4_drv(ctypes.c_void_p(kernel),
+                       rdm1.ctypes.data_as(ctypes.c_void_p),
                        rdm2.ctypes.data_as(ctypes.c_void_p),
                        rdm3.ctypes.data_as(ctypes.c_void_p),
                        rdm4.ctypes.data_as(ctypes.c_void_p),
@@ -240,19 +222,19 @@ def _complete_dm4_(dm3, dm4):
 # Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
 # complete the full 4-pdm
     def transpose01(ijkl, i, j, k, l):
-        jikl = ijkl.transpose(1,0,2,3).copy()
+        jikl = ijkl.transpose(1,0,2,3)
         jikl[:,j] -= dm3[i,:,k,:,l,:]
         jikl[i,:] += dm3[j,:,k,:,l,:]
         dm4[j,:,i,:,k,:,l,:] = jikl
         return jikl
     def transpose12(ijkl, i, j, k, l):
-        ikjl = ijkl.transpose(0,2,1,3).copy()
+        ikjl = ijkl.transpose(0,2,1,3)
         ikjl[:,:,k] -= dm3[i,:,j,:,l,:]
         ikjl[:,j,:] += dm3[i,:,k,:,l,:]
         dm4[i,:,k,:,j,:,l,:] = ikjl
         return ikjl
     def transpose23(ijkl, i, j, k, l):
-        ijlk = ijkl.transpose(0,1,3,2).copy()
+        ijlk = ijkl.transpose(0,1,3,2)
         ijlk[:,:,:,l] -= dm3[i,:,j,:,k,:]
         ijlk[:,:,k,:] += dm3[i,:,j,:,l,:]
         dm4[i,:,j,:,l,:,k,:] = ijlk
@@ -271,65 +253,17 @@ def _complete_dm4_(dm3, dm4):
 #(iljk)-> lijk -> likj -> lkij -> lkji -> ljki -> ljik
     norb = dm3.shape[0]
     for i in range(norb):
-        for l in range(i+1):
-            for j in range(l+1):
-                for k in range(j+1):
-                    tmp = chain(dm4[i,:,j,:,k,:,l,:], i, j, k, l)
+        for k in range(i+1):
+            for j in range(k+1):
+                for l in range(j+1):
+                    tmp = chain(dm4[i,:,j,:,k,:,l,:].copy(), i, j, k, l)
                     tmp = transpose01(tmp, i, k, j, l)
                     tmp = chain(tmp, k, i, j, l)
-                    tmp = transpose01(dm4[i,:,j,:,k,:,l,:], i, j, k, l)
+                    tmp = transpose01(dm4[i,:,j,:,k,:,l,:].copy(), i, j, k, l)
                     tmp = chain(tmp, j, i, k, l)
-                    tmp = transpose01(dm4[i,:,l,:,j,:,k,:], i, l, j, k)
+                    tmp = transpose01(dm4[i,:,l,:,j,:,k,:].copy(), i, l, j, k)
                     tmp = chain(tmp, l, i, j, k)
     return dm4
-
-def make_dm4(fcivec, norb, nelec):
-    #return make_dm4_o0(fcivec, norb, nelec)
-    return make_dm4_o1(fcivec, norb, nelec)[3]
-
-# (6o,6e)   ~ 4MB
-# (8o,8e)   ~ 153MB
-# (10o,10e) ~ 4.8GB
-# t2(*,ij,kl) = E_i^j E_k^l|0>
-def _trans2(fcivec, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    if link_index is None:
-        link_index = cistring.gen_linkstr_index(range(norb), neleca)
-    na, nlink = link_index.shape[:2]
-    fcivec = fcivec.reshape(na,na)
-    t1 = _trans1(fcivec, norb, nelec)
-    t2 = numpy.zeros((na,na,norb,norb,norb,norb))
-    for str0, tab in enumerate(link_index):
-        for a, i, str1, sign in tab:
-            t2[str1,:,a,i] += sign * t1[str0]
-    for k in range(na):
-        for str0, tab in enumerate(link_index):
-            for a, i, str1, sign in tab:
-                t2[k,str1,a,i] += sign * t1[k,str0]
-    return t2
-def _trans1(fcivec, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    if link_index is None:
-        link_index = cistring.gen_linkstr_index(range(norb), neleca)
-    na, nlink = link_index.shape[:2]
-    fcivec = fcivec.reshape(na,na)
-    t1 = numpy.zeros((na,na,norb,norb))
-    for str0, tab in enumerate(link_index):
-        for a, i, str1, sign in tab:
-            t1[str1,:,a,i] += sign * fcivec[str0]
-    for k in range(na):
-        for str0, tab in enumerate(link_index):
-            for a, i, str1, sign in tab:
-                t1[k,str1,a,i] += sign * fcivec[k,str0]
-    return t1
 
 # <p^+ q r^+ s t^+ u> => <p^+ r^+ t^+ u s q>
 # rdm2 is the (reordered) standard 2-pdm
@@ -353,9 +287,5 @@ def reorder_rdm3(rdm1, rdm2, rdm3, inplace=True):
 # <p^+ q r^+ s t^+ u w^+ v> => <p^+ r^+ t^+ w^+ v u s q>
 # rdm2, rdm3 are the (reordered) standard 2-pdm and 3-pdm
 def reorder_rdm4(rdm1, rdm2, rdm3, rdm4, inplace=True):
-    pass
-    if not inplace:
-        rdm4 = rdm4.copy()
-    norb = rdm1.shape[0]
-    return rdm4
+    raise RuntimeError('TODO')
 

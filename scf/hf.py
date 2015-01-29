@@ -72,6 +72,12 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
     cycle = 0
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
+
+    cond = numpy.linalg.cond(s1e)
+    if cond*1e-17 > conv_tol:
+        log.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
+                 'SCF may be inaccurate and hard to converge.', cond)
+
     try:
         adiis = mf.DIIS(mf)
         adiis.space = mf.diis_space

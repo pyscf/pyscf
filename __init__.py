@@ -105,3 +105,4 @@ from pyscf import ao2mo
 
 # modules in ./future are in test
 __path__.append(os.path.join(os.path.dirname(__file__), 'future'))
+__path__.append(os.path.join(os.path.dirname(__file__), 'tools'))

@@ -28,8 +28,9 @@ def _load_file(cderi_file, start_id, count=160, dataname='eri_mo'):
         nset = len(feri['%s/0'%dataname])
         ncol = sum([feri['%s/0/%d'%(dataname,i)].shape[1] for i in range(nset)])
         nrow = min(feri['%s/0/0'%dataname].shape[0]-start_id, count)
+        dtype = feri['%s/0/0'%dataname].dtype
         end = start_id + nrow
-        buf = numpy.empty((comp,nrow,ncol))
+        buf = numpy.empty((comp,nrow,ncol), dtype=dtype)
         for icomp in range(comp):
             p0 = 0
             for i in range(nset):
@@ -41,8 +42,9 @@ def _load_file(cderi_file, start_id, count=160, dataname='eri_mo'):
         nset = len(feri[dataname])
         ncol = sum([feri['%s/%d'%(dataname,i)].shape[1] for i in range(nset)])
         nrow = min(feri['%s/0'%dataname].shape[0]-start_id, count)
+        dtype = feri['%s/0'%dataname].dtype
         end = start_id + nrow
-        buf = numpy.empty((nrow,ncol))
+        buf = numpy.empty((nrow,ncol), dtype=dtype)
         p0 = 0
         for i in range(nset):
             dat = feri['%s/%d'%(dataname,i)]

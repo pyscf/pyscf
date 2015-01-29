@@ -66,7 +66,7 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7,
               istep+1, numpy.linalg.norm(g), norm_x, numpy.max(abs(xtrial)), w_t)
     return w_t, xtrial
 
-def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
+def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, start_tol=1e-4,
                 max_cycle=10, max_stepsize=.6, lindep=1e-14, start_cycle=0,
                 pick_mode=avoid_singular, dot=numpy.dot):
 
@@ -92,7 +92,7 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, toloose=1e-4,
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)
-        if norm_dx < toloose and istep+1 >= start_cycle:
+        if norm_dx < start_tol and istep+1 >= start_cycle:
             yield istep, w_t, xtrial
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, |dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \

@@ -9,7 +9,7 @@
 #include "vhf/fblas.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
-#define BUFBASE         320
+#define BUFBASE         96
 #define SQRT2           1.4142135623730950488
 
 #define BRAKETSYM       1
@@ -54,9 +54,11 @@ static void compress_link(_LinkT *clink, int *link_index,
  * determinant of str1
  */
 
-static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+static double rdm2_a_t1(double *ci0, double *t1,
+                        int bcount, int stra_id, int strb_id,
                         int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
 {
+        ci0 += strb_id;
         const int nnorb = norb * norb;
         int i, j, k, a, str1, sign;
         const _LinkT *tab = clink_indexa + stra_id * nlinka;
@@ -71,12 +73,12 @@ static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 pci = ci0 + str1*nstrb;
                 pt1 = t1 + i*norb+a;
                 if (sign > 0) {
-                        for (k = 0; k < fillcnt; k++) {
+                        for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] += pci[k];
                                 csum += pci[k] * pci[k];
                         }
                 } else {
-                        for (k = 0; k < fillcnt; k++) {
+                        for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] -= pci[k];
                                 csum += pci[k] * pci[k];
                         }
@@ -86,16 +88,17 @@ static double rdm2_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
 }
 
 /*
-static double rdm2_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+static double rdm2_b_t1(double *ci0, double *t1,
+                        int bcount, int stra_id, int strb_id,
                         int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
 {
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
-        const _LinkT *tab = clink_indexb;
+        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
         double *pci = ci0 + stra_id*nstrb;
         double csum = 0;
 
-        for (str0 = 0; str0 < fillcnt; str0++) {
+        for (str0 = 0; str0 < bcount; str0++) {
                 for (j = 0; j < nlinkb; j++) {
                         i    = EXTRACT_I   (tab[j]);
                         a    = EXTRACT_A   (tab[j]);
@@ -109,16 +112,17 @@ static double rdm2_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
         }
         return csum;
 } */
-static double rdm2_0b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+static double rdm2_0b_t1(double *ci0, double *t1,
+                         int bcount, int stra_id, int strb_id,
                          int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
 {
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
-        const _LinkT *tab = clink_indexb;
+        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
         double *pci = ci0 + stra_id*nstrb;
         double csum = 0;
 
-        for (str0 = 0; str0 < fillcnt; str0++) {
+        for (str0 = 0; str0 < bcount; str0++) {
                 memset(t1, 0, sizeof(double) * nnorb);
                 for (j = 0; j < nlinkb; j++) {
                         i    = EXTRACT_I   (tab[j]);
@@ -134,20 +138,20 @@ static double rdm2_0b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
         return csum;
 }
 
-double FCI_t1ci_ms0(double *ci0, double *t1, int fillcnt,
+double FCI_t1ci_ms0(double *ci0, double *t1, int bcount,
                     int stra_id, int strb_id,
                     int norb, int na, int nlink, _LinkT *clink_index)
 {
         double csum;
-        csum = rdm2_0b_t1(ci0, t1, fillcnt, stra_id,
-                          norb, na, nlink, clink_index+strb_id*nlink)
-             + rdm2_a_t1 (ci0+strb_id, t1, fillcnt, stra_id,
+        csum = rdm2_0b_t1(ci0, t1, bcount, stra_id, strb_id,
+                          norb, na, nlink, clink_index)
+             + rdm2_a_t1 (ci0, t1, bcount, stra_id, strb_id,
                           norb, na, nlink, clink_index);
         return csum;
 }
 
 static void tril_particle_symm(double *rdm2, double *tbra, double *tket,
-                               int fillcnt, int norb,
+                               int bcount, int norb,
                                double alpha, double beta)
 {
         const char TRANS_N = 'N';
@@ -155,10 +159,10 @@ static void tril_particle_symm(double *rdm2, double *tbra, double *tket,
         int nnorb = norb * norb;
         int i, j, k, m, n;
         int blk = MIN(((int)(48/norb))*norb, nnorb);
-        double *buf = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf = malloc(sizeof(double) * nnorb*bcount);
         double *p1;
 
-        for (n = 0, k = 0; k < fillcnt; k++) {
+        for (n = 0, k = 0; k < bcount; k++) {
                 p1 = tbra + k * nnorb;
                 for (i = 0; i < norb; i++) {
                 for (j = 0; j < norb; j++, n++) {
@@ -166,16 +170,16 @@ static void tril_particle_symm(double *rdm2, double *tbra, double *tket,
                 } }
         }
 
-//        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+//        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
 //               &alpha, tket, &nnorb, buf, &nnorb, &beta, rdm2, &nnorb);
         for (m = 0; m < nnorb-blk; m+=blk) {
                 n = nnorb - m;
-                dgemm_(&TRANS_N, &TRANS_T, &blk, &n, &fillcnt,
+                dgemm_(&TRANS_N, &TRANS_T, &blk, &n, &bcount,
                        &alpha, tket+m, &nnorb, buf+m, &nnorb,
                        &beta, rdm2+m*nnorb+m, &nnorb);
         }
         n = nnorb - m;
-        dgemm_(&TRANS_N, &TRANS_T, &n, &n, &fillcnt,
+        dgemm_(&TRANS_N, &TRANS_T, &n, &n, &bcount,
                &alpha, tket+m, &nnorb, buf+m, &nnorb,
                &beta, rdm2+m*nnorb+m, &nnorb);
 
@@ -242,10 +246,10 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         pdm2 = (double *)malloc(sizeof(double) * nnorb*nnorb);
         memset(pdm1, 0, sizeof(double) * nnorb);
         memset(pdm2, 0, sizeof(double) * nnorb*nnorb);
-        for (ib = 0; ib < nb; ib += bufbase) {
-                blen = MIN(bufbase, nb-ib);
 #pragma omp for schedule(dynamic, 2) nowait
-                for (strk = 0; strk < na; strk++) {
+        for (strk = 0; strk < na; strk++) {
+                for (ib = 0; ib < nb; ib += bufbase) {
+                        blen = MIN(bufbase, nb-ib);
                         (*dm12kernel)(pdm1, pdm2, bra, ket, blen, strk, ib,
                                       norb, na, nb, nlinka, nlinkb,
                                       clinka, clinkb, symm);
@@ -306,7 +310,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
  * not necessarily be singlet
  */
 void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
-                      int fillcnt, int stra_id, int strb_id,
+                      int bcount, int stra_id, int strb_id,
                       int norb, int na, int nb, int nlinka, int nlinkb,
                       _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -317,23 +321,23 @@ void FCIrdm12kern_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb * fillcnt);
+        double *buf = malloc(sizeof(double) * nnorb * bcount);
 
-        csum = FCI_t1ci_ms0(ket, buf, fillcnt, stra_id, strb_id,
+        csum = FCI_t1ci_ms0(ket, buf, bcount, stra_id, strb_id,
                             norb, na, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
-                dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
+                dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
                        ket+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
                 switch (symm) {
                 case BRAKETSYM:
-                        dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &bcount,
                                &D1, buf, &nnorb, &D1, rdm2, &nnorb);
                         break;
                 case PARTICLESYM:
-                        tril_particle_symm(rdm2, buf, buf, fillcnt, norb, 1, 1);
+                        tril_particle_symm(rdm2, buf, buf, bcount, norb, 1, 1);
                         break;
                 default:
-                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                                &D1, buf, &nnorb, buf, &nnorb,
                                &D1, rdm2, &nnorb);
                 }
@@ -353,7 +357,7 @@ void FCImake_rdm12_ms0(double *rdm1, double *rdm2, double *bra, double *ket,
  * _spin0 assumes the strict symmetry on alpha and beta electrons
  */
 void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
-                        int fillcnt, int stra_id, int strb_id,
+                        int bcount, int stra_id, int strb_id,
                         int norb, int na, int nb, int nlinka, int nlinkb,
                         _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -368,28 +372,29 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D2 = 2;
         const int nnorb = norb * norb;
         int fill0, fill1, i;
-        double csum;
+        double csum = 0;
         double *buf = malloc(sizeof(double) * nnorb * na);
 
-        if (strb_id+fillcnt < stra_id) {
-                fill0 = fillcnt;
-                fill1 = fillcnt;
-                csum = rdm2_0b_t1(ket, buf, fill0, stra_id, norb, na,
-                                  nlinka, clink_indexa+strb_id*nlinka)
-                     + rdm2_a_t1 (ket+strb_id, buf, fill1, stra_id, norb, na,
-                                  nlinka, clink_indexa);
-        } else {
+        if (strb_id+bcount <= stra_id) {
+                fill0 = bcount;
+                fill1 = bcount;
+                csum = rdm2_0b_t1(ket, buf, fill0, stra_id, strb_id,
+                                  norb, na, nlinka, clink_indexa)
+                     + rdm2_a_t1 (ket, buf, fill1, stra_id, strb_id,
+                                  norb, na, nlinka, clink_indexa);
+        } else if (stra_id >= strb_id) {
                 fill0 = stra_id - strb_id;
                 fill1 = stra_id - strb_id + 1;
                 memset(buf+fill0*nnorb, 0, sizeof(double)*nnorb);
-                csum = rdm2_0b_t1(ket, buf, fill0, stra_id, norb, na,
-                                  nlinka, clink_indexa+strb_id*nlinka)
-                     + rdm2_a_t1 (ket+strb_id, buf, fill1, stra_id, norb, na,
-                                  nlinka, clink_indexa);
+                csum = rdm2_0b_t1(ket, buf, fill0, stra_id, strb_id,
+                                  norb, na, nlinka, clink_indexa)
+                     + rdm2_a_t1 (ket, buf, fill1, stra_id, strb_id,
+                                  norb, na, nlinka, clink_indexa);
         }
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fill1, &D2, buf, &nnorb,
                        ket+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
+
                 for (i = fill0*nnorb; i < fill1*nnorb; i++) {
                         buf[i] *= SQRT2;
                 }
@@ -426,7 +431,7 @@ void FCImake_rdm12_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
  * transition density matrix, for ms0, not necessarily be singlet
  */
 void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
-                      int fillcnt, int stra_id, int strb_id,
+                      int bcount, int stra_id, int strb_id,
                       int norb, int na, int nb, int nlinka, int nlinkb,
                       _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -436,23 +441,23 @@ void FCItdm12kern_ms0(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
-        double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf0 = malloc(sizeof(double) * nnorb*bcount);
+        double *buf1 = malloc(sizeof(double) * nnorb*bcount);
 
-        csum = FCI_t1ci_ms0(bra, buf1, fillcnt, stra_id, strb_id,
+        csum = FCI_t1ci_ms0(bra, buf1, bcount, stra_id, strb_id,
                             norb, na, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        csum = FCI_t1ci_ms0(ket, buf0, fillcnt, stra_id, strb_id,
+        csum = FCI_t1ci_ms0(ket, buf0, bcount, stra_id, strb_id,
                             norb, na, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
+        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
                bra+stra_id*na+strb_id, &INC1, &D1, tdm1, &INC1);
         switch (symm) {
         case PARTICLESYM:
-                tril_particle_symm(tdm2, buf1, buf0, fillcnt, norb, D1, D1);
+                tril_particle_symm(tdm2, buf1, buf0, bcount, norb, D1, D1);
                 break;
         default:
-                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                        &D1, buf0, &nnorb, buf1, &nnorb,
                        &D1, tdm2, &nnorb);
         }
@@ -477,7 +482,7 @@ void FCItrans_rdm12_ms0(double *rdm1, double *rdm2,
  * ***********************************************
  */
 void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
-                    int fillcnt, int stra_id, int strb_id,
+                    int bcount, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
                     _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -488,24 +493,24 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf = malloc(sizeof(double) * nnorb*bcount);
 
-        memset(buf, 0, sizeof(double)*nnorb*fillcnt);
-        csum = rdm2_a_t1(ket+strb_id, buf, fillcnt, stra_id,
+        memset(buf, 0, sizeof(double)*nnorb*bcount);
+        csum = rdm2_a_t1(ket, buf, bcount, stra_id, strb_id,
                          norb, nb, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
-                dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
+                dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
                 switch (symm) {
                 case BRAKETSYM:
-                        dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &bcount,
                                &D1, buf, &nnorb, &D1, rdm2, &nnorb);
                         break;
                 case PARTICLESYM:
-                        tril_particle_symm(rdm2, buf, buf, fillcnt, norb, 1, 1);
+                        tril_particle_symm(rdm2, buf, buf, bcount, norb, 1, 1);
                         break;
                 default:
-                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                                &D1, buf, &nnorb, buf, &nnorb,
                                &D1, rdm2, &nnorb);
                 }
@@ -513,7 +518,7 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
         free(buf);
 }
 void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
-                    int fillcnt, int stra_id, int strb_id,
+                    int bcount, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
                     _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -524,23 +529,23 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf = malloc(sizeof(double) * nnorb*bcount);
 
-        csum = rdm2_0b_t1(ket, buf, fillcnt, stra_id,
-                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
+        csum = rdm2_0b_t1(ket, buf, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb);
         if (csum > CSUMTHR) {
-                dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf, &nnorb,
+                dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
                 switch (symm) {
                 case BRAKETSYM:
-                        dsyrk_(&UP, &TRANS_N, &nnorb, &fillcnt,
+                        dsyrk_(&UP, &TRANS_N, &nnorb, &bcount,
                                &D1, buf, &nnorb, &D1, rdm2, &nnorb);
                         break;
                 case PARTICLESYM:
-                        tril_particle_symm(rdm2, buf, buf, fillcnt, norb, 1, 1);
+                        tril_particle_symm(rdm2, buf, buf, bcount, norb, 1, 1);
                         break;
                 default:
-                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                                &D1, buf, &nnorb, buf, &nnorb,
                                &D1, rdm2, &nnorb);
                 }
@@ -549,7 +554,7 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
 }
 
 void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
-                    int fillcnt, int stra_id, int strb_id,
+                    int bcount, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
                     _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -559,25 +564,25 @@ void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
-        double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf0 = malloc(sizeof(double) * nnorb*bcount);
+        double *buf1 = malloc(sizeof(double) * nnorb*bcount);
 
-        memset(buf1, 0, sizeof(double)*nnorb*fillcnt);
-        csum = rdm2_a_t1(bra+strb_id, buf1, fillcnt, stra_id,
+        memset(buf1, 0, sizeof(double)*nnorb*bcount);
+        csum = rdm2_a_t1(bra, buf1, bcount, stra_id, strb_id,
                          norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        memset(buf0, 0, sizeof(double)*nnorb*fillcnt);
-        csum = rdm2_a_t1(ket+strb_id, buf0, fillcnt, stra_id,
+        memset(buf0, 0, sizeof(double)*nnorb*bcount);
+        csum = rdm2_a_t1(ket, buf0, bcount, stra_id, strb_id,
                          norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
+        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
         switch (symm) {
         case PARTICLESYM:
-                tril_particle_symm(tdm2, buf1, buf0, fillcnt, norb, D1, D1);
+                tril_particle_symm(tdm2, buf1, buf0, bcount, norb, D1, D1);
                 break;
         default:
-                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                        &D1, buf0, &nnorb, buf1, &nnorb, &D1, tdm2, &nnorb);
         }
 _normal_end:
@@ -586,7 +591,7 @@ _normal_end:
 }
 
 void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
-                    int fillcnt, int stra_id, int strb_id,
+                    int bcount, int stra_id, int strb_id,
                     int norb, int na, int nb, int nlinka, int nlinkb,
                     _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -596,23 +601,23 @@ void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*fillcnt);
-        double *buf1 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *buf0 = malloc(sizeof(double) * nnorb*bcount);
+        double *buf1 = malloc(sizeof(double) * nnorb*bcount);
 
-        csum = rdm2_0b_t1(bra, buf1, fillcnt, stra_id,
-                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
+        csum = rdm2_0b_t1(bra, buf1, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
-        csum = rdm2_0b_t1(ket, buf0, fillcnt, stra_id,
-                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
+        csum = rdm2_0b_t1(ket, buf0, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
-        dgemv_(&TRANS_N, &nnorb, &fillcnt, &D1, buf0, &nnorb,
+        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
         switch (symm) {
         case PARTICLESYM:
-                tril_particle_symm(tdm2, buf1, buf0, fillcnt, norb, D1, D1);
+                tril_particle_symm(tdm2, buf1, buf0, bcount, norb, D1, D1);
                 break;
         default:
-                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+                dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                        &D1, buf0, &nnorb, buf1, &nnorb, &D1, tdm2, &nnorb);
         }
 _normal_end:
@@ -621,7 +626,7 @@ _normal_end:
 }
 
 void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
-                     int fillcnt, int stra_id, int strb_id,
+                     int bcount, int stra_id, int strb_id,
                      int norb, int na, int nb, int nlinka, int nlinkb,
                      _LinkT *clink_indexa, _LinkT *clink_indexb, int symm)
 {
@@ -630,18 +635,18 @@ void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *bufb = malloc(sizeof(double) * nnorb*fillcnt);
-        double *bufa = malloc(sizeof(double) * nnorb*fillcnt);
+        double *bufb = malloc(sizeof(double) * nnorb*bcount);
+        double *bufa = malloc(sizeof(double) * nnorb*bcount);
 
-        memset(bufa, 0, sizeof(double)*nnorb*fillcnt);
-        csum = rdm2_a_t1(bra+strb_id, bufa, fillcnt, stra_id,
+        memset(bufa, 0, sizeof(double)*nnorb*bcount);
+        csum = rdm2_a_t1(bra, bufa, bcount, stra_id, strb_id,
                          norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        csum = rdm2_0b_t1(ket, bufb, fillcnt, stra_id,
-                          norb, nb, nlinkb, clink_indexb+strb_id*nlinkb);
+        csum = rdm2_0b_t1(ket, bufb, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
 // no particle symmetry between alpha-alpha-beta-beta 2pdm
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fillcnt,
+        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
                &D1, bufb, &nnorb, bufa, &nnorb, &D1, tdm2, &nnorb);
 _normal_end:
         free(bufb);
