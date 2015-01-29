@@ -28,12 +28,10 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(mol.stdout, 0)
+        log = logger.Logger(mol.stdout, verbose)
     auxmol = incore.format_aux_basis(mol, auxbasis)
     j2c = incore.fill_2c2e(mol, auxmol, intor=int2c)
     log.debug('size of aux basis %d', j2c.shape[0])
@@ -115,12 +113,10 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpd
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(mol.stdout, 0)
+        log = logger.Logger(mol.stdout, verbose)
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     nmoi = mo_coeffs[0].shape[1]
@@ -217,12 +213,10 @@ def half_e1(mol, mo_coeffs, swapfile, auxbasis='weigend',
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(mol.stdout, 0)
+        log = logger.Logger(mol.stdout, verbose)
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     nmoi = mo_coeffs[0].shape[1]

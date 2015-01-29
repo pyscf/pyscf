@@ -31,7 +31,7 @@ def format_aux_basis(mol, auxbasis='weigend'):
     return pmol
 
 
-# get (ij|L)
+# (ij|L)
 def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
     assert(aosym in ('s1', 's2ij'))
     atm, bas, env = \
@@ -65,7 +65,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
     return eri
 
 
-# get (L|ij)
+# (L|ij)
 def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
     eri = aux_e2(mol, auxmol, intor, aosym, comp, hermi)
     naux = eri.shape[1]
@@ -89,18 +89,16 @@ def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
     return eri
 
 
-def cholesky_eri(mol, auxbasis='weigend', verbose=None):
+def cholesky_eri(mol, auxbasis='weigend', verbose=0):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
     '''
     t0 = (time.clock(), time.time())
-    if isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
-    elif isinstance(verbose, logger.Logger):
+    if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(mol.stdout, 0)
+        log = logger.Logger(mol.stdout, verbose)
     auxmol = format_aux_basis(mol, auxbasis)
 
     j2c = fill_2c2e(mol, auxmol, intor='cint2c2e_sph')

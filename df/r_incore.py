@@ -129,4 +129,3 @@ if __name__ == '__main__':
 
     cderi = cderi[0].reshape(-1,n2c,n2c)
     print(numpy.allclose(cderi, cderi.transpose(0,2,1).conj()))
-

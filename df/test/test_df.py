@@ -7,6 +7,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
@@ -35,7 +36,6 @@ class KnowValues(unittest.TestCase):
         j3c = j3c.reshape(nao,nao,naoaux)
 
         eri0 = numpy.empty((nao,nao,naoaux))
-        libri.CINTcgto_spheric.restype = ctypes.c_int
         pi = 0
         for i in range(mol.nbas):
             pj = 0
@@ -115,6 +115,33 @@ class KnowValues(unittest.TestCase):
         feri.close()
         self.assertTrue(numpy.allclose(cderi1.T, cderi0.reshape(naux,-1)))
 
+    def test_r_incore(self):
+        j3c = df.r_incore.aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1')
+        nao = mol.nao_2c()
+        naoaux = auxmol.nao_nr()
+        j3c = j3c.reshape(nao,nao,naoaux)
+
+        eri0 = numpy.empty((nao,nao,naoaux), dtype=numpy.complex)
+        pi = 0
+        for i in range(mol.nbas):
+            pj = 0
+            for j in range(mol.nbas):
+                pk = 0
+                for k in range(mol.nbas, mol.nbas+auxmol.nbas):
+                    shls = (i, j, k)
+                    buf = gto.moleintor.getints_by_shell('cint3c2e_spinor',
+                                                         shls, atm, bas, env)
+                    di, dj, dk = buf.shape
+                    eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
+                    pk += dk
+                pj += dj
+            pi += di
+        self.assertTrue(numpy.allclose(eri0, j3c))
+        eri1 = df.r_incore.aux_e2(mol, auxmol, intor='cint3c2e_spinor',
+                                  aosym='s2ij')
+        for i in range(naoaux):
+            j3c[:,:,i] = lib.unpack_tril(eri1[:,i])
+        self.assertTrue(numpy.allclose(eri0, j3c))
 
 
 if __name__ == "__main__":
