@@ -22,7 +22,7 @@ def run(b, mo0=None, dm0=None):
     mf = scf.RHF(mol)
     mf.scf(dm0)
 
-    mc = mcscf.CASSCF(mol, mf, 12, 8)
+    mc = mcscf.CASSCF(mf, 12, 8)
     if mo0 is not None:
         mo0 = lo.orth.vec_lowdin(mo0, mf.get_ovlp())
     else:
@@ -48,7 +48,7 @@ def urun(b, mo0=None, dm0=None):
     mf = scf.UHF(mol)
     mf.scf(dm0)
 
-    mc = mcscf.CASSCF(mol, mf, 12, 8)
+    mc = mcscf.CASSCF(mf, 12, 8)
     if mo0 is not None:
         mo0 =(lo.orth.vec_lowdin(mo0[0], mf.get_ovlp()),
               lo.orth.vec_lowdin(mo0[1], mf.get_ovlp()))

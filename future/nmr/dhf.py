@@ -11,6 +11,7 @@ import sys
 import time
 import numpy
 import pyscf.lib
+from pyscf.lib import logger
 import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
 import pyscf.scf as scf
@@ -83,8 +84,12 @@ def make_rdm1_1(mo1occ, mo0, occ):
         dm1.append(tmp + tmp.T.conj())
     return numpy.array(dm1)
 
-def make_h10giao(mol, dm0, with_gaunt=False):
-    log.debug(mol, 'first order Fock matrix / GIAOs')
+def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+    log.debug('first order Fock matrix / GIAOs')
     n4c = dm0.shape[0]
     n2c = n4c // 2
     c = mol.light_speed
@@ -109,9 +114,14 @@ def make_h10giao(mol, dm0, with_gaunt=False):
         h1[i,n2c:,n2c:] += wg[i]*(.25/c**2) - tg[i]*.5
     return h1
 
-def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False):
+def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
+                verbose=logger.WARN):
     if gauge_orig is not None:
         mol.set_common_origin_(gauge_orig)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     log.debug(mol, 'first order Fock matrix / RKB')
     n4c = dm0.shape[0]
     n2c = n4c // 2
@@ -128,10 +138,15 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False):
     return h1
 
 #TODO the uncouupled force
-def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False):
+def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
+                verbose=logger.WARN):
     if gauge_orig is not None:
         mol.set_common_origin_(gauge_orig)
-    log.debug(mol, 'first order Fock matrix / RMB')
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+    log.debug('first order Fock matrix / RMB')
     n4c = dm0.shape[0]
     n2c = n4c // 2
     c = mol.light_speed
@@ -168,13 +183,14 @@ def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False):
         h1[i,n2c:,n2c:] +=-t1cc * .5 + (v1[i]+v1[i].conj().T) * (.25/c**2)
     return h1
 
-def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False):
+def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
+             verbose=logger.WARN):
     if mb.upper() == 'RMB':
-        h1 = make_h10rmb(mol, dm0, gauge_orig, with_gaunt)
+        h1 = make_h10rmb(mol, dm0, gauge_orig, with_gaunt, verbose)
     else: # RKB
-        h1 = make_h10rkb(mol, dm0, gauge_orig, with_gaunt)
+        h1 = make_h10rkb(mol, dm0, gauge_orig, with_gaunt, verbose)
     if gauge_orig is None:
-        h1 += make_h10giao(mol, dm0, with_gaunt)
+        h1 += make_h10giao(mol, dm0, with_gaunt, verbose)
     return h1
 
 def make_s10(mol, gauge_orig=None, mb='RMB'):
@@ -262,31 +278,37 @@ class NMR(hf.NMR):
             mo10 = self.mo10
         return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
 
-    def make_rdm1_1(self, mo1occ, mo0, occ):
+    def make_rdm1_1(self, mo1occ, mo0=None, occ=None):
+        if mo0 is None: mo0 = self._scf.mo_coeff
+        if occ is None: occ = self._scf.mo_occ
         return make_rdm1_1(mo1occ, mo0, occ)
 
-    def make_h10(self, mol, dm0, gauge_orig=None):
-        t0 = (time.clock(), time.time())
+    def make_h10(self, mol=None, dm0=None, gauge_orig=None):
+        if mol is None: mol = self.mol
+        if dm0 is None: dm0 = self._scf.make_rdm1()
         if gauge_orig is None: gauge_orig = self.gauge_orig
+        t0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
         if self.mb.upper() == 'RMB':
-            h1 = _hack_mol_log(mol, self, make_h10rmb, dm0, gauge_orig,
-                               with_gaunt=self._scf.with_gaunt)
+            h1 = make_h10rmb(mol, dm0, gauge_orig,
+                             with_gaunt=self._scf.with_gaunt, verbose=log)
         else: # RKB
-            h1 = _hack_mol_log(mol, self, make_h10rkb, dm0, gauge_orig,
-                               with_gaunt=self._scf.with_gaunt)
-        t0 = log.timer(self, '%s h1'%self.mb, *t0)
+            h1 = make_h10rkb(mol, dm0, gauge_orig,
+                             with_gaunt=self._scf.with_gaunt, verbose=log)
+        t0 = log.timer('%s h1'%self.mb, *t0)
         pyscf.scf.chkfile.dump(self.chkfile, 'nmr/h1', h1)
 
         if gauge_orig is None:
-            h1 += _hack_mol_log(mol, self, make_h10giao, dm0,
-                                with_gaunt=self._scf.with_gaunt)
-        t0 = log.timer(self, 'GIAO', *t0)
+            h1 += make_h10giao(mol, dm0,
+                               with_gaunt=self._scf.with_gaunt, verbose=log)
+        t0 = log.timer('GIAO', *t0)
         pyscf.scf.chkfile.dump(self.chkfile, 'nmr/h1giao', h1)
         return h1
 
-    def make_s10(self, mol, gauge_orig=None):
+    def make_s10(self, mol=None, gauge_orig=None):
+        if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
-        return _hack_mol_log(mol, self, make_s10, gauge_orig, mb=self.mb)
+        return make_s10(mol, gauge_orig, mb=self.mb)
 
     def _vind(self, mo1):
         '''Induced potential'''
@@ -364,14 +386,6 @@ def _call_giao_vhf1(mol, dm):
         vj[i] = pyscf.lib.hermi_triu(vj[i], 1)
         vk[i] = vk[i] + vk[i].T.conj()
     return vj, vk
-
-def _hack_mol_log(mol, dev, fn, *args, **kwargs):
-    verbose_bak, mol.verbose = mol.verbose, dev.verbose
-    stdout_bak,  mol.stdout  = mol.stdout , dev.stdout
-    res = fn(mol, *args, **kwargs)
-    mol.verbose = verbose_bak
-    mol.stdout  = stdout_bak
-    return res
 
 
 if __name__ == '__main__':

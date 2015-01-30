@@ -338,7 +338,15 @@ def energy(cc, t1, t2, eris, blksize=1):
 
 
 class CC(object):
-    def __init__(self, mol, mf):
+    def __init__(self, mf):
+        from pyscf import gto
+        if isinstance(mf, gto.Mole):
+            raise RuntimeError('''
+You see this error message because of the API updates in pyscf v0.10.
+In the new API, the first argument of CC class is HF objects.  Please see
+http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventions''')
+
+        mol = mf.mol
         self.mol = mol
         self._scf = mf
         self.verbose = mol.verbose
@@ -533,7 +541,7 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf() # -76.0267656731
 
-    mcc = CC(mol, rhf)
+    mcc = CC(rhf)
     eris = mcc.ao2mo()
     emp2, t1, t2 = mcc.init_amps(eris)
     print(abs(t2).sum() - 4.9556571218177)

@@ -121,8 +121,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     >>> import numpy
     >>> from pyscf import gto, scf
     >>> from pyscf.scf import _vhf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> dmsa = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
     >>> dmsb = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
     >>> dms = numpy.vstack((dmsa,dmsb))
@@ -251,8 +250,7 @@ def spin_square(mo, ovlp=1):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', charge=1, spin=1, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', charge=1, spin=1, verbose=0)
     >>> mf = scf.UHF(mol)
     >>> mf.kernel()
     -75.623975516256706
@@ -306,14 +304,17 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), verbose)
+    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
 
 def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
     '''
     if ovlp is None:
         ovlp = hf.get_ovlp(mol)
-    log = logger.Logger(mol.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     pop_a = numpy.einsum('ij->i', dm[0]*ovlp)
     pop_b = numpy.einsum('ij->i', dm[1]*ovlp)
     label = mol.spheric_labels()
@@ -338,7 +339,10 @@ def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     from pyscf.lo import orth
-    log = logger.Logger(mol.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     c = orth.pre_orth_ao_atm_scf(mol)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
     c_inv = numpy.linalg.inv(orth_coeff)
@@ -346,7 +350,7 @@ def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG):
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
 
     log.info(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), verbose)
+    return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 
 def map_rhf_to_uhf(rhf):
     '''Take the settings from RHF object'''
@@ -366,8 +370,7 @@ class UHF(hf.SCF):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', charge=1, spin=1, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', charge=1, spin=1, verbose=0)
     >>> mf = scf.UHF(mol)
     >>> mf.kernel()
     -75.623975516256706
@@ -412,7 +415,8 @@ class UHF(hf.SCF):
             f = adiis.update(s1e, dm, numpy.array(f))
         return f
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
+        if mo_energy is None: mo_energy = self.mo_energy
         n_a = self.nelectron_alpha
         n_b = self.mol.nelectron - n_a
         mo_occ = numpy.zeros_like(mo_energy)
@@ -442,34 +446,31 @@ class UHF(hf.SCF):
             mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-    def energy_elec(self, dm, h1e=None, vhf=None):
+    def energy_elec(self, dm=None, h1e=None, vhf=None):
+        if dm is None: dm = self.make_rdm1()
         return energy_elec(self, dm, h1e, vhf)
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_minao)
+        if mol is None: mol = self.mol
+        return init_guess_by_minao(mol)
 
     def init_guess_by_atom(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_atom)
+        if mol is None: mol = self.mol
+        return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_1e)
+        if mol is None: mol = self.mol
+        return init_guess_by_1e(mol)
 
     def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None:
-            mol = self.mol
-        if chkfile is None:
-            chkfile = self.chkfile
-        return _hack_mol_log(mol, self, init_guess_by_chkfile, chkfile,
-                             project=project)
+        if mol is None: mol = self.mol
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(mol, chkfile, project=project)
 
-    def get_jk(self, mol, dm, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         if self._is_mem_enough() or self._eri is not None:
             if self._eri is None:
@@ -480,10 +481,12 @@ class UHF(hf.SCF):
         log.timer(self, 'vj and vk', *t0)
         return vj, vk
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrices.
         See :func:`scf.uhf.get_veff`
         '''
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
@@ -505,7 +508,7 @@ class UHF(hf.SCF):
         self.build()
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_occ, self.mo_coeff \
+                self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, init_dm=dm0)
 #        if self.nelectron_alpha * 2 < self.mol.nelectron:
 #            self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
@@ -521,11 +524,18 @@ class UHF(hf.SCF):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
-    def mulliken_pop(self, mol, dm, ovlp=None, verbose=logger.DEBUG):
-        return _hack_mol_log(mol, self, mulliken_pop, dm, ovlp, verbose)
+    def mulliken_pop(self, mol=None, dm=None, ovlp=None, verbose=logger.DEBUG):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if ovlp is None: ovlp = self.get_ovlp(mol)
+        log = logger.Logger(self.stdout, verbose)
+        return mulliken_pop(mol, dm, ovlp, log)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol, dm, verbose=logger.DEBUG):
-        return _hack_mol_log(mol, self, mulliken_pop_meta_lowdin_ao, dm, verbose)
+    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None, verbose=logger.DEBUG):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        log = logger.Logger(self.stdout, verbose)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, log)
 
     def spin_square(self, mo_coeff=None, ovlp=None):
         if mo_coeff is None:
@@ -546,14 +556,6 @@ class UHF_DIIS(diis.SCF_DIIS):
         self.err_vec_stack.append(errvec)
         if self.err_vec_stack.__len__() > self.space:
             self.err_vec_stack.pop(0)
-
-def _hack_mol_log(mol, dev, fn, *args, **kwargs):
-    verbose_bak, mol.verbose = mol.verbose, dev.verbose
-    stdout_bak,  mol.stdout  = mol.stdout , dev.stdout
-    res = fn(mol, *args, **kwargs)
-    mol.verbose = verbose_bak
-    mol.stdout  = stdout_bak
-    return res
 
 def _makevhf(vj, vk, nset):
     if nset == 1:

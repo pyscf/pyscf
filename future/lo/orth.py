@@ -49,10 +49,10 @@ def pre_orth_ao_atm_scf(mol):
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb in atm_scf:
-            e_hf, mo_e, mo_occ, mo_c = atm_scf[symb]
+            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
         else:
             symb = mol.atom_pure_symbol(ia)
-            e_hf, mo_e, mo_occ, mo_c = atm_scf[symb]
+            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
         p1 = p0 + mo_e.size
         c[p0:p1,p0:p1] = mo_c
         p0 = p1

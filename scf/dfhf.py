@@ -10,12 +10,15 @@ import pyscf.lib
 from pyscf.lib import logger
 
 
-def density_fit(mf):
+def density_fit(mf, auxbasis='weigend'):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
 
     Args:
         mf : an SCF object
+
+    Kwargs:
+        auxbasis : str
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -23,8 +26,7 @@ def density_fit(mf):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
     >>> mf = scf.density_fit(scf.RHF(mol))
     >>> mf.scf()
     -100.005306000435510
@@ -40,17 +42,37 @@ def density_fit(mf):
     class HF(mf.__class__):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
-            self.auxbasis = 'weigend'
+            self.auxbasis = auxbasis
             self._cderi = None
             self.direct_scf = False
             self._keys = self._keys.union(['auxbasis'])
 
-        def get_jk(self, mol, dm, hermi=1):
+        def get_jk(self, mol=None, dm=None, hermi=1):
+            if mol is None: mol = self.mol
+            if dm is None: dm = self.make_rdm1()
             if isinstance(self, pyscf.scf.dhf.UHF):
                 return r_get_jk_(self, mol, dm, hermi)
             else:
                 return get_jk_(self, mol, dm, hermi)
     return HF()
+
+def density_fit_(mf, auxbasis='weigend'):
+    '''Replace J K constructor of HF object.  See the usage of :func:`density_fit`
+    '''
+    import pyscf.scf
+    def get_jk(mol, dm, hermi=1):
+        if mol is None: mol = self.mol
+        if dm is None: dm = mf.make_rdm1()
+        if isinstance(mf, pyscf.scf.dhf.UHF):
+            return r_get_jk_(mf, mol, dm, hermi)
+        else:
+            return get_jk_(mf, mol, dm, hermi)
+    mf.get_jk = get_jk
+    mf.auxbasis = auxbasis
+    mf._cderi = None
+    mf.direct_scf = False
+    mf._keys = mf._keys.union(['auxbasis'])
+    return mf
 
 
 OCCDROP = 1e-12
@@ -136,7 +158,7 @@ def get_jk_(mf, mol, dms, hermi=1):
             rargs = (ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(0))
-            dm = numpy.asarray(dm, order='C')
+            dm = numpy.asarray(dm, order='F')
             for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = df.load_buf(cderi, b0, b1-b0)
                 buf = numpy.empty((b1-b0,nao,nao))
@@ -167,49 +189,7 @@ def get_jk_(mf, mol, dms, hermi=1):
     return vj, vk
 
 
-def r_get_jk_o0_(mf, mol, dms, hermi=1):
-    '''Relativistic density fitting JK'''
-    from pyscf import df
-    t0 = (time.clock(), time.time())
-    if not hasattr(mf, '_cderi') or mf._cderi is None:
-        log = logger.Logger(mf.stdout, mf.verbose)
-        auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
-        mf._naoaux = auxmol.nao_nr()
-        mf._cderi = df.r_incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
-                                             verbose=log)
-    n2c = mol.nao_2c()
-    c1 = .5 / mol.light_speed
-    def fjk(dm):
-        # dm is 4C density matrix
-        cderi_ll = mf._cderi[0].reshape(-1,n2c,n2c)
-        cderi_ss = mf._cderi[1].reshape(-1,n2c,n2c)
-        vj = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
-        vk = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
-
-        rho =(numpy.dot(mf._cderi[0], dm[:n2c,:n2c].T.reshape(-1))
-            + numpy.dot(mf._cderi[1], dm[n2c:,n2c:].T.reshape(-1)*c1**2))
-        vj[:n2c,:n2c] = numpy.dot(rho, mf._cderi[0]).reshape(n2c,n2c)
-        vj[n2c:,n2c:] = numpy.dot(rho, mf._cderi[1]).reshape(n2c,n2c) * c1**2
-
-        v1 = numpy.einsum('pij,ki->pkj', cderi_ll, dm[:n2c,:n2c])
-        vk[:n2c,:n2c] = numpy.einsum('pik,pkj->ij', cderi_ll, v1)
-        v1 = numpy.einsum('pij,ki->pkj', cderi_ss, dm[n2c:,n2c:])
-        vk[n2c:,n2c:] = numpy.einsum('pik,pkj->ij', cderi_ss, v1) * c1**4
-        v1 = numpy.einsum('pij,ki->pkj', cderi_ll, dm[:n2c,n2c:])
-        vk[:n2c,n2c:] = numpy.einsum('pik,pkj->ij', cderi_ss, v1) * c1**2
-        vk[n2c:,:n2c] = vk[:n2c,n2c:].T.conj()
-        return vj, vk
-
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        vj, vk = fjk(dms)
-    else:
-        vjk = [fjk(dm) for dm in dms]
-        vj = numpy.array([x[0] for x in vjk])
-        vk = numpy.array([x[1] for x in vjk])
-    logger.timer(mf, 'vj and vk', *t0)
-    return vj, vk
-
-def r_get_jk_o1_(mf, mol, dms, hermi=1):
+def r_get_jk_(mf, mol, dms, hermi=1):
     '''Relativistic density fitting JK'''
     from pyscf import df
     from pyscf.ao2mo import _ao2mo
@@ -308,9 +288,6 @@ def r_get_jk_o1_(mf, mol, dms, hermi=1):
         vk = numpy.array([x[1] for x in vjk])
     logger.timer(mf, 'vj and vk', *t0)
     return vj, vk
-
-def r_get_jk_(mf, mol, dms, hermi=1):
-    return r_get_jk_o1_(mf, mol, dms, hermi)
 
 
 def prange(start, end, step):

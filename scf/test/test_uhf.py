@@ -7,8 +7,7 @@ import unittest
 from pyscf import gto
 from pyscf import scf
 
-mol = gto.Mole()
-mol.build(
+mol = gto.M(
     verbose = 5,
     output = '/dev/null',
     atom = '''

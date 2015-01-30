@@ -17,6 +17,21 @@ from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
 
+
+def M(*args, **kwargs):
+    r'''This is a simple way to build up Mole object quickly.
+
+    Args: Same to :func:`Mole.build`
+
+    Examples:
+
+    >>> from pyscf import gto
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
+    '''
+    mol = Mole()
+    mol.build_(*args, **kwargs)
+    return mol
+
 def gto_norm(l, expnt):
     r'''Normalized factor for GTO   :math:`g=r^l e^{-\alpha r^2}`
 
@@ -76,7 +91,6 @@ def format_atom(atoms, origin=0, axes=1):
     >>> gto.format_atom(['9,0,0,0', (1, (0, 0, 1))], origin=(1,1,1))
     [['F', [-1.0, -1.0, -1.0]], ['H', [-1, -1, 0]]]
     '''
-    elementdic = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
     fmt_atoms = []
     def str2atm(line):
         dat = line.split()
@@ -84,7 +98,7 @@ def format_atom(atoms, origin=0, axes=1):
             symb = param.ELEMENTS[int(dat[0])][0]
         else:
             rawsymb = _rm_digit(dat[0])
-            stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
+            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
             symb = dat[0].replace(rawsymb, stdsymb)
         c = numpy.array([float(x) for x in dat[1:4]]) - origin
         return [symb, numpy.dot(axes, c).tolist()]
@@ -103,7 +117,7 @@ def format_atom(atoms, origin=0, axes=1):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
                     rawsymb = _rm_digit(atom[0])
-                    stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
+                    stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
                     symb = atom[0].replace(rawsymb, stdsymb)
                 c = numpy.array(atom[1]) - origin
                 fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
@@ -134,14 +148,13 @@ def format_basis(basis_tab):
         [0.82454700000000003, 0.90469100000000002]],
         [0, [0.18319199999999999, 1.0]]]}
     '''
-    elementdic = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
     fmt_basis = {}
     for atom in basis_tab.keys():
         symb = _symbol(atom)
 
         if isinstance(basis_tab[atom], str):
             rawsymb = _rm_digit(symb)
-            stdsymb = param.ELEMENTS[elementdic[rawsymb.upper()]][0]
+            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
             symb = symb.replace(rawsymb, stdsymb)
             fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
         else:
@@ -189,10 +202,8 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     Examples:
         Compute the overlap between H2 molecule and O atom
 
-    >>> mol1 = gto.Mole()
-    >>> mol1.build(atom='H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> mol2 = gto.Mole()
-    >>> mol2.build(atom='O 0 0 0', basis='sto3g')
+    >>> mol1 = gto.M(atom='H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol2 = gto.M(atom='O 0 0 0', basis='sto3g')
     >>> atm3, bas3, env3 = gto.conc_env(mol1._atm, mol1._bas, mol1._env,
     ...                                 mol2._atm, mol2._bas, mol2._env)
     >>> gto.moleintor.getints('cint1e_ovlp_sph', atm3, bas3, env3, range(2), range(2,5))
@@ -237,10 +248,8 @@ def intor_cross(intor, mol1, mol2, comp=1):
     Examples:
         Compute the overlap between H2 molecule and O atom
 
-    >>> mol1 = gto.Mole()
-    >>> mol1.build(atom='H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> mol2 = gto.Mole()
-    >>> mol2.build(atom='O 0 0 0', basis='sto3g')
+    >>> mol1 = gto.M(atom='H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol2 = gto.M(atom='O 0 0 0', basis='sto3g')
     >>> gto.intor_cross('cint1e_ovlp_sph', mol1, mol2)
     [[ 0.04875181  0.44714688  0.          0.37820346  0.        ]
      [ 0.04875181  0.44714688  0.          0.          0.37820346]]
@@ -362,8 +371,7 @@ def tot_electrons(mol):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 1 0; C 0 0 1', charge=1)
+    >>> mol = gto.M(atom='H 0 1 0; C 0 0 1', charge=1)
     >>> gto.tot_electrons(mol)
     6
     '''
@@ -449,8 +457,7 @@ def nao_nr_range(mol, bas_id0, bas_id1):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> mol = gto.M(atom='O 0 0 0; C 0 0 1', basis='6-31g')
     >>> gto.nao_nr_range(mol, 2, 4)
     (2, 6)
     '''
@@ -483,8 +490,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> mol = gto.M(atom='O 0 0 0; C 0 0 1', basis='6-31g')
     >>> gto.nao_2c_range(mol, 2, 4)
     (4, 12)
     '''
@@ -502,8 +508,7 @@ def ao_loc_nr(mol):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> mol = gto.M(atom='O 0 0 0; C 0 0 1', basis='6-31g')
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
@@ -523,8 +528,7 @@ def ao_loc_2c(mol):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; C 0 0 1', basis='6-31g')
+    >>> mol = gto.M(atom='O 0 0 0; C 0 0 1', basis='6-31g')
     >>> gto.ao_loc_2c(mol)
     [0, 2, 4, 6, 12, 18, 20, 22, 24, 30, 36]
     '''
@@ -607,8 +611,7 @@ def spheric_labels(mol):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
+    >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
     >>> gto.spheric_labels(mol)
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
@@ -645,8 +648,7 @@ def search_shell_id(mol, atm_id, l):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
+    >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
     >>> mol.search_shell_id(1, 1) # Cl p shell
     4
     >>> mol.search_shell_id(1, 2) # Cl d shell
@@ -677,8 +679,7 @@ def search_ao_nr(mol, atm_id, l, m, atmshell):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
+    >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
     >>> mol.search_ao_nr(1, 1, -1, 3) # Cl 3px
     7
     '''
@@ -822,8 +823,7 @@ class Mole(object):
 
     Examples:
 
-    >>> mol = Mole()
-    >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
+    >>> mol = Mole(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
     >>> print(mol.atom_symbol(0))
     H^2
     >>> print(mol.atom_pure_symbol(0))
@@ -833,13 +833,13 @@ class Mole(object):
     >>> print(mol.intor('cint1e_ovlp_sph'))
     [[ 0.99999999  0.43958641]
      [ 0.43958641  0.99999999]]
-    >>> mol.Charge = 1
+    >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
 
     '''
     def __init__(self):
-        self.verbose = log.ERROR
+        self.verbose = log.NOTE
         self.output = None
         self.max_memory = param.MEMORY_MAX
 
@@ -1568,8 +1568,7 @@ class Mole(object):
         Examples:
             Compute the overlap between H2 molecule and O atom
 
-        >>> mol = gto.Mole()
-        >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
         >>> mol.intor_cross('cint1e_ovlp_sph', range(0,3), range(3,5))
         [[ 0.04875181  0.04875181]
          [ 0.44714688  0.44714688]
@@ -1599,6 +1598,7 @@ class Mole(object):
     def spinor_labels(self):
         return spinor_labels(self)
 
+_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
 def _rm_digit(symb):
     if symb.isalpha():

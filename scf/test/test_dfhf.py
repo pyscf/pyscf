@@ -9,8 +9,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import dfhf
 
-mol = gto.Mole()
-mol.build(
+mol = gto.M(
     verbose = 5,
     output = '/dev/null',
     atom = '''
@@ -19,8 +18,7 @@ mol.build(
         H     0    0.757    0.587''',
     basis = 'cc-pvdz',
 )
-symol = gto.Mole()
-symol.build(
+symol = gto.M(
     verbose = 5,
     output = '/dev/null',
     atom = '''
@@ -76,7 +74,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
-        mf = scf.density_fit(scf.RHF(mol))
+        mf = scf.density_fit_(scf.RHF(mol))
         vhf1 = mf.get_veff(mol, dm, hermi=0)
         naux = mf._cderi.shape[0]
         cderi = numpy.empty((naux,nao,nao))

@@ -18,7 +18,7 @@ spin-adapted MP2
 t2[i,j,b,a] = (ia|jb) / D_ij^ab
 '''
 
-def kernel(mp, mo_coeff, mo_energy, nocc, auxbasis='weigend', verbose=None):
+def kernel(mp, mo_energy, mo_coeff, nocc, auxbasis='weigend', verbose=None):
     cderi = mp.ao2mo(mo_coeff, nocc)
     nvir = len(mo_energy) - nocc
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
@@ -48,7 +48,7 @@ class MP2(object):
         self.emp2 = None
         self.t2 = None
 
-    def kernel(self, mo_coeff=None, mo_energy=None, nocc=None):
+    def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
         if mo_coeff is None:
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
@@ -57,7 +57,7 @@ class MP2(object):
             nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
-                kernel(self, mo_coeff, mo_energy, nocc, verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, nocc, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 

@@ -267,12 +267,12 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.scf()
 
-    mc = mcscf.CASSCF(mol, m, 4, 4)
+    mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
     mc.fcisolver.tol = 1e-9
     emc_1 = mc.mc2step()[0]
 
-    mc = mcscf.CASCI(mol, m, 4, 4)
+    mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
     emc_0 = mc.casci()[0]
 
@@ -288,10 +288,10 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.scf()
 
-    mc = mcscf.CASSCF(mol, m, 4, 4)
+    mc = mcscf.CASSCF(m, 4, 4)
     emc_1ref = mc.mc2step()[0]
 
-    mc = mcscf.CASCI(mol, m, 4, 4)
+    mc = mcscf.CASCI(m, 4, 4)
     emc_0ref = mc.casci()[0]
 
     print('DMRGCI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))

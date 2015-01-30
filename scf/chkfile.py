@@ -45,7 +45,7 @@ def load_scf(chkfile):
     fh5.close()
     return mol, scf_rec
 
-def dump_scf(mol, chkfile, hf_energy, mo_energy, mo_occ, mo_coeff):
+def dump_scf(mol, chkfile, hf_energy, mo_energy, mo_coeff, mo_occ):
     '''save temporary results'''
     if h5py.is_hdf5(chkfile):
         fh5 = h5py.File(chkfile)

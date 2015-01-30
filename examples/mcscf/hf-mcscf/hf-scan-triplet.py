@@ -22,7 +22,7 @@ def run(b, dm, mo):
     m = scf.RHF(mol)
     ehf.append(m.scf(dm))
 
-    mc = mcscf.CASSCF(mol, m, 6, 6)
+    mc = mcscf.CASSCF(m, 6, 6)
     if mo is None:
         mo = mcscf.sort_mo(mc, m.mo_coeff, [3,4,5,6,8,9])
     else:

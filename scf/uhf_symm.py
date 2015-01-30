@@ -17,8 +17,6 @@ from pyscf.scf import hf_symm
 from pyscf.scf import uhf
 from pyscf.scf import _vhf
 
-'''
-'''
 
 def analyze(mf, verbose=logger.DEBUG):
     from pyscf.tools import dump_mat
@@ -90,9 +88,9 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), verbose)
+    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), log)
 
-def get_irrep_nelec(mol, mo_occ, mo_coeff):
+def get_irrep_nelec(mol, mo_coeff, mo_occ):
     '''Alpha/beta electron numbers for each irreducible representation.
 
     Args:
@@ -109,12 +107,11 @@ def get_irrep_nelec(mol, mo_occ, mo_coeff):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
     >>> mf = scf.UHF(mol)
     >>> mf.scf()
     -75.623975516256721
-    >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_occ, mf.mo_coeff)
+    >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
     orbsyma = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -144,8 +141,7 @@ class UHF(uhf.UHF):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
     -75.623975516256692
@@ -227,6 +223,10 @@ class UHF(uhf.UHF):
         return numpy.array((ea,eb)), (ca,cb)
 
     def get_occ(self, mo_energy, mo_coeff=None):
+        ''' We cannot assume default mo_energy value, because the orbital
+        energies are sorted after doing SCF.  But in this function, we need
+        the orbital energies are grouped by symmetry irreps
+        '''
         mol = self.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nirrep = mol.symm_orb.__len__()
@@ -308,7 +308,7 @@ class UHF(uhf.UHF):
         self.build(mol)
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_occ, self.mo_coeff \
+                self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, init_dm=dm0)
 
         log.timer(self, 'SCF', *cput0)
@@ -344,10 +344,10 @@ class UHF(uhf.UHF):
     def analyze(self, mo_verbose=logger.DEBUG):
         return analyze(self, mo_verbose)
 
-    def get_irrep_nelec(self, mol=None, mo_occ=None, mo_coeff=None):
+    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return get_irrep_nelec(mol, mo_occ, mo_coeff)
+        return get_irrep_nelec(mol, mo_coeff, mo_occ)
 
 

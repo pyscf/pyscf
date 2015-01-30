@@ -24,12 +24,12 @@ m.scf()
 
 class KnowValues(unittest.TestCase):
     def test_mc2step_4o4e_fci(self):
-        mc = mcscf.CASSCF(mol, m, 4, 4)
+        mc = mcscf.CASSCF(m, 4, 4)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc,-108.91378640707609, 7)
 
     def test_mc2step_4o4e(self):
-        mc = mcscf.CASSCF(mol, m, 4, 4)
+        mc = mcscf.CASSCF(m, 4, 4)
         mc.max_cycle_macro = 10
         mc.fcisolver = fciqmcscf.FCIQMCCI(mol)
         mc.fcisolver.RDMSamples = 5000
@@ -37,7 +37,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc,-108.91378666934476, 7)
 
     def test_mc2step_6o6e(self):
-        mc = mcscf.CASSCF(mol, m, 6, 6)
+        mc = mcscf.CASSCF(m, 6, 6)
         mc.max_cycle_macro = 10
         mc.fcisolver = fciqmcscf.FCIQMCCI(mol)
         mc.fcisolver.RDMSamples = 5000

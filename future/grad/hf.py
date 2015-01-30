@@ -15,7 +15,7 @@ import pyscf.lib.parameters as param
 from pyscf.scf import _vhf
 
 
-def grad_elec(mfg, mo_energy=None, mo_occ=None, mo_coeff=None):
+def grad_elec(mfg, mo_energy=None, mo_coeff=None, mo_occ=None):
     t0 = (time.clock(), time.time())
     mf = mfg._scf
     mol = mfg.mol
@@ -28,7 +28,7 @@ def grad_elec(mfg, mo_energy=None, mo_occ=None, mo_coeff=None):
     vhf = mfg.get_veff(mol, dm0)
     log.timer(mfg, 'gradients of 2e part', *t0)
     f1 = h1 + vhf
-    dme0 = mfg.make_rdm1e(mf.mo_energy, mf.mo_occ, mf.mo_coeff)
+    dme0 = mfg.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
     gs = []
     for ia in range(mol.natm):
         f = mfg.matblock_by_atom(mol, ia, f1) + mfg._grad_rinv(mol, ia)
@@ -57,8 +57,6 @@ def grad_nuc(mol):
                     f[i] += q1 * q2 * (r2[i] - r1[i])/ r**3
         gs.extend(f)
     gs = numpy.array(gs).reshape((mol.natm,3))
-    log.debug(mol, 'gradients of nuclear part')
-    log.debug(mol, str(gs))
     return gs
 
 
@@ -84,7 +82,7 @@ def get_coulomb_hf(mol, dm):
                                mol._atm, mol._bas, mol._env)
     return vj - vk*.5
 
-def make_rdm1e(mo_energy, mo_occ, mo_coeff):
+def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''
     mo0 = mo_coeff[:,mo_occ>0]
     mo0e = mo0 * mo_energy[mo_occ>0] * mo_occ[mo_occ>0]
@@ -118,21 +116,24 @@ class RHF:
 
     @pyscf.lib.omnimethod
     def get_hcore(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         return get_hcore(mol)
 
     @pyscf.lib.omnimethod
     def get_ovlp(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         return get_ovlp(mol)
 
-    def get_veff(self, mol, dm):
-        return _hack_mol_log(mol, self, get_coulomb_hf, dm)
+    def get_veff(self, mol=None, dm=None):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self._scf.make_rdm1()
+        return get_coulomb_hf(mol, dm)
 
-    def make_rdm1e(self, mo_energy, mo_occ, mo_coeff):
-        return make_rdm1e(mo_energy, mo_occ, mo_coeff)
+    def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+        if mo_energy is None: mo_energy = self._scf.mo_energy
+        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
+        if mo_occ is None: mo_occ = self._scf.mo_occ
+        return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     def _grad_rinv(self, mol, ia):
         ''' for given atom, <|\\nabla r^{-1}|> '''
@@ -142,32 +143,33 @@ class RHF:
     def matblock_by_atom(self, mol, atm_id, mat):
         return matblock_by_atom(mol, atm_id, mat)
 
-    def grad_elec(self, mo_energy=None, mo_occ=None, mo_coeff=None):
-        return grad_elec(self, mo_energy, mo_occ, mo_coeff)
+    def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+        if mo_energy is None: mo_energy = self._scf.mo_energy
+        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
+        if mo_occ is None: mo_occ = self._scf.mo_occ
+        return grad_elec(self, mo_energy, mo_coeff, mo_occ)
 
     def grad_nuc(self, mol=None):
         if mol is None: mol = self.mol
-        return _hack_mol_log(mol, self, grad_nuc)
+        gs = grad_nuc(mol)
+        log.debug(self, 'gradients of nuclear part')
+        log.debug(self, str(gs))
+        return gs
 
-    def grad(self, mo_energy=None, mo_occ=None, mo_coeff=None):
+    def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None):
         cput0 = (time.clock(), time.time())
+        if mo_energy is None: mo_energy = self._scf.mo_energy
+        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
+        if mo_occ is None: mo_occ = self._scf.mo_occ
         if self.verbose >= param.VERBOSE_INFO:
             self.dump_flags()
-        grads = self.grad_elec(mo_energy, mo_occ, mo_coeff) + self.grad_nuc()
+        grads = self.grad_elec(mo_energy, mo_coeff, mo_occ) + self.grad_nuc()
         for ia in range(self.mol.natm):
-            log.log(self, 'atom %d %s, force = (%.14g, %.14g, %.14g)', \
-                    ia, self.mol.atom_symbol(ia), *grads[ia])
+            log.note(self, 'atom %d %s, force = (%.14g, %.14g, %.14g)', \
+                     ia, self.mol.atom_symbol(ia), *grads[ia])
         log.timer(self, 'HF gradients', *cput0)
         return grads
 
-
-def _hack_mol_log(mol, dev, fn, *args, **kwargs):
-    verbose_bak, mol.verbose = mol.verbose, dev.verbose
-    stdout_bak,  mol.stdout  = mol.stdout , dev.stdout
-    res = fn(mol, *args, **kwargs)
-    mol.verbose = verbose_bak
-    mol.stdout  = stdout_bak
-    return res
 
 if __name__ == '__main__':
     from pyscf import gto

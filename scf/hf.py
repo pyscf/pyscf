@@ -51,9 +51,8 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
     Examples:
 
     >>> from pyscf import gto, scf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
-    >>> conv, e, mo_e, mo_occ, mo = scf.hf.kernel(scf.hf.SCF(mol), init_dm=numpy.eye(mol.nao_nr()))
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
+    >>> conv, e, mo_e, mo, mo_occ = scf.hf.kernel(scf.hf.SCF(mol), init_dm=numpy.eye(mol.nao_nr()))
     >>> print('conv = %s, E(HF) = %.12f' % (conv, e))
     conv = True, E(HF) = -1.081170784378
     '''
@@ -108,7 +107,7 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
             scf_conv = True
 
         if dump_chk:
-            mf.dump_chk(hf_energy, mo_energy, mo_occ, mo_coeff)
+            mf.dump_chk(hf_energy, mo_energy, mo_coeff, mo_occ)
         cput1 = log.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
@@ -121,10 +120,57 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     hf_energy = mf.energy_tot(dm, h1e, vhf)
     if dump_chk:
-        mf.dump_chk(hf_energy, mo_energy, mo_occ, mo_coeff)
+        mf.dump_chk(hf_energy, mo_energy, mo_coeff, mo_occ)
     log.timer(mf, 'scf_cycle', *cput0)
 
-    return scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff
+    return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
+
+def energy_elec(mf, dm, h1e=None, vhf=None):
+    r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
+    HF potential
+
+    ... math::
+
+        E = \sum_{ij}h_{ij} \gamma_{ji}
+          + \frac{1}{2} \sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl \rangle
+
+    Args:
+        mf : an instance of SCF class
+
+        dm : 2D ndarray
+            one-partical density matrix
+
+    Kwargs:
+        h1e : 2D ndarray
+            Core hamiltonian
+        vhf : 2D ndarray
+            HF potential
+
+    Returns:
+        Hartree-Fock electronic energy and the 2-electron part contribution
+
+    Examples:
+
+    >>> from pyscf import gto, scf
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
+    >>> mf = scf.RHF(mol)
+    >>> mf.scf()
+    >>> dm = mf.make_rdm1()
+    >>> scf.hf.energy_elec(mf, dm)
+    (-1.5176090667746334, 0.60917167853723675)
+    '''
+    if h1e is None: h1e = mf.get_hcore()
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
+    e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
+    log.debug1(mf, 'E_coul = %.15g', e_coul)
+    return e1+e_coul, e_coul
+
+def energy_tot(mf, dm, h1e=None, vhf=None):
+    r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
+    See :func:`scf.hf.energy_elec` for the electron part
+    '''
+    return energy_elec(mf, h1e, vhf, dm)[0] + mf.mol.energy_nuc()
 
 
 
@@ -134,8 +180,7 @@ def get_hcore(mol):
     Examples:
 
     >>> from pyscf import gto, scf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> scf.hf.get_hcore(mol)
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
@@ -159,15 +204,13 @@ def init_guess_by_minao(mol):
     Examples:
 
     >>> from pyscf import gto, scf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> scf.hf.init_guess_by_minao(mol)
     array([[ 0.94758917,  0.09227308],
            [ 0.09227308,  0.94758917]])
     '''
     from pyscf.scf import atom_hf
     from pyscf.scf import addons
-    log.info(mol, 'initial guess from MINAO')
 
     def minao_basis(symb):
         basis_add = pyscf.gto.basis.load('ano', symb)
@@ -225,25 +268,20 @@ def init_guess_by_atom(mol):
     atm_scf = atom_hf.get_atm_nrhf(mol)
     nbf = mol.nao_nr()
     dm = numpy.zeros((nbf, nbf))
-    hf_energy = 0
     p0 = 0
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb in atm_scf:
-            e_hf, mo_e, mo_occ, mo_c = atm_scf[symb]
+            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
         else:
             symb = mol.atom_pure_symbol(ia)
-            e_hf, mo_e, mo_occ, mo_c = atm_scf[symb]
+            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
         p1 = p0 + mo_e.__len__()
         dm[p0:p1,p0:p1] = numpy.dot(mo_c*mo_occ, mo_c.T.conj())
-        hf_energy += e_hf
         p0 = p1
 
-    log.info(mol, '\n')
-    log.info(mol, 'Initial guess from superpostion of atomic densties.')
     for k,v in atm_scf.items():
-        log.debug(mol, 'Atom %s, E = %.12g', k, v[0])
-    log.debug(mol, 'total atomic SCF energy = %.12g', hf_energy)
+        log.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
     return dm
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
@@ -340,58 +378,8 @@ def make_rdm1(mo_coeff, mo_occ):
         mo_occ : 1D ndarray
             Occupancy
     '''
-    mocc = numpy.einsum('ij,j->ij', mo_coeff, mo_occ)
-    return numpy.dot(mocc, mo_coeff.T.conj())
-
-def energy_elec(mf, dm, h1e=None, vhf=None):
-    r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
-    HF potential
-
-    ... math::
-
-        E = \sum_{ij}h_{ij} \gamma_{ji}
-          + \frac{1}{2} \sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl \rangle
-
-    Args:
-        mf : an instance of SCF class
-
-        dm : 2D ndarray
-            one-partical density matrix
-
-    Kwargs:
-        h1e : 2D ndarray
-            Core hamiltonian
-        vhf : 2D ndarray
-            HF potential
-
-    Returns:
-        Hartree-Fock electronic energy and the 2-electron part contribution
-
-    Examples:
-
-    >>> from pyscf import gto, scf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
-    >>> mf = scf.RHF(mol)
-    >>> mf.scf()
-    >>> dm = mf.make_rdm1()
-    >>> scf.hf.energy_elec(mf, dm)
-    (-1.5176090667746334, 0.60917167853723675)
-    '''
-    if h1e is None:
-        h1e = mf.get_hcore()
-    if vhf is None:
-        vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
-    e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
-    log.debug1(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
-
-def energy_tot(mf, dm, h1e=None, vhf=None):
-    r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
-    See :func:`scf.hf.energy_elec` for the electron part
-    '''
-    return energy_elec(mf, h1e, vhf, dm)[0] + mf.mol.energy_nuc()
+    mocc = mo_coeff[:,mo_occ>0]
+    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.T.conj())
 
 ################################################
 # for general DM
@@ -426,8 +414,7 @@ def dot_eri_dm(eri, dm, hermi=0):
 
     >>> from pyscf import gto, scf
     >>> from pyscf.scf import _vhf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
     >>> dms = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
     >>> j, k = scf.hf.dot_eri_dm(eri, dms, hermi=0)
@@ -472,8 +459,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
 
     >>> from pyscf import gto, scf
     >>> from pyscf.scf import _vhf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> dms = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
     >>> j, k = scf.hf.get_jk(mol, dms, hermi=0)
     >>> print(j.shape)
@@ -519,8 +505,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     >>> import numpy
     >>> from pyscf import gto, scf
     >>> from pyscf.scf import _vhf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> dm0 = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
     >>> vhf0 = scf.hf.get_veff(mol, dm0, hermi=0)
     >>> dm1 = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
@@ -555,7 +540,7 @@ def analyze(mf, verbose=logger.DEBUG):
         label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), verbose)
+    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
 
 def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -569,7 +554,10 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     '''
     if ovlp is None:
         ovlp = get_ovlp(mol)
-    log = logger.Logger(mol.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         pop = numpy.einsum('ij->i', dm*ovlp).real
     else: # ROHF
@@ -597,7 +585,10 @@ def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG):
     Rydberg, the orthogonalization are carreid out within each subsets.
     '''
     from pyscf.lo import orth
-    log = logger.Logger(mol.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     c = orth.pre_orth_ao_atm_scf(mol)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
     c_inv = numpy.linalg.inv(orth_coeff)
@@ -607,7 +598,7 @@ def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG):
         dm = reduce(numpy.dot, (c_inv, dm[0]+dm[1], c_inv.T.conj()))
 
     log.info(' ** Mulliken pop on meta-lowdin orthogonal AOs  **')
-    return mulliken_pop(mol, dm, numpy.eye(orth_coeff.shape[0]), verbose)
+    return mulliken_pop(mol, dm, numpy.eye(orth_coeff.shape[0]), log)
 
 
 class SCF(object):
@@ -656,11 +647,10 @@ class SCF(object):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
     >>> mf = scf.hf.SCF(mol)
     >>> mf.verbose = 0
-    >>> mf.level_shift = .4
+    >>> mf.level_shift_factor = .4
     >>> mf.scf()
     -1.0811707843775884
     '''
@@ -688,7 +678,7 @@ class SCF(object):
         self.direct_scf = True
         self.direct_scf_tol = 1e-13
 ##################################################
-# don't modify the following private variables, they are not input options
+# don't modify the following attributes, they are not input options
         self.mo_energy = None
         self.mo_coeff = None
         self.mo_occ = None
@@ -740,13 +730,11 @@ class SCF(object):
         return e, c
 
     def get_hcore(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         return get_hcore(mol)
 
     def get_ovlp(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         return get_ovlp(mol)
 
     def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
@@ -788,18 +776,16 @@ class SCF(object):
             chkfile.dump_scf(self.mol, self.chkfile, *args)
 
     def init_guess_by_minao(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_minao)
+        if mol is None: mol = self.mol
+        return init_guess_by_minao(mol)
 
     def init_guess_by_atom(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_atom)
+        if mol is None: mol = self.mol
+        log.info(self, 'Initial guess from superpostion of atomic densties.')
+        return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         log.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
@@ -808,12 +794,9 @@ class SCF(object):
         return self.make_rdm1(mo_coeff, mo_occ)
 
     def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None:
-            mol = self.mol
-        if chkfile is None:
-            chkfile = self.chkfile
-        return _hack_mol_log(mol, self, init_guess_by_chkfile, chkfile,
-                             project=project)
+        if mol is None: mol = self.mol
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(mol, chkfile, project=project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
@@ -832,26 +815,25 @@ class SCF(object):
         else:
             return self.init_guess_by_minao(mol)
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital
 
-        Args:
+        Kwargs:
             mo_energy : 1D ndarray
                 Obital energies
 
-        Kwargs:
             mo_coeff : 2D ndarray
                 Obital coefficients
 
         Examples:
 
         >>> from pyscf import gto, scf
-        >>> mol = gto.Mole()
-        >>> mol.build(atom='H 0 0 0; F 0 0 1.1')
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
         >>> mf = scf.hf.SCF(mol)
         >>> mf.get_occ(numpy.arange(mol.nao_nr()))
         array([2, 2, 2, 2, 2, 0])
         '''
+        if mo_energy is None: mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = self.mol.nelectron // 2
         mo_occ[:nocc] = 2
@@ -865,20 +847,16 @@ class SCF(object):
 
     # full density matrix for RHF
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        if mo_occ is None:
-            mo_occ = self.mo_occ
+        if mo_occ is None: mo_occ = self.mo_occ
+        if mo_coeff is None: mo_coeff = self.mo_coeff
         return make_rdm1(mo_coeff, mo_occ)
 
     def energy_elec(self, dm=None, h1e=None, vhf=None):
-        if dm is None:
-            dm = self.make_rdm1()
+        if dm is None: dm = self.make_rdm1()
         return energy_elec(self, dm, h1e, vhf)
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
-        if dm is None:
-            dm = self.make_rdm1()
+        if dm is None: dm = self.make_rdm1()
         return self.energy_elec(dm, h1e, vhf)[0] + self.mol.energy_nuc()
 
     def check_dm_conv(self, dm, dm_last, conv_tol):
@@ -903,8 +881,7 @@ class SCF(object):
 
         >>> import numpy
         >>> from pyscf import gto, scf
-        >>> mol = gto.Mole()
-        >>> mol.build(atom='H 0 0 0; F 0 0 1.1')
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
         >>> mf = scf.hf.SCF(mol)
         >>> dm_guess = numpy.eye(mol.nao_nr())
         >>> mf.kernel(dm_guess)
@@ -916,7 +893,7 @@ class SCF(object):
         self.build()
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_occ, self.mo_coeff \
+                self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, init_dm=dm0)
 
         log.timer(self, 'SCF', *cput0)
@@ -925,20 +902,24 @@ class SCF(object):
             self.analyze(self.verbose)
         return self.hf_energy
 
-    def get_jk(self, mol, dm, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         '''Compute J, K matrices for the given density matrix.  See :func:`scf.hf.get_jk`
         '''
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         log.timer(self, 'vj and vk', *t0)
         return vj, vk
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff`
 
         Note the effects of :attr:`SCF.direct_scf` on this function
         '''
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
@@ -947,29 +928,36 @@ class SCF(object):
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
 
-    def dump_energy(self, hf_energy, converged):
+    def dump_energy(self, hf_energy=None, converged=None):
+        if hf_energy is None: hf_energy = self.hf_energy
+        if converged is None: converged = self.converged
         if converged:
-            log.log(self, 'converged SCF energy = %.15g',
-                    hf_energy)
+            log.note(self, 'converged SCF energy = %.15g',
+                     hf_energy)
         else:
-            log.log(self, 'SCF not converge.')
-            log.log(self, 'SCF energy = %.15g after %d cycles',
-                    hf_energy, self.max_cycle)
+            log.note(self, 'SCF not converge.')
+            log.note(self, 'SCF energy = %.15g after %d cycles',
+                     hf_energy, self.max_cycle)
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
-    def mulliken_pop(self, mol, dm, ovlp=None, verbose=logger.DEBUG):
-        if ovlp is None:
-            ovlp = self.get_ovlp(mol)
-        return _hack_mol_log(mol, self, mulliken_pop, dm, ovlp, verbose)
+    def mulliken_pop(self, mol=None, dm=None, ovlp=None, verbose=logger.DEBUG):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if ovlp is None: ovlp = self.get_ovlp(mol)
+        log = logger.Logger(self.stdout, verbose)
+        return mulliken_pop(mol, dm, ovlp, log)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol, dm, verbose=logger.DEBUG):
-        return _hack_mol_log(mol, self, mulliken_pop_meta_lowdin_ao, dm, verbose)
+    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None, verbose=logger.DEBUG):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        log = logger.Logger(self.stdout, verbose)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, log)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
-        return nbf**4/1e6 < self.max_memory
+        return nbf**4/1e6 < self.max_memory*.95
 
 
 ############
@@ -997,14 +985,16 @@ class RHF(SCF):
         SCF.__init__(self, mol)
         self._eri = None
 
-    def get_jk(self, mol, dm, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff`
 
         Note the incore version, which initializes an _eri array in memory.
         '''
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
-        if self._is_mem_enough() or self._eri is not None:
+        if self._eri is not None or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
@@ -1013,11 +1003,13 @@ class RHF(SCF):
         log.timer(self, 'vj and vk', *t0)
         return vj, vk
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff`
         '''
-        if self._is_mem_enough() or self._eri is not None:
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if self._eri is not None or self._is_mem_enough():
             vj, vk = self.get_jk(mol, dm, hermi)
             return vj - vk * .5
         else:
@@ -1025,7 +1017,7 @@ class RHF(SCF):
 
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
-# keep mo_occ, mo_energy, mo_coeff as RHF structure
+# keep mo_energy, mo_coeff, mo_occ as RHF structure
 class ROHF(RHF):
     __doc__ = SCF.__doc__
     def __init__(self, mol):
@@ -1038,21 +1030,13 @@ class ROHF(RHF):
                  (self.mol.nelectron-self.mol.spin)//2, self.mol.spin)
 
     def init_guess_by_minao(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        dm = _hack_mol_log(mol, self, init_guess_by_minao)
+        if mol is None: mol = self.mol
+        dm = init_guess_by_minao(mol)
         return numpy.array((dm*.5,dm*.5))
 
     def init_guess_by_atom(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        dm = _hack_mol_log(mol, self, init_guess_by_atom)
-        return numpy.array((dm*.5,dm*.5))
-
-    def init_guess_by_1e(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        dm = _hack_mol_log(mol, self, init_guess_by_1e)
+        if mol is None: mol = self.mol
+        dm = init_guess_by_atom(mol)
         return numpy.array((dm*.5,dm*.5))
 
     def init_guess_by_1e(self, mol=None):
@@ -1067,10 +1051,8 @@ class ROHF(RHF):
 
     def init_guess_by_chkfile(self, mol=None, chkfile_name=None, project=True):
         from pyscf.scf import addons
-        if mol is None:
-            mol = self.mol
-        if chkfile_name is None:
-            chkfile_name = self.chkfile
+        if mol is None: mol = self.mol
+        if chkfile_name is None: chkfile_name = self.chkfile
         chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
 
         def fproj(mo):
@@ -1168,7 +1150,8 @@ class ROHF(RHF):
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
         return f, fa0, fb0
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
+        if mo_energy is None: mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
@@ -1191,38 +1174,33 @@ class ROHF(RHF):
         return mo_occ
 
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        if mo_occ is None:
-            mo_occ = self.mo_occ
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if mo_occ is None: mo_occ = self.mo_occ
         mo_a = mo_coeff[:,mo_occ>0]
         mo_b = mo_coeff[:,mo_occ==2]
         dm_a = numpy.dot(mo_a, mo_a.T)
         dm_b = numpy.dot(mo_b, mo_b.T)
         return numpy.array((dm_a, dm_b))
 
-    def energy_elec(self, dm, h1e=None, vhf=None):
+    def energy_elec(self, dm=None, h1e=None, vhf=None):
         import pyscf.scf.uhf
+        if dm is None: dm = self.make_rdm1()
         ee, ecoul = pyscf.scf.uhf.energy_elec(self, dm, h1e, vhf)
         log.debug1(self, 'E_coul = %.15g', ecoul)
         return ee, ecoul
 
-    def init_guess_by_minao(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        dm = _hack_mol_log(mol, self, init_guess_by_minao)
-        return numpy.array((dm*.5,dm*.5))
-
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
         for the given density matrix.  See :func:`scf.uhf.get_veff`.
         '''
         import pyscf.scf.uhf
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
-        if self._is_mem_enough() or self._eri is not None:
+        if self._eri is not None or self._is_mem_enough():
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         if self.direct_scf:
@@ -1234,14 +1212,6 @@ class ROHF(RHF):
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         return vhf
-
-def _hack_mol_log(mol, dev, fn, *args, **kwargs):
-    verbose_bak, mol.verbose = mol.verbose, dev.verbose
-    stdout_bak,  mol.stdout  = mol.stdout , dev.stdout
-    res = fn(mol, *args, **kwargs)
-    mol.verbose = verbose_bak
-    mol.stdout  = stdout_bak
-    return res
 
 
 if __name__ == '__main__':

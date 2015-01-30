@@ -23,7 +23,7 @@ m = scf.RHF(mol)
 print('HF     = %.15g' % m.scf())
 
 # Default running of MCSCF
-mc = mcscf.CASSCF(mol, m, 4, (4,2))
+mc = mcscf.CASSCF(m, 4, (4,2))
 mc.stdout.write('** Triplet, using spin1 ci solver **\n')
 emc1 = mc.mc1step()[0]
 
@@ -37,7 +37,7 @@ mol.build(False, False)
 m = scf.RHF(mol)
 print('HF     = %.15g' % m.scf())
 
-mc = mcscf.CASSCF(mol, m, 4, 6)
+mc = mcscf.CASSCF(m, 4, 6)
 # change the CAS space FCI solver. e.g. to DMRG, FCIQMC
 mc.fcisolver = fci.direct_spin1
 # Initial guess of MCSCF with given CI coefficients
@@ -60,7 +60,7 @@ mol.build(False, False)
 m = scf.RHF(mol)
 print('HF     = %.15g' % m.scf())
 
-mc = mcscf.CASSCF(mol, m, 6, 6)
+mc = mcscf.CASSCF(m, 6, 6)
 mc.fcisolver = fci.direct_spin0
 # Change CAS active space
 # MO index for CAS space to generate initial guess

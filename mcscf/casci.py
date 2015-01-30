@@ -23,7 +23,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
 
-def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
+def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     '''CAS sapce one-electron hamiltonian
 
     Args:
@@ -33,6 +33,7 @@ def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
         A tuple, the first is the effective one-electron hamiltonian defined in CAS space,
         the second is the electronic energy from core.
     '''
+    if mo_coeff is None: mo_coeff = casci.mo_coeff
     if ncas is None: ncas = casci.ncas
     if ncore is None: ncore = casci.ncore
     mo_core = mo_coeff[:,:ncore]
@@ -50,11 +51,11 @@ def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     return h1eff, energy_core
 
-def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
     '''CASCI solver
     '''
-    if verbose is None:
-        verbose = casci.verbose
+    if verbose is None: verbose = casci.verbose
+    if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = pyscf.lib.logger.Logger(casci.stdout, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start CASCI')
@@ -78,7 +79,7 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    log.info('CASCI E = %.15g, E(CI) = %.15g', e_tot, e_cas)
+    log.note('CASCI E = %.15g, E(CI) = %.15g', e_tot, e_cas)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -105,7 +106,7 @@ class CASCI(object):
             the FCISolver to this attribute, e.g.
 
             >>> from pyscf import fci
-            >>> mc = mcscf.CASSCF(mol, mf, 4, 4)
+            >>> mc = mcscf.CASSCF(mf, 4, 4)
             >>> mc.fcisolver = fci.solver(mol, singlet=True)
             >>> mc.fcisolver = fci.direct_spin1.FCISolver(mol)
 
@@ -126,15 +127,15 @@ class CASCI(object):
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
-    >>> mc = mcscf.CASCI(mol, mf, 6, 6)
+    >>> mc = mcscf.CASCI(mf, 6, 6)
     >>> mc.kernel()[0]
     -108.980200816243354
     '''
-    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf, ncas, nelecas, ncore=None):
+        mol = mf.mol
         self.mol = mol
         self._scf = mf
         self.verbose = mol.verbose
@@ -162,6 +163,8 @@ class CASCI(object):
         self.fcisolver.max_cycle = 50
         self.fcisolver.conv_tol = 1e-8
 
+##################################################
+# don't modify the following attributes, they are not input options
         self.mo_coeff = mf.mo_coeff
         self.ci = None
         self.e_tot = 0
@@ -184,12 +187,18 @@ class CASCI(object):
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
 
-    def get_veff(self, mol, dm, hermi=1):
+    def get_veff(self, mol=None, dm=None, hermi=1):
+        if mol is None: mol = self.mol
+        if dm is None:
+            mocore = self.mo_coeff[:,:self.ncore]
+            dm = numpy.dot(mocore, mocore.T) * 2
 # don't call self._scf.get_veff, because ROHF return alpha,beta potential separately
         vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
         return vj - vk * .5
 
-    def ao2mo(self, mo_coeff):
+    def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
         nao, nmo = mo_coeff.shape
         if self._scf._eri is not None and \
            (nao**2*nmo**2+nmo**4*2)/4*8/1e6 > self.max_memory:
@@ -203,8 +212,7 @@ class CASCI(object):
         return eri
 
     def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
+        if mo_coeff is None: mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, ncore)
 
     def kernel(self, *args, **kwargs):
@@ -276,14 +284,14 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = CASCI(mol, m, 4, 4)
+    mc = CASCI(m, 4, 4)
     mc.fcisolver = fci.solver(mol)
     emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
-    mc = CASCI(mol, m, 4, (3,1))
+    mc = CASCI(m, 4, (3,1))
     #mc.fcisolver = fci.direct_spin1
     mc.fcisolver = fci.solver(mol, False)
     emc = mc.casci()[0]
@@ -312,13 +320,13 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = CASCI(mol, m, 9, 8)
+    mc = CASCI(m, 9, 8)
     mc.fcisolver = fci.solver(mol)
     emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     print(emc - -227.948912536)
 
-    mc = CASCI(mol, m, 9, (5,3))
+    mc = CASCI(m, 9, (5,3))
     #mc.fcisolver = fci.direct_spin1
     mc.fcisolver = fci.solver(mol, False)
     emc = mc.casci()[0]

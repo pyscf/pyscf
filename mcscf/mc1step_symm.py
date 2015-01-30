@@ -17,12 +17,12 @@ from pyscf.mcscf import mc2step
 
 
 class CASSCF(mc1step.CASSCF):
-    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-        assert(mol.symmetry)
+    def __init__(self, mf, ncas, nelecas, ncore=None):
+        assert(mf.mol.symmetry)
 # Ag, A1 or A
 #TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
-        mc1step.CASSCF.__init__(self, mol, mf, ncas, nelecas, ncore)
+        mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore)
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
         if mo_coeff is None:
@@ -149,7 +149,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = CASSCF(mol, m, 6, 4)
+    mc = CASSCF(m, 6, 4)
     mc.fcisolver = pyscf.fci.solver(mol)
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
@@ -158,7 +158,7 @@ if __name__ == '__main__':
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print(emc - -76.0873923174, emc - -76.0926176464)
 
-    mc = CASSCF(mol, m, 6, (3,1))
+    mc = CASSCF(m, 6, (3,1))
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
     mc.verbose = 4

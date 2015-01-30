@@ -11,7 +11,7 @@ m = scf.RHF(mol)
 print(m.scf())
 
 from pyscf import mcscf
-mc = mcscf.CASSCF(mol, m, 6, 6)
+mc = mcscf.CASSCF(m, 6, 6)
 emc = mc.mc1step()[0]
 mc.analyze()
 print('E = %.9g' % emc)

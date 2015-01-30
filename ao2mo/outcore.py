@@ -17,7 +17,7 @@ from pyscf.ao2mo import _ao2mo
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
          intor='cint2e_sph', aosym='s4', comp=1,
-         max_memory=1000, ioblk_size=256, verbose=0, compact=True):
+         max_memory=1000, ioblk_size=256, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
     Args:
@@ -84,19 +84,18 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     ...     f5 = h5py.File(h5file)
     ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     ...     f5.close()
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> ao2mo.outcore.full(mol, mo1, 'full.h5')
     >>> view('full.h5')
     dataset ['eri_mo'], shape (55, 55)
-    >>> ao2mo.outcore.full(mol, (mo1,mo2,mo3,mo3), 'full.h5', dataname='new', compact=False)
+    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', dataname='new', compact=False)
     >>> view('full.h5', 'new')
     dataset ['eri_mo', 'new'], shape (100, 100)
-    >>> ao2mo.outcore.full(mol, (mo1,mo1,mo1,mo1), 'full.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 100)
-    >>> ao2mo.outcore.full(mol, (mo1,mo1,mo1,mo1), 'full.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
@@ -106,7 +105,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             intor='cint2e_sph', aosym='s4', comp=1,
-            max_memory=1000, ioblk_size=256, verbose=0, compact=True):
+            max_memory=1000, ioblk_size=256, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
 
@@ -175,8 +174,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     ...     f5 = h5py.File(h5file)
     ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     ...     f5.close()
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
     >>> mo3 = numpy.random.random((mol.nao_nr(), 6))
@@ -206,10 +204,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_0pass = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
-    elif isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
     else:
-        log = logger.Logger(mol.stdout, mol.verbose)
+        log = logger.Logger(mol.stdout, verbose)
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
@@ -323,7 +319,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
             intor='cint2e_sph', aosym='s4', comp=1,
-            max_memory=1000, ioblk_size=256, verbose=0, compact=True,
+            max_memory=1000, ioblk_size=256, verbose=logger.WARN, compact=True,
             ao2mopt=None):
     r'''Half transfer arbitrary spherical AO integrals to MO integrals
     for the given two sets of orbitals
@@ -379,10 +375,8 @@ def half_e1(mol, mo_coeffs, swapfile,
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
-    elif isinstance(verbose, int):
-        log = logger.Logger(mol.stdout, verbose)
     else:
-        log = logger.Logger(mol.stdout, mol.verbose)
+        log = logger.Logger(mol.stdout, verbose)
 
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
 
@@ -450,7 +444,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     return swapfile
 
 def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
-                verbose=0, compact=True):
+                verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
     This function is a wrap for :func:`ao2mo.outcore.general`.  It's not really
     IO free.  The returned MO integrals are held in memory.  For backward compatibility,
@@ -509,32 +503,29 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
             and return the "plain" MO integrals
 
     Returns:
-        None
+        2D/3D MO-integral array.  They may or may not have the permutation
+        symmetry, depending on the given orbitals, and the kwargs compact.  If
+        the four sets of orbitals are identical, the MO integrals will at most
+        have 4-fold symmetry.
 
     Examples:
 
     >>> from pyscf import gto
     >>> from pyscf import ao2mo
-    >>> import h5py
-    >>> def view(h5file, dataname='eri_mo'):
-    ...     f5 = h5py.File(h5file)
-    ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
-    ...     f5.close()
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
-    >>> ao2mo.outcore.full(mol, mo1, 'full.h5')
-    >>> view('full.h5')
-    dataset ['eri_mo'], shape (55, 55)
-    >>> ao2mo.outcore.full(mol, (mo1,mo2,mo3,mo3), 'full.h5', dataname='new', compact=False)
-    >>> view('full.h5', 'new')
-    dataset ['eri_mo', 'new'], shape (100, 100)
-    >>> ao2mo.outcore.full(mol, (mo1,mo1,mo1,mo1), 'full.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
-    >>> view('full.h5')
-    dataset ['eri_mo', 'new'], shape (3, 100, 100)
-    >>> ao2mo.outcore.full(mol, (mo1,mo1,mo1,mo1), 'full.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
-    >>> view('full.h5')
-    dataset ['eri_mo', 'new'], shape (3, 100, 55)
+    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1)
+    >>> print(eri1.shape)
+    (55, 55)
+    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, compact=False)
+    >>> print(eri1.shape)
+    (100, 100)
+    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> print(eri1.shape)
+    (3, 100, 100)
+    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> print(eri1.shape)
+    (3, 100, 55)
     '''
     erifile = tempfile.NamedTemporaryFile()
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
@@ -544,7 +535,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     return numpy.array(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
-                   verbose=0, compact=True):
+                   verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.  This function is a wrap for
     :func:`ao2mo.outcore.general`.  It's not really IO free.  The returned MO
@@ -585,9 +576,10 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
             and return the "plain" MO integrals
 
     Returns:
-        ndarray of transformed MO integrals.  The MO integrals may or may not
-        have the permutation symmetry, depending on the given orbitals, and
-        the kwargs compact.
+        2D/3D MO-integral array.  They may or may not have the permutation
+        symmetry, depending on the given orbitals, and the kwargs compact.  If
+        the four sets of orbitals are identical, the MO integrals will at most
+        have 4-fold symmetry.
 
     Examples:
 
@@ -598,8 +590,7 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
     ...     f5 = h5py.File(h5file)
     ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     ...     f5.close()
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
     >>> mo3 = numpy.random.random((mol.nao_nr(), 6))

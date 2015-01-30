@@ -422,14 +422,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     else:
         log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
-    log.log('1-step CASSCF, energy = %.15g', e_tot)
+    log.note('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 
 
 class CASSCF(casci_uhf.CASCI):
-    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-        casci_uhf.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
+    def __init__(self, mf, ncas, nelecas, ncore=None):
+        casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 # the max orbital rotation and CI increment, prefer small step size
         self.max_orb_stepsize = .03
 # small max_ci_stepsize is good to converge, since steepest descent is used
@@ -455,6 +455,9 @@ class CASSCF(casci_uhf.CASCI):
         self.natorb = False
 
         self.fcisolver.max_cycle = 50
+
+##################################################
+# don't modify the following attributes, they are not input options
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
@@ -744,7 +747,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = CASSCF(mol, m, 4, (2,1))
+    mc = CASSCF(m, 4, (2,1))
     #mo = m.mo_coeff
     mo = addons.sort_mo(mc, m.mo_coeff, [(3,4,5,6),(3,4,6,7)], 1)
     emc = kernel(mc, mo, micro=4, verbose=4)[1]
@@ -764,7 +767,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = CASSCF(mol, m, 4, (2,1))
+    mc = CASSCF(m, 4, (2,1))
     mc.verbose = 4
     #mo = m.mo_coeff
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7), 1)

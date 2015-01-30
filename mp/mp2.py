@@ -22,7 +22,7 @@ t2[i,j,b,a] = (ia|jb) / D_ij^ab
 # (ij|kl) => (ij|ol) => (ol|ij) => (ol|oj) => (ol|ov) => (ov|ov)
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 
-def kernel(mp, mo_coeff, mo_energy, nocc, verbose=None):
+def kernel(mp, mo_energy, mo_coeff, nocc, verbose=None):
     ovov = mp.ao2mo(mo_coeff, nocc)
 
     nvir = len(mo_energy) - nocc
@@ -40,7 +40,7 @@ def kernel(mp, mo_coeff, mo_energy, nocc, verbose=None):
 
     return emp2, t2
 
-def make_rdm1(mp, mo_coeff, mo_energy, nocc, verbose=None):
+def make_rdm1(mp, mo_energy, mo_coeff, nocc, verbose=None):
     ovov = mp.ao2mo(mo_coeff, nocc)
     nmo = len(mo_energy)
     nvir = nmo - nocc
@@ -81,7 +81,7 @@ class MP2(object):
         self.emp2 = None
         self.t2 = None
 
-    def kernel(self, mo_coeff=None, mo_energy=None, nocc=None):
+    def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
         if mo_coeff is None:
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
@@ -90,7 +90,7 @@ class MP2(object):
             nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
-                kernel(self, mo_coeff, mo_energy, nocc, verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, nocc, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
@@ -165,5 +165,5 @@ if __name__ == '__main__':
     dm1ref[:nocc,:nocc] = dm1occ[ ::2, ::2]+dm1occ[1::2,1::2]
     dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
     dm1ref = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
-    rdm1 = make_rdm1(pt, mf.mo_coeff, mf.mo_energy, nocc)
+    rdm1 = make_rdm1(pt, mf.mo_energy, mf.mo_coeff, nocc)
     print(numpy.allclose(rdm1, dm1ref))

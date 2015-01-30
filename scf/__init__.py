@@ -7,8 +7,7 @@
 Simple usage::
 
     >>> from pyscf import gto, scf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1')
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1')
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
 
@@ -91,7 +90,7 @@ from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import diis
 from pyscf.scf import addons
-from pyscf.scf.dfhf import density_fit
+from pyscf.scf.dfhf import density_fit, density_fit_
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *

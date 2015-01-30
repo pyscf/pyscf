@@ -29,11 +29,10 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
-    >>> mc = mcscf.CASSCF(mol, mf, 4, 4)
+    >>> mc = mcscf.CASSCF(mf, 4, 4)
     >>> cas_list = [5,6,8,9] # pi orbitals
     >>> mo = mcscf.sort_mo(mc, mf.mo_coeff, cas_list)
     >>> mc.kernel(mo)[0]
@@ -96,7 +95,7 @@ def project_init_guess(casscf, init_mo):
         mol.build(atom='H 0 0 0; F 0 0 0.8', basis='ccpvdz', verbose=0)
         mf = scf.RHF(mol)
         mf.scf()
-        mc = mcscf.CASSCF(mol, mf, 6, 6)
+        mc = mcscf.CASSCF(mf, 6, 6)
         mo = mcscf.sort_mo(mc, mf.mo_coeff, [3,4,5,6,8,9])
         print('E(0.8) = %.12f' % mc.kernel(mo)[0])
         init_mo = mc.mo_coeff
@@ -105,7 +104,7 @@ def project_init_guess(casscf, init_mo):
             mol.build(0, 0)
             mf = scf.RHF(mol)
             mf.scf()
-            mc = mcscf.CASSCF(mol, mf, 6, 6)
+            mc = mcscf.CASSCF(mf, 6, 6)
             mo = mcscf.project_init_guess(mc, init_mo)
             print('E(%2.1f) = %.12f' % (b, mc.kernel(mo)[0]))
             init_mo = mc.mo_coeff
@@ -173,11 +172,10 @@ def make_rdm1(casscf, fcivec=None, mo_coeff=None):
 
     >>> import scipy.linalg
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='sto-3g', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='sto-3g', verbose=0)
     >>> mf = scf.RHF(mol)
     >>> res = mf.scf()
-    >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+    >>> mc = mcscf.CASSCF(mf, 6, 6)
     >>> res = mc.kernel()
     >>> natocc = numpy.linalg.eigh(mcscf.make_rdm1(mc), mf.get_ovlp(), type=2)[0]
     >>> print(natocc)
@@ -368,11 +366,10 @@ def spin_square(casscf, fcivec=None, mo_coeff=None, ovlp=None):
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; O 0 0 1', basis='sto-3g', spin=2, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; O 0 0 1', basis='sto-3g', spin=2, verbose=0)
     >>> mf = scf.UHF(mol)
     >>> res = mf.scf()
-    >>> mc = mcscf.CASSCF(mol, mf, 4, 6)
+    >>> mc = mcscf.CASSCF(mf, 4, 6)
     >>> res = mc.kernel()
     >>> print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
     S^2 = 3.9831589, 2S+1 = 4.1149284
@@ -418,7 +415,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
 
-    mc = mc1step.CASSCF(mol, m, 6, 6)
+    mc = mc1step.CASSCF(m, 6, 6)
     mc.verbose = 4
     emc, e_ci, fcivec, mo = mc.mc1step()
     print(ehf, emc, emc-ehf)

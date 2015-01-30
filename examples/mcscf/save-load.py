@@ -20,7 +20,7 @@ m = scf.RHF(mol)
 m.get_occ = scf.addons.dynamic_occ(m, 1e-3)
 m.scf()
 
-mc = mcscf.CASSCF(mol, m, 6, (4,2))
+mc = mcscf.CASSCF(m, 6, (4,2))
 # Change the default CASSCF save_mo_coeff function. Save every MO coefficients
 # for each CAS iteration step
 def save_mo_coeff(mo_coeff, imacro, imicro):
@@ -35,7 +35,7 @@ mc.max_cycle_macro = 10
 mc.conv_tol = 1e-4
 e1 = mc.mc1step()[0]
 
-mc = mcscf.CASSCF(mol, m, 6, (4,2))
+mc = mcscf.CASSCF(m, 6, (4,2))
 mc.fcisolver = pyscf.fci.direct_spin1
 mc.max_orb_stepsize = .05
 mc.max_cycle_micro = 3

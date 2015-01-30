@@ -15,11 +15,9 @@ from pyscf.scf import diis
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 
-'''
-'''
 
 
-# mo_coeff, mo_occ, mo_energy are all in nosymm representation
+# mo_energy, mo_coeff, mo_occ are all in nosymm representation
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
@@ -64,18 +62,18 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), verbose)
+    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), log)
 
-def get_irrep_nelec(mol, mo_occ, mo_coeff):
+def get_irrep_nelec(mol, mo_coeff, mo_occ):
     '''Electron numbers for each irreducible representation.
 
     Args:
         mol : an instance of :class:`Mole`
             To provide irrep_id, and spin-adapted basis
-        mo_occ : 1D ndarray
-            Regular occupancy, without grouping for irreps
         mo_coeff : 2D ndarray
             Regular orbital coefficients, without grouping for irreps
+        mo_occ : 1D ndarray
+            Regular occupancy, without grouping for irreps
 
     Returns:
         irrep_nelec : dict
@@ -83,12 +81,11 @@ def get_irrep_nelec(mol, mo_occ, mo_coeff):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
     -76.016789472074251
-    >>> scf.hf_symm.get_irrep_nelec(mol, mf.mo_occ, mf.mo_coeff)
+    >>> scf.hf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
     orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -115,8 +112,7 @@ class RHF(hf.RHF):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
     -76.016789472074251
@@ -182,6 +178,10 @@ class RHF(hf.RHF):
         return e, c
 
     def get_occ(self, mo_energy, mo_coeff=None):
+        ''' We cannot assume default mo_energy value, because the orbital
+        energies are sorted after doing SCF.  But in this function, we need
+        the orbital energies are grouped by symmetry irreps
+        '''
         mol = self.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nirrep = mol.symm_orb.__len__()
@@ -237,7 +237,7 @@ class RHF(hf.RHF):
         self.build(mol)
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_occ, self.mo_coeff \
+                self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, init_dm=dm0)
 
         log.timer(self, 'SCF', *cput0)
@@ -262,11 +262,11 @@ class RHF(hf.RHF):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
-    def get_irrep_nelec(self, mol=None, mo_occ=None, mo_coeff=None):
+    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return get_irrep_nelec(mol, mo_occ, mo_coeff)
+        return get_irrep_nelec(mol, mo_coeff, mo_occ)
 
 
 class ROHF(hf.ROHF):
@@ -280,8 +280,7 @@ class ROHF(hf.ROHF):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', symmetry=True, charge=1, spin=1, verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
     -75.619358861084052
@@ -429,7 +428,8 @@ class ROHF(hf.ROHF):
             f = adiis.update(s1e, dmsf, f)
         return (f, fa0, fb0)
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
+        if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nirrep = mol.symm_orb.__len__()
@@ -522,7 +522,7 @@ class ROHF(hf.ROHF):
         self.build(mol)
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_occ, self.mo_coeff \
+                self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, init_dm=dm0)
 
         log.timer(self, 'SCF', *cput0)
@@ -593,12 +593,12 @@ class ROHF(hf.ROHF):
         dm = self.make_rdm1(mo_coeff, mo_occ)
         return self.mulliken_pop(mol, dm, self.get_ovlp(), verbose)
 
-    def get_irrep_nelec(self, mol=None, mo_occ=None, mo_coeff=None):
+    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm
         if mol is None: mol = self.mol
-        if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
         if mo_coeff is None: mo_coeff = (self.mo_coeff,self.mo_coeff)
-        return uhf_symm.get_irrep_nelec(mol, mo_occ, mo_coeff)
+        if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
+        return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
 
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):

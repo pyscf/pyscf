@@ -11,6 +11,27 @@ import pyscf.lib.parameters as param
 from pyscf.scf import hf
 
 
+def get_atm_nrhf(mol):
+    atm_scf_result = {}
+    for a, b in mol._basis.items():
+        atm = gto.Mole()
+        atm.stdout = mol.stdout
+        atm.atom = [[a, (0, 0, 0)]]
+        atm._basis = {a: b}
+        atm.nelectron = gto.mole._charge(a)
+        atm.spin = atm.nelectron % 2
+        atm._atm, atm._bas, atm._env = \
+                atm.make_env(atm.atom, atm._basis, atm._env)
+        atm.natm = atm._atm.__len__()
+        atm.nbas = atm._bas.__len__()
+        atm._built = True
+        atm_hf = AtomSphericAverageRHF(atm)
+        atm_hf.verbose = 0
+        atm_scf_result[a] = atm_hf.scf()[1:]
+        atm_hf._eri = None
+    mol.stdout.flush()
+    return atm_scf_result
+
 class AtomSphericAverageRHF(hf.RHF):
     def __init__(self, mol):
         self._eri = None
@@ -67,38 +88,12 @@ class AtomSphericAverageRHF(hf.RHF):
                     idx += 1
         return mo_e, mo_c
 
-    def get_occ(self, mo_energy, mo_coeff):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
         return self._occ
-
-    def make_rdm1(self, mo_coeff, mo_occ):
-        mo = mo_coeff[:,mo_occ>0]
-        return numpy.dot(mo*mo_occ[mo_occ>0], mo.T)
 
     def scf(self, *args, **keys):
         self.build()
-        res = hf.kernel(self, *args, dump_chk=False, **keys)
-        return res
-
-def get_atm_nrhf(mol):
-    atm_scf_result = {}
-    for a, b in mol._basis.items():
-        atm = gto.Mole()
-        atm.stdout = mol.stdout
-        atm.atom = [[a, (0, 0, 0)]]
-        atm._basis = {a: b}
-        atm.nelectron = gto.mole._charge(a)
-        atm.spin = atm.nelectron % 2
-        atm._atm, atm._bas, atm._env = \
-                atm.make_env(atm.atom, atm._basis, atm._env)
-        atm.natm = atm._atm.__len__()
-        atm.nbas = atm._bas.__len__()
-        atm._built = True
-        atm_hf = AtomSphericAverageRHF(atm)
-        atm_hf.verbose = 0
-        atm_scf_result[a] = atm_hf.scf()[1:]
-        atm_hf._eri = None
-    mol.stdout.flush()
-    return atm_scf_result
+        return hf.kernel(self, *args, dump_chk=False, **keys)
 
 def frac_occ(symb, l):
     nuc = gto.mole._charge(symb)
@@ -110,8 +105,6 @@ def frac_occ(symb, l):
     else:
         ndocc = frac = 0
     return ndocc, frac
-
-
 
 
 

@@ -22,7 +22,7 @@ class KnowValues(unittest.TestCase):
 
         m = scf.RHF(mol)
         ehf = m.scf()
-        mc = mcscf.CASSCF(mol, m, 6, 4)
+        mc = mcscf.CASSCF(m, 6, 4)
         mc.verbose = 5
         mo = m.mo_coeff
 
@@ -39,7 +39,7 @@ class KnowValues(unittest.TestCase):
         ncas = mc.ncas
         nocc = ncore + ncas
         nmo = mo.shape[1]
-        eri = ao2mo.incore.full(m._eri, mo, compact=False).reshape(nmo,nmo,nmo,nmo)
+        eri = ao2mo.incore.full(m._eri, mo, compact=False).reshape((nmo,)*4)
         aaap = numpy.array(eri[ncore:nocc,ncore:nocc,ncore:nocc,:])
         jc_pp = numpy.einsum('iipq->ipq', eri[:ncore,:ncore,:,:])
         kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])
@@ -80,7 +80,7 @@ class KnowValues(unittest.TestCase):
         m = scf.UHF(mol)
         ehf = m.scf()
 
-        mc = mcscf.mc1step_uhf.CASSCF(mol, m, 4, 4)
+        mc = mcscf.mc1step_uhf.CASSCF(m, 4, 4)
         mc.verbose = 5
         mo = m.mo_coeff
 

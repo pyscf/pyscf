@@ -17,13 +17,13 @@ basis = {'N': 'ccpvdz', },
 )
 mfr = scf.RHF(mol)
 mfr.scf()
-mcr = mcscf.CASSCF(mol, mfr, 4, 4)
+mcr = mcscf.CASSCF(mfr, 4, 4)
 mcr.conv_tol_grad = 1e-6
 mcr.mc1step()[0]
 
 mfu = scf.UHF(mol)
 mfu.scf()
-mcu = mcscf.CASSCF(mol, mfu, 4, 4)
+mcu = mcscf.CASSCF(mfu, 4, 4)
 mcu.conv_tol_grad = 1e-6
 mcu.mc1step()[0]
 

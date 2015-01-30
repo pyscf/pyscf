@@ -30,6 +30,9 @@ def frac_occ(mf, tol=1e-3):
         log.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
+def frac_occ_(mf, tol=1e-3):
+    mf.get_occ = frac_occ(mf, tol)
+    return mf.get_occ
 
 def dynamic_occ(mf, tol=1e-3):
     def get_occ(mo_energy, mo_coeff=None):
@@ -50,6 +53,9 @@ def dynamic_occ(mf, tol=1e-3):
         log.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
+def dynamic_occ_(mf, tol=1e-3):
+    mf.get_occ = dynamic_occ(mf, tol)
+    return mf.get_occ
 
 def float_occ(mf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
@@ -68,6 +74,9 @@ def float_occ(mf):
             mf.nelectron_alpha = n_a
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     return get_occ
+def float_occ_(mf):
+    mf.get_occ = float_occ(mf)
+    return mf.get_occ
 
 def symm_allow_occ(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
@@ -100,6 +109,9 @@ break symmetry as the occupied orbitals'''
         log.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
+def symm_allow_occ_(mf, tol=1e-3):
+    mf.get_occ = symm_allow_occ(mf, tol)
+    return mf.get_occ
 
 def follow_state(mf, occorb=None):
     occstat = [occorb]
@@ -119,6 +131,9 @@ def follow_state(mf, occorb=None):
         occstat[0] = mo_coeff[:,mo_occ>0]
         return mo_occ
     return get_occ
+def follow_state_(mf, occorb=None):
+    mf.get_occ = follow_state_(mf, occorb)
+    return mf.get_occ
 
 
 

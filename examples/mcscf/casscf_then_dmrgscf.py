@@ -14,7 +14,7 @@ mol.build(
 m = scf.RHF(mol)
 m.scf()
 
-mc = mcscf.CASSCF(mol, m, 6, 6)
+mc = mcscf.CASSCF(m, 6, 6)
 mc.max_cycle_macro = 5
 mc.max_cycle_micro = 1
 mc.conv_tol = 1e-5
@@ -23,7 +23,7 @@ mc.mc1step()
 mo = mc.mo_coeff
 
 mol.stdout.write('\n*********** Call DMRGSCF **********\n')
-mc = mcscf.CASSCF(mol, m, 8, 8)
+mc = mcscf.CASSCF(m, 8, 8)
 mc.max_orb_stepsize = .05
 mc.max_cycle_macro = 20
 mc.max_cycle_micro = 3

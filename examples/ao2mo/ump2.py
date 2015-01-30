@@ -11,7 +11,7 @@ m = scf.UHF(mol)
 print(m.scf())
 
 import numpy
-def myump2(mol, mo_energy, mo_occ, mo_coeff):
+def myump2(mol, mo_energy, mo_coeff, mo_occ):
     from pyscf import ao2mo
     o = numpy.hstack((mo_coeff[0][:,mo_occ[0]>0] ,mo_coeff[1][:,mo_occ[1]>0]))
     v = numpy.hstack((mo_coeff[0][:,mo_occ[0]==0],mo_coeff[1][:,mo_occ[1]==0]))
@@ -29,6 +29,6 @@ def myump2(mol, mo_energy, mo_occ, mo_coeff):
     emp2 = .25 * numpy.einsum('iajb,iajb,iajb->', g, g, de)
     return emp2
 
-e = myump2(mol, m.mo_energy, m.mo_occ, m.mo_coeff)
+e = myump2(mol, m.mo_energy, m.mo_coeff, m.mo_occ)
 print('E(UMP2) = %.9g, ref = -0.346926068' % e)
 

@@ -159,7 +159,7 @@ class KnowValues(unittest.TestCase):
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
-        scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, occ, mo)
+        scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334710607028219, 9)
 
         mf = scf.hf.RHF(mol)
@@ -182,7 +182,7 @@ class KnowValues(unittest.TestCase):
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
-        scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, occ, mo)
+        scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0644293224517574, 9)
 
         mf = scf.hf.RHF(mol)
@@ -205,7 +205,7 @@ class KnowValues(unittest.TestCase):
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
-        scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, occ, mo)
+        scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 5.3700827555643791, 9)
 
         mf = scf.hf.RHF(mol)
@@ -237,7 +237,7 @@ class KnowValues(unittest.TestCase):
             f = mf0.get_fock(h, s, numpy.zeros_like(h), 0)
             e, mo = mf0.eig(f, s)
             occ = mf0.get_occ(e, mo)
-            mf0.dump_chk(0, e, occ, mo)
+            mf0.dump_chk(0, e, mo, occ)
         def check(HFclass, ref):
             mol1 = mol.copy()
             mol1.basis = 'cc-pvdz'

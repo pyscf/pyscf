@@ -26,7 +26,7 @@ def run(b, dm, mo, ci=None):
     m.conv_tol = 1e-9
     ehf.append(m.scf(dm))
 
-    mc = mcscf.CASSCF(mol, m, 12, 12)
+    mc = mcscf.CASSCF(m, 12, 12)
     mc.fcisolver.conv_tol = 1e-9
     if mo is None:
         # the initial guess for b = 1.5

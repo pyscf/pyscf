@@ -55,7 +55,7 @@ class KnowValues(unittest.TestCase):
         dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
         dm1ref = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
 
-        rdm1 = mp.mp2.make_rdm1(pt, mf.mo_coeff, mf.mo_energy, nocc)
+        rdm1 = mp.mp2.make_rdm1(pt, mf.mo_energy, mf.mo_coeff, nocc)
         self.assertTrue(numpy.allclose(rdm1, dm1ref))
 
 

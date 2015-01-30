@@ -5,17 +5,16 @@
 Simple usage::
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
-    >>> mc = mcscf.CASCI(mol, mf, 6, 6)
+    >>> mc = mcscf.CASCI(mf, 6, 6)
     >>> mc.kernel()[0]
     -108.980200816243354
-    >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+    >>> mc = mcscf.CASSCF(mf, 6, 6)
     >>> mc.kernel()[0]
     -109.044401882238134
-    >>> mc = mcscf.CASSCF(mol, mf, 4, 4)
+    >>> mc = mcscf.CASSCF(mf, 4, 4)
     >>> cas_list = [5,6,8,9] # pick orbitals for CAS space, 1-based indices
     >>> mo = mcscf.sort_mo(mc, mf.mo_coeff, cas_list)
     >>> mc.kernel(mo)[0]
@@ -42,7 +41,7 @@ There are some parameters to control the CASSCF/CASCI method.
         the FCISolver to this attribute, e.g.
 
         >>> from pyscf import fci
-        >>> mc = mcscf.CASSCF(mol, mf, 4, 4)
+        >>> mc = mcscf.CASSCF(mf, 4, 4)
         >>> mc.fcisolver = fci.solver(mol, singlet=True)
         >>> mc.fcisolver = fci.direct_spin1.FCISolver(mol)
 
@@ -74,7 +73,7 @@ The Following attributes are used for CASSCF
         optimization by reducing max_orb_stepsize, max_ci_stepsize and
         max_cycle_micro, max_cycle_micro_inner and ah_start_tol.)
 
-        >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+        >>> mc = mcscf.CASSCF(mf, 6, 6)
         >>> mc.max_orb_stepsize = .01
         >>> mc.max_cycle_micro = 1
         >>> mc.max_cycle_macro = 100
@@ -120,11 +119,10 @@ The Following attributes are used for CASSCF
         optimization, but slow down the performance.
         
         >>> from pyscf import gto, scf, mcscf
-        >>> mol = gto.Mole()
-        >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+        >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
         >>> mf = scf.UHF(mol)
         >>> mf.scf()
-        >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+        >>> mc = mcscf.CASSCF(mf, 6, 6)
         >>> mc.conv_tol = 1e-10
         >>> mc.ah_conv_tol = 1e-5
         >>> mc.kernel()
@@ -162,28 +160,50 @@ from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step_uhf
 from pyscf.mcscf.addons import *
 
-def CASSCF(mol, mf, *args, **kwargs):
-    if mol.symmetry:
-        if mf.__class__.__name__ in ('RHF', 'ROHF'):
-            mc = mc1step_symm.CASSCF(mol, mf, *args, **kwargs)
+def CASSCF(mf, *args, **kwargs):
+    from pyscf import scf
+
+    from pyscf import gto
+    if isinstance(mf, gto.Mole):
+        raise RuntimeError('''
+You see this error message because of the API updates in pyscf v0.10.
+In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
+        mc = mcscf.CASSCF(mf, norb, nelec)
+Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
+of API conventions''')
+
+    if mf.mol.symmetry:
+        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+            mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
         else:
-            mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
+            mc = mc1step_symm.CASSCF(mf, *args, **kwargs)
     else:
-        if mf.__class__.__name__ in ('RHF', 'ROHF'):
-            mc = mc1step.CASSCF(mol, mf, *args, **kwargs)
+        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+            mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
         else:
-            mc = mc1step_uhf.CASSCF(mol, mf, *args, **kwargs)
+            mc = mc1step.CASSCF(mf, *args, **kwargs)
     return mc
 
-def CASCI(mol, mf, *args, **kwargs):
-    if mol.symmetry:
-        if mf.__class__.__name__ in ('RHF', 'ROHF'):
-            mc = casci_symm.CASCI(mol, mf, *args, **kwargs)
+def CASCI(mf, *args, **kwargs):
+    from pyscf import scf
+
+    from pyscf import gto
+    if isinstance(mf, gto.Mole):
+        raise RuntimeError('''
+You see this error message because of the API updates in pyscf v0.10.
+In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
+        mc = mcscf.CASCI(mf, norb, nelec)
+Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
+of API conventions''')
+
+    if mf.mol.symmetry:
+        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+            mc = casci_uhf.CASCI(mf, *args, **kwargs)
         else:
-            mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)
+            mc = casci_symm.CASCI(mf, *args, **kwargs)
     else:
-        if mf.__class__.__name__ in ('RHF', 'ROHF'):
-            mc = casci.CASCI(mol, mf, *args, **kwargs)
+        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+            mc = casci_uhf.CASCI(mf, *args, **kwargs)
         else:
-            mc = casci_uhf.CASCI(mol, mf, *args, **kwargs)
+            mc = casci.CASCI(mf, *args, **kwargs)
     return mc

@@ -37,14 +37,14 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, init_dm=None):
         dm = init_dm
 
     if init_dm is None and mf._coulomb_now.upper() == 'LLLL':
-        scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
+        scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 4e-3, dump_chk, init_dm=dm)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
     if init_dm is None and (mf._coulomb_now.upper() == 'SSLL' \
                          or mf._coulomb_now.upper() == 'LLSS'):
-        scf_conv, hf_energy, mo_energy, mo_occ, mo_coeff \
+        scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 4e-4, dump_chk, init_dm=dm)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
@@ -90,7 +90,7 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
     return vj, vk
 
 def get_jk(mol, dm, hermi=1, coulomb_allow='SSSS'):
-    return get_jk_coulomb(mol, dm, hermi, coulomb_allow)
+    return get_jk_coulomb(mol, dm, hermi=hermi, coulomb_allow=coulomb_allow)
 
 
 def get_hcore(mol):
@@ -209,8 +209,8 @@ def analyze(mf, verbose=logger.DEBUG):
 #TODO        log.debug(' ** MO coefficients **')
 #TODO        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
 #TODO        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
-    dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), verbose)
+#TODO    dm = mf.make_rdm1(mo_coeff, mo_occ)
+#TODO    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
 
 
 class UHF(hf.SCF):
@@ -223,8 +223,7 @@ class UHF(hf.SCF):
 
     Examples:
 
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', verbose=0)
     >>> mf = scf.RHF(mol)
     >>> e0 = mf.scf()
     >>> mf = scf.DHF(mol)
@@ -280,22 +279,17 @@ class UHF(hf.SCF):
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_minao)
+        if mol is None: mol = self.mol
+        return init_guess_by_minao(mol)
 
     def init_guess_by_atom(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        return _hack_mol_log(mol, self, init_guess_by_atom)
+        if mol is None: mol = self.mol
+        return init_guess_by_atom(mol)
 
     def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None:
-            mol = self.mol
-        if chkfile is None:
-            chkfile = self.chkfile
-        return _hack_mol_log(mol, self, init_guess_by_chkfile, chkfile,
-                             project=project)
+        if mol is None: mol = self.mol
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(mol, chkfile, project=project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
@@ -343,7 +337,8 @@ class UHF(hf.SCF):
             self.opt_ssll.direct_scf_tol = self.direct_scf_tol
             set_vkscreen(self.opt_ssll, 'CVHFrkbssll_vkscreen')
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
+        if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         n4c = mo_energy.size
         n2c = n4c // 2
@@ -385,16 +380,23 @@ class UHF(hf.SCF):
 #TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
 #TODO        return -vj, -vk
 
-    def get_jk(self, mol, dm, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
-        vj, vk = _hack_mol_log(mol, self, get_jk_coulomb,
-                               dm, hermi, self._coulomb_now,
-                               self.opt_llll, self.opt_ssll, self.opt_ssss)
+        verbose_bak, mol.verbose = mol.verbose, self.verbose
+        stdout_bak,  mol.stdout  = mol.stdout , self.stdout
+        vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
+                                self.opt_llll, self.opt_ssll, self.opt_ssss)
+        mol.verbose = verbose_bak
+        mol.stdout  = stdout_bak
         log.timer(self, 'vj and vk', *t0)
         return vj, vk
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Dirac-Coulomb'''
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
@@ -420,7 +422,7 @@ class UHF(hf.SCF):
         self.build()
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_occ, self.mo_coeff \
+                self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, init_dm=dm0)
 
         log.timer(self, 'SCF', *cput0)
@@ -465,7 +467,8 @@ class RHF(UHF):
         dm = make_rdm1(mo_coeff, mo_occ)
         return (dm + time_reversal_matrix(self.mol, dm)) * .5
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
+        if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         n4c = mo_energy.size
         n2c = n4c // 2
@@ -569,14 +572,6 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
                                 ('ji->s2kl', 'jk->s1il'), dms, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
     return _jk_triu_(vj, vk, hermi)
-
-def _hack_mol_log(mol, dev, fn, *args, **kwargs):
-    verbose_bak, mol.verbose = mol.verbose, dev.verbose
-    stdout_bak,  mol.stdout  = mol.stdout , dev.stdout
-    res = fn(mol, *args, **kwargs)
-    mol.verbose = verbose_bak
-    mol.stdout  = stdout_bak
-    return res
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     proj = addons.project_mo_nr2r(mol_nr, 1, mol)

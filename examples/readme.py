@@ -78,7 +78,7 @@ rhf = scf.RHF(mol)
 # An initial guess of density matrix can be passed to the scf method
 # e.g., dm = numpy.eye(mol.nao_nr()); rhf.scf(dm)
 print('E=%.15g' % rhf.scf())
-# after doing SCF, RHF.mo_coeff, RHF.mo_energy, RHF.mo_occ, RHF.hf_energy,
+# after doing SCF, RHF.mo_energy, RHF.mo_coeff, RHF.mo_occ, RHF.hf_energy,
 # RHF.converged (True/Flase, to see if SCF converged) will be held in RHF class.
 print(rhf.mo_coeff.shape)
 print(rhf.mo_energy)

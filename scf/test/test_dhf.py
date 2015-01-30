@@ -7,8 +7,7 @@ import unittest
 from pyscf import gto
 from pyscf import scf
 
-mol = gto.Mole()
-mol.build(
+mol = gto.M(
     verbose = 5,
     output = '/dev/null',
     atom = '''
@@ -39,10 +38,10 @@ class KnowValues(unittest.TestCase):
         mf = scf.dhf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.892132873081664, 9)
 
-    def test_analyze(self):
-        numpy.random.seed(1)
-        pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.0355530265140636, 9)
+#    def test_analyze(self):
+#        numpy.random.seed(1)
+#        pop, chg = mf.analyze()
+#        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.0355530265140636, 9)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.hf_energy, -76.081567943868265, 9)

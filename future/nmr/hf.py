@@ -67,7 +67,11 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
                 para_vir[n,b,m] = msc_para[n,b,m] - para_occ[n,b,m]
     return msc_para, para_vir, para_occ
 
-def make_h10(mol, dm0, gauge_orig=None):
+def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     if gauge_orig is None:
         # A10_i dot p + p dot A10_i consistents with <p^2 g>
         # A10_j dot p + p dot A10_j consistents with <g p^2>
@@ -239,8 +243,7 @@ class NMR(object):
         if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
         if shielding_nuc is None: shielding_nuc = self.shielding_nuc
-        if dm0 is None:
-            dm0 = self._scf.make_rdm1(self._scf.mo_coeff, self._scf.mo_occ)
+        if dm0 is None: dm0 = self._scf.make_rdm1()
         return dia(mol, dm0, gauge_orig, shielding_nuc)
 
     def para(self, *args, **kwargs):
@@ -256,18 +259,24 @@ class NMR(object):
             mo10 = self.mo10
         return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
 
-    def make_rdm1_1(self, mo1occ, mo0, occ):
+    def make_rdm1_1(self, mo1occ, mo0=None, occ=None):
+        if mo0 is None: mo0 = self._scf.mo_coeff
+        if occ is None: occ = self._scf.mo_occ
         return make_rdm1_1(mo1occ, mo0, occ)
 
-    def make_h10(self, mol, dm0, gauge_orig=None):
+    def make_h10(self, mol=None, dm0=None, gauge_orig=None):
+        if mol is None: mol = self.mol
+        if dm0 is None: dm0 = self._scf.make_rdm1()
         if gauge_orig is None: gauge_orig = self.gauge_orig
-        h1 = _hack_mol_log(mol, self, make_h10, dm0, gauge_orig)
+        log = logger.Logger(self.stdout, self.verbose)
+        h1 = make_h10(mol, dm0, gauge_orig, log)
         pyscf.scf.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
-    def make_s10(self, mol, gauge_orig=None):
+    def make_s10(self, mol=None, gauge_orig=None):
+        if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
-        return _hack_mol_log(mol, self, make_s10, gauge_orig)
+        return make_s10(mol, gauge_orig)
 
     def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, s1=None):
         cput1 = (time.clock(), time.time())
@@ -310,14 +319,6 @@ def _mat_ao2mo(mat, mo_coeff, occ):
     mo0 = mo_coeff[:,occ>0]
     mat_mo = [reduce(numpy.dot, (mo_coeff.T.conj(),i,mo0)) for i in mat]
     return numpy.array(mat_mo)
-
-def _hack_mol_log(mol, dev, fn, *args, **kwargs):
-    verbose_bak, mol.verbose = mol.verbose, dev.verbose
-    stdout_bak,  mol.stdout  = mol.stdout , dev.stdout
-    res = fn(mol, *args, **kwargs)
-    mol.verbose = verbose_bak
-    mol.stdout  = stdout_bak
-    return res
 
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)

@@ -25,11 +25,10 @@ def full(eri_ao, mo_coeff, verbose=0, compact=True):
             Print level
         compact : bool
             When compact is True, the returned MO integrals have 4-fold
-            symmetry.  otherwise, the "plain" MO integrals without symmetry
-            will be returned
+            symmetry.  Otherwise, return the "plain" MO integrals.
 
     Returns:
-        ndarray of transformed MO integrals.  The MO integrals may or may not
+        2D array of transformed MO integrals.  The MO integrals may or may not
         have the permutation symmetry (controlled by the kwargs compact)
 
 
@@ -38,8 +37,7 @@ def full(eri_ao, mo_coeff, verbose=0, compact=True):
     >>> from pyscf import gto
     >>> from pyscf.scf import _vhf
     >>> from pyscf import ao2mo
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> eri1 = ao2mo.incore.full(eri, mo1)
@@ -74,7 +72,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
             and return the "plain" MO integrals
 
     Returns:
-        ndarray of transformed MO integrals.  The MO integrals may or may not
+        2D array of transformed MO integrals.  The MO integrals may or may not
         have the permutation symmetry, depending on the given orbitals, and
         the kwargs compact.  If the four sets of orbitals are identical, the
         MO integrals will at most have 4-fold symmetry.
@@ -85,8 +83,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
     >>> from pyscf import gto
     >>> from pyscf.scf import _vhf
     >>> from pyscf import ao2mo
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
@@ -183,8 +180,7 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
 
     >>> from pyscf import gto
     >>> from pyscf import ao2mo
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> mo2 = numpy.random.random((mol.nao_nr(), 8))

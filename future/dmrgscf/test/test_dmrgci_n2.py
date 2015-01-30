@@ -24,13 +24,13 @@ m.scf()
 
 class KnowValues(unittest.TestCase):
     def test_mc2step_4o4e(self):
-        mc = mcscf.CASSCF(mol, m, 4, 4)
+        mc = mcscf.CASSCF(m, 4, 4)
         mc.fcisolver = dmrgscf.CheMPS2(mol)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
 
     def test_mc2step_6o6e(self):
-        mc = mcscf.CASSCF(mol, m, 6, 6)
+        mc = mcscf.CASSCF(m, 6, 6)
         mc.fcisolver = dmrgscf.CheMPS2(mol)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)

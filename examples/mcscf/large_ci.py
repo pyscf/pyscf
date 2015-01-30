@@ -14,7 +14,7 @@ mol.build(
 m = scf.RHF(mol)
 m.scf()
 
-mc = mcscf.CASSCF(mol, m, 6, 6)
+mc = mcscf.CASSCF(m, 6, 6)
 mc.mc1step()
 
 from pyscf import fci

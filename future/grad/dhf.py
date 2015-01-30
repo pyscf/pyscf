@@ -14,8 +14,8 @@ from pyscf.scf import _vhf
 from pyscf.grad import hf
 
 
-def grad_elec(mfg, mo_energy=None, mo_occ=None, mo_coeff=None):
-    return hf.grad_elec(mfg, mo_energy, mo_occ, mo_coeff)
+def grad_elec(mfg, mo_energy=None, mo_coeff=None, mo_occ=None):
+    return hf.grad_elec(mfg, mo_energy, mo_coeff, mo_occ)
 
 def grad_nuc(mol):
     return hf.grad_nuc(mol)
@@ -48,8 +48,8 @@ def get_ovlp(mol):
     s1e[:,n2c:,n2c:] = t * (.5/c**2)
     return s1e
 
-def make_rdm1e(mo_energy, mo_occ, mo_coeff):
-    return hf.make_rdm1e(mo_energy, mo_occ, mo_coeff)
+def make_rdm1e(mo_energy, mo_coeff, mo_occ):
+    return hf.make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
 def matblock_by_atom(mol, atm_id, mat):
     '''extract row band for each atom'''

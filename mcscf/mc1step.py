@@ -395,7 +395,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     else:
         log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
-    log.log('1-step CASSCF, energy = %.15g', e_tot)
+    log.note('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 
@@ -458,11 +458,10 @@ class CASSCF(casci.CASCI):
             optimization, but decrease the performance.
             
             >>> from pyscf import gto, scf, mcscf
-            >>> mol = gto.Mole()
-            >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+            >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
             >>> mf = scf.UHF(mol)
             >>> mf.scf()
-            >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+            >>> mc = mcscf.CASSCF(mf, 6, 6)
             >>> mc.conv_tol = 1e-10
             >>> mc.ah_conv_tol = 1e-5
             >>> mc.kernel()
@@ -491,16 +490,15 @@ class CASSCF(casci.CASCI):
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.Mole()
-    >>> mol.build(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.scf()
-    >>> mc = mcscf.CASSCF(mol, mf, 6, 6)
+    >>> mc = mcscf.CASSCF(mf, 6, 6)
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
-    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-        casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
+    def __init__(self, mf, ncas, nelecas, ncore=None):
+        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 # the max orbital rotation and CI increment, prefer small step size
         self.max_orb_stepsize = .03
 # small max_ci_stepsize is good to converge, since steepest descent is used
@@ -527,6 +525,9 @@ class CASSCF(casci.CASCI):
         self.natorb = False # CAS space in natural orbital
 
         self.fcisolver.max_cycle = 50
+
+##################################################
+# don't modify the following attributes, they are not input options
         self.e_tot = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
@@ -851,11 +852,11 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    emc = kernel(CASSCF(mol, m, 4, 4), m.mo_coeff, verbose=4)[1]
+    emc = kernel(CASSCF(m, 4, 4), m.mo_coeff, verbose=4)[1]
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
 
-    mc = CASSCF(mol, m, 4, (3,1))
+    mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
@@ -873,7 +874,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = CASSCF(mol, m, 6, 4)
+    mc = CASSCF(m, 6, 4)
     mc.fcisolver = pyscf.fci.solver(mol)
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
@@ -882,7 +883,7 @@ if __name__ == '__main__':
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print(emc - -76.0873923174, emc - -76.0926176464)
 
-    mc = CASSCF(mol, m, 6, (3,1))
+    mc = CASSCF(m, 6, (3,1))
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
     mc.verbose = 4

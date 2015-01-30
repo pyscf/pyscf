@@ -16,12 +16,12 @@ from pyscf.mcscf import casci
 
 
 class CASCI(casci.CASCI):
-    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-        assert(mol.symmetry)
+    def __init__(self, mf, ncas, nelecas, ncore=None):
+        assert(mf.mol.symmetry)
 # Ag, A1 or A
 #TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
-        casci.CASCI.__init__(self, mol, mf, ncas, nelecas, ncore)
+        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 
     def casci(self, mo_coeff=None, ci0=None, **cikwargs):
         if mo_coeff is None:
@@ -74,13 +74,13 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = CASCI(mol, m, 4, 4)
+    mc = CASCI(m, 4, 4)
     emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
-    mc = CASCI(mol, m, 4, (3,1))
+    mc = CASCI(m, 4, (3,1))
     mc.fcisolver = pyscf.fci.direct_spin1
     emc = mc.casci()[0]
     print(emc - -75.439016172976)

@@ -251,14 +251,14 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.scf()
 
-    mc = mcscf.CASSCF(mol, m, 4, 4)
+    mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000
     mc.max_cycle_macro = 10
     emc_1 = mc.mc2step()[0]
 
-    mc = mcscf.CASCI(mol, m, 4, 4)
+    mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000
@@ -276,10 +276,10 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.scf()
 
-    mc = mcscf.CASSCF(mol, m, 4, 4)
+    mc = mcscf.CASSCF(m, 4, 4)
     emc_1ref = mc.mc2step()[0]
 
-    mc = mcscf.CASCI(mol, m, 4, 4)
+    mc = mcscf.CASCI(m, 4, 4)
     emc_0ref = mc.casci()[0]
 
     print('FCIQMCCI  = %.15g CASCI  = %.15g' % (emc_0, emc_0ref))

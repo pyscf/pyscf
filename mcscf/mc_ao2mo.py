@@ -181,7 +181,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
 
-    mc = mc1step.CASSCF(mol, m, 6, 4)
+    mc = mc1step.CASSCF(m, 6, 4)
     mc.verbose = 4
     mo = m.mo_coeff.copy()
 
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     ncas = mc.ncas
     nocc = ncore + ncas
     nmo = mo.shape[1]
-    eri = ao2mo.incore.full(m._eri, mo, compact=False).reshape(nmo,nmo,nmo,nmo)
+    eri = ao2mo.incore.full(m._eri, mo, compact=False).reshape((nmo,)*4)
     aaap = numpy.array(eri[ncore:nocc,ncore:nocc,ncore:nocc,:])
     jc_pp = numpy.einsum('iipq->ipq', eri[:ncore,:ncore,:,:])
     kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])

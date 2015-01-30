@@ -23,7 +23,7 @@ rhf.scf()
 
 class KnowValues(unittest.TestCase):
     def test_ccsd(self):
-        mcc = cc.ccsd.CC(mol, rhf)
+        mcc = cc.ccsd.CC(rhf)
         mcc.conv_tol = 1e-9
         mcc.conv_tol_normt = 1e-7
         eris = mcc.ao2mo()

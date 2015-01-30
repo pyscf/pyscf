@@ -25,13 +25,14 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_a:]       )
     return mo_core, mo_cas, mo_vir
 
-def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
+def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     '''CAS sapce one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
 
     Args:
         casci : a U-CASSCF/U-CASCI object or UHF object
 
     '''
+    if mo_coeff is None: mo_coeff = casci.mo_coeff
     if ncas is None: ncas = casci.ncas
     if ncore is None: ncore = casci.ncore
     mo_core =(mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
@@ -54,11 +55,11 @@ def h1e_for_cas(casci, mo_coeff, ncas=None, ncore=None):
              reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
     return h1eff, energy_core
 
-def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
     '''UHF-CASCI solver
     '''
-    if verbose is None:
-        verbose = casci.verbose
+    if verbose is None: verbose = casci.verbose
+    if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = pyscf.lib.logger.Logger(casci.stdout, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start uhf-based CASCI')
@@ -82,15 +83,16 @@ def kernel(casci, mo_coeff, ci0=None, verbose=None, **cikwargs):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    log.info('CASCI E = %.15g', e_tot)
+    log.note('CASCI E = %.15g', e_tot)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
 
 class CASCI(object):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
-    def __init__(self, mol, mf, ncas, nelecas, ncore=None):
-#TODO:        assert('RHF'  == mf.__class__.__name__)
+    def __init__(self, mf, ncas, nelecas, ncore=None):
+        #assert('UHF' == mf.__class__.__name__)
+        mol = mf.mol
         self.mol = mol
         self._scf = mf
         self.verbose = mol.verbose
@@ -117,6 +119,8 @@ class CASCI(object):
         self.fcisolver.max_cycle = 30
         self.fcisolver.conv_tol = 1e-8
 
+##################################################
+# don't modify the following attributes, they are not input options
         self.mo_coeff = mf.mo_coeff
         self.ci = None
         self.e_tot = 0
@@ -143,10 +147,19 @@ class CASCI(object):
         hcore = self._scf.get_hcore(mol)
         return (hcore,hcore)
 
-    def get_veff(self, mol, dm):
+    def get_veff(self, mol=None, dm=None):
+        if mol is None: mol = self.mol
+        if dm is None:
+            mocore = (self.mo_coeff[0][:,:self.ncore[0]],
+                      self.mo_coeff[1][:,:self.ncore[1]])
+            dm = (numpy.dot(mocore[0], mocore[0].T),
+                  numpy.dot(mocore[1], mocore[1].T))
         return self._scf.get_veff(mol, dm)
 
-    def ao2mo(self, mo_coeff):
+    def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
+                        self.mo_coeff[1][:,self.ncore[1]:self.ncore[1]+self.ncas])
         nao, nmo = mo_coeff[0].shape
         if self._scf._eri is not None:
             #and nao*nao*nmo*nmo*3/4*8/1e6 > self.max_memory
@@ -257,7 +270,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = CASCI(mol, m, 4, (2,2))
+    mc = CASCI(m, 4, (2,2))
     emc = mc.casci()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
@@ -286,7 +299,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = CASCI(mol, m, 9, (4,4))
+    mc = CASCI(m, 9, (4,4))
     emc = mc.casci()[0]
     mc.analyze()
     print(ehf, emc, emc-ehf)

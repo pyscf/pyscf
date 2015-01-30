@@ -263,7 +263,7 @@ if __name__ == '__main__':
     m = scf.UHF(mol)
     ehf = m.scf()
 
-    mc = mc1step_uhf.CASSCF(mol, m, 4, 4)
+    mc = mc1step_uhf.CASSCF(m, 4, 4)
     mc.verbose = 4
     mo = m.mo_coeff
 

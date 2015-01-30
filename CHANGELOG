@@ -15,6 +15,10 @@ Version 0.10 (2015-1-?):
 * Support molecular geometry string as input for Mole.atom
 * Improve density fitting model for non-relativistic SCF
 * Add documentation for whole package
+* API updates:
+  - Remove the first argument (Mole object) in CASSCF/CASCI class initialization
+  - Change the return value ordering of function scf.hf.kernel
+  - Set default value for the arguments of most class functions
 
 Version 0.9 (2015-1-4):
 * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
