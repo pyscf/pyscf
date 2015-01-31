@@ -161,8 +161,8 @@ class CASCI(object):
             mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
                         self.mo_coeff[1][:,self.ncore[1]:self.ncore[1]+self.ncas])
         nao, nmo = mo_coeff[0].shape
-        if self._scf._eri is not None:
-            #and nao*nao*nmo*nmo*3/4*8/1e6 > self.max_memory
+        if self._scf._eri is not None and \
+           (nao*nao*nmo*nmo*12+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
             moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
             na = mo_coeff[0].shape[1]
             nab = moab.shape[1]

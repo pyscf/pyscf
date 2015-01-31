@@ -201,7 +201,7 @@ class CASCI(object):
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
         nao, nmo = mo_coeff.shape
         if self._scf._eri is not None and \
-           (nao**2*nmo**2+nmo**4*2)/4*8/1e6 > self.max_memory:
+           (nao**2*nmo**2+nmo**4*2+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
             eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
         else:
             ftmp = tempfile.NamedTemporaryFile()

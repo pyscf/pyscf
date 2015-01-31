@@ -18,7 +18,7 @@ from pyscf.gto import basis
 from pyscf.gto import moleintor
 
 
-def M(*args, **kwargs):
+def M(**kwargs):
     r'''This is a simple way to build up Mole object quickly.
 
     Args: Same to :func:`Mole.build`
@@ -29,7 +29,7 @@ def M(*args, **kwargs):
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
     '''
     mol = Mole()
-    mol.build_(*args, **kwargs)
+    mol.build_(**kwargs)
     return mol
 
 def gto_norm(l, expnt):
@@ -1033,7 +1033,7 @@ class Mole(object):
                                for ir in self.irrep_id]
             self.symm_orb = [c for c in symm_orb if c.size > 0]
 
-        if dump_input and not self._built and self.verbose >= log.NOTICE:
+        if dump_input and not self._built and self.verbose > log.NOTICE:
             self.dump_input()
 
         log.debug2(self, 'arg.atm = %s', self._atm)

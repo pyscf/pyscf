@@ -255,8 +255,8 @@ class RHF(hf.RHF):
         self.mo_occ[nocc:] = 0
 
 # analyze at last, in terms of the ordered orbital energies
-        if self.verbose >= logger.INFO:
-            self.analyze(self.verbose)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(self.verbose)
         return self.hf_energy
 
     def analyze(self, verbose=logger.DEBUG):
@@ -539,8 +539,8 @@ class ROHF(hf.ROHF):
         self.mo_occ[:nocc] = self.mo_occ[self.mo_occ>0][o_sort]
         self.mo_occ[nocc:] = 0
 
-        if self.verbose >= logger.INFO:
-            self.analyze(self.verbose)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(self.verbose)
         return self.hf_energy
 
     def analyze(self, verbose=logger.DEBUG):

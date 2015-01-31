@@ -517,8 +517,8 @@ class UHF(hf.SCF):
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
-        if self.verbose >= logger.INFO:
-            self.analyze(self.verbose)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(self.verbose)
         return self.hf_energy
 
     def analyze(self, verbose=logger.DEBUG):

@@ -337,8 +337,8 @@ class UHF(uhf.UHF):
         self.mo_occ[1][:nocc_b] = 1
         self.mo_occ[1][nocc_b:] = 0
 
-        if self.verbose >= logger.INFO:
-            self.analyze(self.verbose)
+        #if self.verbose >= logger.INFO:
+        #    self.analyze(self.verbose)
         return self.hf_energy
 
     def analyze(self, mo_verbose=logger.DEBUG):

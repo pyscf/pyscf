@@ -8,8 +8,8 @@ from functools import reduce
 import numpy
 import h5py
 
-import pyscf.ao2mo
-import pyscf.lib.logger as logger
+from pyscf.lib import logger
+from pyscf import ao2mo
 
 
 '''
@@ -31,8 +31,8 @@ def kernel(mp, mo_energy, mo_coeff, nocc, verbose=None):
     emp2 = 0
     for i in range(nocc):
         djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-        gi = numpy.array(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
-        gi = gi.transpose(1,2,0)
+        gi = numpy.array(ovov[i*nvir:(i+1)*nvir], copy=False)
+        gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
         t2[i] = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
         # 2*ijab-ijba
         theta = gi*2 - gi.transpose(0,2,1)
@@ -80,6 +80,9 @@ class MP2(object):
 
         self.emp2 = None
         self.t2 = None
+        # hold h5file, to prevent the dataset being closed in self.ao2mo()
+        # than in memory
+        self._feri = None
 
     def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
         if mo_coeff is None:
@@ -106,13 +109,14 @@ class MP2(object):
         if self._scf._eri is not None and \
            (nocc*nvir*nmo**2/2*8 + (nocc*nvir)**2*8 \
             + self._scf._eri.nbytes)/1e6 < self.max_memory:
-            eri = pyscf.ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
+            eri = ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
         else:
             erifile = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
-                                        verbose=self.verbose)
-            feri = h5py.File(erifile.name, 'r')
-            eri = feri['eri_mo']
+            ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
+                                  verbose=self.verbose)
+            self._feri = h5py.File(erifile.name, 'r')
+            # return the dataset, so it does not use too much memory.
+            eri = self._feri['eri_mo']
         time1 = log.timer('Integral transformation', *time0)
         return eri
 
@@ -140,7 +144,7 @@ if __name__ == '__main__':
 
     co = mf.mo_coeff[:,:nocc]
     cv = mf.mo_coeff[:,nocc:]
-    g = pyscf.ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
+    g = ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
     eia = mf.mo_energy[:nocc,None] - mf.mo_energy[nocc:]
     t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
     t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,3,1)

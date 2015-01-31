@@ -530,6 +530,15 @@ static void trans_kgtl(int (*intor)(), int (*fmmm)(), int (*fill)(), int (*fstep
                         } }
                         eri_mo += neri_mo;
                 }
+        } else {
+                for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (l0 = lloc, l = 0; l < dl; l++, l0++) {
+                        for (k0 = kloc, k = 0; k < dk; k++, k0++) {
+                                off = ij_pair * (*fstep)(k0, l0, nao, kstart);
+                                memset(eri_mo+off, 0, sizeof(double)*ij_pair);
+                        } }
+                        eri_mo += neri_mo;
+                }
         }
         free(eri);
 }
@@ -570,6 +579,15 @@ static void trans_keql(int (*intor)(), int (*fmmm)(), int (*fill)(), int (*fstep
                         for (l0 = lloc, l = 0; l0 <= k0; l++, l0++) {
                                 off = ij_pair * (*fstep)(k0, l0, nao, kstart);
                                 (*fmmm)(eri_mo+off, peri+nao2*(l*dk+k), envs,0);
+                        } }
+                        eri_mo += neri_mo;
+                }
+        } else {
+                for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (k0 = kloc, k = 0; k < dk; k++, k0++) {
+                        for (l0 = lloc, l = 0; l0 <= k0; l++, l0++) {
+                                off = ij_pair * (*fstep)(k0, l0, nao, kstart);
+                                memset(eri_mo+off, 0, sizeof(double)*ij_pair);
                         } }
                         eri_mo += neri_mo;
                 }
