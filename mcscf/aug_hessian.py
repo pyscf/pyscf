@@ -141,11 +141,15 @@ def _regular_step(heff, ovlp, xs, pick_mode, log):
     w, v = scipy.linalg.eigh(heff, ovlp)
     if log.verbose >= logger.DEBUG2:
         log.debug2('AH eigs %s', str(w))
-    if w[1] < 0:
-        log.debug('Negative hessian eigenvalue found %s',
-                  str(scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])[0][:5]))
 
     index = pick_mode(w, v)
+
+    if w[1] < 0:
+        log.debug1('Negative hessian eigenvalue found %s',
+                   str(scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])[0][:5]))
+    if index > 0 and w[0] < -1e-5:
+        log.debug('AH might follow negative hessians %s', str(w[:index]))
+
     if abs(v[0,index]) < 1e-4:
         raise RuntimeError('aug_hess diverge')
     else:

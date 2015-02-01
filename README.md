@@ -106,9 +106,8 @@ Known problems
   "pyscf/lib/deps" and rebuild pyscf to fix this problem.
 
 * tests fail
+
   mcscf/test/test_addons.py    test_spin_square
-  mcscf/test/test_c2h4.py      test_mc1step_4o4e
-  mcscf/test/test_c2h4.py      test_mc2step_4o4e
 
 
 * Program exits with
