@@ -60,7 +60,7 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
     cput0 = (time.clock(), time.time())
     mol = mf.mol
     if init_dm is None:
-        dm = mf.get_init_guess(key=mf.init_guess)
+        dm = mf.get_init_guess(key=mf.init_guess, mol=mol)
     else:
         dm = init_dm
 
