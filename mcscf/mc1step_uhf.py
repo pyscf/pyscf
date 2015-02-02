@@ -322,7 +322,9 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
-           ci0=None, verbose=None, **cikwargs):
+           ci0=None, verbose=None,
+           dump_chk=True, dump_chk_ci=False,
+           **cikwargs):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -395,6 +397,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
 
         mo = list(map(numpy.dot, mo, u))
+        # keep this here to save new MO coeff at earliest time:  (WP)
         casscf.save_mo_coeff(mo, imacro, imicro)
 
         eris = None # to avoid using too much memory
@@ -412,9 +415,18 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         if abs(e_tot - elast) < tol \
            and (norm_gorb < toloose and norm_dm1 < toloose):
             conv = True
-            break
         else:
             elast = e_tot
+
+        if dump_chk:
+            casscf.dump_chk(mo,
+                            mcscf_energy=e_tot, e_cas=e_ci,
+                            ci_vector=(fcivec if dump_chk_ci else None),
+                            iter_macro=imacro+1,
+                            iter_micro_tot=totmicro,
+                            converged=(conv if (conv or (imacro+1 >= macro)) else None),
+                           )
+        if conv: break
 
     if conv:
         log.info('1-step CASSCF converged in %d macro (%d JK %d micro) steps',
@@ -695,7 +707,11 @@ class CASSCF(casci_uhf.CASCI):
         return casdm1, casdm2, g
 
     def save_mo_coeff(self, mo_coeff, *args):
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo_coeff)
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff_new', mo_coeff)
+
+    def dump_chk(self, *args, **kwargs):
+        from pyscf.mcscf import chkfile
+        chkfile.dump_mcscf(self.mol, self.chkfile, *args, **kwargs)
 
 
 # to avoid calculating AO integrals
