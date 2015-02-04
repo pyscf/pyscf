@@ -186,7 +186,7 @@ class RHF(hf.RHF):
         mo_occ = numpy.zeros_like(mo_energy)
         nirrep = mol.symm_orb.__len__()
         mo_e_left = []
-        noccs = []
+        idx_e_left = []
         nelec_fix = 0
         p0 = 0
         for ir in range(nirrep):
@@ -196,33 +196,31 @@ class RHF(hf.RHF):
                 n = self.irrep_nelec[irname]
                 mo_occ[p0:p0+n//2] = 2
                 nelec_fix += n
-                noccs.append(n)
             else:
-                noccs.append(0)
-                mo_e_left.append(mo_energy[p0:p0+nso])
+                idx_e_left.append(range(p0,p0+nso))
             p0 += nso
         nelec_float = mol.nelectron - nelec_fix
         assert(nelec_float >= 0)
         if nelec_float > 0:
-            mo_e_left = sorted(numpy.hstack(mo_e_left))
-            elumo_float = mo_e_left[nelec_float//2]
+            idx_e_left = numpy.hstack(idx_e_left)
+            mo_e_left = mo_energy[idx_e_left]
+            mo_e_sort = numpy.argsort(mo_e_left)
+            occ_idx = idx_ea_left[ea_sort][:neleca_float]
+            mo_occ[occ_idx] = 2
 
-        ehomo, irhomo = (-1e9, None)
-        elumo, irlumo = ( 1e9, None)
+        ehomo = max(mo_energy[mo_occ>0 ])
+        elumo = min(mo_energy[mo_occ==0])
+        noccs = []
         p0 = 0
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
-            if irname in self.irrep_nelec:
-                nocc = self.irrep_nelec[irname]
-            else:
-                nocc = int((mo_energy[p0:p0+nso]<elumo_float).sum())
-                mo_occ[p0:p0+nocc] = 2
-                noccs[ir] = nocc
-            if nocc > 0 and mo_energy[p0+nocc-1] > ehomo:
-                ehomo, irhomo = mo_energy[p0+nocc-1], irname
-            if nocc < nso and mo_energy[p0+nocc] < elumo:
-                elumo, irlumo = mo_energy[p0+nocc], irname
+
+            noccs.append(int(mo_occ[p0:p0+nso].sum()))
+            if ehomo in mo_energy[p0:p0+nso]:
+                irhomo = irname
+            if elumo in mo_energy[p0:p0+nso]:
+                irlumo = irname
             p0 += nso
         log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
                  irhomo, ehomo, irlumo, elumo)
