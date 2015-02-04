@@ -30,10 +30,12 @@ def header(mol, fout):
             else:
                 b_coeff = b[1:]
             nprim = len(b_coeff)
-            fout.write(' %s   %2d 1.00\n' % (param.ANGULAR[l], nprim))
-            fmt = '    ' + '%18.14g'*len(b_coeff[0]) + '\n'
-            for ip in range(nprim):
-                fout.write(fmt % tuple(b_coeff[ip]))
+            nctr = len(b_coeff[0]) - 1
+            for ic in range(nctr):
+                fout.write(' %s   %2d 1.00\n' % (param.ANGULAR[l], nprim))
+                for ip in range(nprim):
+                    fout.write('    %18.14g  %18.14g\n' %
+                               (b_coeff[ip][0], b_coeff[ip][ic+1]))
         fout.write('\n')
     fout.write('[5d]\n[9g]\n\n')
 
@@ -66,16 +68,16 @@ def order_ao_index(mol):
             off += l * 2 + 1
     return idx
 
-def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
+def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None, \
                   occ=None):
-    from pyscf import symm
+    import pyscf.symm
     aoidx = order_ao_index(mol)
     nmo = mo_coeff.shape[1]
-    if sym is None:
+    if symm is None:
         if mol.symmetry:
-            sym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo_coeff)
+            symm = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo_coeff)
         else:
-            sym = ['A']*nmo
+            symm = ['A']*nmo
     if ene is None:
         ene = numpy.arange(nmo)
     if occ is None:
@@ -83,12 +85,12 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
     assert(spin == 'Alpha' or spin == 'Beta')
     fout.write('[MO]\n')
     for imo in range(nmo):
-        fout.write(' Sym= %s\n' % sym[imo])
+        fout.write(' Sym= %s\n' % symm[imo])
         fout.write(' Ene= %15.10g\n' % ene[imo])
         fout.write(' Spin= %s\n' % spin)
         fout.write(' Occup= %10.5f\n' % occ[imo])
         for i,j in enumerate(aoidx):
-            fout.write(' %3d    %18.14g\n' % (i, mo_coeff[j,imo]))
+            fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
 def dump_scf(mf, filename):
     import pyscf.scf
