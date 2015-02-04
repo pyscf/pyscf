@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os
+import os, sys
 import ctypes
 import tempfile
 import numpy
@@ -238,7 +238,7 @@ def _mem_usage(ncore, ncas, nmo):
                ncas**2*nmo**2*7 + nmo**3*2) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
     if outcore > 10000:
-        print('Be careful with the virtual memorty address space `ulimit -v`')
+        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore
 
 if __name__ == '__main__':

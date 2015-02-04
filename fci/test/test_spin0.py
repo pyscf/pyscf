@@ -6,6 +6,7 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
+from pyscf import mcscf
 from pyscf import fci
 
 mol = gto.Mole()
@@ -89,6 +90,26 @@ class KnowValues(unittest.TestCase):
         _,dm0 = fci.direct_spin0.make_rdm12(ci0, norb, nelec)
         _,dm2 = fci.direct_spin0.trans_rdm12(ci0, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(dm2,dm0))
+
+    def test_davidson_only(self):
+        x = 3.0 * 0.529177249
+        y = (2.54 - 0.46 * 3.0) * 0.529177249
+        mol = gto.M(
+            verbose = 0,
+            atom = [
+            ['Be',( 0., 0.    , 0.   )],
+            ['H', ( x, -y    , 0.    )],
+            ['H', ( x,  y    , 0.    )],],
+            symmetry = True,
+            basis = '6-311g')
+        mf = scf.RHF(mol)
+        mf.scf()
+        h1e = mcscf.casci.h1e_for_cas(mf, mf.mo_coeff, ncas=2, ncore=2)[0]
+        eri = ao2mo.incore.full(mf._eri, mf.mo_coeff[:,2:4])
+        cis = fci.direct_spin0.FCISolver(mol)
+        cis.davidson_only = True
+        e, c = cis.kernel(h1e, eri, 2, 2)
+        self.assertAlmostEqual(e, -0.8075552416051176, 10)
 
 
 if __name__ == "__main__":

@@ -275,13 +275,16 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
     pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*nb:
-        ci0 = numpy.empty((na*nb))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
+    if not fci.davidson_only:
+        if len(addr) == 1:
+            return pw, pv
+        elif len(addr) == na*nb:
+            ci0 = numpy.empty((na*nb))
+            ci0[addr] = pv[:,0]
+            if abs(pw[0]-pw[1]) > 1e-12:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-            return pw[0], ci0.reshape(na,nb)
+                return pw[0], ci0.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -336,6 +339,11 @@ class FCISolver(object):
         self.max_memory = 1200 # MB
 # level shift in precond
         self.level_shift = 1e-2
+        # force the diagonlization use davidson iteration.  When the CI space
+        # is small, the solver exactly diagonlizes the Hamiltonian.  But this
+        # solution will ignore the initial guess.  Setting davidson_only can
+        # enforce the solution on the initial guess state
+        self.davidson_only = False
 
         self._keys = set(self.__dict__.keys())
 

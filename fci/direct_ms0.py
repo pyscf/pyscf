@@ -212,13 +212,16 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
     pw, pv = scipy.linalg.eigh(h0)
-    if len(addr) == na*na:
-        ci0 = numpy.empty((na*na))
-        ci0[addr] = pv[:,0]
-        if abs(pw[0]-pw[1]) > 1e-12:
+    if not fci.davidson_only:
+        if len(addr) == 1:
+            return pw, pv
+        elif len(addr) == na*na:
+            ci0 = numpy.empty((na*na))
+            ci0[addr] = pv[:,0]
+            if abs(pw[0]-pw[1]) > 1e-12:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-            return pw[0], ci0.reshape(na,na)
+                return pw[0], ci0.reshape(na,na)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 

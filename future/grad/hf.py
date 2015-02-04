@@ -107,12 +107,10 @@ class RHF:
         self.chkfile = scf_method.chkfile
 
     def dump_flags(self):
-        pass
-#        log.info(self, '\n')
-#        log.info(self, '******** Gradients flags ********')
-#        if not self._scf.converged:
-#            log.warn(self, 'underneath SCF of gradients not converged')
-#        log.info(self, '\n')
+        log.info(self, '\n')
+        log.info(self, '******** Gradients flags ********')
+        log.info(self, 'mean field = %s', self._scf.__module__)
+        log.info(self, '\n')
 
     @pyscf.lib.omnimethod
     def get_hcore(self, mol=None):

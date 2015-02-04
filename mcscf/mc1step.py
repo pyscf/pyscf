@@ -370,8 +370,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
 
         mo = numpy.dot(mo, u)
-        # keep this here to save new MO coeff at earliest time:  (WP)
-        casscf.save_mo_coeff(mo, imacro, imicro)
 
         eris = None # to avoid using too much memory
         eris = casscf.update_ao2mo(mo)
@@ -392,6 +390,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             elast = e_tot
 
         if dump_chk:
+            casscf.save_mo_coeff(mo, imacro, imicro)
             casscf.dump_chk(mo,
                             mcscf_energy=e_tot, e_cas=e_ci,
                             ci_vector=(fcivec if dump_chk_ci else None),
@@ -815,7 +814,7 @@ class CASSCF(casci.CASCI):
         return casdm1, casdm2, g
 
     def save_mo_coeff(self, mo_coeff, *args):
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff_new', mo_coeff)
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo_coeff)
     def load_mo_coeff(self):
         return pyscf.scf.chkfile.load(self.chkfile, 'mcscf/mo_coeff')
 
