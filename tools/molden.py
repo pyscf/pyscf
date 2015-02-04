@@ -44,9 +44,7 @@ def order_ao_index(mol):
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
         for n in range(nc):
-            if l == 1:
-                idx.extend([off+2,off+0,off+1])
-            elif l == 2:
+            if l == 2:
                 idx.extend([off+2,off+3,off+1,off+4,off+0])
             elif l == 3:
                 idx.extend([off+3,off+4,off+2,off+5,off+1,off+6,off+0])
