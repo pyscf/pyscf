@@ -141,8 +141,8 @@ static void rdm4_a_t2(double *ci0, double *t2,
                         }
                 }
         }
-}
         free(t1);
+}
 }
 
 static void tril3pdm_particle_symm(double *rdm3, double *tbra, double *t2ket,
