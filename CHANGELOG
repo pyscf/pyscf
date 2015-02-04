@@ -1,4 +1,4 @@
-Version 0.10 (2015-1-?):
+Version 0.10 (2015-2-4):
 * Refactoring:
   - Expose class member functions to module level
   - Rename member function of class Mole,
@@ -21,6 +21,7 @@ Version 0.10 (2015-1-?):
   - Set default value for the arguments of most class functions
 * Removing the default calling of analyze() in kernel functions
 * Fix screening bug in ao2mo.outcore for long-range separated molecule
+* Add 4pdm
 
 Version 0.9 (2015-1-4):
 * Add 2-step FCIQMC-CASSCF, using NECI as FCI solver
