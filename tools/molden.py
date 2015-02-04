@@ -38,6 +38,15 @@ def header(mol, fout):
     fout.write('[5d]\n[9g]\n\n')
 
 def order_ao_index(mol):
+# reorder d,f,g fucntion to
+#  5D: D 0, D+1, D-1, D+2, D-2
+#  6D: xx, yy, zz, xy, xz, yz
+#
+#  7F: F 0, F+1, F-1, F+2, F-2, F+3, F-3
+# 10F: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
+#
+#  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
+# 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
     idx = []
     off = 0
     for ib in range(mol.nbas):
@@ -50,6 +59,8 @@ def order_ao_index(mol):
                 idx.extend([off+3,off+4,off+2,off+5,off+1,off+6,off+0])
             elif l == 4:
                 idx.extend([off+4,off+5,off+3,off+6,off+2,off+7,off+1,off+8,off+0])
+            elif l > 4:
+                raise RuntimeError('l=5 is not supported')
             else:
                 idx.extend(range(off,off+l*2+1))
             off += l * 2 + 1
@@ -57,19 +68,14 @@ def order_ao_index(mol):
 
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', sym=None, ene=None, \
                   occ=None):
-# reorder d,f,g fucntion to
-#  5D: D 0, D+1, D-1, D+2, D-2
-#  6D: xx, yy, zz, xy, xz, yz
-#
-#  7F: F 0, F+1, F-1, F+2, F-2, F+3, F-3
-# 10F: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
-#
-#  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
-# 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
+    from pyscf import symm
     aoidx = order_ao_index(mol)
     nmo = mo_coeff.shape[1]
     if sym is None:
-        sym = ['A']*nmo
+        if mol.symmetry:
+            sym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo_coeff)
+        else:
+            sym = ['A']*nmo
     if ene is None:
         ene = numpy.arange(nmo)
     if occ is None:
