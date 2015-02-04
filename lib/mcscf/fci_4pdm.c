@@ -106,15 +106,16 @@ static void rdm4_a_t2(double *ci0, double *t2,
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         int i, j, k, l, a, sign, str1;
-        double *t1 = malloc(sizeof(double) * nstrb * nnorb);
+        double *t1;
         double *pt1, *pt2;
         _LinkT *tab = clink_indexa + stra_id * nlinka;
 
 #pragma omp parallel default(none) \
-        shared(ci0, t1, t2, bcount, strb_id, norb, nstrb, nlinka, \
+        shared(ci0, t2, bcount, strb_id, norb, nstrb, nlinka, \
                clink_indexa, tab), \
-        private(i, j, k, l, a, str1, sign, pt1, pt2)
+        private(i, j, k, l, a, str1, sign, t1, pt1, pt2)
 {
+        t1 = malloc(sizeof(double) * nstrb * nnorb);
 #pragma omp for schedule(dynamic, 1) nowait
         for (j = 0; j < nlinka; j++) {
                 i    = EXTRACT_I   (tab[j]);
