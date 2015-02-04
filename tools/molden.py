@@ -23,7 +23,7 @@ def header(mol, fout):
     lbl = mol.spheric_labels()
     for ia in range(mol.natm):
         fout.write('%d 0\n' %(ia+1))
-        for b in mol.basis[mol.atom_symbol(ia)]:
+        for b in mol._basis[mol.atom_symbol(ia)]:
             l = b[0]
             if isinstance(b[1], int):
                 b_coeff = b[2:]
