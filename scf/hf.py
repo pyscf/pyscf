@@ -20,7 +20,7 @@ from pyscf.scf import _vhf
 
 
 
-def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
+def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None, callback=None):
     '''kernel: the SCF driver.
 
     Args:
@@ -106,6 +106,12 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, init_dm=None):
            and mf.check_dm_conv(dm, dm_last, conv_tol):
             scf_conv = True
 
+#TODO        if callback is not None:
+#TODO            try:
+#TODO                callback(mf, mo_energy, mo_coeff, mo_occ, hf_energy, fock, cycle)
+#TODO            except:
+#TODO                import traceback
+#TODO                traceback.print_exc(file=sys.stderr)
         if dump_chk:
             mf.dump_chk(hf_energy, mo_energy, mo_coeff, mo_occ)
         cput1 = log.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
@@ -566,7 +572,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(label):
-        log.info('pop of  %s %10.5f', '%d%s %s%4s'%s, pop[i])
+        log.info('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
 
     log.info(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -579,19 +585,39 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
-def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG):
+def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
+                                pre_orth_method='ANO'):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     In the meta-lowdin, the AOs are grouped in three sets: core, valence and
     Rydberg, the orthogonalization are carreid out within each subsets.
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        dm : ndarray or 2-item list of ndarray
+            Density matrix.  ROHF dm is a 2-item list of 2D array
+
+    Kwargs:
+        verbose : int or instance of :class:`lib.logger.Logger`
+
+        pre_orth_method : str
+            Pre-orthogonalization, which localized GTOs for each atom.
+            To obtain the occupied and unoccupied atomic shells, there are
+            three methods
+
+            | 'ano'   : Project GTOs to ANO basis
+            | 'minao' : Project GTOs to MINAO basis
+            | 'scf'   : Fraction-averaged RHF
+
     '''
     from pyscf.lo import orth
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    c = orth.pre_orth_ao_atm_scf(mol)
+    c = orth.pre_orth_ao(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
-    c_inv = numpy.linalg.inv(orth_coeff)
+    c_inv = numpy.dot(orth_coeff.T, mol.intor_symmetric('cint1e_ovlp_sph'))
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))
     else: # ROHF
@@ -949,11 +975,13 @@ class SCF(object):
         log = logger.Logger(self.stdout, verbose)
         return mulliken_pop(mol, dm, ovlp, log)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None, verbose=logger.DEBUG):
+    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None,
+                                    verbose=logger.DEBUG,
+                                    pre_orth_method='ANO'):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         log = logger.Logger(self.stdout, verbose)
-        return mulliken_pop_meta_lowdin_ao(mol, dm, log)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, log, pre_orth_method)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()

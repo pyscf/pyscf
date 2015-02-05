@@ -43,7 +43,11 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         pop, chg = mf.mulliken_pop(mol, dm)
         self.assertAlmostEqual(abs(pop).sum(), 18.076192698218936, 9)
-        pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm)
+        pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
+        self.assertAlmostEqual(abs(pop).sum(), 17.35430883835847, 9)
+        pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
+        self.assertAlmostEqual(abs(pop).sum(), 17.456435048220101, 9)
+        pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
         self.assertAlmostEqual(abs(pop).sum(), 17.481299501546292, 9)
 
     def test_analyze(self):

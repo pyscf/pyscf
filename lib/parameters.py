@@ -2,6 +2,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+L_MAX      = 8
 MEMORY_MAX = 4000 # MB
 
 #LIGHTSPEED = 137.035 999 679 94    #http://physics.nist.gov/cgi-bin/cuu/Value?alph

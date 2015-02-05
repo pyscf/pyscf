@@ -335,7 +335,8 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
 
-def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG):
+def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG,
+                                pre_orth_method='ANO'):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     from pyscf.lo import orth
@@ -343,7 +344,7 @@ def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    c = orth.pre_orth_ao_atm_scf(mol)
+    c = orth.pre_orth_ao(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
     c_inv = numpy.linalg.inv(orth_coeff)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
@@ -531,11 +532,13 @@ class UHF(hf.SCF):
         log = logger.Logger(self.stdout, verbose)
         return mulliken_pop(mol, dm, ovlp, log)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None, verbose=logger.DEBUG):
+    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None,
+                                    verbose=logger.DEBUG,
+                                    pre_orth_method='ANO'):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         log = logger.Logger(self.stdout, verbose)
-        return mulliken_pop_meta_lowdin_ao(mol, dm, log)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, log, pre_orth_method)
 
     def spin_square(self, mo_coeff=None, ovlp=None):
         if mo_coeff is None:

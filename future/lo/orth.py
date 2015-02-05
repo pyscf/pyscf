@@ -5,12 +5,14 @@
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
+import pyscf.gto
 
 def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
     e, v = numpy.linalg.eigh(s)
-    return numpy.dot(v/numpy.sqrt(e), v.T.conj())
+    idx = e > 1e-14
+    return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def schmidt(s):
     c = numpy.linalg.cholesky(s)
@@ -38,8 +40,70 @@ def weight_orth(s, weight):
     return weight[:,None] * c
 
 
-def pre_orth_ao(mol):
-    return pre_orth_ao_atm_scf(mol)
+def pre_orth_ao(mol, method='ANO'):
+    '''Localized GTOs for each atom.  Possible localized methods include
+    the ANO/MINAO projected basis or fraction-averaged RHF'''
+    if method.upper() in ('ANO', 'MINAO'):
+# Use ANO/MINAO basis to define the strongly occupied set
+        return pre_orth_project_ano(mol, method)
+    else:
+        return pre_orth_ao_atm_scf(mol)
+
+def pre_orth_project_ano(mol, basname):
+    import pyscf.scf
+    def search_atm_l(atm, l):
+        idx = []
+        p0 = 0
+        for ib, b in enumerate(atm._bas):
+            l0 = atm.bas_angular(ib)
+            nctr = atm.bas_nctr(ib)
+            if l0 == l:
+                idx.extend(range(p0,p0+(2*l+1)*nctr))
+            p0 += (2*l0+1) * nctr
+        return idx
+
+    aos = {}
+    for symb in mol._basis.keys():
+        stdsymb = param.ELEMENTS[pyscf.gto.mole._ELEMENTDIC[symb.upper()]][0]
+        atm = pyscf.gto.Mole()
+        atm._atm, atm._bas, atm._env = \
+                atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
+        s0 = atm.intor_symmetric('cint1e_ovlp_sph')
+
+        basis_add = pyscf.gto.basis.load(basname, stdsymb)
+        atmp = pyscf.gto.Mole()
+        atmp._atm, atmp._bas, atmp._env = \
+                atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
+        ano = pyscf.scf.addons.project_mo_nr2nr(atmp, 1, atm)
+        rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
+        c = rm_ano.copy()
+        for l in range(4):
+            idx  = numpy.array(search_atm_l(atm, l))
+            idxp = numpy.array(search_atm_l(atmp, l))
+            if len(idx) > len(idxp) > 0:
+# For angular l, first place the projected ANO, then the rest AOs.
+                sdiag = reduce(numpy.dot, (rm_ano[:,idx].T, s0, rm_ano[:,idx])).diagonal()
+                c[:,idx[:len(idxp)]] = ano[:,idxp]
+                c[:,idx[len(idxp):]] = rm_ano[:,numpy.argsort(sdiag)[len(idxp):]]
+            elif len(idxp) >= len(idx) > 0:
+                c[:,idx] = ano[:,idxp[:len(idx)]]
+        aos[symb] = c
+
+    nao = mol.nao_nr()
+    c = numpy.zeros((nao,nao))
+    p0 = 0
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb in mol._basis:
+            ano = aos[symb]
+        else:
+            symb = mol.atom_pure_symbol(ia)
+            ano = aos[symb]
+        p1 = p0 + ano.shape[1]
+        c[p0:p1,p0:p1] = ano
+        p0 = p1
+    return c
+
 def pre_orth_ao_atm_scf(mol):
     from pyscf.scf import atom_hf
     atm_scf = atom_hf.get_atm_nrhf(mol)
@@ -56,7 +120,6 @@ def pre_orth_ao_atm_scf(mol):
         p1 = p0 + mo_e.size
         c[p0:p1,p0:p1] = mo_c
         p0 = p1
-    log.debug(mol, 'use SCF AO instead of input basis')
     return c
 
 

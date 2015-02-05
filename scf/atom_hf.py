@@ -46,7 +46,7 @@ class AtomSphericAverageRHF(hf.RHF):
         atm = self.mol
         symb = atm.atom_symbol(0)
         nuc = gto.mole._charge(symb)
-        idx_by_l = [[] for i in range(6)]
+        idx_by_l = [[] for i in range(param.L_MAX)]
         i0 = 0
         for ib in range(atm.nbas):
             l = atm.bas_angular(ib)
@@ -61,7 +61,7 @@ class AtomSphericAverageRHF(hf.RHF):
         mo_e = numpy.zeros(nbf)
 
         # fraction occupation
-        for l in range(4):
+        for l in range(param.L_MAX):
             if idx_by_l[l]:
                 n2occ, frac = frac_occ(symb, l)
                 log.debug1(self, 'l = %d, occ = %d + %.4g', l, n2occ, frac)
@@ -91,14 +91,14 @@ class AtomSphericAverageRHF(hf.RHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         return self._occ
 
-    def scf(self, *args, **keys):
+    def scf(self, *args, **kwargs):
         self.build()
-        return hf.kernel(self, *args, dump_chk=False, **keys)
+        return hf.kernel(self, *args, dump_chk=False, **kwargs)
 
 def frac_occ(symb, l):
     nuc = gto.mole._charge(symb)
-    ne = param.ELEMENTS[nuc][2][l]
-    if ne > 0:
+    if l < 4 and param.ELEMENTS[nuc][2][l] > 0:
+        ne = param.ELEMENTS[nuc][2][l]
         nd = (l * 2 + 1) * 2
         ndocc = ne.__floordiv__(nd)
         frac = (float(ne) / nd - ndocc) * 2

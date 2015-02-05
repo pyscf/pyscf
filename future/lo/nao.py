@@ -108,7 +108,9 @@ def _core_val_ryd_list(mol):
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
         for n in range(nc):
-            if count[ia,l]+n < param.CORESHELL[nuc][l]:
+            if l > 3:
+                rydbg_lst += list(range(k, k+(2*l+1)))
+            elif count[ia,l]+n < param.CORESHELL[nuc][l]:
                 core_lst += list(range(k, k+(2*l+1)))
             elif count[ia,l]+n < valenceof(nuc, l):
                 val_lst += list(range(k, k+(2*l+1)))
