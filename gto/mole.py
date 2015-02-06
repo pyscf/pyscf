@@ -212,14 +212,15 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     '''
     off = len(env1)
     natm_off = len(atm1)
-    atm2 = numpy.array(atm2)
-    bas2 = numpy.array(bas2)
+    atm2 = numpy.copy(atm2)
+    bas2 = numpy.copy(bas2)
     atm2[:,PTR_COORD] += off
     atm2[:,PTR_MASS ] += off
     bas2[:,ATOM_OF  ] += natm_off
     bas2[:,PTR_EXP  ] += off
     bas2[:,PTR_COEFF] += off
-    return atm1+atm2.tolist(), bas1+bas2.tolist(), env1+env2
+    return (numpy.vstack((atm1,atm2)), numpy.vstack((bas1,bas2)),
+            numpy.hstack((env1,env2)))
 
 # <bas-of-mol1|intor|bas-of-mol2>
 def intor_cross(intor, mol1, mol2, comp=1):
@@ -273,7 +274,7 @@ def make_atm_env(atom, ptr=0):
     _atm[PTR_COORD] = ptr
     _atm[NUC_MOD_OF] = param.MI_NUC_POINT
     _atm[PTR_MASS ] = ptr + 3
-    return _atm, _env
+    return numpy.array(_atm, numpy.int32), numpy.array(_env)
 
 # append (atom, l, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0) to bas
 # absorb normalization into GTO contraction coefficients
@@ -305,7 +306,7 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
     _env = list(itertools.chain.from_iterable(_env)) # flatten nested lists
-    return _bas, _env
+    return numpy.array(_bas, numpy.int32), numpy.array(_env)
 
 def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
     '''Generate the input arguments for ``libcint`` library in terms of
@@ -331,15 +332,15 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
             atm0[NUC_MOD_OF] = nucmod[_rm_digit(symb)]
         if ia+1 in mass:
             atm0[PTR_MASS] = ptr_env
-            env0.append(mass[ia+1])
+            env0 = numpy.hstack((env0, mass[ia+1]))
             ptr_env = ptr_env + 1
         elif symb in mass:
             atm0[PTR_MASS] = ptr_env
-            env0.append(mass[symb])
+            env0 = numpy.hstack((env0, mass[symb]))
             ptr_env = ptr_env + 1
         elif _rm_digit(symb) in mass:
             atm0[PTR_MASS] = ptr_env
-            env0.append(mass[_rm_digit(symb)])
+            env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
             ptr_env = ptr_env + 1
         _atm.append(atm0)
         _env.append(env0)
@@ -357,11 +358,14 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
             bas0 = _basdic[symb]
         else:
             bas0 = _basdic[_rm_digit(symb)]
-        _bas.append([[ia] + b[1:] for b in bas0])
+        b = bas0.copy()
+        b[:,ATOM_OF] = ia
+        _bas.append(b)
 
-    _bas = list(itertools.chain.from_iterable(_bas))
-    _env = list(itertools.chain.from_iterable(_env))
-    return _atm, _bas, pre_env+_env
+    _atm = numpy.array(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
+    _bas = numpy.array(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
+    _env = numpy.hstack((pre_env,numpy.hstack(_env)))
+    return _atm, _bas, _env
 
 def tot_electrons(mol):
     '''Total number of electrons for the given molecule
@@ -385,9 +389,9 @@ def copy(mol):
     '''
     import copy
     newmol = copy.copy(mol)
-    newmol._atm = copy.deepcopy(mol._atm)
-    newmol._bas = copy.deepcopy(mol._bas)
-    newmol._env = copy.deepcopy(mol._env)
+    newmol._atm = numpy.copy(mol._atm)
+    newmol._bas = numpy.copy(mol._bas)
+    newmol._env = numpy.copy(mol._env)
     newmol.atom    = copy.deepcopy(mol.atom)
     newmol.basis   = copy.deepcopy(mol.basis)
     newmol._basis  = copy.deepcopy(mol._basis)
@@ -431,13 +435,10 @@ def len_cart(l):
 
 def npgto_nr(mol):
     '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
-    return reduce(lambda n, b: n + (mol.bas_angular(b) * 2 + 1) \
-                                * mol.bas_nprim(b),
-                  range(len(mol._bas)), 0)
+    return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NPRIM_OF]).sum()
 def nao_nr(mol):
     '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
-    return sum([(mol.bas_angular(b) * 2 + 1) * mol.bas_nctr(b) \
-                for b in range(len(mol._bas))])
+    return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_nr_range(mol, bas_id0, bas_id1):
@@ -461,10 +462,8 @@ def nao_nr_range(mol, bas_id0, bas_id1):
     >>> gto.nao_nr_range(mol, 2, 4)
     (2, 6)
     '''
-    nao_id0 = sum([(mol.bas_angular(b) * 2 + 1) * mol.bas_nctr(b) \
-                   for b in range(bas_id0)])
-    n = sum([(mol.bas_angular(b) * 2 + 1) * mol.bas_nctr(b) \
-             for b in range(bas_id0, bas_id1)])
+    nao_id0 = ((mol._bas[:bas_id0,ANG_OF]*2+1) * mol._bas[:bas_id0,NCTR_OF]).sum()
+    n = ((mol._bas[bas_id0:bas_id1,ANG_OF]*2+1)* mol._bas[bas_id0:bas_id1,NCTR_OF]).sum()
     return nao_id0, nao_id0+n
 
 def nao_2c(mol):
@@ -726,6 +725,7 @@ NUC_MOD_OF = 2
 PTR_MASS   = 3
 RAD_GRIDS  = 4
 ANG_GRIDS  = 5
+ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1
 NPRIM_OF   = 2
@@ -733,6 +733,7 @@ NCTR_OF    = 3
 KAPPA_OF   = 4
 PTR_EXP    = 5
 PTR_COEFF  = 6
+BAS_SLOTS  = 8
 # pointer to env
 PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
@@ -1015,8 +1016,8 @@ class Mole(object):
         self._atm, self._bas, self._env = \
                 self.make_env(self.atom, self._basis, self._env, \
                               self.nucmod, self.mass)
-        self.natm = self._atm.__len__()
-        self.nbas = self._bas.__len__()
+        self.natm = len(self._atm)
+        self.nbas = len(self._bas)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             sys.stderr.write('Electron number %d and spin %d are not consistent\n' %
@@ -1036,9 +1037,9 @@ class Mole(object):
         if dump_input and not self._built and self.verbose > log.NOTICE:
             self.dump_input()
 
-        log.debug2(self, 'arg.atm = %s', self._atm)
-        log.debug2(self, 'arg.bas = %s', self._bas)
-        log.debug2(self, 'arg.env = %s', self._env)
+        log.debug2(self, 'arg.atm = %s', str(self._atm))
+        log.debug2(self, 'arg.bas = %s', str(self._bas))
+        log.debug2(self, 'arg.env = %s', str(self._env))
 
         self._built = True
         #return self._atm, self._bas, self._env
@@ -1174,7 +1175,8 @@ class Mole(object):
 
         Examples:
 
-        >>> mol.set_common_origin_((0,0,0))
+        >>> mol.set_common_origin_(0)
+        >>> mol.set_common_origin_((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
 
@@ -1183,7 +1185,8 @@ class Mole(object):
 
         Examples:
 
-        >>> mol.set_rinv_orig_((0,0,0))
+        >>> mol.set_rinv_orig_(0)
+        >>> mol.set_rinv_orig_((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
 
@@ -1231,7 +1234,7 @@ class Mole(object):
         >>> mol.atom_charge(1)
         17
         '''
-        return self._atm[atm_id][CHARGE_OF]
+        return self._atm[atm_id,CHARGE_OF]
 
     def atom_coord(self, atm_id):
         r'''Coordinates (ndarray) of the given atom id
@@ -1246,8 +1249,8 @@ class Mole(object):
         >>> mol.atom_coord(1)
         [ 0.          0.          2.07869874]
         '''
-        ptr = self._atm[atm_id][PTR_COORD]
-        return numpy.array(self._env[ptr:ptr+3])
+        ptr = self._atm[atm_id,PTR_COORD]
+        return self._env[ptr:ptr+3].copy()
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom
@@ -1278,8 +1281,7 @@ class Mole(object):
         >>> mol.atom_nshells(1)
         [3, 4, 5, 6, 7]
         '''
-        return [ib for ib in range(len(self._bas)) \
-                if self.bas_atom(ib) == atm_id]
+        return numpy.where(self._bas[:,ATOM_OF] == atm_id)[0]
 
     def bas_coord(self, bas_id):
         r'''Coordinates (ndarray) associated with the given basis id
@@ -1295,8 +1297,8 @@ class Mole(object):
         [ 0.          0.          2.07869874]
         '''
         atm_id = self.bas_atom(bas_id) - 1
-        ptr = self._atm[atm_id][PTR_COORD]
-        return numpy.array(self._env[ptr:ptr+3])
+        ptr = self._atm[atm_id,PTR_COORD]
+        return self._env[ptr:ptr+3].copy()
 
     def bas_atom(self, bas_id):
         r'''The atom (0-based id) that the given basis sits on
@@ -1311,7 +1313,7 @@ class Mole(object):
         >>> mol.bas_atom(7)
         1
         '''
-        return self._bas[bas_id][ATOM_OF]
+        return self._bas[bas_id,ATOM_OF]
 
     def bas_angular(self, bas_id):
         r'''The angular momentum associated with the given basis
@@ -1326,7 +1328,7 @@ class Mole(object):
         >>> mol.bas_atom(7)
         2
         '''
-        return self._bas[bas_id][ANG_OF]
+        return self._bas[bas_id,ANG_OF]
 
     def bas_nctr(self, bas_id):
         r'''The number of contracted GTOs for the given shell
@@ -1341,7 +1343,7 @@ class Mole(object):
         >>> mol.bas_atom(3)
         3
         '''
-        return self._bas[bas_id][NCTR_OF]
+        return self._bas[bas_id,NCTR_OF]
 
     def bas_nprim(self, bas_id):
         r'''The number of primitive GTOs for the given shell
@@ -1356,7 +1358,7 @@ class Mole(object):
         >>> mol.bas_atom(3)
         11
         '''
-        return self._bas[bas_id][NPRIM_OF]
+        return self._bas[bas_id,NPRIM_OF]
 
     def bas_kappa(self, bas_id):
         r'''Kappa (if l < j, -l-1, else l) of the given shell
@@ -1371,7 +1373,7 @@ class Mole(object):
         >>> mol.bas_kappa(3)
         0
         '''
-        return self._bas[bas_id][KAPPA_OF]
+        return self._bas[bas_id,KAPPA_OF]
 
     def bas_exp(self, bas_id):
         r'''exponents (ndarray) of the given shell
@@ -1387,7 +1389,7 @@ class Mole(object):
         [ 13.01     1.962    0.4446]
         '''
         nprim = self.bas_nprim(bas_id)
-        ptr = self._bas[bas_id][PTR_EXP]
+        ptr = self._bas[bas_id,PTR_EXP]
         return numpy.array(self._env[ptr:ptr+nprim])
 
     def bas_ctr_coeff(self, bas_id):
@@ -1407,7 +1409,7 @@ class Mole(object):
         '''
         nprim = self.bas_nprim(bas_id)
         nctr = self.bas_nctr(bas_id)
-        ptr = self._bas[bas_id][PTR_COEFF]
+        ptr = self._bas[bas_id,PTR_COEFF]
         return numpy.array(self._env[ptr:ptr+nprim*nctr]).reshape(nprim,nctr)
 
     def bas_len_spinor(self, bas_id):
@@ -1421,7 +1423,7 @@ class Mole(object):
     def bas_len_cart(self, bas_id):
         '''The number of Cartesian function associated with given basis
         '''
-        return len_cart(self._bas[bas_id][ANG_OF])
+        return len_cart(self._bas[bas_id,ANG_OF])
 
 
     def npgto_nr(self):
@@ -1606,16 +1608,16 @@ def _rm_digit(symb):
     else:
         return ''.join([i for i in symb if i.isalpha()])
 def _charge(symb_or_chg):
-    if isinstance(symb_or_chg, int):
-        return symb_or_chg
-    else:
+    if isinstance(symb_or_chg, str):
         return param.ELEMENTS_PROTON[_rm_digit(symb_or_chg)]
+    else:
+        return symb_or_chg
 
 def _symbol(symb_or_chg):
-    if isinstance(symb_or_chg, int):
-        return param.ELEMENTS[symb_or_chg][0]
-    else:
+    if isinstance(symb_or_chg, str):
         return symb_or_chg
+    else:
+        return param.ELEMENTS[symb_or_chg][0]
 
 def _update_from_cmdargs_(mol):
     # Ipython shell conflicts with optparse

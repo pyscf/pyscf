@@ -336,7 +336,7 @@ static void _part_cp(double *out, double *in, int nrow, int ncol,
 }
 
 // ao[:nao,:ngrids] in Fortran-order
-void VXCvalue_nr_gto(int nao, int ngrids, double *ao, double *coord,
+void VXCeval_nr_gto(int nao, int ngrids, double *ao, double *coord,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         int l, ig, np, nc, nc_cart, atm_id, bas_id, deg;
@@ -374,7 +374,7 @@ void VXCvalue_nr_gto(int nao, int ngrids, double *ao, double *coord,
 }
 
 // in ao[:nao,:ngrids,:4] in Fortran-order, [:4] ~ ao, ao_dx, ao_dy, ao_dz
-void VXCvalue_nr_gto_grad(int nao, int ngrids, double *ao, double *coord,
+void VXCeval_nr_gto_grad(int nao, int ngrids, double *ao, double *coord,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int i, ig;

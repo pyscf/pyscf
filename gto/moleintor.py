@@ -96,11 +96,11 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
             "cint1e_rinv_cart"          cartesian  (\| rinv \|))
             ==========================  =========  =============
 
-        atm : list of int-list
+        atm : int32 ndarray
             libcint integral function argument
-        bas : list of int-list
+        bas : int32 ndarray
             libcint integral function argument
-        env : list of float
+        env : float64 ndarray
             libcint integral function argument
 
     Kwargs:
@@ -140,9 +140,6 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
     else:
         assert(max(kets) < len(bas))
 
-    atm = numpy.array(atm, dtype=numpy.int32)
-    bas = numpy.array(bas, dtype=numpy.int32)
-    env = numpy.array(env, numpy.double)
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
@@ -323,11 +320,11 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
         shls : list of int
             The AO shell-ids of the integrals
-        atm : list of int-list
+        atm : int32 ndarray
             libcint integral function argument
-        bas : list of int-list
+        bas : int32 ndarray
             libcint integral function argument
-        env : list of float
+        env : float64 ndarray
             libcint integral function argument
 
     Kwargs:
@@ -347,12 +344,6 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
-    if not (isinstance(atm, numpy.ndarray) and atm.dtype == numpy.int32):
-        atm = numpy.array(atm, dtype=numpy.int32)
-    if not (isinstance(bas, numpy.ndarray) and bas.dtype == numpy.int32):
-        bas = numpy.array(bas, dtype=numpy.int32)
-    if not (isinstance(env, numpy.ndarray) and env.dtype == numpy.double):
-        env = numpy.array(env, numpy.double)
     c_bas = bas.ctypes.data_as(ctypes.c_void_p)
     natm = ctypes.c_int(atm.shape[0])
     nbas = ctypes.c_int(bas.shape[0])

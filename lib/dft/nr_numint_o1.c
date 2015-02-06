@@ -130,9 +130,9 @@ static void nr_rho_sf(int id, int np, struct _VXCEnvs *envs, double *dm,
         int nao = envs->nao;
 
         if (_xc_has_gga(envs->func_x, envs->func_c)) {
-                VXCvalue_nr_gto_grad(nao, np, ao, envs->coords+id*3,
-                                     envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env);
+                VXCeval_nr_gto_grad(nao, np, ao, envs->coords+id*3,
+                                    envs->atm, envs->natm,
+                                    envs->bas, envs->nbas, envs->env);
                 _dot_vmm(nao, np, 4, ao, dm, ao, rho);
                 int i;
                 double *rho1 = rho  + np;
@@ -146,9 +146,9 @@ static void nr_rho_sf(int id, int np, struct _VXCEnvs *envs, double *dm,
                                  + rho3[i]*rho3[i];
                 }
         } else {
-                VXCvalue_nr_gto(nao, np, ao, envs->coords+id*3,
-                                envs->atm, envs->natm,
-                                envs->bas, envs->nbas, envs->env);
+                VXCeval_nr_gto(nao, np, ao, envs->coords+id*3,
+                               envs->atm, envs->natm,
+                               envs->bas, envs->nbas, envs->env);
                 _dot_vmv(nao, np, ao, dm, ao, rho);
         }
 }

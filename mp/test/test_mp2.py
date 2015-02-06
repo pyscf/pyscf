@@ -58,6 +58,25 @@ class KnowValues(unittest.TestCase):
         rdm1 = mp.mp2.make_rdm1(pt, mf.mo_energy, mf.mo_coeff, nocc)
         self.assertTrue(numpy.allclose(rdm1, dm1ref))
 
+    def test_mp2_outcore(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.output = None
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+
+        mol.basis = 'cc-pvdz'
+        mol.build()
+        mf = scf.RHF(mol)
+        mf.max_memory = 0
+        mf.scf()
+        pt = mp.mp2.MP2(mf)
+        e, t2 = pt.kernel()
+        self.assertAlmostEqual(e, -0.204019967288338, 12)
+        self.assertAlmostEqual(numpy.linalg.norm(t2), 0.19379397642098622, 9)
+
 
 
 if __name__ == "__main__":

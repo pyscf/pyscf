@@ -43,17 +43,6 @@ include(ExternalProject)
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
   )
 #endif()
-if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
-else()
-  ExternalProject_Add(libxc
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.0.tar.gz
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
-          --enable-shared LIBS=-lm
-  )
-endif()
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib)
 
@@ -67,7 +56,18 @@ add_subdirectory(np_helper)
 add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
-add_subdirectory(dft)
 add_subdirectory(cc)
 add_subdirectory(ri)
 
+if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
+else()
+  ExternalProject_Add(libxc
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.0.tar.gz
+    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
+          --enable-shared LIBS=-lm
+  )
+endif()
+add_subdirectory(dft)
