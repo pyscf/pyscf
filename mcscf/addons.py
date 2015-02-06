@@ -279,7 +279,10 @@ def get_fock(casscf, fcivec=None, mo_coeff=None):
 
     if _is_uhf_mo(mo_coeff):
         casdm1 = casscf.fcisolver.make_rdm1s(fcivec, ncas, nelecas)
-        eris = casscf.update_ao2mo(mo_coeff)
+        if isinstance(casscf, mcscf.mc1step_uhf.CASSCF):
+            eris = casscf.update_ao2mo(mo_coeff)
+        else:
+            eris = mcscf.mc_ao2mo_uhf._ERIS(casscf, mo_coeff)
         vhf = (numpy.einsum('ipq->pq', eris.jkcpp) + eris.jC_pp \
                + numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1[0]) \
                - numpy.einsum('upqv,uv->pq', eris.appa, casdm1[0]) \
@@ -292,8 +295,11 @@ def get_fock(casscf, fcivec=None, mo_coeff=None):
              reduce(numpy.dot, (mo_coeff[1].T, casscf.get_hcore()[1], mo_coeff[1])))
         fock = (h1[0] + vhf[0], h1[1] + vhf[1])
     else:
+        if isinstance(casscf, mcscf.mc1step.CASSCF):
+            eris = casscf.update_ao2mo(mo_coeff)
+        else:
+            eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff)
         casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
-        eris = casscf.update_ao2mo(mo_coeff)
         vj = numpy.einsum('ipq->pq', eris.jc_pp) * 2 \
            + numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
         vk = numpy.einsum('ipq->pq', eris.kc_pp) * 2 \
