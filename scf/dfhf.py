@@ -96,9 +96,8 @@ def get_jk_(mf, mol, dms, hermi=1):
                                                 auxbasis=mf.auxbasis,
                                                 verbose=log)
 
-    s = mf.get_ovlp()
     cderi = mf._cderi
-    nao = s.shape[0]
+    nao = mol.nao_nr()
 
     def fjk(dm):
         #:vj = reduce(numpy.dot, (cderi.reshape(-1,nao*nao), dm.reshape(-1),
@@ -111,7 +110,7 @@ def get_jk_(mf, mol, dms, hermi=1):
         if hermi == 1:
 # I cannot assume dm is positive definite because it might be the density
 # matrix difference when the mf.direct_scf flag is set.
-            e, c = scipy.linalg.eigh(dm, s, type=2)
+            e, c = scipy.linalg.eigh(dm)
             pos = e > OCCDROP
             neg = e < -OCCDROP
             if sum(pos)+sum(neg) > 0:
