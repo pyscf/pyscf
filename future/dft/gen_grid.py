@@ -49,7 +49,7 @@ def original_becke(g):
 
 def gen_atomic_grids(mol, radi_method=radi.gauss_chebeshev, level=3):
     atom_grids_tab = {}
-    for atm in mol.basis.keys():
+    for atm in mol._basis.keys():
         if atm in mol.grids:
             n_rad, n_ang = mol.grids[atm]
         else:
