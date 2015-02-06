@@ -205,7 +205,7 @@ class RHF(hf.RHF):
             idx_e_left = numpy.hstack(idx_e_left)
             mo_e_left = mo_energy[idx_e_left]
             mo_e_sort = numpy.argsort(mo_e_left)
-            occ_idx = idx_e_left[mo_e_sort][:nelec_float]
+            occ_idx = idx_e_left[mo_e_sort][:(nelec_float//2)]
             mo_occ[occ_idx] = 2
 
         ehomo = max(mo_energy[mo_occ>0 ])

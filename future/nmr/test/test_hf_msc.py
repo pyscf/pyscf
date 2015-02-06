@@ -10,9 +10,9 @@ mol = gto.Mole()
 mol.verbose = 5
 mol.output = '/dev/null'
 
-mol.atom.extend([
+mol.atom = [
     [1   , (0. , 0. , .917)],
-    ["F" , (0. , 0. , 0.)], ])
+    ["F" , (0. , 0. , 0.)], ]
 #mol.nucmod = {"F":2, "H":2}
 mol.basis = {"H": 'cc_pvdz',
              "F": 'cc_pvdz',}

@@ -77,7 +77,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         # A10_j dot p + p dot A10_j consistents with <g p^2>
         # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
         h1 = .5 * mol.intor('cint1e_giao_irjxp_sph', 3)
-        logger.debug(mol, 'First-order Fock matrix from GIAOs\n')
+        log.debug('First-order Fock matrix of GIAOs')
         h1 += make_h10giao(mol, dm0)
     else:
         mol.set_common_origin_(gauge_orig)

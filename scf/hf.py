@@ -979,7 +979,7 @@ class HF1e(SCF):
 class RHF(SCF):
     __doc__ = SCF.__doc__
     def __init__(self, mol):
-        if mol.nelectron != 1 and mol.nelectron.__mod__(2) is not 0:
+        if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
 # Note: self._eri requires large mount of memory
         SCF.__init__(self, mol)

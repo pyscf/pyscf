@@ -451,7 +451,7 @@ class HF1e(UHF):
 class RHF(UHF):
     '''Dirac-RHF'''
     def __init__(self, mol):
-        if mol.nelectron.__mod__(2) is not 0:
+        if mol.nelectron.__mod__(2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
         UHF.__init__(self, mol)
 
