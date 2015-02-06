@@ -29,4 +29,4 @@ mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
 
 # dm0 is the initial guess
-mf.scf(dm)
+mf.scf(dm0)
