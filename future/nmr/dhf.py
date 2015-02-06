@@ -122,7 +122,7 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    log.debug(mol, 'first order Fock matrix / RKB')
+    log.debug('first order Fock matrix / RKB')
     n4c = dm0.shape[0]
     n2c = n4c // 2
     if gauge_orig is None:
