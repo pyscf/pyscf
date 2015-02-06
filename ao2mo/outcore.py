@@ -532,7 +532,9 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
     feri = h5py.File(erifile.name, 'r')
-    return numpy.array(feri['eri_mo'])
+    eri = numpy.array(feri['eri_mo'])
+    feri.close()
+    return eri
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
                    verbose=logger.WARN, compact=True):
@@ -616,7 +618,9 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
     feri = h5py.File(erifile.name, 'r')
-    return numpy.array(feri['eri_mo'])
+    eri = numpy.array(feri['eri_mo'])
+    feri.close()
+    return eri
 
 
 def iden_coeffs(mo1, mo2):
