@@ -510,7 +510,7 @@ class UHF(hf.SCF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, init_dm=dm0)
+                = hf.kernel(self, self.conv_tol, dm0=dm0)
 #        if self.nelectron_alpha * 2 < self.mol.nelectron:
 #            self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
 #            self.mo_occ = (self.mo_occ[1], self.mo_occ[0])

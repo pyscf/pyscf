@@ -160,7 +160,7 @@ class KnowValues(unittest.TestCase):
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
-        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334710607028219, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0381294999637398, 9)
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.hf.init_guess_by_chkfile(mol, ftmp.name, project=False)

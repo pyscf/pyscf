@@ -24,7 +24,7 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.hf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 23.074873357239454, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 23.104248631727842, 9)
 
     def test_1e(self):
         mf = scf.hf.HF1e(mol)
@@ -42,13 +42,13 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         dm = numpy.random.random((nao,nao))
         pop, chg = mf.mulliken_pop(mol, dm)
-        self.assertAlmostEqual(abs(pop).sum(), 18.076192698218936, 9)
+        self.assertAlmostEqual(abs(pop).sum(), 18.076192698218936, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
-        self.assertAlmostEqual(abs(pop).sum(), 17.35430883835847, 9)
+        self.assertAlmostEqual(abs(pop).sum(), 17.35430883835847, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
-        self.assertAlmostEqual(abs(pop).sum(), 17.456435048220101, 9)
+        self.assertAlmostEqual(abs(pop).sum(), 17.456435048220101, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(abs(pop).sum(), 17.481299501546292, 9)
+        self.assertAlmostEqual(abs(pop).sum(), 17.481299501546292, 7)
 
     def test_analyze(self):
         numpy.random.seed(1)

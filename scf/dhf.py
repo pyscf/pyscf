@@ -23,7 +23,7 @@ from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
 
-def kernel(mf, conv_tol=1e-9, dump_chk=True, init_dm=None):
+def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None):
     '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
     SCF is carried out in three steps.  First the 2-electron part is
     approximated by large component integrals (LL|LL); Next, (SS|LL) the
@@ -31,21 +31,21 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, init_dm=None):
     converge the SCF with the small component contributions (SS|SS)
     '''
     mol = mf.mol
-    if init_dm is None:
+    if dm0 is None:
         dm = mf.get_init_guess()
     else:
-        dm = init_dm
+        dm = dm0
 
-    if init_dm is None and mf._coulomb_now.upper() == 'LLLL':
+    if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 4e-3, dump_chk, init_dm=dm)
+                = hf.kernel(mf, 4e-3, dump_chk, dm0=dm)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
-    if init_dm is None and (mf._coulomb_now.upper() == 'SSLL' \
+    if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' \
                          or mf._coulomb_now.upper() == 'LLSS'):
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 4e-4, dump_chk, init_dm=dm)
+                = hf.kernel(mf, 4e-4, dump_chk, dm0=dm)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
 
@@ -57,7 +57,7 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, init_dm=None):
     if mf.with_gaunt:
         mf.get_veff = mf.get_vhf_with_gaunt
 
-    return hf.kernel(mf, conv_tol, dump_chk, init_dm=dm)
+    return hf.kernel(mf, conv_tol, dump_chk, dm0=dm)
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None):
@@ -423,7 +423,7 @@ class UHF(hf.SCF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = kernel(self, self.conv_tol, init_dm=dm0)
+                = kernel(self, self.conv_tol, dm0=dm0)
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)

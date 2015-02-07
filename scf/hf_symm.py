@@ -236,7 +236,7 @@ class RHF(hf.RHF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, init_dm=dm0)
+                = hf.kernel(self, self.conv_tol, dm0=dm0)
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
@@ -521,7 +521,7 @@ class ROHF(hf.ROHF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, init_dm=dm0)
+                = hf.kernel(self, self.conv_tol, dm0=dm0)
 
         log.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
