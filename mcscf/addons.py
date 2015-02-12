@@ -269,6 +269,7 @@ def make_rdm12(casscf, fcivec=None, mo_coeff=None):
 def get_fock(casscf, fcivec=None, mo_coeff=None):
     '''Generalized Fock matrix
     '''
+    from pyscf import mcscf
     if fcivec is None:
         fcivec = casscf.ci
     if mo_coeff is None:
