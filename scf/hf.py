@@ -88,11 +88,10 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     except:
         adiis = None
 
-    cput1 = cput0
     vhf = mf.get_veff(mol, dm)
     hf_energy = mf.energy_tot(dm, h1e, vhf)
     log.info(mf, 'init E=%.15g', hf_energy)
-    log.timer(mf, 'initialize scf')
+    cput1 = log.timer(mf, 'initialize scf', *cput0)
     while not scf_conv and cycle < max(1, mf.max_cycle):
         dm_last = dm
         last_hf_e = hf_energy
