@@ -117,7 +117,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_spin0', fcivec, fcivec,
                               norb, nelec, link_index, 1)
     if reorder:
-        dm2 = rdm.reorder_rdm(dm1, dm2, True)
+        dm1, dm2 = rdm.reorder_rdm(dm1, dm2, True)
     return dm1, dm2
 
 # dm_pq = <I|p^+ q|J>
@@ -144,7 +144,7 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_ms0', cibra, ciket,
                               norb, nelec, link_index, 2)
     if reorder:
-        dm2 = rdm.reorder_rdm(dm1, dm2, True)
+        dm1, dm2 = rdm.reorder_rdm(dm1, dm2, True)
     return dm1, dm2
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
