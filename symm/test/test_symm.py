@@ -34,142 +34,189 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ct[2], 0.11740000000, 9)
 
     def test_detect_symm(self):
-        atoms = [[1, (0., 0., 0.)],
-                 [1, (1., 0., 0.)],
-                 [1, (0., 0., 1.)],
-                 [1, (-1, 0., 0.)],
-                 [1, (0.,-1., 0.)],
-                 [1, (0., 0.,-1.)]]
-        ops = symm.SymmOperator(atoms)
+        atoms = [['H', (0., 0., 0.)],
+                 ['H', (1., 0., 0.)],
+                 ['H', (0., 0., 1.)],
+                 ['H', (-1, 0., 0.)],
+                 ['H', (0.,-1., 0.)],
+                 ['H', (0., 0.,-1.)]]
+        ops = symm.SymmSys(atoms)
         self.assertEqual(ops.detect_icenter(), False)
         v = numpy.linalg.norm(ops.detect_C2() - numpy.array((0.,1.,0.)))
         self.assertAlmostEqual(v, 0., 14)
         v = ops.detect_mirror()
         self.assertAlmostEqual(numpy.dot(v[0],v[1]), 0., 14)
         self.assertAlmostEqual(numpy.dot(v[2],v[3]), 0., 14)
-        l = symm.detect_symm(atoms)[0]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2v')
-        #self.assertAlmostEqual(numpy.linalg.norm(c[1][1]-numpy.array((-1.,0.,1./6))), 0., 14)
+        self.assertTrue(symm.check_given_symm('C2v', atoms))
 
     def test_detect_symm_d2h(self):
-        atoms = [[1, (0., 0., 0.)],
-                 [1, (1., 0., 0.)],
-                 [1, (0., 1., 0.)],
-                 [1, (0., 0., 1.)],
-                 [1, (-1, 0., 0.)],
-                 [1, (0.,-1., 0.)],
-                 [1, (0., 0.,-1.)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H', (0., 0., 0.)],
+                 ['H', (1., 0., 0.)],
+                 ['H', (0., 1., 0.)],
+                 ['H', (0., 0., 1.)],
+                 ['H', (-1, 0., 0.)],
+                 ['H', (0.,-1., 0.)],
+                 ['H', (0., 0.,-1.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'D2h')
         self.assertEqual(symm.symm_identical_atoms(l,atoms), \
-                         [[0],[1,4],[2,5],[3,6]])
+                         [[1, 4], [2, 5], [3, 6], [0]])
+        self.assertTrue(symm.check_given_symm('D2h', atoms))
 
     def test_detect_symm_c2v(self):
-        atoms = [[1, (1., 0., 2.)],
-                 [2, (0., 1., 0.)],
-                 [1, (-2.,0.,-1.)],
-                 [2, (0.,-1., 0.)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H' , (1., 0., 2.)],
+                 ['He', (0., 1., 0.)],
+                 ['H' , (-2.,0.,-1.)],
+                 ['He', (0.,-1., 0.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2v')
         self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
+        self.assertTrue(symm.check_given_symm('C2v', atoms))
 
     def test_detect_symm_d2h_a(self):
-        atoms = [[1, (1., 0., 2.)],
-                 [2, (0., 1., 0.)],
-                 [1, (-1.,0.,-2.)],
-                 [2, (0.,-1., 0.)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['He', (0., 1., 0.)],
+                 ['H' , (1., 0., 0.)],
+                 ['H' , (-1.,0., 0.)],
+                 ['He', (0.,-1., 0.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
+        self.assertEqual(l, 'D2h')
+        self.assertEqual(symm.symm_identical_atoms(l,atoms),
+                         [[1, 2], [0, 3]])
+        self.assertTrue(symm.check_given_symm('D2h', atoms))
+
+    def test_detect_symm_d2h_b(self):
+        atoms = [['H' , (1., 0., 2.)],
+                 ['He', (0., 1., 0.)],
+                 ['H' , (-1.,0.,-2.)],
+                 ['He', (0.,-1., 0.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'D2h')
         self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
+        self.assertTrue(symm.check_given_symm('D2h', atoms))
 
-    def test_detect_symm_c2v(self):
-        atoms = [[1, (1., 0., 2.)],
-                 [2, (0., 1., 0.)],
-                 [1, (1., 0., 0.)],
-                 [1, (-1.,0., 0.)],
-                 [1, (-1.,0.,-2.)],
-                 [2, (0.,-1., 0.)]]
-        l = symm.detect_symm(atoms)[0]
+    def test_detect_symm_c2h_a(self):
+        atoms = [['H' , (1., 0., 2.)],
+                 ['He', (0., 1.,-1.)],
+                 ['H' , (-1.,0.,-2.)],
+                 ['He', (0.,-1., 1.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2h')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,4],[1,5],[2,3]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
+        self.assertTrue(symm.check_given_symm('C2h', atoms))
 
-        atoms = [[1, (1., 0., 1.)],
-                 [1, (1., 0.,-1.)],
-                 [2, (0., 0., 2.)],
-                 [2, (2., 0.,-2.)],
-                 [3, (1., 1., 0.)],
-                 [3, (1.,-1., 0.)]]
-        l = symm.detect_symm(atoms)[0]
+    def test_detect_symm_c2h(self):
+        atoms = [['H' , (1., 0., 2.)],
+                 ['He', (0., 1., 0.)],
+                 ['H' , (1., 0., 0.)],
+                 ['H' , (-1.,0., 0.)],
+                 ['H' , (-1.,0.,-2.)],
+                 ['He', (0.,-1., 0.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2h')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,1],[2,3],[4,5]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[2,3],[0,4],[1,5]])
+        self.assertTrue(symm.check_given_symm('C2h', atoms))
+
+        atoms = [['H' , (1., 0., 1.)],
+                 ['H' , (1., 0.,-1.)],
+                 ['He', (0., 0., 2.)],
+                 ['He', (2., 0.,-2.)],
+                 ['Li', (1., 1., 0.)],
+                 ['Li', (1.,-1., 0.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
+        self.assertEqual(l, 'C2h')
+        self.assertEqual(symm.symm_identical_atoms(l,atoms),
+                         [[2, 3], [4, 5], [0, 1]])
+        self.assertTrue(symm.check_given_symm('C2h', atoms))
 
     def test_detect_symm_d2(self):
-        atoms = [[1, (1., 0., 1.)],
-                 [1, (1., 0.,-1.)],
-                 [2, (0., 0., 2.)],
-                 [2, (2., 0., 2.)],
-                 [2, (1., 1.,-2.)],
-                 [2, (1.,-1.,-2.)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H' , (1., 0., 1.)],
+                 ['H' , (1., 0.,-1.)],
+                 ['He', (0., 0., 2.)],
+                 ['He', (2., 0., 2.)],
+                 ['He', (1., 1.,-2.)],
+                 ['He', (1.,-1.,-2.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'D2')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,1],[2,3],[4,5]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms),
+                         [[2, 3, 4, 5], [0, 1]])
+        self.assertTrue(symm.check_given_symm('D2', atoms))
 
     def test_detect_symm_ci(self):
-        atoms = [[1, ( 1., 0., 0.)],
-                 [2, ( 0., 1., 0.)],
-                 [3, ( 0., 0., 1.)],
-                 [4, ( .5, .5, .5)],
-                 [1, (-1., 0., 0.)],
-                 [2, ( 0.,-1., 0.)],
-                 [3, ( 0., 0.,-1.)],
-                 [4, (-.5,-.5,-.5)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H' , ( 1., 0., 0.)],
+                 ['He', ( 0., 1., 0.)],
+                 ['Li', ( 0., 0., 1.)],
+                 ['Be', ( .5, .5, .5)],
+                 ['H' , (-1., 0., 0.)],
+                 ['He', ( 0.,-1., 0.)],
+                 ['Li', ( 0., 0.,-1.)],
+                 ['Be', (-.5,-.5,-.5)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'Ci')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[i,i+4] for i in range(4)])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms),
+                         [[0, 4], [3, 7], [1, 5], [2, 6]])
+        self.assertTrue(symm.check_given_symm('Ci', atoms))
 
     def test_detect_symm_cs(self):
-        atoms = [[1, (1., 0., 2.)],
-                 [2, (1., 0., 0.)],
-                 [3, (2., 0.,-1.)],
-                 [4, (0., 0., 1.)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H' , (1., 0., 2.)],
+                 ['He', (1., 0., 0.)],
+                 ['Li', (2., 0.,-1.)],
+                 ['Be', (0., 0., 1.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'Cs')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0],[1],[2],[3]])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms),
+                         [[3], [0], [1], [2]])
+        self.assertTrue(symm.check_given_symm('Cs', atoms))
 
     def test_detect_symm_c1(self):
-        atoms = [[1, ( 1., 0., 0.)],
-                 [2, ( 0., 1., 0.)],
-                 [3, ( 0., 0., 1.)],
-                 [4, ( .5, .5, .5)]]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H' , ( 1., 0., 0.)],
+                 ['He', ( 0., 1., 0.)],
+                 ['Li', ( 0., 0., 1.)],
+                 ['Be', ( .5, .5, .5)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C1')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [(i,) for i in range(4)])
+        self.assertEqual(symm.symm_identical_atoms(l,atoms),
+                         [[2], [1], [3], [0]])
+        self.assertTrue(symm.check_given_symm('C1', atoms))
 
     def test_detect_symm_line(self):
-        atoms = [[1, ( 0., 0., 0.)],
-                 [2, ( 0., 2., 0.)], ]
+        atoms = [['H' , ( 0., 0., 0.)],
+                 ['He', ( 0., 2., 0.)], ]
         l = symm.detect_symm(atoms)[0]
         self.assertEqual(l, 'C2v')
-        atoms = [[1, ( 0., 0., 0.)],
-                 [2, ( 0., 2., 0.)],
-                 [2, ( 0., 4., 0.)],
-                 [1, ( 0., 6., 0.)], ]
-        l = symm.detect_symm(atoms)[0]
+        atoms = [['H' , ( 0., 0., 0.)],
+                 ['He', ( 0., 2., 0.)],
+                 ['He', ( 0., 4., 0.)],
+                 ['H' , ( 0., 6., 0.)], ]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'D2h')
         self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,3],[1,2]])
+        self.assertTrue(symm.check_given_symm('D2h', atoms))
 
     def test_detect_symm_c2(self):
-        atoms = [[1, ( 1., 0., 1.)],
-                 [1, ( 1., 0.,-1.)],
-                 [4, ( 0.,-3., 2.)],
-                 [4, ( 0., 3.,-2.)]]
-        l,center,axis = symm.detect_symm(atoms)
-        coord = numpy.array([x[1] for x in atoms])
-        coord = numpy.einsum('ij,kj->ki', axis, coord-center)
-        atoms = [[atoms[i][0],coord[i]] for i in range(len(atoms))]
+        atoms = [['H' , ( 1., 0., 1.)],
+                 ['H' , ( 1., 0.,-1.)],
+                 ['He', ( 0.,-3., 2.)],
+                 ['He', ( 0., 3.,-2.)]]
+        l, orig, axes = symm.detect_symm(atoms)
+        atoms = symm.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2')
-        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[0,1],[2,3]])
-
+        self.assertEqual(symm.symm_identical_atoms(l,atoms), [[2,3], [0,1]])
+        self.assertTrue(symm.check_given_symm('C2', atoms))
 
 if __name__ == "__main__":
     print("Full Tests geom")

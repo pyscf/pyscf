@@ -9,17 +9,6 @@ import pyscf.gto
 from pyscf.symm import geom
 from pyscf.symm import param
 
-OP_TEST = {
-    'E'  : lambda x,y:True,
-    'C2x': lambda x,y:geom.related_by_C2(numpy.array((1.,0.,0.)),x,y),
-    'C2y': lambda x,y:geom.related_by_C2(numpy.array((0.,1.,0.)),x,y),
-    'C2z': lambda x,y:geom.related_by_C2(numpy.array((0.,0.,1.)),x,y),
-    'i'  : geom.related_by_icenter,
-    'sx' : lambda x,y:geom.related_by_mirror(numpy.array((1.,0.,0.)),x,y),
-    'sy' : lambda x,y:geom.related_by_mirror(numpy.array((0.,1.,0.)),x,y),
-    'sz' : lambda x,y:geom.related_by_mirror(numpy.array((0.,0.,1.)),x,y),
-}
-
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
     'C2x': (0, 1, 1),
@@ -40,19 +29,31 @@ def tot_parity_odd(op, l, m):
         return (ox and gx)^(oy and gy)^(oz and gz)
 
 def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
-    atoms = [(a[0], numpy.array(a[1])) for a in atoms]
-    ops = param.OPERATOR_TABLE[gpname]
+    opdic = geom.symm_ops(gpname)
+    ops = [opdic[op] for op in param.OPERATOR_TABLE[gpname]]
     chartab = param.CHARACTER_TABLE[gpname]
     nirrep = chartab.__len__()
-    so = [[] for i in range(nirrep)]
     nfn, basoff = _basis_offset_for_atoms(atoms, basis_tab)
+    coords = numpy.around([a[1] for a in atoms], decimals=geom.PLACE-1)
 
+    so = [[] for i in range(nirrep)]
     for atom_ids in eql_atom_ids:
         at0 = atoms[atom_ids[0]]
         symb = pyscf.gto.mole._symbol(at0[0])
-        op_relate_atoms = \
-                [pyscf.lib.find_if(lambda x: OP_TEST[op](at0, atoms[x]), atom_ids)
-                 for op in ops]
+        op_coords = numpy.around([numpy.dot(at0[1], op) for op in ops],
+                                 decimals=geom.PLACE-1)
+# num atoms in atom_ids smaller than num ops?
+## the coord-ids generated from the ops sequence
+#        id_coords = numpy.argsort(geom.argsort_coords(op_coords))
+## which atom_id that each coord-id corresponds to
+#        from_atom_id = numpy.argsort(geom.argsort_coords(coords[atom_ids]))
+#        op_relate_atoms = atom_ids[from_atom_id[id_coords]]
+        coords0 = coords[atom_ids]
+        idx = []
+        for c in op_coords:
+            idx.append(numpy.argwhere(numpy.sum(abs(coords0-c),axis=1)
+                                      <geom.GEOM_THRESHOLD)[0,0])
+        op_relate_atoms = numpy.array(atom_ids)[idx]
 
         ib = 0
         if symb in basis_tab:
@@ -63,17 +64,17 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
             angl = b[0]
             for i in range(_num_contract(b)):
                 for m in range(-angl,angl+1):
-                    sign = [-1 if tot_parity_odd(op,angl,m) else 1 \
-                                     for op in ops]
+                    sign = [-1 if tot_parity_odd(op,angl,m) else 1
+                            for op in param.OPERATOR_TABLE[gpname]]
                     c = numpy.zeros((nirrep,nfn))
-                    for op_id,atm_id in enumerate(op_relate_atoms):
+                    for op_id, atm_id in enumerate(op_relate_atoms):
                         idx = basoff[atm_id] + ib
                         for ir, irrep in enumerate(chartab):
                             c[ir,idx] += irrep[op_id+1] * sign[op_id]
+                    norms = numpy.sqrt(numpy.einsum('ij,ij->i', c, c))
                     for ir in range(nirrep):
-                        if abs(numpy.linalg.norm(c[ir])) > 1e-14:
-                            norm = numpy.linalg.norm(c[ir])
-                            so[ir].append(c[ir]/norm)
+                        if(norms[ir] > 1e-12):
+                            so[ir].append(c[ir]/norms[ir])
                     ib += 1
     for ir,c in enumerate(so):
         if len(c) > 0:
@@ -128,4 +129,4 @@ if __name__ == "__main__":
     atoms = pyscf.gto.mole.format_atom(h2o.atom, origin, axes)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
-    print(symm_adapted_basis(gpname, eql_atoms, atoms, h2o.basis))
+    print(symm_adapted_basis(gpname, eql_atoms, atoms, h2o._basis))
