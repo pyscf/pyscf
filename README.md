@@ -99,7 +99,7 @@ Known problems
   have bug in dsyrk function.  It occasionally results in NaN in mcscf
   solver.  To fix this, change to other BLAS vendors e.g. to MKL
 
-        BLA_VENDOR=Intel10_64lp cmake ..
+        BLA_VENDOR=Intel10_64lp_seq cmake ..
 
 * tests fail
 

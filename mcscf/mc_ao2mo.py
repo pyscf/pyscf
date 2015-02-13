@@ -2,6 +2,7 @@
 
 import os, sys
 import ctypes
+import time
 import tempfile
 import numpy
 import h5py
@@ -37,6 +38,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
                      verbose=0):
+    time0 = (time.clock(), time.time())
     mol = casscf.mol
     log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
     ncore = casscf.ncore
@@ -52,6 +54,9 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
+        if mol.verbose >= pyscf.lib.logger.DEBUG1:
+            time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
+                                              *tuple(time1))
         buf = numpy.empty((nmo,nao_pair))
         col0 = 0
         for ic in range(klaoblks):
@@ -59,9 +64,15 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             col1 = col0 + dat.shape[1]
             buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
+        if mol.verbose >= pyscf.lib.logger.DEBUG1:
+            time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
+    time0 = pyscf.lib.logger.timer(mol, 'halfe1', *time0)
+    time1 = [time.clock(), time.time()]
     aapp, appa, Iapcv = _trans_aapp_(mo, ncore, ncas, load_buf)
+    time0 = pyscf.lib.logger.timer(mol, 'trans_aapp', *time0)
     jc_pp, kc_pp, Icvcv = _trans_cvcv_(mo, ncore, ncas, load_buf)
+    time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
     fswap.close()
     return jc_pp, kc_pp, aapp, appa, Iapcv, Icvcv
 

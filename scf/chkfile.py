@@ -11,7 +11,10 @@ def load_chkfile_key(chkfile, key):
     return load(chkfile, key)
 def load(chkfile, key):
     fh5 = h5py.File(chkfile, 'r')
-    val = fh5[key].value
+    if key in fh5:
+        val = fh5[key].value
+    else:
+        val = None
     fh5.close()
     return val
 
