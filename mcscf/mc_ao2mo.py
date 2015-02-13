@@ -54,7 +54,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
-        if mol.verbose >= pyscf.lib.logger.DEBUG1
+        if mol.verbose >= pyscf.lib.logger.DEBUG1:
             time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
                                               *tuple(time1))
         buf = numpy.empty((nmo,nao_pair))
@@ -64,7 +64,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             col1 = col0 + dat.shape[1]
             buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
-        if mol.verbose >= pyscf.lib.logger.DEBUG1
+        if mol.verbose >= pyscf.lib.logger.DEBUG1:
             time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
     time0 = pyscf.lib.logger.timer(mol, 'halfe1', *time0)
