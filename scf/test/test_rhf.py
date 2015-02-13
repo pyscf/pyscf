@@ -24,7 +24,7 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.hf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 23.104248631727842, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 23.074873357239454, 9)
 
     def test_1e(self):
         mf = scf.hf.HF1e(mol)

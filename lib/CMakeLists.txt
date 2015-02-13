@@ -59,6 +59,8 @@ add_subdirectory(mcscf)
 add_subdirectory(cc)
 add_subdirectory(ri)
 
+if (${ENABLE_LIBXC})
+endif()
 if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
 else()
   ExternalProject_Add(libxc

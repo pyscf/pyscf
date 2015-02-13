@@ -91,7 +91,7 @@ also download the PDF version from  http://sunqm.net/pyscf/PySCF-0.10.pdf
 Known problems
 --------------
 
-* Error message "Library not loaded: libcint.2.5.0.dylib" On OS X
+* Error message "Library not loaded: libcint.2.5.1.dylib" On OS X
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
@@ -101,10 +101,6 @@ Known problems
 
         BLA_VENDOR=Intel10_64lp cmake ..
 
-* AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
-  It is caused by old version of libcint.  Remove the directory
-  "pyscf/lib/deps" and rebuild pyscf to fix this problem.
-
 * tests fail
 
   mcscf/test/test_addons.py    test_spin_square
@@ -112,11 +108,19 @@ Known problems
 
 * Program exits with
 ```
+AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
+```
+
+  It is caused by old version of libcint.  Remove the directory
+  "pyscf/lib/deps" and rebuild pyscf to fix this problem.
+
+
+```
 Exception AttributeError: "'NoneType' object has no attribute 'byref'" in
 <bound method VHFOpt.__del__ of <pyscf.scf._vhf.VHFOpt object at 0x2b52390>> ignored
 ```
-  It was observed when pyscf is used with other inspectors like
-  profiler, pdb etc.
+  It was observed when pyscf is used with inspectors like profiler, pdb
+  etc.
 
 
 

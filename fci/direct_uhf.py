@@ -232,8 +232,8 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
 
-def make_rdm12s(fcivec, norb, nelec, link_index=None):
-    return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index)
+def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
+    return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, reorder)
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
@@ -242,8 +242,8 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index)
+def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
+    return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
 
 
 ###############################################################
@@ -297,10 +297,10 @@ class FCISolver(direct_spin1.FCISolver):
         return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
 
     def make_rdm12s(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index)
+        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, **kwargs)
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index)
+        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
 
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
         return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
@@ -309,10 +309,10 @@ class FCISolver(direct_spin1.FCISolver):
         return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
     def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index)
+        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, **kwargs)
 
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index)
+        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
 
 
 

@@ -113,10 +113,12 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
                          norb, nelec, link_index)
     return (rdm1, rdm1)
 
-def make_rdm12(fcivec, norb, nelec, link_index=None):
+def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_spin0', fcivec, fcivec,
                               norb, nelec, link_index, 1)
-    return rdm.reorder_rdm(dm1, dm2, True)
+    if reorder:
+        dm2 = rdm.reorder_rdm(dm1, dm2, True)
+    return dm1, dm2
 
 # dm_pq = <I|p^+ q|J>
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
@@ -138,10 +140,12 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     return rdm1a + rdm1b
 
 # dm_pq,rs = <I|p^+ q r^+ s|J>
-def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
+def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_ms0', cibra, ciket,
                               norb, nelec, link_index, 2)
-    return rdm.reorder_rdm(dm1, dm2, True)
+    if reorder:
+        dm2 = rdm.reorder_rdm(dm1, dm2, True)
+    return dm1, dm2
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec) * .5
@@ -198,7 +202,7 @@ class FCISolver(direct_ms0.FCISolver):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12(fcivec, norb, nelec, link_index)
+        return make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
 
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
@@ -207,7 +211,7 @@ class FCISolver(direct_ms0.FCISolver):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return trans_rdm12(cibra, ciket, norb, nelec, link_index)
+        return trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
 
 
 

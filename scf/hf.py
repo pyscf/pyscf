@@ -247,8 +247,8 @@ def init_guess_by_minao(mol):
 
     dm = numpy.dot(c*occ,c.T)
 # normalize eletron number
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
-    dm *= mol.nelectron / (dm*s).sum()
+#    s = mol.intor_symmetric('cint1e_ovlp_sph')
+#    dm *= mol.nelectron / (dm*s).sum()
     return dm
 
 def init_guess_by_1e(mol):

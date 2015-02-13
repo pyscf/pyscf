@@ -90,8 +90,8 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
 # dm_pq,rs = dm_sr,qp;  dm_qp,rs = dm_rs,qp
 # need call reorder_rdm for this rdm2 to get standard 2pdm
 
-def make_rdm12(fcivec, norb, nelec, link_index=None):
-    return direct_ms0.make_rdm12(fcivec, norb, nelec, link_index)
+def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
+    return direct_ms0.make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
 # dm_pq = <I|p^+ q|J>
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
@@ -101,8 +101,8 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     return direct_ms0.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
 # dm_pq,rs = <I|p^+ q r^+ s|J>
-def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
-    return direct_ms0.trans_rdm12(cibra, ciket, norb, nelec, link_index)
+def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
+    return direct_ms0.trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -160,7 +160,7 @@ class FCISolver(direct_ms0.FCISolver):
         return direct_ms0.make_rdm1(fcivec, norb, nelec, link_index)
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_ms0.make_rdm12(fcivec, norb, nelec, link_index)
+        return direct_ms0.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
 
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
         return direct_ms0.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
@@ -169,7 +169,7 @@ class FCISolver(direct_ms0.FCISolver):
         return direct_ms0.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_ms0.trans_rdm12(cibra, ciket, norb, nelec, link_index)
+        return direct_ms0.trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
 
 
 if __name__ == '__main__':

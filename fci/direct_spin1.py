@@ -207,20 +207,21 @@ def make_rdm1(fcivec, norb, nelec, link_index=None):
     rdm1a, rdm1b = make_rdm1s(fcivec, norb, nelec, link_index)
     return rdm1a + rdm1b
 
-def make_rdm12s(fcivec, norb, nelec, link_index=None):
+def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCIrdm12kern_a', fcivec, fcivec,
                                        norb, nelec, link_index, 1)
     dm1b, dm2bb = rdm.make_rdm12_spin1('FCIrdm12kern_b', fcivec, fcivec,
                                        norb, nelec, link_index, 1)
     _, dm2ab = rdm.make_rdm12_spin1('FCItdm12kern_ab', fcivec, fcivec,
                                     norb, nelec, link_index, 0)
-    dm1a, dm2aa = rdm.reorder_rdm(dm1a, dm2aa, inplace=True)
-    dm1b, dm2bb = rdm.reorder_rdm(dm1b, dm2bb, inplace=True)
+    if reorder:
+        dm1a, dm2aa = rdm.reorder_rdm(dm1a, dm2aa, inplace=True)
+        dm1b, dm2bb = rdm.reorder_rdm(dm1b, dm2bb, inplace=True)
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
 
-def make_rdm12(fcivec, norb, nelec, link_index=None):
+def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
-            make_rdm12s(fcivec, norb, nelec, link_index)
+            make_rdm12s(fcivec, norb, nelec, link_index, reorder)
     return dm1a+dm1b, dm2aa+dm2ab+dm2ab.transpose(2,3,0,1)+dm2bb
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
@@ -235,7 +236,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
-def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None):
+def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCItdm12kern_a', cibra, ciket,
                                        norb, nelec, link_index, 2)
     dm1b, dm2bb = rdm.make_rdm12_spin1('FCItdm12kern_b', cibra, ciket,
@@ -245,13 +246,14 @@ def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None):
     _, dm2ba = rdm.make_rdm12_spin1('FCItdm12kern_ab', ciket, cibra,
                                     norb, nelec, link_index, 0)
     dm2ba = dm2ba.transpose(3,2,1,0)
-    dm1a, dm2aa = rdm.reorder_rdm(dm1a, dm2aa, inplace=True)
-    dm1b, dm2bb = rdm.reorder_rdm(dm1b, dm2bb, inplace=True)
+    if reorder:
+        dm1a, dm2aa = rdm.reorder_rdm(dm1a, dm2aa, inplace=True)
+        dm1b, dm2bb = rdm.reorder_rdm(dm1b, dm2bb, inplace=True)
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb)
 
-def trans_rdm12(cibra, ciket, norb, nelec, link_index=None):
+def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb) = \
-            trans_rdm12s(cibra, ciket, norb, nelec, link_index)
+            trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
     return dm1a+dm1b, dm2aa+dm2ab+dm2ba+dm2bb
 
 
@@ -405,10 +407,10 @@ class FCISolver(object):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
     def make_rdm12s(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12s(fcivec, norb, nelec, link_index)
+        return make_rdm12s(fcivec, norb, nelec, link_index, **kwargs)
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12(fcivec, norb, nelec, link_index)
+        return make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
 
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
@@ -417,10 +419,10 @@ class FCISolver(object):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
     def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return trans_rdm12s(cibra, ciket, norb, nelec, link_index)
+        return trans_rdm12s(cibra, ciket, norb, nelec, link_index, **kwargs)
 
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return trans_rdm12(cibra, ciket, norb, nelec, link_index)
+        return trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
 
 
 if __name__ == '__main__':

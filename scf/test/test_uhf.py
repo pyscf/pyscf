@@ -24,7 +24,7 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.uhf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 23.104248631727806, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 23.074873357239472, 9)
 
     def test_energy_tot(self):
         numpy.random.seed(1)
