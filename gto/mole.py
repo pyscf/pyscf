@@ -63,6 +63,30 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
+def unique_atoms(atoms, basis=None):
+    atmgroup = {}
+    for ia, a in enumerate(atoms):
+        if a[0] in atmgroup:
+            atmgroup[a[0]].append(ia)
+        elif basis is None:
+            atmgroup[a[0]] = [ia]
+        else:
+            rawsymb = _rm_digit(a[0])
+            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            if a[0] in basis:
+                if stdsymb in basis and basis[a[0]] == basis[stdsymb]:
+                    if stdsymb in atmgroup:
+                        atmgroup[stdsymb].append(ia)
+                    else:
+                        atmgroup[stdsymb] = [ia]
+                else:
+                    atmgroup[a[0]] = [ia]
+            elif stdsymb in atmgroup:
+                atmgroup[stdsymb].append(ia)
+            else:
+                atmgroup[stdsymb] = [ia]
+    return atmgroup
+
 
 def format_atom(atoms, origin=0, axes=1):
     '''Convert the input :attr:`Mole.atom` to the internal data format.
