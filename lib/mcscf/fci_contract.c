@@ -65,14 +65,15 @@ static int strb_buflen(int nstr, int nnorb)
  * into t1[:nstrb,nnorb] 
  *    str1-of-alpha -> create/annihilate -> str0-of-alpha
  * ci0[:nstra,:nstrb] is contiguous in beta-strings
- * fillcnt control the number of beta strings to be calculated.
+ * bcount control the number of beta strings to be calculated.
  * for spin=0 system, only lower triangle of the intermediate ci vector
  * needs to be calculated
  */
-static double prog_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
-                        int norb, int nstrb, int nlinka,
-                        _LinkT *clink_indexa)
+static double prog_a_t1(double *ci0, double *t1,
+                        int bcount, int stra_id, int strb_id,
+                        int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
 {
+        ci0 += strb_id;
         const int nnorb = norb * (norb+1)/2;
         int j, k, ia, str1, sign;
         const _LinkT *tab = clink_indexa + stra_id * nlinka;
@@ -86,12 +87,12 @@ static double prog_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 pt1 = t1 + ia;
                 pci = ci0 + str1*(unsigned long)nstrb;
                 if (sign > 0) {
-                        for (k = 0; k < fillcnt; k++) {
+                        for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] += pci[k];
                                 csum += pci[k] * pci[k];
                         }
                 } else {
-                        for (k = 0; k < fillcnt; k++) {
+                        for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] -= pci[k];
                                 csum += pci[k] * pci[k];
                         }
@@ -103,19 +104,20 @@ static double prog_a_t1(double *ci0, double *t1, int fillcnt, int stra_id,
  * For given stra_id, spread all beta-strings into t1[:nstrb,nnorb] 
  *    all str0-of-beta -> create/annihilate -> str1-of-beta
  * ci0[:nstra,:nstrb] is contiguous in beta-strings
- * fillcnt control the number of beta strings to be calculated.
+ * bcount control the number of beta strings to be calculated.
  * for spin=0 system, only lower triangle of the intermediate ci vector
  * needs to be calculated
-static double prog_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
+static double prog_b_t1(double *ci0, double *t1,
+                        int bcount, int stra_id, int strb_id,
                         int norb, int nstrb, int nlinkb, int *clink_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const _LinkT *tab = clink_indexb;
+        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
         double *pci = ci0 + stra_id*(unsigned long)nstrb;
         double csum = 0;
 
-        for (str0 = 0; str0 < fillcnt; str0++) {
+        for (str0 = 0; str0 < bcount; str0++) {
                 for (j = 0; j < nlinkb; j++) {
                         ia   = EXTRACT_IA  (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
@@ -135,17 +137,17 @@ static double prog_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
  * initializes t1 with 0, to reduce data transfer between CPU
  * cache and memory
  */
-static double prog0_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
-                         int norb, int nstrb, int nlinkb,
-                         _LinkT *clink_indexb)
+static double prog0_b_t1(double *ci0, double *t1,
+                         int bcount, int stra_id, int strb_id,
+                         int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const _LinkT *tab = clink_indexb;
+        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
         double *pci = ci0 + stra_id*(unsigned long)nstrb;
         double csum = 0;
 
-        for (str0 = 0; str0 < fillcnt; str0++) {
+        for (str0 = 0; str0 < bcount; str0++) {
                 memset(t1, 0, sizeof(double)*nnorb);
                 for (j = 0; j < nlinkb; j++) {
                         ia   = EXTRACT_IA  (tab[j]);
@@ -164,10 +166,11 @@ static double prog0_b_t1(double *ci0, double *t1, int fillcnt, int stra_id,
 /*
  * spread t1 into ci1
  */
-static void spread_a_t1(double *ci1, double *t1, int fillcnt, int stra_id,
-                        int norb, int nstrb, int nlinka,
-                        _LinkT *clink_indexa)
+static void spread_a_t1(double *ci1, double *t1,
+                        int bcount, int stra_id, int strb_id,
+                        int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
 {
+        ci1 += strb_id;
         const int nnorb = norb * (norb+1)/2;
         int j, k, ia, str1, sign;
         const _LinkT *tab = clink_indexa + stra_id * nlinka;
@@ -180,27 +183,27 @@ static void spread_a_t1(double *ci1, double *t1, int fillcnt, int stra_id,
                 cp0 = t1 + ia;
                 cp1 = ci1 + str1*(unsigned long)nstrb;
                 if (sign > 0) {
-                        for (k = 0; k < fillcnt; k++) {
+                        for (k = 0; k < bcount; k++) {
                                 cp1[k] += cp0[k*nnorb];
                         }
                 } else {
-                        for (k = 0; k < fillcnt; k++) {
+                        for (k = 0; k < bcount; k++) {
                                 cp1[k] -= cp0[k*nnorb];
                         }
                 }
         }
 }
 
-static void spread_b_t1(double *ci1, double *t1, int fillcnt, int stra_id,
-                        int norb, int nstrb, int nlinkb,
-                        _LinkT *clink_indexb)
+static void spread_b_t1(double *ci1, double *t1,
+                        int bcount, int stra_id, int strb_id,
+                        int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const _LinkT *tab = clink_indexb;
+        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
         double *pci = ci1 + stra_id * (unsigned long)nstrb;
 
-        for (str0 = 0; str0 < fillcnt; str0++) {
+        for (str0 = 0; str0 < bcount; str0++) {
                 for (j = 0; j < nlinkb; j++) {
                         ia   = EXTRACT_IA  (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
@@ -297,7 +300,7 @@ void FCIcontract_1e_ms0(double *f1e_tril, double *ci0, double *ci1,
 
 
 static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
-                           int fillcnt, int stra_id, int strb_id,
+                           int bcount, int stra_id, int strb_id,
                            int norb, int na, int nb, int nlinka, int nlinkb,
                            _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
@@ -305,22 +308,22 @@ static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * (norb+1)/2;
-        double *t1 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *t1 = malloc(sizeof(double) * nnorb*bcount);
         double csum;
 
-        csum = prog0_b_t1(ci0, t1, fillcnt, stra_id, norb, nb,
-                          nlinkb, clink_indexb+strb_id*nlinkb)
-             + prog_a_t1(ci0+strb_id, t1, fillcnt, stra_id, norb, nb,
-                         nlinka, clink_indexa);
+        csum = prog0_b_t1(ci0, t1, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb)
+             + prog_a_t1(ci0, t1, bcount, stra_id, strb_id,
+                         norb, nb, nlinka, clink_indexa);
 
         if (csum > CSUMTHR) {
-                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &fillcnt, &nnorb,
+                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &bcount, &nnorb,
                        &D1, eri, &nnorb, t1, &nnorb,
                        &D0, tbuf, &nnorb);
-                spread_b_t1(ci1, tbuf, fillcnt, stra_id, norb, nb,
-                            nlinkb, clink_indexb+strb_id*nlinkb);
+                spread_b_t1(ci1, tbuf, bcount, stra_id, strb_id,
+                            norb, nb, nlinkb, clink_indexb);
         } else {
-                memset(tbuf, 0, sizeof(double)*nnorb*fillcnt);
+                memset(tbuf, 0, sizeof(double)*nnorb*bcount);
         }
         free(t1);
 }
@@ -377,14 +380,14 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                                                clink, clink);
                         }
 
-/* Note: the fillcnt diffs in ctr_rhf2e_kern and spread_a_t1.
+/* Note: the bcount diffs in ctr_rhf2e_kern and spread_a_t1.
  * ctr_rhf2e_kern needs strk+1 beta-strings, spread_a_t1 takes strk
  * beta-strings */
                         for (strk = MAX(strk0, ib); strk < strk1; strk++) {
                                 pbuf = buf + (strk-strk0)*blen*nnorb;
-                                spread_a_t1(ci1+ib, pbuf,
-                                            MIN(blklenb,strk-ib), strk, norb, na,
-                                            nlink, clink);
+                                spread_a_t1(ci1, pbuf,
+                                            MIN(blklenb,strk-ib), strk, ib,
+                                            norb, na, nlink, clink);
                         }
                 }
         }
@@ -431,8 +434,8 @@ void FCIcontract_rhf2e_spin1(double *eri, double *ci0, double *ci1,
                         for (ic = 0; ic < strk1; ic++) {
                                 strk = strk0 + ic;
                                 pbuf = buf + ic * blen * nnorb;
-                                spread_a_t1(ci1+ib, pbuf, blen, strk, norb, nb,
-                                            nlinka, clinka);
+                                spread_a_t1(ci1, pbuf, blen, strk, ib,
+                                            norb, nb, nlinka, clinka);
                         }
                 }
         }
@@ -454,7 +457,7 @@ void FCIcontract_2e_ms0(double *eri, double *ci0, double *ci1,
  */
 static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
                            double *ci0, double *ci1, double *tbuf,
-                           int fillcnt, int stra_id, int strb_id,
+                           int bcount, int stra_id, int strb_id,
                            int norb, int na, int nb, int nlinka, int nlinkb,
                            _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
@@ -463,31 +466,31 @@ static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * (norb+1)/2;
-        double *t1a = malloc(sizeof(double) * nnorb*fillcnt*3);
-        double *t1b = t1a + nnorb*fillcnt;
-        double *tmp = t1b + nnorb*fillcnt;
+        double *t1a = malloc(sizeof(double) * nnorb*bcount*3);
+        double *t1b = t1a + nnorb*bcount;
+        double *tmp = t1b + nnorb*bcount;
         double csum;
 
-        memset(t1a, 0, sizeof(double)*nnorb*fillcnt);
-        csum = prog0_b_t1(ci0, t1b, fillcnt, stra_id, norb, nb,
-                          nlinkb, clink_indexb+strb_id*nlinkb)
-             + prog_a_t1(ci0+strb_id, t1a, fillcnt, stra_id, norb, nb,
-                         nlinka, clink_indexa);
+        memset(t1a, 0, sizeof(double)*nnorb*bcount);
+        csum = prog0_b_t1(ci0, t1b, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb)
+             + prog_a_t1(ci0, t1a, bcount, stra_id, strb_id,
+                         norb, nb, nlinka, clink_indexa);
 
         if (csum > CSUMTHR) {
-                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &bcount, &nnorb,
                        &D1, eri_aa, &nnorb, t1a, &nnorb, &D0, tbuf, &nnorb);
-                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &bcount, &nnorb,
                        &D1, eri_ab, &nnorb, t1b, &nnorb, &D1, tbuf, &nnorb);
 
-                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &fillcnt, &nnorb,
+                dgemm_(&TRANS_N, &TRANS_N, &nnorb, &bcount, &nnorb,
                        &D1, eri_ab, &nnorb, t1a, &nnorb, &D0, tmp, &nnorb);
-                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &fillcnt, &nnorb,
+                dgemm_(&TRANS_T, &TRANS_N, &nnorb, &bcount, &nnorb,
                        &D1, eri_bb, &nnorb, t1b, &nnorb, &D1, tmp, &nnorb);
-                spread_b_t1(ci1, tmp, fillcnt, stra_id, norb, nb,
-                            nlinkb, clink_indexb+strb_id*nlinkb);
+                spread_b_t1(ci1, tmp, bcount, stra_id, strb_id,
+                            norb, nb, nlinkb, clink_indexb);
         } else {
-                memset(tbuf, 0, sizeof(double)*nnorb*fillcnt);
+                memset(tbuf, 0, sizeof(double)*nnorb*bcount);
         }
         free(t1a);
 }
@@ -531,8 +534,8 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                         for (ic = 0; ic < strk1; ic++) {
                                 strk = strk0 + ic;
                                 pbuf = buf + ic * blen * nnorb;
-                                spread_a_t1(ci1+ib, pbuf, blen, strk, norb, nb,
-                                            nlinka, clinka);
+                                spread_a_t1(ci1, pbuf, blen, strk, ib,
+                                            norb, nb, nlinka, clinka);
                         }
                 }
         }
@@ -745,7 +748,7 @@ void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
  *
  ***********************************************************************/
 static void ctr_rhf2esym_kern(double *eri, double *ci0, double *ci1, double *tbuf,
-                              int fillcnt, int stra_id, int strb_id,
+                              int bcount, int stra_id, int strb_id,
                               int norb, int na, int nb, int nlinka, int nlinkb,
                               _LinkT *clink_indexa, _LinkT *clink_indexb,
                               int *dimirrep, int totirrep)
@@ -755,26 +758,26 @@ static void ctr_rhf2esym_kern(double *eri, double *ci0, double *ci1, double *tbu
         const double D1 = 1;
         const int nnorb = norb * (norb+1)/2;
         int ir, p0;
-        double *t1 = malloc(sizeof(double) * nnorb*fillcnt);
+        double *t1 = malloc(sizeof(double) * nnorb*bcount);
         double csum;
 
-        csum = prog0_b_t1(ci0, t1, fillcnt, stra_id, norb, nb,
-                          nlinkb, clink_indexb+strb_id*nlinkb)
-             + prog_a_t1(ci0+strb_id, t1, fillcnt, stra_id, norb, nb,
-                         nlinka, clink_indexa);
+        csum = prog0_b_t1(ci0, t1, bcount, stra_id, strb_id,
+                          norb, nb, nlinkb, clink_indexb)
+             + prog_a_t1(ci0, t1, bcount, stra_id, strb_id,
+                         norb, nb, nlinka, clink_indexa);
 
         if (csum > CSUMTHR) {
                 for (ir = 0, p0 = 0; ir < totirrep; ir++) {
                         dgemm_(&TRANS_N, &TRANS_N,
-                               dimirrep+ir, &fillcnt, dimirrep+ir,
+                               dimirrep+ir, &bcount, dimirrep+ir,
                                &D1, eri+p0*nnorb+p0, &nnorb, t1+p0, &nnorb,
                                &D0, tbuf+p0, &nnorb);
                         p0 += dimirrep[ir];
                 }
-                spread_b_t1(ci1, tbuf, fillcnt, stra_id, norb, nb,
-                            nlinkb, clink_indexb+strb_id*nlinkb);
+                spread_b_t1(ci1, tbuf, bcount, stra_id, strb_id,
+                            norb, nb, nlinkb, clink_indexb);
         } else {
-                memset(tbuf, 0, sizeof(double)*nnorb*fillcnt);
+                memset(tbuf, 0, sizeof(double)*nnorb*bcount);
         }
         free(t1);
 }
@@ -820,8 +823,8 @@ void FCIcontract_rhf2e_spin1_symm(double *eri, double *ci0, double *ci1,
                         for (ic = 0; ic < strk1; ic++) {
                                 strk = strk0 + ic;
                                 pbuf = buf + ic * blen * nnorb;
-                                spread_a_t1(ci1+ib, pbuf, blen, strk, norb, nb,
-                                            nlinka, clinka);
+                                spread_a_t1(ci1, pbuf, blen, strk, ib,
+                                            norb, nb, nlinka, clinka);
                         }
                 }
         }
@@ -872,14 +875,14 @@ void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
                                                   dimirrep, totirrep);
                 }
 
-/* Note: the fillcnt diffs in ctr_rhf2e_kern and spread_a_t1.
+/* Note: the bcount diffs in ctr_rhf2e_kern and spread_a_t1.
  * ctr_rhf2e_kern needs strk+1 beta-strings, spread_a_t1 takes strk
  * beta-strings */
                         for (strk = MAX(strk0, ib); strk < strk1; strk++) {
                                 pbuf = buf + (strk-strk0)*blen*nnorb;
-                                spread_a_t1(ci1+ib, pbuf,
-                                            MIN(blklenb,strk-ib), strk, norb, na,
-                                            nlink, clink);
+                                spread_a_t1(ci1, pbuf,
+                                            MIN(blklenb,strk-ib), strk, ib,
+                                            norb, na, nlink, clink);
                         }
                 }
         }
