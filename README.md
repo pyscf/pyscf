@@ -99,7 +99,7 @@ Known problems
   have bug in dsyrk function.  It occasionally results in NaN in mcscf
   solver.  To fix this, change to other BLAS vendors e.g. to MKL
 
-        BLA_VENDOR=Intel10_64lp cmake ..
+        BLA_VENDOR=Intel10_64lp_seq cmake ..
 
 * AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
   It is caused by old version of libcint.  Remove the directory

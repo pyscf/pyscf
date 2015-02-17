@@ -63,6 +63,30 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
+def unique_atoms(atoms, basis=None):
+    atmgroup = {}
+    for ia, a in enumerate(atoms):
+        if a[0] in atmgroup:
+            atmgroup[a[0]].append(ia)
+        elif basis is None:
+            atmgroup[a[0]] = [ia]
+        else:
+            rawsymb = _rm_digit(a[0])
+            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            if a[0] in basis:
+                if stdsymb in basis and basis[a[0]] == basis[stdsymb]:
+                    if stdsymb in atmgroup:
+                        atmgroup[stdsymb].append(ia)
+                    else:
+                        atmgroup[stdsymb] = [ia]
+                else:
+                    atmgroup[a[0]] = [ia]
+            elif stdsymb in atmgroup:
+                atmgroup[stdsymb].append(ia)
+            else:
+                atmgroup[stdsymb] = [ia]
+    return atmgroup
+
 
 def format_atom(atoms, origin=0, axes=1):
     '''Convert the input :attr:`Mole.atom` to the internal data format.
@@ -756,8 +780,9 @@ class Mole(object):
             Charge of molecule. It affects the electron numbers
         spin : int
             2S, num. alpha electrons - num. beta electrons
-        symmetry : bool
-            The parameter controls whether to use symmetry in calculation
+        symmetry : bool or str
+            Whether to use symmetry.  If given a string of point group
+            name, the given point group symmetry will be used.
 
         atom : list or str
             To define molecluar structure.  The internal format is
@@ -958,8 +983,9 @@ class Mole(object):
             spin : int
                 2S, num. alpha electrons - num. beta electrons
                 If given, overwrite :attr:`Mole.spin`
-            symmetry : bool
-                Whether to use symmetry.  If given, overwrite :attr:`Mole.symmetry`
+            symmetry : bool or str
+                Whether to use symmetry.  If given a string of point group
+                name, the given point group symmetry will be used.
             light_speed :
                 If given, overwrite :attr:`Mole.light_speed`
 
@@ -992,17 +1018,6 @@ class Mole(object):
         self.check_sanity(self)
 
         self.atom = self.format_atom(self.atom)
-        if self.symmetry:
-            import pyscf.symm
-            #if self.symmetry in pyscf.symm.param.POINTGROUP
-            #    self.groupname = self.symmetry
-            #    #todo: pyscf.symm.check_given_symm(self.symmetric, self.atom)
-            #    pass
-            #else:
-            #    self.groupname, inp_atoms = pyscf.symm.detect_symm(self.atom)
-            self.groupname, origin, axes = pyscf.symm.detect_symm(self.atom)
-            self.atom = self.format_atom(self.atom, origin, axes)
-
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
             uniq_atoms = set([a[0] for a in self.atom])
@@ -1010,6 +1025,18 @@ class Mole(object):
                                                   for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)
+        if self.symmetry:
+            import pyscf.symm
+            if self.symmetry in pyscf.symm.param.CHARACTER_TABLE:
+                self.groupname = self.symmetry
+                assert(pyscf.symm.check_given_symm(self.groupname, self.atom,
+                                                   self._basis))
+                orig = 0
+                axes = 1
+            else:
+                self.groupname, orig, axes = \
+                        pyscf.symm.detect_symm(self.atom, self._basis)
+            self.atom = self.format_atom(self.atom, orig, axes)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
         self._atm, self._bas, self._env = \
