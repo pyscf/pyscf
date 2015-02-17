@@ -220,8 +220,8 @@ def addr2str(norb, nelec, addr):
 #    return addr
 def str2addr(norb, nelec, string):
     if isinstance(string, str):
-        string = int(string, 2)
         assert(string.count('1') == nelec)
+        string = int(string, 2)
     else:
         assert(bin(string).count('1') == nelec)
     libfci.FCIstr2addr.restype = ctypes.c_int

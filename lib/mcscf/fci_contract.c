@@ -642,10 +642,10 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         pj = first1(db & strb[j]);
                         tmp = h1e_b[pi*norb+pj];
                         for (k = 0; k < norb; k++) {
-                                if (stra[i] & (1<<k)) {
+                                if (stra[i] & (1UL<<k)) {
                                         tmp += g2e_ab[pi*norb+pj+k*d3+k*d2];
                                 }
-                                if (strb[i] & (1<<k)) {
+                                if (strb[i] & (1UL<<k)) {
                                         tmp += g2e_bb[pi*d3+pj*d2+k*norb+k]
                                              - g2e_bb[pi*d3+k*d2+k*norb+pj];
                                 }
@@ -659,9 +659,9 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         case 4:
                         pi = first1(db & strb[i]);
                         pj = first1(db & strb[j]);
-                        pk = first1((db & strb[i]) ^ (1<<pi));
-                        pl = first1((db & strb[j]) ^ (1<<pj));
-                        str1 = strb[j] ^ (1<<pi) ^ (1<<pj);
+                        pk = first1((db & strb[i]) ^ (1UL<<pi));
+                        pl = first1((db & strb[j]) ^ (1UL<<pj));
+                        str1 = strb[j] ^ (1UL<<pi) ^ (1UL<<pj);
                         if (FCIparity(strb[j], str1)
                            *FCIparity(str1, strb[i]) > 0) {
                                 h0[i*np+j] = g2e_bb[pi*d3+pj*d2+pk*norb+pl]
@@ -676,10 +676,10 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         pj = first1(da & stra[j]);
                         tmp = h1e_a[pi*norb+pj];
                         for (k = 0; k < norb; k++) {
-                                if (strb[i] & (1<<k)) {
+                                if (strb[i] & (1UL<<k)) {
                                         tmp += g2e_ab[pi*d3+pj*d2+k*norb+k];
                                 }
-                                if (stra[i] & (1<<k)) {
+                                if (stra[i] & (1UL<<k)) {
                                         tmp += g2e_aa[pi*d3+pj*d2+k*norb+k]
                                              - g2e_aa[pi*d3+k*d2+k*norb+pj];
                                 }
@@ -705,9 +705,9 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         case 0:
                         pi = first1(da & stra[i]);
                         pj = first1(da & stra[j]);
-                        pk = first1((da & stra[i]) ^ (1<<pi));
-                        pl = first1((da & stra[j]) ^ (1<<pj));
-                        str1 = stra[j] ^ (1<<pi) ^ (1<<pj);
+                        pk = first1((da & stra[i]) ^ (1UL<<pi));
+                        pl = first1((da & stra[j]) ^ (1UL<<pj));
+                        str1 = stra[j] ^ (1UL<<pi) ^ (1UL<<pj);
                         if (FCIparity(stra[j], str1)
                            *FCIparity(str1, stra[i]) > 0) {
                                 h0[i*np+j] = g2e_aa[pi*d3+pj*d2+pk*norb+pl]

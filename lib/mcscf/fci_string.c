@@ -88,7 +88,7 @@ int FCIstr2addr(int norb, int nelec, unsigned long string)
         for (norb_left = norb - 1; norb_left >= 0; norb_left--) {
                 if (nelec_left == 0 || norb_left < nelec_left) {
                         break;
-                } else if ((1<<norb_left) & string) {
+                } else if ((1UL<<norb_left) & string) {
                         addr += binomial(norb_left, nelec_left);
                         nelec_left--;
                 }
@@ -111,7 +111,7 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
         for (str_id = 0; str_id < na; str_id++) {
                 str0 = strs[str_id];
                 for (i = 0, io = 0, iv = 0; i < norb; i++) {
-                        if (str0 & (1<<i)) {
+                        if (str0 & (1UL<<i)) {
                                 occ[io] = i;
                                 io += 1;
                         } else {
@@ -129,7 +129,8 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                         }
                         for (i = 0; i < nocc; i++) {
                                 for (a = 0; a < nvir; a++, k++) {
-                                        str1 = (str0^(1<<occ[i])) | (1<<vir[a]);
+                                        str1 = (str0^(1UL<<occ[i])) |
+                                                (1UL<<vir[a]);
                                         if (vir[a] > occ[i]) {
                                                 ia = vir[a]*(vir[a]+1)/2+occ[i];
                                         } else {
@@ -152,7 +153,8 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
 
                         for (i = 0; i < nocc; i++) {
                                 for (a = 0; a < nvir; a++, k++) {
-                                        str1 = (str0^(1<<occ[i])) | (1<<vir[a]);
+                                        str1 = (str0^(1UL<<occ[i])) |
+                                                (1UL<<vir[a]);
                                         tab[k*4+0] = vir[a];
                                         tab[k*4+1] = occ[i];
                                         tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
