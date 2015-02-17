@@ -71,13 +71,35 @@ static int binomial(int n, int m)
         int i;
         unsigned long num = 1;
         unsigned long div = 1;
-        for (i = 0; i < n-m; i++) {
-                num *= m+i+1;
+        double dnum = 1;
+        double ddiv = 1;
+        if (n < 28) {
+                if (m+m >= n) {
+                        for (i = 0; i < n-m; i++) {
+                                num *= m+i+1;
+                                div *= i+1;
+                        }
+                } else {
+                        for (i = 0; i < m; i++) {
+                                num *= (n-m)+i+1;
+                                div *= i+1;
+                        }
+                }
+                return num / div;
+        } else {
+                if (m+m >= n) {
+                        for (i = 0; i < n-m; i++) {
+                                dnum *= m+i+1;
+                                ddiv *= i+1;
+                        }
+                } else {
+                        for (i = 0; i < m; i++) {
+                                dnum *= (n-m)+i+1;
+                                ddiv *= i+1;
+                        }
+                }
+                return (int)(dnum / ddiv);
         }
-        for (i = 0; i < n-m; i++) {
-                div *= i+1;
-        }
-        return num / div;
 }
 
 int FCIstr2addr(int norb, int nelec, unsigned long string)
