@@ -441,6 +441,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         ti0 = log.timer('transposing to disk', *ti2)
         # release the memory of buf before allocating temporary data
         buf = None
+    fswap.close()
     return swapfile
 
 def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
