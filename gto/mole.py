@@ -63,7 +63,7 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
-def unique_atoms(atoms, basis=None):
+def atom_types(atoms, basis=None):
     atmgroup = {}
     for ia, a in enumerate(atoms):
         if a[0] in atmgroup:
@@ -143,7 +143,10 @@ def format_atom(atoms, origin=0, axes=1):
                     rawsymb = _rm_digit(atom[0])
                     stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
                     symb = atom[0].replace(rawsymb, stdsymb)
-                c = numpy.array(atom[1]) - origin
+                if isinstance(atom[1], (int, long, float)):
+                    c = numpy.array(atom[1:4]) - origin
+                else:
+                    c = numpy.array(atom[1]) - origin
                 fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
     return fmt_atoms
 
@@ -386,9 +389,18 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
         b[:,ATOM_OF] = ia
         _bas.append(b)
 
-    _atm = numpy.array(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
-    _bas = numpy.array(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
-    _env = numpy.hstack((pre_env,numpy.hstack(_env)))
+    if _atm:
+        _atm = numpy.array(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
+    else:
+        _atm = numpy.zeros((0,ATM_SLOTS), numpy.int32)
+    if _bas:
+        _bas = numpy.array(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
+    else:
+        _bas = numpy.zeros((0,BAS_SLOTS), numpy.int32)
+    if _env:
+        _env = numpy.hstack((pre_env,numpy.hstack(_env)))
+    else:
+        _env = pre_env
     return _atm, _bas, _env
 
 def tot_electrons(mol):
