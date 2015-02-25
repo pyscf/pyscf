@@ -23,44 +23,44 @@ t2[i,j,b,a] = (ia|jb) / D_ij^ab
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 
 def kernel(mp, mo_energy, mo_coeff, nocc, verbose=None):
-    ovov = mp.ao2mo(mo_coeff, nocc)
-
     nvir = len(mo_energy) - nocc
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
     t2 = numpy.empty((nocc,nocc,nvir,nvir))
     emp2 = 0
-    for i in range(nocc):
-        djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-        gi = numpy.array(ovov[i*nvir:(i+1)*nvir], copy=False)
-        gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
-        t2[i] = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
-        # 2*ijab-ijba
-        theta = gi*2 - gi.transpose(0,2,1)
-        emp2 += numpy.einsum('jab,jab', t2[i], theta)
+
+    with mp.ao2mo(mo_coeff, nocc) as ovov:
+        for i in range(nocc):
+            djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
+            gi = numpy.array(ovov[i*nvir:(i+1)*nvir], copy=False)
+            gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
+            t2[i] = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
+            # 2*ijab-ijba
+            theta = gi*2 - gi.transpose(0,2,1)
+            emp2 += numpy.einsum('jab,jab', t2[i], theta)
 
     return emp2, t2
 
 def make_rdm1(mp, mo_energy, mo_coeff, nocc, verbose=None):
-    ovov = mp.ao2mo(mo_coeff, nocc)
     nmo = len(mo_energy)
     nvir = nmo - nocc
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
     emp2 = 0
-    for i in range(nocc):
-        djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-        gi = numpy.array(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
-        gi = gi.transpose(1,2,0)
-        t2i = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
-        # 2*ijab-ijba
-        theta = gi*2 - gi.transpose(0,2,1)
-        emp2 += numpy.einsum('jab,jab', t2i, theta)
+    with mp.ao2mo(mo_coeff, nocc) as ovov:
+        for i in range(nocc):
+            djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
+            gi = numpy.array(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
+            gi = gi.transpose(1,2,0)
+            t2i = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
+            # 2*ijab-ijba
+            theta = gi*2 - gi.transpose(0,2,1)
+            emp2 += numpy.einsum('jab,jab', t2i, theta)
 
-        dm1vir += numpy.einsum('jca,jcb->ab', t2i, t2i) * 2 \
-                - numpy.einsum('jca,jbc->ab', t2i, t2i)
-        dm1occ += numpy.einsum('iab,jab->ij', t2i, t2i) * 2 \
-                - numpy.einsum('iab,jba->ij', t2i, t2i)
+            dm1vir += numpy.einsum('jca,jcb->ab', t2i, t2i) * 2 \
+                    - numpy.einsum('jca,jbc->ab', t2i, t2i)
+            dm1occ += numpy.einsum('iab,jab->ij', t2i, t2i) * 2 \
+                    - numpy.einsum('iab,jba->ij', t2i, t2i)
 
     rdm1 = numpy.zeros((nmo,nmo))
 # *2 for beta electron
@@ -80,9 +80,6 @@ class MP2(object):
 
         self.emp2 = None
         self.t2 = None
-        # hold h5file, to prevent the dataset being closed in self.ao2mo()
-        # than in memory
-        self._feri = None
 
     def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
         if mo_coeff is None:
@@ -114,11 +111,9 @@ class MP2(object):
             erifile = tempfile.NamedTemporaryFile()
             ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
                                   verbose=self.verbose)
-            self._feri = h5py.File(erifile.name, 'r')
-            # return the dataset, so it does not use too much memory.
-            eri = self._feri['eri_mo']
+            eri = erifile
         time1 = log.timer('Integral transformation', *time0)
-        return eri
+        return ao2mo.load(eri)
 
 
 if __name__ == '__main__':

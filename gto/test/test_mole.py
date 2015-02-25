@@ -82,20 +82,20 @@ C    SP
         self.assertEqual(mol0.search_ao_nr(1, 1, -1, 5), None)
         self.assertEqual(mol0.search_ao_nr(1, 1, -1, 4), 16)
 
-    def test_unique_atoms(self):
+    def test_atom_types(self):
         atoms = [['H0', ( 0, 0, 0)],
                  ['H1', ( 0, 0, 0)],
                  ['H',  ( 0, 0, 0)],
                  ['H3', ( 0, 0, 0)]]
         basis = {'H':'sto3g', 'H1': '6-31g'}
-        atmgroup = gto.mole.unique_atoms(atoms, basis)
+        atmgroup = gto.mole.atom_types(atoms, basis)
         self.assertEqual(atmgroup, {'H': [0, 2, 3], 'H1': [1]})
         atoms = [['H0', ( 0, 0, 0)],
                  ['H1', ( 0, 0, 0)],
                  ['H2', ( 0, 0, 0)],
                  ['H3', ( 0, 0, 0)]]
         basis = {'H2':'sto3g', 'H3':'6-31g', 'H0':'sto3g', 'H1': '6-31g'}
-        atmgroup = gto.mole.unique_atoms(atoms, basis)
+        atmgroup = gto.mole.atom_types(atoms, basis)
         self.assertEqual(atmgroup, {'H2': [2], 'H3': [3], 'H0': [0], 'H1': [1]})
 
     def test_given_symmetry(self):

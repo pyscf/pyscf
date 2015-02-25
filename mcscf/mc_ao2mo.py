@@ -11,8 +11,6 @@ import pyscf.lib.numpy_helper
 import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
 
-libmcscf = pyscf.lib.load_library('libmcscf')
-
 # least memory requirements:
 # nmo  ncore  ncas  outcore  incore
 # 200  40     16    0.8GB    3.7 GB (_eri 1.6GB intermediates 1.3G)

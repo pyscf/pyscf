@@ -3,106 +3,43 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import re
 import numpy
+import scipy.linalg
 import pyscf.lib
 from pyscf.gto import mole
 import pyscf.symm.param
 
 GEOM_THRESHOLD = 1e-5
-PLACE = int(-numpy.log(GEOM_THRESHOLD))
+PLACE = int(-numpy.log10(GEOM_THRESHOLD))
 
 def get_charge_center(atoms):
-    xbar = 0
-    ybar = 0
-    zbar = 0
-    totchg = 0
-    for atm in atoms:
-        symb = atm[0]
-        charge = mole._charge(symb)
-        x,y,z = atm[1]
-        xbar += charge * x
-        ybar += charge * y
-        zbar += charge * z
-        totchg += charge
-    return numpy.array((xbar,ybar,zbar), dtype=float) / totchg
+    charge = numpy.array([mole._charge(a[0]) for a in atoms])
+    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    rbar = numpy.einsum('i,ij->j', charge, coords)/charge.sum()
+    return rbar
 
 def get_mass_center(atoms):
-    xbar = 0
-    ybar = 0
-    zbar = 0
-    totmass = 0
-    for atm in atoms:
-        symb = atm[0]
-        charge = mole._charge(symb)
-        mass = pyscf.lib.parameters.ELEMENTS[charge][1]
-        x,y,z = atm[1]
-        xbar += mass * x
-        ybar += mass * y
-        zbar += mass * z
-        totmass += mass
-    return numpy.array((xbar,ybar,zbar)) / totmass
+    mass = numpy.array([pyscf.lib.parameters.ELEMENTS[mole._charge(a[0])][1]
+                        for a in atoms])
+    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    rbar = numpy.einsum('i,ij->j', mass, coords)/mass.sum()
+    return rbar
 
-def gen_new_axis(axisz, axisx=None, axisy=None):
-    if axisx is not None:
-        axisy = numpy.cross(axisz, axisx)
-    elif axisy is not None:
-        axisx = numpy.cross(axisy, axisz)
-    elif abs(axisz[1]) < GEOM_THRESHOLD: # in xz plain
-        axisy = numpy.array((0.,1.,0.))
-        axisx = numpy.cross(axisy, axisz)
-    elif abs(axisz[0]) < abs(axisz[1]): # close to old y axis
-        axisx = numpy.array((axisz[1], -axisz[0], 0))
-        axisy = numpy.cross(axisz, axisx)
-    else:
-        axisy = numpy.array((-axisz[1], axisz[0], 0))
-        axisx = numpy.cross(axisy, axisz)
-    new_axis = numpy.array((axisx/numpy.linalg.norm(axisx),
-                            axisy/numpy.linalg.norm(axisy),
-                            axisz/numpy.linalg.norm(axisz)))
-    return new_axis
-
-def normalize(v):
-    rr = numpy.linalg.norm(v)
-    if rr > 1e-12:
-        return v/rr
-    else:
-        return v
+def get_inertia_momentum(atoms, basis):
+    charge = numpy.array([mole._charge(a[0]) for a in atoms])
+    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    rbar = numpy.einsum('i,ij->j', charge, coords)/charge.sum()
+    coords = coords - rbar
+    im = numpy.einsum('i,ij,ik->jk', charge, coords, coords)/charge.sum()
+    return im
 
 def parallel_vectors(v1, v2):
-    v3 = numpy.cross(v1, v2)
+    v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
     return numpy.linalg.norm(v3) < GEOM_THRESHOLD
 
-def vector_perp_to_vector(v1):
-    if abs(v1[0]) > GEOM_THRESHOLD or abs(v1[1]) > GEOM_THRESHOLD:
-        return numpy.array((-v1[1],v1[0],0.))
-    else:
-        return numpy.array((1.,0.,0.))
-def vector_perp_to_vectors(v1, v2):
-    v3 = numpy.cross(v1,v2)
-    norm = numpy.linalg.norm(v3)
-    if norm < GEOM_THRESHOLD:
-        return vector_perp_to_vector(v1)
-    else:
-        return v3/norm
-
-def vector_parallel_x(vec):
-    return abs(vec[1]) < GEOM_THRESHOLD and abs(vec[2]) < GEOM_THRESHOLD
-def vector_parallel_y(vec):
-    return abs(vec[0]) < GEOM_THRESHOLD and abs(vec[2]) < GEOM_THRESHOLD
-def vector_parallel_z(vec):
-    return abs(vec[0]) < GEOM_THRESHOLD and abs(vec[1]) < GEOM_THRESHOLD
-def order_vectors(vecs):
-    # ordering vectors, move (0,0,1),(1,0,0),(0,1,0) to the front
-    if list(filter(vector_parallel_y, vecs)):
-        vecs = [numpy.array((0.,1.,0.))] + pyscf.lib.remove_if(vector_parallel_y, vecs)
-    if list(filter(vector_parallel_x, vecs)):
-        vecs = [numpy.array((1.,0.,0.))] + pyscf.lib.remove_if(vector_parallel_x, vecs)
-    if list(filter(vector_parallel_z, vecs)):
-        vecs = [numpy.array((0.,0.,1.))] + pyscf.lib.remove_if(vector_parallel_z, vecs)
-    return vecs
-
 def argsort_coords(coords):
-    coords = numpy.array(coords)
+    coords = numpy.around(coords, decimals=PLACE-1)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
@@ -115,6 +52,7 @@ def sort_coords(coords):
 def rotation_mat(vec, theta):
     '''rotate angle theta along vec
     new(x,y,z) = R * old(x,y,z)'''
+    vec = vec / numpy.linalg.norm(vec)
     uu = vec.reshape(-1,1) * vec.reshape(1,-1)
     ux = numpy.array((
         ( 0     ,-vec[2], vec[1]),
@@ -125,98 +63,143 @@ def rotation_mat(vec, theta):
     r = c * numpy.eye(3) + s * ux + (1-c) * uu
     return r
 
-def find_axis(vecs):
-    nv = vecs.__len__()
-    if nv < 3:
-        return None
-    elif list(filter(vector_parallel_x, vecs)) \
-         and list(filter(vector_parallel_z, vecs)):
-        return numpy.eye(3)
-    else:
-        orthtab = numpy.zeros((nv,nv),dtype=bool)
-        for i in range(nv):
-            for j in range(i):
-                if abs(numpy.dot(vecs[i],vecs[j])) < GEOM_THRESHOLD:
-                    orthtab[i,j] = orthtab[j,i] = True
-        for i in range(nv):
-            if orthtab[i].sum() >= 2:
-                lst = [j for j in range(nv) if orthtab[i,j]]
-                for j in lst:
-                    if orthtab[j,lst].sum() > 0:
-                        return gen_new_axis(vecs[i], axisx=vecs[j])
-
-####################################
-def atoms_in_line(atoms):
-    if len(atoms) == 2:
-        return True
-    else:
-        coords = numpy.array([a[1] for a in atoms])
-        v12 = coords[1] - coords[0]
-        return all([parallel_vectors(c-coords[0], v12) for c in coords[2:]])
-
-def atoms_in_plain(atoms):
-    coords = numpy.array([a[1] for a in atoms])
-    v12 = coords[1] - coords[0]
-    for c in coords[2:]:
-        if not parallel_vectors(c-coords[0], v12):
-            plain = numpy.cross(v12, c-coords[0])
-            if numpy.allclose(numpy.dot(coords[2:], plain), 0, atol=GEOM_THRESHOLD):
-                return plain
-    return False
-
+#TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None):
     '''
     Return group name, charge center, and nex_axis (three rows for x,y,z)
     '''
+# a tight threshold for classifying the main class of group.  Because if the
+# main group class is incorrectly assigned, the following search _search_toi
+# and search_c_highest is very likely to give wrong type of symmetry
+    tol = GEOM_THRESHOLD / len(atoms)
+
     rawsys = SymmSys(atoms, basis)
-    if atoms.__len__() == 1:
-        return 'D2h', numpy.zeros(3), numpy.eye(3)
-    elif atoms.__len__() == 2:
-        rchg = rawsys.charge_center
-        new_axis = gen_new_axis(numpy.array(atoms[0][1])-rchg, axisx=(1,0,0))
+    w, axes = scipy.linalg.eigh(rawsys.im)
+    axes = axes.T
+
+    if numpy.allclose(w, 0, atol=tol):
+        gpname = 'SO3'
+    elif numpy.allclose(w[:2], 0, atol=tol): # linear molecule
         if rawsys.detect_icenter():
-            return 'D2h', rchg, new_axis
+            gpname = 'Dooh'
         else:
-            return 'C2v', rchg, new_axis
-    elif atoms_in_line(atoms):
-        rchg = rawsys.charge_center
-        if numpy.allclose(atoms[0][1], 0):
-            zaxis = numpy.array(atoms[1][1]) - rchg
+            gpname = 'Coov'
+    elif numpy.allclose(w, w[0], atol=tol): # T, O, I
+        gpname, axes = _search_toi(rawsys)
+    elif (numpy.allclose(w[0], w[1], atol=tol) or
+          numpy.allclose(w[1], w[2], atol=tol)):
+        if numpy.allclose(w[1], w[2], atol=tol):
+            axes = axes[[1,2,0]]
+        n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
+        if c2x is not None:
+            if rawsys.iden_op(-rotation_mat(axes[2],numpy.pi)):
+                gpname = 'D%dh' % n
+            elif rawsys.detect_icenter():
+                gpname = 'D%dd' % n
+            else:
+                gpname = 'D%d' % n
+            yaxis = numpy.cross(axes[2], c2x)
+            axes = numpy.array((c2x, yaxis, axes[2]))
+        elif mirrorx is not None:
+            gpname = 'C%dv' % n
+            yaxis = numpy.cross(axes[2], mirrorx)
+            axes = numpy.array((mirrorx, yaxis, axes[2]))
+        elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)): # xy-mirror
+            gpname = 'C%dh' % n
+        elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi/n)): # rotate and inverse
+            gpname = 'S%d' % (n*2)
         else:
-            zaxis = numpy.array(atoms[0][1]) - rchg
-        new_axis = gen_new_axis(zaxis, axisx=(1,0,0))
-        if rawsys.detect_icenter():
-            return 'D2h', rchg, new_axis
-        else:
-            return 'C2v', rchg, new_axis
+            gpname = 'C%d' % n
     else:
-        rchg = rawsys.charge_center
-        icenter = rawsys.detect_icenter()
-        c2_axis = rawsys.detect_C2()
-        c2_xyz = find_axis(c2_axis)
-        if icenter:
-            if not c2_axis:
-                return 'Ci', rchg, numpy.eye(3)
-            elif c2_axis.__len__() >= 3 and c2_xyz is not None:
-                return 'D2h', rchg, c2_xyz
+        is_c2x = rawsys.iden_op(rotation_mat(axes[0], numpy.pi))
+        is_c2y = rawsys.iden_op(rotation_mat(axes[1], numpy.pi))
+        is_c2z = rawsys.iden_op(rotation_mat(axes[2], numpy.pi))
+# rotate to old axes, as close as possible?
+        if is_c2z and is_c2x and is_c2y:
+            if rawsys.detect_icenter():
+                gpname = 'D2h'
             else:
-                new_axis = gen_new_axis(c2_axis[0])
-                return 'C2h', rchg, new_axis
+                gpname = 'D2'
+        elif is_c2z or is_c2x or is_c2y:
+            if is_c2x:
+                axes = axes[[1,2,0]]
+            if is_c2y:
+                axes = axes[[2,0,1]]
+            mirrorx = -rotation_mat(axes[0], numpy.pi)
+            if rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)):
+                gpname = 'C2h'
+            elif rawsys.iden_op(mirrorx):
+                gpname = 'C2v'
+            else:
+                gpname = 'C2'
         else:
-            mirror = rawsys.detect_mirror()
-            if c2_axis.__len__() >= 3 and c2_xyz is not None:
-                return 'D2', rchg, c2_xyz
-            elif c2_axis and mirror:
-                new_axis = gen_new_axis(c2_axis[0], axisy=mirror[0])
-                return 'C2v', rchg, new_axis
-            elif c2_axis:
-                new_axis = gen_new_axis(c2_axis[0])
-                return 'C2', rchg, new_axis
-            elif mirror:
-                new_axis = gen_new_axis(mirror[0])
-                return 'Cs', rchg, new_axis
+            if rawsys.detect_icenter():
+                gpname = 'Ci'
+            elif rawsys.iden_op(-rotation_mat(axes[0], numpy.pi)):
+                gpname = 'Cs'
+                axes = axes[[1,2,0]]
+            elif rawsys.iden_op(-rotation_mat(axes[1], numpy.pi)):
+                gpname = 'Cs'
+                axes = axes[[2,0,1]]
+            elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)):
+                gpname = 'Cs'
             else:
-                return 'C1', rchg, numpy.eye(3)
+                gpname = 'C1'
+    charge_center = get_charge_center(atoms)
+    if not numpy.allclose(charge_center, rawsys.charge_center, atol=tol):
+        assert(parallel_vectors(charge_center-rawsys.charge_center, axes[2]))
+    return gpname, charge_center, _pesudo_vectors(axes)
+
+
+# reduce to D2h and its subgroups
+# FIXME, CPL, 209, 506
+def subgroup(gpname, axes):
+    if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
+        return gpname, axes
+    elif gpname in ('Dooh', 'SO3'):
+        return 'D2h', axes
+    elif gpname in ('Coov',):
+        return 'C2v', axes
+    elif gpname in ('Oh',):
+        return 'D2h', axes
+    elif gpname in ('Ih',):
+        return 'Cs', axes[[2,0,1]]
+    elif gpname in ('Td',):
+        x,y,z = axes
+        x = (x+y) / numpy.linalg.norm(x+y)
+        y = numpy.cross(z, x)
+        return 'C2v', numpy.array((x,y,z))
+    elif re.search('S\d+', gpname):
+        n = int(re.search('\d+', gpname).group(0))
+        return 'C%d'%(n//2), axes
+    else:
+        n = int(re.search('\d+', gpname).group(0))
+        if re.search('D\d+d', gpname):
+            gpname = 'C%dv' % n
+        if n % 2 == 0:
+            subname = re.sub('\d+', '2', gpname)
+        else:
+            # Dnh -> C2v
+            # Dn  -> C2
+            # Cnh -> Cs
+            # Cnv -> Cs
+            if re.search('D\d+h', gpname):
+                subname = 'C2v'
+                axes = axes[[1,2,0]]
+            elif re.search('D\d+', gpname):
+                subname = 'C2'
+                axes = axes[[1,2,0]]
+            elif re.search('C\d+h', gpname):
+                subname = 'Cs'
+            elif re.search('C\d+v', gpname):
+                subname = 'Cs'
+                axes = axes[[1,2,0]]
+            else:
+                subname = 'C1'
+        if subname[-1] == 'd':
+            subname = subname[:-1]
+        return subname, axes
+
 
 def symm_ops(gpname, axes=None):
     if axes is not None:
@@ -246,25 +229,25 @@ def symm_ops(gpname, axes=None):
 
 def symm_identical_atoms(gpname, atoms):
     ''' Requires '''
-    if not numpy.allclose(get_charge_center(atoms), 0):
+    if not numpy.allclose(get_charge_center(atoms), 0, atol=GEOM_THRESHOLD):
         raise RuntimeError('''The molecule needs to be placed in the standard orientation.
 It can be obtained using the return variables of detect_symm.''')
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms)
-    coords = numpy.array([a[1] for a in rawsys.atoms])
+    coords = numpy.array([a[1] for a in atoms], dtype=float)
     idx = argsort_coords(coords)
     coords0 = coords[idx]
 
     dup_atom_ids = []
     for op in ops:
-        newc = numpy.around(numpy.dot(coords, op), decimals=PLACE-1)
+        newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
-        assert(numpy.allclose(coords0, newc[idx]))
+        assert(numpy.allclose(coords0, newc[idx], atol=GEOM_THRESHOLD))
         dup_atom_ids.append(idx)
 
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
-    uniq_idx = numpy.unique(dup_atom_ids[:,0])
+    uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
     eql_atom_ids = dup_atom_ids[uniq_idx]
     eql_atom_ids = [list(set(i)) for i in eql_atom_ids]
     return eql_atom_ids
@@ -274,16 +257,16 @@ def check_given_symm(gpname, atoms, basis=None):
 # match, but also the symbols and basis functions
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
-    rawsys = SymmSys(atoms)
-    for lst in rawsys.uniq_atoms.values():
-        coords = numpy.array([rawsys.atoms[i][1] for i in lst])
+    rawsys = SymmSys(atoms, basis)
+    for lst in rawsys.atomtypes.values():
+        coords = rawsys.atoms[lst,1:]
         idx = argsort_coords(coords)
         coords0 = coords[idx]
 
         for op in ops:
-            newc = numpy.around(numpy.dot(coords, op), decimals=PLACE-1)
+            newc = numpy.dot(coords, op)
             idx = argsort_coords(newc)
-            if not numpy.allclose(coords0, newc[idx]):
+            if not numpy.allclose(coords0, newc[idx], atol=GEOM_THRESHOLD):
                 return False
     return True
 
@@ -292,47 +275,49 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
+
 class SymmSys(object):
     def __init__(self, atoms, basis=None):
-        atoms = [(a[0], numpy.array(a[1])) for a in atoms]
-        self.charge_center = get_charge_center(atoms)
-        self.mass_center = get_mass_center(atoms)
-# it's important to round off the coordinates, so that we can use
-# numpy.allclose to compare the coordinates
-        self.atoms = [[a[0], numpy.around(a[1]-self.charge_center, decimals=PLACE-1)]
-                      for a in atoms]
-        self.uniq_atoms = mole.unique_atoms(atoms, basis)
+        self.atomtypes = mole.atom_types(atoms, basis)
+        # fake systems, which treates the atoms of different basis as different atoms.
+        # the fake systems do not have the same symmetry as the potential
+        # it's only used to determine the main (Z-)axis
+        chg1 = numpy.pi - 2
+        coords = []
+        fake_chgs = []
+        idx = []
+        for k, lst in self.atomtypes.items():
+            idx.append(lst)
+            coords.append([atoms[i][1] for i in lst])
+            ksymb = mole._rm_digit(k)
+            if ksymb != k or ksymb == 'GHOST':
+                fake_chgs.append([chg1] * len(lst))
+                chg1 *= numpy.pi-2
+            else:
+                fake_chgs.append([mole._charge(ksymb)] * len(lst))
+        coords = numpy.array(numpy.vstack(coords), dtype=float)
+        fake_chgs = numpy.hstack(fake_chgs)
+        self.charge_center = numpy.einsum('i,ij->j', fake_chgs, coords)/fake_chgs.sum()
+        coords = coords - self.charge_center
+        self.im = numpy.einsum('i,ij,ik->jk', fake_chgs, coords, coords)/fake_chgs.sum()
+
+        idx = numpy.argsort(numpy.hstack(idx))
+        self.atoms = numpy.hstack((fake_chgs.reshape(-1,1), coords))[idx]
+
 
     def group_atoms_by_distance(self, index):
-        r = [numpy.linalg.norm(self.atoms[i][1]) for i in index]
+        c = self.atoms[index,1:]
+        r = numpy.sqrt(numpy.einsum('ij,ij->i', c, c))
         lst = numpy.argsort(r)
         groups = [[index[lst[0]]]]
         for i in range(len(lst)-1):
-            if numpy.allclose(r[lst[i]], r[lst[i+1]]):
+            if numpy.allclose(r[lst[i]], r[lst[i+1]], atol=GEOM_THRESHOLD):
                 groups[-1].append(index[lst[i+1]])
             else:
                 groups.append([index[lst[i+1]]])
         return groups
 
-    def check_op_valid(self, op_test, atom_groups):
-        for atoms in atom_groups:
-            for atm in atoms:
-                # check if op_test on atm can generate an atom of the mole
-                if not pyscf.lib.member(op_test, atm, atoms):
-                    return False
-        return True
-
     def remove_dupvec(self, vs):
-        def p_normalize(vs):
-            # pseudo vector
-            idy0 = abs(vs[:,1])<GEOM_THRESHOLD
-            idz0 = abs(vs[:,2])<GEOM_THRESHOLD
-            vs = vs.copy()
-            vs[vs[:,2]<0] *= -1
-            vs[numpy.logical_and(vs[:,1]<0, idz0)] *= -1
-            idx = numpy.logical_and(idy0, idz0)
-            vs[numpy.logical_and(vs[:,0]<0, idx)] *= -1
-            return vs
         def rm_iter(vs):
             if len(vs) <= 1:
                 return vs
@@ -340,106 +325,239 @@ class SymmSys(object):
                 x = numpy.sum(abs(vs[1:]-vs[0]), axis=1)
                 rest = rm_iter(vs[1:][x>GEOM_THRESHOLD])
                 return numpy.vstack((vs[0], rest))
-        return rm_iter(p_normalize(vs))
+        return rm_iter(_pesudo_vectors(vs))
 
     def detect_icenter(self):
-        for lst in self.uniq_atoms.values():
-            coords = sort_coords([self.atoms[i][1] for i in lst])
-            newc = sort_coords(-coords)
-            if not numpy.allclose(coords, newc, atol=GEOM_THRESHOLD):
+        return self.iden_op(-1)
+
+    def iden_op(self, op):
+        for lst in self.atomtypes.values():
+            r0 = self.atoms[lst,1:]
+            r1 = numpy.dot(r0, op)
+            if not numpy.allclose(sort_coords(r0), sort_coords(r1),
+                                  atol=GEOM_THRESHOLD):
                 return False
         return True
 
-    def detect_C2(self):
-        def search_maybe_c2(groups):
-            maybe_c2 = [] # normalized vector
-            for g in groups:
-                if g.__len__() == 1:
-                    if not numpy.allclose(self.atoms[g[0]][1], 0):
-                        maybe_c2.append(normalize(self.atoms[g[0]][1]))
-                else:
-                    for i,gi in enumerate(g):
-                        for j in range(i):
-                            gj = g[j]
-                            if numpy.allclose(self.atoms[gi][1]+self.atoms[gj][1],0):
-                                maybe_c2.append(normalize(self.atoms[gi][1]))
-                                # linear molecules are handled as a special case
-                                #maybe_c2.append(normalize(vector_perp_to_vector(gi[1])))
+    def search_c_highest(self, zaxis):
+        has_c2x = True
+        has_mirrorx = True
+        maybe_cn = []
+        maybe_c2x = []
+        maybe_mirrorx = []
+        for atype in self.atomtypes.values():
+            groups = self.group_atoms_by_distance(atype)
+            for lst in groups:
+                r0 = self.atoms[lst,1:]
+                zcos = numpy.around(numpy.einsum('ij,j->i', r0, zaxis),
+                                    decimals=PLACE-1)
+                uniq_zcos = numpy.unique(zcos)
+                for d in uniq_zcos:
+                    cn = (zcos==d).sum()
+                    if (cn == 1):
+                        if not parallel_vectors(zaxis, r0[zcos==d][0]):
+                            raise RuntimeError('Unknown symmetry')
+                    else:
+                        maybe_cn.append(cn)
+
+                # The possible C2x are composed by those vectors, whose
+                # distance to xy-mirror are identical
+                if has_c2x:
+                    for d in uniq_zcos:
+                        if numpy.allclose(d, 0, atol=GEOM_THRESHOLD): # plain which cross the orig
+                            r1 = r0[zcos==d]
+                            i1, i2 = numpy.tril_indices(len(r1))
+                            maybe_c2x.append(r1[i1] + r1[i2])
+                        elif d > GEOM_THRESHOLD:
+                            mirrord = abs(zcos+d)<GEOM_THRESHOLD
+                            if mirrord.sum() == (zcos==d).sum():
+                                above = r0[zcos==d]
+                                below = r0[mirrord]
+                                nelem = len(above)
+                                i1, i2 = numpy.indices((nelem,nelem))
+                                maybe_c2x.append(above[i1.flatten()] +
+                                                 below[i2.flatten()])
                             else:
-                                maybe_c2.append(normalize(self.atoms[gi][1]+self.atoms[gj][1]))
-                                vec = vector_perp_to_vectors(self.atoms[gi][1], self.atoms[gj][1])
-                                maybe_c2.append(normalize(vec))
-            return self.remove_dupvec(numpy.array(maybe_c2))
-        maybe_c2 = []
-        for lst in self.uniq_atoms.values():
-            groups = self.group_atoms_by_distance(lst)
-            maybe_c2.extend(search_maybe_c2(groups))
-        #c2 perp to plain. e.g.
-        # H   He
-        #  \ /
-        #   H
-        #  / \
-        # He  H
-        if len(self.atoms) > 2:
-            plain_vec = atoms_in_plain(self.atoms)
-            if isinstance(plain_vec, numpy.ndarray):
-                maybe_c2.append(plain_vec)
+                                # if the number of mirrored vectors are diff,
+                                # it's impossible to have c2x
+                                has_c2x = False
+                                break
 
-        if len(maybe_c2) == 0:
-            return False
+                if has_mirrorx:
+                    for d in uniq_zcos:
+                        r1 = r0[zcos==d]
+                        i1, i2 = numpy.tril_indices(len(r1))
+                        maybe_mirrorx.append(numpy.cross(zaxis, r1[i1]+r1[i2]))
+
+        possible_cn = []
+        for n in set(maybe_cn):
+            for i in range(2, n+1):
+                if n % i == 0:
+                    possible_cn.append(i)
+
+        r0 = self.atoms[:,1:]
+        n = 1
+        for i in sorted(set(possible_cn), reverse=True):
+            op = rotation_mat(zaxis, numpy.pi*2/i)
+            r1 = numpy.dot(r0, op)
+            if numpy.allclose(sort_coords(r0), sort_coords(r1),
+                              atol=GEOM_THRESHOLD):
+                n = i
+                break
+
+        #
+        # C2 perp to Cn and mirros on Cn
+        #
+
+        def pick_vectors(maybe_vec):
+            maybe_vec = numpy.vstack(maybe_vec)
+            # remove zero-vectors and duplicated vectors
+            d = numpy.einsum('ij,ij->i', maybe_vec, maybe_vec)
+            maybe_vec = maybe_vec[d>GEOM_THRESHOLD**2]
+            maybe_vec /= numpy.sqrt(d[d>GEOM_THRESHOLD**2]).reshape(-1,1)
+            maybe_vec = self.remove_dupvec(maybe_vec) # also transfer to pseudo-vector
+
+            # remove the C2x which can be related by Cn rotation along z axis
+            seen = numpy.zeros(len(maybe_vec), dtype=bool)
+            for k, r1 in enumerate(maybe_vec):
+                if not seen[k]:
+                    cos2r1 = numpy.einsum('j,ij->i', r1, maybe_vec[k+1:])
+                    for i in range(1,n):
+                        c = numpy.cos(numpy.pi*i/n) # no 2pi because of pseudo-vector
+                        seen[k+1:][abs(cos2r1-c) < GEOM_THRESHOLD] = True
+
+            possible_vec = maybe_vec[numpy.logical_not(seen)]
+            return possible_vec
+
+        c2x = None
+        if has_c2x:
+            possible_c2x = pick_vectors(maybe_c2x)
+            r0 = sort_coords(self.atoms[:,1:])
+            for c in possible_c2x:
+                op = rotation_mat(c, numpy.pi)
+                r1 = numpy.dot(r0, op)
+                if numpy.allclose(sort_coords(r1), r0, atol=GEOM_THRESHOLD):
+                    c2x = c
+                    break
+
+        mirrorx = None
+        if has_mirrorx:
+            possible_mirrorx = pick_vectors(maybe_mirrorx)
+            r0 = sort_coords(self.atoms[:,1:])
+            for c in possible_mirrorx:
+                op = -rotation_mat(c, numpy.pi)
+                r1 = numpy.dot(r0, op)
+                if numpy.allclose(sort_coords(r1), r0, atol=GEOM_THRESHOLD):
+                    mirrorx = c
+                    break
+
+        return n, c2x, mirrorx
+
+
+# T/Td/Th/O/Oh/I/Ih
+def _search_toi(rawsys):
+    def has_rotation(zaxis, n, coords):
+        op = rotation_mat(zaxis, numpy.pi*2/n)
+        r1 = numpy.dot(coords, op)
+        return numpy.allclose(sort_coords(coords), sort_coords(r1),
+                              atol=GEOM_THRESHOLD)
+
+    def highest_c(zaxis, coords):
+        for n in (5, 4, 3):
+            if has_rotation(zaxis, n, coords):
+                return n
+        return 1
+
+    maybe = []
+    maybe_axes = []
+    for atype in rawsys.atomtypes.values():
+        groups = rawsys.group_atoms_by_distance(atype)
+        for lst in groups:
+            if len(lst) > 1:
+                coords = rawsys.atoms[lst,1:]
+                zaxis = rawsys.atoms[lst[0],1:]
+                if not parallel_vectors(zaxis, rawsys.atoms[lst[1],1:]):
+                    xaxis = rawsys.atoms[lst[1],1:]
+                else:
+                    xaxis = rawsys.atoms[lst[2],1:]
+                maybe_axes.append([zaxis,xaxis])
+
+                cn = highest_c(zaxis, coords)
+                if cn == 5:
+                    maybe.append('I')
+                    break
+                elif cn == 4:
+                    maybe.append('O')
+                    break
+                else: # C3 axis or fullerene
+                    zcos = numpy.around(numpy.einsum('ij,j->i', coords, zaxis),
+                                        decimals=PLACE-1)
+                    uniq_zcos = numpy.unique(zcos)
+                    for d in reversed(uniq_zcos):
+                        idx = numpy.where(zcos==d)[0]
+                        if len(idx) >= 2:
+                            r1, r2 = coords[idx[:2]]
+                            zaxis1 = numpy.cross(r2-zaxis, r1-zaxis)
+                            cn = highest_c(zaxis1, coords)
+                            if cn == 5:
+                                maybe.append('I')
+                                # xaxis on mirror
+                                maybe_axes[-1] = [zaxis1,zaxis]
+                                break
+                            elif cn == 4:
+                                maybe.append('O')
+                                maybe_axes[-1] = [zaxis1,zaxis]
+                                break
+                            elif cn == 3:
+                                maybe.append('T')
+                                xaxis = zaxis+r2
+                                zaxis = zaxis+r1
+                                maybe_axes[-1] = [zaxis,xaxis]
+                                break
+                            else:
+                                raise RuntimeError('Unknown symmetry')
+                    break # lst in rawsys.group_atoms_by_distance(atype)
+
+    def make_axes(zx):
+        z, x = zx
+        y = numpy.cross(z, x)
+        x = numpy.cross(y, z) # because x might not perp to z
+        x /= numpy.linalg.norm(x)
+        y /= numpy.linalg.norm(y)
+        z /= numpy.linalg.norm(z)
+        return numpy.array((x,y,z))
+    if 'T' in maybe:
+# FIXME
+        gpname = 'Td'
+        axes = make_axes(maybe_axes[maybe.index('T')])
+    elif 'O' in maybe:
+        if rawsys.detect_icenter():
+            gpname = 'Oh'
         else:
-            maybe_c2 = self.remove_dupvec(numpy.array(maybe_c2))
-
-            axes = []
-            for axis in maybe_c2:
-                rotmat = rotation_mat(axis, numpy.pi)
-                alltrue = True
-                for lst in self.uniq_atoms.values():
-                    coords = sort_coords([self.atoms[i][1] for i in lst])
-                    newc = numpy.einsum('ij,kj->ki', rotmat, coords)
-                    newc = sort_coords(numpy.around(newc, decimals=PLACE-1))
-                    if not numpy.allclose(coords, newc, atol=GEOM_THRESHOLD):
-                        alltrue = False
-                        break
-                if alltrue:
-                    axes.append(axis)
-            return order_vectors(axes)
-
-    def detect_mirror(self):
-        maybe_mirror = [] # normalized vector perp to the mirror
-        for lst in self.uniq_atoms.values():
-            groups = self.group_atoms_by_distance(lst)
-            for g in groups:
-                for i,gi in enumerate(g):
-                    for j in range(i):
-                        gj = g[j]
-                        maybe_mirror.append(normalize(self.atoms[gj][1]
-                                                     -self.atoms[gi][1]))
-
-        if len(self.atoms) > 2:
-            plain_vec = atoms_in_plain(self.atoms)
-            if isinstance(plain_vec, numpy.ndarray):
-                maybe_mirror.append(plain_vec)
-
-        if len(maybe_mirror) == 0:
-            return False
+            gpname = 'O'
+        axes = make_axes(maybe_axes[maybe.index('O')])
+    else:
+        if rawsys.detect_icenter():
+            gpname = 'Ih'
         else:
-            maybe_mirror = self.remove_dupvec(numpy.array(maybe_mirror))
+            gpname = 'I'
+        axes = make_axes(maybe_axes[maybe.index('I')])
+    return gpname, axes
 
-            mirrors = []
-            for mir_vec in maybe_mirror:
-                alltrue = True
-                rotmat = -rotation_mat(mir_vec, numpy.pi)
-                for lst in self.uniq_atoms.values():
-                    coords = sort_coords([self.atoms[i][1] for i in lst])
-                    newc = numpy.einsum('ij,kj->ki', rotmat, coords)
-                    newc = sort_coords(numpy.around(newc, decimals=PLACE-1))
-                    if not numpy.allclose(coords, newc, atol=GEOM_THRESHOLD):
-                        alltrue = False
-                        break
-                if alltrue:
-                    mirrors.append(mir_vec)
-            return order_vectors(mirrors)
+
+# orientation of rotation axes
+def _pesudo_vectors(vs):
+    idy0 = abs(vs[:,1])<GEOM_THRESHOLD
+    idz0 = abs(vs[:,2])<GEOM_THRESHOLD
+    vs = vs.copy()
+    # ensure z component > 0
+    vs[vs[:,2]<0] *= -1
+    # if z component == 0, ensure y component > 0
+    vs[numpy.logical_and(vs[:,1]<0, idz0)] *= -1
+    # if y and z component == 0, ensure x component > 0
+    idx = numpy.logical_and(idy0, idz0)
+    vs[numpy.logical_and(vs[:,0]<0, idx)] *= -1
+    return vs
 
 
 if __name__ == "__main__":
@@ -452,5 +570,18 @@ if __name__ == "__main__":
 
     atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]]
     gpname, orig, axes = detect_symm(atom)
-    atom = shift_atom(atom, orig, axes)
-    print(gpname, symm_identical_atoms(gpname, atom))
+    print gpname, orig, axes
+    #atom = shift_atom(atom, orig, axes)
+    #print(gpname, symm_identical_atoms(gpname, atom))
+
+    atom = [['H', (0., 0., 0.)],
+            ['H', (0., 0., 1.)],
+            ['H', (0., 1., 0.)],
+            ['H', (1., 0., 0.)],
+            ['H', (-1, 0., 0.)],
+            ['H', (0.,-1., 0.)],
+            ['H', (0., 0.,-1.)]]
+    gpname, orig, axes = detect_symm(atom)
+    print gpname, orig, axes
+    #atom = shift_atom(atom, orig, axes)
+    #print(gpname, symm_identical_atoms(gpname, atom))

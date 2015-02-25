@@ -204,11 +204,8 @@ class CASCI(object):
            (nao**2*nmo**2+nmo**4*2+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
             eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
         else:
-            ftmp = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.outcore.full(self.mol, mo_coeff, ftmp.name,
-                                     verbose=self.verbose)
-            feri = h5py.File(ftmp.name, 'r')
-            eri = numpy.array(feri['eri_mo'])
+            eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
+                                                  verbose=self.verbose)
         return eri
 
     def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
@@ -256,7 +253,7 @@ class CASCI(object):
 
             s = reduce(numpy.dot, (mo_coeff.T, self._scf.get_ovlp(),
                                    self._scf.mo_coeff))
-            idx = numpy.argwhere(abs(s)>.5)
+            idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
                 log.info('<mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
             log.info('** Largest CI components **')

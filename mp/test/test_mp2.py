@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import unittest
 from functools import reduce
 import numpy
@@ -39,7 +38,7 @@ class KnowValues(unittest.TestCase):
 
         pt = mp.MP2(mf)
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.204019967288338, 12)
+        self.assertAlmostEqual(emp2, -0.204019967288338, 11)
         self.assertTrue(numpy.allclose(t2, t2ref0))
 
         t2s = numpy.zeros((nocc*2,nocc*2,nvir*2,nvir*2))

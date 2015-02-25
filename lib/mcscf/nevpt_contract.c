@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <omp.h>
-
-#include "fblas.h"
+//#include <omp.h>
+#include "config.h"
+#include "vhf/fblas.h"
 
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define BLK     48

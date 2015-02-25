@@ -257,7 +257,7 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, dx=0, verbose=None):
                    imic, norm_gorb, norm_dx1, dxmax, w)
         if imic >= casscf.max_cycle_micro_inner \
            or norm_gorb > norm_gprev \
-           or norm_gorb < casscf.conv_tol_grad:
+           or norm_gorb < casscf.conv_tol_grad*.2:
             break
         norm_gprev = numpy.linalg.norm(g_orb)
 

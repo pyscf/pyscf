@@ -207,3 +207,4 @@ of API conventions''')
         else:
             mc = casci.CASCI(mf, *args, **kwargs)
     return mc
+

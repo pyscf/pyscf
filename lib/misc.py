@@ -131,7 +131,8 @@ class capture_stdout:
     Usage:
         with capture_stdout() as stdout:
             ...
-        print(stdout.read())'''
+        print(stdout.read())
+    '''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None

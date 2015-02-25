@@ -174,12 +174,11 @@ class CASCI(object):
         else:
             ftmp = tempfile.NamedTemporaryFile()
             moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            pyscf.ao2mo.outcore.full(self.mol, moab, ftmp.name,
-                                     verbose=self.verbose)
+            eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
+                                                  verbose=self.verbose)
             na = mo_coeff[0].shape[1]
             nab = moab.shape[1]
-            with h5py.File(ftmp.name, 'r') as feri:
-                eri = pyscf.ao2mo.restore(1, numpy.array(feri['eri_mo']), nab)
+            eri = pyscf.ao2mo.restore(1, eri, nab)
             eri_aa = eri[:na,:na,:na,:na].copy()
             eri_ab = eri[:na,:na,na:,na:].copy()
             eri_bb = eri[na:,na:,na:,na:].copy()
@@ -230,12 +229,12 @@ class CASCI(object):
 
             s = reduce(numpy.dot, (mo_coeff[0].T, self._scf.get_ovlp(),
                                    self._scf.mo_coeff[0]))
-            idx = numpy.argwhere(abs(s)>.5)
+            idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
                 log.info('alpha <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
             s = reduce(numpy.dot, (mo_coeff[1].T, self._scf.get_ovlp(),
                                    self._scf.mo_coeff[1]))
-            idx = numpy.argwhere(abs(s)>.5)
+            idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
 

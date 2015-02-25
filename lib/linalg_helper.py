@@ -84,7 +84,7 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
         log.debug('davidson %d %d, rr=%g, e=%.12g, seig=%g',
                   istep, subspace, rr, e, seig[0])
 
-        if rr < toloose or abs(de) < tol or seig[0] < lindep:
+        if rr/numpy.sqrt(rr.size) < tol or abs(de) < tol or seig[0] < lindep:
             break
 
 # floating size of subspace, prevent the new intital guess going too bad

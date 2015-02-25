@@ -1040,15 +1040,21 @@ class Mole(object):
             self._basis = self.format_basis(self.basis)
         if self.symmetry:
             import pyscf.symm
-            if self.symmetry in pyscf.symm.param.CHARACTER_TABLE:
-                self.groupname = self.symmetry
-                assert(pyscf.symm.check_given_symm(self.groupname, self.atom,
-                                                   self._basis))
+            if isinstance(self.symmetry, str):
+                self.topgroup = self.symmetry
                 orig = 0
-                axes = 1
+                axes = numpy.eye(3)
+                self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                if not pyscf.symm.check_given_symm(self.groupname, self.atom,
+                                                   self._basis):
+                    self.topgroup, orig, axes = \
+                            pyscf.symm.detect_symm(self.atom, self._basis)
+                    sys.stderr.write('Warn: unable to identify input symmetry %s,'
+                                     'use %s instead.\n' (self.symmetry, self.topgroup))
             else:
-                self.groupname, orig, axes = \
+                self.topgroup, orig, axes = \
                         pyscf.symm.detect_symm(self.atom, self._basis)
+            self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
             self.atom = self.format_atom(self.atom, orig, axes)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
@@ -1195,9 +1201,13 @@ class Mole(object):
 
         log.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
         if self.symmetry:
-            log.info(self, 'point group symmetry = %s', self.groupname)
+            if self.topgroup == self.groupname:
+                log.info(self, 'point group symmetry = %s', self.topgroup)
+            else:
+                log.info(self, 'point group symmetry = %s, use subgroup %s',
+                         self.topgroup, self.groupname)
             for ir in range(self.symm_orb.__len__()):
-                log.info(self, 'num. orbitals of %s = %d', \
+                log.info(self, 'num. orbitals of irrep %s = %d', \
                          self.irrep_name[ir], self.symm_orb[ir].shape[1])
         log.info(self, 'number of shells = %d', self.nbas)
         log.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
