@@ -15,6 +15,7 @@ import pyscf.scf
 from pyscf.scf import _vhf
 from pyscf.dft import vxc
 from pyscf.dft import gen_grid
+from pyscf.dft import numint
 
 
 class RKS(pyscf.scf.hf.RHF):
@@ -25,14 +26,17 @@ class RKS(pyscf.scf.hf.RHF):
         self._exc = 0
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(mol)
-        self._keys = set(self.__dict__.keys())
+        self._numint = numint._NumInt()
+        self._keys = self._keys.union(['xc', 'grids'])
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
         log.info(self, 'XC functionals = %s', self.xc)
-        log.info(self, 'DFT grids: %s', self.grids.becke_scheme.__doc__)
-        #TODO:for k,v in self.mol.grids.items():
-        #TODO:    log.info(self, '%s   radi %d, angular %d', k, *v)
+        try:
+            log.info(self, 'DFT grids')
+            self.grids.dump_flags()
+        except:
+            pass
 
     def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         '''Coulomb + XC functional'''
@@ -42,8 +46,17 @@ class RKS(pyscf.scf.hf.RHF):
             t0 = log.timer(self, 'seting up grids', *t0)
 
         x_code, c_code = vxc.parse_xc_name(self.xc)
-        n, self._exc, vx = vxc.nr_vxc(mol, self.grids, x_code, c_code, \
-                                      dm, spin=1, relativity=0)
+        #n, self._exc, vx = vxc.nr_vxc(mol, self.grids, x_code, c_code, \
+        #                              dm, spin=1, relativity=0)
+        #n, self._exc, vx = numint.nr_vxc(mol, self.grids, x_code, c_code,
+        #                                 dm, spin=mol.spin, relativity=0)
+        if self._numint is None:
+            n, self._exc, vx = numint.nr_vxc(mol, self.grids, x_code, c_code,
+                                             dm, spin=mol.spin, relativity=0)
+        else:
+            n, self._exc, vx = \
+                    self._numint.nr_vxc(mol, self.grids, x_code, c_code,
+                                        dm, spin=mol.spin, relativity=0)
         log.debug(self, 'nelec by numeric integration = %s', n)
         t0 = log.timer(self, 'vxc', *t0)
 

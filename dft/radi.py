@@ -39,7 +39,7 @@ BRAGG_RADII = numpy.array((
 #       Jorge Echeverria, Eduard Cremades, Flavia Barragan and Santiago
 #       Alvarez.  Covalent radii revisited. Dalton Trans., 2008, 2832-2838,
 #       doi:10.1039/b801115j
-COVALENT_RADII = numpy.sqrt((
+COVALENT_RADII = numpy.array((
         0.31,                                     0.28,             # 1s
         1.28, 0.96, 0.84, 0.73, 0.71, 0.66, 0.57, 0.58,             # 2s2p
         1.66, 1.41, 1.21, 1.11, 1.07, 1.05, 1.02, 1.06,             # 3s3p
@@ -57,8 +57,21 @@ COVALENT_RADII = numpy.sqrt((
         2.60, 2.21,                                                 # 7s
         2.15, 2.06, 2.00, 1.96, 1.90, 1.87, 1.80, 1.69))
 
+
+#? gauss-legendre quadrature
+
+# Murray, N.C. Handy, G.J. Laming,  Mol. Phys. 78, 997(1993)
+def murray(n, **kwargs):
+    raise RuntimeError('Not implemented')
+
+def becke(n, **kwargs):
+# second kind gauss-chebyshev quadrature
+    raise RuntimeError('Not implemented')
+
 # scale rad and rad_weight if necessary
-def delley(n): #GetAtomRadialGrid
+# gauss-legendre 
+def delley(n, **kwargs):
+    '''Delley'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     r_outer = 12.
@@ -73,10 +86,15 @@ def delley(n): #GetAtomRadialGrid
     return r, w
 
 # Mura-Knowles log3 quadrature (JCP,104,9848)
-def mura_knowles(n):
+def mura_knowles(n, charge=None, **kwargs):
+    '''Mura-Knowles'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
-    far = 5.2 # 7 for Li, Be, Na, Mg, K, Ca, otherwise 5
+# 7 for Li, Be, Na, Mg, K, Ca, otherwise 5
+    if charge is None:
+        far = 5.2
+    else:
+        far = 7
     step = 1. / n
     for i in range(n):
         x = (i+.5) / n
@@ -85,7 +103,8 @@ def mura_knowles(n):
     w = r*r * dr * 4 * numpy.pi
     return r, w
 
-def gauss_chebeshev(n): #rgd_nkcheb
+def gauss_chebyshev(n, **kwargs):
+    '''Gauss-Chebyshev'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     step = 1. / (n+1)
@@ -102,10 +121,66 @@ def gauss_chebeshev(n): #rgd_nkcheb
     return r[::-1], w[::-1]
 
 
+# O. Treutler, R. Ahlrichs, JCP 102, 346.  (M4)
+def treutler(n, **kwargs):
+    '''Treutler-Ahlrichs'''
+    r = numpy.empty(n)
+    dr = numpy.empty(n)
+    step = numpy.pi / (n+1)
+    ln2 = 1 / numpy.log(2)
+    for i in range(n):
+        x = numpy.cos((i+1)*step)
+        r [i] = -ln2*(1+x)**.6 * numpy.log((1-x)/2)
+        dr[i] = step * numpy.sin((i+1)*step) \
+                * ln2*(1+x)**.6 *(-.6/(1+x)*numpy.log((1-x)/2)+1/(1-x))
+    w = r*r * dr * 4 * numpy.pi
+    return r[::-1], w[::-1]
 
-if __name__ == '__main__':
-    #print(delley(10))
-    #print(mura_knowles(10))
-    #print(gauss_chebeshev(10))
-    for i in range(1,60,3):
-        print(i, (0.75 + (3-1)*0.2) * 14.  * (i+2.)**(1/3.))
+
+
+
+
+def becke_atomic_radii_adjust(mol, atomic_radii):
+    '''Becke atomic radii adjust function'''
+# Becke atomic size adjustment.  J. Chem. Phys. 88, 2547
+# i > j
+# fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
+# fac(j,i) = -fac(i,j)
+
+    atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
+    atm_dist = _inter_distance(mol)
+    rad = numpy.array([atomic_radii[mol.atom_charge(ia)-1] \
+                       for ia in range(mol.natm)])
+    rr = rad.reshape(-1,1)/rad
+    a = .25 * (rr.T - rr)
+    a[a<-.5] = -.5
+    a[a>0.5] = 0.5
+    return lambda i,j,g: g + a[i,j]*(1-g**2)
+
+def treutler_atomic_radii_adjust(mol, atomic_radii):
+    '''Treutler atomic radii adjust function: JCP, 102, 346'''
+# JCP, 102, 346
+# i > j
+# fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
+# fac(j,i) = -fac(i,j)
+    atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
+    atm_dist = _inter_distance(mol)
+    rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)-1] \
+                                  for ia in range(mol.natm)]))
+    rr = rad.reshape(-1,1)/rad
+    a = .25 * (rr.T - rr)
+    a[a<-.5] = -.5
+    a[a>0.5] = 0.5
+    return lambda i,j,g: g + a[i,j]*(1-g**2)
+
+def _inter_distance(mol):
+# see gto.mole.energy_nuc
+    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atm))])
+    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atm))])
+    rr = numpy.dot(coords, coords.T)
+    rd = rr.diagonal()
+    rr = rd[:,None] + rd - rr*2
+    rr[numpy.diag_indices_from(rr)] = 0
+    return numpy.sqrt(rr)
+
+

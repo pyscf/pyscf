@@ -290,6 +290,19 @@ XC_CODES = {
 #'XC_HYB_MGGA_XC_M06_2X': 450, # M06-2X functional of Minnesota
 }
 
+def _is_lda(xc_code):
+    if isinstance(xc_code, int):
+        return xc_code in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                           16, 17, 17, 18, 19, 20, 21, 22, 23, 24, 25, 50, 51)
+    else:
+        return xc_code.upper() in \
+                ('X',           'C_WIGNER',    'C_RPA',       'C_HL',        'C_GL',
+                 'C_XALPHA',    'C_VWN',       'C_VWN_RPA',   'C_PZ',        'C_PZ_MOD',
+                 'C_OB_PZ',     'C_PW',        'C_PW_MOD',    'C_OB_PW',     'C_2D_AMGB',
+                 'C_2D_PRM',    'C_vBH',       'C_VBH',       'C_1D_CSC',    'X_2D',
+                 'XC_TETER93',  'X_1D',        'C_ML1',       'C_ML2',       'C_GOMBAS',
+                 'C_PW_RPA',    'K_TF',        'K_LP',)
+
 def _is_hybrid_xc(xc_code):
     if isinstance(xc_code, int):
         return xc_code in (401, 402, 403, 404, 405,
