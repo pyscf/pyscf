@@ -23,8 +23,8 @@ for r in numpy.arange(2.4, 5.1, .2):
                                        tol=1e-14, lindep=1e-15, max_cycle=100)
     s2, m = fci.spin_op.spin_square(civec, c.shape[1], mol.nelectron)
 
-    # or use the factory function fci.FCI
-    myci = fci.FCI(mol, mo)
+    # or use the factory function fci.FCI generate a FCI object for any given orbitals
+    myci = fci.FCI(mol, c)
     e, civec = myci.kernel()
 
     print('r = %f, E = %g, S^2 = %g, 2S+1 = %g' % (r, e+mol.energy_nuc(), s2, m))

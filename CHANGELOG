@@ -1,3 +1,9 @@
+Version 0.11 (2015-3-?):
+* Remove redundant module fci.direct_ms0
+* Update the point group symmetry detect function
+* Optimized DFT grids
+* NEVPT2 (By Sheng Guo)
+
 Version 0.10 (2015-2-4):
 * Refactoring:
   - Expose class member functions to module level
