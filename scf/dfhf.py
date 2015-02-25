@@ -309,11 +309,11 @@ if __name__ == '__main__':
     method = density_fit(pyscf.scf.RHF(mol))
     method.max_memory = 0
     energy = method.scf()
-    print(energy), -76.0259362997
+    print(energy, -76.0259362997)
 
     method = density_fit(pyscf.scf.DHF(mol))
     energy = method.scf()
-    print(energy), -76.0807386852 # normal DHF energy is -76.0815679438127
+    print(energy, -76.0807386852) # normal DHF energy is -76.0815679438127
 
     mol.build(
         verbose = 0,
@@ -327,4 +327,4 @@ if __name__ == '__main__':
 
     method = density_fit(pyscf.scf.UHF(mol))
     energy = method.scf()
-    print(energy), -75.6310072359
+    print(energy, -75.6310072359)

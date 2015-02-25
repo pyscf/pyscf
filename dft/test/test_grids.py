@@ -22,31 +22,6 @@ h2o.grids = {"H": (10, 50),
 h2o.build()
 
 class KnowValues(unittest.TestCase):
-    def test_GaussChebeshev_vs_bdfgrid(self):
-        dat = [[float(s) for s in x.split()] \
-               for x in open('bdfgrid.dat', 'r').readlines()[1:]]
-        tmp = numpy.array(dat)
-        w = tmp[:,0]
-        r = tmp[:,1:]
-        rdic = dict(zip(['%12.9f%12.9f%12.9f' % tuple(i) for i in r],w))
-
-        #grid = gen_grid_o0.Grids(h2o)
-        #grid.becke_scheme = gen_grid_o0.original_becke
-        grid = gen_grid.Grids(h2o)
-        grid.prune_scheme = None
-        grid.radi_method = radi.gauss_chebyshev
-        grid.becke_scheme = gen_grid.original_becke
-        grid.atomic_radii = radi.becke_atomic_radii_adjust(h2o, \
-                numpy.round(radi.BRAGG_RADII*.5/.529177, 2))
-        self.prune_scheme = None
-        grid.setup_grids()
-
-        wsum = 0
-        for i in range(1500):
-            k = '%12.9f%12.9f%12.9f' % tuple(grid.coords[i])
-            wsum += abs(rdic[k]-grid.weights[i])
-        self.assertAlmostEqual(wsum, 0, 10)
-
     def test_gen_grid(self):
         grid = gen_grid.Grids(h2o)
         grid.prune_scheme = None

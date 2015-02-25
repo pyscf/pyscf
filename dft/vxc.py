@@ -419,38 +419,3 @@ def hybrid_coeff(xc_code, spin=1):
         return 0
 
 
-#####################
-
-# spin = 1, unpolarized; spin = 2, polarized
-def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, hermi=1,
-           verbose=None):
-    c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-    c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-    c_env = numpy.array(mol._env)
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-    exc = ctypes.c_double(0)
-    if not dm.flags.f_contiguous:
-        dm = dm.copy(order='F')
-    # data will write to triu in F-ordered array, which is tril of C-array
-    v = numpy.empty_like(dm, order='C')
-
-    libdft.VXCnr_vxc.restype = ctypes.c_double
-    nelec = libdft.VXCnr_vxc(ctypes.c_int(x_id), ctypes.c_int(c_id),
-                             ctypes.c_int(spin), ctypes.c_int(relativity),
-                             dm.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.byref(exc),
-                             v.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(grids.weights.size),
-                             grids.coords.ctypes.data_as(ctypes.c_void_p),
-                             grids.weights.ctypes.data_as(ctypes.c_void_p),
-                             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                             c_env.ctypes.data_as(ctypes.c_void_p))
-    if hermi == 1:
-        v = pyscf.lib.hermi_triu(v, inplace=True)
-    else:
-        raise('anti-Hermitian is not supported')
-    return nelec, exc.value, v
-
-

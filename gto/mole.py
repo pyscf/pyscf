@@ -1439,7 +1439,7 @@ class Mole(object):
         '''
         nprim = self.bas_nprim(bas_id)
         ptr = self._bas[bas_id,PTR_EXP]
-        return numpy.array(self._env[ptr:ptr+nprim])
+        return self._env[ptr:ptr+nprim]
 
     def bas_ctr_coeff(self, bas_id):
         r'''Contract coefficients (ndarray) of the given shell
@@ -1459,7 +1459,7 @@ class Mole(object):
         nprim = self.bas_nprim(bas_id)
         nctr = self.bas_nctr(bas_id)
         ptr = self._bas[bas_id,PTR_COEFF]
-        return numpy.array(self._env[ptr:ptr+nprim*nctr]).reshape(nprim,nctr)
+        return self._env[ptr:ptr+nprim*nctr].reshape(nctr,nprim).T
 
     def bas_len_spinor(self, bas_id):
         '''The number of spinor associated with given basis

@@ -53,13 +53,15 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -230.70808321485694, 7)
+        self.assertAlmostEqual(emc, -230.70808321485694, 6)
 
     def test_mc2step_9o8e_a(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
+        mo = mf.mo_coeff.copy()
+        mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
         emc = mc.mc2step(mo)[0]
-        self.assertAlmostEqual(emc, -230.72211519779304, 7)
+        self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
     def test_mc1step_4o4e(self):
         mc = mcscf.CASSCF(mf, 4, 4)
@@ -72,15 +74,18 @@ class KnowValues(unittest.TestCase):
 # without proper initial guess, it converges to wrong solution.  Big orbital
 # rotation stepsize may converge to the right one by chance
         mc.max_orb_stepsize = .15
+        mc.max_cycle_micro_inner = 8
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -230.72211519779304, 7)
+        self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
     def test_mc1step_9o8e_a(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
+        mo = mf.mo_coeff.copy()
+        mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
         emc = mc.mc1step(mo)[0]
-        self.assertAlmostEqual(emc, -230.72211519779304, 7)
+        self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
 
 if __name__ == "__main__":

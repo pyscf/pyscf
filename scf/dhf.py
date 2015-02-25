@@ -17,7 +17,6 @@ import pyscf.lib
 import pyscf.lib.logger as log
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import addons
 from pyscf.scf import diis
 from pyscf.scf import chkfile
 from pyscf.scf import _vhf
@@ -63,7 +62,7 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None):
     if coulomb_allow.upper() == 'LLLL':
         log.info(mol, 'Coulomb integral: (LL|LL)')
-        j1, k1 = _call_veff_llll(mol, dm, hermi)
+        j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj = numpy.zeros_like(dm)
         vk = numpy.zeros_like(dm)
@@ -72,19 +71,19 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
     elif coulomb_allow.upper() == 'SSLL' \
       or coulomb_allow.upper() == 'LLSS':
         log.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL)')
-        vj, vk = _call_veff_ssll(mol, dm, hermi)
-        j1, k1 = _call_veff_llll(mol, dm, hermi)
+        vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
+        j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj[...,:n2c,:n2c] += j1
         vk[...,:n2c,:n2c] += k1
     else: # coulomb_allow == 'SSSS'
         log.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
-        vj, vk = _call_veff_ssll(mol, dm, hermi)
-        j1, k1 = _call_veff_llll(mol, dm, hermi)
+        vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
+        j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj[...,:n2c,:n2c] += j1
         vk[...,:n2c,:n2c] += k1
-        j1, k1 = _call_veff_ssss(mol, dm, hermi)
+        j1, k1 = _call_veff_ssss(mol, dm, hermi, opt_ssss)
         vj[...,n2c:,n2c:] += j1
         vk[...,n2c:,n2c:] += k1
     return vj, vk
@@ -235,7 +234,6 @@ class UHF(hf.SCF):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8
         self.with_ssss = True
-        self.init_guess = 'minao'
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
 
@@ -293,28 +291,8 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(mol, chkfile, project=project)
 
-    def get_init_guess(self, mol=None, key='minao'):
-        if callable(key):
-            return key(mol)
-        elif key.lower() == '1e':
-            return self.init_guess_by_1e(mol)
-        elif key.lower() == 'atom':
-            return self.init_guess_by_atom(mol)
-        elif key.lower() == 'chkfile':
-            try:
-                return self.init_guess_by_chkfile(mol)
-            except:
-                log.warn(self, 'Fail in reading %s. Use MINAO initial guess', \
-                         self.chkfile)
-                return self.init_guess_by_minao(mol)
-        else:
-            return self.init_guess_by_minao(mol)
-
-    def build(self, mol=None):
-        self.build_(mol)
     def build_(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         mol.check_sanity(self)
 
         if self.direct_scf:
@@ -512,7 +490,6 @@ def _jk_triu_(vj, vk, hermi):
 
 
 def _call_veff_llll(mol, dm, hermi=1, mf_opt=None):
-    n2c = mol.nao_2c()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n2c = dm.shape[0] // 2
         dms = dm[:n2c,:n2c].copy()
@@ -576,6 +553,7 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
     return _jk_triu_(vj, vk, hermi)
 
 def _proj_dmll(mol_nr, dm_nr, mol):
+    from pyscf.scf import addons
     proj = addons.project_mo_nr2r(mol_nr, 1, mol)
 
     n2c = proj.shape[0]

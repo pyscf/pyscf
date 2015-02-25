@@ -8,7 +8,9 @@ from pyscf import gto
 from pyscf import symm
 
 def get_so(atoms, basis):
+    atoms = gto.mole.format_atom(atoms)
     gpname, origin, axes = symm.detect_symm(atoms)
+    gpname, axes = symm.subgroup(gpname, axes)
     atoms = gto.mole.format_atom(atoms, origin, axes)
     eql_atoms = symm.symm_identical_atoms(gpname, atoms)
     so = symm.basis.symm_adapted_basis(gpname, eql_atoms, atoms, basis)
@@ -118,5 +120,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests geom")
+    print("Full Tests symm.basis")
     unittest.main()
