@@ -74,7 +74,7 @@ class AtomSphericAverageRHF(hf.RHF):
                     s1 = s1 + s[idx+m,:][:,idx+m]
                 f1 *= 1./(l*2+1)
                 s1 *= 1./(l*2+1)
-                e, c = scipy.linalg.eigh(f1, s1)
+                e, c = hf.SCF.eig(self, f1, s1)
                 for i, ei in enumerate(e):
                     log.debug1(self, 'l = %d, e_%d = %.9g', l, i, ei)
 

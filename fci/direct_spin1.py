@@ -7,7 +7,6 @@
 # can be used to compute doublet, triplet,...
 #
 # Other files in the directory
-# direct_ms0   MS=0, same number of alpha and beta nelectrons
 # direct_spin0 singlet
 # direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
 #              MO integrals
@@ -86,14 +85,14 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = fcivec.reshape(na,nb)
     ci1 = numpy.empty_like(fcivec)
 
-    libfci.FCIcontract_rhf2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
-                                   fcivec.ctypes.data_as(ctypes.c_void_p),
-                                   ci1.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(norb),
-                                   ctypes.c_int(na), ctypes.c_int(nb),
-                                   ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
-                                   link_indexa.ctypes.data_as(ctypes.c_void_p),
-                                   link_indexb.ctypes.data_as(ctypes.c_void_p))
+    libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
+                                fcivec.ctypes.data_as(ctypes.c_void_p),
+                                ci1.ctypes.data_as(ctypes.c_void_p),
+                                ctypes.c_int(norb),
+                                ctypes.c_int(na), ctypes.c_int(nb),
+                                ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                                link_indexa.ctypes.data_as(ctypes.c_void_p),
+                                link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
 def make_hdiag(h1e, eri, norb, nelec):
@@ -182,7 +181,15 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
+    unknown = []
+    for k, v in kwargs:
+        setattr(cis, k, v)
+        if not hasattr(cis, k):
+            unknown.append(k)
+    if unknown:
+        sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
+                         (str(unknown), __name__))
+    return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -193,8 +200,13 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 # dm_pq = <|p^+ q|>
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     if link_index is None:
-        link_indexa = cistring.gen_linkstr_index(range(norb), nelec[0])
-        link_indexb = cistring.gen_linkstr_index(range(norb), nelec[1])
+        if isinstance(nelec, int):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
         link_index = (link_indexa, link_indexb)
     rdm1a = rdm.make_rdm1_spin1('FCImake_rdm1a', fcivec, fcivec,
                                 norb, nelec, link_index)
@@ -220,9 +232,14 @@ def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
 
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
-    (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
-            make_rdm12s(fcivec, norb, nelec, link_index, reorder)
-    return dm1a+dm1b, dm2aa+dm2ab+dm2ab.transpose(2,3,0,1)+dm2bb
+    #(dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
+    #        make_rdm12s(fcivec, norb, nelec, link_index, reorder)
+    #return dm1a+dm1b, dm2aa+dm2ab+dm2ab.transpose(2,3,0,1)+dm2bb
+    dm1, dm2 = rdm.make_rdm12_spin1('FCIrdm12kern_sf', fcivec, fcivec,
+                                    norb, nelec, link_index, 1)
+    if reorder:
+        dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
+    return dm1, dm2
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     rdm1a = rdm.make_rdm1_spin1('FCItrans_rdm1a', cibra, ciket,
@@ -252,9 +269,14 @@ def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb)
 
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb) = \
-            trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
-    return dm1a+dm1b, dm2aa+dm2ab+dm2ba+dm2bb
+    #(dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb) = \
+    #        trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
+    #return dm1a+dm1b, dm2aa+dm2ab+dm2ba+dm2bb
+    dm1, dm2 = rdm.make_rdm12_spin1('FCItdm12kern_sf', cibra, ciket,
+                                    norb, nelec, link_index, 2)
+    if reorder:
+        dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
+    return dm1, dm2
 
 
 
@@ -326,7 +348,7 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
         return x1
     return precond
 
-def make_diag_precond(hdiag, level_shift=0):
+def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return lambda x, e, *args: x/(hdiag-(e-level_shift))
 
 
@@ -336,8 +358,8 @@ class FCISolver(object):
         self.verbose = 0
         self.max_cycle = 50
         self.max_space = 12
-        self.conv_tol = 1e-8
-        self.lindep = 1e-8
+        self.conv_tol = 1e-9
+        self.lindep = 1e-9
         self.max_memory = 1200 # MB
 # level shift in precond
         self.level_shift = 1e-2
@@ -388,7 +410,6 @@ class FCISolver(object):
         return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                    self.level_shift)
 #    def make_precond(self, hdiag, *args):
-#        return make_diag_precond(hdiag, self.level_shift)
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):

@@ -205,7 +205,7 @@ class UHF(uhf.UHF):
         cs = []
         es = []
         for ir in range(nirrep):
-            e, c = scipy.linalg.eigh(ha[ir], s[ir])
+            e, c = hf.SCF.eig(self, ha[ir], s[ir])
             cs.append(c)
             es.append(e)
         ea = numpy.hstack(es)

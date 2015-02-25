@@ -19,9 +19,11 @@ mol.basis = {"H": 'cc_pvdz',
 mol.build()
 
 nrhf = scf.RHF(mol)
+nrhf.conv_tol = 1e-12
 nrhf.scf()
 
 rhf = scf.dhf.RHF(mol)
+nrhf.conv_tol = 1e-12
 rhf.scf()
 
 def finger(mat):
@@ -61,28 +63,28 @@ class KnowValues(unittest.TestCase):
         m.cphf = False
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1642.1875285745107, 6)
+        self.assertAlmostEqual(finger(msc), 1642.1875348839881, 6)
 
     def test_rmb_common_gauge_cpscf(self):
         m = nmr.dhf.NMR(rhf)
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1569.0408600304422, 6)
+        self.assertAlmostEqual(finger(msc), 1569.0408649904268, 6)
 
     def test_rmb_giao_ucpscf(self):
         m = nmr.dhf.NMR(rhf)
         m.cphf = False
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1493.7232347891445, 6)
+        self.assertAlmostEqual(finger(msc), 1493.7232313499048, 6)
 
     def test_rmb_giao_cpscf(self):
         m = nmr.dhf.NMR(rhf)
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1365.4686230355965, 6)
+        self.assertAlmostEqual(finger(msc), 1365.4686105975627, 6)
 
     def test_rkb_giao_cpscf(self):
         m = nmr.dhf.NMR(rhf)
@@ -90,7 +92,7 @@ class KnowValues(unittest.TestCase):
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1923.9100583147037, 6)
+        self.assertAlmostEqual(finger(msc), 1923.9100429530872, 6)
 
     def test_rkb_common_gauge_cpscf(self):
         m = nmr.dhf.NMR(rhf)
@@ -98,7 +100,7 @@ class KnowValues(unittest.TestCase):
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1980.1184514590841, 6)
+        self.assertAlmostEqual(finger(msc), 1980.1184526183633, 6)
 
     def test_make_h10(self):
         numpy.random.seed(1)
@@ -106,13 +108,13 @@ class KnowValues(unittest.TestCase):
         dm0 = numpy.random.random((nao,nao))
         dm0 = dm0 + dm0.T
         h1 = nmr.hf.make_h10(mol, dm0)
-        self.assertAlmostEqual(numpy.linalg.norm(h1), 14.8641461638, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(h1), 14.8641461638, 8)
         h1 = nmr.hf.make_h10(mol, dm0, gauge_orig=(0,0,0))
-        self.assertAlmostEqual(numpy.linalg.norm(h1), 3.61014387186, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(h1), 3.61014387186, 8)
         h1 = nmr.dhf.make_h10(mol, rhf.make_rdm1())
-        self.assertAlmostEqual(numpy.linalg.norm(h1), 13.261106469, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(h1), 13.261106469, 8)
         h1 = nmr.dhf.make_h10(mol, rhf.make_rdm1(), gauge_orig=(0,0,0), mb='RKB')
-        self.assertAlmostEqual(numpy.linalg.norm(h1), 6.2623637195, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(h1), 6.2623637195, 8)
 
 
 

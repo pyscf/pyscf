@@ -80,16 +80,16 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     link_indexb = reorder4irrep(eri, norb, link_indexb, orbsym)[1]
     dimirrep = numpy.array(dimirrep, dtype=numpy.int32)
 
-    libfci.FCIcontract_rhf2e_spin1_symm(eri.ctypes.data_as(ctypes.c_void_p),
-                                        fcivec.ctypes.data_as(ctypes.c_void_p),
-                                        ci1.ctypes.data_as(ctypes.c_void_p),
-                                        ctypes.c_int(norb),
-                                        ctypes.c_int(na), ctypes.c_int(nb),
-                                        ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
-                                        link_indexa.ctypes.data_as(ctypes.c_void_p),
-                                        link_indexb.ctypes.data_as(ctypes.c_void_p),
-                                        dimirrep.ctypes.data_as(ctypes.c_void_p),
-                                        ctypes.c_int(len(dimirrep)))
+    libfci.FCIcontract_2e_spin1_symm(eri.ctypes.data_as(ctypes.c_void_p),
+                                     fcivec.ctypes.data_as(ctypes.c_void_p),
+                                     ci1.ctypes.data_as(ctypes.c_void_p),
+                                     ctypes.c_int(norb),
+                                     ctypes.c_int(na), ctypes.c_int(nb),
+                                     ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                                     link_indexa.ctypes.data_as(ctypes.c_void_p),
+                                     link_indexb.ctypes.data_as(ctypes.c_void_p),
+                                     dimirrep.ctypes.data_as(ctypes.c_void_p),
+                                     ctypes.c_int(len(dimirrep)))
     return ci1
 
 
@@ -101,8 +101,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0,
-                                   **kwargs)
+
+    unknown = []
+    for k, v in kwargs:
+        setattr(cis, k, v)
+        if not hasattr(cis, k):
+            unknown.append(k)
+    if unknown:
+        sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
+                         (str(unknown), __name__))
+    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):

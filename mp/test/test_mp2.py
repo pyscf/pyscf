@@ -20,6 +20,7 @@ mol.basis = {'H': 'cc-pvdz',
              'O': 'cc-pvdz',}
 mol.build()
 mf = scf.RHF(mol)
+mf.conv_tol = 1e-14
 mf.scf()
 
 
@@ -74,7 +75,7 @@ class KnowValues(unittest.TestCase):
         mf.scf()
         pt = mp.mp2.MP2(mf)
         e, t2 = pt.kernel()
-        self.assertAlmostEqual(e, -0.204019967288338, 12)
+        self.assertAlmostEqual(e, -0.20401996728747132, 11)
         self.assertAlmostEqual(numpy.linalg.norm(t2), 0.19379397642098622, 9)
 
 

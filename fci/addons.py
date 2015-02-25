@@ -108,6 +108,14 @@ def cre_b(ci0, norb, nelec, ap_id):
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
+
+def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
+    from pyscf.fci import direct_spin1
+    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
+    ci1 = direct_spin1.contract_2e(h2e, fcivec, norb, nelec, link_index)
+    return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+
+
 if __name__ == '__main__':
     a4 = 10*numpy.arange(4)[:,None]
     a6 = 10*numpy.arange(6)[:,None]

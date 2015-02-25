@@ -17,7 +17,7 @@ rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
 class KnowValues(unittest.TestCase):
     def test_rdm3(self):
         dm3ref = make_dm3_o0(ci0, norb, nelec)
-        dm3 = fci.rdm.make_dm123(ci0, norb, nelec)[2]
+        dm3 = fci.rdm.make_dm123('FCI3pdm_kern_spin0', ci0, ci0, norb, nelec)[2]
         self.assertTrue(numpy.allclose(dm3ref, dm3))
 
         dm3 = fci.rdm.reorder_rdm3(rdm1, rdm2, dm3)
@@ -26,9 +26,29 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(rdm2, numpy.einsum('ijmmkl->ijkl',dm3)*fac))
         self.assertTrue(numpy.allclose(rdm2, numpy.einsum('mmijkl->ijkl',dm3)*fac))
 
+        dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', ci0, ci0, norb, nelec)[2]
+        dm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec, reorder=False)[1]
+        self.assertTrue(numpy.allclose(dm2, numpy.einsum('mmijkl->ijkl',dm3)/nelec))
+
+        numpy.random.seed(2)
+        na = fci.cistring.num_strings(norb, 5)
+        nb = fci.cistring.num_strings(norb, 3)
+        ci1 = numpy.random.random((na,nb))
+        dm3ref = make_dm3_o0(ci1, norb, (5,3))
+        dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', ci1, ci1, norb, (5,3))[2]
+        self.assertTrue(numpy.allclose(dm3ref, dm3))
+
     def test_dm4(self):
         dm4ref = make_dm4_o0(ci0, norb, nelec)
-        dm4 = fci.rdm.make_dm1234(ci0, norb, nelec)[3]
+        dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', ci0, ci0, norb, nelec)[3]
+        self.assertTrue(numpy.allclose(dm4ref, dm4))
+
+        numpy.random.seed(2)
+        na = fci.cistring.num_strings(norb, 5)
+        nb = fci.cistring.num_strings(norb, 3)
+        ci1 = numpy.random.random((na,nb))
+        dm4ref = make_dm4_o0(ci1, norb, (5,3))
+        dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', ci1, ci1, norb, (5,3))[3]
         self.assertTrue(numpy.allclose(dm4ref, dm4))
 
     def test_tdm2(self):
@@ -61,42 +81,42 @@ class KnowValues(unittest.TestCase):
 # (8o,8e)   ~ 153MB
 # (10o,10e) ~ 4.8GB
 # t2(*,ij,kl) = E_i^j E_k^l|0>
-def _trans2(fcivec, norb, nelec, link_index=None):
+def _trans2(fcivec, norb, nelec):
     if isinstance(nelec, int):
-        neleca = nelec//2
+        neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    if link_index is None:
-        link_index = fci.cistring.gen_linkstr_index(range(norb), neleca)
-    na, nlink = link_index.shape[:2]
-    fcivec = fcivec.reshape(na,na)
+    link_indexa = fci.cistring.gen_linkstr_index(range(norb), neleca)
+    link_indexb = fci.cistring.gen_linkstr_index(range(norb), nelecb)
+    na, nlinka = link_indexa.shape[:2]
+    nb, nlinkb = link_indexb.shape[:2]
+    fcivec = fcivec.reshape(na,nb)
     t1 = _trans1(fcivec, norb, nelec)
-    t2 = numpy.zeros((na,na,norb,norb,norb,norb))
-    for str0, tab in enumerate(link_index):
+    t2 = numpy.zeros((na,nb,norb,norb,norb,norb))
+    for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             t2[str1,:,a,i] += sign * t1[str0]
     for k in range(na):
-        for str0, tab in enumerate(link_index):
+        for str0, tab in enumerate(link_indexb):
             for a, i, str1, sign in tab:
                 t2[k,str1,a,i] += sign * t1[k,str0]
     return t2
-def _trans1(fcivec, norb, nelec, link_index=None):
+def _trans1(fcivec, norb, nelec):
     if isinstance(nelec, int):
-        neleca = nelec//2
+        neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    if link_index is None:
-        link_index = fci.cistring.gen_linkstr_index(range(norb), neleca)
-    na, nlink = link_index.shape[:2]
-    fcivec = fcivec.reshape(na,na)
-    t1 = numpy.zeros((na,na,norb,norb))
-    for str0, tab in enumerate(link_index):
+    link_indexa = fci.cistring.gen_linkstr_index(range(norb), neleca)
+    link_indexb = fci.cistring.gen_linkstr_index(range(norb), nelecb)
+    na, nlinka = link_indexa.shape[:2]
+    nb, nlinkb = link_indexb.shape[:2]
+    fcivec = fcivec.reshape(na,nb)
+    t1 = numpy.zeros((na,nb,norb,norb))
+    for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             t1[str1,:,a,i] += sign * fcivec[str0]
     for k in range(na):
-        for str0, tab in enumerate(link_index):
+        for str0, tab in enumerate(link_indexb):
             for a, i, str1, sign in tab:
                 t1[k,str1,a,i] += sign * fcivec[k,str0]
     return t1
@@ -108,15 +128,15 @@ def make_dm3_o0(fcivec, norb, nelec):
     # <0|p^+ q r^+ s|i> <i|t^+ u|0>
     t1 = _trans1(fcivec, norb, nelec)
     t2 = _trans2(fcivec, norb, nelec)
-    na = t1.shape[0]
-    rdm3 = numpy.dot(t1.reshape(na*na,-1).T, t2.reshape(na*na,-1))
+    na, nb = t1.shape[:2]
+    rdm3 = numpy.dot(t1.reshape(na*nb,-1).T, t2.reshape(na*nb,-1))
     return rdm3.reshape((norb,)*6).transpose(1,0,2,3,4,5)
 
 def make_dm4_o0(fcivec, norb, nelec):
     # <0|p^+ q r^+ s|i> <i|t^+ u|0>
     t2 = _trans2(fcivec, norb, nelec)
-    na = t2.shape[0]
-    rdm4 = numpy.dot(t2.reshape(na*na,-1).T, t2.reshape(na*na,-1))
+    na, nb = t2.shape[:2]
+    rdm4 = numpy.dot(t2.reshape(na*nb,-1).T, t2.reshape(na*nb,-1))
     return rdm4.reshape((norb,)*8).transpose(3,2,1,0,4,5,6,7)
 
 

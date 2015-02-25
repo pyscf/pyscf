@@ -43,28 +43,28 @@ ci1 /= numpy.linalg.norm(ci1)
 class KnowValues(unittest.TestCase):
     def test_contract(self):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
-        ci1ref = fci.direct_ms0.contract_1e(h1e, ci0, norb, nelec)
+        ci1ref = fci.direct_spin1.contract_1e(h1e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.4334177490820625, 10)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973749455304, 10)
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
-        ci1ref = fci.direct_ms0.contract_2e(g2e, ci0, norb, nelec)
+        ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 15.424543673198277, 10)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 15.076640155060481, 10)
 
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239692, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 8)
         e = fci.direct_spin0.energy(h1e, g2e, c, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239692, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 8)
 
     def test_rdm1(self):
-        dm1ref = fci.direct_ms0.make_rdm1(ci0, norb, nelec)
+        dm1ref = fci.direct_spin1.make_rdm1(ci0, norb, nelec)
         dm1 = fci.direct_spin0.make_rdm1(ci0, norb, nelec)
         self.assertTrue(numpy.allclose(dm1ref, dm1))
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7059849569286722, 10)
 
     def test_rdm12(self):
-        dm1ref, dm2ref = fci.direct_ms0.make_rdm12(ci0, norb, nelec)
+        dm1ref, dm2ref = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
         dm1, dm2 = fci.direct_spin0.make_rdm12(ci0, norb, nelec)
         self.assertTrue(numpy.allclose(dm1ref, dm1))
         self.assertTrue(numpy.allclose(dm2ref, dm2))
@@ -72,7 +72,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(dm2), 7.8811473403497736, 10)
 
     def test_trans_rdm1(self):
-        dm1ref = fci.direct_ms0.trans_rdm1(ci0, ci1, norb, nelec)
+        dm1ref = fci.direct_spin1.trans_rdm1(ci0, ci1, norb, nelec)
         dm1 = fci.direct_spin0.trans_rdm1(ci0, ci1, norb, nelec)
         self.assertTrue(numpy.allclose(dm1ref, dm1))
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.5485017426647461, 10)
@@ -81,7 +81,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm1, dm0))
 
     def test_trans_rdm12(self):
-        dm1ref, dm2ref = fci.direct_ms0.trans_rdm12(ci0, ci1, norb, nelec)
+        dm1ref, dm2ref = fci.direct_spin1.trans_rdm12(ci0, ci1, norb, nelec)
         dm1, dm2 = fci.direct_spin0.trans_rdm12(ci0, ci1, norb, nelec)
         self.assertTrue(numpy.allclose(dm1ref, dm1))
         self.assertTrue(numpy.allclose(dm2ref, dm2))

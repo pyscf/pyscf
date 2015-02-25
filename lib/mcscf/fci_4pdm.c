@@ -24,9 +24,10 @@ typedef struct {
 #define EXTRACT_SIGN(I) (I.sign)
 #define EXTRACT_ADDR(I) (I.addr)
 
-double FCI_t1ci_ms0(double *ci0, double *t1, int bcount,
-                    int stra_id, int strb_id,
-                    int norb, int na, int nlink, _LinkT *clink_index);
+double FCI_t1ci_sf(double *ci0, double *t1, int bcount,
+                   int stra_id, int strb_id,
+                   int norb, int na, int nb, int nlinka, int nlinkb,
+                   _LinkT *clink_indexa, _LinkT *clink_indexb);
 
 static void compress_link(_LinkT *clink, int *link_index,
                           int norb, int nstr, int nlink)
@@ -53,18 +54,19 @@ static void compress_link(_LinkT *clink, int *link_index,
  */
 static void rdm4_0b_t2(double *ci0, double *t2,
                        int bcount, int stra_id, int strb_id,
-                       int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
+                       int norb, int na, int nb, int nlinka, int nlinkb,
+                       _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         int i, j, k, l, a, sign, str1;
-        double *t1 = malloc(sizeof(double) * nstrb * nnorb);
+        double *t1 = malloc(sizeof(double) * nb * nnorb);
         double *pt1, *pt2;
         _LinkT *tab;
 
         // form t1 which has beta^+ beta |t1> => target stra_id
-        FCI_t1ci_ms0(ci0, t1, nstrb, stra_id, 0,
-                     norb, nstrb, nlinkb, clink_indexb);
+        FCI_t1ci_sf(ci0, t1, nb, stra_id, 0,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 
 #pragma omp parallel default(none) \
         shared(t1, t2, bcount, strb_id, norb, nlinkb, clink_indexb), \
@@ -101,7 +103,8 @@ static void rdm4_0b_t2(double *ci0, double *t2,
  */
 static void rdm4_a_t2(double *ci0, double *t2,
                       int bcount, int stra_id, int strb_id,
-                      int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
+                      int norb, int na, int nb, int nlinka, int nlinkb,
+                      _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
@@ -111,11 +114,11 @@ static void rdm4_a_t2(double *ci0, double *t2,
         _LinkT *tab = clink_indexa + stra_id * nlinka;
 
 #pragma omp parallel default(none) \
-        shared(ci0, t2, bcount, strb_id, norb, nstrb, nlinka, \
-               clink_indexa, tab), \
+        shared(ci0, t2, bcount, strb_id, norb, na, nb, nlinka, nlinkb, \
+               clink_indexa, clink_indexb, tab), \
         private(i, j, k, l, a, str1, sign, t1, pt1, pt2)
 {
-        t1 = malloc(sizeof(double) * nstrb * nnorb);
+        t1 = malloc(sizeof(double) * bcount * nnorb);
 #pragma omp for schedule(dynamic, 1) nowait
         for (j = 0; j < nlinka; j++) {
                 i    = EXTRACT_I   (tab[j]);
@@ -124,8 +127,9 @@ static void rdm4_a_t2(double *ci0, double *t2,
                 sign = EXTRACT_SIGN(tab[j]);
 
                 // form t1 which has alpha^+ alpha |t1> => target stra_id (through str1)
-                FCI_t1ci_ms0(ci0, t1, bcount, str1, strb_id,
-                             norb, nstrb, nlinka, clink_indexa);
+                FCI_t1ci_sf(ci0, t1, bcount, str1, strb_id,
+                            norb, na, nb, nlinka, nlinkb,
+                            clink_indexa, clink_indexb);
 
                 for (k = 0; k < bcount; k++) {
                         pt1 = t1 + k * nnorb;
@@ -143,6 +147,17 @@ static void rdm4_a_t2(double *ci0, double *t2,
         }
         free(t1);
 }
+}
+
+void FCI_t2ci_sf(double *ci0, double *t2, int bcount,
+                 int stra_id, int strb_id,
+                 int norb, int na, int nb, int nlinka, int nlinkb,
+                 _LinkT *clink_indexa, _LinkT *clink_indexb)
+{
+        rdm4_0b_t2(ci0, t2, bcount, stra_id, strb_id,
+                   norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        rdm4_a_t2 (ci0, t2, bcount, stra_id, strb_id,
+                   norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 }
 
 static void tril3pdm_particle_symm(double *rdm3, double *tbra, double *t2ket,
@@ -209,14 +224,86 @@ static void tril2pdm_particle_symm(double *rdm2, double *tbra, double *tket,
                &D1, rdm2+m*nnorb, &nnorb);
 }
 
-
-void FCI4pdm_kern_ms0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
-                      double *ci0, int bcount, int stra_id, int strb_id,
-                      int norb, int nstrb, int nlink, _LinkT *clink)
+static void make_rdm12_sf(double *rdm1, double *rdm2,
+                          double *bra, double *ket, double *t1bra, double *t1ket,
+                          int bcount, int stra_id, int strb_id,
+                          int norb, int na, int nb)
 {
         const char TRANS_N = 'N';
         const char TRANS_T = 'T';
+        const int INC1 = 1;
         const double D1 = 1;
+        const int nnorb = norb * norb;
+        int k, l;
+        unsigned long n;
+        double *tbra = malloc(sizeof(double) * nnorb * bcount);
+        double *pbra, *pt1;
+
+        for (n = 0; n < bcount; n++) {
+                pbra = tbra + n * nnorb;
+                pt1 = t1bra + n * nnorb;
+                for (k = 0; k < norb; k++) {
+                        for (l = 0; l < norb; l++) {
+                                pbra[k*norb+l] = pt1[l*norb+k];
+                        }
+                }
+        }
+        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
+               &D1, t1ket, &nnorb, tbra, &nnorb,
+               &D1, rdm2, &nnorb);
+
+        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, t1ket, &nnorb,
+               bra+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
+
+        free(tbra);
+}
+
+static void make_rdm12_spin0(double *rdm1, double *rdm2,
+                             double *bra, double *ket, double *t1bra, double *t1ket,
+                             int bcount, int stra_id, int strb_id,
+                             int norb, int na, int nb)
+{
+        const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
+        const int INC1 = 1;
+        const double D1 = 1;
+        const int nnorb = norb * norb;
+        int k, l;
+        unsigned long n;
+        double *tbra = malloc(sizeof(double) * nnorb * bcount);
+        double *pbra, *pt1;
+        double factor;
+
+        for (n = 0; n < bcount; n++) {
+                if (n+strb_id == stra_id) {
+                        factor = 1;
+                } else {
+                        factor = 2;
+                }
+                pbra = tbra + n * nnorb;
+                pt1 = t1bra + n * nnorb;
+                for (k = 0; k < norb; k++) {
+                        for (l = 0; l < norb; l++) {
+                                pbra[k*norb+l] = pt1[l*norb+k] * factor;
+                        }
+                }
+        }
+        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
+               &D1, t1ket, &nnorb, tbra, &nnorb,
+               &D1, rdm2, &nnorb);
+
+        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, tbra, &nnorb,
+               bra+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
+
+        free(tbra);
+}
+
+void FCI4pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
+                     double *bra, double *ket,
+                     int bcount, int stra_id, int strb_id,
+                     int norb, int na, int nb, int nlinka, int nlinkb,
+                     _LinkT *clink_indexa, _LinkT *clink_indexb)
+{
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
@@ -224,29 +311,38 @@ void FCI4pdm_kern_ms0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         int i, j, k, l, ij;
         unsigned long n;
         double *tbra;
-        double *t1 = malloc(sizeof(double) * nnorb * bcount);
-        double *t2 = malloc(sizeof(double) * n4 * bcount);
-        double *pbra, *pt1, *pt2;
+        double *t1bra = malloc(sizeof(double) * nnorb * bcount * 2);
+        double *t2bra = malloc(sizeof(double) * n4 * bcount * 2);
+        double *t1ket = t1bra + nnorb * bcount;
+        double *t2ket = t1bra + n4 * bcount;
+        double *pbra, *pt2;
 
-        // t2[:,i,j,k,l] = E^i_j E^k_l|ci0>
-        rdm4_0b_t2(ci0, t2, bcount, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
-        rdm4_a_t2 (ci0, t2, bcount, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
-        FCI_t1ci_ms0(ci0, t1, bcount, stra_id, strb_id,
-                     norb, nstrb, nlink, clink);
+        // t2[:,i,j,k,l] = E^i_j E^k_l|ket>
+        FCI_t1ci_sf(bra, t1bra, bcount, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        FCI_t2ci_sf(bra, t2bra, bcount, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        if (bra == ket) {
+                t1ket = t1bra;
+                t2ket = t2bra;
+        } else {
+                FCI_t1ci_sf(ket, t1ket, bcount, stra_id, strb_id,
+                            norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+                FCI_t2ci_sf(ket, t2ket, bcount, stra_id, strb_id,
+                            norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        }
 
 #pragma omp parallel default(none) \
-        shared(rdm3, rdm4, t1, t2, norb, bcount), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt1, pt2)
+        shared(rdm3, rdm4, t1ket, t2bra, t2ket, norb, bcount), \
+        private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
 #pragma omp for schedule(dynamic, 1) nowait
-        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ci0| E^j_i E^l_k)
+        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 for (n = 0; n < bcount; n++) {
                         for (k = 0; k < norb; k++) {
                                 pbra = tbra + n * nnorb + k*norb;
-                                pt2 = t2 + n * n4 + k*nnorb + ij;
+                                pt2 = t2bra + n * n4 + k*nnorb + ij;
                                 for (l = 0; l < norb; l++) {
                                         pbra[l] = pt2[l*n3];
                                 }
@@ -255,46 +351,30 @@ void FCI4pdm_kern_ms0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
 
                 i = ij / norb;
                 j = ij - i * norb;
-// contract <bra-of-Eij| with |E^k_l E^m_n ci0>
-                tril3pdm_particle_symm(rdm4+(j*norb+i)*n6, tbra, t2,
+// contract <bra-of-Eij| with |E^k_l E^m_n ket>
+                tril3pdm_particle_symm(rdm4+(j*norb+i)*n6, tbra, t2ket,
                                        bcount, j+1, norb);
 // rdm3
-                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1,
+                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1ket,
                                        bcount, j+1, norb);
         }
         free(tbra);
 }
 
-// rdm1 and rdm2
-        const int INC1 = 1;
-        tbra = malloc(sizeof(double) * nnorb * bcount);
-        for (n = 0; n < bcount; n++) {
-                pbra = tbra + n * nnorb;
-                pt1 = t1 + n * nnorb;
-                for (k = 0; k < norb; k++) {
-                        for (l = 0; l < norb; l++) {
-                                pbra[k*norb+l] = pt1[l*norb+k];
-                        }
-                }
-        }
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
-               &D1, t1, &nnorb, tbra, &nnorb,
-               &D1, rdm2, &nnorb);
-
-        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, t1, &nnorb,
-               ci0+stra_id*nstrb+strb_id, &INC1, &D1, rdm1, &INC1);
-
-        free(tbra);
-        free(t1);
-        free(t2);
+        make_rdm12_sf(rdm1, rdm2, bra, ket, t1bra, t1ket,
+                      bcount, stra_id, strb_id, norb, na, nb);
+        free(t1bra);
+        free(t2bra);
 }
 
 /*
  * use symmetry ci0[a,b] == ci0[b,a], t2[a,b,...] == t2[b,a,...]
  */
 void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
-                        double *ci0, int bcount, int stra_id, int strb_id,
-                        int norb, int nstrb, int nlink, _LinkT *clink)
+                        double *bra, double *ket,
+                        int bcount, int stra_id, int strb_id,
+                        int norb, int na, int nb, int nlinka, int nlinkb,
+                        _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         int fill1;
         if (strb_id+bcount <= stra_id) {
@@ -305,9 +385,6 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
                 return;
         }
 
-        const char TRANS_N = 'N';
-        const char TRANS_T = 'T';
-        const double D1 = 1;
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
@@ -316,25 +393,33 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         unsigned long n;
         double factor;
         double *tbra;
-        double *t1 = malloc(sizeof(double) * nnorb * fill1);
-        double *t2 = malloc(sizeof(double) * n4 * fill1);
-        double *pbra, *pt1, *pt2;
+        double *t1bra = malloc(sizeof(double) * nnorb * fill1 * 2);
+        double *t2bra = malloc(sizeof(double) * n4 * fill1 * 2);
+        double *t1ket = t1bra + nnorb * fill1;
+        double *t2ket = t1bra + n4 * fill1;
+        double *pbra, *pt2;
 
-        FCI_t1ci_ms0(ci0, t1, fill1, stra_id, strb_id,
-                     norb, nstrb, nlink, clink);
-
-        rdm4_0b_t2(ci0, t2, fill1, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
-        rdm4_a_t2 (ci0, t2, fill1, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
+        FCI_t1ci_sf(bra, t1bra, fill1, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        FCI_t2ci_sf(bra, t2bra, fill1, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        if (bra == ket) {
+                t1ket = t1bra;
+                t2ket = t2bra;
+        } else {
+                FCI_t1ci_sf(ket, t1ket, fill1, stra_id, strb_id,
+                            norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+                FCI_t2ci_sf(ket, t2ket, fill1, stra_id, strb_id,
+                            norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        }
 
 #pragma omp parallel default(none) \
-        shared(rdm3, rdm4, t1, t2, norb, stra_id, strb_id, fill1), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt1, pt2, factor)
+        shared(rdm3, rdm4, t1ket, t2bra, t2ket, norb, stra_id, strb_id, fill1), \
+        private(ij, i, j, k, l, n, tbra, pbra, pt2, factor)
 {
         tbra = malloc(sizeof(double) * nnorb * fill1);
 #pragma omp for schedule(dynamic, 1) nowait
-        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ci0| E^j_i E^l_k)
+        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 i = ij / norb;
                 j = ij - i * norb;
                 for (n = 0; n < fill1; n++) {
@@ -345,50 +430,27 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
                         }
                         for (k = 0; k <= j; k++) {
                                 pbra = tbra + n * nnorb + k*norb;
-                                pt2 = t2 + n * n4 + k*nnorb + ij;
+                                pt2 = t2bra + n * n4 + k*nnorb + ij;
                                 for (l = 0; l < norb; l++) {
                                         pbra[l] = pt2[l*n3] * factor;
                                 }
                         }
                 }
 
-// contract <bra-of-Eij| with |E^k_l E^m_n ci0>
-                tril3pdm_particle_symm(rdm4+(j*norb+i)*n6, tbra, t2,
+// contract <bra-of-Eij| with |E^k_l E^m_n ket>
+                tril3pdm_particle_symm(rdm4+(j*norb+i)*n6, tbra, t2ket,
                                        fill1, j+1, norb);
 // rdm3
-                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1,
+                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1ket,
                                        fill1, j+1, norb);
         }
         free(tbra);
 }
 
-// rdm1 and rdm2
-        tbra = malloc(sizeof(double) * nnorb * fill1);
-        for (n = 0; n < fill1; n++) {
-                if (n+strb_id == stra_id) {
-                        factor = 1;
-                } else {
-                        factor = 2;
-                }
-                pbra = tbra + n * nnorb;
-                pt1 = t1 + n * nnorb;
-                for (k = 0; k < norb; k++) {
-                        for (l = 0; l < norb; l++) {
-                                pbra[k*norb+l] = pt1[l*norb+k] * factor;
-                        }
-                }
-        }
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill1,
-               &D1, t1, &nnorb, tbra, &nnorb,
-               &D1, rdm2, &nnorb);
-
-        const int INC1 = 1;
-        dgemv_(&TRANS_N, &nnorb, &fill1, &D1, tbra, &nnorb,
-               ci0+stra_id*nstrb+strb_id, &INC1, &D1, rdm1, &INC1);
-
-        free(tbra);
-        free(t1);
-        free(t2);
+        make_rdm12_spin0(rdm1, rdm2, bra, ket, t1bra, t1ket,
+                         fill1, stra_id, strb_id, norb, na, nb);
+        free(t1bra);
+        free(t2bra);
 }
 
 
@@ -408,59 +470,62 @@ void FCIrdm4_drv(void (*kernel)(),
         int ib, strk, bcount;
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
+        _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
         compress_link(clinka, link_indexa, norb, na, nlinka);
+        compress_link(clinkb, link_indexb, norb, nb, nlinkb);
         memset(rdm1, 0, sizeof(double) * nnorb);
         memset(rdm2, 0, sizeof(double) * n4);
         memset(rdm3, 0, sizeof(double) * n4 * nnorb);
         memset(rdm4, 0, sizeof(double) * n4 * n4);
 
         for (strk = 0; strk < na; strk++) {
-                for (ib = 0; ib < na; ib += BUFBASE) {
-                        bcount = MIN(BUFBASE, na-ib);
+                for (ib = 0; ib < nb; ib += BUFBASE) {
+                        bcount = MIN(BUFBASE, nb-ib);
                         (*kernel)(rdm1, rdm2, rdm3, rdm4,
-                                  ket, bcount, strk, ib,
-                                  norb, na, nlinka, clinka);
+                                  bra, ket, bcount, strk, ib,
+                                  norb, na, nb, nlinka, nlinkb, clinka, clinkb);
                 }
         }
         free(clinka);
+        free(clinkb);
 }
 
 
-void FCI3pdm_kern_ms0(double *rdm1, double *rdm2, double *rdm3,
-                      double *ci0, int bcount, int stra_id, int strb_id,
-                      int norb, int nstrb, int nlink, _LinkT *clink)
+void FCI3pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3,
+                     double *bra, double *ket,
+                     int bcount, int stra_id, int strb_id,
+                     int norb, int na, int nb, int nlinka, int nlinkb,
+                     _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
-        const char TRANS_N = 'N';
-        const char TRANS_T = 'T';
-        const double D1 = 1;
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
         int i, j, k, l, ij;
         unsigned long n;
-        double *tbra = malloc(sizeof(double) * nnorb * bcount);
-        double *t1 = malloc(sizeof(double) * nnorb * bcount);
-        double *t2 = malloc(sizeof(double) * n4 * bcount);
-        double *pbra, *pt1, *pt2;
+        double *tbra;
+        double *t1bra = malloc(sizeof(double) * nnorb * bcount);
+        double *t1ket = malloc(sizeof(double) * nnorb * bcount);
+        double *t2bra = malloc(sizeof(double) * n4 * bcount);
+        double *pbra, *pt2;
 
-        // t2[:,i,j,k,l] = E^i_j E^k_l|ci0>
-        rdm4_0b_t2(ci0, t2, bcount, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
-        rdm4_a_t2 (ci0, t2, bcount, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
-        FCI_t1ci_ms0(ci0, t1, bcount, stra_id, strb_id,
-                     norb, nstrb, nlink, clink);
+        // t2[:,i,j,k,l] = E^i_j E^k_l|ket>
+        FCI_t1ci_sf(bra, t1bra, bcount, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        FCI_t2ci_sf(bra, t2bra, bcount, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        FCI_t1ci_sf(ket, t1ket, bcount, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 
 #pragma omp parallel default(none) \
-        shared(rdm3, t1, t2, norb, bcount), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt1, pt2)
+        shared(rdm3, t1ket, t2bra, norb, bcount), \
+        private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
 #pragma omp for schedule(dynamic, 1) nowait
-        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ci0| E^j_i E^l_k)
+        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 for (n = 0; n < bcount; n++) {
                         pbra = tbra + n * nnorb;
-                        pt2 = t2 + n * n4 + ij;
+                        pt2 = t2bra + n * n4 + ij;
                         for (k = 0; k < norb; k++) {
                                 for (l = 0; l < norb; l++) {
                                         pbra[k*norb+l] = pt2[l*n3+k*nnorb];
@@ -470,41 +535,27 @@ void FCI3pdm_kern_ms0(double *rdm1, double *rdm2, double *rdm3,
 
                 i = ij / norb;
                 j = ij - i * norb;
-                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1,
+                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1ket,
                                        bcount, j+1, norb);
         }
         free(tbra);
 }
 
-// rdm1 and rdm2
-        const int INC1 = 1;
-        for (n = 0; n < bcount; n++) {
-                pbra = tbra + n * nnorb;
-                pt1 = t1 + n * nnorb;
-                for (k = 0; k < norb; k++) {
-                        for (l = 0; l < norb; l++) {
-                                pbra[k*norb+l] = pt1[l*norb+k];
-                        }
-                }
-        }
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
-               &D1, t1, &nnorb, tbra, &nnorb,
-               &D1, rdm2, &nnorb);
-
-        dgemv_(&TRANS_N, &nnorb, &bcount, &D1, t1, &nnorb,
-               ci0+stra_id*nstrb+strb_id, &INC1, &D1, rdm1, &INC1);
-
-        free(tbra);
-        free(t1);
-        free(t2);
+        make_rdm12_sf(rdm1, rdm2, bra, ket, t1bra, t1ket,
+                      bcount, stra_id, strb_id, norb, na, nb);
+        free(t1bra);
+        free(t1ket);
+        free(t2bra);
 }
 
 /*
  * use symmetry ci0[a,b] == ci0[b,a], t2[a,b,...] == t2[b,a,...]
  */
 void FCI3pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3,
-                        double *ci0, int bcount, int stra_id, int strb_id,
-                        int norb, int nstrb, int nlink, _LinkT *clink)
+                        double *bra, double *ket,
+                        int bcount, int stra_id, int strb_id,
+                        int norb, int na, int nb, int nlinka, int nlinkb,
+                        _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         int fill1;
         if (strb_id+bcount <= stra_id) {
@@ -515,9 +566,6 @@ void FCI3pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3,
                 return;
         }
 
-        const char TRANS_N = 'N';
-        const char TRANS_T = 'T';
-        const double D1 = 1;
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
@@ -525,26 +573,26 @@ void FCI3pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3,
         unsigned long n;
         double factor;
         double *tbra;
-        double *t1 = malloc(sizeof(double) * nnorb * fill1);
-        double *t2 = malloc(sizeof(double) * n4 * fill1);
-        double *pbra, *pt1, *pt2;
+        double *t1bra = malloc(sizeof(double) * nnorb * fill1);
+        double *t1ket = malloc(sizeof(double) * nnorb * fill1);
+        double *t2bra = malloc(sizeof(double) * n4 * fill1);
+        double *pbra, *pt2;
 
-        FCI_t1ci_ms0(ci0, t1, fill1, stra_id, strb_id,
-                     norb, nstrb, nlink, clink);
-
-        // t2[:,i,j,k,l] = E^i_j E^k_l|ci0>
-        rdm4_0b_t2(ci0, t2, fill1, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
-        rdm4_a_t2 (ci0, t2, fill1, stra_id, strb_id,
-                   norb, nstrb, nlink, clink);
+        // t2[:,i,j,k,l] = E^i_j E^k_l|ket>
+        FCI_t2ci_sf(bra, t2bra, fill1, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        FCI_t1ci_sf(bra, t1bra, fill1, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
+        FCI_t1ci_sf(ket, t1ket, fill1, stra_id, strb_id,
+                    norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 
 #pragma omp parallel default(none) \
-        shared(rdm3, t1, t2, norb, stra_id, strb_id, fill1), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt1, pt2, factor)
+        shared(rdm3, t1ket, t2bra, norb, stra_id, strb_id, fill1), \
+        private(ij, i, j, k, l, n, tbra, pbra, pt2, factor)
 {
         tbra = malloc(sizeof(double) * nnorb * fill1);
 #pragma omp for schedule(dynamic, 1) nowait
-        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ci0| E^j_i E^l_k)
+        for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 i = ij / norb;
                 j = ij - i * norb;
                 for (n = 0; n < fill1; n++) {
@@ -555,46 +603,23 @@ void FCI3pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3,
                         }
                         for (k = 0; k <= j; k++) {
                                 pbra = tbra + n * nnorb + k*norb;
-                                pt2 = t2 + n * n4 + k*nnorb + ij;
+                                pt2 = t2bra + n * n4 + k*nnorb + ij;
                                 for (l = 0; l < norb; l++) {
                                         pbra[l] = pt2[l*n3] * factor;
                                 }
                         }
                 }
 
-                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1,
+                tril2pdm_particle_symm(rdm3+(j*norb+i)*n4, tbra, t1ket,
                                        fill1, j+1, norb);
         }
         free(tbra);
 }
-
-// rdm1 and rdm2
-        tbra = malloc(sizeof(double) * nnorb * fill1);
-        for (n = 0; n < fill1; n++) {
-                if (n+strb_id == stra_id) {
-                        factor = 1;
-                } else {
-                        factor = 2;
-                }
-                pbra = tbra + n * nnorb;
-                pt1 = t1 + n * nnorb;
-                for (k = 0; k < norb; k++) {
-                        for (l = 0; l < norb; l++) {
-                                pbra[k*norb+l] = pt1[l*norb+k] * factor;
-                        }
-                }
-        }
-        dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &fill1,
-               &D1, t1, &nnorb, tbra, &nnorb,
-               &D1, rdm2, &nnorb);
-
-        const int INC1 = 1;
-        dgemv_(&TRANS_N, &nnorb, &fill1, &D1, tbra, &nnorb,
-               ci0+stra_id*nstrb+strb_id, &INC1, &D1, rdm1, &INC1);
-
-        free(tbra);
-        free(t1);
-        free(t2);
+        make_rdm12_spin0(rdm1, rdm2, bra, ket, t1bra, t1ket,
+                         fill1, stra_id, strb_id, norb, na, nb);
+        free(t1bra);
+        free(t1ket);
+        free(t2bra);
 }
 
 /*
@@ -613,19 +638,22 @@ void FCIrdm3_drv(void (*kernel)(),
         int ib, strk, bcount;
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
+        _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
         compress_link(clinka, link_indexa, norb, na, nlinka);
+        compress_link(clinkb, link_indexb, norb, nb, nlinkb);
         memset(rdm1, 0, sizeof(double) * nnorb);
         memset(rdm2, 0, sizeof(double) * n4);
         memset(rdm3, 0, sizeof(double) * n4 * nnorb);
 
         for (strk = 0; strk < na; strk++) {
-                for (ib = 0; ib < na; ib += BUFBASE) {
-                        bcount = MIN(BUFBASE, na-ib);
+                for (ib = 0; ib < nb; ib += BUFBASE) {
+                        bcount = MIN(BUFBASE, nb-ib);
                         (*kernel)(rdm1, rdm2, rdm3,
-                                  ket, bcount, strk, ib,
-                                  norb, na, nlinka, clinka);
+                                  bra, ket, bcount, strk, ib,
+                                  norb, na, nb, nlinka, nlinkb, clinka, clinkb);
                 }
         }
         free(clinka);
+        free(clinkb);
 }
 

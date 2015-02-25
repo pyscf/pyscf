@@ -18,6 +18,7 @@ mol.basis = {'H': 'cc-pvdz',
              'O': 'cc-pvdz',}
 mol.build()
 rhf = scf.RHF(mol)
+rhf.conv_tol = 1e-14
 rhf.scf()
 
 

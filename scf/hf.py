@@ -750,6 +750,8 @@ class SCF(object):
         .. math:: HC = SCE
         '''
         e, c = scipy.linalg.eigh(h, s)
+        idx = numpy.argmax(abs(c.real), axis=0)
+        c[:,c[idx,range(len(e))].real<0] *= -1
         return e, c
 
     def get_hcore(self, mol=None):
@@ -1112,7 +1114,7 @@ class ROHF(RHF):
         nopen = self.mol.spin
         nocc = ncore + nopen
         feff, fa, fb = h
-        mo_energy, mo_coeff = scipy.linalg.eigh(feff, s)
+        mo_energy, mo_coeff = SCF.eig(self, feff, s)
         mopen = mo_coeff[:,ncore:]
         ea = numpy.einsum('ik,ik->k', mopen, numpy.dot(fa, mopen))
         idx = ea.argsort()

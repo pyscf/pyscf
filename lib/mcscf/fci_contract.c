@@ -288,16 +288,6 @@ void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
                          link_index, link_index);
 }
 
-void FCIcontract_1e_ms0(double *f1e_tril, double *ci0, double *ci1,
-                        int norb, int na, int nlink, int *link_index)
-{
-        memset(ci1, 0, sizeof(double)*na*na);
-        FCIcontract_a_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
-                         link_index, link_index);
-        FCIcontract_b_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
-                         link_index, link_index);
-}
-
 
 static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
                            int bcount, int stra_id, int strb_id,
@@ -396,9 +386,9 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
 }
 
 
-void FCIcontract_rhf2e_spin1(double *eri, double *ci0, double *ci1,
-                             int norb, int na, int nb, int nlinka, int nlinkb,
-                             int *link_indexa, int *link_indexb)
+void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
+                          int norb, int na, int nb, int nlinka, int nlinkb,
+                          int *link_indexa, int *link_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         const int blklenb = strb_buflen(nb, nnorb);
@@ -443,14 +433,6 @@ void FCIcontract_rhf2e_spin1(double *eri, double *ci0, double *ci1,
         free(clinkb);
         free(buf);
 }
-
-void FCIcontract_2e_ms0(double *eri, double *ci0, double *ci1,
-                        int norb, int na, int nlink, int *link_index)
-{
-        FCIcontract_rhf2e_spin1(eri, ci0, ci1, norb, na, na, nlink, nlink,
-                                link_index, link_index);
-}
-
 
 /*
  * eri_ab is mixed integrals (alpha,alpha|beta,beta), |beta,beta) in small strides
@@ -782,10 +764,10 @@ static void ctr_rhf2esym_kern(double *eri, double *ci0, double *ci1, double *tbu
         free(t1);
 }
 
-void FCIcontract_rhf2e_spin1_symm(double *eri, double *ci0, double *ci1,
-                                  int norb, int na, int nb, int nlinka, int nlinkb,
-                                  int *link_indexa, int *link_indexb,
-                                  int *dimirrep, int totirrep)
+void FCIcontract_2e_spin1_symm(double *eri, double *ci0, double *ci1,
+                               int norb, int na, int nb, int nlinka, int nlinkb,
+                               int *link_indexa, int *link_indexb,
+                               int *dimirrep, int totirrep)
 {
         const int nnorb = norb * (norb+1)/2;
         const int blklenb = strb_buflen(nb, nnorb);
@@ -831,14 +813,6 @@ void FCIcontract_rhf2e_spin1_symm(double *eri, double *ci0, double *ci1,
         free(clinka);
         free(clinkb);
         free(buf);
-}
-
-void FCIcontract_2e_ms0_symm(double *eri, double *ci0, double *ci1,
-                             int norb, int na, int nlink, int *link_index,
-                             int *dimirrep, int totirrep)
-{
-        FCIcontract_rhf2e_spin1_symm(eri, ci0, ci1, norb, na, na, nlink, nlink,
-                                     link_index, link_index, dimirrep,totirrep);
 }
 
 void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,

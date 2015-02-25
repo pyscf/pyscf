@@ -135,29 +135,30 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 #
 # 3-particle and 4-particle density matrix for RHF-FCI wfn
 #
-def make_dm123(fcivec, norb, nelec):
+def make_dm123(fname, cibra, ciket, norb, nelec):
     if isinstance(nelec, int):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
-    assert(neleca == nelecb)
-    link_index = cistring.gen_linkstr_index(range(norb), neleca)
-    na,nlink = link_index.shape[:2]
+    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    na,nlinka = link_indexa.shape[:2]
+    nb,nlinkb = link_indexb.shape[:2]
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
-    kernel = _ctypes.dlsym(librdm._handle, 'FCI3pdm_kern_spin0')
+    kernel = _ctypes.dlsym(librdm._handle, fname)
     librdm.FCIrdm3_drv(ctypes.c_void_p(kernel),
                        rdm1.ctypes.data_as(ctypes.c_void_p),
                        rdm2.ctypes.data_as(ctypes.c_void_p),
                        rdm3.ctypes.data_as(ctypes.c_void_p),
-                       fcivec.ctypes.data_as(ctypes.c_void_p),
-                       fcivec.ctypes.data_as(ctypes.c_void_p),
+                       cibra.ctypes.data_as(ctypes.c_void_p),
+                       ciket.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_int(norb),
-                       ctypes.c_int(na), ctypes.c_int(na),
-                       ctypes.c_int(nlink), ctypes.c_int(nlink),
-                       link_index.ctypes.data_as(ctypes.c_void_p),
-                       link_index.ctypes.data_as(ctypes.c_void_p))
+                       ctypes.c_int(na), ctypes.c_int(nb),
+                       ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                       link_indexa.ctypes.data_as(ctypes.c_void_p),
+                       link_indexb.ctypes.data_as(ctypes.c_void_p))
     rdm3 = _complete_dm3_(rdm2, rdm3)
     return rdm1, rdm2, rdm3
 def _complete_dm3_(dm2, dm3):
@@ -189,31 +190,31 @@ def _complete_dm3_(dm2, dm3):
                 tmp = transpose01(tmp, k, i, j)
     return dm3
 
-def make_dm1234(fcivec, norb, nelec):
+def make_dm1234(fname, cibra, ciket, norb, nelec):
     if isinstance(nelec, int):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
-    assert(neleca == nelecb)
-    link_index = cistring.gen_linkstr_index(range(norb), neleca)
-    na,nlink = link_index.shape[:2]
+    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    na,nlinka = link_indexa.shape[:2]
+    nb,nlinkb = link_indexb.shape[:2]
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
     rdm4 = numpy.empty((norb,)*8)
-    kernel = _ctypes.dlsym(librdm._handle, 'FCI4pdm_kern_spin0')
-    librdm.FCIrdm4_drv(ctypes.c_void_p(kernel),
+    librdm.FCIrdm4_drv(ctypes.c_void_p(_ctypes.dlsym(librdm._handle, fname)),
                        rdm1.ctypes.data_as(ctypes.c_void_p),
                        rdm2.ctypes.data_as(ctypes.c_void_p),
                        rdm3.ctypes.data_as(ctypes.c_void_p),
                        rdm4.ctypes.data_as(ctypes.c_void_p),
-                       fcivec.ctypes.data_as(ctypes.c_void_p),
-                       fcivec.ctypes.data_as(ctypes.c_void_p),
+                       cibra.ctypes.data_as(ctypes.c_void_p),
+                       ciket.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_int(norb),
-                       ctypes.c_int(na), ctypes.c_int(na),
-                       ctypes.c_int(nlink), ctypes.c_int(nlink),
-                       link_index.ctypes.data_as(ctypes.c_void_p),
-                       link_index.ctypes.data_as(ctypes.c_void_p))
+                       ctypes.c_int(na), ctypes.c_int(nb),
+                       ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                       link_indexa.ctypes.data_as(ctypes.c_void_p),
+                       link_indexb.ctypes.data_as(ctypes.c_void_p))
     rdm3 = _complete_dm3_(rdm2, rdm3)
     rdm4 = _complete_dm4_(rdm3, rdm4)
     return rdm1, rdm2, rdm3, rdm4

@@ -170,7 +170,7 @@ class RHF(hf.RHF):
         cs = []
         es = []
         for ir in range(nirrep):
-            e, c = scipy.linalg.eigh(h[ir], s[ir])
+            e, c = hf.SCF.eig(self, h[ir], s[ir])
             cs.append(c)
             es.append(e)
         e = numpy.hstack(es)
@@ -364,7 +364,7 @@ class ROHF(hf.ROHF):
         ecore = []
         eopen = []
         for ir in range(nirrep):
-            e, c = scipy.linalg.eigh(h[ir], s[ir])
+            e, c = hf.SCF.eig(self, h[ir], s[ir])
             ecore.append(e.copy())
             eopen.append(numpy.einsum('ik,ik->k', c, numpy.dot(fa[ir], c)))
             if len(self._irrep_doccs) > 0:

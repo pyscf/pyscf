@@ -40,6 +40,10 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose([x[0] for x in res], refci))
         self.assertEqual([x[1:] for x in res], refstr)
 
+    def test__init__file(self):
+        c1 = fci.FCI(mol, m.mo_coeff)
+        self.assertAlmostEqual(c1.kernel()[0], -8.9347029192929313, 9)
+
     def test_init_triplet(self):
         ci1 = fci.addons.initguess_triplet(norb, nelec, '0b1011')
         self.assertAlmostEqual(abs(ci1 + ci1.T).sum(), 0)

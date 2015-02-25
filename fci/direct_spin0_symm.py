@@ -5,7 +5,6 @@
 # FCI solver for Singlet state
 #
 # Other files in the directory
-# direct_ms0   MS=0, same number of alpha and beta nelectrons
 # direct_spin0 singlet
 # direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
 #              MO integrals
@@ -22,7 +21,6 @@ import pyscf.symm
 import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin0
-from pyscf.fci import direct_ms0
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 
@@ -78,7 +76,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return direct_ms0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
+
+    unknown = []
+    for k, v in kwargs:
+        setattr(cis, k, v)
+        if not hasattr(cis, k):
+            unknown.append(k)
+    if unknown:
+        sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
+                         (str(unknown), __name__))
+    return direct_spin0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
@@ -121,10 +128,10 @@ class FCISolver(direct_spin0.FCISolver):
         return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
 
     def make_hdiag(self, h1e, eri, norb, nelec):
-        return direct_ms0.make_hdiag(h1e, eri, norb, nelec)
+        return direct_spin0.make_hdiag(h1e, eri, norb, nelec)
 
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
-        return direct_ms0.pspace(h1e, eri, norb, nelec, hdiag, np)
+        return direct_spin0.pspace(h1e, eri, norb, nelec, hdiag, np)
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
@@ -147,8 +154,8 @@ class FCISolver(direct_spin0.FCISolver):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         self.mol.check_sanity(self)
-        e, ci = direct_ms0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
-                                      **kwargs)
+        e, ci = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
+                                        **kwargs)
 # when norb is small, ci is obtained by exactly diagonalization. It can happen
 # that the ground state is triplet (ci = -ci.T), symmetrize the coefficients
 # will lead to ci = 0

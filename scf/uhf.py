@@ -396,8 +396,8 @@ class UHF(hf.SCF):
                  self.mol.nelectron-self.nelectron_alpha)
 
     def eig(self, fock, s):
-        e_a, c_a = scipy.linalg.eigh(fock[0], s)
-        e_b, c_b = scipy.linalg.eigh(fock[1], s)
+        e_a, c_a = hf.SCF.eig(self, fock[0], s)
+        e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
     def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):

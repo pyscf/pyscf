@@ -246,6 +246,8 @@ class UHF(hf.SCF):
 
     def eig(self, h, s):
         e, c = scipy.linalg.eigh(h, s)
+        idx = numpy.argmax(abs(c.real), axis=0)
+        c[:,c[idx,range(len(e))].real<0] *= -1
         return e, c
         #try:
         #    import pyscf.lib.jacobi

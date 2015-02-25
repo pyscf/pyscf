@@ -38,12 +38,12 @@ class KnowValues(unittest.TestCase):
     def test_rcas_natorb(self):
         ci1, mo1, mocc1 = mcscf.addons.cas_natorb(mcr)
         self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 11.4470460817871, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 2.59144964144265, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 2.59144951056707, 7)
 
     def test_ucas_natorb(self):
         ci2, mo2, mocc2 = mcscf.addons.cas_natorb(mcu)
         self.assertAlmostEqual(numpy.linalg.norm(mo2)  , 11.4470460817871*numpy.sqrt(2), 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mocc2), 2.59144964144265/numpy.sqrt(2), 7)
+        self.assertAlmostEqual(numpy.linalg.norm(mocc2), 2.59144951056707/numpy.sqrt(2), 7)
 
     def test_map2hf(self):
         idx = mcscf.addons.map2hf(mcr)
@@ -53,11 +53,11 @@ class KnowValues(unittest.TestCase):
     def test_get_fock(self):
         f1 = mcscf.addons.get_fock(mcr)
         self.assertTrue(numpy.allclose(f1, f1.T))
-        self.assertAlmostEqual(numpy.linalg.norm(f1), 23.59747669, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(f1), 23.597476504476919, 7)
         f1 = mcscf.addons.get_fock(mcu)
         self.assertTrue(numpy.allclose(f1[0], f1[0].T))
         self.assertTrue(numpy.allclose(f1[1], f1[1].T))
-        self.assertAlmostEqual(numpy.linalg.norm(f1), 23.59747669*numpy.sqrt(2), 6)
+        self.assertAlmostEqual(numpy.linalg.norm(f1), 23.597476504476919*numpy.sqrt(2), 6)
 
     def test_make_rdm12(self):
         dmr = mcscf.addons.make_rdm1(mcr)

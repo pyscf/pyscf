@@ -65,15 +65,15 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(c).sum(), 1908.8535852660757, 7)
 
     def test_orth_ao(self):
-        c0 = orth.pre_orth_ao(mol)
+        c0 = orth.pre_orth_ao(mol, method='scf')
         self.assertAlmostEqual(numpy.linalg.norm(c0), 7.2617698799320358, 9)
         self.assertAlmostEqual(abs(c0).sum(), 40.116080631662804, 8)
         c = orth.orth_ao(mol, 'lowdin', c0)
         self.assertAlmostEqual(numpy.linalg.norm(c), 10.967144073462256, 9)
-        self.assertAlmostEqual(abs(c).sum(), 112.23459140302003, 9)
+        self.assertAlmostEqual(abs(c).sum(), 112.23459140302003, 8)
         c = orth.orth_ao(mol, 'meta_lowdin', c0)
         self.assertAlmostEqual(numpy.linalg.norm(c), 10.967144073462256, 9)
-        self.assertAlmostEqual(abs(c).sum(), 111.61017124719302, 9)
+        self.assertAlmostEqual(abs(c).sum(), 111.61017124719302, 8)
 
 
 if __name__ == "__main__":

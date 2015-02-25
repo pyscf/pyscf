@@ -7,7 +7,6 @@
 # spin multiplicity is broken. 
 #
 # Other files in the directory
-# direct_ms0   MS=0, same number of alpha and beta nelectrons
 # direct_spin0 singlet
 # direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
 #              MO integrals
@@ -216,8 +215,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0,
-                                   **kwargs)
+
+    unknown = []
+    for k, v in kwargs:
+        setattr(cis, k, v)
+        if not hasattr(cis, k):
+            unknown.append(k)
+    if unknown:
+        sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
+                         (str(unknown), __name__))
+    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
