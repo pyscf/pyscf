@@ -356,8 +356,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
                       '|g[c]|=%4.3g, |dm1|=%4.3g',
                       imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if (norm_t < toloose or norm_gorb < toloose or
-                norm_gci < toloose or norm_dm1 < toloose):
+            if (norm_t < toloose or norm_gci < toloose or
+                (norm_gorb < toloose and norm_dm1 < toloose)):
 # When close to convergence, rotate the CAS space to natural orbital.
 # Because the casdm1 is only an approximation, it's not neccesary to transform to
 # the natural orbitals at the beginning of optimization
