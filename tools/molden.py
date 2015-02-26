@@ -16,7 +16,7 @@ def header(mol, fout):
     for ia in range(mol.natm):
         symb = mol.atom_pure_symbol(ia)
         chg = mol.atom_charge(ia)
-        fout.write('%s   %d   %d' % (symb, ia+1, chg))
+        fout.write('%s   %d   %d   ' % (symb, ia+1, chg))
         coord = mol.atom_coord(ia)
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
     fout.write('[GTO]\n')
