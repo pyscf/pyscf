@@ -94,6 +94,8 @@ from pyscf.scf.dfhf import density_fit, density_fit_
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
+from pyscf.scf import x2c
+from pyscf.scf.x2c import sfx2c1e, sfx2c
 
 
 
@@ -141,4 +143,6 @@ def DHF(mol, *args):
     else:
         return dhf.UHF(mol, *args)
 
+def X2C(mol, *args):
+    return x2c.UHF(mol, *args)
 

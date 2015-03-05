@@ -14,16 +14,12 @@ from pyscf.scf import dhf
 from pyscf.scf import _vhf
 
 
-def sfx2c1e(mf, uncontract_x=True):
+def sfx2c1e(mf):
     '''Spin-free X2C.
     For the given SCF object, update the hcore constructor.
 
     Args:
         mf : an SCF object
-
-    Kwargs:
-        uncontract_x : bool
-            Uncontract basis to generate X matrix
 
     Returns:
         An SCF object
@@ -39,41 +35,44 @@ def sfx2c1e(mf, uncontract_x=True):
     >>> mf = scf.sfx2c1e(scf.UHF(mol))
     >>> mf.scf()
     '''
-    mol = mf.mol
-    if uncontract_x:
-        xmol, contr_coeff = _uncontract_mol(mol)
-    else:
-        xmol = mol
-    c = mol.light_speed
-    t = xmol.intor_symmetric('cint1e_kin_sph')
-    v = xmol.intor_symmetric('cint1e_nuc_sph')
-    s = xmol.intor_symmetric('cint1e_ovlp_sph')
-    w = xmol.intor_symmetric('cint1e_pnucp_sph')
-
-    nao = t.shape[0]
-    n2 = nao * 2
-    h = numpy.zeros((n2,n2))
-    m = numpy.zeros((n2,n2))
-    h[:nao,:nao] = v
-    h[:nao,nao:] = t
-    h[nao:,:nao] = t
-    h[nao:,nao:] = w * (.25/c**2) - t
-    m[:nao,:nao] = s
-    m[nao:,nao:] = t * (.5/c**2)
-
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
-    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
-    h1 = _get_hcore_fw(t, v, w, s, x, c)
-    if uncontract_x:
-        h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
 
     class HF(mf.__class__):
         def __init__(self):
+            self.xuncontract = False
+            self.xequation = '1e'
             self.__dict__.update(mf.__dict__)
+            self._keys = self._keys.union(['xequation', 'xuncontract'])
 
         def get_hcore(self, mol=None):
+            mol = mf.mol
+            if self.xuncontract:
+                xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
+            else:
+                xmol = mol
+            c = mol.light_speed
+            t = xmol.intor_symmetric('cint1e_kin_sph')
+            v = xmol.intor_symmetric('cint1e_nuc_sph')
+            s = xmol.intor_symmetric('cint1e_ovlp_sph')
+            w = xmol.intor_symmetric('cint1e_pnucp_sph')
+
+            nao = t.shape[0]
+            n2 = nao * 2
+            h = numpy.zeros((n2,n2))
+            m = numpy.zeros((n2,n2))
+            h[:nao,:nao] = v
+            h[:nao,nao:] = t
+            h[nao:,:nao] = t
+            h[nao:,nao:] = w * (.25/c**2) - t
+            m[:nao,:nao] = s
+            m[nao:,nao:] = t * (.5/c**2)
+
+            e, a = scipy.linalg.eigh(h, m)
+            cl = a[:nao,nao:]
+            cs = a[nao:,nao:]
+            x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
+            if self.xuncontract:
+                h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
             return h1
 
     return HF()
@@ -81,10 +80,10 @@ def sfx2c1e(mf, uncontract_x=True):
 sfx2c = sfx2c1e
 
 
-def get_hcore(mol, uncontract_x=True):
+def get_hcore(mol, xuncontract=False):
     '''Foldy-Wouthuysen hcore'''
-    if uncontract_x:
-        xmol, contr_coeff_nr = _uncontract_mol(mol)
+    if xuncontract:
+        xmol, contr_coeff_nr = _uncontract_mol(mol, xuncontract)
         np, nc = contr_coeff_nr.shape
         contr_coeff = numpy.zeros((np*2,nc*2))
         contr_coeff[0::2,0::2] = contr_coeff_nr
@@ -114,7 +113,7 @@ def get_hcore(mol, uncontract_x=True):
     cs = a[n2c:,n2c:]
     x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
     h1 = _get_hcore_fw(t, v, w, s, x, c)
-    if uncontract_x:
+    if xuncontract:
         h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
     return h1
 
@@ -167,8 +166,9 @@ def get_init_guess(mol, key='minao'):
 class UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
+        self.xuncontract = False
         self.xequation = '1e'
-        self._keys = self._keys.union(['xequation'])
+        self._keys = self._keys.union(['xequation', 'xuncontract'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -210,7 +210,7 @@ class UHF(hf.SCF):
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
-        return get_hcore(mol)
+        return get_hcore(mol, self.xuncontract)
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
@@ -261,28 +261,45 @@ class UHF(hf.SCF):
         return dhf.analyze(self, verbose)
 
 
-def _uncontract_mol(mol):
+def _uncontract_mol(mol, xuncontract=False):
     pmol = mol.copy()
     _bas = []
     contr_coeff = []
     for ib in range(mol.nbas):
-        np = mol._bas[ib,mole.NPRIM_OF]
-        pexp = mol._bas[ib,mole.PTR_EXP]
-        pcoeff = mol._bas[ib,mole.PTR_COEFF]
-        pmol._env[pcoeff] = 1
-        bs = numpy.tile(mol._bas[ib], (np,1))
-        bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
-        bs[:,mole.PTR_EXP] = numpy.arange(pexp, pexp+np)
-        _bas.append(bs)
+        if isinstance(xuncontract, bool):
+            uncontract_me = xuncontract
+        elif isinstance(xuncontract, str):
+            ia = mol.bas_atom(ib)
+            uncontract_me = ((xuncontract == mol.atom_pure_symbol(ia)) or
+                             (xuncontract == mol.atom_symbol(ia)))
+        else: #isinstance(xuncontract, (tuple, list)):
+            ia = mol.bas_atom(ib)
+            uncontract_me = ((mol.atom_pure_symbol(ia) in xuncontract) or
+                             (mol.atom_symbol(ia) in unxuncontract))
 
-        l = mol.bas_angular(ib)
-        d = l * 2 + 1
-        c = mol.bas_ctr_coeff(ib)
-        nc = c.shape[1]
-        c1 = numpy.zeros((np*d,nc*d))
-        for j in range(l*2+1):
-            c1[j::d,j::d] = c
-        contr_coeff.append(c1)
+        if uncontract_me:
+            np = mol._bas[ib,mole.NPRIM_OF]
+            pexp = mol._bas[ib,mole.PTR_EXP]
+            pcoeff = mol._bas[ib,mole.PTR_COEFF]
+            pmol._env[pcoeff] = 1
+            bs = numpy.tile(mol._bas[ib], (np,1))
+            bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
+            bs[:,mole.PTR_EXP] = numpy.arange(pexp, pexp+np)
+            _bas.append(bs)
+
+            l = mol.bas_angular(ib)
+            d = l * 2 + 1
+            c = mol.bas_ctr_coeff(ib)
+            nc = c.shape[1]
+            c1 = numpy.zeros((np*d,nc*d))
+            for j in range(l*2+1):
+                c1[j::d,j::d] = c
+            contr_coeff.append(c1)
+        else:
+            _bas.append(mol._bas[ib])
+            l = mol.bas_angular(ib)
+            d = l * 2 + 1
+            contr_coeff.append(numpy.eye(d*mol.bas_nctr(ib)))
     pmol._bas = numpy.vstack(_bas)
     return pmol, scipy.linalg.block_diag(*contr_coeff)
 

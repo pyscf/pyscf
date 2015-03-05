@@ -22,10 +22,18 @@ class KnowValues(unittest.TestCase):
     def test_sfx2c1e(self):
         myx2c = scf.x2c.sfx2c1e(scf.RHF(mol))
         e = myx2c.kernel()
+        self.assertAlmostEqual(e, -76.081765438081675, 9)
+
+        myx2c.xuncontract = True
+        e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.075429084857021, 9)
 
     def test_x2c1e(self):
         myx2c = scf.x2c.UHF(mol)
+        e = myx2c.kernel()
+        self.assertAlmostEqual(e, -76.081767969229489, 9)
+
+        myx2c.xuncontract = True
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.075431233304926, 9)
 

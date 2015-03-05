@@ -10,18 +10,16 @@ mol.build(
     basis = 'ccpvdz',
 )
 
-mf = scf.density_fit(scf.RHF(mol))
-energy = mf.scf()
-print('E = %.12f, ref = -76.0259362997' % energy)
+mf = scf.sfx2c(scf.RHF(mol))
+energy = mf.kernel()
+print('E = %.12f, ref = -76.081765438082' % energy)
 
 
 mol.spin = 1
 mol.charge = 1
 mol.build(0, 0)
 
-mf = scf.density_fit(scf.UHF(mol))
-# the default auxiliary basis is Weigend Coulomb Fitting basis.
-mf.auxbasis = 'cc-pvdz-fit'
+mf = scf.sfx2c(scf.UHF(mol))
 energy = mf.scf()
-print('E = %.12f, ref = -75.6310072359' % energy)
+print('E = %.12f, ref = -75.687130144740' % energy)
 
