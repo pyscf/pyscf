@@ -233,7 +233,7 @@ class boys:
             logger.debug(self, "Boys :: update norm   = %g", update_norm)
             logger.debug(self, "Boys :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
 
-        logger.notice(self, "Boys localization procedure converged in %d iterations.", iteration)
+        logger.note(self, "Boys localization procedure converged in %d iterations.", iteration)
 
         converged_coeff = np.dot( self.coeff, self.u )
         return converged_coeff
