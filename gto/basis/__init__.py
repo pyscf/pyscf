@@ -47,6 +47,10 @@ def load(basis_name, symb):
     '''
     alias = {
         'ano'        : 'ano.dat'        ,
+        'anoroosdz'  : 'roos-dz.dat'    ,
+        'anoroostz'  : 'roos-tz.dat'    ,
+        'roosdz'     : 'roos-dz.dat'    ,
+        'roostz'     : 'roos-tz.dat'    ,
         'ccpv5z'     : 'cc-pv5z.dat'    ,
         'ccpvdz'     : 'cc-pvdz.dat'    ,
         'augccpvdz'  : 'aug-cc-pvdz.dat',

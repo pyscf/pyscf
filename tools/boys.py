@@ -11,6 +11,7 @@
 from pyscf import gto, scf
 from pyscf.tools import molden
 from pyscf.lib import parameters as param
+from pyscf.lib import logger
 
 import numpy as np
 import scipy
@@ -24,24 +25,25 @@ class boys:
             mol : A molecule which has been built
             orbital_coeff: Set of orthonormal orbitals, expressed in terms of the AO, which should be localized
         '''
-    
+
         self.themol  = mol
         self.coeff   = orbital_coeff
         self.Norbs   = orbital_coeff.shape[1]
         self.numVars = ( self.Norbs * ( self.Norbs - 1 ) ) / 2
-        
+
         rvec        = self.themol.intor('cint1e_r_sph', 3)
         self.x_orig = np.dot( np.dot( self.coeff.T, rvec[0] ) , self.coeff )
         self.y_orig = np.dot( np.dot( self.coeff.T, rvec[1] ) , self.coeff )
         self.z_orig = np.dot( np.dot( self.coeff.T, rvec[2] ) , self.coeff )
-        
+
         self.u      = np.eye( self.Norbs, dtype=float )
         self.x_symm = self.x_orig + self.x_orig.T
         self.y_symm = self.x_orig + self.x_orig.T
         self.z_symm = self.x_orig + self.x_orig.T
-        
-        self.verbose = param.VERBOSE_NOTICE
-        
+
+        self.verbose = mol.verbose
+        self.stdout = mol.stdout
+
     def dump_molden( self, filename, orbital_coeff ):
         r'''Create a molden file to inspect a set of orbitals
 
@@ -49,13 +51,13 @@ class boys:
             filename : Filename of the molden file
             orbital_coeff: Set of orthonormal orbitals, expressed in terms of the AO, for which a molden file should be created
         '''
-    
+
         with open( filename, 'w' ) as thefile:
             molden.header( self.themol, thefile )
             molden.orbital_coeff( self.themol, thefile, orbital_coeff )
-        
+
     def __update_unitary( self, flatx ):
-    
+
         squarex = np.zeros( [ self.Norbs, self.Norbs ], dtype=float )
         increment = 0
         for row in range( self.Norbs ):
@@ -71,9 +73,9 @@ class boys:
         self.x_symm = x_curr + x_curr.T
         self.y_symm = y_curr + y_curr.T
         self.z_symm = z_curr + z_curr.T
-        
+
     def __costfunction( self ):
-    
+
         value = 0.0
         for i in range( self.Norbs ):
             for j in range( i+1, self.Norbs ): # j > i
@@ -85,9 +87,9 @@ class boys:
                 value += temp * temp
         value *= -0.25
         return value
-        
+
     def __gradient( self ):
-        
+
         grad = np.zeros( [ self.numVars ], dtype=float )
         increment = 0
         for p in range( self.Norbs ):
@@ -98,13 +100,13 @@ class boys:
                 increment += 1
         grad *= -self.Norbs
         return grad
-        
+
     def __debug_gradient( self ):
-    
+
         gradient_analytic = self.__gradient()
-        
+
         original_umatrix = np.array( self.u, copy=True )
-        
+
         stepsize = 1e-8
         CF_ref = self.__costfunction()
         gradient_numerical = np.zeros( [ self.numVars ], dtype=float )
@@ -115,16 +117,16 @@ class boys:
             self.__update_unitary( flatx )
             CF_step = self.__costfunction()
             gradient_numerical[ counter ] = ( CF_step - CF_ref ) / stepsize
-        
+
         self.u = np.array( original_umatrix, copy=True )
         flatx = np.zeros( [ self.numVars ], dtype=float )
         self.__update_unitary( flatx )
-        
-        print "2-norm( gradient difference ) =", np.linalg.norm( gradient_analytic - gradient_numerical )
-        print "2-norm( gradient )            =", np.linalg.norm( gradient_analytic )
+
+        logger.debug(self, "2-norm( gradient difference ) = %g", np.linalg.norm( gradient_analytic - gradient_numerical ))
+        logger.debug(self, "2-norm( gradient )            = %g", np.linalg.norm( gradient_analytic ))
 
     def __hessian( self ):
-    
+
         hess = np.zeros( [ self.numVars, self.numVars ], dtype=float )
         increment_col = 0
         for r in range( self.Norbs ):
@@ -163,13 +165,13 @@ class boys:
                 increment_col += 1
         hess *= -self.Norbs
         return hess
-        
+
     def __debug_hessian( self ):
-    
+
         hessian_analytic = self.__hessian()
-        
+
         original_umatrix = np.array( self.u, copy=True )
-        
+
         stepsize = 1e-8
         gradient_ref = self.__gradient()
         hessian_numerical = np.zeros( [ self.numVars, self.numVars ], dtype=float )
@@ -180,38 +182,37 @@ class boys:
             self.__update_unitary( flatx )
             gradient_step = self.__gradient()
             hessian_numerical[ :, counter ] = ( gradient_step - gradient_ref ) / stepsize
-        
+
         self.u = np.array( original_umatrix, copy=True )
         flatx = np.zeros( [ self.numVars ], dtype=float )
         self.__update_unitary( flatx )
-        
+
         hessian_numerical = 0.5 * ( hessian_numerical + hessian_numerical.T )
-        
-        print "2-norm( hessian difference ) =", np.linalg.norm( hessian_analytic - hessian_numerical )
-        print "2-norm( hessian )            =", np.linalg.norm( hessian_analytic )
+
+        logger.debug(self, "2-norm( hessian difference ) = %.g", np.linalg.norm( hessian_analytic - hessian_numerical ))
+        logger.debug(self, "2-norm( hessian )            = %.g", np.linalg.norm( hessian_analytic ))
 
     def optimize( self ):
         r'''Augmented Hessian Newton-Raphson optimization of the Boys localization cost function, using an exact gradient and hessian
-        
+
         Returns:
             The orbital coefficients of the orthonormal localized orbitals, expressed in terms of the AO
         '''
-    
+
         # To break up symmetrical orbitals
         flatx = 0.0123 * np.ones( [ self.numVars ], dtype=float )
         self.__update_unitary( flatx )
-        
+
         #self.__debug_gradient()
         #self.__debug_hessian()
-        
+
         gradient_norm = 1.0
         threshold = 1e-6
         iteration = 0
-        if ( self.verbose >= param.VERBOSE_DEBUG ):
-            print "Boys :: At iteration", iteration, "the cost function =", -self.__costfunction()
-        
+        logger.debug(self, "Boys :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
+
         while ( gradient_norm > threshold ):
-        
+
             iteration += 1
             augmented = np.zeros( [ self.numVars+1, self.numVars+1 ], dtype=float )
             gradient = self.__gradient()
@@ -223,19 +224,17 @@ class boys:
             eigenvals = eigenvals[idx]
             eigenvecs = eigenvecs[:,idx]
             flatx = eigenvecs[:-1,0] / eigenvecs[self.numVars,0]
-            
+
             gradient_norm = np.linalg.norm( gradient )
             update_norm = np.linalg.norm( flatx )
             self.__update_unitary( flatx )
-            
-            if ( self.verbose >= param.VERBOSE_DEBUG ):
-                print "Boys :: gradient norm =", gradient_norm
-                print "Boys :: update norm   =", update_norm
-                print "Boys :: At iteration", iteration, "the cost function =", -self.__costfunction()
-                
-        if ( self.verbose >= param.VERBOSE_NOTICE ):
-            print "Boys localization procedure converged in", iteration, "iterations."
-            
+
+            logger.debug(self, "Boys :: gradient norm = %g", gradient_norm)
+            logger.debug(self, "Boys :: update norm   = %g", update_norm)
+            logger.debug(self, "Boys :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
+
+        logger.notice(self, "Boys localization procedure converged in %d iterations.", iteration)
+
         converged_coeff = np.dot( self.coeff, self.u )
         return converged_coeff
-        
+

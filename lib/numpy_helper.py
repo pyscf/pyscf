@@ -203,6 +203,40 @@ def dot(a, b, alpha=1, c=None, beta=0):
 
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
+def zdot(a, b, alpha=1, c=None, beta=0):
+    if numpy.iscomplexobj(a):
+        if numpy.iscomplexobj(b):
+            k1 = dot(a.real+a.imag, b.real.copy())
+            k2 = dot(a.real.copy(), b.imag-b.real)
+            k3 = dot(a.imag.copy(), b.real+b.imag)
+            if c is None:
+                return k1-k3 + (k1+k2)*1j
+            else:
+                c[:] = c * beta + alpha * (k1-k3 + (k1+k2)*1j)
+                return c
+        else:
+            ar = a.real.copy()
+            ai = a.imag.copy()
+            cr = dot(ar, b, alpha)
+            ci = dot(ai, b, alpha)
+            if c is None:
+                return cr + ci*1j
+            else:
+                c[:] = c*beta + (cr+ci*1j)
+                return c
+    elif numpy.iscomplexobj(b):
+        br = b.real.copy()
+        bi = b.imag.copy()
+        cr = dot(a, br, alpha)
+        ci = dot(a, bi, alpha)
+        if c is None:
+            return cr + ci*1j
+        else:
+            c[:] = c*beta + (cr+ci*1j)
+            return c
+    else:
+        return dot(a, b, alpha, c, beta)
+
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
@@ -222,6 +256,7 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        c.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_double(alpha), ctypes.c_double(beta))
     return c
+
 
 
 
@@ -266,3 +301,9 @@ if __name__ == '__main__':
     print(abs(dot(b  ,a.T)-numpy.dot(b  ,a.T)).sum())
     print(abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum())
     print(abs(dot(b.T,a  )-numpy.dot(b.T,a  )).sum())
+
+    a = numpy.random.random((400,400))
+    b = numpy.random.random((400,400))
+    c = numpy.random.random((400,400))
+    d = numpy.random.random((400,400))
+    print numpy.allclose(numpy.dot(a+b*1j, c+d*1j), zdot(a+b*1j, c+d*1j))

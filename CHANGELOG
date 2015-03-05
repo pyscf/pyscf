@@ -3,6 +3,8 @@ Version 0.11 (2015-3-?):
 * Update the point group symmetry detect function
 * Optimized DFT grids
 * NEVPT2 (By Sheng Guo)
+* X2C-1e HF
+* Boys localization
 
 Version 0.10 (2015-2-4):
 * Refactoring:

@@ -3,11 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import re
 import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.gto import mole
+from pyscf.lib import logger
 import pyscf.symm.param
 
 GEOM_THRESHOLD = 1e-5
@@ -64,18 +66,24 @@ def rotation_mat(vec, theta):
     return r
 
 #TODO: Sn, T, Th, O, I
-def detect_symm(atoms, basis=None):
+def detect_symm(atoms, basis=None, verbose=logger.WARN):
     '''
     Return group name, charge center, and nex_axis (three rows for x,y,z)
     '''
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
 # a tight threshold for classifying the main class of group.  Because if the
 # main group class is incorrectly assigned, the following search _search_toi
 # and search_c_highest is very likely to give wrong type of symmetry
     tol = GEOM_THRESHOLD / len(atoms)
+    log.debug('geometry tol = %g', tol)
 
     rawsys = SymmSys(atoms, basis)
     w, axes = scipy.linalg.eigh(rawsys.im)
     axes = axes.T
+    log.debug('principal inertia moments %s', str(w))
 
     if numpy.allclose(w, 0, atol=tol):
         gpname = 'SO3'

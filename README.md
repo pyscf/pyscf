@@ -96,11 +96,16 @@ Known problems
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
-* On debian-6, the system default BLAS library (libf77blas.so.3gf) might
-  have bug in dsyrk function.  It occasionally results in NaN in mcscf
-  solver.  To fix this, change to other BLAS vendors e.g. to MKL
+* Fails at runtime with error message
+```
+  OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
+```
 
-        BLA_VENDOR=Intel10_64lp_seq cmake ..
+  This problem relates to MKL v11.1 on intel64 architecture.  There is
+  no solution for the combination of Python + MKL 11.1 + AVX.  You need
+  either change to other MKL version or drop out the mkl_avx:
+
+        BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
 
 * tests fail
 
