@@ -5,10 +5,39 @@
 
 import os
 import ctypes
+import tempfile
 import numpy
+import h5py
 import pyscf.lib
 
 libao2mo = pyscf.lib.load_library('libao2mo')
+
+class load:
+    '''load 2e integrals from hdf5 file
+    Usage:
+        with load(erifile) as eri:
+            print eri.shape
+    '''
+    def __init__(self, eri, dataname='eri_mo'):
+        self.eri = eri
+        self.dataname = dataname
+        self.feri = None
+
+    def __enter__(self):
+        if isinstance(self.eri, str):
+            self.feri = h5py.File(self.eri)
+            return self.feri[self.dataname]
+        elif (isinstance(self.eri, file) or
+              isinstance(self.eri, tempfile._TemporaryFileWrapper)):
+            self.feri = h5py.File(self.eri.name)
+            return self.feri[self.dataname]
+        else:
+            return self.eri
+
+    def __exit__(self, type, value, traceback):
+        if not isinstance(self.eri, numpy.ndarray):
+            self.feri.close()
+
 
 def restore(symmetry, eri, norb, tao=None):
     r'''Convert the 2e integrals between different level of permutation symmetry
