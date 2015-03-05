@@ -196,6 +196,10 @@ class CASCI(object):
         vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
         return vj - vk * .5
 
+    def get_h2cas(self, mo_coeff=None):
+        return self.ao2mo(self, mo_coeff)
+    def get_h2eff(self, mo_coeff=None):
+        return self.ao2mo(self, mo_coeff)
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
@@ -208,6 +212,10 @@ class CASCI(object):
                                                   verbose=self.verbose)
         return eri
 
+    def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
+        return self.h1e_for_cas(mo_coeff, ncas, ncore)
+    def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
+        return self.h1e_for_cas(mo_coeff, ncas, ncore)
     def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, ncore)

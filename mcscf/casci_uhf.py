@@ -156,6 +156,10 @@ class CASCI(object):
                   numpy.dot(mocore[1], mocore[1].T))
         return self._scf.get_veff(mol, dm)
 
+    def get_h2cas(self, mo_coeff=None):
+        return self.ao2mo(self, mo_coeff)
+    def get_h2eff(self, mo_coeff=None):
+        return self.ao2mo(self, mo_coeff)
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
@@ -185,6 +189,10 @@ class CASCI(object):
 
         return (eri_aa, eri_ab, eri_bb)
 
+    def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
+        return self.h1e_for_cas(mo_coeff, ncas, ncore)
+    def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
+        return self.h1e_for_cas(mo_coeff, ncas, ncore)
     def h1e_for_cas(self, mo_coeff=None, ncas=None, nelecas=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff

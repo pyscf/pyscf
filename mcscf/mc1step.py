@@ -33,14 +33,7 @@ def h1e_for_cas(casscf, mo, eris):
     return h1eff
 
 def expmat(a):
-    x1 = numpy.dot(a,a)
-    u = numpy.eye(a.shape[0]) + a + .5 * x1
-    x2 = numpy.dot(x1,a)
-    u = u + 1./6 * x2
-    #x3 = numpy.dot(x1,x1)
-    #u = u + 1./24 * x3
-    u, w, vh = numpy.linalg.svd(u)
-    return numpy.dot(u,vh)
+    return scipy.linalg.expm(a)
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
@@ -174,6 +167,7 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
     t2m = (time.clock(), time.time())
     g_orb0, h_op, h_diag = casscf.gen_g_hop(mo, casdm1, casdm2, eris)
     t3m = log.timer('gen h_op', *t2m)
+    log.debug('    |gorb_0|=%4.3g', numpy.linalg.norm(g_orb0))
 
     precond = lambda x, e: x/(h_diag-(e-casscf.ah_level_shift))
     u = numpy.eye(nmo)
@@ -186,7 +180,11 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
         g_orb = g_orb0 + h_op(dx)
 
     norm_gprev = numpy.linalg.norm(g_orb)
-    ah_start_tol = min(norm_gprev, casscf.ah_start_tol)
+    if norm_gprev > casscf.ah_start_tol:
+        ah_start_tol = casscf.ah_start_tol
+    else:
+        ah_start_tol = norm_gprev
+        log.debug1(casscf, 'Set AH start tol to %g', ah_start_tol)
     g_op = lambda: g_orb
     imic = 0
     for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0, log,
@@ -220,7 +218,7 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
         norm_gprev = numpy.linalg.norm(g_orb)
 
     t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-    return u, dx, g_orb, imic+ihop
+    return u, dx, g_orb0, imic+ihop
 
 # dc = h_{co} * dr
 def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
@@ -354,10 +352,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
             log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
                       '|g[c]|=%4.3g, |dm1|=%4.3g',
-                      imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
-            t2m = log.timer('micro iter %d'%imicro, *t2m)
+                      imicro+1, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
+            t2m = log.timer('micro iter %d'%(imicro+1), *t2m)
             if (norm_t < toloose or norm_gci < toloose or
-                (norm_gorb < toloose and norm_dm1 < toloose)):
+                norm_gorb < toloose or norm_dm1 < toloose):
 # When close to convergence, rotate the CAS space to natural orbital.
 # Because the casdm1 is only an approximation, it's not neccesary to transform to
 # the natural orbitals at the beginning of optimization
@@ -525,11 +523,20 @@ class CASSCF(casci.CASCI):
         self.ah_conv_tol = 1e-8
         self.ah_max_cycle = 20
         self.ah_lindep = self.ah_conv_tol**2
-# ah_start_tol and ah_start_cycle control the start point to use AH step.
-# In function rotate_orb_ah, the orbital rotation is carried out with the
-# approximate aug_hessian step after a few davidson updates of the AH eigen
-# problem.  Reducing ah_start_tol or increasing ah_start_cycle will delay the
-# start point of orbital rotation.
+# * ah_start_tol and ah_start_cycle control the start point to use AH step.
+#   In function rotate_orb_ah, the orbital rotation is carried out with the
+#   approximate aug_hessian step after a few davidson updates of the AH eigen
+#   problem.  Reducing ah_start_tol or increasing ah_start_cycle will delay
+#   the start point of orbital rotation.
+# * Be careful with the SYMMETRY BROKEN caused by ah_start_tol/ah_start_cycle.
+#   ah_start_tol/ah_start_cycle actually approximates the hessian to reduce
+#   the J/K evaluation required by AH.  When the system symmetry is higher
+#   than the one given by mol.symmetry/mol.groupname,  symmetry broken might
+#   occur due to this approximation,  e.g.  with the default ah_start_tol,
+#   C2 (16o, 8e) under D2h symmetry might break the degeneracy between 
+#   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
+#   be fixed by increasing the accuracy of AH solver, e.g.
+#               ah_start_tol = 1e-8;  ah_conv_tol = 1e-9
         self.ah_start_tol = 1e-4
         self.ah_start_cycle = 3
         self.chkfile = mf.chkfile
@@ -778,38 +785,48 @@ class CASSCF(casci.CASCI):
 #   approx CI hessian then solving  (H-E*1)dc = g or aug-hessian or H dc = g
 #   has not obvious advantage than simple gradeint.
 
-# * minimal subspace is identical to simple gradient updates
         g = hc - (e_ci-ecore) * fcivec.ravel()  # hc-eci*fcivec equals to eqs. (@)
-        # dynamic ci_stepsize: ci graidents may change the CI vector too much,
-        # which causes oscillation in macro iterations
-        max_step = min(numpy.linalg.norm(rmat)/rmat.shape[0], self.max_ci_stepsize)
-        dc = -g.ravel()
-        dcmax = numpy.max(abs(dc))
-        if dcmax > max_step:
-            ci1 = fcivec.ravel() + dc * (max_step/dcmax)
-        else:
-            ci1 = fcivec.ravel() + dc
-        ci1 *= 1/numpy.linalg.norm(ci1)
-        casdm1, casdm2 = self.fcisolver.make_rdm12(ci1, ncas, nelecas)
+        dcmax = numpy.max(abs(g))
+        if dcmax > self.max_ci_stepsize:
+            logger.debug(self, 'CI step by gradient descent')
+# * minimal subspace is identical to simple gradient updates
+            # dynamic ci_stepsize: ci graidents may change the CI vector too much,
+            # which causes oscillation in macro iterations
+            #max_step = numpy.linalg.norm(rmat)/rmat.shape[0]
+            #if max_step > self.max_ci_stepsize:
+            #    max_step = self.max_ci_stepsize
+            #else:
+            #    logger.debug1(self, 'Set CI step size to %g', max_step)
+            max_step = self.max_ci_stepsize
 
+            dc = -g.ravel()
+            if dcmax > max_step:
+                ci1 = fcivec.ravel() + dc * (max_step/dcmax)
+            else:
+                ci1 = fcivec.ravel() + dc
+            ci1 *= 1/numpy.linalg.norm(ci1)
+
+        else: # should we switch to 2D subspace when rmat is small?
+
+            logger.debug(self, 'CI step by 2D subspace response')
 # * 2D subspace spanned by fcivec and hc.  It does not have significant
 #   improvement to minimal subspace.
-#        x1 = self.fcisolver.contract_2e(h2eff, hc, ncas, nelecas).ravel()
-#        heff = numpy.zeros((2,2))
-#        seff = numpy.zeros((2,2))
-#        heff[0,0] = numpy.dot(fcivec.ravel(), hc)
-#        #heff[0,1] = heff[1,0] = numpy.dot(fcivec.ravel(), x1)
-#        heff[0,1] = heff[1,0] = numpy.dot(hc, hc)
-#        heff[1,1] = numpy.dot(hc, x1)
-#        seff[0,0] = 1 #numpy.dot(fcivec.ravel(), fcivec.ravel())
-#        seff[0,1] = seff[1,0] = heff[0,0] #numpy.dot(fcivec.ravel(), hc)
-#        seff[1,1] = heff[0,1] #numpy.dot(hc, hc)
-#        w, v = scipy.linalg.eigh(heff, seff)
-#        x1 = None
-#        ci1 = fcivec.ravel() * v[0,0] + hc.ravel() * v[1,0]
-#        casdm1, casdm2 = self.fcisolver.make_rdm12(ci1, ncas, nelecas)
-#        ci1 = None
-#        g = hc - (e_ci-ecore) * fcivec.ravel()  # hc-eci*fcivec equals to eqs. (@)
+            x1 = self.fcisolver.contract_2e(h2eff, hc, ncas, nelecas).ravel()
+            heff = numpy.zeros((2,2))
+            seff = numpy.zeros((2,2))
+            heff[0,0] = numpy.dot(fcivec.ravel(), hc)
+            #heff[0,1] = heff[1,0] = numpy.dot(fcivec.ravel(), x1)
+            heff[0,1] = heff[1,0] = numpy.dot(hc, hc)
+            heff[1,1] = numpy.dot(hc, x1)
+            seff[0,0] = 1 #numpy.dot(fcivec.ravel(), fcivec.ravel())
+            seff[0,1] = seff[1,0] = heff[0,0] #numpy.dot(fcivec.ravel(), hc)
+            seff[1,1] = heff[0,1] #numpy.dot(hc, hc)
+            w, v = scipy.linalg.eigh(heff, seff)
+            ci1 = fcivec.ravel() * v[0,0] + hc.ravel() * v[1,0]
+#            else: # full response
+#                e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=fcivec)
+
+        casdm1, casdm2 = self.fcisolver.make_rdm12(ci1, ncas, nelecas)
 
         return casdm1, casdm2, g
 
