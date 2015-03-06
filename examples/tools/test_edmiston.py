@@ -2,9 +2,9 @@
 #
 # Author: Sebastian Wouters <sebastianwouters@gmail.com>
 #
-# Date: March 4, 2015
+# Date: March 5, 2015
 #
-# Test file to illustrate the usage of boys localization
+# Test file to illustrate the usage of Edmiston-Ruedenberg localization
 #
 
 from pyscf import gto, scf
@@ -37,8 +37,8 @@ mf = scf.RHF( mol )
 mf.verbose = 0
 mf.scf()
 
-filename_mo   = 'benzene-631g-mo.molden'
-filename_boys = 'benzene-631g-boys.molden'
+filename_mo       = 'benzene-631g-mo.molden'
+filename_edmiston = 'benzene-631g-edmiston.molden'
 
 with open( filename_mo, 'w' ) as thefile:
     molden.header( mol, thefile )
@@ -47,9 +47,9 @@ print "Molecular orbitals saved in", filename_mo
 
 # Localize the pi-type orbitals. Counting starts from 0! 12 orbitals as 6-31G is DZ.
 tolocalize = np.array([17, 20, 21, 22, 23, 30, 36, 41, 42, 47, 48, 49]) - 1
-loc  = localizer.localizer( mol, mf.mo_coeff[:,tolocalize], 'boys' )
+loc  = localizer.localizer( mol, mf.mo_coeff[:,tolocalize], 'edmiston' )
 loc.verbose = param.VERBOSE_DEBUG
 new_coeff = loc.optimize()
-loc.dump_molden( filename_boys, new_coeff )
-print "Boys localized pi-orbitals saved in", filename_boys
+loc.dump_molden( filename_edmiston, new_coeff )
+print "Edmiston-Ruedenberg localized pi-orbitals saved in", filename_edmiston
 
