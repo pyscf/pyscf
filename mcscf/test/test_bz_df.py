@@ -33,30 +33,14 @@ mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
 
 
 class KnowValues(unittest.TestCase):
-    def test_casci_4o4e(self):
-        mc = mcscf.CASCI(mf, 4, 4)
-        emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -230.6573122151, 7)
-
-    def test_casci_9o8e(self):
-        mc = mcscf.CASCI(mf, 9, 8)
-        emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -230.6582147496, 7)
-
     def test_mc2step_4o4e(self):
-        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -230.6627383822, 7)
 
     def test_mc2step_9o8e(self):
-        mc = mcscf.CASSCF(mf, 9, 8)
-        mc.conv_tol = 1e-8
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -230.70808321485694, 6)
-
-    def test_mc2step_9o8e_a(self):
-        mc = mcscf.CASSCF(mf, 9, 8)
+        mc = mcscf.density_fit(mcscf.CASSCF(mf, 9, 8))
         mc.conv_tol = 1e-8
         mo = mf.mo_coeff.copy()
         mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
@@ -64,23 +48,13 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
     def test_mc1step_4o4e(self):
-        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -230.6627383823, 7)
 
     def test_mc1step_9o8e(self):
-        mc = mcscf.CASSCF(mf, 9, 8)
-# without proper initial guess, it converges to wrong solution.  Big orbital
-# rotation stepsize may converge to the right one if lucky enough
-        mc.max_orb_stepsize = .3
-        mc.max_cycle_micro = 4
-        mc.conv_tol = 1e-8
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -230.70807850232282, 6)
-
-    def test_mc1step_9o8e_a(self):
-        mc = mcscf.CASSCF(mf, 9, 8)
+        mc = mcscf.density_fit(mcscf.CASSCF(mf, 9, 8))
         mc.conv_tol = 1e-8
         mo = mf.mo_coeff.copy()
         mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]

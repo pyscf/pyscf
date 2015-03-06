@@ -4,5 +4,6 @@
 
 from pyscf.ao2mo import incore
 from pyscf.ao2mo import outcore
+from pyscf.ao2mo import r_outcore
 
 from pyscf.ao2mo.addons import load, restore

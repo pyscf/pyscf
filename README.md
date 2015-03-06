@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry
 
-version 0.10
+version 0.11
 
-2015-2-4
+2015-3-6
 
 Pyscf is a python module for quantum chemistry program.  The module
 aims to provide a simple, light-weight and efficient platform for

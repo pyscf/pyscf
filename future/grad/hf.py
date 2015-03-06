@@ -107,10 +107,12 @@ class RHF:
         self.chkfile = scf_method.chkfile
 
     def dump_flags(self):
-        log.info(self, '\n')
-        log.info(self, '******** Gradients flags ********')
-        log.info(self, 'mean field = %s', self._scf.__module__)
-        log.info(self, '\n')
+        pass
+#        log.info(self, '\n')
+#        log.info(self, '******** Gradients flags ********')
+#        if not self._scf.converged:
+#            log.warn(self, 'underneath SCF of gradients not converged')
+#        log.info(self, '\n')
 
     @pyscf.lib.omnimethod
     def get_hcore(self, mol=None):
@@ -135,7 +137,7 @@ class RHF:
 
     def _grad_rinv(self, mol, ia):
         ''' for given atom, <|\\nabla r^{-1}|> '''
-        mol.set_rinv_orig_(mol.atom_coord(ia))
+        mol.set_rinv_origin_(mol.atom_coord(ia))
         return mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
 
     def matblock_by_atom(self, mol, atm_id, mat):

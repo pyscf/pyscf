@@ -299,15 +299,19 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
     pw, pv = scipy.linalg.eigh(h0)
+# The degenerated wfn can break symmetry.  The davidson iteration with proper
+# initial guess doesn't have this issue
     if not fci.davidson_only:
         if len(addr) == 1:
             return pw, pv
         elif len(addr) == na*nb:
-            ci0 = numpy.empty((na*nb))
-            ci0[addr] = pv[:,0]
-            if abs(pw[0]-pw[1]) > 1e-12:
-# The degenerated wfn can break symmetry.  The davidson iteration with proper
-# initial guess doesn't have this issue
+            if fci.nroots > 1:
+                ci0 = numpy.empty((nroots,na*nb))
+                ci0[:,addr] = pv[:,:nroots].T
+                return pw[:nroots], ci0.reshape(nroots,na,nb)
+            elif abs(pw[0]-pw[1]) > 1e-12:
+                ci0 = numpy.empty((na*nb))
+                ci0[addr] = pv[:,0]
                 return pw[0], ci0.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
@@ -368,6 +372,7 @@ class FCISolver(object):
         # solution will ignore the initial guess.  Setting davidson_only can
         # enforce the solution on the initial guess state
         self.davidson_only = False
+        self.nroots = 1
 
         self._keys = set(self.__dict__.keys())
 
@@ -383,6 +388,8 @@ class FCISolver(object):
         log.info('level shift = %d', self.level_shift)
         log.info('max iter space = %d', self.max_space)
         log.info('max_memory %d MB', self.max_memory)
+        log.info('davidson only = %s', self.davidson_only)
+        log.info('nroots = %d', self.nroots)
 
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):

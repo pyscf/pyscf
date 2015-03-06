@@ -43,15 +43,11 @@ class AO2MOpt(object):
         libao2mo.CINTdel_optimizer(ctypes.byref(self._cintopt))
         libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
 
+
 # if vout is not None, transform AO to MO in-place
-def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
-           aosym='s1', mosym='s1', comp=1, ao2mopt=None, vout=None):
+def nr_e1fill_(intor, sh_range, atm, bas, env,
+               aosym='s1', comp=1, ao2mopt=None, vout=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
-    assert(mosym in ('s2', 's1'))
-    mo_coeff = numpy.asfortranarray(mo_coeff)
-    nao = mo_coeff.shape[0]
-    i0, icount, j0, jcount = shape
-    ij_count = icount * jcount
 
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
@@ -59,17 +55,119 @@ def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
-    ksh0, ksh1 = sh_range
-    ANG_OF = 1
-    NCTR_OF = 3
-    fdim = lambda i: (c_bas[i,ANG_OF]*2+1)*c_bas[i,NCTR_OF]
-    kstart = sum([fdim(ksh) for ksh in range(ksh0)])
-    kend = kstart + sum([fdim(ksh) for ksh in range(ksh0, ksh1)])
+    klsh0, klsh1, nkl = sh_range
 
-    if aosym in ('s4', 's2kl'):
-        klpair = kend*(kend+1)//2 - kstart*(kstart+1)//2
+    if vout is None:
+        libao2mo.CINTtot_cgto_spheric.restype = ctypes.c_int
+        nao = libao2mo.CINTtot_cgto_spheric(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
+        if aosym in ('s4', 's2ij'):
+            nao_pair = nao * (nao+1) // 2
+        else:
+            nao_pair = nao * nao
+        vout = numpy.empty((comp,nkl,nao_pair))
     else:
-        klpair = (kend-kstart) * nao
+        assert(vout.flags.c_contiguous)
+
+    if ao2mopt is not None:
+        cao2mopt = ao2mopt._this
+        cintopt = ao2mopt._cintopt
+        cintor = ao2mopt._intor
+    else:
+        cao2mopt = ctypes.c_void_p()
+        cintor = _fpointer(intor)
+        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
+
+    fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
+    fill = _fpointer('AO2MOfill_nr_' + aosym)
+    fdrv(cintor, fill,
+         vout.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
+         ctypes.c_int(nkl), ctypes.c_int(comp),
+         cintopt, cao2mopt,
+         c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+         c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+         c_env.ctypes.data_as(ctypes.c_void_p))
+
+    if ao2mopt is None:
+        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
+    return vout
+
+# Abandoned AO2MOnr_e1_drv, replaced by serial calling of
+# AO2MOnr_e1fill_drv and AO2MOnr_e2_drv
+#def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
+#           aosym='s1', mosym='s1', comp=1, ao2mopt=None, vout=None):
+#    assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
+#    assert(mosym in ('s2', 's1'))
+#    mo_coeff = numpy.asfortranarray(mo_coeff)
+#    nao = mo_coeff.shape[0]
+#    i0, icount, j0, jcount = shape
+#    ij_count = icount * jcount
+#
+#    c_atm = numpy.array(atm, dtype=numpy.int32)
+#    c_bas = numpy.array(bas, dtype=numpy.int32)
+#    c_env = numpy.array(env)
+#    natm = ctypes.c_int(c_atm.shape[0])
+#    nbas = ctypes.c_int(c_bas.shape[0])
+#
+#    klsh0, klsh1, nkl = sh_range
+#
+#    if aosym in ('s4', 's2ij'):
+#        if mosym == 's2':
+#            fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
+#            assert(icount == jcount)
+#            ij_count = icount * (icount+1) / 2
+#        elif icount <= jcount:
+#            fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
+#        else:
+#            fmmm = _fpointer('AO2MOmmm_nr_s2_igtj')
+#    else:
+#        if icount <= jcount:
+#            fmmm = _fpointer('AO2MOmmm_nr_s1_iltj')
+#        else:
+#            fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
+#
+#    if vout is None:
+#        vout = numpy.empty((comp,nkl,ij_count))
+#    else:
+#        assert(vout.flags.c_contiguous)
+#        assert(vout.size > comp*nkl*ij_count)
+#
+#    if ao2mopt is not None:
+#        cao2mopt = ao2mopt._this
+#        cintopt = ao2mopt._cintopt
+#        cintor = ao2mopt._intor
+#    else:
+#        cao2mopt = ctypes.c_void_p()
+#        cintor = _fpointer(intor)
+#        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
+#
+#    fdrv = getattr(libao2mo, 'AO2MOnr_e1_drv')
+#    fill = _fpointer('AO2MOfill_nr_' + aosym)
+#    ftrans = _fpointer('AO2MOtranse1_nr_' + aosym)
+#    fdrv(cintor, fill, ftrans, fmmm,
+#         vout.ctypes.data_as(ctypes.c_void_p),
+#         mo_coeff.ctypes.data_as(ctypes.c_void_p),
+#         ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
+#         ctypes.c_int(nkl),
+#         ctypes.c_int(i0), ctypes.c_int(icount),
+#         ctypes.c_int(j0), ctypes.c_int(jcount),
+#         ctypes.c_int(comp), cintopt, cao2mopt,
+#         c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+#         c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+#         c_env.ctypes.data_as(ctypes.c_void_p))
+#
+#    if ao2mopt is None:
+#        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
+#    return vout
+# if vout is not None, transform AO to MO in-place
+def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
+    assert(eri.flags.c_contiguous)
+    assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
+    assert(mosym in ('s2', 's1'))
+    mo_coeff = numpy.asfortranarray(mo_coeff)
+    nao = mo_coeff.shape[0]
+    i0, icount, j0, jcount = shape
+    ij_count = icount * jcount
 
     if aosym in ('s4', 's2ij'):
         if mosym == 's2':
@@ -86,40 +184,32 @@ def nr_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
         else:
             fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
+    nrow = eri.shape[0]
+
     if vout is None:
-        vout = numpy.empty((comp,klpair,ij_count))
+        vout = numpy.empty((nrow,ij_count))
     else:
         assert(vout.flags.c_contiguous)
-        assert(vout.size > comp*klpair*ij_count)
+        assert(vout.size >= nrow*ij_count)
 
-    if ao2mopt is not None:
-        cao2mopt = ao2mopt._this
-        cintopt = ao2mopt._cintopt
-        cintor = ao2mopt._intor
-    else:
-        cao2mopt = ctypes.c_void_p()
-        cintor = _fpointer(intor)
-        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
-
-    fdrv = getattr(libao2mo, 'AO2MOnr_e1_drv')
+    fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
+    pao_loc = ctypes.POINTER(ctypes.c_void_p)()
+    c_nbas = ctypes.c_int(0)
     ftrans = _fpointer('AO2MOtranse1_nr_' + aosym)
-    fdrv(cintor, ftrans, fmmm,
+    fdrv(ftrans, fmmm,
          vout.ctypes.data_as(ctypes.c_void_p),
+         eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
-         ctypes.c_int(ksh0), ctypes.c_int(ksh1-ksh0),
+         ctypes.c_int(nrow), ctypes.c_int(nao),
          ctypes.c_int(i0), ctypes.c_int(icount),
          ctypes.c_int(j0), ctypes.c_int(jcount),
-         ctypes.c_int(comp), cintopt, cao2mopt,
-         c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-         c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-         c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if ao2mopt is None:
-        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
+         pao_loc, c_nbas)
     return vout
 
 # if vout is not None, transform AO to MO in-place
-def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
+# ao_loc has nbas+1 elements, last element in ao_loc == nao
+def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None,
+           ao_loc=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
     assert(mosym in ('s2', 's1'))
@@ -128,7 +218,7 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
     k0, kc, l0, lc = shape
     kl_count = kc * lc
 
-    if aosym == 's4' or aosym == 's2kl':
+    if aosym in ('s4', 's2kl'):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(kc == lc)
@@ -146,29 +236,145 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
     nrow = eri.shape[0]
 
     if vout is None:
-        if aosym == 's4' or aosym == 's2kl':
-            klnaopair = nao*(nao+1)//2
-        else:
-            klnaopair = nao**2
-        if 0 and kl_count == klnaopair:
-# we can reuse memory, but switch it off because it's so easy to cause mistake
-            vout = eri
-        else:
-# memory cannot be reused unless nij == nao_pair, even nij < nao_pair.
-# When OMP is used, data is not accessed sequentially, the transformed
-# integrals can overwrite the AO integrals which are not used.
-            vout = numpy.empty((nrow,kl_count))
+        vout = numpy.empty((nrow,kl_count))
     else:
         assert(vout.flags.c_contiguous)
+        assert(vout.size >= nrow*kl_count)
+
+    if ao_loc is None:
+        pao_loc = ctypes.POINTER(ctypes.c_void_p)()
+        c_nbas = ctypes.c_int(0)
+        ftrans = _fpointer('AO2MOtranse2_nr_' + aosym)
+    else:
+        ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
+        c_nbas = ctypes.c_int(ao_loc.shape[0]-1)
+        pao_loc = ao_loc.ctypes.data_as(ctypes.c_void_p)
+        ftrans = _fpointer('AO2MOsortranse2_nr_' + aosym)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
-    ftrans = _fpointer('AO2MOtranse2_nr_' + aosym)
     fdrv(ftrans, fmmm,
          vout.ctypes.data_as(ctypes.c_void_p),
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
          ctypes.c_int(k0), ctypes.c_int(kc),
-         ctypes.c_int(l0), ctypes.c_int(lc))
+         ctypes.c_int(l0), ctypes.c_int(lc),
+         pao_loc, c_nbas)
     return vout
+
+
+# if vout is not None, transform AO to MO in-place
+def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
+          tao, aosym='s1', comp=1, ao2mopt=None, vout=None):
+    assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
+                     'a4kl', 'a4'))
+    mo_coeff = numpy.asfortranarray(mo_coeff)
+    nao = mo_coeff.shape[0]
+    i0, icount, j0, jcount = shape
+    ij_count = icount * jcount
+
+    c_atm = numpy.array(atm, dtype=numpy.int32)
+    c_bas = numpy.array(bas, dtype=numpy.int32)
+    c_env = numpy.array(env)
+    natm = ctypes.c_int(c_atm.shape[0])
+    nbas = ctypes.c_int(c_bas.shape[0])
+
+    klsh0, klsh1, nkl = sh_range
+
+    if icount <= jcount:
+        fmmm = _fpointer('AO2MOmmm_r_iltj')
+    else:
+        fmmm = _fpointer('AO2MOmmm_r_igtj')
+
+    if vout is None:
+        vout = numpy.empty((comp,nkl,ij_count), dtype=numpy.complex)
+    else:
+        assert(vout.flags.c_contiguous)
+        assert(numpy.iscomplexobj(vout))
+        assert(vout.size >= comp*nkl*ij_count)
+
+    if ao2mopt is not None:
+        cao2mopt = ao2mopt._this
+        cintopt = ao2mopt._cintopt
+        cintor = ao2mopt._intor
+    else:
+        cao2mopt = ctypes.c_void_p()
+        cintor = _fpointer(intor)
+        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
+
+    tao = numpy.asarray(tao, dtype=numpy.int32)
+
+    fdrv = getattr(libao2mo, 'AO2MOr_e1_drv')
+    fill = _fpointer('AO2MOfill_r_' + aosym)
+    ftrans = _fpointer('AO2MOtranse1_r_' + aosym)
+    fdrv(cintor, fill, ftrans, fmmm,
+         vout.ctypes.data_as(ctypes.c_void_p),
+         mo_coeff.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
+         ctypes.c_int(nkl),
+         ctypes.c_int(i0), ctypes.c_int(icount),
+         ctypes.c_int(j0), ctypes.c_int(jcount),
+         ctypes.c_int(comp), cintopt, cao2mopt,
+         tao.ctypes.data_as(ctypes.c_void_p),
+         c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+         c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+         c_env.ctypes.data_as(ctypes.c_void_p))
+
+    if ao2mopt is None:
+        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
+    return vout
+
+# if vout is not None, transform AO to MO in-place
+# ao_loc has nbas+1 elements, last element in ao_loc == nao
+def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', vout=None):
+    assert(eri.flags.c_contiguous)
+    assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
+                     'a4kl', 'a4'))
+    mo_coeff = numpy.asfortranarray(mo_coeff)
+    nao = mo_coeff.shape[0]
+    k0, kc, l0, lc = shape
+    kl_count = kc * lc
+
+    if kc <= lc:
+        fmmm = _fpointer('AO2MOmmm_r_iltj')
+    else:
+        fmmm = _fpointer('AO2MOmmm_r_igtj')
+
+    nrow = eri.shape[0]
+
+    if vout is None:
+        vout = numpy.empty((nrow,kl_count), dtype=numpy.complex)
+    else:
+        assert(vout.flags.c_contiguous)
+        assert(numpy.iscomplexobj(vout))
+        assert(vout.size >= nrow*kl_count)
+
+    tao = numpy.asarray(tao, dtype=numpy.int32)
+    ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
+    c_nbas = ctypes.c_int(ao_loc.shape[0]-1)
+    ftrans = _fpointer('AO2MOsortranse2_r_' + aosym)
+
+    fdrv = getattr(libao2mo, 'AO2MOr_e2_drv')
+    fdrv(ftrans, fmmm,
+         vout.ctypes.data_as(ctypes.c_void_p),
+         eri.ctypes.data_as(ctypes.c_void_p),
+         mo_coeff.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_int(nrow), ctypes.c_int(nao),
+         ctypes.c_int(k0), ctypes.c_int(kc),
+         ctypes.c_int(l0), ctypes.c_int(lc),
+         tao.ctypes.data_as(ctypes.c_void_p),
+         ao_loc.ctypes.data_as(ctypes.c_void_p), c_nbas)
+    return vout
+
+
+def _get_num_threads():
+    libao2mo.omp_get_num_threads.restype = ctypes.c_int
+    nthreads = libao2mo.omp_get_num_threads()
+    return nthreads
+
+# ij = i * (i+1) / 2 + j
+def _extract_pair(ij):
+    i = int(numpy.sqrt(2*ij+.25) - .5 + 1e-7)
+    j = ij - i*(i+1)//2
+    return i,j
 

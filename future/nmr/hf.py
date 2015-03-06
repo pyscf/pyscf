@@ -27,7 +27,7 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
 
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_orig_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
         if gauge_orig is None:
             h11 = mol.intor('cint1e_giao_a11part_sph', 9)
         else:
@@ -53,7 +53,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     para_vir = numpy.zeros((len(shielding_nuc),3,3))
     para_occ = numpy.zeros((len(shielding_nuc),3,3))
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_orig_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
         # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p>
         h01 = mol.intor_asymmetric('cint1e_ia01p_sph', 3)
         # *2 for doubly occupied orbitals

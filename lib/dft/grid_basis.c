@@ -19,7 +19,6 @@
 
 double CINTcommon_fac_sp(int l);
 double exp_cephes(double);
-double *CINTc2s_ket_sph(double *, int, double *, int);
 
 static int _len_cart[] = {
         1, 3, 6, 10, 15, 21, 28, 36

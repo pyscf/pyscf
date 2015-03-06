@@ -21,7 +21,7 @@ static void store_ij(double *eri, int ish, int jsh,
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         double *eribuf = (double *)malloc(sizeof(double)*di*dj*nao*nao);
         int i, j, i0, j0, kl;
-        unsigned long ij0;
+        size_t ij0;
         double *peri, *pbuf;
 
         CVHFfill_nr_s8(cint2e_sph, CVHFunpack_nrblock2tril, vhfopt->fprescreen,

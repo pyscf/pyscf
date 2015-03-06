@@ -10,10 +10,10 @@
 
 void AO2MOrestore_nr8to1(double *eri8, double *eri1, int norb)
 {
-        unsigned long npair = norb*(norb+1)/2;
-        unsigned long i, j, ij;
-        unsigned long d2 = norb * norb;
-        unsigned long d3 = norb * norb * norb;
+        size_t npair = norb*(norb+1)/2;
+        size_t i, j, ij;
+        size_t d2 = norb * norb;
+        size_t d3 = norb * norb * norb;
         double *buf = malloc(sizeof(double)*npair);
 
         for (ij = 0, i = 0; i < norb; i++) {
@@ -30,10 +30,10 @@ void AO2MOrestore_nr8to1(double *eri8, double *eri1, int norb)
 
 void AO2MOrestore_nr4to1(double *eri4, double *eri1, int norb)
 {
-        unsigned long npair = norb*(norb+1)/2;
-        unsigned long i, j, ij;
-        unsigned long d2 = norb * norb;
-        unsigned long d3 = norb * norb * norb;
+        size_t npair = norb*(norb+1)/2;
+        size_t i, j, ij;
+        size_t d2 = norb * norb;
+        size_t d3 = norb * norb * norb;
 
         for (ij = 0, i = 0; i < norb; i++) {
         for (j = 0; j <= i; j++, ij++) {
@@ -47,11 +47,11 @@ void AO2MOrestore_nr4to1(double *eri4, double *eri1, int norb)
 
 void AO2MOrestore_nr1to4(double *eri1, double *eri4, int norb)
 {
-        unsigned long npair = norb*(norb+1)/2;
-        unsigned long i, j, k, l, ij, kl;
-        unsigned long d1 = norb;
-        unsigned long d2 = norb * norb;
-        unsigned long d3 = norb * norb * norb;
+        size_t npair = norb*(norb+1)/2;
+        size_t i, j, k, l, ij, kl;
+        size_t d1 = norb;
+        size_t d2 = norb * norb;
+        size_t d3 = norb * norb * norb;
 
         for (ij = 0, i = 0; i < norb; i++) {
         for (j = 0; j <= i; j++, ij++) {
@@ -64,10 +64,10 @@ void AO2MOrestore_nr1to4(double *eri1, double *eri4, int norb)
 
 void AO2MOrestore_nr1to8(double *eri1, double *eri8, int norb)
 {
-        unsigned long i, j, k, l, ij, kl, ijkl;
-        unsigned long d1 = norb;
-        unsigned long d2 = norb * norb;
-        unsigned long d3 = norb * norb * norb;
+        size_t i, j, k, l, ij, kl, ijkl;
+        size_t d1 = norb;
+        size_t d2 = norb * norb;
+        size_t d3 = norb * norb * norb;
 
         ijkl = 0;
         for (ij = 0, i = 0; i < norb; i++) {

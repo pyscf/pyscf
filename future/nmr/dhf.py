@@ -28,7 +28,7 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     n2c = n4c // 2
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_orig_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
         if mb.upper() == 'RMB':
             if gauge_orig is None:
                 t11 = mol.intor('cint1e_giao_sa10sa01', 9)
@@ -59,7 +59,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     para_occ = numpy.zeros((len(shielding_nuc),3,3))
     h01 = numpy.zeros((3, n4c, n4c), complex)
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_orig_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
         t01 = mol.intor('cint1e_sa01sp', 3)
         for m in range(3):
             h01[m,:n2c,n2c:] = .5 * t01[m]

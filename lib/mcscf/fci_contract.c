@@ -3,6 +3,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <math.h>
 //#include <omp.h>
@@ -85,7 +86,7 @@ static double prog_a_t1(double *ci0, double *t1,
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 pt1 = t1 + ia;
-                pci = ci0 + str1*(unsigned long)nstrb;
+                pci = ci0 + str1*(uint64_t)nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] += pci[k];
@@ -114,7 +115,7 @@ static double prog_b_t1(double *ci0, double *t1,
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*(unsigned long)nstrb;
+        double *pci = ci0 + stra_id*(uint64_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -144,7 +145,7 @@ static double prog0_b_t1(double *ci0, double *t1,
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*(unsigned long)nstrb;
+        double *pci = ci0 + stra_id*(uint64_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -181,7 +182,7 @@ static void spread_a_t1(double *ci1, double *t1,
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 cp0 = t1 + ia;
-                cp1 = ci1 + str1*(unsigned long)nstrb;
+                cp1 = ci1 + str1*(uint64_t)nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 cp1[k] += cp0[k*nnorb];
@@ -201,7 +202,7 @@ static void spread_b_t1(double *ci1, double *t1,
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci1 + stra_id * (unsigned long)nstrb;
+        double *pci = ci1 + stra_id * (uint64_t)nstrb;
 
         for (str0 = 0; str0 < bcount; str0++) {
                 for (j = 0; j < nlinkb; j++) {
@@ -235,8 +236,8 @@ void FCIcontract_a_1e(double *f1e_tril, double *ci0, double *ci1,
                         ia   = EXTRACT_IA  (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
-                        pci0 = ci0 + str0 * (unsigned long)nstrb;
-                        pci1 = ci1 + str1 * (unsigned long)nstrb;
+                        pci0 = ci0 + str0 * (uint64_t)nstrb;
+                        pci1 = ci1 + str1 * (uint64_t)nstrb;
                         tmp = sign * f1e_tril[ia];
                         for (k = 0; k < nstrb; k++) {
                                 pci1[k] += tmp * pci0[k];
@@ -261,10 +262,10 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
         compress_link(clink, link_indexb, nstrb, nlinkb);
 
         for (str0 = 0; str0 < nstra; str0++) {
-                pci1 = ci1 + str0 * (unsigned long)nstrb;
+                pci1 = ci1 + str0 * (uint64_t)nstrb;
                 for (k = 0; k < nstrb; k++) {
                         tab = clink + k * nlinkb;
-                        tmp = ci0[str0*(unsigned long)nstrb+k];
+                        tmp = ci0[str0*(uint64_t)nstrb+k];
                         for (j = 0; j < nlinkb; j++) {
                                 ia   = EXTRACT_IA  (tab[j]);
                                 str1 = EXTRACT_ADDR(tab[j]);
@@ -582,16 +583,42 @@ void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
 }
 
 
-int FCIpopcount_4(unsigned long x);
-int FCIparity(unsigned long string0, unsigned long string1);
+int FCIpopcount_4(uint64_t x);
+int FCIparity(uint64_t string0, uint64_t string1);
 //see http://en.wikipedia.org/wiki/Find_first_set
-static int first1(unsigned long r)
+static const int TABLE[] = {
+        -1, // 0 
+        0 , // 1 
+        1 , // 2 
+        1 , // 3 
+        2 , // 4 
+        2 , // 5 
+        2 , // 6 
+        2 , // 7 
+        3 , // 8 
+        3 , // 9 
+        3 , // 10
+        3 , // 11
+        3 , // 12
+        3 , // 13
+        3 , // 14
+        3 , // 15
+};
+// be carefull with (r >> 64), which is not defined in C99 standard
+static int first1(uint64_t r)
 {
-        int n = 1;
-        while (r >> n) {
-            n++;
+        assert(r > 0);
+
+        uint64_t n = 0;
+        while (r != 0) {
+                if (r & 0xf) {
+                        return n + TABLE[r & 0xf];
+                } else {
+                        r >>= 4;
+                        n += 4;
+                }
         }
-        return n-1;
+        return -1;
 }
 
 
@@ -604,17 +631,18 @@ static int first1(unsigned long r)
 
 void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                           double *g2e_aa, double *g2e_ab, double *g2e_bb,
-                          unsigned long *stra, unsigned long *strb,
+                          uint64_t *stra, uint64_t *strb,
                           int norb, int np)
 {
         int i, j, k, pi, pj, pk, pl;
         int n1da, n1db;
         int d2 = norb * norb;
         int d3 = norb * norb * norb;
-        unsigned long da, db, str1;
+        uint64_t da, db, str1;
         double tmp;
 
         for (i = 0; i < np; i++) {
+                assert(stra[i] > 0 && strb[i] >> 0);
         for (j = 0; j < i; j++) {
                 da = stra[i] ^ stra[j];
                 db = strb[i] ^ strb[j];
@@ -707,7 +735,7 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
 }
 
 void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
-                      unsigned long *stra, unsigned long *strb,
+                      uint64_t *stra, uint64_t *strb,
                       int norb, int np)
 {
         FCIpspace_h0tril_uhf(h0, h1e, h1e, g2e, g2e, g2e, stra, strb, norb, np);

@@ -113,7 +113,7 @@ class UHF(hf.RHF):
         n4c = n2c * 2
         c = mol.light_speed
         v = numpy.zeros((3,n4c,n4c), numpy.complex)
-        mol.set_rinv_orig_(mol.atom_coord(ia))
+        mol.set_rinv_origin_(mol.atom_coord(ia))
         vn = mol.atom_charge(ia) * mol.intor('cint1e_iprinv', comp=3)
         wn = mol.atom_charge(ia) * mol.intor('cint1e_ipsprinvsp', comp=3)
         v[:,:n2c,:n2c] = vn

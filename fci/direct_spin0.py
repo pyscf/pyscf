@@ -41,6 +41,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(norb), ctypes.c_int(na),
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
+# no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 # Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
@@ -70,6 +71,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(norb), ctypes.c_int(na),
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
+# no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 def absorb_h1e(*args, **kwargs):
@@ -149,22 +151,6 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown), __name__))
-
-    if ci0 is None:
-        if isinstance(nelec, int):
-            na = cistring.num_strings(norb, nelec//2)
-        else:
-            na = cistring.num_strings(norb, nelec[0])
-        ci0 = numpy.zeros(na*na)
-# For alpha/beta symmetrized contract_2e subroutine, it's necessary to
-# symmetrize the initial guess, otherwise got strange numerical noise after
-# couple of davidson iterations
-#        ci0[addr] = pv[:,1]
-#        ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na),True).ravel()*.5
-#TODO: optimize initial guess.  Using pspace vector as initial guess may have
-# spin problems.  The 'ground state' of psapce vector may have different spin
-# state to the true ground state.
-        ci0[0] = 1
     return kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
 
 # dm_pq = <|p^+ q|>
@@ -241,16 +227,27 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
     pw, pv = scipy.linalg.eigh(h0)
+# The degenerated wfn can break symmetry.  The davidson iteration with proper
+# initial guess doesn't have this issue
     if not fci.davidson_only:
         if len(addr) == 1:
             return pw, pv
         elif len(addr) == na*na:
-            ci0 = numpy.empty((na*na))
-            ci0[addr] = pv[:,0]
-            if abs(pw[0]-pw[1]) > 1e-12:
-# The degenerated wfn can break symmetry.  The davidson iteration with proper
-# initial guess doesn't have this issue
-                return pw[0], ci0.reshape(na,na)
+            if fci.nroots > 1:
+                ci0 = numpy.empty((nroots,na*na))
+                ci0[:,addr] = pv[:,:nroots].T
+                return pw[:nroots], ci0.reshape(nroots,na,na)
+            elif abs(pw[0]-pw[1]) > 1e-12:
+                ci0 = numpy.empty((na*na))
+                ci0[addr] = pv[:,0]
+                ci0 = ci0.reshape(na,na)
+                ci0 = pyscf.lib.transpose_sum(ci0, inplace=True) * .5
+                # direct diagonalization may lead to triplet ground state
+##TODO: optimize initial guess.  Using pspace vector as initial guess may have
+## spin problems.  The 'ground state' of psapce vector may have different spin
+## state to the true ground state.
+                if numpy.allclose(numpy.linalg.norm(ci0), 1):
+                    return pw[0], ci0.reshape(na,na)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -266,6 +263,9 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         #ci0[addr] = pv[:,0]
         ci0[0] = 1
     else:
+# symmetrize the initial guess, otherwise got strange numerical noise after
+# couple of davidson iterations
+#        ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na)).ravel()*.5
         ci0 = ci0.ravel()
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)

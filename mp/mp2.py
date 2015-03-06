@@ -6,7 +6,6 @@ import time
 import tempfile
 from functools import reduce
 import numpy
-import h5py
 
 from pyscf.lib import logger
 from pyscf import ao2mo

@@ -81,7 +81,7 @@ void NEVPTkern_dfec_dfae(double *gt2, double *eri, double *t2ket,
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
         int i, m, n;
-        unsigned long k;
+        size_t k;
         double *cp0, *cp1;
         double *t2t; // E^d_fE^a_e with ae transposed
 
@@ -121,7 +121,7 @@ void NEVPTkern_aedf_ecdf(double *gt2, double *eri, double *t2ket,
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
         int i, m, n;
-        unsigned long k;
+        size_t k;
         double *cp0, *cp1;
         double *t2t;
 
@@ -160,7 +160,7 @@ void NEVPTkern_cedf_aedf(double *gt2, double *eri, double *t2ket,
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        unsigned long k;
+        size_t k;
         int blen;
 
 #pragma omp parallel default(none) \
@@ -186,7 +186,7 @@ void NEVPTkern_dfea_dfec(double *gt2, double *eri, double *t2ket,
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        unsigned long k;
+        size_t k;
 
 #pragma omp parallel default(none) \
         shared(gt2, eri, t2ket, bcount, norb, na, nb) \
@@ -211,7 +211,7 @@ void NEVPTkern_sf(void (*contract_kernel)(),
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
         int i, j, k, l, ij;
-        unsigned long n;
+        size_t n;
         double *t1ket = malloc(sizeof(double) * nnorb * bcount);
         double *t2ket = malloc(sizeof(double) * n4 * bcount);
         double *gt2 = malloc(sizeof(double) * nnorb * bcount);
@@ -270,8 +270,8 @@ void NEVPTcontract(void (*kernel)(),
                    int norb, int na, int nb, int nlinka, int nlinkb,
                    int *link_indexa, int *link_indexb)
 {
-        const unsigned long nnorb = norb * norb;
-        const unsigned long n4 = nnorb * nnorb;
+        const size_t nnorb = norb * norb;
+        const size_t n4 = nnorb * nnorb;
         int i, j, k, ib, strk, bcount;
         double *pdm2 = malloc(sizeof(double) * n4);
         double *cp1, *cp0;

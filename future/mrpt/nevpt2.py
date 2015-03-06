@@ -735,7 +735,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     vhfcore, cvcv = _trans_cvcv_(mo, ncore, ncas, load_buf)
     return vhfcore, aapp, appa, apcv, cvcv
 
-def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=512, tmpdir=None,
+def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
     time0 = (time.clock(), time.time())
     mol = mc.mol
@@ -749,6 +749,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=512, tmpdir=None,
 
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo), swapfile.name,
+                                max_memory=max_memory, ioblk_size=ioblk_size,
                                 verbose=log, compact=False)
 
     fswap = h5py.File(swapfile.name, 'r')
@@ -769,17 +770,18 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=512, tmpdir=None,
         return buf
     time0 = pyscf.lib.logger.timer(mol, 'halfe1', *time0)
     time1 = [time.clock(), time.time()]
-    aapp, appa, apcv = _trans_aapp_(mo, ncore, ncas, load_buf)
+    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
+    aapp, appa, apcv = _trans_aapp_(mo, ncore, ncas, load_buf, ao_loc)
     time0 = pyscf.lib.logger.timer(mol, 'trans_aapp', *time0)
     cvcvfile = tempfile.NamedTemporaryFile()
     with h5py.File(cvcvfile.name) as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
-        vhfcore = _trans_cvcv_(mo, ncore, ncas, load_buf, cvcv)[0]
+        vhfcore = _trans_cvcv_(mo, ncore, ncas, load_buf, cvcv, ao_loc)[0]
     time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
     fswap.close()
     return vhfcore, aapp, appa, apcv, cvcvfile
 
-def _trans_aapp_(mo, ncore, ncas, fload):
+def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo.shape[1]
     nocc = ncore + ncas
     nvir = nmo - nocc
@@ -793,7 +795,8 @@ def _trans_aapp_(mo, ncore, ncas, fload):
     appa = numpy.empty((ncas,nmo,nmo,ncas))
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = _ao2mo.nr_e2_(fload(ncore+i), mo, klshape, aosym='s4',mosym='s2')
+        buf = _ao2mo.nr_e2_(fload(ncore+i), mo, klshape,
+                            aosym='s4', mosym='s2', ao_loc=ao_loc)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -802,7 +805,7 @@ def _trans_aapp_(mo, ncore, ncas, fload):
         apcv[i] = ppp[:,:ncore,nocc:]
     return aapp, appa, apcv
 
-def _trans_cvcv_(mo, ncore, ncas, fload, cvcv=None):
+def _trans_cvcv_(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
     nao, nmo = mo.shape
     nocc = ncore + ncas
     nvir = nmo - nocc
@@ -827,7 +830,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, cvcv=None):
 
         klshape = (0, ncore, nocc, nvir)
         _ao2mo.nr_e2_(buf[nocc:nmo], mo, klshape,
-                      aosym='s4', mosym='s1', vout=vcv)
+                      aosym='s4', mosym='s1', vout=vcv, ao_loc=ao_loc)
         cvcv[i*nvir:(i+1)*nvir] = vcv
     vj = reduce(numpy.dot, (mo.T, vj, mo))
     vk = numpy.dot(mo.T, vk)

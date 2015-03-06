@@ -4,7 +4,7 @@
 #
 
 '''
-XC functional
+XC functional, this is the interface to libxc
 '''
 
 import os

@@ -56,12 +56,12 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
         fill = _fpointer('RIfill_s1_auxe2')
         nao_pair = nao * nao
         buflen = min(max(int(ioblk_size*1e6/8/naoaux/comp), 1), nao_pair)
-        shranges = ao2mo.outcore.info_shell_ranges(mol, buflen, 's1')
+        shranges = _guess_shell_ranges(mol, buflen, 's1')
     else:
         fill = _fpointer('RIfill_s2ij_auxe2')
         nao_pair = nao * (nao+1) // 2
         buflen = min(max(int(ioblk_size*1e6/8/naoaux/comp), 1), nao_pair)
-        shranges = ao2mo.outcore.info_shell_ranges(mol, buflen, 's4')
+        shranges = _guess_shell_ranges(mol, buflen, 's4')
     log.debug('erifile %.8g MB, IO buf size %.8g MB',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     log.debug1('shranges = %s', shranges)
@@ -107,7 +107,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
 
 def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=None,
             int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
-            max_memory=1000, ioblk_size=256, verbose=0, compact=True):
+            max_memory=2000, ioblk_size=256, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -207,7 +207,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpd
 
 def half_e1(mol, mo_coeffs, swapfile, auxbasis='weigend',
             int3c='cint3c2e_sph', aosym='s2ij', comp=1,
-            max_memory=1000, ioblk_size=256, verbose=0, compact=True):
+            max_memory=2000, ioblk_size=256, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -258,7 +258,7 @@ def half_e1(mol, mo_coeffs, swapfile, auxbasis='weigend',
               naoaux*nao_pair*8/1e6, comp*iolen*buflen*8/1e6)
     log.debug('step1: (ij,L) shape (%d,%d) swap-block-shape (%d,%d), cache %.8g MB',
               nao_pair, naoaux, iolen, buflen, comp*buflen*nao_pair*8/1e6)
-    shranges = _info_shell_ranges(auxmol, buflen)
+    shranges = _guess_shell_ranges(auxmol, buflen, 's1')
     log.debug1('shranges = %s', shranges)
 
     atm, bas, env = \
@@ -308,7 +308,7 @@ def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
 
-def _info_shell_ranges(mol, buflen):
+def _guess_shell_ranges(mol, buflen, aosym):
     bas_dim = [(mol.bas_angular(i)*2+1)*(mol.bas_nctr(i)) \
                for i in range(mol.nbas)]
     ao_loc = [0]
@@ -319,15 +319,28 @@ def _info_shell_ranges(mol, buflen):
     ish_seg = [0] # record the starting shell id of each buffer
     bufrows = []
     ij_start = 0
-    for i in range(mol.nbas):
-        ij_end = ao_loc[i+1]
-        if ij_end - ij_start > buflen:
-            ish_seg.append(i) # put present shell to next segments
-            ijend = ao_loc[i]
-            bufrows.append(ijend-ij_start)
-            ij_start = ijend
-    ish_seg.append(mol.nbas)
-    bufrows.append(nao-ij_start)
+
+    if aosym in ('s4', 's2kl'):
+        for i in range(mol.nbas):
+            ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
+            if ij_end - ij_start > buflen:
+                ish_seg.append(i) # put present shell to next segments
+                ijend = ao_loc[i]*(ao_loc[i]+1)//2
+                bufrows.append(ijend-ij_start)
+                ij_start = ijend
+        nao_pair = nao*(nao+1) // 2
+        ish_seg.append(mol.nbas)
+        bufrows.append(nao_pair-ij_start)
+    else:
+        for i in range(mol.nbas):
+            ij_end = ao_loc[i+1]
+            if ij_end - ij_start > buflen:
+                ish_seg.append(i) # put present shell to next segments
+                ijend = ao_loc[i]
+                bufrows.append(ijend-ij_start)
+                ij_start = ijend
+        ish_seg.append(mol.nbas)
+        bufrows.append(nao-ij_start)
 
     # for each buffer, sh_ranges record (start, end, bufrow)
     sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))

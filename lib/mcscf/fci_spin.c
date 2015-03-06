@@ -34,7 +34,7 @@ static double ades_bcre_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 j     = ades_index[id*4+0];
                 str1  = ades_index[id*4+2];
                 signa = ades_index[id*4+3];
-                pci = ci0 + str1 * (unsigned long)nstrb;
+                pci = ci0 + str1 * (size_t)nstrb;
                 pt1 = t1 + j*norb;
                 for (k = 0; k < fillcnt; k++) {
                         tab = bcre_index + k * invir * 4;
@@ -76,7 +76,7 @@ static double acre_bdes_t1(double *ci0, double *t1, int fillcnt, int stra_id,
                 i     = acre_index[ic*4+0];
                 str1  = acre_index[ic*4+2];
                 signa = acre_index[ic*4+3];
-                pci = ci0 + str1 * (unsigned long)nstrb;
+                pci = ci0 + str1 * (size_t)nstrb;
                 pt1 = t1 + i;
                 tab = bdes_index;
                 for (str0 = 0; str0 < fillcnt; str0++) {

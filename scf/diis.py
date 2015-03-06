@@ -77,7 +77,7 @@ diis.min_space is the minimal number of vectors to store before damping'''
             #    H[i,i] = H[i,i] + 1e-9
             #c = numpy.linalg.solve(H, G)
             for i in range(1,nd):
-                H[i,i] = H[i,i] + 1e-11
+                H[i,i] = H[i,i] + 1e-10
             c = numpy.linalg.solve(H, G)
             #c = numpy.linalg.solve(H[:nd,:nd], G[:nd])
         log.debug1(self, 'diis-c %s', c)

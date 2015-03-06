@@ -602,7 +602,7 @@ void CVHFnrs8_incore_drv(double *eri, double *dmj, double *vj,
         const int npair = n*(n+1)/2;
         double *vj_priv, *vk_priv;
         int i, j;
-        unsigned long ij, off;
+        size_t ij, off;
 
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
@@ -642,7 +642,7 @@ void CVHFnrs4_incore_drv(double *eri, double *dmj, double *vj,
         const int npair = n*(n+1)/2;
         double *vj_priv, *vk_priv;
         int i, j;
-        unsigned long ij, off;
+        size_t ij, off;
 
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
@@ -682,7 +682,7 @@ void CVHFnrs2ij_incore_drv(double *eri, double *dmj, double *vj,
         const int npair = n*(n+1)/2;
         double *vj_priv, *vk_priv;
         int i, j;
-        unsigned long ij, off;
+        size_t ij, off;
 
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
@@ -722,7 +722,7 @@ void CVHFnrs2kl_incore_drv(double *eri, double *dmj, double *vj,
         const int npair = n*(n+1)/2;
         double *vj_priv, *vk_priv;
         int i, j;
-        unsigned long ij, off;
+        size_t ij, off;
 
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
@@ -761,7 +761,7 @@ void CVHFnrs1_incore_drv(double *eri, double *dmj, double *vj,
 {
         double *vj_priv, *vk_priv;
         int i, j;
-        unsigned long ij, off;
+        size_t ij, off;
 
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);

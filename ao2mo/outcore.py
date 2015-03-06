@@ -12,12 +12,14 @@ import pyscf.lib
 import pyscf.lib.logger as logger
 from pyscf.ao2mo import _ao2mo
 
-# default max_memory (MB) is 1000 MB, large cache may NOT improve performance
 # default ioblk_size is 256 MB
+
+IOBUF_WORDS_PREFER = 1e8
+IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
          intor='cint2e_sph', aosym='s4', comp=1,
-         max_memory=1000, ioblk_size=256, verbose=logger.WARN, compact=True):
+         max_memory=2000, ioblk_size=256, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
     Args:
@@ -105,7 +107,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             intor='cint2e_sph', aosym='s4', comp=1,
-            max_memory=1000, ioblk_size=256, verbose=logger.WARN, compact=True):
+            max_memory=2000, ioblk_size=256, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
 
@@ -217,7 +219,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     nao = mo_coeffs[0].shape[0]
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
-        nao_pair = nao*(nao+1)//2
+        nao_pair = nao * (nao+1) // 2
     else:
         nao_pair = nao * nao
 
@@ -249,9 +251,13 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         feri = h5py.File(erifile, 'w')
     if comp == 1:
-        h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair), 'f8')
+        chunks = (nmoj,nmol)
+        h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
+                                      'f8', chunks=chunks)
     else:
-        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair), 'f8')
+        chunks = (1,nmoj,nmol)
+        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
+                                      'f8', chunks=chunks)
 
     if nij_pair == 0 or nkl_pair == 0:
         feri.close()
@@ -266,15 +272,22 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
-    e2buflen = min(int(max_memory*1e6/8)//nao_pair,
-                   int(ioblk_size*1e6/8)//nkl_pair, nij_pair)
-    log.debug('step2: kl-pair (ao %d, mo %d), mem cache %.8g MB, ioblock %.8g MB', \
-              nao_pair, nkl_pair,
-              e2buflen*nao_pair*8/1e6, e2buflen*nkl_pair*8/1e6)
+    e1buflen = guess_e1bufsize(max_memory, ioblk_size,
+                               nij_pair, nao_pair, comp)[0]
+    mem_words = max_memory * 1e6 / 8
+    iobuf_size = min(float(nkl_pair)/(nkl_pair+nao_pair)*mem_words,
+                     IOBUF_WORDS_PREFER) * 8
+    e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
+
+    log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, '
+              'ioblock (r/w) %.8g/%.8g MB', \
+              nao_pair, nkl_pair, e2buflen*nao_pair*8/1e6,
+              e2buflen*nij_pair*8/1e6, e2buflen*nkl_pair*8/1e6)
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/e2buflen)) * comp
+    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     ti0 = time_1pass
     buf = numpy.empty((e2buflen, nao_pair))
     istep = 0
@@ -295,7 +308,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
                 col0 = col1
             ti2 = log.timer('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
             tioi += ti2[1]-ti0[1]
-            pbuf = _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym)
+            pbuf = _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym,
+                                 ao_loc=ao_loc)
 
             tw1 = time.time()
             if comp == 1:
@@ -319,9 +333,9 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
             intor='cint2e_sph', aosym='s4', comp=1,
-            max_memory=1000, ioblk_size=256, verbose=logger.WARN, compact=True,
+            max_memory=2000, ioblk_size=256, verbose=logger.WARN, compact=True,
             ao2mopt=None):
-    r'''Half transfer arbitrary spherical AO integrals to MO integrals
+    r'''Half transform arbitrary spherical AO integrals to MO integrals
     for the given two sets of orbitals
 
     Args:
@@ -384,8 +398,8 @@ def half_e1(mol, mo_coeffs, swapfile,
     nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
     aosym = _stand_sym_code(aosym)
-    if aosym in ('s4', 's2kl'):
-        nao_pair = nao*(nao+1)//2
+    if aosym in ('s4', 's2ij'):
+        nao_pair = nao * (nao+1) // 2
     else:
         nao_pair = nao * nao
 
@@ -402,10 +416,11 @@ def half_e1(mol, mo_coeffs, swapfile,
                            order='F', copy=False)
         ijshape = (0, nmoi, nmoi, nmoj)
 
-    e1buflen, e2buflen = \
-            info_swap_block(max_memory, ioblk_size, nij_pair, nao_pair, comp)
-    shranges = info_shell_ranges(mol, e1buflen, aosym)
-    e1buflen = max([x[2] for x in shranges])
+    e1buflen, mem_words, iobuf_words, ioblk_words = \
+            guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
+# The buffer to hold AO integrals in C code, see line (@)
+    aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
+    shranges = guess_shell_ranges(mol, e1buflen, aobuflen, aosym)
     if ao2mopt is None:
         if intor == 'cint2e_sph':
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
@@ -414,33 +429,42 @@ def half_e1(mol, mo_coeffs, swapfile,
             ao2mopt = _ao2mo.AO2MOpt(mol, intor)
 
     log.debug('step1: tmpfile %.8g MB', nij_pair*nao_pair*8/1e6)
-    log.debug('step1: (ij,kl) shape (%d,%d), swap-block-shape (%d,%d), mem cache %.8g MB', \
-              nij_pair, nao_pair, e2buflen, e1buflen,
-              comp*e1buflen*nij_pair*8/1e6)
-    log.debug1('shranges = %s', shranges)
+    log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
+              nij_pair, nao_pair, mem_words*8/1e6, iobuf_words*8/1e6)
 
     fswap = h5py.File(swapfile, 'w')
     for icomp in range(comp):
-        fswap.create_group(str(icomp)) # for h5py old version
+        g = fswap.create_group(str(icomp)) # for h5py old version
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
+    nstep = len(shranges)
     for istep,sh_range in enumerate(shranges):
         log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
-                  istep+1, len(shranges), *sh_range)
-        buf = _ao2mo.nr_e1_(intor, moij, ijshape, sh_range[:2],
-                            mol._atm, mol._bas, mol._env,
-                            aosym, ijmosym, comp, ao2mopt)
-        ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,len(shranges)),
-                        *ti0)
+                  istep+1, nstep, *(sh_range[:3]))
+        buflen = sh_range[2]
+        iobuf = numpy.empty((comp,buflen,nij_pair))
+        nmic = len(sh_range[3])
+        p0 = 0
+        for imic, aoshs in enumerate(sh_range[3]):
+            log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
+                       imic+1, nmic, *aoshs)
+            buf = numpy.empty((comp*aoshs[2],nao*nao)) # (@)
+            _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
+                              aosym, comp, ao2mopt, buf)
+            buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
+            iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
+            p0 += aoshs[2]
+        ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
+
+        e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
         for icomp in range(comp):
             dset = fswap.create_dataset('%d/%d'%(icomp,istep),
-                                        (nij_pair,buf.shape[1]), 'f8')
+                                        (nij_pair,iobuf.shape[1]), 'f8',
+                                        chunks=None)
             for col0, col1 in prange(0, nij_pair, e2buflen):
-                dset[col0:col1] = pyscf.lib.transpose(buf[icomp,:,col0:col1])
+                dset[col0:col1] = pyscf.lib.transpose(iobuf[icomp,:,col0:col1])
         ti0 = log.timer('transposing to disk', *ti2)
-        # release the memory of buf before allocating temporary data
-        buf = None
     fswap.close()
     return swapfile
 
@@ -533,9 +557,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
     feri = h5py.File(erifile.name, 'r')
-    eri = numpy.array(feri['eri_mo'])
-    feri.close()
-    return eri
+    return numpy.array(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
                    verbose=logger.WARN, compact=True):
@@ -619,9 +641,7 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
     feri = h5py.File(erifile.name, 'r')
-    eri = numpy.array(feri['eri_mo'])
-    feri.close()
-    return eri
+    return numpy.array(feri['eri_mo'])
 
 
 def iden_coeffs(mo1, mo2):
@@ -632,58 +652,89 @@ def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
 
-# decide the number of blocks needed for swap file
-def info_swap_block(max_memory, ioblk_size, nij_pair, nao_pair, comp):
-    mem_words = int(max_memory * 1e6 / 8)
-    ioblk_words = int(ioblk_size * 1e6 / 8)
-    ioblk_words = min(ioblk_words, mem_words)
+def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
+    mem_words = max_memory * 1e6 / 8
+# part of the max_memory is used to hold the AO integrals.  The iobuf is the
+# buffer to temporary hold the transformed integrals before streaming to disk.
+# iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
+    if mem_words > 2e8:
+        iobuf_words = int(IOBUF_WORDS_PREFER) # 1.2GB
+    else:
+        iobuf_words = int(mem_words // 2)
+    ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
-    # decided the buffer row and column sizes
-    e1buflen = min(mem_words//(comp*nij_pair), nao_pair)
-    e2buflen = min(mem_words//nao_pair, nij_pair)
-    if e1buflen*e2buflen > 1.1*ioblk_words:
-        e2buflen = int(ioblk_words//e1buflen + 1)
-    return e1buflen, e2buflen
+    e1buflen = int(min(iobuf_words//(comp*nij_pair), nao_pair))
+    return e1buflen, mem_words, iobuf_words, ioblk_words
+
+def guess_e2bufsize(ioblk_size, nrows, ncols):
+    e2buflen = int(min(ioblk_size*1e6/8/ncols, nrows))
+    e2buflen = max(e2buflen//IOBUF_ROW_MIN, 1) * IOBUF_ROW_MIN
+    chunks = (IOBUF_ROW_MIN, ncols)
+    return e2buflen, chunks
 
 # based on the size of buffer, dynamic range of AO-shells for each buffer
-def info_shell_ranges(mol, buflen, aosym):
-    bas_dim = [(mol.bas_angular(i)*2+1)*(mol.bas_nctr(i)) \
-               for i in range(mol.nbas)]
-    ao_loc = [0]
-    for i in bas_dim:
-        ao_loc.append(ao_loc[-1]+i)
-    nao = ao_loc[-1]
+def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
+    ao_loc = mol.ao_loc_nr()
 
-    ish_seg = [0] # record the starting shell id of each buffer
-    bufrows = []
-    ij_start = 0
+    accum = []
+
     if aosym in ('s4', 's2kl'):
         for i in range(mol.nbas):
-            ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
-            if ij_end - ij_start > buflen:
-                ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i]*(ao_loc[i]+1)//2
-                bufrows.append(ijend-ij_start)
-                ij_start = ijend
-        nao_pair = nao*(nao+1) // 2
-        ish_seg.append(mol.nbas)
-        bufrows.append(nao_pair-ij_start)
+            di = ao_loc[i+1] - ao_loc[i]
+            for j in range(i):
+                dj = ao_loc[j+1] - ao_loc[j]
+                accum.append(di*dj)
+            accum.append(di*(di+1)//2)
     else:
         for i in range(mol.nbas):
-            ij_end = ao_loc[i+1] * nao
-            if ij_end - ij_start > buflen:
-                ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i] * nao
-                bufrows.append(ijend-ij_start)
-                ij_start = ijend
-        nao_pair = nao * nao
-        ish_seg.append(mol.nbas)
-        bufrows.append(nao_pair-ij_start)
-    assert(sum(bufrows) == nao_pair)
+            di = ao_loc[i+1] - ao_loc[i]
+            for j in range(mol.nbas):
+                dj = ao_loc[j+1] - ao_loc[j]
+                accum.append(di*dj)
 
-    # for each buffer, sh_ranges record (start, end, bufrow)
-    sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
-    return sh_ranges
+    ijsh_range = []
+    buflen = 0
+    ij_start = 0
+    for ij, dij in enumerate(accum):
+        buflen += dij
+        if buflen > max_iobuf:
+# to fill each iobuf, AO integrals may need to be fill to aobuf several times
+            if max_aobuf < buflen-dij:
+                ijdiv = []
+                n0 = ij_start
+                aobuf = 0
+                for n in range(ij_start, ij):
+                    aobuf += accum[n]
+                    if aobuf > max_aobuf:
+                        ijdiv.append((n0, n, aobuf-accum[n]))
+                        n0 = n
+                        aobuf = accum[n]
+                ijdiv.append((n0, ij, aobuf))
+            else:
+                ijdiv = [(ij_start, ij, buflen-dij)]
+
+            ijsh_range.append((ij_start, ij, buflen-dij, ijdiv))
+
+            ij_start = ij
+            buflen = dij
+
+    ij = len(accum)
+
+    if max_aobuf < buflen:
+        ijdiv = []
+        n0 = ij_start
+        aobuf = 0
+        for n in range(ij_start, ij):
+            aobuf += accum[n]
+            if aobuf > max_aobuf:
+                ijdiv.append((n0, n, aobuf-accum[n]))
+                n0 = n
+                aobuf = accum[n]
+        ijdiv.append((n0, ij, aobuf))
+    else:
+        ijdiv = [(ij_start, ij, buflen)]
+    ijsh_range.append((ij_start, ij, buflen, ijdiv))
+    return ijsh_range
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):
@@ -693,9 +744,13 @@ def _stand_sym_code(sym):
     else:
         return 's' + sym
 
+
 if __name__ == '__main__':
-    import scf
-    import gto
+    import time
+    from pyscf import scf
+    from pyscf import gto
+    from pyscf.ao2mo import incore
+    from pyscf.ao2mo import addons
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_outcore'
@@ -713,11 +768,9 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf()
 
-    import time
     print(time.clock())
     full(mol, rhf.mo_coeff, 'h2oeri.h5', max_memory=10, ioblk_size=5)
     print(time.clock())
-    import incore
     eri0 = incore.full(rhf._eri, rhf.mo_coeff)
     feri = h5py.File('h2oeri.h5', 'r')
     print('full', abs(eri0-feri['eri_mo']).sum())
@@ -737,6 +790,5 @@ if __name__ == '__main__':
     general(mol, (c,c,c,c), 'h2oeri.h5', max_memory=10, ioblk_size=5, compact=False)
     feri = h5py.File('h2oeri.h5', 'r')
     eri1 = numpy.array(feri['eri_mo']).reshape(n,n,n,n)
-    import addons
     eri1 = addons.restore(4, eri1, n)
     print('general', abs(eri0-eri1).sum())

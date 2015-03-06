@@ -8,6 +8,7 @@ import numpy
 import h5py
 import pyscf.lib
 import pyscf.lib.numpy_helper
+from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.mcscf import mc_ao2mo
@@ -55,13 +56,14 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
             Iapcv, IAPCV, apCV, APcv, Icvcv, ICVCV, cvCV
 
 
-def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
-                     verbose=0):
+def trans_e1_outcore(mol, mo, ncore, ncas,
+                     max_memory=None, ioblk_size=512, tmpdir=None,
+                     verbose=logger.WARN):
     time0 = (time.clock(), time.time())
-    mol = casscf.mol
-    log = pyscf.lib.logger.Logger(casscf.stdout, verbose)
-    ncore = casscf.ncore
-    ncas = casscf.ncas
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     nao, nmo = mo[0].shape
     nao_pair = nao*(nao+1)//2
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
@@ -73,9 +75,8 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
-                                              *tuple(time1))
+        if log.verbose >= logger.DEBUG1:
+            time1[:] = log.timer('between load_buf', *tuple(time1))
         buf = numpy.empty((nmo,nao_pair))
         col0 = 0
         for ic in range(klaoblks):
@@ -83,17 +84,20 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             col1 = col0 + dat.shape[1]
             buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
+        if log.verbose >= logger.DEBUG1:
+            time1[:] = log.timer('load_buf', *tuple(time1))
         return buf
-    time0 = pyscf.lib.logger.timer(mol, 'halfe1-beta', *time0)
+    time0 = log.timer('halfe1-beta', *time0)
     time1 = [time.clock(), time.time()]
+    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
-            _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)
-    time0 = pyscf.lib.logger.timer(mol, 'trans_AAPP', *time0)
+            _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf,
+                         ao_loc)
+    time0 = log.timer('trans_AAPP', *time0)
     jC_PP, jC_pp, kC_PP, ICVCV = \
-            _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)[:4]
-    time0 = pyscf.lib.logger.timer(mol, 'trans_CVCV', *time0)
+            _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf,
+                         ao_loc)[:4]
+    time0 = log.timer('trans_CVCV', *time0)
     tmp = None
     fswap.close()
 
@@ -106,9 +110,8 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_buf(bfn_id):
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
-                                              *tuple(time1))
+        if log.verbose >= logger.DEBUG1:
+            time1[:] = log.timer('between load_buf', *tuple(time1))
         buf = numpy.empty((nmo,nao_pair))
         col0 = 0
         for ic in range(klaoblks):
@@ -116,17 +119,17 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             col1 = col0 + dat.shape[1]
             buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
             col0 = col1
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
+        if log.verbose >= logger.DEBUG1:
+            time1[:] = log.timer('load_buf', *tuple(time1))
         return buf
-    time0 = pyscf.lib.logger.timer(mol, 'halfe1-alpha', *time0)
+    time0 = log.timer('halfe1-alpha', *time0)
     time1 = [time.clock(), time.time()]
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
-            _trans_aapp_(mo, ncore, ncas, load_buf)
-    time0 = pyscf.lib.logger.timer(mol, 'trans_aapp', *time0)
+            _trans_aapp_(mo, ncore, ncas, load_buf, ao_loc)
+    time0 = log.timer('trans_aapp', *time0)
     jc_pp, jc_PP, kc_pp, Icvcv, cvCV = \
-            _trans_cvcv_(mo, ncore, ncas, load_buf)
-    time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
+            _trans_cvcv_(mo, ncore, ncas, load_buf, ao_loc)
+    time0 = log.timer('trans_cvcv', *time0)
     fswap.close()
 
     jkcpp = jc_pp - kc_pp
@@ -136,7 +139,7 @@ def trans_e1_outcore(casscf, mo, max_memory=None, ioblk_size=512, tmpdir=None,
             Iapcv, IAPCV, apCV, APcv, Icvcv, ICVCV, cvCV
 
 
-def _trans_aapp_(mo, ncore, ncas, fload):
+def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
     c_nmo = ctypes.c_int(nmo)
@@ -153,7 +156,7 @@ def _trans_aapp_(mo, ncore, ncas, fload):
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
         buf = _ao2mo.nr_e2_(fload(ncore[0]+i), mo[0], klshape,
-                            aosym='s4', mosym='s2')
+                            aosym='s4', mosym='s2', ao_loc=ao_loc)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -165,7 +168,7 @@ def _trans_aapp_(mo, ncore, ncas, fload):
                  - ppp[ncore[0]:,:ncore[0],:].transpose(2,1,0)
 
         buf = _ao2mo.nr_e2_(fload(ncore[0]+i), mo[1], klshape,
-                            aosym='s4', mosym='s2')
+                            aosym='s4', mosym='s2', ao_loc=ao_loc)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -175,7 +178,7 @@ def _trans_aapp_(mo, ncore, ncas, fload):
 
     return aapp, aaPP, appa, apPA, japcv, apCV
 
-def _trans_cvcv_(mo, ncore, ncas, fload):
+def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
     c_nmo = ctypes.c_int(nmo)
@@ -192,20 +195,22 @@ def _trans_cvcv_(mo, ncore, ncas, fload):
         buf = fload(i)
         klshape = (0, ncore[1], ncore[1], nmo-ncore[1])
         _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[1], klshape,
-                      aosym='s4', mosym='s1', vout=cvCV[i])
+                      aosym='s4', mosym='s1', vout=cvCV[i], ao_loc=ao_loc)
 
         klshape = (0, nmo, 0, nmo)
-        tmp = _ao2mo.nr_e2_(buf[i:i+1], mo[1], klshape, aosym='s4', mosym='s1')
+        tmp = _ao2mo.nr_e2_(buf[i:i+1], mo[1], klshape, aosym='s4',
+                            mosym='s1', ao_loc=ao_loc)
         jc_PP += tmp.reshape(nmo,nmo)
 
         klshape = (0, ncore[0], 0, nmo)
         _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[0], klshape,
-                      aosym='s4', mosym='s1', vout=vcp)
+                      aosym='s4', mosym='s1', vout=vcp, ao_loc=ao_loc)
         kc_pp[i,ncore[0]:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
         _ao2mo.nr_e2_(buf[:ncore[0]], mo[0], klshape,
-                      aosym='s4', mosym='s2', vout=buf[:ncore[0]])
+                      aosym='s4', mosym='s2', vout=buf[:ncore[0]],
+                      ao_loc=ao_loc)
         for j in range(ncore[0]):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
                     cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
@@ -233,13 +238,14 @@ class _ERIS(object):
         if method == 'outcore' \
            or _mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 > casscf.max_memory*.9 \
            or casscf._scf._eri is None:
+            log = logger.Logger(casscf.stdout, casscf.verbose)
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \
             self.appa, self.apPA, self.APPA, \
             self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
             self.Icvcv, self.ICVCV, self.cvCV = \
-                    trans_e1_outcore(casscf, mo, max_memory=casscf.max_memory,
-                                     verbose=casscf.verbose)
+                    trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
+                                     max_memory=casscf.max_memory, verbose=log)
         elif method == 'incore' and casscf._scf._eri is not None:
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \

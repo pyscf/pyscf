@@ -11,25 +11,9 @@
 #include "vhf/fblas.h"
 #include "vhf/nr_direct.h"
 #include "np_helper/np_helper.h"
+#include "ao2mo/r_ao2mo.h"
 
-
-struct _AO2MOEnvs {
-        int natm;
-        int nbas;
-        int *atm;
-        int *bas;
-        double *env;
-        int nao;
-        int ksh_start;
-        int ksh_count;
-        int bra_start;
-        int bra_count;
-        int ket_start;
-        int ket_count;
-        int ncomp;
-        int *ao_loc;
-        double complex *mo_coeff;
-};
+#define MAX(I,J)        ((I) > (J) ? (I) : (J))
 
 void zhemm_(const char*, const char*,
             const int*, const int*,

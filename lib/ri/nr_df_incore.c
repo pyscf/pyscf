@@ -10,26 +10,10 @@
 #include "vhf/fblas.h"
 #include "vhf/nr_direct.h"
 #include "np_helper/np_helper.h"
+#include "ao2mo/nr_ao2mo.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 
-struct _AO2MOEnvs {
-        int natm;
-        int nbas;
-        int *atm;
-        int *bas;
-        double *env;
-        int nao;
-        int ksh_start;
-        int ksh_count;
-        int bra_start;
-        int bra_count;
-        int ket_start;
-        int ket_count;
-        int ncomp;
-        int *ao_loc;
-        double *mo_coeff;
-};
 
 void RIfill_s1_auxe2(int (*intor)(), double *eri,
                      int ish, int jsh, int bastart, int auxstart, int auxcount,

@@ -907,6 +907,7 @@ class Mole(object):
 
         self.stdout = sys.stdout
         self.groupname = 'C1'
+        self.topgroup = 'C1'
         self.nelectron = 0
         self.symm_orb = None
         self.irrep_id = None
@@ -1229,7 +1230,7 @@ class Mole(object):
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
 
-    def set_rinv_orig_(self, coord):
+    def set_rinv_origin_(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
 
         Examples:

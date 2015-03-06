@@ -76,7 +76,7 @@ def density_fit_(mf, auxbasis='weigend'):
 
 
 OCCDROP = 1e-12
-BLOCKDIM = 160
+BLOCKDIM = 240
 def get_jk_(mf, mol, dms, hermi=1):
     from pyscf import df
     from pyscf.ao2mo import _ao2mo

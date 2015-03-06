@@ -298,7 +298,7 @@ def get_fock(casscf, fcivec=None, mo_coeff=None):
     else:
         if isinstance(casscf, mcscf.mc1step.CASSCF):
             eris = casscf.update_ao2mo(mo_coeff)
-        else:
+        else: # CASCI
             eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff)
         casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
         vj = numpy.einsum('ipq->pq', eris.jc_pp) * 2 \

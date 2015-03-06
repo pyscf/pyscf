@@ -235,7 +235,7 @@ static void make_rdm12_sf(double *rdm1, double *rdm2,
         const double D1 = 1;
         const int nnorb = norb * norb;
         int k, l;
-        unsigned long n;
+        size_t n;
         double *tbra = malloc(sizeof(double) * nnorb * bcount);
         double *pbra, *pt1;
 
@@ -269,7 +269,7 @@ static void make_rdm12_spin0(double *rdm1, double *rdm2,
         const double D1 = 1;
         const int nnorb = norb * norb;
         int k, l;
-        unsigned long n;
+        size_t n;
         double *tbra = malloc(sizeof(double) * nnorb * bcount);
         double *pbra, *pt1;
         double factor;
@@ -307,9 +307,9 @@ void FCI4pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        const unsigned long n6 = nnorb * nnorb * nnorb;
+        const size_t n6 = nnorb * nnorb * nnorb;
         int i, j, k, l, ij;
-        unsigned long n;
+        size_t n;
         double *tbra;
         double *t1bra = malloc(sizeof(double) * nnorb * bcount * 2);
         double *t2bra = malloc(sizeof(double) * n4 * bcount * 2);
@@ -388,9 +388,9 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        const unsigned long n6 = nnorb * nnorb * nnorb;
+        const size_t n6 = nnorb * nnorb * nnorb;
         int i, j, k, l, ij;
-        unsigned long n;
+        size_t n;
         double factor;
         double *tbra;
         double *t1bra = malloc(sizeof(double) * nnorb * fill1 * 2);
@@ -465,8 +465,8 @@ void FCIrdm4_drv(void (*kernel)(),
                  int norb, int na, int nb, int nlinka, int nlinkb,
                  int *link_indexa, int *link_indexb)
 {
-        const unsigned long nnorb = norb * norb;
-        const unsigned long n4 = nnorb * nnorb;
+        const size_t nnorb = norb * norb;
+        const size_t n4 = nnorb * nnorb;
         int ib, strk, bcount;
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
@@ -501,7 +501,7 @@ void FCI3pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3,
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
         int i, j, k, l, ij;
-        unsigned long n;
+        size_t n;
         double *tbra;
         double *t1bra = malloc(sizeof(double) * nnorb * bcount);
         double *t1ket = malloc(sizeof(double) * nnorb * bcount);
@@ -570,7 +570,7 @@ void FCI3pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3,
         const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
         int i, j, k, l, ij;
-        unsigned long n;
+        size_t n;
         double factor;
         double *tbra;
         double *t1bra = malloc(sizeof(double) * nnorb * fill1);
@@ -633,8 +633,8 @@ void FCIrdm3_drv(void (*kernel)(),
                  int norb, int na, int nb, int nlinka, int nlinkb,
                  int *link_indexa, int *link_indexb)
 {
-        const unsigned long nnorb = norb * norb;
-        const unsigned long n4 = nnorb * nnorb;
+        const size_t nnorb = norb * norb;
+        const size_t n4 = nnorb * nnorb;
         int ib, strk, bcount;
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
