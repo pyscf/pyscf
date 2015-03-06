@@ -5,4 +5,4 @@
 from pyscf.ao2mo import incore
 from pyscf.ao2mo import outcore
 
-from pyscf.ao2mo.addons import restore
+from pyscf.ao2mo.addons import load, restore

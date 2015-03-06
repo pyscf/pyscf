@@ -7,6 +7,11 @@
 #include "config.h"
 #include "cint.h"
 
+void cint2c2e_sph_optimizer(CINTOpt **cintopt, int *atm, int natm,
+                            int *bas, int nbas, double *env);
+int cint2c2e_sph(double *buf, int *shls, int *atm, int natm,
+                 int *bas, int nbas, double *env, CINTOpt *cintopt);
+
 void RInr_fill2c2e_sph(double *eri, int auxstart, int auxcount,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
