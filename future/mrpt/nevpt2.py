@@ -863,7 +863,7 @@ if __name__ == '__main__':
     ci_e = mc.kernel()[0]
     #mc.fcisolver.conv_tol = 1e-14
     mc.verbose = 4
-    print ci_e
+    print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
     print(sc_nevpt(mc), -0.16978532268234559)

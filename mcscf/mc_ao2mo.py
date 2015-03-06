@@ -5,6 +5,7 @@ import ctypes
 import _ctypes
 import time
 import tempfile
+from functools import reduce
 import numpy
 import h5py
 import pyscf.lib

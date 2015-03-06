@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"

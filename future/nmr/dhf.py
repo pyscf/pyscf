@@ -9,6 +9,7 @@ NMR shielding of Dirac Hartree-Fock
 
 import sys
 import time
+from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.lib import logger

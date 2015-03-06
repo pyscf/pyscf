@@ -131,6 +131,6 @@ def s2kl_s1(symmetry, eri, norb):
     return eri1
 
 if __name__ == '__main__':
-    print 'Full Tests for outcore'
+    print('Full Tests for outcore')
     unittest.main()
 

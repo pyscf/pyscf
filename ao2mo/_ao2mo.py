@@ -115,7 +115,7 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
 #        if mosym == 's2':
 #            fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
 #            assert(icount == jcount)
-#            ij_count = icount * (icount+1) / 2
+#            ij_count = icount * (icount+1) // 2
 #        elif icount <= jcount:
 #            fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
 #        else:
@@ -173,7 +173,7 @@ def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(icount == jcount)
-            ij_count = icount * (icount+1) / 2
+            ij_count = icount * (icount+1) // 2
         elif icount <= jcount:
             fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
         else:
@@ -222,7 +222,7 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None,
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(kc == lc)
-            kl_count = kc * (kc+1) / 2
+            kl_count = kc * (kc+1) // 2
         elif kc <= lc:
             fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
         else:

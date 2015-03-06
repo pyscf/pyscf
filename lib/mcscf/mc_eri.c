@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <assert.h>
 #include "vhf/fblas.h"
 
 struct _AO2MOEnvs {

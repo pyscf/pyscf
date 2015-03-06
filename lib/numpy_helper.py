@@ -306,4 +306,4 @@ if __name__ == '__main__':
     b = numpy.random.random((400,400))
     c = numpy.random.random((400,400))
     d = numpy.random.random((400,400))
-    print numpy.allclose(numpy.dot(a+b*1j, c+d*1j), zdot(a+b*1j, c+d*1j))
+    print(numpy.allclose(numpy.dot(a+b*1j, c+d*1j), zdot(a+b*1j, c+d*1j)))

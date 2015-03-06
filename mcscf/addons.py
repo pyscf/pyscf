@@ -301,12 +301,10 @@ def get_fock(casscf, fcivec=None, mo_coeff=None):
         else: # CASCI
             eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff)
         casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
-        vj = numpy.einsum('ipq->pq', eris.jc_pp) * 2 \
-           + numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
-        vk = numpy.einsum('ipq->pq', eris.kc_pp) * 2 \
-           + numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
+        vj = numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
+        vk = numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
         h1 = reduce(numpy.dot, (mo_coeff.T, casscf.get_hcore(), mo_coeff))
-        fock = h1 + vj - vk * .5
+        fock = h1 + eris.vhf_c + vj - vk * .5
     return fock
 
 def cas_natorb(casscf, fcivec=None, mo_coeff=None):

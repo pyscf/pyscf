@@ -578,7 +578,7 @@ if __name__ == "__main__":
 
     atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]]
     gpname, orig, axes = detect_symm(atom)
-    print gpname, orig, axes
+    print(gpname, orig, axes)
     #atom = shift_atom(atom, orig, axes)
     #print(gpname, symm_identical_atoms(gpname, atom))
 
@@ -590,6 +590,6 @@ if __name__ == "__main__":
             ['H', (0.,-1., 0.)],
             ['H', (0., 0.,-1.)]]
     gpname, orig, axes = detect_symm(atom)
-    print gpname, orig, axes
+    print(gpname, orig, axes)
     #atom = shift_atom(atom, orig, axes)
     #print(gpname, symm_identical_atoms(gpname, atom))

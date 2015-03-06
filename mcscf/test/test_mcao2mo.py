@@ -28,12 +28,25 @@ class KnowValues(unittest.TestCase):
 
         eris0 = mcscf.mc_ao2mo._ERIS(mc, mo, 'incore')
         eris1 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore')
-        self.assertTrue(numpy.allclose(eris0.jc_pp, eris1.jc_pp))
-        self.assertTrue(numpy.allclose(eris0.kc_pp, eris1.kc_pp))
+        eris2 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', approx=1)
+        eris3 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', approx=2)
+        self.assertTrue(numpy.allclose(eris0.vhf_c, eris1.vhf_c))
+        self.assertTrue(numpy.allclose(eris0.j_cp , eris1.j_cp ))
+        self.assertTrue(numpy.allclose(eris0.k_cp , eris1.k_cp ))
         self.assertTrue(numpy.allclose(eris0.aapp , eris1.aapp ))
         self.assertTrue(numpy.allclose(eris0.appa , eris1.appa ))
         self.assertTrue(numpy.allclose(eris0.Iapcv, eris1.Iapcv))
         self.assertTrue(numpy.allclose(eris0.Icvcv, eris1.Icvcv))
+
+        self.assertTrue(numpy.allclose(eris0.vhf_c, eris2.vhf_c))
+        self.assertTrue(numpy.allclose(eris0.j_cp , eris2.j_cp ))
+        self.assertTrue(numpy.allclose(eris0.k_cp , eris2.k_cp ))
+        self.assertTrue(numpy.allclose(eris0.aapp , eris2.aapp ))
+        self.assertTrue(numpy.allclose(eris0.appa , eris2.appa ))
+
+        self.assertTrue(numpy.allclose(eris0.vhf_c, eris3.vhf_c))
+        self.assertTrue(numpy.allclose(eris0.aapp , eris3.aapp ))
+        self.assertTrue(numpy.allclose(eris0.appa , eris3.appa ))
 
         ncore = mc.ncore
         ncas = mc.ncas
@@ -43,6 +56,9 @@ class KnowValues(unittest.TestCase):
         aaap = numpy.array(eri[ncore:nocc,ncore:nocc,ncore:nocc,:])
         jc_pp = numpy.einsum('iipq->ipq', eri[:ncore,:ncore,:,:])
         kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])
+        vhf_c = numpy.einsum('cij->ij', jc_pp)*2 - numpy.einsum('cij->ij', kc_pp)
+        j_cp = numpy.einsum('ijj->ij', jc_pp)
+        k_cp = numpy.einsum('ijj->ij', kc_pp)
         aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
         appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
         capv = eri[:ncore,ncore:nocc,:,ncore:]
@@ -58,8 +74,9 @@ class KnowValues(unittest.TestCase):
              - ccvv.transpose(0,3,1,2) \
              - cvcv.transpose(0,3,2,1)
 
-        self.assertTrue(numpy.allclose(jc_pp, eris0.jc_pp))
-        self.assertTrue(numpy.allclose(kc_pp, eris0.kc_pp))
+        self.assertTrue(numpy.allclose(vhf_c, eris0.vhf_c))
+        self.assertTrue(numpy.allclose(j_cp , eris0.j_cp ))
+        self.assertTrue(numpy.allclose(k_cp , eris0.k_cp ))
         self.assertTrue(numpy.allclose(aapp , eris0.aapp ))
         self.assertTrue(numpy.allclose(appa , eris0.appa ))
         self.assertTrue(numpy.allclose(cVAp.transpose(2,3,0,1), eris1.Iapcv))

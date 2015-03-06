@@ -27,7 +27,7 @@ class load:
         if isinstance(self.eri, str):
             self.feri = h5py.File(self.eri)
             return self.feri[self.dataname]
-        elif (isinstance(self.eri, file) or
+        elif (hasattr(self.eri, 'read') or #isinstance(self.eri, file) or
               isinstance(self.eri, tempfile._TemporaryFileWrapper)):
             self.feri = h5py.File(self.eri.name)
             return self.feri[self.dataname]

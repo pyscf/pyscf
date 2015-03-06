@@ -143,7 +143,7 @@ def format_atom(atoms, origin=0, axes=1):
                     rawsymb = _rm_digit(atom[0])
                     stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
                     symb = atom[0].replace(rawsymb, stdsymb)
-                if isinstance(atom[1], (int, long, float)):
+                if isinstance(atom[1], (int, float)):
                     c = numpy.array(atom[1:4]) - origin
                 else:
                     c = numpy.array(atom[1]) - origin
