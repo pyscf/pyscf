@@ -46,8 +46,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(mocc2), 2.59144951056707/numpy.sqrt(2), 7)
 
     def test_map2hf(self):
-        idx = mcscf.addons.map2hf(mcr)
-        idx0 = zip(*((range(mfr.mo_energy.size),)*2))
+        idx = numpy.array(mcscf.addons.map2hf(mcr))
+        idx0 = numpy.vstack((range(mfr.mo_energy.size),)*2).T
         self.assertTrue(numpy.allclose(idx, idx0))
 
     def test_get_fock(self):

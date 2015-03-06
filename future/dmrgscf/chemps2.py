@@ -88,7 +88,7 @@ class CheMPS2(object):
                             Ham.setVmat(i, k, j, l, eri[i,j,k,l])
         Ham.setEconst(0)
 
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             spin2 = 0
         else:
             spin2 = (nelec[0]-nelec[1]) * 2
@@ -135,7 +135,7 @@ class CheMPS2(object):
         return Energy, fakewfn_by_rdm2
 
     def make_rdm12(self, fakewfn_by_rdm2, ncas, nelec, **kwargs):
-        if not isinstance(nelec, int):
+        if not isinstance(nelec, (int, numpy.integer)):
             nelec = sum(nelec)
 # CheMPS2 uses physics notation
         rdm2 = fakewfn_by_rdm2.transpose(0,2,1,3)

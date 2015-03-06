@@ -166,7 +166,8 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
     precond = lambda x, e: x/(h_diag-(e-casscf.ah_level_shift))
     u = numpy.eye(nmo)
 
-    if isinstance(dx, int):
+    if isinstance(dx, (int, numpy.integer, numpy.number)):
+        dx = 0
         x0 = g_orb0
         g_orb = g_orb0
     else:

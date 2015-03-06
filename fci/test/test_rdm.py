@@ -82,7 +82,7 @@ class KnowValues(unittest.TestCase):
 # (10o,10e) ~ 4.8GB
 # t2(*,ij,kl) = E_i^j E_k^l|0>
 def _trans2(fcivec, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -102,7 +102,7 @@ def _trans2(fcivec, norb, nelec):
                 t2[k,str1,a,i] += sign * t1[k,str0]
     return t2
 def _trans1(fcivec, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec

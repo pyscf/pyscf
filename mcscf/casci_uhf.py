@@ -99,7 +99,7 @@ class CASCI(object):
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
         self.ncas = ncas
-        if isinstance(nelecas, int):
+        if isinstance(nelecas, (int, numpy.integer)):
             nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
             self.nelecas = (neleca, nelecb)

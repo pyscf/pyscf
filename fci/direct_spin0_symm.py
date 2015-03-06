@@ -44,7 +44,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec

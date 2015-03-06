@@ -3,6 +3,7 @@
 import os
 import ctypes
 import _ctypes
+from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.fci import cistring
@@ -51,7 +52,7 @@ def spin_square(ci, norb, nelec, mo_coeff=None, ovlp=1):
 # <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
 #                                       -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb})
 #               + (neleca+nelecb)/4
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
@@ -123,7 +124,7 @@ def local_spin(ci, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_baab(ci, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
@@ -157,7 +158,7 @@ def make_rdm2_baab(ci, norb, nelec):
 # dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def _make_rdm2_abba(ci, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec

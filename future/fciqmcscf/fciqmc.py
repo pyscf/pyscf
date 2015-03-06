@@ -89,7 +89,7 @@ class FCIQMCCI(object):
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             nelectrons = nelec
         else:
             nelectrons = nelec[0]+nelec[1]
@@ -121,7 +121,7 @@ class FCIQMCCI(object):
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
         if fciRestart is None:
             fciRestart = self.restart
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2 + nelec%2
             nelecb = nelec - neleca
         else :

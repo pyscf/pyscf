@@ -27,7 +27,7 @@ libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -70,7 +70,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -96,7 +96,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     return ci1
 
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -129,7 +129,7 @@ def make_hdiag(h1e, eri, norb, nelec):
     return numpy.array(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
-    if not isinstance(nelec, int):
+    if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
     eri = eri.copy()
     h2e = pyscf.ao2mo.restore(1, eri, norb).copy()
@@ -142,7 +142,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 
 # pspace Hamiltonian matrix, CPL, 169, 463
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -200,7 +200,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 # dm_pq = <|p^+ q|>
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -285,7 +285,7 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
 ###############################################################
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
         nelec = (neleca, nelecb)

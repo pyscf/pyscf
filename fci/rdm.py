@@ -29,7 +29,7 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
 
 # dm_pq = <|p^+ q|>
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec
@@ -54,7 +54,7 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec
@@ -75,7 +75,7 @@ def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 # nelec and link_index are tuples of (alpha,beta)
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -103,7 +103,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -136,7 +136,7 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 # 3-particle and 4-particle density matrix for RHF-FCI wfn
 #
 def make_dm123(fname, cibra, ciket, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -191,7 +191,7 @@ def _complete_dm3_(dm2, dm3):
     return dm3
 
 def make_dm1234(fname, cibra, ciket, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec

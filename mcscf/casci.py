@@ -142,7 +142,7 @@ class CASCI(object):
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
         self.ncas = ncas
-        if isinstance(nelecas, int):
+        if isinstance(nelecas, (int, numpy.integer)):
             assert(nelecas%2 == 0)
             nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
@@ -154,7 +154,7 @@ class CASCI(object):
             assert(ncorelec % 2 == 0)
             self.ncore = ncorelec // 2
         else:
-            assert(isinstance(ncore, int))
+            assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
         #self.fcisolver = fci.direct_spin0.FCISolver(mol)
         self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1])

@@ -39,7 +39,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
     -109.007378939813691
     '''
     ncore = casscf.ncore
-    if isinstance(ncore, int):
+    if isinstance(ncore, (int, numpy.integer)):
         assert(casscf.ncas == len(caslst))
         nmo = mo_coeff.shape[1]
         if base != 0:
@@ -47,7 +47,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         idx = [i for i in range(nmo) if i not in caslst]
         return numpy.hstack((mo_coeff[:,idx[:ncore]], mo_coeff[:,caslst], mo_coeff[:,idx[ncore:]]))
     else: # UHF-based CASSCF
-        if isinstance(caslst[0], int):
+        if isinstance(caslst[0], (int, numpy.integer)):
             assert(casscf.ncas == len(caslst))
             if base != 0:
                 caslsta = [i-1 for i in caslst]
@@ -135,7 +135,7 @@ def project_init_guess(casscf, init_mo):
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff
     s = casscf._scf.get_ovlp()
-    if isinstance(ncore, int):
+    if isinstance(ncore, (int, numpy.integer)):
         assert(mfmo.shape[0] == init_mo.shape[0])
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF
@@ -387,7 +387,7 @@ def spin_square(casscf, fcivec=None, mo_coeff=None, ovlp=None):
     ncore    = casscf.ncore
     ncas     = casscf.ncas
     nelecas  = casscf.nelecas
-    if isinstance(ncore, int):
+    if isinstance(ncore, (int, numpy.integer)):
         nocc = ncore + ncas
         mocas = mo_coeff[:,ncore:nocc]
         return fci.spin_op.spin_square(fcivec, ncas, nelecas, mocas, ovlp)

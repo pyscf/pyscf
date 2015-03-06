@@ -35,7 +35,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
         eri = numpy.empty((nao*nao,naoaux), dtype=numpy.complex)
         fill = _fpointer('RIfill_r_s1_auxe2')
     else:
-        eri = numpy.empty((nao*(nao+1)/2,naoaux), dtype=numpy.complex)
+        eri = numpy.empty((nao*(nao+1)//2,naoaux), dtype=numpy.complex)
         fill = _fpointer('RIfill_r_s2ij_auxe2')
     fintor = _fpointer(intor)
     cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)

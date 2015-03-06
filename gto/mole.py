@@ -418,7 +418,7 @@ def tot_electrons(mol):
     nelectron = -mol.charge
     for ia in range(mol.natm):
         nelectron += mol.atom_charge(ia)
-    return nelectron
+    return int(nelectron)
 
 def copy(mol):
     '''Deepcopy of the given :class:`Mole` object

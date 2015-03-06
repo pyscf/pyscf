@@ -5,7 +5,7 @@ import numpy
 from pyscf.fci import cistring
 
 def large_ci(ci, norb, nelec, tol=.1):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -18,7 +18,7 @@ def large_ci(ci, norb, nelec, tol=.1):
     return res
 
 def initguess_triplet(norb, nelec, binstring):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -35,7 +35,7 @@ def initguess_triplet(norb, nelec, binstring):
 # N-electron wavefunction:
 # |N-1> = a_p |N>
 def des_a(ci0, norb, nelec, ap_id):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
@@ -56,7 +56,7 @@ def des_a(ci0, norb, nelec, ap_id):
 # construct (N-1)-electron wavefunction by removing a beta electron from
 # N-electron wavefunction:
 def des_b(ci0, norb, nelec, ap_id):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
@@ -75,7 +75,7 @@ def des_b(ci0, norb, nelec, ap_id):
 # N-electron wavefunction:
 # |N+1> = a_p^+ |N>
 def cre_a(ci0, norb, nelec, ap_id):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec
@@ -93,7 +93,7 @@ def cre_a(ci0, norb, nelec, ap_id):
 # construct (N+1)-electron wavefunction by adding a beta electron to
 # N-electron wavefunction:
 def cre_b(ci0, norb, nelec, ap_id):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
         neleca, nelecb = nelec

@@ -26,7 +26,7 @@ libfci = pyscf.lib.load_library('libmcscf')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
@@ -56,7 +56,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
@@ -78,7 +78,7 @@ def absorb_h1e(*args, **kwargs):
     return direct_spin1.absorb_h1e(*args, **kwargs)
 
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec
@@ -103,7 +103,7 @@ def make_hdiag(h1e, eri, norb, nelec):
     return hdiag.ravel()
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec
@@ -179,7 +179,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
 # dm_pq = <I|p^+ q|J>
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
@@ -214,7 +214,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 ###############################################################
 
 def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec

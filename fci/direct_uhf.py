@@ -31,7 +31,7 @@ libfci = pyscf.lib.load_library('libmcscf')
 # h2e has three parts (h2e_aa, h2e_ab, h2e_bb)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -74,7 +74,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -107,7 +107,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     return ci1
 
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -167,7 +167,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
             pyscf.ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:

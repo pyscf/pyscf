@@ -35,7 +35,7 @@ def make_a16(h1e, h2e, dms, civec, norb, nelec, link_index=None):
         f3ca = dms['f3ca']
         f3ac = dms['f3ac']
     else:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelecb = nelec//2
         else:
             neleca, nelecb = nelec
@@ -83,7 +83,7 @@ def make_a22(h1e, h2e, dms, civec, norb, nelec, link_index=None):
         f3ca = dms['f3ca']
         f3ac = dms['f3ac']
     else:
-        if isinstance(nelec, int):
+        if isinstance(nelec, (int, numpy.integer)):
             neleca = nelecb = nelec//2
         else:
             neleca, nelecb = nelec
@@ -657,7 +657,7 @@ def sc_nevpt(mc, verbose=logger.NOTE):
 
 
 def _contract4pdm(kern, eri, civec, norb, nelec, link_index=None):
-    if isinstance(nelec, int):
+    if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
