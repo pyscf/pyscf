@@ -52,4 +52,3 @@ loc.verbose = param.VERBOSE_DEBUG
 new_coeff = loc.optimize()
 loc.dump_molden( filename_boys, new_coeff )
 print("Boys localized pi-orbitals saved in", filename_boys)
-

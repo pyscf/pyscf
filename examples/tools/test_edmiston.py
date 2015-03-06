@@ -52,4 +52,3 @@ loc.verbose = param.VERBOSE_DEBUG
 new_coeff = loc.optimize()
 loc.dump_molden( filename_edmiston, new_coeff )
 print("Edmiston-Ruedenberg localized pi-orbitals saved in", filename_edmiston)
-
