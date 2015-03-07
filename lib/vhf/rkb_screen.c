@@ -25,7 +25,6 @@ int cint2e_spsp1spsp2();
 int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
-        return 1;
         if (!opt) {
                 return 1; // no screen
         }

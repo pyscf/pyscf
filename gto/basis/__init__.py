@@ -111,7 +111,7 @@ def load(basis_name, symb):
     else:
         fp, pathname, description = imp.find_module(basmod, __path__)
         mod = imp.load_module(name, fp, pathname, description)
-        mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
+        #mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
         b = mod.__getattribute__(symb)
         fp.close()
     return b

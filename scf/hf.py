@@ -834,7 +834,7 @@ class SCF(object):
             try:
                 return self.init_guess_by_chkfile(mol)
             except:
-                log.warn(self, 'Fail in reading %s. Use MINAO initial guess', \
+                log.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                          self.chkfile)
                 return self.init_guess_by_minao(mol)
         else:
