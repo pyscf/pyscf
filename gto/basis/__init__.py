@@ -109,9 +109,10 @@ def load(basis_name, symb):
     if 'dat' in basmod:
         b = parse_nwchem.parse(os.path.join(os.path.dirname(__file__), basmod), symb)
     else:
-        fp, pathname, description = imp.find_module('minao', __path__)
+        fp, pathname, description = imp.find_module(basmod, __path__)
         mod = imp.load_module(name, fp, pathname, description)
-        #mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
+        mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
         b = mod.__getattribute__(symb)
+        fp.close()
     return b
 

@@ -4,6 +4,7 @@
 
 import unittest
 import numpy
+from functools import reduce
 from pyscf import gto
 from pyscf import symm
 from pyscf.symm import geom
@@ -92,11 +93,11 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(gpname, 'Cs')
         self.assertTrue(geom.check_given_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
-                         [[0], [1, 4], [2, 3], [5], [9, 6], [8, 7], [25, 10],
-                          [11, 29], [28, 12], [27, 13], [26, 14], [20, 15],
+                         [[0], [1, 4], [2, 3], [5], [6, 9], [7, 8], [10, 25],
+                          [11, 29], [12, 28], [13, 27], [14, 26], [15, 20],
                           [16, 24], [17, 23], [18, 22], [19, 21], [30],
-                          [34, 31], [32, 33], [50, 35], [36, 54], [37, 53],
-                          [52, 38], [51, 39], [40, 45], [41, 49], [48, 42],
+                          [31, 34], [32, 33], [35, 50], [36, 54], [37, 53],
+                          [38, 52], [39, 51], [40, 45], [41, 49], [42, 48],
                           [43, 47], [44, 46], [55], [56, 59], [57, 58]])
 
     def test_ih2(self):
@@ -249,7 +250,7 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(gpname, 'C2')
         self.assertTrue(geom.check_given_symm('C2', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
-                         [[0, 9], [8, 1], [2, 7], [3, 6], [4, 5]])
+                         [[0, 9], [1, 8], [2, 7], [3, 6], [4, 5]])
 
     def test_d5d(self):
         coord1 = ring(5)

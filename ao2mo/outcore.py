@@ -272,26 +272,23 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
-    e1buflen = guess_e1bufsize(max_memory, ioblk_size,
-                               nij_pair, nao_pair, comp)[0]
     mem_words = max_memory * 1e6 / 8
     iobuf_size = min(float(nkl_pair)/(nkl_pair+nao_pair)*mem_words,
                      IOBUF_WORDS_PREFER) * 8
-    e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
+    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
-    log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, '
-              'ioblock (r/w) %.8g/%.8g MB', \
-              nao_pair, nkl_pair, e2buflen*nao_pair*8/1e6,
-              e2buflen*nij_pair*8/1e6, e2buflen*nkl_pair*8/1e6)
+    log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
+              nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
+              iobuflen*nkl_pair*8/1e6)
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
-    ijmoblks = int(numpy.ceil(float(nij_pair)/e2buflen)) * comp
+    ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     ti0 = time_1pass
-    buf = numpy.empty((e2buflen, nao_pair))
+    buf = numpy.empty((iobuflen, nao_pair))
     istep = 0
-    for row0, row1 in prange(0, nij_pair, e2buflen):
+    for row0, row1 in prange(0, nij_pair, iobuflen):
         nrow = row1 - row0
 
         for icomp in range(comp):
@@ -697,7 +694,7 @@ def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
     ij_start = 0
     for ij, dij in enumerate(accum):
         buflen += dij
-        if buflen > max_iobuf:
+        if buflen > max_iobuf and buflen > dij:
 # to fill each iobuf, AO integrals may need to be fill to aobuf several times
             if max_aobuf < buflen-dij:
                 ijdiv = []
@@ -705,7 +702,7 @@ def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
                 aobuf = 0
                 for n in range(ij_start, ij):
                     aobuf += accum[n]
-                    if aobuf > max_aobuf:
+                    if aobuf > max_aobuf and aobuf > accum[n]:
                         ijdiv.append((n0, n, aobuf-accum[n]))
                         n0 = n
                         aobuf = accum[n]

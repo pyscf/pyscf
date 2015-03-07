@@ -127,9 +127,10 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
 {
         /* This memory is released in void CVHFdel_optimizer, Don't know
          * why valgrind raises memory leak here */
-        if (!opt->q_cond) {
-                opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->q_cond) {
+                free(opt->q_cond);
         }
+        opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
         double *buf;
         double qtmp;
@@ -158,16 +159,17 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
 
                 }
         }
-
-        if (!opt->dm_cond) {
-                opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-                memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
-        }
 }
 
 void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
                              int *atm, int natm, int *bas, int nbas, double *env)
 {
+        if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
+                free(opt->dm_cond);
+        }
+        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
+
         int *ao_loc = malloc(sizeof(int) * (nbas+1));
         CINTshells_spheric_offset(ao_loc, bas, nbas);
         ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1, bas);

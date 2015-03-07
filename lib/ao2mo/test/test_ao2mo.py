@@ -318,5 +318,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print 'Full Tests for nr_ao2mo_o5'
+    print('Full Tests for nr_ao2mo_o5')
     unittest.main()

@@ -1129,6 +1129,7 @@ class Mole(object):
                 self.stdout.write(finput.read())
                 self.stdout.write('INFO: ******************** input file end ********************\n')
                 self.stdout.write('\n')
+                finput.close()
             except:
                 log.warn(self, 'input file does not exist')
 

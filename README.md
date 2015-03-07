@@ -101,9 +101,9 @@ Known problems
   OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
 ```
 
-  This problem relates to MKL v11.1 on intel64 architecture.  There is
-  no solution for the combination of Python + MKL 11.1 + AVX.  You need
-  either change to other MKL version or drop out the mkl_avx:
+  This problem relates to MKL v11.1 on intel64 architecture.  Currently,
+  there is no solution for the combination of Python + MKL 11.1 + AVX.
+  You need either change to other MKL version or drop mkl_avx:
 
         BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
 

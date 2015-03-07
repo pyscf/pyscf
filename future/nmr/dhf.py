@@ -317,7 +317,7 @@ class NMR(hf.NMR):
         mo_occ = self._scf.mo_occ
         dm1 = self.make_rdm1_1(mo1, mo_coeff, mo_occ)
         direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
-# hermi=1 because dm1 = C^1 C^{0T} + C^0 C^{1T}
+# hermi=1 because dm1 = C^1 C^{0dagger} + C^0 C^{1dagger}
         v_ao = self._scf.get_veff(self.mol, dm1, hermi=1)
         self._scf.direct_scf = direct_scf_bak
         return hf._mat_ao2mo(v_ao, mo_coeff, mo_occ)

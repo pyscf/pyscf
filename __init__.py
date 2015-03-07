@@ -97,6 +97,8 @@ in the function name.
 
 '''
 
+__version__ = '0.11'
+
 import os
 from pyscf import gto
 from pyscf import lib

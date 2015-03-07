@@ -257,7 +257,7 @@ It can be obtained using the return variables of detect_symm.''')
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
     uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
     eql_atom_ids = dup_atom_ids[uniq_idx]
-    eql_atom_ids = [list(set(i)) for i in eql_atom_ids]
+    eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
     return eql_atom_ids
 
 def check_given_symm(gpname, atoms, basis=None):

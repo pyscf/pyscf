@@ -344,6 +344,7 @@ if __name__ == '__main__':
     mol.build()
 
     rhf = scf.RHF(mol)
+    rhf.max_memory = 0
     rhf.scf()
     nmr = NMR(rhf)
     nmr.cphf = True

@@ -18,6 +18,10 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 from pyscf.df import incore
 
+#
+# for auxe2 (ij|P)
+#
+
 libri = pyscf.lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
@@ -61,7 +65,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
         fill = _fpointer('RIfill_s2ij_auxe2')
         nao_pair = nao * (nao+1) // 2
         buflen = min(max(int(ioblk_size*1e6/8/naoaux/comp), 1), nao_pair)
-        shranges = _guess_shell_ranges(mol, buflen, 's4')
+        shranges = _guess_shell_ranges(mol, buflen, 's2ij')
     log.debug('erifile %.8g MB, IO buf size %.8g MB',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     log.debug1('shranges = %s', shranges)
@@ -139,9 +143,13 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpd
     else:
         feri = h5py.File(erifile, 'w')
     if comp == 1:
-        h5d_eri = feri.create_dataset(dataname, (nij_pair,naoaux), 'f8')
+        chunks = (nmoj,min(int(16e3/nmoj),naoaux))
+        h5d_eri = feri.create_dataset(dataname, (nij_pair,naoaux), 'f8',
+                                      chunks=chunks)
     else:
-        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,naoaux), 'f8')
+        chunks = (1,nmoj,min(int(16e3/nmoj),naoaux))
+        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,naoaux), 'f8',
+                                      chunks=chunks)
     if nij_pair == 0 or naoaux == 0:
         feri.close()
         return erifile
@@ -258,7 +266,16 @@ def half_e1(mol, mo_coeffs, swapfile, auxbasis='weigend',
               naoaux*nao_pair*8/1e6, comp*iolen*buflen*8/1e6)
     log.debug('step1: (ij,L) shape (%d,%d) swap-block-shape (%d,%d), cache %.8g MB',
               nao_pair, naoaux, iolen, buflen, comp*buflen*nao_pair*8/1e6)
-    shranges = _guess_shell_ranges(auxmol, buflen, 's1')
+
+    shranges = []
+    ao_loc = auxmol.ao_loc_nr()
+    ish0 = 0
+    for i in range(auxmol.nbas):
+        ij_end = ao_loc[i+1]
+        if ij_end - ao_loc[ish0] > buflen and i != 0:
+            shranges.append((ish0,i,ao_loc[i]-ao_loc[ish0]))
+            ish0 = i
+    shranges.append((ish0,auxmol.nbas,ao_loc[auxmol.nbas]-ao_loc[ish0]))
     log.debug1('shranges = %s', shranges)
 
     atm, bas, env = \
@@ -320,10 +337,10 @@ def _guess_shell_ranges(mol, buflen, aosym):
     bufrows = []
     ij_start = 0
 
-    if aosym in ('s4', 's2kl'):
+    if aosym in ('s2ij'):
         for i in range(mol.nbas):
             ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
-            if ij_end - ij_start > buflen:
+            if ij_end - ij_start > buflen and i != 0:
                 ish_seg.append(i) # put present shell to next segments
                 ijend = ao_loc[i]*(ao_loc[i]+1)//2
                 bufrows.append(ijend-ij_start)
@@ -333,14 +350,14 @@ def _guess_shell_ranges(mol, buflen, aosym):
         bufrows.append(nao_pair-ij_start)
     else:
         for i in range(mol.nbas):
-            ij_end = ao_loc[i+1]
-            if ij_end - ij_start > buflen:
+            ij_end = ao_loc[i+1] * nao
+            if ij_end - ij_start > buflen and i != 0:
                 ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i]
+                ijend = ao_loc[i] * nao
                 bufrows.append(ijend-ij_start)
                 ij_start = ijend
         ish_seg.append(mol.nbas)
-        bufrows.append(nao-ij_start)
+        bufrows.append(nao*nao-ij_start)
 
     # for each buffer, sh_ranges record (start, end, bufrow)
     sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))

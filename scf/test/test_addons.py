@@ -129,6 +129,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print "Full Tests for addons"
+    print("Full Tests for addons")
     unittest.main()
 

@@ -25,6 +25,7 @@ int cint2e_spsp1spsp2();
 int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
+        return 1;
         if (!opt) {
                 return 1; // no screen
         }
@@ -161,9 +162,10 @@ static void set_qcond(int (*intor)(), double *qcond,
 void CVHFrkbllll_direct_scf(CVHFOpt *opt, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (!opt->q_cond) {
-                opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->q_cond) {
+                free(opt->q_cond);
         }
+        opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
         set_qcond(cint2e, opt->q_cond, atm, natm, bas, nbas, env);
 }
@@ -171,9 +173,10 @@ void CVHFrkbllll_direct_scf(CVHFOpt *opt, int *atm, int natm,
 void CVHFrkbssss_direct_scf(CVHFOpt *opt, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (!opt->q_cond) {
-                opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->q_cond) {
+                free(opt->q_cond);
         }
+        opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
         const int INC1 = 1;
         int nn = nbas * nbas;
@@ -187,9 +190,10 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int *atm, int natm,
 void CVHFrkbssll_direct_scf(CVHFOpt *opt, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (!opt->q_cond) {
-                opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
+        if (opt->q_cond) {
+                free(opt->q_cond);
         }
+        opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
 
         const int INC1 = 1;
         int nn = nbas * nbas;
@@ -232,14 +236,15 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
         free(ao_loc);
 }
 
-
+//  dm_cond ~ 1+nset, dm_cond + dms_cond
 void CVHFrkbllll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                                int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (!opt->dm_cond) {
-                opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
-                memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
+        if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
+                free(opt->dm_cond);
         }
+        opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
+        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
         // dmcond followed by dmscond which are max matrix element for each dm
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
                    opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
@@ -249,10 +254,11 @@ void CVHFrkbssss_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                                int *atm, int natm, int *bas, int nbas,
                                double *env)
 {
-        if (!opt->dm_cond) {
-                opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
-                memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
+        if (opt->dm_cond) {
+                free(opt->dm_cond);
         }
+        opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
+        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
                    opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
 }
@@ -263,11 +269,12 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                                int *atm, int natm, int *bas, int nbas,
                                double *env)
 {
-        nset = nset / 3;
-        if (!opt->dm_cond) {
-                opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*4*(1+nset));
-                memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*4*(1+nset));
+        if (opt->dm_cond) {
+                free(opt->dm_cond);
         }
+        nset = nset / 3;
+        opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*4*(1+nset));
+        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*4*(1+nset));
 
         // 4 types of dmcond (LL,SS,SL,SS) followed by 4 types of dmscond
         int n2c = CINTtot_cgto_spinor(bas, nbas);

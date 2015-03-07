@@ -37,7 +37,7 @@ def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
         feval = _ctypes.dlsym(libdft._handle, 'VXCeval_nr_gto')
 
     if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)/BLKSIZE,nbas.value),
+        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,nbas.value),
                               dtype=numpy.int8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),

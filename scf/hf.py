@@ -971,16 +971,14 @@ class SCF(object):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if ovlp is None: ovlp = self.get_ovlp(mol)
-        log = logger.Logger(self.stdout, verbose)
-        return mulliken_pop(mol, dm, ovlp, log)
+        return mulliken_pop(mol, dm, ovlp, verbose)
 
     def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None,
                                     verbose=logger.DEBUG,
                                     pre_orth_method='ANO'):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        log = logger.Logger(self.stdout, verbose)
-        return mulliken_pop_meta_lowdin_ao(mol, dm, log, pre_orth_method)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, verbose, pre_orth_method)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()

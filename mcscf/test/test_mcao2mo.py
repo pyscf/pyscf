@@ -8,11 +8,11 @@ from pyscf import ao2mo
 from pyscf import mcscf
 
 
+mol = gto.Mole()
+mol.verbose = 7
+mol.output = '/dev/null'
 class KnowValues(unittest.TestCase):
     def test_rhf(self):
-        mol = gto.Mole()
-        mol.verbose = 0
-        mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],
@@ -83,9 +83,6 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(cVCv.transpose(2,3,0,1), eris1.Icvcv))
 
     def test_uhf(self):
-        mol = gto.Mole()
-        mol.verbose = 0
-        mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],

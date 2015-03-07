@@ -1,5 +1,7 @@
 /*
  * Author: Qiming Sun <osirpt.sun@gmail.com>
+ *
+ * auxe2: (ij|P) where P is the auxiliary basis
  */
 
 #include <stdlib.h>
@@ -36,6 +38,7 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
 
         shls[0] = ish;
         shls[1] = jsh;
+
         for (ksh = auxstart; ksh < nbasnaux; ksh++) {
                 shls[2] = ksh;
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
@@ -82,6 +85,7 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
 
         shls[0] = ish;
         shls[1] = jsh;
+
         for (ksh = auxstart; ksh < nbasnaux; ksh++) {
                 shls[2] = ksh;
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
