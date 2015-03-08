@@ -26,7 +26,7 @@ def davidson(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
     if hermi:
         toloose = max(tol, lindep)
         gen = davidson_cc(a, x0, precond, tol, max_cycle, maxspace,
-                          nroots, hermi, lindep, max_memory, _real_ascend, dot)
+                          nroots, hermi, lindep, max_memory, _real_lowest, dot)
         for istep, rdic in enumerate(gen):
             log.debug('davidson %d, subspace %d, |resid|=%g, e=%s, seig=%g',
                       istep, len(rdic['xs'][-1]), rdic['rnorm'],
@@ -37,7 +37,7 @@ def davidson(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
         return rdic['e'], rdic['v']
     else:
         gen = davidson_cc(a, x0, precond, tol, max_cycle, maxspace,
-                          nroots, hermi, lindep, max_memory, _real_ascend, dot)
+                          nroots, hermi, lindep, max_memory, _real_lowest, dot)
         for istep, rdic in enumerate(gen):
             log.debug('davidson %d, subspace %d, |resid(L,R)|=(%g,%g), e=%s, seig=%g',
                       istep, len(rdic['xs'][-1]),
@@ -51,13 +51,13 @@ dsyev = davidson
 
 
 # Sort real part of eigenvalues and pick the lowest ones
-def _real_ascend(nroots, e, *args):
+def _real_lowest(nroots, e, *args):
     return numpy.argsort(e.real)[:nroots]
 
 
 def davidson_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
                 nroots=1, hermi=1, lindep=1e-16, max_memory=2000,
-                eig_pick=_real_ascend, dot=numpy.dot):
+                eig_pick=_real_lowest, dot=numpy.dot):
     if hermi:
         return davidson_he_cc(a, x0, precond, tol, max_cycle, maxspace,
                               nroots, lindep, max_memory, eig_pick, dot)
@@ -68,7 +68,7 @@ def davidson_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
 #FIXME: unstable for nroots > 1?
 def davidson_ge_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
                    nroots=1, lindep=1e-16, max_memory=2000,
-                   eig_pick=_real_ascend, dot=numpy.dot):
+                   eig_pick=_real_lowest, dot=numpy.dot):
     assert(max_cycle >= maxspace >= nroots)
 
     max_cycle = max_cycle + nroots - 1
@@ -97,10 +97,10 @@ def davidson_ge_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
         ovlp[istep,istep] = dot(xls[istep].conj(), xrs[istep])
 
         nroots_now = min(nroots,istep+1)
-
-        w, vl, vr = scipy.linalg.eig(heff[:istep+1,:istep+1],
-                                     ovlp[:istep+1,:istep+1], left=True)
-        eigidx = eig_pick(nroots_now, w, vl, vr)
+        hnow = heff[:istep+1,:istep+1]
+        snow = ovlp[:istep+1,:istep+1]
+        w, vl, vr = scipy.linalg.eig(hnow, snow, left=True)
+        eigidx = eig_pick(nroots_now, w, vl, vr, hnow, snow)
         w  = w[eigidx]
         vl = vl[:,eigidx]
         vr = vr[:,eigidx]
@@ -177,7 +177,7 @@ def davidson_ge_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
 # JCC, 22, 1574
 def davidson_he_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
                    nroots=1, lindep=1e-16, max_memory=2000,
-                   eig_pick=_real_ascend, dot=numpy.dot):
+                   eig_pick=_real_lowest, dot=numpy.dot):
     assert(max_cycle >= maxspace >= nroots)
 
     max_cycle = max_cycle + nroots - 1
@@ -192,10 +192,11 @@ def davidson_he_cc(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
         for j in range(istep+1):
             heff[istep,j] = heff[j,istep] = dot(xs[istep].conj(), ax[j])
             ovlp[istep,j] = ovlp[j,istep] = dot(xs[istep].conj(), xs[j])
-        w, v = scipy.linalg.eigh(heff[:istep+1,:istep+1],
-                                 ovlp[:istep+1,:istep+1])
         nroots_now = min(nroots,istep+1)
-        eigidx = eig_pick(nroots_now, w, v)
+        hnow = heff[:istep+1,:istep+1]
+        snow = ovlp[:istep+1,:istep+1]
+        w, v = scipy.linalg.eigh(hnow, snow)
+        eigidx = eig_pick(nroots_now, w, v, hnow, snow)
         w = w[eigidx]
         v = v[:,eigidx]
         seig = scipy.linalg.eigh(ovlp[:istep+1,:istep+1])[0]
@@ -288,7 +289,7 @@ if __name__ == '__main__':
 
 # Stick on the states as close as possible to the initial guess
     last_eigs = [None]
-    def eig_pick(nroots, e, *args):
+    def eig_pick(nroots, e, vl, vr, h, s):
         if len(e) > nroots:
             eigidx = []
             for ei in last_eigs[0]:
