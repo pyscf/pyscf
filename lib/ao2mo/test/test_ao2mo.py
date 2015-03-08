@@ -27,7 +27,7 @@ mol.atom.extend([
 mol.basis = 'cc-pvdz'
 mol.build()
 nao = mol.nao_nr()
-naopair = nao*(nao+1)/2
+naopair = nao*(nao+1)//2
 numpy.random.seed(15)
 mo = numpy.random.random((nao,nao))
 mo = mo.copy(order='F')

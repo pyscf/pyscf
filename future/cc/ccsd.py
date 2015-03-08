@@ -391,6 +391,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.emp2, t1, t2
 
 
+    def kernel(self, t1=None, t2=None):
+        return self.ccsd(t1, t2)
     def ccsd(self, t1=None, t2=None):
         nocc = self.nocc
         nmo = self.nmo

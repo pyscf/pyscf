@@ -130,26 +130,27 @@ def get_jk_(mf, mol, dms, hermi=1):
                 cnegargs = (ctypes.c_int(nao),
                             ctypes.c_int(0), ctypes.c_int(cneg.shape[1]),
                             ctypes.c_int(0), ctypes.c_int(0))
-                for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
-                    eri1 = df.load_buf(cderi, b0, b1-b0)
-                    buf = reduce(numpy.dot, (eri1, dmtril, eri1))
-                    vj += pyscf.lib.unpack_tril(buf, hermi)
-                    if cpos.shape[1] > 0:
-                        buf = numpy.empty(((b1-b0)*cpos.shape[1],nao))
-                        fdrv(ftrans, fmmm,
-                             buf.ctypes.data_as(ctypes.c_void_p),
-                             eri1.ctypes.data_as(ctypes.c_void_p),
-                             cpos.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(b1-b0), *cposargs)
-                        vk += numpy.dot(buf.T, buf)
-                    if cneg.shape[1] > 0:
-                        buf = numpy.empty(((b1-b0)*cneg.shape[1],nao))
-                        fdrv(ftrans, fmmm,
-                             buf.ctypes.data_as(ctypes.c_void_p),
-                             eri1.ctypes.data_as(ctypes.c_void_p),
-                             cneg.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(b1-b0), *cnegargs)
-                        vk -= numpy.dot(buf.T, buf)
+                with df.load(cderi) as feri:
+                    for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+                        eri1 = numpy.array(feri[b0:b1], copy=False)
+                        buf = reduce(numpy.dot, (eri1, dmtril, eri1))
+                        vj += pyscf.lib.unpack_tril(buf, hermi)
+                        if cpos.shape[1] > 0:
+                            buf = numpy.empty(((b1-b0)*cpos.shape[1],nao))
+                            fdrv(ftrans, fmmm,
+                                 buf.ctypes.data_as(ctypes.c_void_p),
+                                 eri1.ctypes.data_as(ctypes.c_void_p),
+                                 cpos.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(b1-b0), *cposargs)
+                            vk += numpy.dot(buf.T, buf)
+                        if cneg.shape[1] > 0:
+                            buf = numpy.empty(((b1-b0)*cneg.shape[1],nao))
+                            fdrv(ftrans, fmmm,
+                                 buf.ctypes.data_as(ctypes.c_void_p),
+                                 eri1.ctypes.data_as(ctypes.c_void_p),
+                                 cneg.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(b1-b0), *cnegargs)
+                            vk -= numpy.dot(buf.T, buf)
         else:
             #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
             #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
@@ -158,24 +159,25 @@ def get_jk_(mf, mol, dms, hermi=1):
                      ctypes.c_int(0), ctypes.c_int(nao),
                      ctypes.c_int(0), ctypes.c_int(0))
             dm = numpy.asarray(dm, order='F')
-            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
-                eri1 = df.load_buf(cderi, b0, b1-b0)
-                buf = numpy.empty((b1-b0,nao,nao))
-                fdrv(ftrans, fmmm,
-                     buf.ctypes.data_as(ctypes.c_void_p),
-                     eri1.ctypes.data_as(ctypes.c_void_p),
-                     dm.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(b1-b0), *rargs)
-                rho = numpy.einsum('kii->k', buf)
-                vj += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
+            with df.load(cderi) as feri:
+                for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+                    eri1 = numpy.array(feri[b0:b1], copy=False)
+                    buf = numpy.empty((b1-b0,nao,nao))
+                    fdrv(ftrans, fmmm,
+                         buf.ctypes.data_as(ctypes.c_void_p),
+                         eri1.ctypes.data_as(ctypes.c_void_p),
+                         dm.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs)
+                    rho = numpy.einsum('kii->k', buf)
+                    vj += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
 
-                buf1 = numpy.empty((b1-b0,nao,nao))
-                fdrv(ftrans, fcopy,
-                     buf1.ctypes.data_as(ctypes.c_void_p),
-                     eri1.ctypes.data_as(ctypes.c_void_p),
-                     dm.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(b1-b0), *rargs)
-                vk += numpy.dot(buf.reshape(-1,nao).T, buf1.reshape(-1,nao))
+                    buf1 = numpy.empty((b1-b0,nao,nao))
+                    fdrv(ftrans, fcopy,
+                         buf1.ctypes.data_as(ctypes.c_void_p),
+                         eri1.ctypes.data_as(ctypes.c_void_p),
+                         dm.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs)
+                    vk += numpy.dot(buf.reshape(-1,nao).T, buf1.reshape(-1,nao))
         return vj, vk
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -225,56 +227,62 @@ def r_get_jk_(mf, mol, dms, hermi=1):
         dmls = numpy.asarray(dm[:n2c,n2c:], order='C') * c1
         dmsl = numpy.asarray(dm[n2c:,:n2c], order='C') * c1
         dmss = numpy.asarray(dm[n2c:,n2c:], order='C') * c1**2
-        for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
-            erill = df.load_buf(mf._cderi[0], b0, b1-b0)
-            eriss = df.load_buf(mf._cderi[1], b0, b1-b0)
-            buf = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)
-            buf1 = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)
+        with df.load(mf._cderi[0]) as ferill:
+            with df.load(mf._cderi[1]) as feriss: # python2.6 not support multiple with
+                for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+                    erill = numpy.array(ferill[b0:b1], copy=False)
+                    eriss = numpy.array(feriss[b0:b1], copy=False)
+                    buf = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)
+                    buf1 = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)
 
-            fdrv(ftrans, fmmm,
-                 buf.ctypes.data_as(ctypes.c_void_p),
-                 erill.ctypes.data_as(ctypes.c_void_p),
-                 dmll.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(b1-b0), *rargs) # buf == (P|LL)
-            rho = numpy.einsum('kii->k', buf)
+                    fdrv(ftrans, fmmm,
+                         buf.ctypes.data_as(ctypes.c_void_p),
+                         erill.ctypes.data_as(ctypes.c_void_p),
+                         dmll.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs) # buf == (P|LL)
+                    rho = numpy.einsum('kii->k', buf)
 
-            fdrv(ftrans, fcopy,
-                 buf1.ctypes.data_as(ctypes.c_void_p),
-                 erill.ctypes.data_as(ctypes.c_void_p),
-                 dmll.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(b1-b0), *rargs) # buf1 == (P|LL)
-            vk[:n2c,:n2c] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c))
+                    fdrv(ftrans, fcopy,
+                         buf1.ctypes.data_as(ctypes.c_void_p),
+                         erill.ctypes.data_as(ctypes.c_void_p),
+                         dmll.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs) # buf1 == (P|LL)
+                    vk[:n2c,:n2c] += numpy.dot(buf1.reshape(-1,n2c).T,
+                                               buf.reshape(-1,n2c))
 
-            fdrv(ftrans, fmmm,
-                 buf.ctypes.data_as(ctypes.c_void_p),
-                 eriss.ctypes.data_as(ctypes.c_void_p),
-                 dmls.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(b1-b0), *rargs) # buf == (P|LS)
-            vk[:n2c,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c)) * c1
+                    fdrv(ftrans, fmmm,
+                         buf.ctypes.data_as(ctypes.c_void_p),
+                         eriss.ctypes.data_as(ctypes.c_void_p),
+                         dmls.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs) # buf == (P|LS)
+                    vk[:n2c,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T,
+                                               buf.reshape(-1,n2c)) * c1
 
-            fdrv(ftrans, fmmm,
-                 buf.ctypes.data_as(ctypes.c_void_p),
-                 eriss.ctypes.data_as(ctypes.c_void_p),
-                 dmss.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(b1-b0), *rargs) # buf == (P|SS)
-            rho += numpy.einsum('kii->k', buf)
-            vj[:n2c,:n2c] += pyscf.lib.unpack_tril(numpy.dot(rho, erill), 1)
-            vj[n2c:,n2c:] += pyscf.lib.unpack_tril(numpy.dot(rho, eriss), 1) * c1**2
+                    fdrv(ftrans, fmmm,
+                         buf.ctypes.data_as(ctypes.c_void_p),
+                         eriss.ctypes.data_as(ctypes.c_void_p),
+                         dmss.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs) # buf == (P|SS)
+                    rho += numpy.einsum('kii->k', buf)
+                    vj[:n2c,:n2c] += pyscf.lib.unpack_tril(numpy.dot(rho, erill), 1)
+                    vj[n2c:,n2c:] += pyscf.lib.unpack_tril(numpy.dot(rho, eriss), 1) * c1**2
 
-            fdrv(ftrans, fcopy,
-                 buf1.ctypes.data_as(ctypes.c_void_p),
-                 eriss.ctypes.data_as(ctypes.c_void_p),
-                 dmss.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(b1-b0), *rargs) # buf == (P|SS)
-            vk[n2c:,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c)) * c1**2
+                    fdrv(ftrans, fcopy,
+                         buf1.ctypes.data_as(ctypes.c_void_p),
+                         eriss.ctypes.data_as(ctypes.c_void_p),
+                         dmss.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), *rargs) # buf == (P|SS)
+                    vk[n2c:,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T,
+                                               buf.reshape(-1,n2c)) * c1**2
 
-            if not hermi == 1:
-                fdrv(ftrans, fmmm,
-                     buf.ctypes.data_as(ctypes.c_void_p),
-                     erill.ctypes.data_as(ctypes.c_void_p),
-                     dmsl.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(b1-b0), *rargs) # buf == (P|SL)
-                vk[n2c:,:n2c] += numpy.dot(buf1.reshape(-1,n2c).T, buf.reshape(-1,n2c)) * c1
+                    if not hermi == 1:
+                        fdrv(ftrans, fmmm,
+                             buf.ctypes.data_as(ctypes.c_void_p),
+                             erill.ctypes.data_as(ctypes.c_void_p),
+                             dmsl.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(b1-b0), *rargs) # buf == (P|SL)
+                        vk[n2c:,:n2c] += numpy.dot(buf1.reshape(-1,n2c).T,
+                                                   buf.reshape(-1,n2c)) * c1
         if hermi == 1:
             vk[n2c:,:n2c] = vk[:n2c,n2c:].T.conj()
         return vj, vk

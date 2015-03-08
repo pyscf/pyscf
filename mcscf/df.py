@@ -65,20 +65,21 @@ def density_fit(casscf, auxbasis='weigend', level=1):
             fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
-            for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
-                eri1 = df.load_buf(self._cderi, b0, b1-b0)
-                buf = numpy.empty((b1-b0,nmo,nmo))
-                fdrv(ftrans, fmmm,
-                     buf.ctypes.data_as(ctypes.c_void_p),
-                     eri1.ctypes.data_as(ctypes.c_void_p),
-                     mo.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(b1-b0), ctypes.c_int(nao),
-                     ctypes.c_int(0), ctypes.c_int(nmo),
-                     ctypes.c_int(0), ctypes.c_int(nmo),
-                     ctypes.c_void_p(0), ctypes.c_int(0))
-                bufd = numpy.einsum('kii->ki', buf)
-                eris.j_cp += numpy.einsum('ki,kj->ij', bufd[:,:ncore], bufd)
-                eris.k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
+            with df.load(self._cderi) as feri:
+                for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
+                    eri1 = numpy.array(feri[b0:b1], copy=False)
+                    buf = numpy.empty((b1-b0,nmo,nmo))
+                    fdrv(ftrans, fmmm,
+                         buf.ctypes.data_as(ctypes.c_void_p),
+                         eri1.ctypes.data_as(ctypes.c_void_p),
+                         mo.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(b1-b0), ctypes.c_int(nao),
+                         ctypes.c_int(0), ctypes.c_int(nmo),
+                         ctypes.c_int(0), ctypes.c_int(nmo),
+                         ctypes.c_void_p(0), ctypes.c_int(0))
+                    bufd = numpy.einsum('kii->ki', buf)
+                    eris.j_cp += numpy.einsum('ki,kj->ij', bufd[:,:ncore], bufd)
+                    eris.k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
             return eris
 
 # We don't modify self._scf because it changes self.h1eff function.
