@@ -76,13 +76,14 @@ def density_fit_(mf, auxbasis='weigend'):
 
 
 OCCDROP = 1e-12
-BLOCKDIM = 240
+BLOCKDIM = 120
+_call_count = 0
 def get_jk_(mf, mol, dms, hermi=1):
     from pyscf import df
     from pyscf.ao2mo import _ao2mo
     t0 = (time.clock(), time.time())
+    log = logger.Logger(mf.stdout, mf.verbose)
     if not hasattr(mf, '_cderi') or mf._cderi is None:
-        log = logger.Logger(mf.stdout, mf.verbose)
         nao = mol.nao_nr()
         auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
         mf._naoaux = auxmol.nao_nr()
@@ -96,96 +97,120 @@ def get_jk_(mf, mol, dms, hermi=1):
                                                 auxbasis=mf.auxbasis,
                                                 verbose=log)
 
+    if len(dms) == 0:
+        return [], []
+
+    global _call_count
+    _call_count += 1
+
     cderi = mf._cderi
     nao = mol.nao_nr()
+    fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
+    fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+    ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
 
-    def fjk(dm):
-        #:vj = reduce(numpy.dot, (cderi.reshape(-1,nao*nao), dm.reshape(-1),
-        #:                        cderi.reshape(-1,nao*nao))).reshape(nao,nao)
-        fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
-        fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-        ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
-        vj = numpy.zeros_like(dm)
-        vk = numpy.zeros_like(dm)
-        if hermi == 1:
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        dms = [dms]
+        nset = 1
+    else:
+        nset = len(dms)
+    vj = numpy.zeros((nset,nao,nao))
+    vk = numpy.zeros((nset,nao,nao))
+
+    #:vj = reduce(numpy.dot, (cderi.reshape(-1,nao*nao), dm.reshape(-1),
+    #:                        cderi.reshape(-1,nao*nao))).reshape(nao,nao)
+    if hermi == 1:
 # I cannot assume dm is positive definite because it might be the density
 # matrix difference when the mf.direct_scf flag is set.
+        dmtril = []
+        cpos = []
+        cneg = []
+        for k, dm in enumerate(dms):
+            dmtril.append(pyscf.lib.pack_tril(dm+dm.T))
+            for i in range(nao):
+                dmtril[k][i*(i+1)//2+i] *= .5
+
             e, c = scipy.linalg.eigh(dm)
             pos = e > OCCDROP
             neg = e < -OCCDROP
-            if sum(pos)+sum(neg) > 0:
-                dmtril = pyscf.lib.pack_tril(dm+dm.T)
-                for i in range(nao):
-                    dmtril[i*(i+1)//2+i] *= .5
 
-                #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
-                #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
-                cpos = numpy.einsum('ij,j->ij', c[:,pos], numpy.sqrt(e[pos]))
-                cpos = numpy.asfortranarray(cpos)
-                cneg = numpy.einsum('ij,j->ij', c[:,neg], numpy.sqrt(-e[neg]))
-                cneg = numpy.asfortranarray(cneg)
-                cposargs = (ctypes.c_int(nao),
-                            ctypes.c_int(0), ctypes.c_int(cpos.shape[1]),
-                            ctypes.c_int(0), ctypes.c_int(0))
-                cnegargs = (ctypes.c_int(nao),
-                            ctypes.c_int(0), ctypes.c_int(cneg.shape[1]),
-                            ctypes.c_int(0), ctypes.c_int(0))
-                with df.load(cderi) as feri:
-                    for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
-                        eri1 = numpy.array(feri[b0:b1], copy=False)
-                        buf = reduce(numpy.dot, (eri1, dmtril, eri1))
-                        vj += pyscf.lib.unpack_tril(buf, hermi)
-                        if cpos.shape[1] > 0:
-                            buf = numpy.empty(((b1-b0)*cpos.shape[1],nao))
-                            fdrv(ftrans, fmmm,
-                                 buf.ctypes.data_as(ctypes.c_void_p),
-                                 eri1.ctypes.data_as(ctypes.c_void_p),
-                                 cpos.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(b1-b0), *cposargs)
-                            vk += numpy.dot(buf.T, buf)
-                        if cneg.shape[1] > 0:
-                            buf = numpy.empty(((b1-b0)*cneg.shape[1],nao))
-                            fdrv(ftrans, fmmm,
-                                 buf.ctypes.data_as(ctypes.c_void_p),
-                                 eri1.ctypes.data_as(ctypes.c_void_p),
-                                 cneg.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(b1-b0), *cnegargs)
-                            vk -= numpy.dot(buf.T, buf)
-        else:
-            #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
-            #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
-            fcopy = df.incore._fpointer('RImmm_nr_s2_copy')
-            rargs = (ctypes.c_int(nao),
-                     ctypes.c_int(0), ctypes.c_int(nao),
-                     ctypes.c_int(0), ctypes.c_int(0))
-            dm = numpy.asarray(dm, order='F')
-            with df.load(cderi) as feri:
-                for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
-                    eri1 = numpy.array(feri[b0:b1], copy=False)
+            #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
+            #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
+            cpos.append(numpy.asarray(numpy.einsum('ij,j->ij', c[:,pos],
+                                                   numpy.sqrt(e[pos])), order='F'))
+            cneg.append(numpy.asarray(numpy.einsum('ij,j->ij', c[:,neg],
+                                                   numpy.sqrt(-e[neg])),order='F'))
+        if mf.verbose >= logger.DEBUG1:
+            t1 = log.timer('Initialization', *t0)
+        with df.load(cderi) as feri:
+            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+                eri1 = numpy.array(feri[b0:b1], copy=False)
+                if mf.verbose >= logger.DEBUG1:
+                    t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
+                for k in range(nset):
+                    buf = reduce(numpy.dot, (eri1, dmtril[k], eri1))
+                    vj[k] += pyscf.lib.unpack_tril(buf, hermi)
+                    if cpos[k].shape[1] > 0:
+                        buf = numpy.empty(((b1-b0)*cpos[k].shape[1],nao))
+                        fdrv(ftrans, fmmm,
+                             buf.ctypes.data_as(ctypes.c_void_p),
+                             eri1.ctypes.data_as(ctypes.c_void_p),
+                             cpos[k].ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(b1-b0), ctypes.c_int(nao),
+                             ctypes.c_int(0), ctypes.c_int(cpos[k].shape[1]),
+                             ctypes.c_int(0), ctypes.c_int(0))
+                        vk[k] += pyscf.lib.dot(buf.T, buf)
+                    if cneg[k].shape[1] > 0:
+                        buf = numpy.empty(((b1-b0)*cneg[k].shape[1],nao))
+                        fdrv(ftrans, fmmm,
+                             buf.ctypes.data_as(ctypes.c_void_p),
+                             eri1.ctypes.data_as(ctypes.c_void_p),
+                             cneg[k].ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(b1-b0), ctypes.c_int(nao),
+                             ctypes.c_int(0), ctypes.c_int(cneg[k].shape[1]),
+                             ctypes.c_int(0), ctypes.c_int(0))
+                        vk[k] -= pyscf.lib.dot(buf.T, buf)
+                if mf.verbose >= logger.DEBUG1:
+                    t1 = log.timer('jk', *t1)
+    else:
+        #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
+        #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
+        fcopy = df.incore._fpointer('RImmm_nr_s2_copy')
+        rargs = (ctypes.c_int(nao),
+                 ctypes.c_int(0), ctypes.c_int(nao),
+                 ctypes.c_int(0), ctypes.c_int(0))
+        dms = [numpy.asarray(dm, order='F') for dm in dms]
+        if mf.verbose >= logger.DEBUG1:
+            t1 = log.timer('Initialization', *t0)
+        with df.load(cderi) as feri:
+            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+                eri1 = numpy.array(feri[b0:b1], copy=False)
+                if mf.verbose >= logger.DEBUG1:
+                    t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
+                for k in range(nset):
                     buf = numpy.empty((b1-b0,nao,nao))
                     fdrv(ftrans, fmmm,
                          buf.ctypes.data_as(ctypes.c_void_p),
                          eri1.ctypes.data_as(ctypes.c_void_p),
-                         dm.ctypes.data_as(ctypes.c_void_p),
+                         dms[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(b1-b0), *rargs)
                     rho = numpy.einsum('kii->k', buf)
-                    vj += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
+                    vj[k] += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
 
                     buf1 = numpy.empty((b1-b0,nao,nao))
                     fdrv(ftrans, fcopy,
                          buf1.ctypes.data_as(ctypes.c_void_p),
                          eri1.ctypes.data_as(ctypes.c_void_p),
-                         dm.ctypes.data_as(ctypes.c_void_p),
+                         dms[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(b1-b0), *rargs)
-                    vk += numpy.dot(buf.reshape(-1,nao).T, buf1.reshape(-1,nao))
-        return vj, vk
+                    vk[k] += pyscf.lib.dot(buf.reshape(-1,nao).T,
+                                           buf1.reshape(-1,nao))
+                if mf.verbose >= logger.DEBUG1:
+                    t1 = log.timer('jk', *t1)
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        vj, vk = fjk(dms)
-    else:
-        vjk = [fjk(dm) for dm in dms]
-        vj = numpy.array([x[0] for x in vjk])
-        vk = numpy.array([x[1] for x in vjk])
+    if len(dms) == 1:
+        vj = vj[0]
+        vk = vk[0]
     logger.timer(mf, 'vj and vk', *t0)
     return vj, vk
 
@@ -298,8 +323,12 @@ def r_get_jk_(mf, mol, dms, hermi=1):
 
 
 def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    if _call_count % 2 == 1:
+        for i in reversed(range(start, end, step)):
+            yield i, min(i+step, end)
+    else:
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
 
 if __name__ == '__main__':

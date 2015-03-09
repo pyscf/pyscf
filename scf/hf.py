@@ -68,12 +68,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     else:
         dm = dm0
 
-    if dump_chk:
-        # dump mol after reading initialized DM
-        chkfile.dump(mf.chkfile, 'mol', format(mol.pack()))
-
-    scf_conv = False
-    cycle = 0
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
 
@@ -91,6 +85,13 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     vhf = mf.get_veff(mol, dm)
     hf_energy = mf.energy_tot(dm, h1e, vhf)
     log.info(mf, 'init E=%.15g', hf_energy)
+
+    if dump_chk:
+        # dump mol after reading initialized DM
+        chkfile.dump(mf.chkfile, 'mol', format(mol.pack()))
+
+    scf_conv = False
+    cycle = 0
     cput1 = log.timer(mf, 'initialize scf', *cput0)
     while not scf_conv and cycle < max(1, mf.max_cycle):
         dm_last = dm
