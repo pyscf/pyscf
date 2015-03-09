@@ -59,7 +59,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = (int)((k-1)/nthread) + 1;
+                        nblk = MIN((int)((k-1)/nthread) + 1, k);
                         cpriv = malloc(sizeof(double) * m * n);
 
 #pragma omp for nowait schedule(static)
@@ -80,7 +80,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 }
                 free(cpriv);
-        }
+                }
 
         } else if (m > n+4) { // parallelize m
 
@@ -97,7 +97,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = (int)((m-1)/nthread) + 1;
+                        nblk = MIN((int)((m-1)/nthread) + 1, m);
 
 #pragma omp for nowait schedule(static)
                         for (i = 0; i < nthread; i++) {
@@ -123,7 +123,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined HAVE_OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = (int)((n-1)/nthread) + 1;
+                        nblk = MIN((int)((n-1)/nthread) + 1, n);
 
 #pragma omp for nowait schedule(static)
                         for (i = 0; i < nthread; i++) {
