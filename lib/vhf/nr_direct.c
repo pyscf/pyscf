@@ -273,7 +273,7 @@ static void filldot_kgtl(int (*intor)(), void (*funpack)(), int (*fill)(),
                          struct _VHFEnvs *envs)
 {
         const int nao = envs->nao;
-        const int nao2 = nao * nao;
+        const size_t nao2 = nao * nao;
         const int kloc = envs->ao_loc[ksh];
         const int lloc = envs->ao_loc[lsh];
         const int dk = envs->ao_loc[ksh+1] - kloc;
@@ -316,12 +316,13 @@ static void filldot_keql(int (*intor)(), void (*funpack)(), int (*fill)(),
                          struct _VHFEnvs *envs)
 {
         const int nao = envs->nao;
-        const int nao2 = nao * nao;
+        const size_t nao2 = nao * nao;
         const int kloc = envs->ao_loc[ksh];
         const int lloc = envs->ao_loc[lsh];
         const int dk = envs->ao_loc[ksh+1] - kloc;
         const int dl = envs->ao_loc[lsh+1] - lloc;
-        int k, l, k0, l0, ieri, idm, off;
+        int k, l, k0, l0, ieri, idm;
+        size_t off;
         double *eri = malloc(sizeof(double)*dk*dl*nao2*ncomp);
         double *peri;
         double *dm;
