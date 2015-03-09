@@ -347,6 +347,7 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double *eri,
                     int nkl, int ish, int jshtot, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
+        const size_t nao2 = nao * nao;
         const int *ao_loc = envs->ao_loc;
         const int klsh_start = envs->klsh_start;
         const int klsh_end = klsh_start + envs->klsh_count;
@@ -388,7 +389,7 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double *eri,
                 for (jsh = 0; jsh < jshtot; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao * nao * nkl * icomp
+                                peri = eri + nao2 * nkl * icomp
                                      + ao_loc[ish] * nao + ao_loc[jsh];
                                 for (k = 0; k < dk; k++) {
                                 for (l = 0; l < dl; l++) {
@@ -397,12 +398,12 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double *eri,
                                         for (j = 0; j < dj; j++) {
                                                 peri[i*nao+j] = pbuf1[j*di+i];
                                         } }
-                                        peri += nao*nao;
+                                        peri += nao2;
                                 } }
                                 pbuf += di * dj * dk * dl;
                         }
                 }
-                eri += (size_t)nao * nao * dk * dl;
+                eri += nao2 * dk * dl;
         }
         free(buf);
 }
@@ -411,6 +412,7 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double *eri,
                     int nkl, int ish, int jshtot, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
+        const size_t nao2 = nao * nao;
         const int *ao_loc = envs->ao_loc;
         const int klsh_start = envs->klsh_start;
         const int klsh_end = klsh_start + envs->klsh_count;
@@ -453,7 +455,7 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double *eri,
                         for (jsh = 0; jsh < jshtot; jsh++) {
                                 dj = ao_loc[jsh+1] - ao_loc[jsh];
                                 for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao * nao * nkl * icomp
+                                        peri = eri + nao2 * nkl * icomp
                                              + ao_loc[ish] * nao + ao_loc[jsh];
                                         for (k = 0; k < dk; k++) {
                                         for (l = 0; l <= k; l++) {
@@ -462,12 +464,12 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double *eri,
                                                 for (j = 0; j < dj; j++) {
                                                         peri[i*nao+j] = pbuf1[j*di+i];
                                                 } }
-                                                peri += nao * nao;
+                                                peri += nao2;
                                         } }
                                         pbuf += di * dj * dk * dl;
                                 }
                         }
-                        eri += (size_t)nao * nao * dk*(dk+1)/2;
+                        eri += nao2 * dk*(dk+1)/2;
 
                 } else {
 
@@ -475,7 +477,7 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double *eri,
                         for (jsh = 0; jsh < jshtot; jsh++) {
                                 dj = ao_loc[jsh+1] - ao_loc[jsh];
                                 for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao * nao * nkl * icomp
+                                        peri = eri + nao2 * nkl * icomp
                                              + ao_loc[ish] * nao + ao_loc[jsh];
                                         for (k = 0; k < dk; k++) {
                                         for (l = 0; l < dl; l++) {
@@ -484,12 +486,12 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double *eri,
                                                 for (j = 0; j < dj; j++) {
                                                         peri[i*nao+j] = pbuf1[j*di+i];
                                                 } }
-                                                peri += nao * nao;
+                                                peri += nao2;
                                         } }
                                         pbuf += di * dj * dk * dl;
                                 }
                         }
-                        eri += (size_t)nao * nao * dk * dl;
+                        eri += nao2 * dk * dl;
                 }
         }
         free(buf);

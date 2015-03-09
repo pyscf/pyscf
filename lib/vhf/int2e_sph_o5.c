@@ -16,6 +16,7 @@ static void store_ij(double *eri, int ish, int jsh,
                      CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
 {
         const int nao = envs->nao;
+        const size_t nao2 = nao * nao;
         const int *ao_loc = envs->ao_loc;
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
@@ -31,7 +32,7 @@ static void store_ij(double *eri, int ish, int jsh,
                 if (i0 >= j0) {
                         ij0 = i0*(i0+1)/2 + j0;
                         peri = eri + ij0*(ij0+1)/2;
-                        pbuf = eribuf + (j*di+i) * nao*nao;
+                        pbuf = eribuf + nao2 * (j*di+i);
                         for (kl = 0; kl <= ij0; kl++) {
                                 peri[kl] = pbuf[kl];
                         }

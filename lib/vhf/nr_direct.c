@@ -14,6 +14,8 @@
 
 #define LOWERTRI_INDEX(I,J)     ((I) > (J) ? ((I)*((I)+1)/2+(J)) : ((J)*((J)+1)/2+(I)))
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
+// 9f or 7g or 5h functions should be enough
+#define NCTRMAX         64
 
 
 /*
@@ -22,6 +24,7 @@
 void CVHFunpack_nrblock2rect(double *buf, double *eri,
                              int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
+        size_t nao2 = nao * nao;
         int iloc = ao_loc[ish];
         int jloc = ao_loc[jsh];
         int di = ao_loc[ish+1] - iloc;
@@ -34,7 +37,7 @@ void CVHFunpack_nrblock2rect(double *buf, double *eri,
                 for (j = 0; j < dj; j++) {
                         eri[i*nao+j] = buf[j*di+i];
                 } }
-                eri += nao*nao;
+                eri += nao2;
                 buf += di*dj;
         }
 }
@@ -45,6 +48,7 @@ void CVHFunpack_nrblock2rect(double *buf, double *eri,
 void CVHFunpack_nrblock2tril(double *buf, double *eri,
                              int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
+        size_t nao2 = nao * nao;
         int iloc = ao_loc[ish];
         int jloc = ao_loc[jsh];
         int di = ao_loc[ish+1] - iloc;
@@ -55,7 +59,7 @@ void CVHFunpack_nrblock2tril(double *buf, double *eri,
 
         if (ish > jsh) {
                 for (kl = 0; kl < dkl; kl++) {
-                        eri0 = eri + nao*nao * kl;
+                        eri0 = eri + nao2 * kl;
                         for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
                                         eri0[j] = buf[j*di+i];
@@ -66,7 +70,7 @@ void CVHFunpack_nrblock2tril(double *buf, double *eri,
                 }
         } else { // ish == jsh
                 for (kl = 0; kl < dkl; kl++) {
-                        eri0 = eri + nao*nao * kl;
+                        eri0 = eri + nao2 * kl;
                         for (i = 0; i < di; i++) {
                                 for (j = 0; j <= i; j++) {
                                         eri0[j] = buf[j*di+i];
@@ -85,6 +89,7 @@ void CVHFunpack_nrblock2tril(double *buf, double *eri,
 void CVHFunpack_nrblock2trilu(double *buf, double *eri,
                               int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
+        size_t nao2 = nao * nao;
         int iloc = ao_loc[ish];
         int jloc = ao_loc[jsh];
         int di = ao_loc[ish+1] - iloc;
@@ -99,8 +104,8 @@ void CVHFunpack_nrblock2trilu(double *buf, double *eri,
                         eril[i*nao+j] = buf[j*di+i];
                         eriu[j*nao+i] = buf[j*di+i];
                 } }
-                eril += nao*nao;
-                eriu += nao*nao;
+                eril += nao2;
+                eriu += nao2;
                 buf += di*dj;
         }
 }
@@ -110,6 +115,7 @@ void CVHFunpack_nrblock2trilu(double *buf, double *eri,
 void CVHFunpack_nrblock2trilu_anti(double *buf, double *eri,
                                    int ish, int jsh, int dkl, int nao, int *ao_loc)
 {
+        size_t nao2 = nao * nao;
         int iloc = ao_loc[ish];
         int jloc = ao_loc[jsh];
         int di = ao_loc[ish+1] - iloc;
@@ -125,8 +131,8 @@ void CVHFunpack_nrblock2trilu_anti(double *buf, double *eri,
                                 eril[i*nao+j] = buf[j*di+i];
                                 eriu[j*nao+i] =-buf[j*di+i];
                         } }
-                        eril += nao*nao;
-                        eriu += nao*nao;
+                        eril += nao2;
+                        eriu += nao2;
                         buf += di*dj;
                 }
         } else {
@@ -150,7 +156,7 @@ int CVHFfill_nr_s1(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
         int ish, jsh, di, dj;
         int empty = 1;
         int shls[4];
-        double *buf = malloc(sizeof(double)*nao*nao*dk*dl*ncomp);
+        double *buf = malloc(sizeof(double)*NCTRMAX*NCTRMAX*dk*dl*ncomp);
 
         shls[2] = ksh;
         shls[3] = lsh;
@@ -190,7 +196,7 @@ static int fill_s2(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
         int ish, jsh, di, dj;
         int empty = 1;
         int shls[4];
-        double *buf = malloc(sizeof(double)*nao*nao*dk*dl*ncomp);
+        double *buf = malloc(sizeof(double)*NCTRMAX*NCTRMAX*dk*dl*ncomp);
 
         shls[2] = ksh;
         shls[3] = lsh;
