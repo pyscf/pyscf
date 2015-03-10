@@ -20,6 +20,7 @@ from pyscf.ao2mo import _ao2mo
 
 libmc = pyscf.lib.load_library('libmcscf')
 
+NUMERICAL_ZERO = 1e-15
 # Ref JCP, 117, 9138
 
 # h1e is the CAS space effective 1e hamiltonian
@@ -311,10 +312,15 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
         +  numpy.einsum('ip,pa,ia->i',h1e_v,dm1,h1e_v)
 
     mo_ener = orbe[mc.ncore+mc.ncas:]
-    ener = ener/norm + mo_ener
-
-    corr = -norm/ener
-    return norm.sum(), corr.sum()
+    norm_t = 0.0
+    ener_t = 0.0
+    for i in xrange(norm.shape[0]):
+      if norm[i] < NUMERICAL_ZERO:
+        continue
+      else:
+        norm_t += norm[i]
+        ener_t -= norm[i]/(ener[i]/norm[i] + mo_ener[i])
+    return norm_t, ener_t
 
 def Si(mc, orbe, dms, eris=None, verbose=None):
     #Subspace S_i^{(1)}
@@ -359,10 +365,15 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
         +  numpy.einsum('pi,pa,ai->i',h1e_v,dm1_h,h1e_v)
 
     mo_ener = orbe[:mc.ncore]
-    ener = ener/norm - mo_ener
-
-    corr = -norm/ener
-    return norm.sum(), corr.sum()
+    norm_t = 0.0
+    ener_t = 0.0
+    for i in xrange(norm.shape[0]):
+      if norm[i] < NUMERICAL_ZERO:
+        continue
+      else:
+        norm_t += norm[i]
+        ener_t -= norm[i]/(ener[i]/norm[i] - mo_ener[i])
+    return norm_t, ener_t
 
 
 def Sijrs(mc,orbe, eris, verbose=None):
@@ -419,12 +430,19 @@ def Sijr(mc,orbe, dms, eris, verbose=None):
     h = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,a3)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,a3)
 
-    theta = numpy.divide(h,norm)
     diff = orbe[mc.ncore+mc.ncas:,None,None] - orbe[None,:mc.ncore,None] - orbe[None,None,:mc.ncore]
-    ener = theta + diff
-    mp_ener = -numpy.divide(norm,ener)
-    ener_t = mp_ener.sum()
-    return norm.sum(), ener_t
+
+    norm_t = 0.0
+    ener_t = 0.0
+    for i in xrange(norm.shape[0]):
+      for j in xrange(norm.shape[1]):
+        for k in xrange(norm.shape[2]):
+          if abs(norm[i,j,k]) < NUMERICAL_ZERO:
+            continue
+          else:
+            norm_t += norm[i,j,k]
+            ener_t -= norm[i,j,k]/(diff[i,j,k]+ h[i,j,k]/norm[i,j,k])
+    return norm_t, ener_t
 
 def Srsi(mc,orbe, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
@@ -448,12 +466,18 @@ def Srsi(mc,orbe, dms, eris, verbose=None):
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,dm1)
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
-    theta = numpy.divide(h,norm)
+    norm_t = 0.0
+    ener_t = 0.0
     diff = orbe[mc.ncore+mc.ncas:,None,None] + orbe[None,mc.ncore+mc.ncas:,None] - orbe[None,None,:mc.ncore]
-    ener = theta + diff
-    mp_ener = -numpy.divide(norm,ener)
-    ener_t = mp_ener.sum()
-    return norm.sum(), ener_t
+    for i in xrange(norm.shape[0]):
+      for j in xrange(norm.shape[1]):
+        for k in xrange(norm.shape[2]):
+          if norm[i,j,k] < NUMERICAL_ZERO:
+            continue
+          else:
+            norm_t += norm[i,j,k]
+            ener_t -= norm[i,j,k]/(h[i,j,k]/norm[i,j,k] + diff[i,j,k])
+    return norm_t, ener_t
 
 # check accuracy of make_a7
 def Srs(mc,orbe, dms, eris=None, verbose=None):
@@ -477,14 +501,19 @@ def Srs(mc,orbe, dms, eris=None, verbose=None):
         h2e_v = eris['appa'][:,nocc:,nocc:].transpose(1,2,0,3)
 
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
-    norm = numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
-    h = numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
-    theta = numpy.divide(h,norm)
+    norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
+    h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
     diff = orbe[mc.ncore+mc.ncas:,None] + orbe[None,mc.ncore+mc.ncas:]
-    ener = theta + diff
-    mp_ener = -numpy.divide(norm,ener)
-    ener_t = mp_ener.sum() * .5
-    return norm.sum()*.5, ener_t
+    norm_t = 0.0
+    ener_t = 0.0
+    for i in xrange(norm.shape[0]):
+      for j in xrange(norm.shape[1]):
+        if norm[i,j] < NUMERICAL_ZERO:
+          continue
+        else:
+          norm_t += norm[i,j]
+          ener_t -= norm[i,j]/(h[i,j]/norm[i,j] + diff[i,j])
+    return norm_t, ener_t
 
 def Sij(mc,orbe, dms, eris, verbose=None):
     #Subspace S_ij^{(-2)}
@@ -522,13 +551,18 @@ def Sij(mc,orbe, dms, eris, verbose=None):
     a9 = make_a9(h1e,h2e,hdm1,hdm2,hdm3)
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
-    theta = numpy.divide(h,norm)
     diff = orbe[:mc.ncore,None] + orbe[None,:mc.ncore]
-    ener = theta - diff
+    norm_t = 0.0
+    ener_t = 0.0
+    for i in xrange(norm.shape[0]):
+      for j in xrange(norm.shape[1]):
+        if norm[i,j] < NUMERICAL_ZERO:
+          continue
+        else:
+          norm_t += norm[i,j]
+          ener_t -= norm[i,j]/(h[i,j]/norm[i,j] - diff[i,j])
+    return norm_t, ener_t
 
-    mp_ener = -numpy.divide(norm,ener)
-    ener_t = mp_ener.sum()
-    return norm.sum(), ener_t
 
 def Sir(mc,orbe, dms, eris, verbose=None):
     #Subspace S_il^{(0)}
@@ -571,12 +605,18 @@ def Sir(mc,orbe, dms, eris, verbose=None):
          - numpy.einsum('rpiq,rabi,pqab->ir',h2e_v1,h2e_v2,a12)\
          - numpy.einsum('rpqi,raib,pqab->ir',h2e_v2,h2e_v1,a12)\
          + numpy.einsum('rpqi,rabi,pqab->ir',h2e_v2,h2e_v2,a13)
-    theta = numpy.divide(h,norm)
     diff = orbe[:mc.ncore,None] - orbe[None,mc.ncore+mc.ncas:]
-    ener = theta - diff
-    mp_ener = -numpy.divide(norm,ener)
-    ener_t = mp_ener.sum()
-    return norm.sum(), ener_t
+    norm_t = 0.0
+    ener_t = 0.0
+    for i in xrange(norm.shape[0]):
+      for j in xrange(norm.shape[1]):
+        if norm[i,j] < NUMERICAL_ZERO:
+          continue
+        else:
+          norm_t += norm[i,j]
+          ener_t -= norm[i,j]/(h[i,j]/norm[i,j] - diff[i,j])
+    return norm_t, ener_t
+
 
 
 def kernel(mc, *args, **kwargs):
