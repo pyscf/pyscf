@@ -885,6 +885,7 @@ class Mole(object):
         self.charge = 0
         self.spin = 0 # 2j
         self.symmetry = False
+        self.symmetry_subgroup = None
 
 # atom, etb, basis, nucmod, mass, grids to save inputs
 # self.atom = [(symb/nuc_charge, (coord(Angstrom):0.,0.,0.)), ...]
@@ -1042,6 +1043,7 @@ class Mole(object):
         if self.symmetry:
             import pyscf.symm
             if isinstance(self.symmetry, str):
+                self.symmetry = pyscf.symm.std_symb(self.symmetry)
                 self.topgroup = self.symmetry
                 orig = 0
                 axes = numpy.eye(3)
@@ -1052,10 +1054,18 @@ class Mole(object):
                             pyscf.symm.detect_symm(self.atom, self._basis)
                     sys.stderr.write('Warn: unable to identify input symmetry %s,'
                                      'use %s instead.\n' (self.symmetry, self.topgroup))
+                    self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
             else:
                 self.topgroup, orig, axes = \
                         pyscf.symm.detect_symm(self.atom, self._basis)
-            self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                if isinstance(self.symmetry_subgroup, str):
+                    self.symmetry_subgroup = \
+                            pyscf.symm.std_symb(self.symmetry_subgroup)
+                    assert(self.symmetry_subgroup in
+                           pyscf.symm.param.SUBGROUP[self.groupname])
+                    if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
+                        raise RuntimeError('TODO: rotate mirror')
             self.atom = self.format_atom(self.atom, orig, axes)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed

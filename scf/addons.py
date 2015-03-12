@@ -10,6 +10,7 @@ from pyscf.scf import hf
 from pyscf.scf import chkfile
 
 def frac_occ(mf, tol=1e-3):
+    assert(isinstance(mf, hf.RHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
@@ -35,6 +36,7 @@ def frac_occ_(mf, tol=1e-3):
     return mf.get_occ
 
 def dynamic_occ(mf, tol=1e-3):
+    assert(isinstance(mf, hf.RHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
