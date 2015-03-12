@@ -88,6 +88,21 @@ class KnowValues(unittest.TestCase):
         e = nevpt2.sc_nevpt(mc)
         self.assertAlmostEqual(e, -0.10315310550843806, 9)
 
+    def test_energy(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = '''
+            O   0 0 0
+            O   0 0 1.207''',
+            basis = '6-31g',
+            spin = 2)
+        m = scf.RHF(mol)
+        m.scf()
+        mc = mcscf.CASCI(m, 6, 8)
+        mc.kernel()
+        e = nevpt2.sc_nevpt(mc)
+        self.assertAlmostEqual(e, -0.16978532268234559, 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for nevpt2")

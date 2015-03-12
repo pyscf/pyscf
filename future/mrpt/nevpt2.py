@@ -364,16 +364,7 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
         +  numpy.einsum('qpir,rpqa,ai->i',h2e_v,dm2_h,h1e_v)*2.0\
         +  numpy.einsum('pi,pa,ai->i',h1e_v,dm1_h,h1e_v)
 
-    mo_ener = orbe[:mc.ncore]
-    norm_t = 0.0
-    ener_t = 0.0
-    for i in xrange(norm.shape[0]):
-      if norm[i] < NUMERICAL_ZERO:
-        continue
-      else:
-        norm_t += norm[i]
-        ener_t -= norm[i]/(ener[i]/norm[i] - mo_ener[i])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, ener, -orbe[:mc.ncore])
 
 
 def Sijrs(mc,orbe, eris, verbose=None):
@@ -432,17 +423,7 @@ def Sijr(mc,orbe, dms, eris, verbose=None):
 
     diff = orbe[mc.ncore+mc.ncas:,None,None] - orbe[None,:mc.ncore,None] - orbe[None,None,:mc.ncore]
 
-    norm_t = 0.0
-    ener_t = 0.0
-    for i in xrange(norm.shape[0]):
-      for j in xrange(norm.shape[1]):
-        for k in xrange(norm.shape[2]):
-          if abs(norm[i,j,k]) < NUMERICAL_ZERO:
-            continue
-          else:
-            norm_t += norm[i,j,k]
-            ener_t -= norm[i,j,k]/(diff[i,j,k]+ h[i,j,k]/norm[i,j,k])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, h, diff)
 
 def Srsi(mc,orbe, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
@@ -466,20 +447,9 @@ def Srsi(mc,orbe, dms, eris, verbose=None):
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,dm1)
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
-    norm_t = 0.0
-    ener_t = 0.0
     diff = orbe[mc.ncore+mc.ncas:,None,None] + orbe[None,mc.ncore+mc.ncas:,None] - orbe[None,None,:mc.ncore]
-    for i in xrange(norm.shape[0]):
-      for j in xrange(norm.shape[1]):
-        for k in xrange(norm.shape[2]):
-          if norm[i,j,k] < NUMERICAL_ZERO:
-            continue
-          else:
-            norm_t += norm[i,j,k]
-            ener_t -= norm[i,j,k]/(h[i,j,k]/norm[i,j,k] + diff[i,j,k])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, h, diff)
 
-# check accuracy of make_a7
 def Srs(mc,orbe, dms, eris=None, verbose=None):
     #Subspace S_rs^{(-2)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
@@ -500,20 +470,12 @@ def Srs(mc,orbe, dms, eris=None, verbose=None):
         h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['appa'][:,nocc:,nocc:].transpose(1,2,0,3)
 
+# check accuracy of make_a7 a7-a7.transpose(2,3,0,1)
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
     norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
     h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
     diff = orbe[mc.ncore+mc.ncas:,None] + orbe[None,mc.ncore+mc.ncas:]
-    norm_t = 0.0
-    ener_t = 0.0
-    for i in xrange(norm.shape[0]):
-      for j in xrange(norm.shape[1]):
-        if norm[i,j] < NUMERICAL_ZERO:
-          continue
-        else:
-          norm_t += norm[i,j]
-          ener_t -= norm[i,j]/(h[i,j]/norm[i,j] + diff[i,j])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, h, diff)
 
 def Sij(mc,orbe, dms, eris, verbose=None):
     #Subspace S_ij^{(-2)}
@@ -548,20 +510,12 @@ def Sij(mc,orbe, dms, eris, verbose=None):
     else:
         hdm3 = make_hdm3(dm1,dm2,dm3,hdm1,hdm2)
 
+# check accuracy of make_a9 a9-a9.transpose(2,3,0,1)
     a9 = make_a9(h1e,h2e,hdm1,hdm2,hdm3)
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
     diff = orbe[:mc.ncore,None] + orbe[None,:mc.ncore]
-    norm_t = 0.0
-    ener_t = 0.0
-    for i in xrange(norm.shape[0]):
-      for j in xrange(norm.shape[1]):
-        if norm[i,j] < NUMERICAL_ZERO:
-          continue
-        else:
-          norm_t += norm[i,j]
-          ener_t -= norm[i,j]/(h[i,j]/norm[i,j] - diff[i,j])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, h, -diff)
 
 
 def Sir(mc,orbe, dms, eris, verbose=None):
@@ -606,16 +560,7 @@ def Sir(mc,orbe, dms, eris, verbose=None):
          - numpy.einsum('rpqi,raib,pqab->ir',h2e_v2,h2e_v1,a12)\
          + numpy.einsum('rpqi,rabi,pqab->ir',h2e_v2,h2e_v2,a13)
     diff = orbe[:mc.ncore,None] - orbe[None,mc.ncore+mc.ncas:]
-    norm_t = 0.0
-    ener_t = 0.0
-    for i in xrange(norm.shape[0]):
-      for j in xrange(norm.shape[1]):
-        if norm[i,j] < NUMERICAL_ZERO:
-          continue
-        else:
-          norm_t += norm[i,j]
-          ener_t -= norm[i,j]/(h[i,j]/norm[i,j] - diff[i,j])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, h, -diff)
 
 
 
@@ -738,6 +683,12 @@ def _extract_orbs(mc, mo_coeff):
     mo_cas = mo_coeff[:,ncore:nocc]
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
+
+def _norm_to_energy(norm, h, diff):
+    idx = abs(norm) > NUMERICAL_ZERO
+    ener_t = -(norm[idx] / (diff[idx] + h[idx]/norm[idx])).sum()
+    norm_t = norm.sum()
+    return norm_t, ener_t
 
 def _ERIS(mc, mo, method='incore'):
     nmo = mo.shape[1]
