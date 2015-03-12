@@ -1161,15 +1161,15 @@ class ROHF(RHF):
         f = reduce(numpy.dot, (cinv.T, feff, cinv))
 
         if 0 <= cycle < self.diis_start_cycle-1:
-            f = damping(s1e, dmsf*.5, f, self.damp_factor)
-            f = level_shift(s1e, dmsf*.5, f, self.level_shift_factor)
+            f = damping(s1e, dm[0], f, self.damp_factor)
+            f = level_shift(s1e, dm[0], f, self.level_shift_factor)
         elif 0 <= cycle:
             # decay the level_shift_factor
             fac = self.level_shift_factor \
                     * numpy.exp(self.diis_start_cycle-cycle-1)
-            f = level_shift(s1e, dmsf*.5, f, fac)
+            f = level_shift(s1e, dm[0], f, fac)
         if adiis is not None and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dmsf, f)
+            f = adiis.update(s1e, dm[0], f)
 # attach alpha and beta fock, because Roothaan effective Fock cannot provide
 # correct orbital energy.  To define orbital energy in self.eig, we use alpha
 # fock and beta fock.
@@ -1226,16 +1226,20 @@ class ROHF(RHF):
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
-        if self._eri is not None or self._is_mem_enough():
-            vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
+            ddm = numpy.vstack((ddm[nset:],             # closed shell
+                                ddm[:nset]-ddm[nset:])) # open shell
             vj, vk = self.get_jk(mol, ddm, hermi)
+            vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
+            vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset) \
                 + numpy.array(vhf_last, copy=False)
         else:
+            dm = numpy.vstack((dm[nset:],dm[:nset]-dm[nset:]))
             vj, vk = self.get_jk(mol, dm, hermi)
+            vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
+            vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         return vhf
 

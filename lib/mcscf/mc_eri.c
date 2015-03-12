@@ -80,28 +80,38 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
 {
         const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
-        int k, l, kl, ksh, lsh, dk, dl;
+        int n, k, l, kl, ksh, lsh, dk, dl;
         double *tridm = malloc(sizeof(double) * nao2);
-        int *kshs = malloc(sizeof(int) * klsh_count);
-        int *lshs = malloc(sizeof(int) * klsh_count);
-        double **peris = malloc(sizeof(double*) * klsh_count);
+        int *klocs = malloc(sizeof(int) * nao2);
+        int *llocs = malloc(sizeof(int) * nao2);
+        double **peris = malloc(sizeof(double*) * nao2);
         double *buf, *jpriv, *kpriv;
         double *peri;
 
-        for (k = 0; k < klsh_count; k++) {
+        n = 0;
+        for (kl = 0; kl < klsh_count; kl++) {
                 // kl = k * (k+1) / 2 + l
-                kl = klsh_start + k;
                 ksh = (int)(sqrt(2*kl+.25) - .5 + 1e-7);
                 lsh = kl - ksh * (ksh+1) / 2;
-                kshs[k] = ksh;
-                lshs[k] = lsh;
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 dl = ao_loc[lsh+1] - ao_loc[lsh];
-                peris[k] = eri;
+
                 if (ksh != lsh) {
-                        eri += nao2 * dk * dl;
+                        for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
+                        for (l = ao_loc[lsh]; l < ao_loc[lsh+1]; l++, n++) {
+                                peris[n] = eri;
+                                klocs[n] = k;
+                                llocs[n] = l;
+                                eri += nao2;
+                        } }
                 } else {
-                        eri += nao2 * dk*(dk+1)/2;
+                        for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
+                        for (l = ao_loc[lsh]; l <= k; l++, n++) {
+                                peris[n] = eri;
+                                klocs[n] = k;
+                                llocs[n] = l;
+                                eri += nao2;
+                        } }
                 }
         }
         for (k = 0, kl = 0; k < nao; k++) {
@@ -113,7 +123,7 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
         }
 
 #pragma omp parallel default(none) \
-        shared(klsh_count, ao_loc, dm, tridm, vj, vk, kshs, lshs, peris) \
+        shared(dm, tridm, vj, vk, klocs, llocs, n, peris) \
         private(k, l, kl, ksh, lsh, peri, buf, jpriv, kpriv)
         {
                 buf = malloc(sizeof(double) * nao2);
@@ -122,27 +132,13 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
                 memset(jpriv, 0, sizeof(double) * nao2);
                 memset(kpriv, 0, sizeof(double) * nao2);
 #pragma omp for nowait schedule(dynamic)
-                for (kl = 0; kl < klsh_count; kl++) {
-                        ksh = kshs[kl];
-                        lsh = lshs[kl];
+                for (kl = 0; kl < n; kl++) {
+                        k = klocs[kl];
+                        l = llocs[kl];
                         peri = peris[kl];
-                        if (ksh != lsh) {
-                                for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
-                                for (l = ao_loc[lsh]; l < ao_loc[lsh+1]; l++) {
-                                        NPdpack_tril(nao, buf, peri);
-                                        CVHFnrs8_tridm_vj(buf, tridm, jpriv, nao, k, l);
-                                        CVHFnrs8_jk_s2il (buf, dm   , kpriv, nao, k, l);
-                                        peri += nao2;
-                                } }
-                        } else {
-                                for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
-                                for (l = ao_loc[lsh]; l <= k; l++) {
-                                        NPdpack_tril(nao, buf, peri);
-                                        CVHFnrs8_tridm_vj(buf, tridm, jpriv, nao, k, l);
-                                        CVHFnrs8_jk_s2il (buf, dm   , kpriv, nao, k, l);
-                                        peri += nao2;
-                                } }
-                        }
+                        NPdpack_tril(nao, buf, peri);
+                        CVHFnrs8_tridm_vj(buf, tridm, jpriv, nao, k, l);
+                        CVHFnrs8_jk_s2il (buf, dm   , kpriv, nao, k, l);
                 }
 #pragma omp critical
                 for (k = 0; k < nao2; k++) {
@@ -155,6 +151,6 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
         }
         free(tridm);
         free(peris);
-        free(kshs);
-        free(lshs);
+        free(klocs);
+        free(llocs);
 }

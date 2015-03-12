@@ -210,6 +210,8 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                     kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf1, mo[i0:i1,:ncore])
                     kc[i0:i1] += numpy.einsum('uvpc,vc->upc', buf1, mo[j0:j1,:ncore])
                 p0 += dij
+            if log.verbose >= logger.DEBUG1:
+                ti1 = log.timer('jc and kc buffer', *ti1)
         elif approx == 2:
             fdrv = libmcscf.MCSCFnrs4_corejk
             fdrv(buf.ctypes.data_as(ctypes.c_void_p),
@@ -218,8 +220,8 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                  kc.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(sh_range[0]), ctypes.c_int(sh_range[1]-sh_range[0]),
                  ctypes.c_int(mol.nbas), ao_loc.ctypes.data_as(ctypes.c_void_p))
-        if log.verbose >= logger.DEBUG1:
-            ti1 = log.timer('jc and kc buffer', *ti1)
+            if log.verbose >= logger.DEBUG1:
+                ti1 = log.timer('core vj and vk', *ti1)
 
         buf = buf1 = bufpa = None
         ti0 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)

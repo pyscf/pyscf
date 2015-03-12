@@ -54,11 +54,11 @@ def davidson(h_op, g, precond, x0, tol=1e-7,
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
-        norm_dx = numpy.linalg.norm(dx)
+        norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
 # note that linear dependence of trial-vectors is very common, it always
 # causes numerical problems in CASSCF
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        if ((norm_dx/numpy.sqrt(x0.size) < tol and abs(w_t-w0) < start_tol)
+        if ((norm_dx < tol and abs(w_t-w0) < start_tol)
             or s0 < lindep):
             break
         log.debug1('AH step %d, index=%d, |dx|=%.5g, lambda=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
@@ -105,15 +105,14 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, start_tol=1e-4,
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
-        norm_dx = numpy.linalg.norm(dx)
+        norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        log.debug1('AH step %d, index=%d, |dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
+        log.debug1('AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if ((norm_dx/numpy.sqrt(x0.size) < tol and abs(w_t-w0) < start_tol)
-            or s0 < lindep):
+        if ((norm_dx < tol and abs(w_t-w0) < start_tol) or s0 < lindep):
             break
-        elif (norm_dx/numpy.sqrt(x0.size) < start_tol and
-              abs(w_t-w0) < start_tol and istep+1 >= start_cycle):
+        elif (norm_dx < start_tol and abs(w_t-w0) < start_tol
+              and istep+1 >= start_cycle):
             yield istep, w_t, xtrial
         w0 = w_t
         x0 = precond(dx, w_t)

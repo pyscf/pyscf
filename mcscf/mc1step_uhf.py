@@ -229,10 +229,11 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, dx=0, verbose=None):
         g_orb = g_orb0 + h_op(dx)
 
     norm_gprev = numpy.linalg.norm(g_orb)
-    ah_start_tol = min(norm_gprev, casscf.ah_start_tol)
+    ah_start_tol = min(norm_gprev*.1, casscf.ah_start_tol)
     g_op = lambda: g_orb
     imic = 0
-    for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0, log,
+    for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0,
+                                                verbose=log,
                                                 tol=casscf.ah_conv_tol,
                                                 start_tol=ah_start_tol,
                                                 max_cycle=casscf.ah_max_cycle,

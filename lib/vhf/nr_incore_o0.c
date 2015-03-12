@@ -372,12 +372,14 @@ void CVHFnrs8_tridm_vj(double *eri, double *tri_dm, double *vj,
         int i, j, ij;
         double dm_ijc = tri_dm[ic*(ic+1)/2+jc];
         double *vj_ij = &vj[ic*nao+jc];
+        const int INC1 = 1;
+        int i1;
 
         for (i = 0, ij = 0; i < ic; i++) {
-                for (j = 0; j <= i; j++, ij++) {
-                        *vj_ij += eri[ij] * tri_dm[ij];
-                        vj[i*nao+j] += eri[ij] * dm_ijc;
-                }
+                i1 = i + 1;
+                *vj_ij += ddot_(&i1, eri+ij, &INC1, tri_dm+ij, &INC1);
+                daxpy_(&i1, &dm_ijc, eri+ij, &INC1, vj+i*nao, &INC1);
+                ij += i1;
         }
         // i == ic
         for (j = 0; j < jc; j++, ij++) {
