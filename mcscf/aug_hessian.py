@@ -12,21 +12,27 @@ from pyscf.lib import logger
 # likely that the optimization path is affected but the CASSCF result is
 # unchanged.
 def avoid_singular(e, v):
-    for index, x in enumerate(v[0]):
-        if abs(x) > .1:
+    for index, x in enumerate(abs(v[0])):
+        if x > .1:
             return index
     raise RuntimeError('aug_hess-pick_mode fail')
 
 # IJQC, 109, 2178
 # use davidson algorithm to solve augmented hessian  Ac = ce
 # c is the trial vector = (1, xtrial)
-def davidson(h_op, g, precond, x0, log, tol=1e-7,
+def davidson(h_op, g, precond, x0, tol=1e-7,
              max_cycle=10, max_stepsize=.6, lindep=1e-14,
-             pick_mode=avoid_singular, dot=numpy.dot):
+             pick_mode=avoid_singular, dot=numpy.dot, verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
+
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = []
     ax = []
 
+    w0 = 0
     lambda0 = 1
     heff = numpy.zeros((max_cycle+1,max_cycle+1))
     ovlp = numpy.eye(max_cycle+1)
@@ -52,11 +58,13 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7,
 # note that linear dependence of trial-vectors is very common, it always
 # causes numerical problems in CASSCF
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        if norm_dx < tol or s0 < lindep:
+        if ((norm_dx/numpy.sqrt(x0.size) < tol and abs(w_t-w0) < start_tol)
+            or s0 < lindep):
             break
         log.debug1('AH step %d, index=%d, |dx|=%.5g, lambda=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep, index, norm_dx, lambda0, w_t, v_t[0], s0)
 #FIXME: The hessian can be very small sometime, the precond may have problems
+        w0 = w_t
         x0 = precond(dx, w_t)
 
     norm_x = numpy.linalg.norm(xtrial)
@@ -66,14 +74,20 @@ def davidson(h_op, g, precond, x0, log, tol=1e-7,
               istep+1, numpy.linalg.norm(g), norm_x, numpy.max(abs(xtrial)), w_t)
     return w_t, xtrial
 
-def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, start_tol=1e-4,
+def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, start_tol=1e-4,
                 max_cycle=10, max_stepsize=.6, lindep=1e-14, start_cycle=0,
-                pick_mode=avoid_singular, dot=numpy.dot):
+                pick_mode=avoid_singular, dot=numpy.dot, verbose=logger.WARN):
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
 
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = []
     ax = []
 
+    w0 = 0
     heff = numpy.zeros((max_cycle+1,max_cycle+1))
     ovlp = numpy.eye(max_cycle+1)
     for istep in range(min(max_cycle,x0.size)):
@@ -92,13 +106,16 @@ def davidson_cc(h_op, g_op, precond, x0, log, tol=1e-7, start_tol=1e-4,
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)
-        if norm_dx < start_tol and istep+1 >= start_cycle:
-            yield istep, w_t, xtrial
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, |dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if norm_dx < tol or s0 < lindep:
+        if ((norm_dx/numpy.sqrt(x0.size) < tol and abs(w_t-w0) < start_tol)
+            or s0 < lindep):
             break
+        elif (norm_dx/numpy.sqrt(x0.size) < start_tol and
+              abs(w_t-w0) < start_tol and istep+1 >= start_cycle):
+            yield istep, w_t, xtrial
+        w0 = w_t
         x0 = precond(dx, w_t)
 
         #yield w_t, xtrial

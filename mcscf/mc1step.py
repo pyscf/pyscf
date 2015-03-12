@@ -176,14 +176,15 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
 
     norm_gprev = numpy.linalg.norm(g_orb)
     # increase the AH accuracy when approach convergence
-    if norm_gprev < casscf.ah_start_tol:
-        ah_start_tol = norm_gprev
+    if norm_gprev*.1 < casscf.ah_start_tol:
+        ah_start_tol = norm_gprev*.1
         log.debug1('Set AH start tol to %g', ah_start_tol)
     else:
         ah_start_tol = casscf.ah_start_tol
     g_op = lambda: g_orb
     imic = 0
-    for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0, log,
+    for ihop, w, dxi in aug_hessian.davidson_cc(h_op, g_op, precond, x0,
+                                                verbose=log,
                                                 tol=casscf.ah_conv_tol,
                                                 start_tol=ah_start_tol,
                                                 max_cycle=casscf.ah_max_cycle,
@@ -807,10 +808,10 @@ class CASSCF(casci.CASCI):
             # dynamic ci_stepsize: ci graidents may change the CI vector too much,
             # which causes oscillation in macro iterations
             max_step = numpy.linalg.norm(rmat)/rmat.shape[0]
-            if max_step > self.max_ci_stepsize:
-                max_step = self.max_ci_stepsize
-            else:
+            if self.ci_response_space == 1 and max_step < self.max_ci_stepsize:
                 logger.debug1(self, 'Set CI step size to %g', max_step)
+            else:
+                max_step = self.max_ci_stepsize
 
             dc = -g.ravel()
             if dcmax > max_step:

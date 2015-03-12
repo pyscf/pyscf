@@ -77,7 +77,6 @@ def density_fit_(mf, auxbasis='weigend'):
 
 OCCDROP = 1e-12
 BLOCKDIM = 120
-_call_count = 0
 def get_jk_(mf, mol, dms, hermi=1):
     from pyscf import df
     from pyscf.ao2mo import _ao2mo
@@ -99,9 +98,6 @@ def get_jk_(mf, mol, dms, hermi=1):
 
     if len(dms) == 0:
         return [], []
-
-    global _call_count
-    _call_count += 1
 
     cderi = mf._cderi
     nao = mol.nao_nr()
@@ -322,7 +318,11 @@ def r_get_jk_(mf, mol, dms, hermi=1):
     return vj, vk
 
 
+_call_count = 0
 def prange(start, end, step):
+    global _call_count
+    _call_count += 1
+
     if _call_count % 2 == 1:
         for i in reversed(range(start, end, step)):
             yield i, min(i+step, end)

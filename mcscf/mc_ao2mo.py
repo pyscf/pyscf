@@ -14,6 +14,7 @@ from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
+from pyscf.scf import hf
 
 # least memory requirements:
 # nmo  ncore  ncas  outcore  incore
@@ -85,7 +86,8 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
 
 # approx = 0: all, includes Icvcv etc
 # approx = 1: aapp, appa and vhf, jcp, kcp
-# approx = 2: vhf, aapp, appa
+# approx = 2: aapp, appa, vhf
+# approx = 3: aapp, appa
 def light_e1_outcore(mol, mo, ncore, ncas,
                      max_memory=None, approx=1, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
@@ -107,7 +109,8 @@ def light_e1_outcore(mol, mo, ncore, ncas,
         jc = numpy.empty((nao,nao,ncore))
         kc = numpy.zeros((nao,nao,ncore))
     else:
-        jc = numpy.empty((nao,nao))
+        dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
+        jc = numpy.zeros((nao,nao))
         kc = numpy.zeros((nao,nao))
 
     mem_words = int(max_memory * 1e6/8)
@@ -155,33 +158,32 @@ def light_e1_outcore(mol, mo, ncore, ncas,
             else:
                 dij = di * dj
                 buf1 = bufpa[p0:p0+dij].reshape(di,dj,-1)
-                mo1 = mo[j0:j1,ncore:nocc]
+                mo1 = mo[j0:j1,ncore:nocc].copy()
                 for i in range(di):
-                    appa_buf[:,i0+i] += numpy.dot(mo1.T, buf1[i])
+                    appa_buf[:,i0+i] += pyscf.lib.dot(mo1.T, buf1[i])
                 buf1 = bufpa[p0:p0+dij].reshape(di,-1)
+            mo1 = mo[i0:i1,ncore:nocc].copy()
             appa_buf[:,j0:j1] += \
-                    numpy.dot(mo[i0:i1,ncore:nocc].T, buf1).reshape(ncas,dj,-1)
+                    pyscf.lib.dot(mo1.T, buf1).reshape(ncas,dj,-1)
             p0 += dij
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('appa buffer', *ti1)
 
 # jc_pp, kc_pp
-        buf1 = numpy.empty((sh_range[2],nao*ncore))
-        fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
-        ftrans = _fpointer('AO2MOtranse1_nr_s4')
-        fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
-        fdrv(ftrans, fmmm,
-             buf1.ctypes.data_as(ctypes.c_void_p),
-             buf.ctypes.data_as(ctypes.c_void_p),
-             mo.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(sh_range[2]), ctypes.c_int(nao),
-             ctypes.c_int(0), ctypes.c_int(nao),
-             ctypes.c_int(0), ctypes.c_int(ncore),
-             ctypes.c_void_p(0), ctypes.c_int(0))
-        buf = buf1
-        if log.verbose >= logger.DEBUG1:
-            ti1 = log.timer('halfmmm core (uv|tc)', *ti1)
         if approx == 1:
+            buf1 = numpy.empty((sh_range[2],nao*ncore))
+            fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
+            ftrans = _fpointer('AO2MOtranse1_nr_s4')
+            fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
+            fdrv(ftrans, fmmm,
+                 buf1.ctypes.data_as(ctypes.c_void_p),
+                 buf.ctypes.data_as(ctypes.c_void_p),
+                 mo.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(sh_range[2]), ctypes.c_int(nao),
+                 ctypes.c_int(0), ctypes.c_int(nao),
+                 ctypes.c_int(0), ctypes.c_int(ncore),
+                 ctypes.c_void_p(0), ctypes.c_int(0))
+            buf = buf1
             p0 = 0
             for ij in range(sh_range[0], sh_range[1]):
                 i,j = _ao2mo._extract_pair(ij)
@@ -208,38 +210,18 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                     kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf1, mo[i0:i1,:ncore])
                     kc[i0:i1] += numpy.einsum('uvpc,vc->upc', buf1, mo[j0:j1,:ncore])
                 p0 += dij
-            if log.verbose >= logger.DEBUG1:
-                ti1 = log.timer('jc and kc buffer', *ti1)
-        else:
-            p0 = 0
-            for ij in range(sh_range[0], sh_range[1]):
-                i,j = _ao2mo._extract_pair(ij)
-                i0 = ao_loc[i]
-                j0 = ao_loc[j]
-                i1 = ao_loc[i+1]
-                j1 = ao_loc[j+1]
-                di = i1 - i0
-                dj = j1 - j0
-                if i == j:
-                    dij = di * (di+1) // 2
-                    buf1 = numpy.empty((di,di,nao*ncore))
-                    idx = numpy.tril_indices(di)
-                    buf1[idx] = buf[p0:p0+dij]
-                    buf1[idx[1],idx[0]] = buf[p0:p0+dij]
-                    buf1 = buf1.reshape(di,di,nao,ncore)
-                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uv', buf1, mo[:,:ncore])
-                    kc[j0:j1] += numpy.einsum('uvpc,uc->vp', buf1, mo[i0:i1,:ncore])
-                else:
-                    dij = di * dj
-                    buf1 = buf[p0:p0+dij].reshape(di,dj,nao,ncore)
-                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uv', buf1, mo[:,:ncore])
-                    kc[j0:j1] += numpy.einsum('uvpc,uc->vp', buf1, mo[i0:i1,:ncore])
-                    kc[i0:i1] += numpy.einsum('uvpc,vc->up', buf1, mo[j0:j1,:ncore])
-                p0 += dij
-            if log.verbose >= logger.DEBUG1:
-                ti1 = log.timer('jc and kc buffer', *ti1)
+        elif approx == 2:
+            fdrv = libmcscf.MCSCFnrs4_corejk
+            fdrv(buf.ctypes.data_as(ctypes.c_void_p),
+                 dm_core.ctypes.data_as(ctypes.c_void_p),
+                 jc.ctypes.data_as(ctypes.c_void_p),
+                 kc.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(sh_range[0]), ctypes.c_int(sh_range[1]-sh_range[0]),
+                 ctypes.c_int(mol.nbas), ao_loc.ctypes.data_as(ctypes.c_void_p))
+        if log.verbose >= logger.DEBUG1:
+            ti1 = log.timer('jc and kc buffer', *ti1)
 
-        buf1 = bufpa = None
+        buf = buf1 = bufpa = None
         ti0 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
     aapp_buf = pyscf.lib.transpose(aapp_buf.reshape(nao_pair,-1))
@@ -262,10 +244,13 @@ def light_e1_outcore(mol, mo, ncore, ncas,
         j_cp = numpy.einsum('pj,jpi->ij', mo, j_cp)
         k_cp = numpy.dot(mo.T, kc.reshape(nao,-1)).reshape(nao,nao,ncore)
         k_cp = numpy.einsum('pj,jpi->ij', mo, k_cp)
-    else:
+    elif approx == 2:
         jc = pyscf.lib.hermi_triu(jc, hermi=1, inplace=True)
-        vhf_c = reduce(numpy.dot, (mo.T, jc*2-kc, mo))
+        kc = pyscf.lib.hermi_triu(kc, hermi=1, inplace=True)
+        vhf_c = reduce(numpy.dot, (mo.T, jc-kc*.5, mo))
         j_cp = k_cp = None
+    elif approx == 3:
+        vhf_c = j_cp = k_cp = None
 
     time0 = log.timer('mc_ao2mo', *time0)
     return vhf_c, j_cp, k_cp, aapp, appa
@@ -339,7 +324,8 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 
 # approx = 0: all, includes Icvcv etc
 # approx = 1: aapp, appa and vhf, jcp, kcp
-# approx = 2: vhf, aapp, appa
+# approx = 2: aapp, appa, vhf
+# approx = 3: aapp, appa
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore', approx=0):
         mol = casscf.mol
