@@ -238,8 +238,7 @@ def symm_ops(gpname, axes=None):
 def symm_identical_atoms(gpname, atoms):
     ''' Requires '''
     if not numpy.allclose(get_charge_center(atoms), 0, atol=GEOM_THRESHOLD):
-        raise RuntimeError('''The molecule needs to be placed in the standard orientation.
-It can be obtained using the return variables of detect_symm.''')
+        sys.stderr.write('WARN: Molecular charge center is not on (0,0,0)\n')
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms)
