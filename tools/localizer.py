@@ -247,6 +247,37 @@ class localizer:
 
         logger.debug(self, "2-norm( hessian difference ) = %.g", np.linalg.norm( hessian_analytic - hessian_numerical ))
         logger.debug(self, "2-norm( hessian )            = %.g", np.linalg.norm( hessian_analytic ))
+        
+    def __reorder_orbitals( self ):
+    
+        # Find the coordinates of each localized orbital (expectation value).
+        __coords = np.zeros( [ self.Norbs, 3 ], dtype=float )
+        if ( self.__which == 'boys' ):
+            for orb in range( self.Norbs ):
+                __coords[ orb, 0 ] = 0.5 * self.x_symm[ orb, orb ]
+                __coords[ orb, 1 ] = 0.5 * self.y_symm[ orb, orb ]
+                __coords[ orb, 2 ] = 0.5 * self.z_symm[ orb, orb ]
+        if ( self.__which == 'edmiston' ):
+            rvec     = self.themol.intor('cint1e_r_sph', 3)
+            rotation = np.dot( self.coeff, self.u )
+            for cart in range(3): #xyz
+                __coords[ :, cart ] = np.diag( np.dot( np.dot( rotation.T, rvec[cart] ) , rotation ) )
+                
+        # Find the atom number to which the localized orbital is closest (RMS).
+        __atomid = np.zeros( [ self.Norbs ], dtype=int )
+        for orb in range( self.Norbs ):
+            min_id = 0
+            min_distance = np.linalg.norm( __coords[ orb, : ] - self.themol.atom_coord( 0 ) )
+            for atom in range( 1, self.themol.natm ):
+                current_distance = np.linalg.norm( __coords[ orb, : ] - self.themol.atom_coord( atom ) )
+                if ( current_distance < min_distance ):
+                    min_distance = current_distance
+                    min_id = atom
+            __atomid[ orb ] = min_id
+            
+        # Reorder
+        idx = __atomid.argsort()
+        self.u = self.u[:,idx]
 
     def optimize( self ):
         r'''Augmented Hessian Newton-Raphson optimization of the localization cost function, using an exact gradient and hessian
@@ -290,7 +321,8 @@ class localizer:
             logger.debug(self, "Localizer :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
 
         logger.note(self, "Localization procedure converged in %d iterations.", iteration)
-
+        
+        self.__reorder_orbitals()
         converged_coeff = np.dot( self.coeff, self.u )
         return converged_coeff
 
