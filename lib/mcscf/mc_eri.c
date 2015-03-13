@@ -80,21 +80,18 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
 {
         const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
-        int n, k, l, kl, ksh, lsh, dk, dl;
+        int n, k, l, kl, ksh, lsh;
         double *tridm = malloc(sizeof(double) * nao2);
         int *klocs = malloc(sizeof(int) * nao2);
         int *llocs = malloc(sizeof(int) * nao2);
         double **peris = malloc(sizeof(double*) * nao2);
         double *buf, *jpriv, *kpriv;
-        double *peri;
 
         n = 0;
         for (kl = 0; kl < klsh_count; kl++) {
                 // kl = k * (k+1) / 2 + l
-                ksh = (int)(sqrt(2*kl+.25) - .5 + 1e-7);
-                lsh = kl - ksh * (ksh+1) / 2;
-                dk = ao_loc[ksh+1] - ao_loc[ksh];
-                dl = ao_loc[lsh+1] - ao_loc[lsh];
+                ksh = (int)(sqrt(2*(klsh_start+kl)+.25) - .5 + 1e-7);
+                lsh = klsh_start+kl - ksh * (ksh+1) / 2;
 
                 if (ksh != lsh) {
                         for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
@@ -124,7 +121,7 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
 
 #pragma omp parallel default(none) \
         shared(dm, tridm, vj, vk, klocs, llocs, n, peris) \
-        private(k, l, kl, ksh, lsh, peri, buf, jpriv, kpriv)
+        private(k, l, kl, ksh, lsh, buf, jpriv, kpriv)
         {
                 buf = malloc(sizeof(double) * nao2);
                 jpriv = malloc(sizeof(double) * nao2);
@@ -135,8 +132,7 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
                 for (kl = 0; kl < n; kl++) {
                         k = klocs[kl];
                         l = llocs[kl];
-                        peri = peris[kl];
-                        NPdpack_tril(nao, buf, peri);
+                        NPdpack_tril(nao, buf, peris[kl]);
                         CVHFnrs8_tridm_vj(buf, tridm, jpriv, nao, k, l);
                         CVHFnrs8_jk_s2il (buf, dm   , kpriv, nao, k, l);
                 }

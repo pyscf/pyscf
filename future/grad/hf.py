@@ -156,6 +156,8 @@ class RHF:
         log.debug(self, str(gs))
         return gs
 
+    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+        return self.grad(mo_energy, mo_coeff, mo_occ)
     def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None):
         cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self._scf.mo_energy

@@ -9,7 +9,7 @@
 void NPdsymm_triu(int n, double *mat, int hermi)
 {
         int ic, ic1, jc, jc1;
-        long i, j, i1;
+        size_t i, j, i1;
 
         if (hermi == HERMITIAN) {
                 for (ic = 0; ic < n; ic += BLOCK_DIM) {
@@ -53,7 +53,7 @@ void NPdsymm_triu(int n, double *mat, int hermi)
 void NPzhermi_triu(int n, double complex *mat, int hermi)
 {
         int ic, ic1, jc, jc1;
-        long i, j, i1;
+        size_t i, j, i1;
 
         if (hermi == HERMITIAN) {
                 for (ic = 0; ic < n; ic += BLOCK_DIM) {
@@ -97,7 +97,7 @@ void NPzhermi_triu(int n, double complex *mat, int hermi)
 
 void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 {
-        long i, j, ij;
+        size_t i, j, ij;
         double *pmat;
 
         for (ij = 0, i = 0; i < n; i++) {
@@ -115,7 +115,7 @@ void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
 {
         int i;
-        unsigned long idx = (unsigned long)row_id * (row_id + 1) / 2;
+        size_t idx = (size_t)row_id * (row_id + 1) / 2;
         memcpy(row, tril+idx, sizeof(double)*row_id);
         for (i = row_id; i < ndim; i++) {
                 idx += i;
@@ -126,7 +126,7 @@ void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
 void NPzunpack_tril(int n, double complex *tril, double complex *mat,
                     int hermi)
 {
-        long i, j, ij;
+        size_t i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
                 for (j = 0; j <= i; j++, ij++) {
                         mat[i*n+j] = tril[ij];
@@ -139,7 +139,7 @@ void NPzunpack_tril(int n, double complex *tril, double complex *mat,
 
 void NPdpack_tril(int n, double *tril, double *mat)
 {
-        long i, j, ij;
+        size_t i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
                 for (j = 0; j <= i; j++, ij++) {
                         tril[ij] = mat[i*n+j];
@@ -149,7 +149,7 @@ void NPdpack_tril(int n, double *tril, double *mat)
 
 void NPzpack_tril(int n, double complex *tril, double complex *mat)
 {
-        long i, j, ij;
+        size_t i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
                 for (j = 0; j <= i; j++, ij++) {
                         tril[ij] = mat[i*n+j];

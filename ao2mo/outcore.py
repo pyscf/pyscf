@@ -650,7 +650,7 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
-    mem_words = max_memory * 1e6 / 8
+    mem_words = max(1, max_memory * 1e6 / 8)
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
@@ -671,6 +671,8 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
 
 # based on the size of buffer, dynamic range of AO-shells for each buffer
 def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
+    max_iobuf = max(1, max_iobuf)
+    max_aobuf = max(1, max_aobuf)
     ao_loc = mol.ao_loc_nr()
 
     accum = []
