@@ -48,7 +48,7 @@ def dump_rec(stdout, c, label=None, label2=None, ncol=5, digits=5, start=0):
 
 def dump_mo(mol, c):
     label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-    dump_mat.dump_mo(mol.stdout, c, label, start=1)
+    dump_rec(mol.stdout, c, label, start=1)
 
 
 if __name__ == '__main__':
