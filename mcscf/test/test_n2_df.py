@@ -14,6 +14,7 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
+max_memory = 1,
 )
 m = scf.RHF(mol)
 m.conv_tol = 1e-9
@@ -26,7 +27,8 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
-symmetry = True
+max_memory = 1,
+symmetry = True,
 )
 msym = scf.RHF(molsym)
 msym.conv_tol = 1e-9

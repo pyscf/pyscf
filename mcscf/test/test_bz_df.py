@@ -23,6 +23,7 @@ mol.atom = [
 
 mol.basis = {'H': '6-31g',
              'C': '6-31g',}
+mol.max_memory = 20
 mol.build()
 
 mf = scf.RHF(mol)

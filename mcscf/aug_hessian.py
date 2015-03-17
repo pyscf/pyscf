@@ -58,8 +58,7 @@ def davidson(h_op, g, precond, x0, tol=1e-7,
 # note that linear dependence of trial-vectors is very common, it always
 # causes numerical problems in CASSCF
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        if ((norm_dx < tol and abs(w_t-w0) < start_tol)
-            or s0 < lindep):
+        if ((norm_dx < tol and abs(w_t-w0) < tol) or s0 < lindep):
             break
         log.debug1('AH step %d, index=%d, |dx|=%.5g, lambda=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep, index, norm_dx, lambda0, w_t, v_t[0], s0)
@@ -74,8 +73,8 @@ def davidson(h_op, g, precond, x0, tol=1e-7,
               istep+1, numpy.linalg.norm(g), norm_x, numpy.max(abs(xtrial)), w_t)
     return w_t, xtrial
 
-def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, start_tol=1e-4,
-                max_cycle=10, max_stepsize=.6, lindep=1e-14, start_cycle=0,
+def davidson_cc(h_op, g_op, precond, x0, tol=1e-7,
+                max_cycle=10, max_stepsize=.6, lindep=1e-14,
                 pick_mode=avoid_singular, dot=numpy.dot, verbose=logger.WARN):
 
     if isinstance(verbose, logger.Logger):
@@ -109,19 +108,16 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, start_tol=1e-4,
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if ((norm_dx < tol and abs(w_t-w0) < start_tol) or s0 < lindep):
+        if ((norm_dx < tol and abs(w_t-w0) < tol) or s0 < lindep):
             break
-        elif (norm_dx < start_tol and abs(w_t-w0) < start_tol
-              and istep+1 >= start_cycle):
-            yield istep, w_t, xtrial
+        yield istep, w_t, xtrial, dx
         w0 = w_t
         x0 = precond(dx, w_t)
 
-        #yield w_t, xtrial
     if x0.size == 0:
-        yield 0, 0, x0
+        yield istep, 0, x0, x0
     else:
-        yield istep+1, w_t, xtrial
+        yield istep, w_t, xtrial, dx
 
 # As did in orz, optimize the stepsize by searching the best lambda
 def _opt_step_as_orz_lambda(heff, ovlp, xs, pick_mode, lambda0,
