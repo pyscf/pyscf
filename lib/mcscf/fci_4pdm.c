@@ -457,7 +457,7 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
 /*
  * This function returns incomplete rdm3, rdm4, in which, particle
  * permutation symmetry is assumed.
- * kernel can be FCI4pdm_kern_ms0, FCI4pdm_kern_spin0
+ * kernel can be FCI4pdm_kern_sf, FCI4pdm_kern_spin0
  */
 void FCIrdm4_drv(void (*kernel)(),
                  double *rdm1, double *rdm2, double *rdm3, double *rdm4,

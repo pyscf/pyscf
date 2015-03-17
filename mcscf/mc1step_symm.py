@@ -10,6 +10,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
 import pyscf.scf
+import pyscf.symm
 from pyscf.mcscf import casci
 from pyscf.mcscf import aug_hessian
 from pyscf.mcscf import mc1step
@@ -92,6 +93,8 @@ class CASSCF(mc1step.CASSCF):
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def gen_g_hop(self, mo, casdm1, casdm2, eris):
+        casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
+                             self.mol.groupname)
         g_orb, h_op, h_diag = mc1step.gen_g_hop(self, mo, casdm1, casdm2, eris)
         g_orb = _symmetrize(self.unpack_uniq_var(g_orb), self.orbsym,
                             self.mol.groupname)
@@ -115,16 +118,13 @@ class CASSCF(mc1step.CASSCF):
         return u, self.pack_uniq_var(dx), g_orb, jkcnt
 
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):
-    irreptab = pyscf.symm.param.IRREP_ID_TABLE[groupname]
-    if isinstance(wfnsym, str):
-        wfnsym = irreptab[wfnsym]
-
+    if wfnsym != 0:
+        raise RuntimeError('TODO: specify symmetry for %s' % groupname)
     mat1 = numpy.zeros_like(mat)
+    orbsym = numpy.array(orbsym)
     for i0 in set(orbsym):
-        irallow = wfnsym ^ i0
-        lst = [j for j,i in enumerate(orbsym) if i == irallow]
-        for j in lst:
-            mat1[j,lst] = mat[j,lst]
+        lst = numpy.where(orbsym == i0)[0]
+        mat1[lst[:,None],lst] = mat[lst[:,None],lst]
     return mat1
 
 

@@ -266,27 +266,48 @@ def _complete_dm4_(dm3, dm4):
                     tmp = chain(tmp, l, i, j, k)
     return dm4
 
+def reorder_dm12(rdm1, rdm2, inplace=True):
+    return reorder_rdm(rdm1, rdm2, inplace)
+
 # <p^+ q r^+ s t^+ u> => <p^+ r^+ t^+ u s q>
-# rdm2 is the (reordered) standard 2-pdm
-def reorder_rdm3(rdm1, rdm2, rdm3, inplace=True):
+# rdm2 is <p^+ q r^+ s>
+def reorder_dm123(rdm1, rdm2, rdm3, inplace=True):
+    rdm1, rdm2 = reorder_rdm(rdm1, rdm2, inplace)
     if not inplace:
         rdm3 = rdm3.copy()
     norb = rdm1.shape[0]
-    for p in range(norb):
-        for q in range(norb):
-            for s in range(norb):
-                rdm3[p,q,q,s] += -rdm2[p,s]
-            for u in range(norb):
-                rdm3[p,q,:,:,q,u] += -rdm2[p,u]
-            for s in range(norb):
-                rdm3[p,q,:,s,s,:] += -rdm2[p,q]
     for q in range(norb):
+        rdm3[:,q,q,:,:,:] -= rdm2
+        rdm3[:,:,:,q,q,:] -= rdm2
+        rdm3[:,q,:,:,q,:] -= rdm2.transpose(0,2,3,1)
         for s in range(norb):
-            rdm3[:,q,q,s,s,:] += -rdm1
-    return rdm3
+            rdm3[:,q,q,s,s,:] -= rdm1
+    return rdm1, rdm2, rdm3
+
 
 # <p^+ q r^+ s t^+ u w^+ v> => <p^+ r^+ t^+ w^+ v u s q>
 # rdm2, rdm3 are the (reordered) standard 2-pdm and 3-pdm
-def reorder_rdm4(rdm1, rdm2, rdm3, rdm4, inplace=True):
-    raise RuntimeError('TODO')
+def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
+    rdm1, rdm2, rdm3 = reorder_dm123(rdm1, rdm2, rdm3, inplace)
+    if not inplace:
+        rdm4 = rdm4.copy()
+    norb = rdm1.shape[0]
+    for q in range(norb):
+        rdm4[:,q,:,:,:,:,q,:] -= rdm3.transpose(0,2,3,4,5,1)
+        rdm4[:,:,:,q,:,:,q,:] -= rdm3.transpose(0,1,2,4,5,3)
+        rdm4[:,:,:,:,:,q,q,:] -= rdm3
+        rdm4[:,q,:,:,q,:,:,:] -= rdm3.transpose(0,2,3,1,4,5)
+        rdm4[:,:,:,q,q,:,:,:] -= rdm3
+        rdm4[:,q,q,:,:,:,:,:] -= rdm3
+        for s in range(norb):
+            rdm4[:,q,q,s,:,:,s,:] -= rdm2.transpose(0,2,3,1)
+            rdm4[:,q,q,:,:,s,s,:] -= rdm2
+            rdm4[:,q,:,:,q,s,s,:] -= rdm2.transpose(0,2,3,1)
+            rdm4[:,q,:,s,q,:,s,:] -= rdm2.transpose(0,2,1,3)
+            rdm4[:,q,:,s,s,:,q,:] -= rdm2.transpose(0,2,3,1)
+            rdm4[:,:,:,s,s,q,q,:] -= rdm2
+            rdm4[:,q,q,s,s,:,:,:] -= rdm2
+            for u in range(norb):
+                rdm4[:,q,q,s,s,u,u,:] -= rdm1
+    return rdm1, rdm2, rdm3, rdm4
 

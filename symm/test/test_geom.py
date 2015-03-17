@@ -215,10 +215,13 @@ class KnowValues(unittest.TestCase):
         basis = {'H':'sto3g'}
         gpname, orig, axes = geom.detect_symm(atoms, basis)
         self.assertEqual(gpname, 'Dooh')
+        self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
+                         [[0], [1,2]])
 
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertEqual(gpname, 'D2h')
+        self.assertEqual(gpname, 'Dooh')
+        self.assertTrue(geom.check_given_symm('Dooh', atoms, basis))
         self.assertTrue(geom.check_given_symm('D2h', atoms, basis))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1,2]])
@@ -228,10 +231,13 @@ class KnowValues(unittest.TestCase):
         basis = {'H':'sto3g', 'H1':'6-31g'}
         gpname, orig, axes = geom.detect_symm(atoms, basis)
         self.assertEqual(gpname, 'Coov')
+        self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
+                         [[0], [1] ,[2]])
 
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertEqual(gpname, 'C2v')
+        self.assertEqual(gpname, 'Coov')
+        self.assertTrue(geom.check_given_symm('Coov', atoms, basis))
         self.assertTrue(geom.check_given_symm('C2v', atoms, basis))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1], [2]])

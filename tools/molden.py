@@ -107,14 +107,17 @@ def dump_scf(mf, filename):
             orbital_coeff(mf.mol, f, mf.mo_coeff, \
                           ene=mf.mo_energy, occ=mf.mo_occ)
 
-def from_chkfile(outfile, chkfile):
+def from_chkfile(outfile, chkfile, key='scf/mo_coeff'):
     import pyscf.scf
-    mol, mf = pyscf.scf.chkfile.load_scf(chkfile)
     with open(outfile, 'w') as f:
+        mol, mf = pyscf.scf.chkfile.load_scf(chkfile)
         header(mol, f)
-        mo = mf['mo_coeff']
         ene = mf['mo_energy']
         occ = mf['mo_occ']
+        if key == 'scf/mo_coeff':
+            mo = mf['mo_coeff']
+        else:
+            mo = mf[key]
         if occ.ndim == 2:
             orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0])
             orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1])

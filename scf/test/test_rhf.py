@@ -129,6 +129,32 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
 
+    def test_n2_symm(self):
+        pmol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''
+                N     0    0    0
+                N     0    0    1''',
+            symmetry = 1,
+            basis = 'cc-pvdz')
+        mf = scf.hf_symm.RHF(pmol)
+        self.assertAlmostEqual(mf.scf(), -108.9298383856092, 9)
+
+    def test_n2_symm_rohf(self):
+        pmol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''
+                N     0    0    0
+                N     0    0    1''',
+            symmetry = 1,
+            charge = 1,
+            spin = 1,
+            basis = 'cc-pvdz')
+        mf = scf.hf_symm.ROHF(pmol)
+        self.assertAlmostEqual(mf.scf(), -108.33899076078299, 9)
+
     def test_dot_eri_dm(self):
         numpy.random.seed(1)
         nao = mol.nao_nr()

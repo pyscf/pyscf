@@ -40,7 +40,7 @@ def symmetrize_orb(mol, irrep_name, symm_orb, mo):
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
-    return gpname[0].upper() + gpname[1:-1] + gpname[-1].lower()
+    return gpname[0].upper() + gpname[1:].lower()
 
 
 if __name__ == "__main__":

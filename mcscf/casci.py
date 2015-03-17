@@ -7,6 +7,7 @@ import tempfile
 import time
 from functools import reduce
 import numpy
+import scipy.linalg
 import h5py
 import pyscf.lib
 from pyscf.lib import logger
@@ -50,6 +51,78 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
                     + numpy.einsum('ij,ji', core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     return h1eff, energy_core
+
+def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
+    from pyscf.tools import dump_mat
+    from pyscf import mcscf
+    if mo_coeff is None: mo_coeff = casscf.mo_coeff
+    if ci is None: ci = casscf.ci
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(casscf.stdout, verbose)
+    nelecas = casscf.nelecas
+    ncas = casscf.ncas
+    ncore = casscf.ncore
+    nocc = ncore + ncas
+    nmo = mo_coeff.shape[1]
+
+    casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
+    dm1a = addons._make_rdm1_on_mo(casdm1a, ncore, ncas, nmo, False)
+    dm1b = addons._make_rdm1_on_mo(casdm1b, ncore, ncas, nmo, False)
+    dm1a = reduce(numpy.dot, (mo_coeff, dm1a, mo_coeff.T))
+    dm1b = reduce(numpy.dot, (mo_coeff, dm1b, mo_coeff.T))
+
+    if log.verbose >= logger.INFO:
+        label = ['%d%3s %s%-4s' % x for x in casscf.mol.spheric_labels()]
+        if log.verbose >= logger.DEBUG:
+            log.info('alpha density matrix (on AO)')
+            dump_mat.dump_tri(log.stdout, dm1a, label)
+            log.info('beta density matrix (on AO)')
+            dump_mat.dump_tri(log.stdout, dm1b, label)
+
+        casdm1 = casdm1a + casdm1b
+        occ, ucas = scipy.linalg.eigh(-(casdm1a+casdm1b))
+        occ = -occ
+        c1 = numpy.dot(mo_coeff[:,ncore:ncore+ncas], ucas)
+        log.info('Natural occupancy %s', str(occ))
+        # restore phase
+        for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
+            if ucas[k,i] < 0:
+                ucas[:,i] *= -1
+        log.info('Natural orbital in CAS space')
+        dump_mat.dump_rec(log.stdout, c1, label, start=1)
+
+        mo_coeff = numpy.hstack((mo_coeff[:,:ncore], c1, mo_coeff[:,nocc:]))
+        eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff, approx=2)
+        vj = numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
+        vk = numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
+        h1 = reduce(numpy.dot, (mo_coeff.T, casscf.get_hcore(), mo_coeff))
+        fock = h1 + eris.vhf_c + vj - vk * .5
+
+        c0 = scipy.linalg.eigh(fock[:ncore,:ncore])[1]
+        c2 = scipy.linalg.eigh(fock[nocc:,nocc:])[1]
+        mo_coeff = numpy.hstack((numpy.dot(mo_coeff[:,:ncore], c0), c1,
+                                 numpy.dot(mo_coeff[:,nocc:], c2)))
+        s = reduce(numpy.dot, (mo_coeff.T, casscf._scf.get_ovlp(),
+                               casscf._scf.mo_coeff))
+        idx = numpy.argwhere(abs(s)>.4)
+        for i,j in idx:
+            log.info('<mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+
+        h1eff = h1[ncore:nocc,ncore:nocc] + eris.vhf_c[ncore:nocc,ncore:nocc]
+        ci = casscf.fcisolver.kernel(h1eff, eris.aapp[:,:,ncore:nocc,ncore:nocc],
+                                     ncas, nelecas)[1]
+        log.info('** Largest CI components **')
+        log.info(' string alpha, string beta, CI coefficients')
+        for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
+            log.info('  %9s    %9s    %.12f', ia, ib, c)
+
+        dm1 = dm1a + dm1b
+        s = casscf._scf.get_ovlp()
+        casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
+        casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
+    return dm1a, dm1b
 
 def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
     '''CASCI solver
@@ -236,8 +309,6 @@ class CASCI(object):
 
         self.e_tot, e_cas, self.ci = \
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
@@ -246,29 +317,9 @@ class CASCI(object):
         self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
         return self.ci, self.mo_coeff
 
-    def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG):
-        from pyscf.tools import dump_mat
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if ci is None: ci = self.ci
-        if verbose >= logger.INFO:
-            log = logger.Logger(self.stdout, verbose)
-            dm1a, dm1b = addons.make_rdm1s(self, ci, mo_coeff)
-            label = ['%d%3s %s%-4s' % x for x in self.mol.spheric_labels()]
-            log.info('alpha density matrix (on AO)')
-            dump_mat.dump_tri(self.stdout, dm1a, label)
-            log.info('beta density matrix (on AO)')
-            dump_mat.dump_tri(self.stdout, dm1b, label)
-
-            s = reduce(numpy.dot, (mo_coeff.T, self._scf.get_ovlp(),
-                                   self._scf.mo_coeff))
-            idx = numpy.argwhere(abs(s)>.4)
-            for i,j in idx:
-                log.info('<mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
-            log.info('** Largest CI components **')
-            log.info(' string alpha, string beta, CI coefficients')
-            for c,ia,ib in fci.addons.large_ci(ci, self.ncas, self.nelecas):
-                log.info('  %9s    %9s    %.12f', ia, ib, c)
-        return dm1a, dm1b
+    def analyze(self, mo_coeff=None, ci=None):
+        log = logger.Logger(self.stdout, self.verbose)
+        return analyze(self, mo_coeff, ci, verbose=log)
 
 
 

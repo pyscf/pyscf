@@ -9,6 +9,7 @@ import tempfile
 from functools import reduce
 import numpy
 import scipy.linalg
+import pyscf.lib
 import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
@@ -166,7 +167,7 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
     precond = lambda x, e: x/(h_diag-(e-casscf.ah_level_shift))
     u = numpy.eye(nmo)
 
-    if isinstance(dx, (int, numpy.integer, numpy.number)):
+    if numpy.linalg.norm(dx) < 1e-16:
         dx = 0
         x0 = g_orb0
         g_orb = g_orb0
@@ -176,8 +177,8 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
 
     norm_gprev = numpy.linalg.norm(g_orb)
     # increase the AH accuracy when approach convergence
-    if norm_gprev*.1 < casscf.ah_start_tol:
-        ah_start_tol = norm_gprev*.1
+    if norm_gprev/numpy.sqrt(g_orb.size) < casscf.ah_start_tol:
+        ah_start_tol = norm_gprev/numpy.sqrt(g_orb.size)
         log.debug1('Set AH start tol to %g', ah_start_tol)
     else:
         ah_start_tol = casscf.ah_start_tol
@@ -197,25 +198,45 @@ def rotate_orb_ah(casscf, mo, casdm1, casdm2, eris, dx=0, verbose=None):
         if dxmax > casscf.max_orb_stepsize:
             dx1 = dx1 * (casscf.max_orb_stepsize/dxmax)
         dx = dx + dx1
-        dr = casscf.unpack_uniq_var(dx1)
-        u = numpy.dot(u, expmat(dr))
 
 # within few steps, g_orb + \sum_i h_op(dx_i) is a good approximation to the
 # exact gradients. After few updates, decreasing the approx gradients may
 # result in the increase of the real gradient.
-        g_orb = g_orb0 + h_op(dx)
-        norm_gorb = numpy.linalg.norm(g_orb)
+        g_orb1 = g_orb0 + h_op(dx)
+        norm_gorb = numpy.linalg.norm(g_orb1)
         norm_dx1 = numpy.linalg.norm(dx1)
         log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, max(|x|)=%4.3g, eig=%4.3g',
                    imic, norm_gorb, norm_dx1, dxmax, w)
+
         if (imic >= casscf.max_cycle_micro_inner
-           or norm_gorb > norm_gprev
            or norm_gorb < casscf.conv_tol_grad):
+            g_orb = g_orb1
+            norm_gprev = norm_gorb
+            dr = casscf.unpack_uniq_var(dx1)
+            u = numpy.dot(u, expmat(dr))
             break
-        norm_gprev = numpy.linalg.norm(g_orb)
+        elif norm_gorb > norm_gprev:
+            dx -= dx1
+# when dx is not updated (=0), it may break the next call of rotate_orb_ah
+# since the next initial guess becomes 0 which leads to non-positive overlap.
+            if numpy.linalg.norm(dx) < 1e-16:
+                ah_start_tol *= .2
+                log.debug1('norm_gorb > norm_gprev, Set AH start tol to %g', ah_start_tol)
+            else:
+                break
+        else:
+            g_orb = g_orb1
+            norm_gprev = norm_gorb
+            dr = casscf.unpack_uniq_var(dx1)
+            u = numpy.dot(u, expmat(dr))
+
+#FIXME: try guess
+    if numpy.linalg.norm(dx) < 1e-16:
+        dx = dx1
 
     t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-    return u, dx, g_orb0, imic+ihop
+#    return u, dx, g_orb0, imic+ihop # return the nonoptimized g_orb?
+    return u, dx, g_orb, imic+ihop
 
 # dc = h_{co} * dr
 def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
@@ -311,13 +332,16 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         return e_tot, e_ci, fcivec, mo
-    elast = e_tot
     conv = False
     toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = 0
     casdm1_old = 0
+
+    if casscf.diis:
+        adiis = pyscf.lib.diis.DIIS(casscf)
+    dodiis = False
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
@@ -330,8 +354,17 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
         casdm1_old = casdm1
         for imicro in range(micro):
-# approximate newton step, fcivec is not updated during micro iters
             casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+
+            dodiis |= (casscf.diis and imacro > 1 and e_tot - elast > -1e-4)
+            if dodiis:
+                log.debug('DIIS for casdm1 and casdm2')
+                adiis.push_err_vec(g_orb)
+                dm12 = numpy.hstack((casdm1.ravel(), casdm2.ravel()))
+                dm12 = adiis.update(dm12)
+                casdm1 = dm12[:ncas*ncas].reshape(ncas,ncas)
+                casdm2 = dm12[ncas*ncas:].reshape((ncas,)*4)
+
             norm_gci = numpy.linalg.norm(gci)
             norm_dm1 = numpy.linalg.norm(casdm1 - casdm1_old)
             t3m = log.timer('update CAS DM', *t3m)
@@ -349,7 +382,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
                       imicro+1, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
             t2m = log.timer('micro iter %d'%(imicro+1), *t2m)
             if (norm_t < toloose or norm_gci < toloose or
-                norm_gorb < toloose or norm_dm1 < toloose):
+                (norm_gorb < toloose and norm_dm1 < toloose)):
 # When close to convergence, rotate the CAS space to natural orbital.
 # Because the casdm1 is only an approximation, it's not neccesary to transform to
 # the natural orbitals at the beginning of optimization
@@ -517,7 +550,7 @@ class CASSCF(casci.CASCI):
         # for augmented hessian
         self.ah_level_shift = 0#1e-2
         self.ah_conv_tol = 1e-8
-        self.ah_max_cycle = 20
+        self.ah_max_cycle = 30
         self.ah_lindep = self.ah_conv_tol**2
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
 #   In function rotate_orb_ah, the orbital rotation is carried out with the
@@ -538,6 +571,7 @@ class CASSCF(casci.CASCI):
         self.chkfile = mf.chkfile
         self.natorb = False # CAS space in natural orbital
         self.ci_response_space = 2
+        self.diis = False
 
         self.fcisolver.max_cycle = 50
 
@@ -568,6 +602,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
         log.info('augmented hessian level shift = %d', self.ah_level_shift)
+        log.info('diis = %s', self.diis)
         log.info('max_memory %d MB', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
@@ -736,6 +771,8 @@ class CASSCF(casci.CASCI):
             vc = reduce(numpy.dot, (mo[:,:ncore].T, vj[1]*2-vk[1], mo[:,ncore:]))
         return va, vc
 
+# hessian_co exactly expands up to first order of H
+# update_casdm exand to approx 2nd order of H
     def update_casdm(self, mo, u, fcivec, e_ci, eris):
         nmo = mo.shape[1]
         rmat = u - numpy.eye(nmo)
@@ -747,39 +784,40 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         nmo = mo.shape[1]
         nocc = ncore + ncas
-        mocc = mo[:,:nocc]
+        uc = u[:,:ncore]
+        ua = u[:,ncore:nocc].copy()
+        ra = rmat[:,ncore:nocc].copy()
 
-        h1e_mo = reduce(numpy.dot, (mo.T, self.get_hcore(), mocc))
-        h1eff = numpy.dot(rmat[:,:nocc].T, h1e_mo)
-        h1eff = h1eff + h1eff.T
+        ddm = numpy.dot(uc, uc.T) * 2 # ~ dm(1) + dm(2)
+        ddm[numpy.diag_indices(ncore)] -= 2
+        jk =(reduce(numpy.dot, (ua.T, eris.vhf_c, ua)) # ~ jk(0) + jk(1) + jk(2)
+           + numpy.einsum('uvpq,pq->uv', eris.aapp, ddm.T)
+           - numpy.einsum('upqv,pq->uv', eris.appa, ddm) * .5)
+        h1e_mo = reduce(numpy.dot, (mo.T, self.get_hcore(), mo))
+        h1 = reduce(numpy.dot, (ua.T, h1e_mo, ua)) + jk
 
-        apca = eris.appa[:,:,:ncore,:]
-        aapc = eris.aapp[:,:,:,:ncore]
-        jk = eris.vhf_c[:nocc]
-        v1 = numpy.einsum('up,pv->uv', jk[ncore:], rmat[:,ncore:nocc]) \
-           + numpy.einsum('uvpi,pi->uv', aapc-apca.transpose(0,3,1,2)*.5,
-                          rmat[:,:ncore]) * 2
-        h1cas = h1eff[ncore:,ncore:] + (v1 + v1.T)
+        paaa = pyscf.lib.dot(eris.appa.transpose(1,0,3,2).reshape(-1,nmo), ra)
+        aaa2 = numpy.dot(ra.T, paaa.reshape(nmo,-1)).reshape((ncas,)*4)
+        aaa2 = aaa2 + aaa2.transpose(1,0,2,3)
+        aaa2 = aaa2 + aaa2.transpose(0,1,3,2)
+        aapa = pyscf.lib.dot(eris.aapp.reshape(-1,nmo), ua)
+        aaa1 = pyscf.lib.dot(aapa.reshape(-1,nmo,ncas).transpose(0,2,1).reshape(-1,nmo),
+                             ua).reshape((ncas,)*4)
+        aaaa = eris.appa[:,ncore:nocc,ncore:nocc,:]
+        aaa1 = aaa1 + aaa1.transpose(2,3,0,1) - aaaa
+        h2 = aaa1 + aaa2
+        paaa = aapa = aaaa = aaa1 = aaa2 = None
 
-        aaap = eris.aapp[:,:,ncore:nocc,:]
-        aaaa = numpy.einsum('tuvp,pw->tuvw', aaap, rmat[:,ncore:nocc])
-        aaaa = aaaa + aaaa.transpose(0,1,3,2)
-        aaaa = aaaa + aaaa.transpose(2,3,0,1)
 # (@)       h2eff = self.fcisolver.absorb_h1e(h1cas, aaaa, ncas, nelecas, .5)
 # (@)       g = self.fcisolver.contract_2e(h2eff, fcivec, ncas, nelecas).ravel()
 
         # pure core response
-        # J from [(i^1i|jj) + (ii^1|jj) + (ii|j^1j) + (ii|jj^1)] has factor 4
-        # spin-free (ii| gives another 2*2, which provides a total factor 16
-        # times 1/2 for 2e-integrals. So the J^1 part has factor 8, K^1 has 4
-        ecore = h1eff[:ncore,:ncore].trace()*2 \
-              + numpy.einsum('jp,pj->', jk[:ncore], rmat[:,:ncore])*4
-# (#)    g = ecore * fcivec.ravel()
+        # response of (1/2 dm * vhf * dm) ~ ddm*vhf
+# Should I consider core response as a part of CI gradients?
+        ecore =(numpy.einsum('pq,pq->', h1e_mo, ddm)
+              + numpy.einsum('pq,pq->', eris.vhf_c, ddm))
         ### hessian_co part end ###
 
-        vhf_a = eris.vhf_c[ncore:nocc,ncore:nocc]
-        h1 = h1e_mo[ncore:nocc,ncore:nocc] + vhf_a + h1cas
-        h2 = eris.aapp[:,:,ncore:nocc,ncore:nocc] + aaaa
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
         hc = self.fcisolver.contract_2e(h2eff, fcivec, ncas, nelecas).ravel()
 

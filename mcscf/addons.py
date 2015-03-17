@@ -299,7 +299,7 @@ def get_fock(casscf, fcivec=None, mo_coeff=None):
         if isinstance(casscf, mcscf.mc1step.CASSCF):
             eris = casscf.update_ao2mo(mo_coeff)
         else: # CASCI
-            eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff)
+            eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff, approx=2)
         casdm1 = casscf.fcisolver.make_rdm1(fcivec, ncas, nelecas)
         vj = numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
         vk = numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
@@ -406,7 +406,7 @@ def spin_square(casscf, fcivec=None, mo_coeff=None, ovlp=None):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    import mc1step
+    from pyscf import mcscf
     from pyscf import tools
     import pyscf.tools.ring
 
@@ -420,7 +420,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
 
-    mc = mc1step.CASSCF(m, 6, 6)
+    mc = mcscf.CASSCF(m, 6, 6)
     mc.verbose = 4
     emc, e_ci, fcivec, mo = mc.mc1step()
     print(ehf, emc, emc-ehf)

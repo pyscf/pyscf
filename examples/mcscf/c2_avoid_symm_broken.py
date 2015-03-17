@@ -15,14 +15,11 @@ mol = gto.M(
 )
 
 myhf = scf.RHF(mol)
-myhf.irrep_nelec = {'Ag': 4, 'B1u': 4, 'B2u': 2, 'B3u': 2,}
+#myhf.irrep_nelec = {'Ag': 4, 'B1u': 4, 'B2u': 2, 'B3u': 2,}
 hf_energy = myhf.scf()
 print('SCF E=%.15g' % hf_energy)
 
 cas = mcscf.CASSCF(myhf, 16, (4,4))
-cas.max_orb_stepsize = 0.3
-cas.ah_start_tol = 1e-8
-cas.ah_conv_tol = 1e-9
 #def save_mo_coeff(mo_coeff, imacro, imicro):
 #    label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
 #    dump_mat.dump_rec(mol.stdout, mo_coeff, label, start=1, digits=9)

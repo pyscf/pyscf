@@ -547,16 +547,15 @@ class UHF(hf.SCF):
         return spin_square(mo_coeff, ovlp)
 
 
-class UHF_DIIS(diis.SCF_DIIS):
-    def push_err_vec(self, s, d, f):
+class UHF_DIIS(pyscf.lib.diis.DIIS):
+    def update(self, s, d, f):
         sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
         sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
         errvec = numpy.hstack((sdf_a.T.conj() - sdf_a, \
                                sdf_b.T.conj() - sdf_b))
         log.debug1(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
-        self.err_vec_stack.append(errvec)
-        if self.err_vec_stack.__len__() > self.space:
-            self.err_vec_stack.pop(0)
+        pyscf.lib.diis.DIIS.push_err_vec(self, errvec)
+        return pyscf.lib.diis.DIIS.update(self, f)
 
 def _makevhf(vj, vk, nset):
     if nset == 1:

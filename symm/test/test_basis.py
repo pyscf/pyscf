@@ -13,7 +13,7 @@ def get_so(atoms, basis):
     gpname, axes = symm.subgroup(gpname, axes)
     atoms = gto.mole.format_atom(atoms, origin, axes)
     eql_atoms = symm.symm_identical_atoms(gpname, atoms)
-    so = symm.basis.symm_adapted_basis(gpname, eql_atoms, atoms, basis)
+    so = symm.basis.symm_adapted_basis(gpname, eql_atoms, atoms, basis)[0]
     n = 0
     for c in so:
         if c.size > 0:

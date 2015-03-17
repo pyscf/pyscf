@@ -175,11 +175,11 @@ int AO2MOmmm_r_igtj(double complex *vout, double complex *eri,
 
         bufr = buf3;
         bufi = buf2;
-        for (i = 0; i < n2c*i_count; i++) {
+        for (i = 0; i < n2c*j_count; i++) {
                 buf3[i] = buf1[i] - buf3[i];
                 buf2[i] = buf1[i] + buf2[i];
         }
-        for (i = 0; i < n2c*i_count; i++) {
+        for (i = 0; i < n2c*j_count; i++) {
                 buf1[i] = bufr[i] + bufi[i];
         }
         mo_r = envs->mo_r + i_start * n2c;
