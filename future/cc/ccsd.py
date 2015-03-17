@@ -483,7 +483,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         nocc = self.nocc
         nvir = self.nmo-self.nocc
         nov = nocc*nvir
-        damp = ccdiis.DIIS(self)
+        damp = lib.diis.DIIS(self)
         damp.space = self.diis_space
         damp.min_space = 1
         def fupdate(t1, t2, istep, normt, de):

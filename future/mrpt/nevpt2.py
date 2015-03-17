@@ -470,7 +470,7 @@ def Srs(mc,orbe, dms, eris=None, verbose=None):
         h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['appa'][:,nocc:,nocc:].transpose(1,2,0,3)
 
-# check accuracy of make_a7 a7-a7.transpose(2,3,0,1)
+# a7 is very sensitive to the accuracy of HF orbital and CI wfn
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
     norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
     h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
@@ -510,7 +510,7 @@ def Sij(mc,orbe, dms, eris, verbose=None):
     else:
         hdm3 = make_hdm3(dm1,dm2,dm3,hdm1,hdm2)
 
-# check accuracy of make_a9 a9-a9.transpose(2,3,0,1)
+# a9 is very sensitive to the accuracy of HF orbital and CI wfn
     a9 = make_a9(h1e,h2e,hdm1,hdm2,hdm3)
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
@@ -850,6 +850,7 @@ if __name__ == '__main__':
     mol.build()
 
     m = scf.RHF(mol)
+    m.conv_tol = 1e-20
     ehf = m.scf()
     mc = mcscf.CASCI(m, 6, 8)
     ci_e = mc.kernel()[0]
@@ -858,7 +859,7 @@ if __name__ == '__main__':
     print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    print(sc_nevpt(mc), -0.16978532268234559)
+    print(sc_nevpt(mc), -0.16978579267520275)
 
 
     mol = gto.Mole()
@@ -884,6 +885,7 @@ if __name__ == '__main__':
     mol.build()
 
     m = scf.RHF(mol)
+    m.conv_tol = 1e-20
     ehf = m.scf()
     mc = mcscf.CASCI(m,8,10)
     mc.kernel()
