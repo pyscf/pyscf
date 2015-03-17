@@ -400,6 +400,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         eris = casscf.update_ao2mo(mo)
         t3m = log.timer('update eri', *t3m)
 
+        elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
@@ -411,8 +412,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         if abs(e_tot - elast) < tol \
            and (norm_gorb < toloose and norm_dm1 < toloose):
             conv = True
-        else:
-            elast = e_tot
 
         if dump_chk:
             casscf.save_mo_coeff(mo, imacro, imicro)
