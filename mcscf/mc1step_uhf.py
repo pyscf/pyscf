@@ -482,8 +482,8 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_conv_tol = 1e-8
         self.ah_max_cycle = 15
         self.ah_lindep = self.ah_conv_tol**2
-        self.ah_start_tol = 1e-4
-        self.ah_start_cycle = 3
+        self.ah_start_tol = .5e-3
+        self.ah_start_cycle = 2
         self.chkfile = mf.chkfile
         self.natorb = False
 

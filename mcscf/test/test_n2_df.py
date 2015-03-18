@@ -145,6 +145,6 @@ class KnowValues(unittest.TestCase):
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 
 if __name__ == "__main__":
-    print("Full Tests for N2")
+    print("Full Tests for density fitting N2")
     unittest.main()
 

@@ -76,10 +76,10 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         log.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
                  'SCF may be inaccurate and hard to converge.', cond)
 
-    try:
+    if mf.DIIS:
         adiis = mf.DIIS(mf)
         adiis.space = mf.diis_space
-    except:
+    else:
         adiis = None
 
     vhf = mf.get_veff(mol, dm)

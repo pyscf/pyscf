@@ -95,27 +95,28 @@ class CASSCF(mc1step.CASSCF):
     def gen_g_hop(self, mo, casdm1, casdm2, eris):
         casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
                              self.mol.groupname)
-        g_orb, h_op, h_diag = mc1step.gen_g_hop(self, mo, casdm1, casdm2, eris)
+        g_orb, h_op1, h_opjk, h_diag = mc1step.gen_g_hop(self, mo, casdm1, casdm2, eris)
         g_orb = _symmetrize(self.unpack_uniq_var(g_orb), self.orbsym,
                             self.mol.groupname)
         h_diag = _symmetrize(self.unpack_uniq_var(h_diag), self.orbsym,
                              self.mol.groupname)
-        def sym_h_op(x):
-            hx = h_op(x)
+        def sym_h_op1(x):
+            hx = h_op1(x)
             hx = _symmetrize(self.unpack_uniq_var(hx), self.orbsym,
                              self.mol.groupname)
             return self.pack_uniq_var(hx)
-        return self.pack_uniq_var(g_orb), sym_h_op, \
+        def sym_h_opjk(x):
+            hx = h_opjk(x)
+            hx = _symmetrize(self.unpack_uniq_var(hx), self.orbsym,
+                             self.mol.groupname)
+            return self.pack_uniq_var(hx)
+        return self.pack_uniq_var(g_orb), sym_h_op1, sym_h_opjk, \
                self.pack_uniq_var(h_diag)
 
-    def rotate_orb(self, mo, casdm1, casdm2, eris, dx=0):
-        u, dx, g_orb, jkcnt = \
-                mc1step.rotate_orb_ah(self, mo, casdm1, casdm2, eris, dx,
-                                      self.verbose)
-        u = _symmetrize(u, self.orbsym, self.mol.groupname)
-        dx = _symmetrize(self.unpack_uniq_var(dx), self.orbsym,
-                         self.mol.groupname)
-        return u, self.pack_uniq_var(dx), g_orb, jkcnt
+    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
+        for u, g_orb, njk in mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2,
+                                                   eris, verbose):
+            yield _symmetrize(u, self.orbsym, self.mol.groupname), g_orb, njk
 
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):
     if wfnsym != 0:
