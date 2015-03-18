@@ -23,7 +23,7 @@ import pyscf.lib.logger as log
 # SCF-EDIIS, JCP 116, 8255
 # error vector = SDF-FDS
 # error vector = F_ai ~ (S-SDS)*S^{-1}FDS = FDS - SDFDS ~ FDS-SDF in converge
-class DIIS:
+class DIIS(pyscf.lib.diis.DIIS):
     def update(self, s, d, f):
         sdf = reduce(numpy.dot, (s,d,f))
         errvec = sdf.T.conj() - sdf
