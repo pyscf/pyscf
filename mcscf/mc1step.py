@@ -200,20 +200,23 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
 
         g_op = lambda: g_orb
         def h_op(x):
-            xcollect.append(x)
-            jkcollect.append(h_opjk(x))
+            jk = h_opjk(x)
+# exclude possible linear dependent vectors
+            if numpy.linalg.norm(x) > casscf.ah_conv_tol:
+                xcollect.append(x)
+                jkcollect.append(jk)
             return h_op1(x) + jkcollect[-1]
 # Divide the hessian into two parts, approx the JK part
         xsinit = [x for x in xcollect]
         axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
 
-        for ihop, w, dxi, hdxi, residual \
+        for ah_conv, ihop, w, dxi, hdxi, residual \
                 in davidson_cc(h_op, g_op, precond, g_orb,
                                xs=xsinit, ax=axinit, verbose=log,
                                tol=casscf.ah_conv_tol,
                                max_cycle=casscf.ah_max_cycle,
                                max_stepsize=1.5, lindep=casscf.ah_lindep):
-            if ((ihop+1 == casscf.ah_max_cycle) or # make sure to use the last step
+            if (ah_conv or # make sure to use the last step
                 ((abs(w-wlast) < ah_start_tol) and
                  (ihop >= casscf.ah_start_cycle))):
 # Gradually lower the start_tol, so the following step gets more precisely
@@ -258,7 +261,6 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         else:
 # Occasionally, all trial rotation goes to the branch "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
-            dx1 = dx1 * .5
             x0 = x0 + dx1
             g_orb = g_orb + h_op1(dx1) + h_opjk(dx1)
             jkcount += 1
@@ -318,18 +320,18 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if ((norm_dx < tol and abs(w_t-w0) < tol) or s0 < lindep):
+        if norm_dx < tol or s0 < lindep:
             break
-        yield istep, w_t, xtrial, hx, dx
+        yield False, istep, w_t, xtrial, hx, dx
         w0 = w_t
         x0 = precond(dx, w_t)
         xs.append(x0)
         ax.append(h_op(x0))
 
     if x0.size == 0:
-        yield istep, 0, x0, 0, x0
+        yield True, istep, 0, x0, 0, x0
     else:
-        yield istep, w_t, xtrial, hx, dx
+        yield True, istep, w_t, xtrial, hx, dx
 
 def _regular_step(heff, ovlp, xs, log):
     w, v = scipy.linalg.eigh(heff, ovlp)
