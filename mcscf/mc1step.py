@@ -253,11 +253,24 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
                     u = numpy.dot(u, expmat(dr))
             wlast = w
 
+        if numpy.linalg.norm(dx) > 1e-14:
+            x0 = x0 + dx
+        else:
+# Occasionally, all trial rotation goes to the branch "norm_gorb > norm_gprev".
+# It leads to the orbital rotation being stuck at x0=0
+            dx1 = dx1 * .5
+            x0 = x0 + dx1
+            g_orb = g_orb + h_op1(dx1) + h_opjk(dx1)
+            jkcount += 1
+            dr = casscf.unpack_uniq_var(dx1)
+            u = numpy.dot(u, expmat(dr))
+            log.debug('orbital rotation step not found, try to guess |g[o]|=%4.3g, |dx|=%4.3g',
+                      numpy.linalg.norm(g_orb), numpy.linalg.norm(dx1))
+
         jkcount += ihop + 1
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         yield u, g_orb, jkcount
 
-        x0 = x0 + dx
         g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, fcasdm1(), fcasdm2(), eris)
         norm_gorb = numpy.linalg.norm(g_orb)
         log.debug('    |g|=%4.3g', norm_gorb)
