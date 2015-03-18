@@ -9,7 +9,6 @@ import pyscf.lib as lib
 import pyscf.lib.logger
 import pyscf.ao2mo
 from pyscf.cc import _ccsd
-from pyscf.cc import ccdiis
 
 # t2 as ijba
 #TODO: optimize diis extrapolation
