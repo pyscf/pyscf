@@ -413,7 +413,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                             self.ecc+self._scf.hf_energy+self.mol.energy_nuc(),
                             self.ecc)
         else:
-            lib.logger.info(self, 'CCSD does converge')
+            lib.logger.info(self, 'CCSD not converge')
             lib.logger.info(self, ' E(CCSD) = %.16g, E_corr = %.16g',
                             self.ecc+self._scf.hf_energy+self.mol.energy_nuc(),
                             self.ecc)
