@@ -28,7 +28,6 @@ class DIIS(pyscf.lib.diis.DIIS):
         sdf = reduce(numpy.dot, (s,d,f))
         errvec = sdf.T.conj() - sdf
         log.debug1(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
-        pyscf.lib.diis.DIIS.push_err_vec(self, errvec)
-        return pyscf.lib.diis.DIIS.update(self, f)
+        return pyscf.lib.diis.DIIS.update(self, f, xerr=errvec)
 
 SCF_DIIS = DIIS

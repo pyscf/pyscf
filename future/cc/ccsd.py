@@ -486,8 +486,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         damp.space = self.diis_space
         damp.min_space = 1
         def fupdate(t1, t2, istep, normt, de):
-            if istep > self.diis_start_cycle and \
-               (abs(de) < 1e-3 and istep % 3 == 0):
+            if istep > self.diis_start_cycle and abs(de) < 1e-2:
                 tbuf = numpy.empty(nov*(nov+1))
                 tbuf[:nov] = t1.ravel()
                 tbuf[nov:] = t2.ravel()
@@ -530,7 +529,7 @@ if __name__ == '__main__':
 
     mol = gto.Mole()
     mol.verbose = 5
-    #mol.output = 'out_h2o'
+    mol.output = 'out_h2o'
     mol.atom = [
         [8 , (0. , 0.     , 0.)],
         [1 , (0. , -0.757 , 0.587)],
