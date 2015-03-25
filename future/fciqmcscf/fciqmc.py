@@ -72,6 +72,7 @@ class FCIQMCCI(object):
         self.restart = False
         self.time = 10
         self.tau = -1.0
+        self.seed = 7
         self.orbsym = []
         if mol.symmetry:
             self.groupname = mol.groupname
@@ -166,6 +167,7 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('memoryfacspawn 1.0\n')
     f.write('totalwalkers %i\n'%(FCIQMCCI.maxwalkers))
     f.write('nmcyc %i\n'%(FCIQMCCI.maxIter))
+    f.write('seed %i\n'%(FCIQMCCI.seed))
     if (Restart):
         f.write('readpops')
     else :
