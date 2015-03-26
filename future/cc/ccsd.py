@@ -326,7 +326,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
 def energy(cc, t1, t2, eris, blksize=1):
     nocc = cc.nocc
     fock = eris.fock
-    e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1)
+    e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
     for p0, p1 in prange(0, nocc, blksize):
         tau = _ccsd.make_tau(t2[p0:p1], t1[p0:p1], t1)
         #theta = tau*2 - tau.transpose(0,1,3,2)
@@ -517,6 +517,41 @@ def block_size(nmo, nocc, max_memory):
     rest = max_memory*1e6/8 - (nocc*nvir)**2*2
     return min(nocc, max(1, int(rest/unit)))
 
+def residual_as_diis_errvec(mycc):
+    nocc = mycc.nocc
+    nvir = mycc.nmo - nocc
+    nov = nocc*nvir
+    damp = lib.diis.DIIS(mycc)
+    damp.space = mycc.diis_space
+    damp.min_space = 1
+    damp.last_t1 = None
+    damp.last_t2 = None
+    mo_e = mycc._scf.mo_energy
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    def fupdate(t1, t2, istep, normt, de):
+        if istep > mycc.diis_start_cycle and abs(de) < 1e-2:
+            if damp.last_t1 is None:
+                damp.last_t1 = t1.copy()
+                damp.last_t2 = t2.copy()
+            else:
+                tbuf = numpy.empty(nov*(nov+1))
+                tbuf[:nov] = ((t1-damp.last_t1)*eia).ravel()
+                pbuf = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
+                for i in range(nocc):
+                    djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).reshape(-1)
+                    pbuf[i] = (t2[i]-damp.last_t2[i]) * djba.reshape(nocc,nvir,nvir)
+                damp.push_err_vec(tbuf)
+                tbuf = numpy.empty(nov*(nov+1))
+                tbuf[:nov] = t1.ravel()
+                tbuf[nov:] = t2.ravel()
+
+                tbuf = damp.update(tbuf)
+                damp.last_t1 = t1 = tbuf[:nov].reshape(nocc,nvir)
+                damp.last_t2 = t2 = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
+            lib.logger.debug(mycc, 'DIIS for step %d', istep)
+        return t1, t2
+    return lambda: fupdate
+
 
 def prange(start, end, step):
     for i in range(start, end, step):
@@ -555,6 +590,12 @@ if __name__ == '__main__':
     print(abs(t1).sum() - 0.05470123093500083)
     print(abs(t2).sum() - 5.5605208391876539)
 
+    mcc.ccsd()
+    print(mcc.ecc - -0.2133432312951)
+    print(abs(mcc.t2).sum() - 5.63970279799556984)
+    print(abs(mcc.t2-mcc.t2.transpose(1,0,3,2)).sum())
+
+    mcc.diis = residual_as_diis_errvec(mcc)
     mcc.ccsd()
     print(mcc.ecc - -0.2133432312951)
     print(abs(mcc.t2).sum() - 5.63970279799556984)
