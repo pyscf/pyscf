@@ -106,7 +106,7 @@ nelec = (6,6)
 mc = mcscf.casci.CASCI(mf, ncas, nelec)
 mo = mcscf.addons.sort_mo(mc, mf.mo_coeff, [9,10,13,14,15,16,17,18], 1)
 mocas = mo[:,10:18]
-e, ecas, ci0 = mc.casci(mo=mo)
+e, ecas, ci0 = mc.casci(mo)
 print('\n')
 print('RHF-CASCI total energy of O2+O2 singlet, which is incorrect', e)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))

@@ -531,7 +531,8 @@ def residual_as_diis_errvec(mycc):
     mo_e = mycc._scf.mo_energy
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
     def fupdate(t1, t2, istep, normt, de):
-        if istep > mycc.diis_start_cycle and abs(de) < 1e-2:
+        if (istep > mycc.diis_start_cycle and
+            abs(de) < mycc.diis_start_energy_diff):
             if damp.last_t1 is None:
                 damp.last_t1 = t1.copy()
                 damp.last_t2 = t2.copy()
