@@ -43,7 +43,7 @@ h2e = ao2mo.incore.full(mf._eri, mo_cas)
 h2e = ao2mo.restore(1, h2e, norb).transpose(0,2,1,3)
 dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
                                          mc.ci, mc.ci, norb, nelec)
-orbe = mcscf.addons.get_fock(mc, mc.ci, mc.mo_coeff).diagonal()
+orbe = mc.get_fock().diagonal()
 hdm1 = 2.0*numpy.eye(dm1.shape[0])-dm1.T
 eris = nevpt2._ERIS(mc, mc.mo_coeff)
 dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
@@ -88,7 +88,7 @@ class KnowValues(unittest.TestCase):
         e = nevpt2.sc_nevpt(mc)
         self.assertAlmostEqual(e, -0.10315310550843806, 9)
 
-    def test_energy(self):
+    def test_energy1(self):
         mol = gto.M(
             verbose = 0,
             atom = '''
@@ -102,6 +102,15 @@ class KnowValues(unittest.TestCase):
         mc.kernel()
         e = nevpt2.sc_nevpt(mc)
         self.assertAlmostEqual(e, -0.16978532268234559, 7)
+
+    def test_ERIS(self):
+        eris0 = nevpt2_o1._ERIS(mc, mc.mo_coeff)
+        eris1 = nevpt2_o2._ERIS(mc, mc.mo_coeff, 'incore')
+        eris2 = nevpt2_o2._ERIS(mc, mc.mo_coeff, 'outcore')
+        for k in eris0.keys():
+            self.assertTrue(numpy.allclose(eris0[k], eris1[k]))
+            with ao2mo.load(eris2[k]) as d2:
+                self.assertTrue(numpy.allclose(eris0[k], d2))
 
 
 if __name__ == "__main__":

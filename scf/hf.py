@@ -987,7 +987,7 @@ class SCF(object):
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
-        return nbf**4/1e6 < self.max_memory*.95
+        return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
 
 ############

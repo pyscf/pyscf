@@ -41,7 +41,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
                    int3c, aosym, int2c, comp, ioblk_size, verbose=log)
     fswap = h5py.File(swapfile.name, 'r')
-    time1 = log.timer('AO->MO eri transformation 1 pass', *time0)
+    time1 = log.timer('generate (ij|L) 1 pass', *time0)
 
     nao = mol.nao_nr()
     auxmol = incore.format_aux_basis(mol, auxbasis)
@@ -99,6 +99,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
                             (istep, totstep, icomp, row0, row1, nrow), *ti0)
 
     fswap.close()
+    feri.close()
     log.timer('cholesky_eri', *time0)
     return erifile
 
@@ -283,6 +284,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpd
                             (istep, totstep, icomp, row0, row1, nrow), *ti0)
 
     fswap.close()
+    feri.close()
     log.timer('AO->MO CD eri transformation 2 pass', *time1)
     log.timer('AO->MO CD eri transformation', *time0)
     return erifile

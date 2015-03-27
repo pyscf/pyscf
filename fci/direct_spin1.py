@@ -23,7 +23,7 @@ import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:

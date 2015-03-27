@@ -33,7 +33,7 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
         int ksh, dk;
         int i, j, k, i0, j0, k0;
         int shls[3];
-        unsigned long ij0;
+        size_t ij0;
         double *peri, *pbuf;
 
         shls[0] = ish;
@@ -41,18 +41,27 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
 
         for (ksh = auxstart; ksh < nbasnaux; ksh++) {
                 shls[2] = ksh;
+                k0 = ao_loc[ksh] - ao_loc[auxstart];;
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                i0 = ao_loc[ish] - ao_loc[bastart];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
-                        dk = ao_loc[ksh+1] - ao_loc[ksh];
-                        i0 = ao_loc[ish] - ao_loc[bastart];
                         for (i = 0; i < di; i++, i0++) {
                         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                                 ij0 = i0 * nao + j0;
-                                k0 = ao_loc[ksh] - ao_loc[auxstart];;
                                 peri = eri + ij0 * naoaux + k0;
                                 pbuf = eribuf + j * di + i;
                                 for (k = 0; k < dk; k++) {
                                         peri[k] = pbuf[k*dij];
+                                }
+                        } }
+                } else {
+                        for (; i0 < ao_loc[ish+1]-ao_loc[bastart]; i0++) {
+                        for (j0 = ao_loc[jsh]; j0 < ao_loc[jsh+1]; j0++) {
+                                ij0 = i0 * nao + j0;
+                                peri = eri + ij0 * naoaux + k0;
+                                for (k = 0; k < dk; k++) {
+                                        peri[k] = 0;
                                 }
                         } }
                 }
@@ -80,7 +89,7 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
         int ksh, dk;
         int i, j, k, i0, j0, k0;
         int shls[3];
-        unsigned long ij0;
+        size_t ij0;
         double *peri, *pbuf;
 
         shls[0] = ish;
@@ -88,14 +97,14 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
 
         for (ksh = auxstart; ksh < nbasnaux; ksh++) {
                 shls[2] = ksh;
+                k0 = ao_loc[ksh] - ao_loc[auxstart];
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
-                        dk = ao_loc[ksh+1] - ao_loc[ksh];
                         if (ish == jsh) {
                                 for (i0 = ao_loc[ish],i = 0; i < di; i++, i0++) {
                                 for (j0 = ao_loc[jsh],j = 0; j0 <= i0; j++, j0++) {
                                         ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        k0 = ao_loc[ksh] - ao_loc[auxstart];
                                         peri = eri + ij0 * naoaux + k0;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
@@ -106,11 +115,30 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
                                 for (i0 = ao_loc[ish], i = 0; i < di; i++,i0++) {
                                 for (j0 = ao_loc[jsh], j = 0; j < dj; j++,j0++) {
                                         ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        k0 = ao_loc[ksh] - ao_loc[auxstart];
                                         peri = eri + ij0 * naoaux + k0;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = pbuf[k*dij];
+                                        }
+                                } }
+                        }
+                } else {
+                        if (ish == jsh) {
+                                for (i0 = ao_loc[ish]; i0 < ao_loc[ish+1];i0++) {
+                                for (j0 = ao_loc[jsh]; j0 <= i0; j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
+                                        peri = eri + ij0 * naoaux + k0;
+                                        for (k = 0; k < dk; k++) {
+                                                peri[k] = 0;
+                                        }
+                                } }
+                        } else {
+                                for (i0 = ao_loc[ish]; i0 < ao_loc[ish+1];i0++) {
+                                for (j0 = ao_loc[jsh]; j0 < ao_loc[jsh+1];j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
+                                        peri = eri + ij0 * naoaux + k0;
+                                        for (k = 0; k < dk; k++) {
+                                                peri[k] = 0;
                                         }
                                 } }
                         }

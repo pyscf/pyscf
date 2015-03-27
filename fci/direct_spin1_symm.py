@@ -23,7 +23,7 @@ import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
 def reorder4irrep(eri, norb, link_index, orbsym):
     if not orbsym:

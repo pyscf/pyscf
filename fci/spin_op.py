@@ -10,7 +10,7 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
 
-librdm = pyscf.lib.load_library('libmcscf')
+librdm = pyscf.lib.load_library('libfci')
 
 ######################################################
 # Spin squared operator

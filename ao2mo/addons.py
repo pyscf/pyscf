@@ -25,7 +25,7 @@ class load:
 
     def __enter__(self):
         if isinstance(self.eri, str):
-            self.feri = h5py.File(self.eri)
+            self.feri = h5py.File(self.eri, 'r')
             return self.feri[self.dataname]
         elif (hasattr(self.eri, 'read') or #isinstance(self.eri, file) or
               isinstance(self.eri, tempfile._TemporaryFileWrapper)):

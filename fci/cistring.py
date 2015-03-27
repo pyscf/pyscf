@@ -9,10 +9,15 @@ import math
 import numpy
 import pyscf.lib
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
-# refer to ci.rdm3.gen_strings
-def gen_strings4orblist(orb_list, nelec, ordering=True):
+# generate string from the given orbital list, the strings are ordered that
+# the first orbital runs fast (as the innerest loop), e.g.
+# gen_strings4orblist((0,1,2,3),2) gives ordered strings
+#       [0b11, 0b101, 0b110, 0b1001, 0b1010, 0b1100]
+# gen_strings4orblist((3,1,0,2),2) gives
+#       [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
+def gen_strings4orblist(orb_list, nelec):
     assert(nelec >= 0)
     if nelec == 0:
         return [0]
@@ -31,11 +36,7 @@ def gen_strings4orblist(orb_list, nelec, ordering=True):
             for n in gen_str_iter(restorb, nelec-1):
                 res.append(n | (1<<orb_list[0]))
         return res
-    if ordering:
-        orb_list = sorted(orb_list, reverse=True)
-    else:
-        orb_list = list(reversed(orb_list))
-    strings = gen_str_iter(orb_list, nelec)
+    strings = gen_str_iter(orb_list[::-1], nelec)
     assert(strings.__len__() == num_strings(len(orb_list),nelec))
     return strings
 

@@ -37,25 +37,34 @@ void RIfill_r_s1_auxe2(int (*intor)(), double complex *eri,
         int ksh, dk;
         int i, j, k, i0, j0, k0;
         int shls[3];
-        unsigned long ij0;
+        size_t ij0;
         double complex *peri, *pbuf;
 
         shls[0] = ish;
         shls[1] = jsh;
         for (ksh = auxstart; ksh < nbasnaux; ksh++) {
                 shls[2] = ksh;
+                k0 = ao_loc[ksh] - ao_loc[auxstart];;
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                i0 = ao_loc[ish] - ao_loc[bastart];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
-                        dk = ao_loc[ksh+1] - ao_loc[ksh];
-                        i0 = ao_loc[ish] - ao_loc[bastart];
                         for (i = 0; i < di; i++, i0++) {
                         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                                 ij0 = i0 * nao + j0;
-                                k0 = ao_loc[ksh] - ao_loc[auxstart];;
                                 peri = eri + ij0 * naoaux + k0;
                                 pbuf = eribuf + j * di + i;
                                 for (k = 0; k < dk; k++) {
                                         peri[k] = pbuf[k*dij];
+                                }
+                        } }
+                } else {
+                        for (i = 0; i < di; i++, i0++) {
+                        for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
+                                ij0 = i0 * nao + j0;
+                                peri = eri + ij0 * naoaux + k0;
+                                for (k = 0; k < dk; k++) {
+                                        peri[k] = 0;
                                 }
                         } }
                 }
@@ -83,21 +92,21 @@ void RIfill_r_s2ij_auxe2(int (*intor)(), double complex *eri,
         int ksh, dk;
         int i, j, k, i0, j0, k0;
         int shls[3];
-        unsigned long ij0;
+        size_t ij0;
         double complex *peri, *pbuf;
 
         shls[0] = ish;
         shls[1] = jsh;
         for (ksh = auxstart; ksh < nbasnaux; ksh++) {
                 shls[2] = ksh;
+                k0 = ao_loc[ksh] - ao_loc[auxstart];
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
-                        dk = ao_loc[ksh+1] - ao_loc[ksh];
                         if (ish == jsh) {
                                 for (i0 = ao_loc[ish],i = 0; i < di; i++, i0++) {
                                 for (j0 = ao_loc[jsh],j = 0; j0 <= i0; j++, j0++) {
                                         ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        k0 = ao_loc[ksh] - ao_loc[auxstart];
                                         peri = eri + ij0 * naoaux + k0;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
@@ -108,11 +117,30 @@ void RIfill_r_s2ij_auxe2(int (*intor)(), double complex *eri,
                                 for (i0 = ao_loc[ish], i = 0; i < di; i++,i0++) {
                                 for (j0 = ao_loc[jsh], j = 0; j < dj; j++,j0++) {
                                         ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        k0 = ao_loc[ksh] - ao_loc[auxstart];
                                         peri = eri + ij0 * naoaux + k0;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = pbuf[k*dij];
+                                        }
+                                } }
+                        }
+                } else {
+                        if (ish == jsh) {
+                                for (i0 = ao_loc[ish],i = 0; i < di; i++, i0++) {
+                                for (j0 = ao_loc[jsh],j = 0; j0 <= i0; j++, j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
+                                        peri = eri + ij0 * naoaux + k0;
+                                        for (k = 0; k < dk; k++) {
+                                                peri[k] = 0;
+                                        }
+                                } }
+                        } else {
+                                for (i0 = ao_loc[ish], i = 0; i < di; i++,i0++) {
+                                for (j0 = ao_loc[jsh], j = 0; j < dj; j++,j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
+                                        peri = eri + ij0 * naoaux + k0;
+                                        for (k = 0; k < dk; k++) {
+                                                peri[k] = 0;
                                         }
                                 } }
                         }
@@ -331,8 +359,8 @@ void RItranse2_r_s1(int (*fmmm)(),
                     double complex *vout, double complex *vin, int row_id,
                     struct _AO2MOEnvs *envs)
 {
-        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        unsigned long nao2 = envs->nao * envs->nao;
+        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t nao2 = envs->nao * envs->nao;
         (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
 }
 
@@ -341,8 +369,8 @@ void RItranse2_r_s2(int (*fmmm)(),
                     struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        unsigned long ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        unsigned long nao2 = nao*(nao+1)/2;
+        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t nao2 = nao*(nao+1)/2;
         double complex *buf = malloc(sizeof(double complex) * nao*nao);
         NPzunpack_tril(nao, vin+nao2*row_id, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);

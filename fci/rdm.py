@@ -7,7 +7,7 @@ import numpy
 import pyscf.lib
 from pyscf.fci import cistring
 
-librdm = pyscf.lib.load_library('libmcscf')
+librdm = pyscf.lib.load_library('libfci')
 
 '''FCI 1, 2, 3, 4-particle density matrices.
 

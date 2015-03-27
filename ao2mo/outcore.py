@@ -416,7 +416,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
 # The buffer to hold AO integrals in C code, see line (@)
-    aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
+    aobuflen = int((mem_words - iobuf_words) // (nao_pair*comp))
     shranges = guess_shell_ranges(mol, e1buflen, aobuflen, aosym)
     if ao2mopt is None:
         if intor == 'cint2e_sph':
@@ -446,9 +446,9 @@ def half_e1(mol, mo_coeffs, swapfile,
         for imic, aoshs in enumerate(sh_range[3]):
             log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
                        imic+1, nmic, *aoshs)
-            buf = numpy.empty((comp*aoshs[2],nao*nao)) # (@)
+            buf = numpy.empty((comp*aoshs[2],nao_pair)) # (@)
             _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
-                              aosym, comp, ao2mopt, buf)
+                              aosym, comp, ao2mopt, vout=buf)
             buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]

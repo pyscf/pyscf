@@ -73,7 +73,6 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 9, 8)
 # without proper initial guess, it converges to wrong solution.  Big orbital
 # rotation stepsize may converge to the right one if lucky enough
-        mc.max_orb_stepsize = .3
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -230.72211519779304, 6)

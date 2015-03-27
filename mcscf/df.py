@@ -3,9 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import time
 from functools import reduce
 import ctypes
 import _ctypes
+import tempfile
 import numpy
 import pyscf.lib
 from pyscf.ao2mo import _ao2mo
@@ -54,9 +56,14 @@ def density_fit(casscf, auxbasis='weigend', level=1):
 
         def update_ao2mo(self, mo):
             ncore = self.ncore
+            self._cderi = None # leave as much memory as possible for mc_ao2mo
             eris = mc_ao2mo._ERIS(self, mo, 'incore', 2)
             # using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
+            t0 = (time.clock(), time.time())
+            log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
             self.get_jk(self.mol, [])
+            if log.verbose >= pyscf.lib.logger.DEBUG1:
+                t1 = log.timer('Generate density fitting integrals', *t0)
 
             mo = numpy.asarray(mo, order='F')
             nao, nmo = mo.shape
@@ -69,6 +76,8 @@ def density_fit(casscf, auxbasis='weigend', level=1):
                 for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
                     eri1 = numpy.array(feri[b0:b1], copy=False)
                     buf = numpy.empty((b1-b0,nmo,nmo))
+                    if log.verbose >= pyscf.lib.logger.DEBUG1:
+                        t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
                     fdrv(ftrans, fmmm,
                          buf.ctypes.data_as(ctypes.c_void_p),
                          eri1.ctypes.data_as(ctypes.c_void_p),
@@ -77,9 +86,14 @@ def density_fit(casscf, auxbasis='weigend', level=1):
                          ctypes.c_int(0), ctypes.c_int(nmo),
                          ctypes.c_int(0), ctypes.c_int(nmo),
                          ctypes.c_void_p(0), ctypes.c_int(0))
-                    bufd = numpy.einsum('kii->ki', buf)
-                    eris.j_cp += numpy.einsum('ki,kj->ij', bufd[:,:ncore], bufd)
+                    if log.verbose >= pyscf.lib.logger.DEBUG1:
+                        t1 = log.timer('transform [%d:%d]'%(b0,b1), *t1)
+                    bufd = numpy.einsum('kii->ki', buf).copy()
+                    #:eris.j_cp += numpy.einsum('ki,kj->ij', bufd[:,:ncore], bufd)
+                    pyscf.lib.dot(bufd[:,:ncore].T.copy(), bufd, 1, eris.j_cp, 1)
                     eris.k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
+                    if log.verbose >= pyscf.lib.logger.DEBUG1:
+                        t1 = log.timer('j_cp and k_cp', *t1)
             return eris
 
 # We don't modify self._scf because it changes self.h1eff function.

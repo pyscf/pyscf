@@ -15,6 +15,9 @@ from pyscf.mcscf import casci
 from pyscf.mcscf import aug_hessian
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
+from pyscf import ao2mo
+from pyscf import fci
+from pyscf.tools.mo_mapping import mo_1to1map
 
 
 class CASSCF(mc1step.CASSCF):
@@ -114,9 +117,70 @@ class CASSCF(mc1step.CASSCF):
                self.pack_uniq_var(h_diag)
 
     def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
-        for u, g_orb, njk in mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2,
-                                                   eris, verbose):
+        for u, g_orb, njk \
+                in mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
             yield _symmetrize(u, self.orbsym, self.mol.groupname), g_orb, njk
+
+    def cas_natorb(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        log = logger.Logger(self.stdout, self.verbose)
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if eris is None: eris = self.update_ao2mo(mo_coeff)
+        ncore = self.ncore
+        ncas = self.ncas
+        nocc = ncore + ncas
+        nelecas = self.nelecas
+        casdm1 = self.fcisolver.make_rdm1(ci, ncas, nelecas)
+        occ, ucas = _symm_eigh(-casdm1, self.orbsym[ncore:nocc])
+        occ = -occ
+        log.info('Natural occ %s', str(occ))
+# restore phase
+        for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
+            if ucas[k,i] < 0:
+                ucas[:,i] *= -1
+        mo_coeff1 = mo_coeff.copy()
+        mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+
+        where_natorb = mo_1to1map(ucas)
+        guide_stringsa = fci.cistring.gen_strings4orblist(where_natorb, nelecas[0])
+        guide_stringsb = fci.cistring.gen_strings4orblist(where_natorb, nelecas[1])
+        old_det_idxa = numpy.argsort(guide_stringsa)
+        old_det_idxb = numpy.argsort(guide_stringsb)
+
+        h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, self.get_hcore(),
+                                   mo_coeff[:,ncore:nocc]))
+              + eris.vhf_c[ncore:nocc,ncore:nocc])
+        h1eff = reduce(numpy.dot, (ucas.T, h1eff, ucas))
+        aaaa = eris.aapp[:,:,ncore:nocc,ncore:nocc].copy()
+        aaaa = ao2mo.incore.full(ao2mo.restore(8, aaaa, ncas), ucas)
+        e_cas, fcivec = self.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
+                                              ci0=ci[old_det_idxa[:,None],old_det_idxb])
+        log.debug('In Natural orbital, CI energy = %.12g', e_cas)
+        return mo_coeff1, fcivec, occ
+    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        self.mo_coeff, self.ci, occ = self.cas_natorb(mo_coeff, ci, eris, verbose)
+        return self.ci, self.mo_coeff
+
+    def canonicalize(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        log = logger.Logger(self.stdout, self.verbose)
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if eris is None: eris = self.update_ao2mo(mo_coeff)
+        ncore = self.ncore
+        nocc = ncore + self.ncas
+        nmo = mo_coeff.shape[1]
+        mo_coeff1, fcivec, occ = self.cas_natorb(mo_coeff, ci, eris, verbose)
+        fock = self.get_fock(mo_coeff, ci, eris)
+        if ncore > 0:
+            w, c1 = _symm_eigh(fock[:ncore,:ncore], self.orbsym[:ncore])
+            mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
+        if nmo-nocc > 0:
+            w, c1 = _symm_eigh(fock[nocc:,nocc:], self.orbsym[nocc:])
+            mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
+        return mo_coeff1, fcivec
+    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        self.mo_coeff, self.ci = self.canonicalize(self, mo_coeff, ci, verbose=verbose)
+        return self.mo_coeff, self.ci
 
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):
     if wfnsym != 0:
@@ -127,6 +191,18 @@ def _symmetrize(mat, orbsym, groupname, wfnsym=0):
         lst = numpy.where(orbsym == i0)[0]
         mat1[lst[:,None],lst] = mat[lst[:,None],lst]
     return mat1
+
+def _symm_eigh(mat, orbsym):
+    orbsym = numpy.array(orbsym)
+    norb = mat.shape[0]
+    e = numpy.zeros(norb)
+    c = numpy.zeros((norb,norb))
+    for i0 in set(orbsym):
+        lst = numpy.where(orbsym == i0)[0]
+        w, v = scipy.linalg.eigh(mat[lst[:,None],lst])
+        e[lst] = w
+        c[lst[:,None],lst] = v
+    return e, c
 
 
 if __name__ == '__main__':

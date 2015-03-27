@@ -12,9 +12,9 @@ import h5py
 import pyscf.lib
 from pyscf.lib import logger
 import pyscf.scf
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf import fci
-from pyscf.mcscf import addons
+from pyscf.tools.mo_mapping import mo_1to1map
 
 
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
@@ -54,7 +54,8 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     from pyscf.tools import dump_mat
-    from pyscf import mcscf
+    from pyscf.mcscf import mc_ao2mo
+    from pyscf.mcscf import addons
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ci is None: ci = casscf.ci
     if isinstance(verbose, logger.Logger):
@@ -81,38 +82,15 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label)
 
-        casdm1 = casdm1a + casdm1b
-        occ, ucas = scipy.linalg.eigh(-(casdm1a+casdm1b))
-        occ = -occ
-        c1 = numpy.dot(mo_coeff[:,ncore:ncore+ncas], ucas)
-        log.info('Natural occupancy %s', str(occ))
-        # restore phase
-        for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
-            if ucas[k,i] < 0:
-                ucas[:,i] *= -1
         log.info('Natural orbital in CAS space')
-        dump_mat.dump_rec(log.stdout, c1, label, start=1)
+        dump_mat.dump_rec(log.stdout, mo_coeff[:,ncore:nocc], label, start=1)
 
-        mo_coeff = numpy.hstack((mo_coeff[:,:ncore], c1, mo_coeff[:,nocc:]))
-        eris = mcscf.mc_ao2mo._ERIS(casscf, mo_coeff, approx=2)
-        vj = numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
-        vk = numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
-        h1 = reduce(numpy.dot, (mo_coeff.T, casscf.get_hcore(), mo_coeff))
-        fock = h1 + eris.vhf_c + vj - vk * .5
-
-        c0 = scipy.linalg.eigh(fock[:ncore,:ncore])[1]
-        c2 = scipy.linalg.eigh(fock[nocc:,nocc:])[1]
-        mo_coeff = numpy.hstack((numpy.dot(mo_coeff[:,:ncore], c0), c1,
-                                 numpy.dot(mo_coeff[:,nocc:], c2)))
-        s = reduce(numpy.dot, (mo_coeff.T, casscf._scf.get_ovlp(),
+        s = reduce(numpy.dot, (casscf.mo_coeff.T, casscf._scf.get_ovlp(),
                                casscf._scf.mo_coeff))
         idx = numpy.argwhere(abs(s)>.4)
         for i,j in idx:
             log.info('<mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
 
-        h1eff = h1[ncore:nocc,ncore:nocc] + eris.vhf_c[ncore:nocc,ncore:nocc]
-        ci = casscf.fcisolver.kernel(h1eff, eris.aapp[:,:,ncore:nocc,ncore:nocc],
-                                     ncas, nelecas)[1]
         log.info('** Largest CI components **')
         log.info(' string alpha, string beta, CI coefficients')
         for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
@@ -123,6 +101,91 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
         casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
     return dm1a, dm1b
+
+def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
+    '''Generalized Fock matrix
+    '''
+    from pyscf.mcscf import mc_ao2mo
+    if ci is None: ci = mc.ci
+    if mo_coeff is None: mo_coeff = mc.mo_coeff
+    if eris is None:
+        if hasattr(mc, 'update_ao2mo'):
+            eris = mc.update_ao2mo(mo_coeff)
+        else: # CASCI
+            eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    ncore = mc.ncore
+    ncas = mc.ncas
+    nelecas = mc.nelecas
+
+    casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    vj = numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
+    vk = numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
+    h1 = reduce(numpy.dot, (mo_coeff.T, mc.get_hcore(), mo_coeff))
+    fock = h1 + eris.vhf_c + vj - vk * .5
+    return fock
+
+def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
+    '''Restore natrual orbitals
+    '''
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mc.stdout, mc.verbose)
+    if mo_coeff is None: mo_coeff = mc.mo_coeff
+    if ci is None: ci = mc.ci
+    if eris is None:
+        if hasattr(mc, 'update_ao2mo'):
+            eris = mc.update_ao2mo(mo_coeff)
+        else: # CASCI
+            eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    ncore = mc.ncore
+    ncas = mc.ncas
+    nocc = ncore + ncas
+    nelecas = mc.nelecas
+    casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    occ, ucas = scipy.linalg.eigh(-casdm1)
+    occ = -occ
+    log.info('Natural occ %s', str(occ))
+# restore phase
+    for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
+        if ucas[k,i] < 0:
+            ucas[:,i] *= -1
+    mo_coeff1 = mo_coeff.copy()
+    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+
+# where_natorb gives the location of the natural orbital for the input cas
+# orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
+# the unsorted determinant strings (on natural orbital). e.g.  (3o,2e) system
+#       CAS orbital      1  2  3
+#       natural orbital  3  1  2        <= by mo_1to1map
+#       CASorb-strings   0b011, 0b101, 0b110
+#                    ==  (1,2), (1,3), (2,3) 
+#       natorb-strings   (3,1), (3,2), (1,2)
+#                    ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
+# then argsort to translate the string representation to the address
+#       [2(=0B011), 0(=0B101), 1(=0B110)]
+# to indicate which CASorb-strings address to be loaded in each natorb-strings slot
+    where_natorb = mo_1to1map(ucas)
+    guide_stringsa = fci.cistring.gen_strings4orblist(where_natorb, nelecas[0])
+    guide_stringsb = fci.cistring.gen_strings4orblist(where_natorb, nelecas[1])
+    old_det_idxa = numpy.argsort(guide_stringsa)
+    old_det_idxb = numpy.argsort(guide_stringsb)
+
+    h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, mc.get_hcore(),
+                               mo_coeff[:,ncore:nocc]))
+          + eris.vhf_c[ncore:nocc,ncore:nocc])
+    h1eff = reduce(numpy.dot, (ucas.T, h1eff, ucas))
+    aaaa = eris.aapp[:,:,ncore:nocc,ncore:nocc].copy()
+    aaaa = ao2mo.incore.full(ao2mo.restore(8, aaaa, ncas), ucas)
+    e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
+                                        ci0=ci[old_det_idxa[:,None],old_det_idxb])
+    log.debug('In Natural orbital, CI energy = %.12g', e_cas)
+    return mo_coeff1, fcivec, occ
+
+def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
+    mo_coeff, fcivec = cas_natorb(mc, mo_coeff, ci, eris, verbose=verbose)[:2]
+    return mo_coeff, fcivec
+
 
 def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
     '''CASCI solver
@@ -311,11 +374,21 @@ class CASCI(object):
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
         return self.e_tot, e_cas, self.ci
 
-    def cas_natorb(self, mo_coeff=None, ci0=None):
-        return self.cas_natorb(mo_coeff, ci0)
-    def cas_natorb_(self, mo_coeff=None, ci0=None):
-        self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
+    def cas_natorb(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        return cas_natorb(self, mo_coeff, ci, eris, verbose)
+    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris, verbose)
         return self.ci, self.mo_coeff
+
+    def get_fock(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        return get_fock(self, mo_coeff, ci, eris, verbose)
+
+    def canonicalize(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        return canonicalize(self, mo_coeff, ci, eris, verbose=verbose)
+    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+        self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
+                                              verbose=verbose)
+        return self.mo_coeff, self.ci
 
     def analyze(self, mo_coeff=None, ci=None):
         log = logger.Logger(self.stdout, self.verbose)

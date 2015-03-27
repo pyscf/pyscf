@@ -10,17 +10,20 @@ import time
 import tempfile
 from functools import reduce
 import numpy
+import scipy.linalg
 import h5py
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf import mcscf
 from pyscf import ao2mo
+from pyscf import scf
 from pyscf.ao2mo import _ao2mo
+from pyscf.mcscf import mc_ao2mo
 
 libmc = pyscf.lib.load_library('libmcscf')
 
-NUMERICAL_ZERO = 1e-15
+NUMERICAL_ZERO = 1e-14
 # Ref JCP, 117, 9138
 
 # h1e is the CAS space effective 1e hamiltonian
@@ -609,7 +612,10 @@ def sc_nevpt(mc, verbose=None):
     fock =(eris['h1eff']
          + numpy.einsum('ij,ijpq->pq', dm1, eris['aapp'])
          - numpy.einsum('ij,ipqj->pq', dm1, eris['appa']) * .5)
-    orbe = fock.diagonal()
+    fake_eris = lambda: None
+    fake_eris.__dict__.update(eris.items())
+    orbe = mc.get_fock(eris=fake_eris).diagonal()
+    fake_eris = None
 
     norm_Sr   , e_Sr    = Sr(mc,orbe, dms, eris)
     logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
@@ -706,10 +712,11 @@ def _ERIS(mc, mo, method='incore'):
         aapp, appa, apcv, cvcv = trans_e1_incore(mc, mo)
 
     dmcore = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
-    vj, vk = scf.hf.SCF.get_jk(mc._scf, mol, dmcore)
+    vj, vk = scf.hf.SCF.get_jk(mc._scf, mc.mol, dmcore)
     vhfcore = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
 
     eris = {}
+    eris['vhf_c'] = vhfcore
     eris['aapp'] = aapp
     eris['appa'] = appa
     eris['apcv'] = apcv

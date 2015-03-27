@@ -7,7 +7,7 @@
 DIIS
 """
 
-import os
+import os, sys
 import tempfile
 from functools import reduce
 import numpy

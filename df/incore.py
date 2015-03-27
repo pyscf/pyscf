@@ -112,6 +112,7 @@ def cholesky_eri(mol, auxbasis='weigend', verbose=0):
     t1 = log.timer('3c2e', *t1)
     cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
                                           overwrite_b=True)
+    j3c = None
     # solve_triangular return cderi in Fortran order
     cderi = pyscf.lib.transpose(cderi.T)
     log.timer('cholesky_eri', *t0)

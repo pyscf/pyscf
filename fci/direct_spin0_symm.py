@@ -24,7 +24,7 @@ from pyscf.fci import direct_spin0
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return direct_spin0.contract_1e(f1e, fcivec, norb, nelec, link_index)
