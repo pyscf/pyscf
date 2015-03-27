@@ -235,7 +235,12 @@ def executeFCIQMC(FCIQMCCI):
     logger.info(FCIQMCCI,'fciqmc outputfile: %s',outfiletmp)
     FCIQMCCI.outputFileCurrent = outfiletmp
     outFile = os.path.join(FCIQMCCI.scratchDirectory,outfiletmp)
-    call("%s  %s > %s"%(FCIQMCCI.executable, inFile, outFile), shell=True)
+    if FCIQMCCI.executable == 'external':
+        logger.info(FCIQMCCI,'External FCIQMC calculation requested from dumped integrals.')
+        logger.info(FCIQMCCI,'Waiting for density matrices and output file to be returned.')
+        input("Press Enter to continue with calculation...")
+    else:
+        call("%s  %s > %s"%(FCIQMCCI.executable, inFile, outFile), shell=True)
 
 def readEnergy(FCIQMCCI):
     file1 = open(os.path.join(FCIQMCCI.scratchDirectory, FCIQMCCI.outputFileCurrent),"r")
