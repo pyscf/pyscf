@@ -78,7 +78,7 @@ class DIIS:
             if 'x%d' % self._head in self._diisfile:
                 self._diisfile['e%d'%self._head][:] = x - self._xopt
                 self._diisfile['x%d'%self._head][:] = x
-                self._head = 1
+                self._head += 1
             else:
                 self._diisfile['e%d'%self._head] = x - self._xopt
                 self._diisfile['x%d'%self._head] = x
