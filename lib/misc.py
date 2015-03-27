@@ -46,9 +46,9 @@ def current_memory():
                 vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
                 return rss/1e6, vms/1e6
         except:
-            return 0
+            return 0, 0
     else:
-        return 0
+        return 0, 0
 
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')

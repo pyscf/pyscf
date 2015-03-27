@@ -357,6 +357,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.conv_tol_normt = 1e-5
         self.diis_space = 6
         self.diis_start_cycle = 1
+        self.diis_start_energy_diff = 1e-2
 
         self.nocc = mol.nelectron // 2
         self.nmo = mf.mo_energy.size
@@ -486,7 +487,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         damp.space = self.diis_space
         damp.min_space = 1
         def fupdate(t1, t2, istep, normt, de):
-            if istep > self.diis_start_cycle and abs(de) < 1e-2:
+            if (istep > self.diis_start_cycle and
+                abs(de) < self.diis_start_energy_diff):
                 tbuf = numpy.empty(nov*(nov+1))
                 tbuf[:nov] = t1.ravel()
                 tbuf[nov:] = t2.ravel()

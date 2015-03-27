@@ -10,7 +10,7 @@
 #include <string.h>
 #include <xc.h>
 
-double xc_hyb_exx_coef(xc_func_type *);
+//double xc_hyb_exx_coef(xc_func_type *);
 
 double VXChybrid_coeff(int xc_id, int spin)
 {

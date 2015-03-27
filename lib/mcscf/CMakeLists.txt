@@ -18,5 +18,5 @@ set_target_properties(mcscf PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(mcscf vhf ao2mo ${BLAS_LIBRARIES})
+target_link_libraries(mcscf fci cvhf ao2mo ${BLAS_LIBRARIES})
 
