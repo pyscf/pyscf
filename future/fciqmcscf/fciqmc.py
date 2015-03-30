@@ -238,7 +238,10 @@ def executeFCIQMC(FCIQMCCI):
     if FCIQMCCI.executable == 'external':
         logger.info(FCIQMCCI,'External FCIQMC calculation requested from dumped integrals.')
         logger.info(FCIQMCCI,'Waiting for density matrices and output file to be returned.')
-        input("Press Enter to continue with calculation...")
+        try:
+            raw_input("Press Enter to continue with calculation...")
+        except:
+            input("Press Enter to continue with calculation...")
     else:
         call("%s  %s > %s"%(FCIQMCCI.executable, inFile, outFile), shell=True)
 
