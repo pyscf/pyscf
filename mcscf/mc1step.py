@@ -211,7 +211,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         xsinit = [x for x in xcollect]
         axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
 
-        for ah_conv, ihop, w, dxi, hdxi, residual \
+        for ah_conv, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, dx1,
                                xs=xsinit, ax=axinit, verbose=log,
                                tol=casscf.ah_conv_tol,
@@ -220,7 +220,8 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
             if (ah_conv or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
                 ((abs(w-wlast) < ah_start_tol) and
                  (numpy.linalg.norm(residual) < casscf.ah_start_tol) and
-                 (ihop >= casscf.ah_start_cycle))):
+                 (ihop >= casscf.ah_start_cycle)) or
+                (seig < casscf.ah_lindep)):
                 imic += 1
                 dx1 = dxi
                 dxmax = numpy.max(abs(dx1))
@@ -254,6 +255,14 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
                     g_orb = g_orb1
                     dr = casscf.unpack_uniq_var(dx1)
                     u = numpy.dot(u, expmat(dr))
+
+# It's better to exclude the pseudo-linear-dependent trial vectors for the
+# next round of orbital rotation since these vectors might break
+# scipy.linalg.eigh or stop davidson_cc early before updating the solutions
+            if seig < casscf.ah_lindep*1e2:
+                xcollect.pop(-1)
+                jkcollect.pop(-1)
+                break
 
             if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad*.5):
                 break
@@ -327,21 +336,20 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         if norm_dx < tol or s0 < lindep:
             conv = True
             break
-        yield conv, istep, w_t, xtrial, hx, dx
+        yield conv, istep, w_t, xtrial, hx, dx, s0
         w0 = w_t
         x0 = precond(dx, w_t)
         xs.append(x0)
         ax.append(h_op(x0))
 
     if x0.size == 0:
-        yield conv, istep, 0, x0, 0, x0
+        yield conv, istep, 0, x0, 0, x0, 1
     else:
-        yield conv, istep, w_t, xtrial, hx, dx
+        yield conv, istep, w_t, xtrial, hx, dx, s0
 
 def _regular_step(heff, ovlp, xs, log):
     w, v = scipy.linalg.eigh(heff, ovlp)
-    if log.verbose >= logger.DEBUG2:
-        log.debug2('AH eigs %s', str(w))
+    log.debug2('AH eigs %s', str(w))
 
     for index, x in enumerate(abs(v[0])):
         if x > .1:
@@ -708,7 +716,7 @@ class CASSCF(casci.CASCI):
         self.ah_level_shift = 0#1e-2
         self.ah_conv_tol = 1e-8
         self.ah_max_cycle = 20
-        self.ah_lindep = self.ah_conv_tol**2
+        self.ah_lindep = 1e-14
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
 #   In function rotate_orb_cc, the orbital rotation is carried out with the
 #   approximate aug_hessian step after a few davidson updates of the AH eigen
