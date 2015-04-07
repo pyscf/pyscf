@@ -1,5 +1,6 @@
-Version 1.0-alpha (2015-4-?):
+Version 1.0-alpha (2015-4-7):
 * D{\infty}h and C{\infty}v
+* Fix bug in DFT screening functions
 
 Version 0.11 (2015-3-6):
 * Remove redundant module fci.direct_ms0
