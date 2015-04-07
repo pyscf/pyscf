@@ -56,7 +56,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, stride_b, nthread, nblk) \
         private(i, ij, j, di, cpriv, pc)
                 {
-#if defined HAVE_OPENMP
+#if defined _OPENMP
                         nthread = omp_get_num_threads();
 #endif
                         nblk = MIN((int)((k-1)/nthread) + 1, k);
@@ -95,7 +95,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
                 {
-#if defined HAVE_OPENMP
+#if defined _OPENMP
                         nthread = omp_get_num_threads();
 #endif
                         nblk = MIN((int)((m-1)/nthread) + 1, m);
@@ -122,7 +122,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
                 {
-#if defined HAVE_OPENMP
+#if defined _OPENMP
                         nthread = omp_get_num_threads();
 #endif
                         nblk = MIN((int)((n-1)/nthread) + 1, n);

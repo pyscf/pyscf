@@ -13,6 +13,7 @@ import ctypes
 from functools import reduce
 import numpy
 import pyscf.lib
+from pyscf.lib import logger
 from pyscf import gto
 from pyscf.dft import radi
 
@@ -255,13 +256,13 @@ class Grids(object):
 
     def dump_flags(self):
         try:
-            pyscf.log.info(self, 'radial grids: %s', self.radi_method.__doc__)
-            pyscf.log.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
-            pyscf.log.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
-            pyscf.log.info(self, 'grids dens level: %d', self.level)
-            pyscf.log.info(self, 'symmetrized grids: %d', self.symmetry)
+            logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
+            logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
+            logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
+            logger.info(self, 'grids dens level: %d', self.level)
+            logger.info(self, 'symmetrized grids: %d', self.symmetry)
             if self.atomic_radii is not None:
-                pyscf.log.info(self, 'adjust function', self.atomic_radii.__doc__)
+                logger.info(self, 'adjust function', self.atomic_radii.__doc__)
         except:
             pass
 
@@ -278,6 +279,10 @@ class Grids(object):
                                    self.becke_scheme)
         pyscf.lib.logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
+
+    def kernel(self, mol=None):
+        self.dump_flags()
+        return self.setup_grids_(mol)
 
     def gen_atomic_grids(self, mol, mol_grids=None, radi_method=None,
                          level=None, prune_scheme=None):

@@ -76,6 +76,12 @@ void VXCdot_ao_dm(double *vm, double *ao, double *dm,
 {
         const int nblk = (ngrids+blksize-1) / blksize;
         int ip, ib;
+
+#pragma omp parallel default(none) \
+        shared(vm, ao, dm, nao, nocc, ngrids, blksize, non0table, \
+               atm, natm, bas, nbas, env) \
+        private(ip, ib)
+#pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * blksize;
                 dot_ao_dm(vm+ip*nocc, ao+ip*nao, dm,
@@ -190,13 +196,30 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
 {
         const int nblk = (ngrids+blksize-1) / blksize;
         int ip, ib;
+        double *v_priv;
 
         memset(vv, 0, sizeof(double) * nao * nao);
 
-        for (ib = 0; ib < nblk; ib++) {
-                ip = ib * blksize;
-                dot_ao_ao(vv, ao1+ip*nao, ao2+ip*nao,
-                          nao, MIN(ngrids-ip, blksize), non0table+ib*nbas,
-                          atm, natm, bas, nbas, env);
+#pragma omp parallel default(none) \
+        shared(vv, ao1, ao2, nao, ngrids, blksize, non0table, \
+               atm, natm, bas, nbas, env) \
+        private(ip, ib, v_priv)
+        {
+                v_priv = malloc(sizeof(double) * nao * nao);
+                memset(v_priv, 0, sizeof(double) * nao * nao);
+#pragma omp for nowait schedule(static)
+                for (ib = 0; ib < nblk; ib++) {
+                        ip = ib * blksize;
+                        dot_ao_ao(v_priv, ao1+ip*nao, ao2+ip*nao,
+                                  nao, MIN(ngrids-ip, blksize), non0table+ib*nbas,
+                                  atm, natm, bas, nbas, env);
+                }
+#pragma omp critical
+                {
+                        for (ip = 0; ip < nao*nao; ip++) {
+                                vv[ip] += v_priv[ip];
+                        }
+                }
+                free(v_priv);
         }
 }

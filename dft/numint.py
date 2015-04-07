@@ -37,14 +37,8 @@ def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
         feval = _ctypes.dlsym(libdft._handle, 'VXCeval_nr_gto')
 
     if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,nbas.value),
-                              dtype=numpy.int8)
-    libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
-                           coords.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(ngrids), ctypes.c_int(BLKSIZE),
-                           c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                           c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                           c_env.ctypes.data_as(ctypes.c_void_p))
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas.value),
+                             dtype=numpy.int8)
 
     libdft.VXCeval_ao_drv(ctypes.c_void_p(feval),
                           ctypes.c_int(nao), ctypes.c_int(ngrids),
@@ -56,7 +50,30 @@ def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
                           c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                           c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                           c_env.ctypes.data_as(ctypes.c_void_p))
-    return ao, non0tab
+    return ao
+
+def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
+              verbose=None):
+    assert(coords.flags.c_contiguous)
+    c_atm = numpy.array(mol._atm, dtype=numpy.int32)
+    c_bas = numpy.array(mol._bas, dtype=numpy.int32)
+    c_env = numpy.array(mol._env)
+    natm = ctypes.c_int(c_atm.shape[0])
+    nbas = ctypes.c_int(c_bas.shape[0])
+    nao = mol.nao_nr()
+    ngrids = len(coords)
+    if bascount is None:
+        bascount = mol.nbas - bastart
+
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,nbas.value),
+                          dtype=numpy.int8)
+    libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
+                           coords.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(ngrids), ctypes.c_int(BLKSIZE),
+                           c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                           c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           c_env.ctypes.data_as(ctypes.c_void_p))
+    return non0tab
 
 def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
     c_atm = numpy.array(mol._atm, dtype=numpy.int32)
@@ -71,7 +88,7 @@ def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
         ngrids, nao = ao.shape
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)/BLKSIZE,nbas.value),
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas.value),
                              dtype=numpy.int8)
     def adot(ao, dm):
         #return pyscf.lib.dot(ao, dm)
@@ -109,7 +126,7 @@ def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
                 c0 = adot(ao[0], cneg)
                 rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
                 for i in range(1, 4):
-                    c1 = adot(ao[i], cpos)
+                    c1 = adot(ao[i], cneg)
                     rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
             else:
                 c0 = adot(ao, cneg)
@@ -135,7 +152,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         ngrids, nao = ao.shape
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)/BLKSIZE,nbas.value),
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas.value),
                              dtype=numpy.int8)
 
     def adot(ao1, ao2):
@@ -267,15 +284,15 @@ def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         weight = grids.weights[ip0:ip1]
         if pyscf.dft.vxc._is_lda(x_id) and pyscf.dft.vxc._is_lda(c_id):
             isgga = False
-            ao, non0tab = eval_ao(mol, coords, isgga=isgga)
-            rho = eval_rho(mol, ao, dm, non0tab, isgga=isgga)
+            ao = eval_ao(mol, coords, isgga=isgga)
+            rho = eval_rho(mol, ao, dm, isgga=isgga)
             exc, vrho, vsigma = eval_xc(x_id, c_id, rho, rho,
                                         spin, relativity, verbose)
             den = rho*weight
         else:
             isgga = True
-            ao, non0tab = eval_ao(mol, coords, isgga=isgga)
-            rho = eval_rho(mol, ao, dm, non0tab, isgga=isgga)
+            ao = eval_ao(mol, coords, isgga=isgga)
+            rho = eval_rho(mol, ao, dm, isgga=isgga)
             sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
             exc, vrho, vsigma = eval_xc(x_id, c_id, rho[0], sigma,
                                         spin, relativity, verbose)
@@ -284,7 +301,7 @@ def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         nelec += den.sum()
         excsum += (den*exc).sum()
         vmat += eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga,
-                         non0tab=non0tab, verbose=verbose)
+                         verbose=verbose)
     return nelec, excsum, vmat
 
 
@@ -294,28 +311,30 @@ class _NumInt:
 
     def nr_vxc(self, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
+        if self.non0tab is None:
+            self.non0tab = make_mask(mol, grids.coords)
         nao = dm.shape[0]
         ngrids = len(grids.weights)
-        blksize = min(int(max_memory/6*1e6/8/nao), ngrids)
+# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
         nelec = 0
         excsum = 0
         vmat = numpy.zeros_like(dm)
         for ip0, ip1 in prange(0, ngrids, blksize):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
+            non0tab = self.non0tab[ip0//BLKSIZE:]
             if pyscf.dft.vxc._is_lda(x_id) and pyscf.dft.vxc._is_lda(c_id):
                 isgga = False
-                ao, self.non0tab = eval_ao(mol, coords, isgga=isgga,
-                                           non0tab=self.non0tab)
-                rho = eval_rho(mol, ao, dm, non0tab=self.non0tab, isgga=isgga)
+                ao = eval_ao(mol, coords, isgga=isgga, non0tab=non0tab)
+                rho = eval_rho(mol, ao, dm, non0tab=non0tab, isgga=isgga)
                 exc, vrho, vsigma = eval_xc(x_id, c_id, rho, rho,
                                             spin, relativity, verbose)
                 den = rho*weight
             else:
                 isgga = True
-                ao, self.non0tab = eval_ao(mol, coords, isgga=isgga,
-                                           non0tab=self.non0tab)
-                rho = eval_rho(mol, ao, dm, non0tab=self.non0tab, isgga=isgga)
+                ao = eval_ao(mol, coords, isgga=isgga, non0tab=non0tab)
+                rho = eval_rho(mol, ao, dm, non0tab=non0tab, isgga=isgga)
                 sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
                 exc, vrho, vsigma = eval_xc(x_id, c_id, rho[0], sigma,
                                             spin, relativity, verbose)

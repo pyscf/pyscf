@@ -42,7 +42,7 @@ class RKS(pyscf.scf.hf.RHF):
         '''Coulomb + XC functional'''
         t0 = (time.clock(), time.time())
         if self.grids.coords is None:
-            self.grids.setup_grids()
+            self.grids.setup_grids_()
             t0 = log.timer(self, 'seting up grids', *t0)
 
         x_code, c_code = vxc.parse_xc_name(self.xc)
