@@ -2,9 +2,8 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
-import incore
-from incore import gen_int2e_from_full_eri
-from incore import get_int2e_from_partial_eri
+from pyscf.ao2mo import incore
+from pyscf.ao2mo import outcore
+from pyscf.ao2mo import r_outcore
 
-import direct
-from direct import gen_int2e_ao2mo
+from pyscf.ao2mo.addons import load, restore

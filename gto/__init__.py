@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 #
-# File: __init__.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from mole import Mole
-import cmd_args
+from pyscf.gto import mole
+from pyscf.gto import basis
+from pyscf.gto.mole import *
+from pyscf.gto.moleintor import getints, getints_by_shell
 
-import basis
-import Dmatrix
+#import pyscf.gto.mole.cmd_args

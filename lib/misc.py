@@ -1,17 +1,54 @@
+#!/usr/bin/env python
 #
-# File: misc.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os, sys
 import tempfile
 import shutil
+import functools
+import math
 import ctypes
 import numpy
-import functools
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
+
+def load_library(libname):
+# numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py
+    if '1.6' in numpy.__version__:
+        if (sys.platform.startswith('linux') or
+            sys.platform.startswith('gnukfreebsd')):
+            so_ext = '.so'
+        elif sys.platform.startswith('darwin'):
+            so_ext = '.dylib'
+        elif sys.platform.startswith('win'):
+            so_ext = '.dll'
+        else:
+            raise OSError('Unknown platform')
+        libname_so = libname + so_ext
+        return ctypes.CDLL(os.path.join(os.path.dirname(__file__), libname_so))
+    else:
+        _loaderpath = os.path.dirname(__file__)
+        return numpy.ctypeslib.load_library(libname, _loaderpath)
+
+#Fixme, the standard resouce module gives wrong number when objects are released
+#see http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
+#or use slow functions as memory_profiler._get_memory did
+CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
+PAGESIZE = os.sysconf("SC_PAGE_SIZE")
+def current_memory():
+    if 0:
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
+    elif sys.platform.startswith('linux'):
+        try:
+            with open("/proc/%s/statm" % os.getpid()) as f:
+                vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
+                return rss/1e6, vms/1e6
+        except:
+            return 0, 0
+    else:
+        return 0, 0
 
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
@@ -44,7 +81,7 @@ def remove_dup(test, lst, from_end=False):
         return set(lst)
     else:
         if from_end:
-            lst = reversed(lst)
+            lst = list(reversed(lst))
         seen = []
         for l in lst:
             if not member(test, l, seen):
@@ -52,51 +89,26 @@ def remove_dup(test, lst, from_end=False):
         return seen
 
 def remove_if(test, lst):
-    return filter(lambda x: not test(x), lst)
+    return list(filter(lambda x: not test(x), lst))
 
 def find_if(test, lst):
     for l in lst:
         if test(l):
             return l
 
+# for give n, generate [(m1,m2),...] that
+#       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
+def tril_equal_pace(n, base=0, npace=0, minimal=1):
+    if base == 0:
+        assert(npace > 0)
+        base = int(math.sqrt(n*(n+1)/npace)) + 1
+    m1 = 0
+    while m1 < n:
+        # m1*m1 + base*base < m1*(m1+1) + base*(base+1) - m2
+        m2 = int(max(math.sqrt(m1**2+base**2), m1+minimal))
+        yield m1, min(m2,n)
+        m1 = m2
 
-def trace_ab(a, b):
-    return (numpy.array(a).T*numpy.array(b)).sum()
-
-def pack_lowtri(mat, nd):
-    mat1d = numpy.empty(nd*(nd+1)/2)
-    n = 0
-    for i in range(nd):
-        for j in range(i+1):
-            mat1d[n] = mat[i,j]
-            n += 1
-    return mat1d
-def unpack_lowtri(mat1d, nd):
-    mat = numpy.empty((nd,nd))
-    n = 0
-    for i in range(nd):
-        for j in range(i+1):
-            mat[i,j] = mat1d[n]
-            mat[j,i] = mat1d[n].conj()
-            n += 1
-    return mat
-
-
-LINEAR_DEP_THRESHOLD = 1e-10
-def solve_lineq_by_SVD(a, b):
-    ''' a * x = b '''
-    t, w, vH = numpy.linalg.svd(a)
-    idx = []
-    for i,wi in enumerate(w):
-        if wi > LINEAR_DEP_THRESHOLD:
-            idx.append(i)
-    if idx:
-        idx = numpy.array(idx)
-        tb = numpy.dot(numpy.array(t[:,idx]).T.conj(), numpy.array(b))
-        x = numpy.dot(numpy.array(vH[idx,:]).T.conj(), tb / w[idx])
-    else:
-        x = numpy.zeros_like(b)
-    return x
 
 class ctypes_stdout:
     '''make c-printf output to string, but keep python print in /dev/pts/1.
@@ -104,7 +116,7 @@ class ctypes_stdout:
     Usage:
         with ctypes_stdout() as stdout:
             ...
-        print stdout.read()'''
+        print(stdout.read())'''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -137,7 +149,8 @@ class capture_stdout:
     Usage:
         with capture_stdout() as stdout:
             ...
-        print stdout.read()'''
+        print(stdout.read())
+    '''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -189,6 +202,8 @@ class quite_run:
 
 # from pygeocoder
 # this decorator lets me use methods as both static and instance methods
+# In contrast to classmethod, when obj.function() is called, the first
+# argument is obj in omnimethod rather than obj.__class__ in classmethod
 class omnimethod(object):
     def __init__(self, func):
         self.func = func
@@ -196,3 +211,8 @@ class omnimethod(object):
     def __get__(self, instance, owner):
         return functools.partial(self.func, instance)
 
+if __name__ == '__main__':
+    for i,j in tril_equal_pace(90, 30):
+        print('base=30', i, j, j*(j+1)//2-i*(i+1)//2)
+    for i,j in tril_equal_pace(90, npace=5):
+        print('npace=5', i, j, j*(j+1)//2-i*(i+1)//2)

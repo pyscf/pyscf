@@ -1,66 +1,82 @@
+#!/usr/bin/env python
 #
-# File: atom_hf.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
-import scipy.linalg.flapack as lapack
-import lib.parameters as param
-import gto
-import lib.logger as log
-import hf
+import scipy.linalg
+import pyscf.gto as gto
+import pyscf.lib.logger as log
+import pyscf.lib.parameters as param
+from pyscf.scf import hf
+
+
+def get_atm_nrhf(mol):
+    atm_scf_result = {}
+    for a, b in mol._basis.items():
+        atm = gto.Mole()
+        atm.stdout = mol.stdout
+        atm.atom = [[a, (0, 0, 0)]]
+        atm._basis = {a: b}
+        atm.nelectron = gto.mole._charge(a)
+        atm.spin = atm.nelectron % 2
+        atm._atm, atm._bas, atm._env = \
+                atm.make_env(atm.atom, atm._basis, atm._env)
+        atm.natm = atm._atm.__len__()
+        atm.nbas = atm._bas.__len__()
+        atm._built = True
+        atm_hf = AtomSphericAverageRHF(atm)
+        atm_hf.verbose = 0
+        atm_scf_result[a] = atm_hf.scf()[1:]
+        atm_hf._eri = None
+    mol.stdout.flush()
+    return atm_scf_result
 
 class AtomSphericAverageRHF(hf.RHF):
     def __init__(self, mol):
+        self._eri = None
         hf.SCF.__init__(self, mol)
 
-        if mol.num_NR_function() < 350:
-            self.eri_in_memory = True
-        else:
-            self.eri_in_memory = False
-        self._eri = None
-
-    def dump_scf_option(self):
-        hf.RHF.dump_scf_option(self)
+    def dump_flags(self):
+        hf.RHF.dump_flags(self)
         log.debug(self.mol, 'occupation averaged SCF for atom  %s', \
-                  self.mol.symbol_of_atm(0))
+                  self.mol.atom_symbol(0))
 
     def eig(self, f, s):
         atm = self.mol
-        symb = atm.symbol_of_atm(0)
+        symb = atm.atom_symbol(0)
         nuc = gto.mole._charge(symb)
-        idx_by_l = [[] for i in range(6)]
+        idx_by_l = [[] for i in range(param.L_MAX)]
         i0 = 0
         for ib in range(atm.nbas):
-            l = atm.angular_of_bas(ib)
-            nc = atm.nctr_of_bas(ib)
+            l = atm.bas_angular(ib)
+            nc = atm.bas_nctr(ib)
             i1 = i0 + nc * (l*2+1)
             idx_by_l[l].extend(range(i0, i1, l*2+1))
             i0 = i1
 
-        nbf = atm.num_NR_function()
+        nbf = atm.nao_nr()
         self._occ = numpy.zeros(nbf)
         mo_c = numpy.zeros((nbf, nbf))
         mo_e = numpy.zeros(nbf)
 
         # fraction occupation
-        for l in range(4):
+        for l in range(param.L_MAX):
             if idx_by_l[l]:
-                ne = param.ELEMENTS[nuc][2][l]
-                if ne > 0:
-                    nd = (l * 2 + 1) * 2
-                    n2occ = ne.__floordiv__(nd)
-                    frac = (float(ne) / nd - n2occ) * 2
-                else:
-                    n2occ = frac = 0
-                log.debug(self, 'l = %d, occ = %d + %.4g', l, n2occ, frac)
+                n2occ, frac = frac_occ(symb, l)
+                log.debug1(self, 'l = %d, occ = %d + %.4g', l, n2occ, frac)
 
                 idx = numpy.array(idx_by_l[l])
-                f1 = f[idx,:][:,idx]
-                s1 = s[idx,:][:,idx]
-                c, e, info = lapack.dsygv(f1, s1)
+                f1 = 0
+                s1 = 0
+                for m in range(l*2+1):
+                    f1 = f1 + f[idx+m,:][:,idx+m]
+                    s1 = s1 + s[idx+m,:][:,idx+m]
+                f1 *= 1./(l*2+1)
+                s1 *= 1./(l*2+1)
+                e, c = hf.SCF.eig(self, f1, s1)
                 for i, ei in enumerate(e):
-                    log.debug(self, 'l = %d, e_%d = %.9g', l, i, ei)
+                    log.debug1(self, 'l = %d, e_%d = %.9g', l, i, ei)
 
                 for m in range(l*2+1):
                     mo_e[idx] = e
@@ -70,32 +86,26 @@ class AtomSphericAverageRHF(hf.RHF):
                     for i,i1 in enumerate(idx):
                         mo_c[idx,i1] = c[:,i]
                     idx += 1
-        return mo_e, mo_c, 0
+        return mo_e, mo_c
 
-    def set_mo_occ(self, mo_energy):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
         return self._occ
 
-    def calc_den_mat(self, mo_coeff, mo_occ):
-        mo = mo_coeff[:,mo_occ>0]
-        return numpy.dot(mo*mo_occ[mo_occ>0], mo.T)
+    def scf(self, *args, **kwargs):
+        self.build()
+        return hf.kernel(self, *args, dump_chk=False, **kwargs)
 
-    def scf_cycle(self, mol, *args, **keys):
-        return hf.scf_cycle(mol, self, *args, dump_chk=False, **keys)
+def frac_occ(symb, l):
+    nuc = gto.mole._charge(symb)
+    if l < 4 and param.ELEMENTS[nuc][2][l] > 0:
+        ne = param.ELEMENTS[nuc][2][l]
+        nd = (l * 2 + 1) * 2
+        ndocc = ne.__floordiv__(nd)
+        frac = (float(ne) / nd - ndocc) * 2
+    else:
+        ndocc = frac = 0
+    return ndocc, frac
 
-def get_atm_nrhf_result(mol):
-    atm_scf_result = {}
-    for a, b in mol.basis.items():
-        atm = gto.Mole()
-        atm.fout = mol.fout
-        atm.atom = [[a, (0, 0, 0)]]
-        atm.basis = {a: b}
-        atm.nelectron = gto.mole._charge(a)
-        atm.make_env()
-        atm_hf = AtomSphericAverageRHF(atm)
-        atm_hf.verbose = 0
-        atm_scf_result[a] = atm_hf.scf_cycle(atm)[1:]
-    mol.fout.flush()
-    return atm_scf_result
 
 
 if __name__ == '__main__':
@@ -108,4 +118,4 @@ if __name__ == '__main__':
 
     mol.basis = {"N": '6-31g'}
     mol.build()
-    print get_atm_nrhf_result(mol)
+    print(get_atm_nrhf(mol))

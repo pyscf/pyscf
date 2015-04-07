@@ -1,12 +1,11 @@
 #
-# File: __init__.py
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import parameters
-from misc import *
-import logger
-
-import _vhf
-import _ao2mo
-import pycint
+from pyscf.lib import parameters
+from pyscf.lib import numpy_helper
+from pyscf.lib import linalg_helper
+from pyscf.lib import logger
+from pyscf.lib.misc import *
+from pyscf.lib.numpy_helper import *
+from pyscf.lib.linalg_helper import *
