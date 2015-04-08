@@ -1234,10 +1234,12 @@ class Mole(object):
 
         Examples:
 
-        >>> mol.set_common_origin_(0)
-        >>> mol.set_common_origin_((1,0,0))
+        >>> mol.set_common_orig_(0)
+        >>> mol.set_common_orig_((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
+    def set_common_orig_(self, coord):
+        self.set_common_origin_(coord)
 
     def set_rinv_origin_(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
@@ -1248,6 +1250,8 @@ class Mole(object):
         >>> mol.set_rinv_orig_((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
+    def set_rinv_orig_(self, coord):
+        self.rinv_origin_(coord)
 
 #NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):

@@ -176,7 +176,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
 
 # Dynamically increase the number of micro cycles when approach convergence?
     if norm_gorb < 0.01:
-        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb))
+        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb+1e-12))
     else:
         max_cycle = casscf.max_cycle_micro_inner
 
@@ -644,7 +644,7 @@ class CASSCF(casci.CASCI):
         ah_max_cycle : float, for AH solver.
             Max number of iterations allowd in AH solver.  Default is 20.
         ah_lindep : float, for AH solver.
-            Linear dependence threshold for AH solver.  Default is 1e-16.
+            Linear dependence threshold for AH solver.  Default is 1e-14.
         ah_start_tol : flat, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
             This value is to control the start point. Default is .5e-3.

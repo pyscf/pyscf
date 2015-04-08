@@ -100,7 +100,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
             lib.dot(tau.reshape(-1,nvir*nvir),
                     eris_vovv.reshape(-1,nvir*nvir).T, 1,
                     tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
-        #: t2new += numpy.einsum('ka,jibk->ijba', -t1[p0:p1], tmp)
+        #: t2new += numpy.einsum('ka,ijbk->ijba', -t1[p0:p1], tmp)
         t2new += lib.dot(tmp.transpose(1,0,2,3).reshape(-1,p1-p0),
                          t1[p0:p1], -1).reshape(nocc,nocc,nvir,nvir)
         tmp = eris_vovv = None

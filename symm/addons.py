@@ -12,6 +12,32 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo):
     irrep_name can be either the symbol or the ID of the irreducible
     representation.  If the ID is provided, it returns the numeric code
     associated with XOR operator, see :py:meth:`symm.param.IRREP_ID_TABLE`
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        irrep_name : list of str or int
+            A list of irrep ID or name,  it can be either mol.irrep_id or
+            mol.irrep_name.  It can affect the return "label".
+        symm_orb : list of 2d array
+            the symmetry adapted basis
+        mo : 2d array
+            the orbitals to label
+
+    Returns:
+        list of symbols or integers to represent the irreps for the given
+        orbitals
+
+    Examples:
+
+    >>> from pyscf import gto, scf, symm
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz',verbose=0, symmetry=1)
+    >>> mf = scf.RHF(mol)
+    >>> mf.kernel()
+    >>> symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff)
+    ['Ag', 'B1u', 'Ag', 'B1u', 'B2u', 'B3u', 'Ag', 'B2g', 'B3g', 'B1u']
+    >>> symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mf.mo_coeff)
+    [0, 5, 0, 5, 6, 7, 0, 2, 3, 5]
     '''
     nmo = mo.shape[1]
     s = mol.intor_symmetric('cint1e_ovlp_sph')

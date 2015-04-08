@@ -756,7 +756,7 @@ class SCF(object):
         '''
         e, c = scipy.linalg.eigh(h, s)
         idx = numpy.argmax(abs(c.real), axis=0)
-        c[:,c[idx,range(len(e))].real<0] *= -1
+        c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
         return e, c
 
     def get_hcore(self, mol=None):
@@ -827,23 +827,29 @@ class SCF(object):
         if mol is None: mol = self.mol
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(mol, chkfile, project=project)
+    def from_chk(self, mol=None, chkfile=None, project=True):
+        return self.init_guess_by_chkfile(mol, chkfile, project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
-            return key(mol)
+            dm = key(mol)
         elif key.lower() == '1e':
-            return self.init_guess_by_1e(mol)
+            dm = self.init_guess_by_1e(mol)
         elif key.lower() == 'atom':
-            return self.init_guess_by_atom(mol)
+            dm = self.init_guess_by_atom(mol)
         elif key.lower() == 'chkfile':
             try:
-                return self.init_guess_by_chkfile(mol)
+                dm = self.init_guess_by_chkfile(mol)
             except:
                 log.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                          self.chkfile)
-                return self.init_guess_by_minao(mol)
+                dm = self.init_guess_by_minao(mol)
         else:
-            return self.init_guess_by_minao(mol)
+            dm = self.init_guess_by_minao(mol)
+        if self.verbose >= logger.DEBUG1:
+            logger.debug1(self, 'Nelec from initial guess = %g',
+                          (dm*self.get_ovlp()).sum())
+        return dm
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital

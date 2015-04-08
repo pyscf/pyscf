@@ -39,8 +39,8 @@ nocc = mol.nelectron // 2
 nvir = len(mf.mo_energy) - nocc
 co = mf.mo_coeff[:,:nocc]
 cv = mf.mo_coeff[:,nocc:]
-ao2mo.outcore.general(mol, (co,cv,co,cv), eritmp.name, max_memory=500,
-                      dataname='mp2_bz', verbose=5)
+ao2mo.general(mol, (co,cv,co,cv), eritmp.name, max_memory=500,
+              dataname='mp2_bz', verbose=5)
 
 eia = mf.mo_energy[:nocc,None] - mf.mo_energy[None,nocc:]
 f = h5py.File(eritmp.name, 'r')

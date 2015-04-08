@@ -65,6 +65,11 @@ def rotation_mat(vec, theta):
     r = c * numpy.eye(3) + s * ux + (1-c) * uu
     return r
 
+# refection operation via householder
+def householder(vec):
+    vec = numpy.array(vec)
+    return numpy.eye(3) - vec[:,None]*vec*2
+
 #TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
     '''
@@ -100,7 +105,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             axes = axes[[1,2,0]]
         n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
         if c2x is not None:
-            if rawsys.iden_op(-rotation_mat(axes[2],numpy.pi)):
+            if rawsys.iden_op(householder(axes[2])):
                 gpname = 'D%dh' % n
             elif rawsys.detect_icenter():
                 gpname = 'D%dd' % n
@@ -112,7 +117,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             gpname = 'C%dv' % n
             yaxis = numpy.cross(axes[2], mirrorx)
             axes = numpy.array((mirrorx, yaxis, axes[2]))
-        elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)): # xy-mirror
+        elif rawsys.iden_op(householder(axes[2])): # xy-mirror
             gpname = 'C%dh' % n
         elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi/n)): # rotate and inverse
             gpname = 'S%d' % (n*2)
@@ -133,23 +138,22 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 axes = axes[[1,2,0]]
             if is_c2y:
                 axes = axes[[2,0,1]]
-            mirrorx = -rotation_mat(axes[0], numpy.pi)
-            if rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)):
+            if rawsys.iden_op(householder(axes[2])):
                 gpname = 'C2h'
-            elif rawsys.iden_op(mirrorx):
+            elif rawsys.iden_op(householder(axes[0])):
                 gpname = 'C2v'
             else:
                 gpname = 'C2'
         else:
             if rawsys.detect_icenter():
                 gpname = 'Ci'
-            elif rawsys.iden_op(-rotation_mat(axes[0], numpy.pi)):
+            elif rawsys.iden_op(householder(axes[0])):
                 gpname = 'Cs'
                 axes = axes[[1,2,0]]
-            elif rawsys.iden_op(-rotation_mat(axes[1], numpy.pi)):
+            elif rawsys.iden_op(householder(axes[1])):
                 gpname = 'Cs'
                 axes = axes[[2,0,1]]
-            elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)):
+            elif rawsys.iden_op(householder(axes[2])):
                 gpname = 'Cs'
             else:
                 gpname = 'C1'
@@ -490,7 +494,7 @@ class SymmSys(object):
             possible_mirrorx = pick_vectors(maybe_mirrorx)
             r0 = sort_coords(self.atoms[:,1:])
             for c in possible_mirrorx:
-                op = -rotation_mat(c, numpy.pi)
+                op = householder(c)
                 r1 = numpy.dot(r0, op)
                 if numpy.allclose(sort_coords(r1), r0, atol=GEOM_THRESHOLD):
                     mirrorx = c
@@ -629,4 +633,4 @@ if __name__ == "__main__":
     gpname, orig, axes = detect_symm(atom)
     print(gpname, orig, axes)
     atom = shift_atom(atom, orig, axes)
-    print(gpname, symm_identical_atoms(gpname, atom))
+    print(gpname, symm_identical_atoms(subgroup(gpname, axes)[0], atom))
