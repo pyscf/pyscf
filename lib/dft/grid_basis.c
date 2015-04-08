@@ -737,8 +737,8 @@ void VXCeval_nr_gto(int nao, int ngrids, int blksize,
         int counts = 0;
         int *pbas = bas;
         double *p_exp, *pcoeff, *pcoord, *pgto, *pcart;
-        double ectr[NPRIMAX*blksize];
-        double cart_gto[NPRIM_CART*blksize];
+        double *ectr = malloc(sizeof(double) * NPRIMAX*blksize);
+        double *cart_gto = malloc(sizeof(double) * NPRIM_CART*blksize);
         double *aobuf = malloc(sizeof(double) * nao * blksize);
         double *paobuf = aobuf;
         double *grid2atm = malloc(sizeof(double) * natm*3*blksize); // [atm_id,xyz,grid]
@@ -776,6 +776,8 @@ void VXCeval_nr_gto(int nao, int ngrids, int blksize,
                 counts += deg * nc;
         }
         _trans(ao, aobuf, nao, blksize, counts);
+        free(ectr);
+        free(cart_gto);
         free(grid2atm);
         free(aobuf);
 }
@@ -790,8 +792,8 @@ void VXCeval_nr_gto_grad(int nao, int ngrids, int blksize,
         int counts = 0;
         int *pbas = bas;
         double *p_exp, *pcoeff, *pcoord, *pgto, *pcart;
-        double ectr[NPRIMAX*blksize*2];
-        double cart_gto[NPRIM_CART*blksize * 4];
+        double *ectr = malloc(sizeof(double) * NPRIMAX*blksize*2);
+        double *cart_gto = malloc(sizeof(double) * NPRIM_CART*blksize * 4);
         double *aobuf = malloc(sizeof(double) * nao*blksize * 4);
         double *paobuf = aobuf;
         double *paobuf1;
@@ -841,6 +843,8 @@ void VXCeval_nr_gto_grad(int nao, int ngrids, int blksize,
                 // note the structure of ao[4,ngrids,nao]
                 _trans(ao+i*nao*ngrids, aobuf+i*nao*blksize, nao, blksize, counts);
         }
+        free(ectr);
+        free(cart_gto);
         free(aobuf);
         free(grid2atm);
 }
