@@ -300,7 +300,7 @@ def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
 
         nelec += den.sum()
         excsum += (den*exc).sum()
-        vmat += eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga,
+        vmat += eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga=isgga,
                          verbose=verbose)
     return nelec, excsum, vmat
 

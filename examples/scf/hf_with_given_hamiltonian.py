@@ -22,7 +22,6 @@ for i in range(n):
 
 e,c = scipy.linalg.eigh(h1)
 dm0 = numpy.dot(c[:,:3],c[:,:3].T) * 2
-hf_energy_initguess = 0
 
 mf.get_hcore = lambda *args: h1
 mf.get_ovlp = lambda *args: numpy.eye(n)

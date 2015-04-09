@@ -1644,6 +1644,10 @@ class Mole(object):
         return moleintor.getints(intor, self._atm, self._bas, self._env,
                                  bras, kets, comp, 0)
 
+    def intor_by_shell(intor, shells, comp=1):
+        return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
+                                          self._env, comp)
+
     def energy_nuc(self):
         return energy_nuc(self)
     def get_enuc(self):
