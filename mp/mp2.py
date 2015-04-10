@@ -30,7 +30,7 @@ def kernel(mp, mo_energy, mo_coeff, nocc, verbose=None):
     with mp.ao2mo(mo_coeff, nocc) as ovov:
         for i in range(nocc):
             djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-            gi = numpy.array(ovov[i*nvir:(i+1)*nvir], copy=False)
+            gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
             gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
             t2[i] = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
             # 2*ijab-ijba
@@ -49,7 +49,7 @@ def make_rdm1(mp, mo_energy, mo_coeff, nocc, verbose=None):
     with mp.ao2mo(mo_coeff, nocc) as ovov:
         for i in range(nocc):
             djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-            gi = numpy.array(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
+            gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
             gi = gi.transpose(1,2,0)
             t2i = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
             # 2*ijab-ijba

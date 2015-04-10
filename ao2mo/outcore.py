@@ -232,13 +232,12 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         log.debug('k-mo == l-mo')
         klmosym = 's2'
         nkl_pair = nmok*(nmok+1) // 2
-        mokl = numpy.array(mo_coeffs[2], order='F', copy=False)
+        mokl = numpy.asarray(mo_coeffs[2], order='F')
         klshape = (0, nmok, 0, nmok)
     else:
         klmosym = 's1'
         nkl_pair = nmok*nmol
-        mokl = numpy.array(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), \
-                           order='F', copy=False)
+        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
         klshape = (0, nmok, nmok, nmol)
 
 #    if nij_pair > nkl_pair:
@@ -404,13 +403,12 @@ def half_e1(mol, mo_coeffs, swapfile,
         log.debug('i-mo == j-mo')
         ijmosym = 's2'
         nij_pair = nmoi*(nmoi+1) // 2
-        moij = numpy.array(mo_coeffs[0], order='F', copy=False)
+        moij = numpy.asarray(mo_coeffs[0], order='F')
         ijshape = (0, nmoi, 0, nmoi)
     else:
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
-        moij = numpy.array(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), \
-                           order='F', copy=False)
+        moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
         ijshape = (0, nmoi, nmoi, nmoj)
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \

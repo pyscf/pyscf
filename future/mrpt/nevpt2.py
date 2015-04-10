@@ -388,7 +388,7 @@ def Sijrs(mc,orbe, eris, verbose=None):
     with ao2mo.load(feri) as cvcv:
         for i in range(ncore):
             djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-            gi = numpy.array(cvcv[i*nvirt:(i+1)*nvirt], copy=False)
+            gi = numpy.asarray(cvcv[i*nvirt:(i+1)*nvirt])
             gi = gi.reshape(nvirt,ncore,nvirt).transpose(1,2,0)
             t2i = (gi.ravel()/djba).reshape(ncore,nvirt,nvirt)
             # 2*ijab-ijba
@@ -712,7 +712,7 @@ def _ERIS(mc, mo, method='incore'):
         aapp, appa, apcv, cvcv = trans_e1_incore(mc, mo)
 
     dmcore = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
-    vj, vk = scf.hf.SCF.get_jk(mc._scf, mc.mol, dmcore)
+    vj, vk = mc._scf.get_jk(mc.mol, dmcore)
     vhfcore = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
 
     eris = {}

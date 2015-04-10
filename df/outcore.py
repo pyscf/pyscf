@@ -223,13 +223,12 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpd
         log.debug('i-mo == j-mo')
         ijmosym = 's2'
         nij_pair = nmoi*(nmoi+1) // 2
-        moij = numpy.array(mo_coeffs[0], order='F', copy=False)
+        moij = numpy.asarray(mo_coeffs[0], order='F')
         ijshape = (0, nmoi, 0, nmoi)
     else:
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
-        moij = numpy.array(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), \
-                           order='F', copy=False)
+        moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
         ijshape = (0, nmoi, nmoi, nmoj)
 
     if h5py.is_hdf5(erifile):

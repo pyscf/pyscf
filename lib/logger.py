@@ -77,6 +77,10 @@ class Logger:
             self._t0, self._w0 = timer(self, msg, self._t0, wall0)
             return self._t0, self._w0
 
+    def timer_debug1(self, msg, cpu0=None, wall0=None):
+        if self.verbose >= DEBUG1:
+            return self.timer(msg, cpu0, wall0)
+
 def flush(rec, msg, *args):
     rec.stdout.write(msg%args)
     rec.stdout.write('\n')
@@ -140,3 +144,11 @@ def timer(rec, msg, cpu0, wall0=None):
     else:
         debug(rec, ' '.join(('    CPU time for', msg, '%9.2f sec')), cpu1-cpu0)
         return cpu1
+
+def timer_debug1(rec, msg, cpu0, wall0=None):
+    if rec.verbose >= DEBUG1:
+        return timer(rec, msg, cpu0, wall0)
+    elif wall0:
+        return time.clock(), time.time()
+    else:
+        return time.clock()

@@ -20,7 +20,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         b += offsetb;
         c += offsetc;
 
-        int stride, nblk;
+        size_t stride, nblk;
         int nthread = 1;
         int i, di;
 
@@ -55,22 +55,22 @@ void NPdgemm(const char trans_a, const char trans_b,
 #pragma omp parallel default(none) \
         shared(a, b, c, stride, stride_b, nthread, nblk) \
         private(i, ij, j, di, cpriv, pc)
-                {
+{
 #if defined _OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = MIN((int)((k-1)/nthread) + 1, k);
-                        nthread = (k-1) / nblk + 1; // avoid k-i*nblk<0
-                        cpriv = malloc(sizeof(double) * m * n);
-
-#pragma omp for nowait schedule(static)
-                        for (i = 0; i < nthread; i++) {
-                                di = MIN(nblk, k-i*nblk);
+                nblk = MIN((int)((k-1)/nthread) + 1, k);
+                cpriv = malloc(sizeof(double) * m * n);
+#pragma omp for
+                for (i = 0; i < nthread; i++) {
+                        di = MIN(nblk, k-i*nblk);
+                        if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &m, &n, &di,
                                        &alpha, a+stride*i*nblk, &lda,
                                        b+stride_b*i*nblk, &ldb,
                                        &D0, cpriv, &m);
                         }
+                }
 #pragma omp critical
                 {
                         for (ij = 0, i = 0; i < n; i++) {
@@ -81,7 +81,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 }
                 free(cpriv);
-                }
+}
 
         } else if (m > n+4) { // parallelize m
 
@@ -94,21 +94,21 @@ void NPdgemm(const char trans_a, const char trans_b,
 #pragma omp parallel default(none) \
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
-                {
+{
 #if defined _OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = MIN((int)((m-1)/nthread) + 1, m);
-                        nthread = (m-1) / nblk + 1; // avoid m-i*nblk<0
-
-#pragma omp for nowait schedule(static)
-                        for (i = 0; i < nthread; i++) {
-                                di = MIN(nblk, m-i*nblk);
+                nblk = MIN((int)((m-1)/nthread) + 1, m);
+#pragma omp for
+                for (i = 0; i < nthread; i++) {
+                        di = MIN(nblk, m-i*nblk);
+                        if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &di, &n, &k,
                                        &alpha, a+stride*i*nblk, &lda, b, &ldb,
                                        &beta, c+i*nblk, &ldc);
                         }
                 }
+}
 
         } else { // parallelize n
 
@@ -121,20 +121,20 @@ void NPdgemm(const char trans_a, const char trans_b,
 #pragma omp parallel default(none) \
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
-                {
+{
 #if defined _OPENMP
                         nthread = omp_get_num_threads();
 #endif
-                        nblk = MIN((int)((n-1)/nthread) + 1, n);
-                        nthread = (n-1) / nblk + 1; // avoid n-i*nblk<0
-
-#pragma omp for nowait schedule(static)
-                        for (i = 0; i < nthread; i++) {
-                                di = MIN(nblk, n-i*nblk);
+                nblk = MIN((int)((n-1)/nthread) + 1, n);
+#pragma omp for
+                for (i = 0; i < nthread; i++) {
+                        di = MIN(nblk, n-i*nblk);
+                        if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &m, &di, &k,
                                        &alpha, a, &lda, b+stride*i*nblk, &ldb,
                                        &beta, c+ldc*i*nblk, &ldc);
                         }
                 }
+}
         }
 }
