@@ -150,7 +150,8 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
 
     f.write('title\n')
     f.write('\n')
-    f.write('system read\n')
+    f.write('system read noorder\n')
+    f.write('symignoreenergies\n')
     f.write('freeformat\n')
     f.write('electrons %i\n'%(neleca+nelecb))
     f.write('nonuniformrandexcits 4ind-weighted\n')
