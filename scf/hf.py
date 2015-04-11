@@ -823,12 +823,14 @@ class SCF(object):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None: mol = self.mol
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if isinstance(chkfile, pyscf.gto.Mole):
+            raise RuntimeError('''
+    You see this error message because of the API updates. The first argument is chkfile string.''')
         if chkfile is None: chkfile = self.chkfile
-        return init_guess_by_chkfile(mol, chkfile, project=project)
-    def from_chk(self, mol=None, chkfile=None, project=True):
-        return self.init_guess_by_chkfile(mol, chkfile, project)
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
+    def from_chk(self, chkfile=None, project=True):
+        return self.init_guess_by_chkfile(chkfile, project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
