@@ -232,13 +232,12 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         log.debug('k-mo == l-mo')
         klmosym = 's2'
         nkl_pair = nmok*(nmok+1) // 2
-        mokl = numpy.array(mo_coeffs[2], order='F', copy=False)
+        mokl = numpy.asarray(mo_coeffs[2], order='F')
         klshape = (0, nmok, 0, nmok)
     else:
         klmosym = 's1'
         nkl_pair = nmok*nmol
-        mokl = numpy.array(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), \
-                           order='F', copy=False)
+        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
         klshape = (0, nmok, nmok, nmol)
 
 #    if nij_pair > nkl_pair:
@@ -404,19 +403,18 @@ def half_e1(mol, mo_coeffs, swapfile,
         log.debug('i-mo == j-mo')
         ijmosym = 's2'
         nij_pair = nmoi*(nmoi+1) // 2
-        moij = numpy.array(mo_coeffs[0], order='F', copy=False)
+        moij = numpy.asarray(mo_coeffs[0], order='F')
         ijshape = (0, nmoi, 0, nmoi)
     else:
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
-        moij = numpy.array(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), \
-                           order='F', copy=False)
+        moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
         ijshape = (0, nmoi, nmoi, nmoj)
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
 # The buffer to hold AO integrals in C code, see line (@)
-    aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
+    aobuflen = int((mem_words - iobuf_words) // (nao_pair*comp))
     shranges = guess_shell_ranges(mol, e1buflen, aobuflen, aosym)
     if ao2mopt is None:
         if intor == 'cint2e_sph':
@@ -446,9 +444,9 @@ def half_e1(mol, mo_coeffs, swapfile,
         for imic, aoshs in enumerate(sh_range[3]):
             log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
                        imic+1, nmic, *aoshs)
-            buf = numpy.empty((comp*aoshs[2],nao*nao)) # (@)
+            buf = numpy.empty((comp*aoshs[2],nao_pair)) # (@)
             _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
-                              aosym, comp, ao2mopt, buf)
+                              aosym, comp, ao2mopt, vout=buf)
             buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]
@@ -553,8 +551,8 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
-    feri = h5py.File(erifile.name, 'r')
-    return numpy.array(feri['eri_mo'])
+    with h5py.File(erifile.name, 'r') as feri:
+        return numpy.array(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
                    verbose=logger.WARN, compact=True):
@@ -637,8 +635,8 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose, compact=compact)
-    feri = h5py.File(erifile.name, 'r')
-    return numpy.array(feri['eri_mo'])
+    with h5py.File(erifile.name, 'r') as feri:
+        return numpy.array(feri['eri_mo'])
 
 
 def iden_coeffs(mo1, mo2):

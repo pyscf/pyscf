@@ -84,17 +84,22 @@ def get_jk_(mf, mol, dms, hermi=1):
     log = logger.Logger(mf.stdout, mf.verbose)
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         nao = mol.nao_nr()
+        nao_pair = nao*(nao+1)//2
         auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
         mf._naoaux = auxmol.nao_nr()
-        if nao*(nao+1)/2*mf._naoaux*8 < mf.max_memory*1e6:
+        if (nao_pair*mf._naoaux*8/1e6*2+pyscf.lib.current_memory()[0]
+            < mf.max_memory*.8):
             mf._cderi = df.incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
                                                verbose=log)
         else:
-            mf._cderi_file = tempfile.NamedTemporaryFile()
-            mf._cderi = mf._cderi_file.name
-            mf._cderi = df.outcore.cholesky_eri(mol, mf._cderi,
-                                                auxbasis=mf.auxbasis,
-                                                verbose=log)
+            mf._cderi = tempfile.NamedTemporaryFile()
+            df.outcore.cholesky_eri(mol, mf._cderi.name, auxbasis=mf.auxbasis,
+                                    verbose=log)
+            if (nao_pair*mf._naoaux*8/1e6+pyscf.lib.current_memory()[0]
+                < mf.max_memory*.9):
+                with df.load(mf._cderi) as feri:
+                    cderi = numpy.array(feri)
+                mf._cderi = cderi
 
     if len(dms) == 0:
         return [], []
@@ -221,7 +226,7 @@ def r_get_jk_(mf, mol, dms, hermi=1):
         n2c = mol.nao_2c()
         auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
         mf._naoaux = auxmol.nao_nr()
-        if n2c*(n2c+1)/2*mf._naoaux*16 < mf.max_memory*1e6:
+        if n2c*(n2c+1)/2*mf._naoaux*16/1e6*2+pyscf.lib.current_memory()[0] < mf.max_memory:
             mf._cderi = df.r_incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
                                                  aosym='s2', verbose=log)
         else:

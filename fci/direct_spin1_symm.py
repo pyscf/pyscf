@@ -23,12 +23,15 @@ import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
 def reorder4irrep(eri, norb, link_index, orbsym):
     if not orbsym:
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
     orbsym = numpy.array(orbsym)
+# map irrep IDs of Dooh or Coov to D2h, C2v
+# see symm.basis.linearmole_symm_descent
+    orbsym = orbsym % 10
 # irrep of (ij| pair
     trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb)]
 # and the number of occurence for each irrep

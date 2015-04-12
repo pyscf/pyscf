@@ -120,6 +120,9 @@ class _TrialXs(list):
             self.scr_h5 = h5py.File(_fd.name, 'w')
         else:
             self.scr_h5 = None
+    def __delete__(self):
+        if self.scr_h5 is not None:
+            self.scr_h5.close()
 
     def __getitem__(self, n):
         if self.scr_h5 is None:

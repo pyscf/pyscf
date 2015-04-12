@@ -1082,13 +1082,11 @@ class Mole(object):
         if self.symmetry:
             import pyscf.symm
             eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
-            symm_orb = pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,\
-                                                     self.atom, self._basis)
-            self.irrep_id = [ir for ir in range(len(symm_orb)) \
-                             if symm_orb[ir].size > 0]
-            self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir) \
+            self.symm_orb, self.irrep_id = \
+                    pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,
+                                                  self.atom, self._basis)
+            self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir)
                                for ir in self.irrep_id]
-            self.symm_orb = [c for c in symm_orb if c.size > 0]
 
         if dump_input and not self._built and self.verbose > log.NOTICE:
             self.dump_input()
@@ -1236,10 +1234,12 @@ class Mole(object):
 
         Examples:
 
-        >>> mol.set_common_origin_(0)
-        >>> mol.set_common_origin_((1,0,0))
+        >>> mol.set_common_orig_(0)
+        >>> mol.set_common_orig_((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
+    def set_common_orig_(self, coord):
+        self.set_common_origin_(coord)
 
     def set_rinv_origin_(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
@@ -1250,6 +1250,8 @@ class Mole(object):
         >>> mol.set_rinv_orig_((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
+    def set_rinv_orig_(self, coord):
+        self.rinv_origin_(coord)
 
 #NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):
@@ -1641,6 +1643,10 @@ class Mole(object):
         '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
                                  bras, kets, comp, 0)
+
+    def intor_by_shell(intor, shells, comp=1):
+        return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
+                                          self._env, comp)
 
     def energy_nuc(self):
         return energy_nuc(self)

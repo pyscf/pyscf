@@ -18,10 +18,10 @@ def run(b, dm, mo, ci=None):
         ['Cr',(  0.000000,  0.000000,  b/2)],
     ]
     mol.basis = 'cc-pVTZ'
+    mol.symmetry = 1
     mol.build()
     m = scf.RHF(mol)
     m.level_shift_factor = .4
-    m.get_occ = scf.addons.frac_occ(m)
     m.max_cycle = 100
     m.conv_tol = 1e-9
     ehf.append(m.scf(dm))
@@ -30,7 +30,7 @@ def run(b, dm, mo, ci=None):
     mc.fcisolver.conv_tol = 1e-9
     if mo is None:
         # the initial guess for b = 1.5
-        caslst = [19,20,21,22,23,24,25,28,29,30,32,33]
+        caslst = [19,20,21,22,23,24,25,28,29,31,32,33]
         mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caslst, 1)
     else:
         mo = mcscf.project_init_guess(mc, mo)
@@ -53,15 +53,15 @@ emc2 = emc[len(x):]
 ehf2.reverse()
 emc2.reverse()
 with open('cr2-scan.txt', 'w') as fout:
-    fout.write('     HF 3.0->1.5     CAS(12,12)      HF 1.5->3.0     CAS(12,12)\n')
+    fout.write('     HF 1.5->3.0     CAS(12,12)      HF 3.0->1.5     CAS(12,12)\n')
     for i, xi in enumerate(x):
         fout.write('%2.1f  %12.8f  %12.8f  %12.8f  %12.8f\n'
                    % (xi, ehf1[i], emc1[i], ehf2[i], emc2[i]))
 
 import matplotlib.pyplot as plt
-plt.plot(x, ehf1, label='HF,3.0->1.5')
-plt.plot(x, ehf2, label='HF,1.5->3.0')
-plt.plot(x, emc1, label='CAS(12,12),3.0->1.5')
-plt.plot(x, emc2, label='CAS(12,12),1.5->3.0')
+plt.plot(x, ehf1, label='HF,1.5->3.0')
+plt.plot(x, ehf2, label='HF,3.0->1.5')
+plt.plot(x, emc1, label='CAS(12,12),1.5->3.0')
+plt.plot(x, emc2, label='CAS(12,12),3.0->1.5')
 plt.legend()
 plt.show()

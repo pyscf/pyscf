@@ -114,18 +114,6 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
 
-    def test_mc1step_natorb(self):
-        mc = mcscf.CASSCF(m, 4, 4)
-        mc.natorb = True
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-    def test_mc2step_natorb(self):
-        mc = mcscf.CASSCF(m, 4, 4)
-        mc.natorb = True
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
     def test_mc1step_uhf_natorb(self):
         mf = scf.UHF(mol)
         mf.scf()
@@ -141,6 +129,18 @@ class KnowValues(unittest.TestCase):
         mc.natorb = True
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
+
+    def test_frozen1s(self):
+        mc = mcscf.CASSCF(msym, 4, 4)
+        mc.frozen = 3
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -108.91373646206542, 7)
+
+    def test_frozenselect(self):
+        mc = mcscf.CASSCF(msym, 4, 4)
+        mc.frozen = [i-1 for i in [19, 20, 26, 27]]
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -108.91238513746941, 7)
 
 if __name__ == "__main__":
     print("Full Tests for N2")

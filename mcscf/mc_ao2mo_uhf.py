@@ -235,17 +235,19 @@ class _ERIS(object):
         ncore = self.ncore
         ncas = self.ncas
 
-        if method == 'outcore' \
-           or _mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 > casscf.max_memory*.9 \
-           or casscf._scf._eri is None:
+        if (method == 'outcore' or
+            ((_mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 +
+              pyscf.lib.current_memory()[0]) > casscf.max_memory*.9) or
+            (casscf._scf._eri is None)):
             log = logger.Logger(casscf.stdout, casscf.verbose)
+            max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \
             self.appa, self.apPA, self.APPA, \
             self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
             self.Icvcv, self.ICVCV, self.cvCV = \
                     trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
-                                     max_memory=casscf.max_memory, verbose=log)
+                                     max_memory=max_memory, verbose=log)
         elif method == 'incore' and casscf._scf._eri is not None:
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \

@@ -217,9 +217,9 @@ class CASCI(object):
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
-        return self.cas_natorb(mo_coeff, ci0)
+        return addons.cas_natorb(self, mo_coeff, ci0)
     def cas_natorb_(self, mo_coeff=None, ci0=None):
-        self.ci, self.mo_coeff, occ = addons.cas_natorb(self, ci0, mo_coeff)
+        self.ci, self.mo_coeff, occ = addons.cas_natorb(self, mo_coeff, ci0)
         return self.ci, self.mo_coeff
 
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG):
@@ -228,7 +228,7 @@ class CASCI(object):
         if ci is None: ci = self.ci
         if verbose >= logger.INFO:
             log = logger.Logger(self.stdout, verbose)
-            dm1a, dm1b = addons.make_rdm1s(self, ci, mo_coeff)
+            dm1a, dm1b = addons.make_rdm1s(self, mo_coeff, ci)
             label = ['%d%3s %s%-4s' % x for x in self.mol.spheric_labels()]
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(self.stdout, dm1a, label)
@@ -256,7 +256,7 @@ class CASCI(object):
         return dm1a, dm1b
 
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
-        return addons.spin_square(self, fcivec, mo_coeff, ovlp)
+        return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
 
 

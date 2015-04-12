@@ -89,6 +89,18 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.010623169610966, 9)
 
+    def test_n2_symm(self):
+        pmol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''
+                N     0    0    0
+                N     0    0    1''',
+            symmetry = 1,
+            basis = 'cc-pvdz')
+        mf = scf.uhf_symm.UHF(pmol)
+        self.assertAlmostEqual(mf.scf(), -108.9298383856092, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for uhf")

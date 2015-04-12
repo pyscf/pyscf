@@ -14,6 +14,7 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
+max_memory = 1,
 )
 m = scf.RHF(mol)
 m.conv_tol = 1e-9
@@ -26,7 +27,8 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
-symmetry = True
+max_memory = 1,
+symmetry = True,
 )
 msym = scf.RHF(molsym)
 msym.conv_tol = 1e-9
@@ -143,6 +145,6 @@ class KnowValues(unittest.TestCase):
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 
 if __name__ == "__main__":
-    print("Full Tests for N2")
+    print("Full Tests for density fitting N2")
     unittest.main()
 

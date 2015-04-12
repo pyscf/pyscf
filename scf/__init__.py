@@ -88,7 +88,6 @@ from pyscf.scf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import dhf
 from pyscf.scf import chkfile
-from pyscf.scf import diis
 from pyscf.scf import addons
 from pyscf.scf.dfhf import density_fit, density_fit_
 from pyscf.scf.uhf import spin_square

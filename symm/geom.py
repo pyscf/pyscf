@@ -65,6 +65,11 @@ def rotation_mat(vec, theta):
     r = c * numpy.eye(3) + s * ux + (1-c) * uu
     return r
 
+# refection operation via householder
+def householder(vec):
+    vec = numpy.array(vec)
+    return numpy.eye(3) - vec[:,None]*vec*2
+
 #TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
     '''
@@ -100,7 +105,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             axes = axes[[1,2,0]]
         n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
         if c2x is not None:
-            if rawsys.iden_op(-rotation_mat(axes[2],numpy.pi)):
+            if rawsys.iden_op(householder(axes[2])):
                 gpname = 'D%dh' % n
             elif rawsys.detect_icenter():
                 gpname = 'D%dd' % n
@@ -112,7 +117,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             gpname = 'C%dv' % n
             yaxis = numpy.cross(axes[2], mirrorx)
             axes = numpy.array((mirrorx, yaxis, axes[2]))
-        elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)): # xy-mirror
+        elif rawsys.iden_op(householder(axes[2])): # xy-mirror
             gpname = 'C%dh' % n
         elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi/n)): # rotate and inverse
             gpname = 'S%d' % (n*2)
@@ -133,23 +138,22 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 axes = axes[[1,2,0]]
             if is_c2y:
                 axes = axes[[2,0,1]]
-            mirrorx = -rotation_mat(axes[0], numpy.pi)
-            if rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)):
+            if rawsys.iden_op(householder(axes[2])):
                 gpname = 'C2h'
-            elif rawsys.iden_op(mirrorx):
+            elif rawsys.iden_op(householder(axes[0])):
                 gpname = 'C2v'
             else:
                 gpname = 'C2'
         else:
             if rawsys.detect_icenter():
                 gpname = 'Ci'
-            elif rawsys.iden_op(-rotation_mat(axes[0], numpy.pi)):
+            elif rawsys.iden_op(householder(axes[0])):
                 gpname = 'Cs'
                 axes = axes[[1,2,0]]
-            elif rawsys.iden_op(-rotation_mat(axes[1], numpy.pi)):
+            elif rawsys.iden_op(householder(axes[1])):
                 gpname = 'Cs'
                 axes = axes[[2,0,1]]
-            elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi)):
+            elif rawsys.iden_op(householder(axes[2])):
                 gpname = 'Cs'
             else:
                 gpname = 'C1'
@@ -164,10 +168,15 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 def subgroup(gpname, axes):
     if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
         return gpname, axes
-    elif gpname in ('Dooh', 'SO3'):
-        return 'D2h', axes
+    elif gpname in ('SO3',):
+        #return 'D2h', axes
+        return 'Dooh', axes
+    elif gpname in ('Dooh',):
+        #return 'D2h', axes
+        return 'Dooh', axes
     elif gpname in ('Coov',):
-        return 'C2v', axes
+        #return 'C2v', axes
+        return 'Coov', axes
     elif gpname in ('Oh',):
         return 'D2h', axes
     elif gpname in ('Ih',):
@@ -237,8 +246,27 @@ def symm_ops(gpname, axes=None):
 
 def symm_identical_atoms(gpname, atoms):
     ''' Requires '''
-    if not numpy.allclose(get_charge_center(atoms), 0, atol=GEOM_THRESHOLD):
-        sys.stderr.write('WARN: Molecular charge center is not on (0,0,0)\n')
+    # Dooh Coov for linear molecule
+    if gpname == 'Dooh':
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+        idx0 = argsort_coords(coords)
+        coords0 = coords[idx0]
+        opdic = symm_ops(gpname)
+        newc = numpy.dot(coords, opdic['sz'])
+        idx1 = argsort_coords(newc)
+        dup_atom_ids = numpy.sort((idx0,idx1), axis=0).T
+        uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
+        eql_atom_ids = dup_atom_ids[uniq_idx]
+        eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
+        return eql_atom_ids
+    elif gpname == 'Coov':
+        eql_atom_ids = [[i] for i,a in enumerate(atoms)]
+        return eql_atom_ids
+
+    center = get_charge_center(atoms)
+    if not numpy.allclose(center, 0, atol=GEOM_THRESHOLD):
+        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
+                        % str(center))
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms)
@@ -262,6 +290,20 @@ def symm_identical_atoms(gpname, atoms):
 def check_given_symm(gpname, atoms, basis=None):
 # more strict than symm_identical_atoms, we required not only the coordinates
 # match, but also the symbols and basis functions
+
+#FIXME: compare the basis set when basis is given
+    if gpname == 'Dooh':
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+        if numpy.allclose(coords[:,:2], 0, atol=GEOM_THRESHOLD):
+            opdic = symm_ops(gpname)
+            rawsys = SymmSys(atoms, basis)
+            return rawsys.detect_icenter()
+        else:
+            return False
+    elif gpname == 'Coov':
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+        return numpy.allclose(coords[:,:2], 0, atol=GEOM_THRESHOLD)
+
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms, basis)
@@ -452,7 +494,7 @@ class SymmSys(object):
             possible_mirrorx = pick_vectors(maybe_mirrorx)
             r0 = sort_coords(self.atoms[:,1:])
             for c in possible_mirrorx:
-                op = -rotation_mat(c, numpy.pi)
+                op = householder(c)
                 r1 = numpy.dot(r0, op)
                 if numpy.allclose(sort_coords(r1), r0, atol=GEOM_THRESHOLD):
                     mirrorx = c
@@ -578,8 +620,8 @@ if __name__ == "__main__":
     atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]]
     gpname, orig, axes = detect_symm(atom)
     print(gpname, orig, axes)
-    #atom = shift_atom(atom, orig, axes)
-    #print(gpname, symm_identical_atoms(gpname, atom))
+    atom = shift_atom(atom, orig, axes)
+    print(gpname, symm_identical_atoms(gpname, atom))
 
     atom = [['H', (0., 0., 0.)],
             ['H', (0., 0., 1.)],
@@ -590,5 +632,5 @@ if __name__ == "__main__":
             ['H', (0., 0.,-1.)]]
     gpname, orig, axes = detect_symm(atom)
     print(gpname, orig, axes)
-    #atom = shift_atom(atom, orig, axes)
-    #print(gpname, symm_identical_atoms(gpname, atom))
+    atom = shift_atom(atom, orig, axes)
+    print(gpname, symm_identical_atoms(subgroup(gpname, axes)[0], atom))

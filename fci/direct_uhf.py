@@ -23,7 +23,7 @@ import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
 # When the spin-orbitals do not have the degeneracy on spacial part,
 # there is only one version of FCI which is close to _spin1 solver.

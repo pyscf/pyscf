@@ -17,10 +17,13 @@ rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
 class KnowValues(unittest.TestCase):
     def test_rdm3(self):
         dm3ref = make_dm3_o0(ci0, norb, nelec)
-        dm3 = fci.rdm.make_dm123('FCI3pdm_kern_spin0', ci0, ci0, norb, nelec)[2]
+        dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_spin0', ci0, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(dm3ref, dm3))
 
-        dm3 = fci.rdm.reorder_rdm3(rdm1, rdm2, dm3)
+        dm3a = reorder_dm123_o0(dm1, dm2, dm3, False)[2]
+        dm3b = fci.rdm.reorder_dm123(dm1, dm2, dm3, False)[2]
+        self.assertTrue(numpy.allclose(dm3a, dm3b))
+        dm3 = dm3b
         fac = 1. / (nelec-2)
         self.assertTrue(numpy.allclose(rdm2, numpy.einsum('ijklmm->ijkl',dm3)*fac))
         self.assertTrue(numpy.allclose(rdm2, numpy.einsum('ijmmkl->ijkl',dm3)*fac))
@@ -48,8 +51,20 @@ class KnowValues(unittest.TestCase):
         nb = fci.cistring.num_strings(norb, 3)
         ci1 = numpy.random.random((na,nb))
         dm4ref = make_dm4_o0(ci1, norb, (5,3))
-        dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', ci1, ci1, norb, (5,3))[3]
+        dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', ci1, ci1, norb, (5,3))
         self.assertTrue(numpy.allclose(dm4ref, dm4))
+        self.assertTrue(numpy.allclose(dm3, numpy.einsum('ppmnijkl->mnijkl',dm4)/8))
+        self.assertTrue(numpy.allclose(dm3, numpy.einsum('mnppijkl->mnijkl',dm4)/8))
+        self.assertTrue(numpy.allclose(dm3, numpy.einsum('mnijppkl->mnijkl',dm4)/8))
+        self.assertTrue(numpy.allclose(dm3, numpy.einsum('mnijklpp->mnijkl',dm4)/8))
+
+        dm3a, dm4a = reorder_dm1234_o0(dm1, dm2, dm3, dm4, False)[2:]
+        dm4b = fci.rdm.reorder_dm1234(dm1, dm2, dm3, dm4, False)[3]
+        self.assertTrue(numpy.allclose(dm4a, dm4b))
+        self.assertTrue(numpy.allclose(dm3a, numpy.einsum('ppmnijkl->mnijkl',dm4b)/5))
+        self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnppijkl->mnijkl',dm4b)/5))
+        self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnijppkl->mnijkl',dm4b)/5))
+        self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnijklpp->mnijkl',dm4b)/5))
 
     def test_tdm2(self):
         dm1 = numpy.einsum('ij,ijkl->kl', ci0, _trans1(ci0, norb, nelec))
@@ -138,6 +153,50 @@ def make_dm4_o0(fcivec, norb, nelec):
     na, nb = t2.shape[:2]
     rdm4 = numpy.dot(t2.reshape(na*nb,-1).T, t2.reshape(na*nb,-1))
     return rdm4.reshape((norb,)*8).transpose(3,2,1,0,4,5,6,7)
+
+# <p^+ q r^+ s t^+ u> => <p^+ r^+ t^+ u s q>
+# rdm2 is <p^+ q r^+ s>
+def reorder_dm123_o0(rdm1, rdm2, rdm3, inplace=True):
+    rdm1, rdm2 = fci.rdm.reorder_rdm(rdm1, rdm2, inplace)
+    if not inplace:
+        rdm3 = rdm3.copy()
+    norb = rdm1.shape[0]
+    for p in range(norb):
+        for q in range(norb):
+            for s in range(norb):
+                rdm3[p,q,q,s] += -rdm2[p,s]
+            for u in range(norb):
+                rdm3[p,q,:,:,q,u] += -rdm2[p,u]
+            for s in range(norb):
+                rdm3[p,q,:,s,s,:] += -rdm2[p,q]
+    for q in range(norb):
+        for s in range(norb):
+            rdm3[:,q,q,s,s,:] += -rdm1
+    return rdm1, rdm2, rdm3
+
+# <p^+ q r^+ s t^+ u w^+ v> => <p^+ r^+ t^+ w^+ v u s q>
+# rdm2, rdm3 are the (reordered) standard 2-pdm and 3-pdm
+def reorder_dm1234_o0(rdm1, rdm2, rdm3, rdm4, inplace=True):
+    rdm1, rdm2, rdm3 = fci.rdm.reorder_dm123(rdm1, rdm2, rdm3, inplace)
+    if not inplace:
+        rdm4 = rdm4.copy()
+    norb = rdm1.shape[0]
+    delta = numpy.eye(norb)
+    rdm4 -= numpy.einsum('qv,pwrstu->pqrstuvw', delta, rdm3)
+    rdm4 -= numpy.einsum('sv,pqrwtu->pqrstuvw', delta, rdm3)
+    rdm4 -= numpy.einsum('uv,pqrstw->pqrstuvw', delta, rdm3)
+    rdm4 -= numpy.einsum('qt,pursvw->pqrstuvw', delta, rdm3)
+    rdm4 -= numpy.einsum('st,pqruvw->pqrstuvw', delta, rdm3)
+    rdm4 -= numpy.einsum('qr,pstuvw->pqrstuvw', delta, rdm3)
+    rdm4 -= numpy.einsum('qr,sv,pwtu', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('qr,uv,pstw', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('qt,uv,pwrs', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('qt,sv,purw', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('st,qv,pwru', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('st,uv,pqrw', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('qr,st,puvw', delta, delta, rdm2)
+    rdm4 -= numpy.einsum('qr,st,uv,pw->pqrstuvw', delta, delta, delta, rdm1)
+    return rdm1, rdm2, rdm3, rdm4
 
 
 if __name__ == "__main__":

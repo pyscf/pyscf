@@ -56,101 +56,102 @@ def f1pointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libao2mo1._handle, name))
 
 class KnowValues(unittest.TestCase):
-    def test_nr_transe1_comp1(self):
-        eri_ao = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-        eriref = ao2mo.restore(1, eri_ao, nao)
-        eriref = numpy.einsum('pjkl,pi->ijkl', eriref, mo)
-        eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)
-
-        def e1drv(intor, ftrans1, fmmm, eri1):
-            libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
-                                     eri1.ctypes.data_as(ctypes.c_void_p),
-                                     mo.ctypes.data_as(ctypes.c_void_p),
-                                     ctypes.c_int(0), nbas,
-                                     ctypes.c_int(0), ctypes.c_int(nao),
-                                     ctypes.c_int(0), ctypes.c_int(nao),
-                                     ctypes.c_int(1),
-                                     ctypes.c_void_p(0), ctypes.c_void_p(0),
-                                     c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                                     c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                                     c_env.ctypes.data_as(ctypes.c_void_p))
-            return eri1
-
-        intor = f1pointer('cint2e_sph')
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s4')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
-        eri1 = numpy.empty((naopair,naopair))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1).T.copy()
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s4')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
-        eri1 = numpy.empty((naopair,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s4')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_iltj')
-        eri1 = numpy.empty((naopair,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2ij')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
-        eri1 = numpy.empty((nao,nao,naopair))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2ij_to_s1(eri1.transpose(2,0,1), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
-        eri1 = numpy.empty((naopair,naopair))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1).T.copy()
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_iltj')
-        eri1 = numpy.empty((naopair,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
-        eri1 = numpy.empty((naopair,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s1_iltj')
-        eri1 = numpy.empty((naopair,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s1_igtj')
-        eri1 = numpy.empty((naopair,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
-        eri1 = numpy.empty((nao,nao,naopair))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
-        eri1 = s2ij_to_s1(eri1.transpose(2,0,1), nao)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
-        fmmm = f1pointer('AO2MOmmm_nr_s1_igtj')
-        eri1 = numpy.empty((nao,nao,nao,nao))
-        eri1 = e1drv(intor, ftrans1, fmmm, eri1).transpose(2,3,0,1)
-        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
-
+#    def test_nr_transe1_comp1(self):
+#        eri_ao = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+#        eriref = ao2mo.restore(1, eri_ao, nao)
+#        eriref = numpy.einsum('pjkl,pi->ijkl', eriref, mo)
+#        eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)
+#
+#        def e1drv(intor, ftrans1, fill, fmmm, eri1):
+#            libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
+#                                     eri1.ctypes.data_as(ctypes.c_void_p),
+#                                     mo.ctypes.data_as(ctypes.c_void_p),
+#                                     ctypes.c_int(0), nbas,
+#                                     ctypes.c_int(0), ctypes.c_int(nao),
+#                                     ctypes.c_int(0), ctypes.c_int(nao),
+#                                     ctypes.c_int(1),
+#                                     ctypes.c_void_p(0), ctypes.c_void_p(0),
+#                                     c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+#                                     c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+#                                     c_env.ctypes.data_as(ctypes.c_void_p))
+#            return eri1
+#
+#        intor = f1pointer('cint2e_sph')
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s4')
+#        fill = f1pointer('AO2MOfill_nr_s4')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
+#        eri1 = numpy.empty((naopair,naopair))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1).T.copy()
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s4')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
+#        eri1 = numpy.empty((naopair,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s4')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_iltj')
+#        eri1 = numpy.empty((naopair,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2ij')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
+#        eri1 = numpy.empty((nao,nao,naopair))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2ij_to_s1(eri1.transpose(2,0,1), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
+#        eri1 = numpy.empty((naopair,naopair))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1).T.copy()
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_iltj')
+#        eri1 = numpy.empty((naopair,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
+#        eri1 = numpy.empty((naopair,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
+#        fmmm = f1pointer('AO2MOmmm_nr_s1_iltj')
+#        eri1 = numpy.empty((naopair,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2kl')
+#        fmmm = f1pointer('AO2MOmmm_nr_s1_igtj')
+#        eri1 = numpy.empty((naopair,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2kl_to_s1(eri1.transpose(1,2,0), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
+#        eri1 = numpy.empty((nao,nao,naopair))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1)
+#        eri1 = s2ij_to_s1(eri1.transpose(2,0,1), nao)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
+#        fmmm = f1pointer('AO2MOmmm_nr_s1_igtj')
+#        eri1 = numpy.empty((nao,nao,nao,nao))
+#        eri1 = e1drv(intor, ftrans1, fmmm, eri1).transpose(2,3,0,1)
+#        self.assertTrue(numpy.allclose(ao2mo.restore(1, eri1, nao), eriref))
+#
     def test_nr_transe2(self):
         eri_ao = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
         eri1 = ao2mo.restore(1, eri_ao, nao)
@@ -213,11 +214,12 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_transe1_compn(self):
         intor = f1pointer('cint2e_ip1_sph')
-        eri_ao = numpy.empty((3,nao,nao,nao,nao))
+        eri_ao = numpy.empty((3,nao,nao,nao*nao))
         ip = 0
         for i in range(mol.nbas):
             jp = 0
             for j in range(mol.nbas):
+                p0 = 0
                 kp = 0
                 for k in range(mol.nbas):
                     lp = 0
@@ -226,22 +228,26 @@ class KnowValues(unittest.TestCase):
                                                              (i,j,k,l), c_atm,
                                                              c_bas, c_env, 3)
                         di,dj,dk,dl = buf.shape[1:]
-                        eri_ao[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
+                        eri_ao[:,ip:ip+di,jp:jp+dj,p0:p0+dk*dl] = buf.reshape(3,di,dj,-1)
                         lp += dl
+                        p0 += dk * dl
                     kp += dk
                 jp += dj
             ip += di
-        eriref = numpy.einsum('npjkl,pi->nijkl', eri_ao, mo)
-        eriref = numpy.einsum('nipkl,pj->nijkl', eriref, mo)
-        eriref = eriref.transpose(0,3,4,1,2)
+        eriref = numpy.einsum('npjk,pi->nijk', eri_ao, mo)
+        eriref = numpy.einsum('nipk,pj->nijk', eriref, mo)
+        eriref = eriref.transpose(0,3,1,2)
 
         ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
+        fill = f1pointer('AO2MOfill_nr_s1')
         fmmm = f1pointer('AO2MOmmm_nr_s1_iltj')
-        eri1 = numpy.empty((3,nao,nao,nao,nao))
-        libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
+        eri1 = numpy.empty((3,nao*nao,nao,nao))
+        libao2mo1.AO2MOnr_e1_drv(intor, fill, ftrans1, fmmm,
                                  eri1.ctypes.data_as(ctypes.c_void_p),
                                  mo.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(0), nbas,
+                                 ctypes.c_int(0),
+                                 ctypes.c_int(nbas.value*nbas.value),
+                                 ctypes.c_int(nao*nao),
                                  ctypes.c_int(0), ctypes.c_int(nao),
                                  ctypes.c_int(0), ctypes.c_int(nao),
                                  ctypes.c_int(3),
@@ -251,48 +257,48 @@ class KnowValues(unittest.TestCase):
                                  c_env.ctypes.data_as(ctypes.c_void_p))
         self.assertTrue(numpy.allclose(eri1, eriref))
 
-    def test_nr_transe1_frag(self):
-        eri_ao = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-        eriref = ao2mo.restore(1, eri_ao, nao)
-        eriref = numpy.einsum('pjkl,pi->ijkl', eriref, mo)
-        eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)
-        eriref = eriref.transpose(2,3,0,1)
-
-        intor = f1pointer('cint2e_sph')
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
-        fmmm = f1pointer('AO2MOmmm_nr_s1_iltj')
-        ib1,ib2 = mol.nao_nr_range(1,1+3)
-        eri1 = numpy.empty((ib2-ib1,nao,2,4))
-        libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
-                                 eri1.ctypes.data_as(ctypes.c_void_p),
-                                 mo.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(1), ctypes.c_int(3),
-                                 ctypes.c_int(0), ctypes.c_int(2),
-                                 ctypes.c_int(2), ctypes.c_int(4),
-                                 ctypes.c_int(1),
-                                 ctypes.c_void_p(0), ctypes.c_void_p(0),
-                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                                 c_env.ctypes.data_as(ctypes.c_void_p))
-        self.assertTrue(numpy.allclose(eri1, eriref[ib1:ib2,:,:2,2:6]))
-
-        intor = f1pointer('cint2e_sph')
-        ftrans1 = f1pointer('AO2MOtranse1_nr_s2ij')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
-        ib1,ib2 = mol.nao_nr_range(1,1+3)
-        eri1 = numpy.empty((ib2-ib1,nao,2,4))
-        libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
-                                 eri1.ctypes.data_as(ctypes.c_void_p),
-                                 mo.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(1), ctypes.c_int(3),
-                                 ctypes.c_int(0), ctypes.c_int(2),
-                                 ctypes.c_int(2), ctypes.c_int(4),
-                                 ctypes.c_int(1),
-                                 ctypes.c_void_p(0), ctypes.c_void_p(0),
-                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                                 c_env.ctypes.data_as(ctypes.c_void_p))
-        self.assertTrue(numpy.allclose(eri1, eriref[ib1:ib2,:,:2,2:6]))
+#    def test_nr_transe1_frag(self):
+#        eri_ao = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+#        eriref = ao2mo.restore(1, eri_ao, nao)
+#        eriref = numpy.einsum('pjkl,pi->ijkl', eriref, mo)
+#        eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)
+#        eriref = eriref.transpose(2,3,0,1)
+#
+#        intor = f1pointer('cint2e_sph')
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s1')
+#        fmmm = f1pointer('AO2MOmmm_nr_s1_iltj')
+#        ib1,ib2 = mol.nao_nr_range(1,1+3)
+#        eri1 = numpy.empty((ib2-ib1,nao,2,4))
+#        libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
+#                                 eri1.ctypes.data_as(ctypes.c_void_p),
+#                                 mo.ctypes.data_as(ctypes.c_void_p),
+#                                 ctypes.c_int(1), ctypes.c_int(3),
+#                                 ctypes.c_int(0), ctypes.c_int(2),
+#                                 ctypes.c_int(2), ctypes.c_int(4),
+#                                 ctypes.c_int(1),
+#                                 ctypes.c_void_p(0), ctypes.c_void_p(0),
+#                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+#                                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+#                                 c_env.ctypes.data_as(ctypes.c_void_p))
+#        self.assertTrue(numpy.allclose(eri1, eriref[ib1:ib2,:,:2,2:6]))
+#
+#        intor = f1pointer('cint2e_sph')
+#        ftrans1 = f1pointer('AO2MOtranse1_nr_s2ij')
+#        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
+#        ib1,ib2 = mol.nao_nr_range(1,1+3)
+#        eri1 = numpy.empty((ib2-ib1,nao,2,4))
+#        libao2mo1.AO2MOnr_e1_drv(intor, ftrans1, fmmm,
+#                                 eri1.ctypes.data_as(ctypes.c_void_p),
+#                                 mo.ctypes.data_as(ctypes.c_void_p),
+#                                 ctypes.c_int(1), ctypes.c_int(3),
+#                                 ctypes.c_int(0), ctypes.c_int(2),
+#                                 ctypes.c_int(2), ctypes.c_int(4),
+#                                 ctypes.c_int(1),
+#                                 ctypes.c_void_p(0), ctypes.c_void_p(0),
+#                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+#                                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+#                                 c_env.ctypes.data_as(ctypes.c_void_p))
+#        self.assertTrue(numpy.allclose(eri1, eriref[ib1:ib2,:,:2,2:6]))
 
     def test_nr_transe1incore(self):
         eri_ao = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)

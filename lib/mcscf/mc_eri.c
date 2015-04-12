@@ -10,31 +10,15 @@
 #include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
+#include "ao2mo/nr_ao2mo.h"
+
+int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
+                        int seekdim);
 
 void CVHFnrs8_tridm_vj(double *eri, double *tri_dm, double *vj,
                        int nao, int ic, int jc);
 void CVHFnrs8_jk_s2il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc);
-
-struct _AO2MOEnvs {
-        int natm;
-        int nbas;
-        int *atm;
-        int *bas;
-        double *env;
-        int nao;
-        int klsh_start;
-        int klsh_count;
-        int bra_start;
-        int bra_count;
-        int ket_start;
-        int ket_count;
-        int ncomp;
-        int *ao_loc;
-        double *mo_coeff;
-        void *cintopt;
-        void *vhfopt;
-};
 
 /*
  * transform ket, s2 to label AO symmetry
@@ -75,17 +59,31 @@ int MCSCFhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
  * eri[dk,dl,nao,nao] the lower triangular nao x nao array is filled in
  * the input.
  */
-void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
-                      int klsh_start, int klsh_count, int nbas, int *ao_loc)
+void MCSCFnrs4_aapp_jk(double *eri, double *xpa, double *mo_coeff,
+                       double *dm, double *vj, double *vk,
+                       int klsh_start, int klsh_count,
+                       int i_start, int i_count, int j_start, int j_count,
+                       int *ao_loc, int nbas)
 {
         const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
+        const size_t nao_pair = nao*(nao+1)/2;
         int n, k, l, kl, ksh, lsh;
-        double *tridm = malloc(sizeof(double) * nao2);
+        double *tridm = malloc(sizeof(double) * nao_pair);
         int *klocs = malloc(sizeof(int) * nao2);
         int *llocs = malloc(sizeof(int) * nao2);
-        double **peris = malloc(sizeof(double*) * nao2);
-        double *buf, *jpriv, *kpriv;
+        double *peri, *jpriv, *kpriv, *buf;
+
+        const int ij_pair = i_count * j_count;
+        struct _AO2MOEnvs envs;
+        envs.bra_start = i_start;
+        envs.bra_count = i_count;
+        envs.ket_start = j_start;
+        envs.ket_count = j_count;
+        envs.nao = nao;
+        envs.nbas = nbas;
+        envs.ao_loc = ao_loc;
+        envs.mo_coeff = mo_coeff;
 
         n = 0;
         for (kl = 0; kl < klsh_count; kl++) {
@@ -96,18 +94,14 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
                 if (ksh != lsh) {
                         for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
                         for (l = ao_loc[lsh]; l < ao_loc[lsh+1]; l++, n++) {
-                                peris[n] = eri;
                                 klocs[n] = k;
                                 llocs[n] = l;
-                                eri += nao2;
                         } }
                 } else {
                         for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
                         for (l = ao_loc[lsh]; l <= k; l++, n++) {
-                                peris[n] = eri;
                                 klocs[n] = k;
                                 llocs[n] = l;
-                                eri += nao2;
                         } }
                 }
         }
@@ -120,8 +114,8 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
         }
 
 #pragma omp parallel default(none) \
-        shared(dm, tridm, vj, vk, klocs, llocs, n, peris) \
-        private(k, l, kl, ksh, lsh, buf, jpriv, kpriv)
+        shared(eri, xpa, dm, tridm, vj, vk, klocs, llocs, n, envs) \
+        private(k, l, kl, ksh, lsh, jpriv, kpriv, peri, buf)
         {
                 buf = malloc(sizeof(double) * nao2);
                 jpriv = malloc(sizeof(double) * nao2);
@@ -132,9 +126,11 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
                 for (kl = 0; kl < n; kl++) {
                         k = klocs[kl];
                         l = llocs[kl];
-                        NPdpack_tril(nao, buf, peris[kl]);
-                        CVHFnrs8_tridm_vj(buf, tridm, jpriv, nao, k, l);
-                        CVHFnrs8_jk_s2il (buf, dm   , kpriv, nao, k, l);
+                        peri = eri + kl * nao_pair;
+                        CVHFnrs8_jk_s2il(peri, dm, kpriv, nao, k, l);
+                        CVHFnrs8_tridm_vj(peri, tridm, jpriv, nao, k, l);
+                        NPdunpack_tril(nao, peri, buf, 0);
+                        AO2MOmmm_nr_s2_igtj(xpa+kl*ij_pair, buf, &envs, 0);
                 }
 #pragma omp critical
                 for (k = 0; k < nao2; k++) {
@@ -146,7 +142,6 @@ void MCSCFnrs4_corejk(double *eri, double *dm, double *vj, double *vk,
                 free(kpriv);
         }
         free(tridm);
-        free(peris);
         free(klocs);
         free(llocs);
 }

@@ -76,10 +76,10 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         log.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
                  'SCF may be inaccurate and hard to converge.', cond)
 
-    try:
+    if mf.DIIS:
         adiis = mf.DIIS(mf)
         adiis.space = mf.diis_space
-    except:
+    else:
         adiis = None
 
     vhf = mf.get_veff(mol, dm)
@@ -530,7 +530,11 @@ def analyze(mf, verbose=logger.DEBUG):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
+
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
@@ -752,7 +756,7 @@ class SCF(object):
         '''
         e, c = scipy.linalg.eigh(h, s)
         idx = numpy.argmax(abs(c.real), axis=0)
-        c[:,c[idx,range(len(e))].real<0] *= -1
+        c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
         return e, c
 
     def get_hcore(self, mol=None):
@@ -819,27 +823,35 @@ class SCF(object):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None: mol = self.mol
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if isinstance(chkfile, pyscf.gto.Mole):
+            raise RuntimeError('''
+    You see this error message because of the API updates. The first argument is chkfile string.''')
         if chkfile is None: chkfile = self.chkfile
-        return init_guess_by_chkfile(mol, chkfile, project=project)
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
+    def from_chk(self, chkfile=None, project=True):
+        return self.init_guess_by_chkfile(chkfile, project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
-            return key(mol)
+            dm = key(mol)
         elif key.lower() == '1e':
-            return self.init_guess_by_1e(mol)
+            dm = self.init_guess_by_1e(mol)
         elif key.lower() == 'atom':
-            return self.init_guess_by_atom(mol)
+            dm = self.init_guess_by_atom(mol)
         elif key.lower() == 'chkfile':
             try:
-                return self.init_guess_by_chkfile(mol)
+                dm = self.init_guess_by_chkfile(mol)
             except:
                 log.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                          self.chkfile)
-                return self.init_guess_by_minao(mol)
+                dm = self.init_guess_by_minao(mol)
         else:
-            return self.init_guess_by_minao(mol)
+            dm = self.init_guess_by_minao(mol)
+        if self.verbose >= logger.DEBUG1:
+            logger.debug1(self, 'Nelec from initial guess = %g',
+                          (dm*self.get_ovlp()).sum())
+        return dm
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital
@@ -983,7 +995,7 @@ class SCF(object):
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
-        return nbf**4/1e6 < self.max_memory*.95
+        return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
 
 ############

@@ -1,0 +1,26 @@
+
+* CCSD lambda
+
+* EOM-IP-CCSD, EOM-EA-CCSD, EOM-EE-CCSD
+
+* MP2 gradients
+
+* MP2 NMR
+
+* Density fitting for DFT
+
+* Spin-polarized DFT
+
+* DFT gradients
+
+* DFT NMR
+
+* TDDFT
+
+* HF/DFT Hessian
+
+* Geometry optimizer
+
+* dryrun.py
+
+* IQmol, or IBOviewer interface

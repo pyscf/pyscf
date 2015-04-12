@@ -121,6 +121,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
 
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
+    assert(eri_ao.size in (nao_pair**2, nao_pair*(nao_pair+1)//2))
 
     if compact and ijsame:
         nij_pair = nmoi*(nmoi+1) // 2

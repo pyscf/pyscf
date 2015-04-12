@@ -22,7 +22,7 @@ from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import direct_spin1
 
-libfci = pyscf.lib.load_library('libmcscf')
+libfci = pyscf.lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     if link_index is None:

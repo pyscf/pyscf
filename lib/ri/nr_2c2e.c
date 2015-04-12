@@ -46,6 +46,13 @@ void RInr_fill2c2e_sph(double *eri, int auxstart, int auxcount,
                         for (j0 = ao_loc[jsh]-ao_loc[auxstart], j = 0; j < dj; j++, j0++) {
                                 eri[i0*naoaux+j0] = buf[j*di+i];
                         } }
+                } else {
+                        for (i0 = ao_loc[ish]-ao_loc[auxstart];
+                             i0 < ao_loc[ish+1]-ao_loc[auxstart]; i0++) {
+                        for (j0 = ao_loc[jsh]-ao_loc[auxstart];
+                             j0 < ao_loc[jsh+1]-ao_loc[auxstart]; j0++) {
+                                eri[i0*naoaux+j0] = 0;
+                        } }
                 }
                 free(buf);
         } }

@@ -32,6 +32,24 @@ def load_library(libname):
         _loaderpath = os.path.dirname(__file__)
         return numpy.ctypeslib.load_library(libname, _loaderpath)
 
+#Fixme, the standard resouce module gives wrong number when objects are released
+#see http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
+#or use slow functions as memory_profiler._get_memory did
+CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
+PAGESIZE = os.sysconf("SC_PAGE_SIZE")
+def current_memory():
+    if 0:
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
+    elif sys.platform.startswith('linux'):
+        try:
+            with open("/proc/%s/statm" % os.getpid()) as f:
+                vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
+                return rss/1e6, vms/1e6
+        except:
+            return 0, 0
+    else:
+        return 0, 0
+
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
     arr = (ctypes.c_int * npm.size)(*npm)

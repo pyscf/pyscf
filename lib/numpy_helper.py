@@ -243,9 +243,9 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
-    assert(m > 0)
-    assert(n > 0)
-    assert(k > 0)
+    assert(0 < m < 2147483648)
+    assert(0 < n < 2147483648)
+    assert(0 < k < 2147483648)
 
     _np_helper.NPdgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),

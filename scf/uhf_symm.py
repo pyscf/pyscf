@@ -38,8 +38,11 @@ def analyze(mf, verbose=logger.DEBUG):
     for ir in range(nirrep):
         if (noccsa[ir]+noccsb[ir]) % 2:
             tot_sym ^= mol.irrep_id[ir]
-    log.info('total symmetry = %s', \
-             pyscf.symm.irrep_name(mol.groupname, tot_sym))
+    if groupname in ('Dooh', 'Coov'):
+        log.info('TODO: total symmetry for %s', mol.groupname)
+    else:
+        log.info('total symmetry = %s', \
+                 pyscf.symm.irrep_name(mol.groupname, tot_sym))
     log.info('alpha occupancy for each irrep:  '+(' %4s'*nirrep), \
              *mol.irrep_name)
     log.info('                                 '+(' %4d'*nirrep), \
@@ -55,34 +58,46 @@ def analyze(mf, verbose=logger.DEBUG):
 
     if verbose >= logger.INFO:
         log.info('**** MO energy ****')
-        irorbcnt = [0] * 8
-        irname_full = [0] * 8
+        irname_full = {}
         for k,ir in enumerate(mol.irrep_id):
             irname_full[ir] = mol.irrep_name[k]
+        irorbcnt = {}
         for k, j in enumerate(orbsyma):
-            irorbcnt[j] += 1
+            if j in irorbcnt:
+                irorbcnt[j] += 1
+            else:
+                irorbcnt[j] = 1
             log.info('alpha MO #%d (%s #%d), energy= %.15g occ= %g', \
                      k+1, irname_full[j], irorbcnt[j], mo_energy[0][k], mo_occ[0][k])
-        irorbcnt = [0] * 8
+        irorbcnt = {}
         for k, j in enumerate(orbsymb):
-            irorbcnt[j] += 1
+            if j in irorbcnt:
+                irorbcnt[j] += 1
+            else:
+                irorbcnt[j] = 1
             log.info('beta  MO #%d (%s #%d), energy= %.15g occ= %g', \
                      k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
 
     if mf.verbose >= logger.DEBUG:
         label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
         molabel = []
-        irorbcnt = [0] * 8
+        irorbcnt = {}
         for k, j in enumerate(orbsyma):
-            irorbcnt[j] += 1
+            if j in irorbcnt:
+                irorbcnt[j] += 1
+            else:
+                irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
         log.debug(' ** alpha MO coefficients **')
         dump_mat.dump_rec(mol.stdout, mo_coeff[0], label, molabel, start=1)
 
         molabel = []
-        irorbcnt = [0] * 8
+        irorbcnt = {}
         for k, j in enumerate(orbsymb):
-            irorbcnt[j] += 1
+            if j in irorbcnt:
+                irorbcnt[j] += 1
+            else:
+                irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
         log.debug(' ** beta MO coefficients **')
         dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)

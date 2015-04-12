@@ -38,11 +38,13 @@ class RKS(pyscf.scf.hf.RHF):
         except:
             pass
 
-    def get_veff(self, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Coulomb + XC functional'''
         t0 = (time.clock(), time.time())
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
         if self.grids.coords is None:
-            self.grids.setup_grids()
+            self.grids.setup_grids_()
             t0 = log.timer(self, 'seting up grids', *t0)
 
         x_code, c_code = vxc.parse_xc_name(self.xc)

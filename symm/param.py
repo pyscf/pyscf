@@ -26,8 +26,7 @@ OPERATOR_TABLE = {
 }
 
 #
-IRREP_ID_TABLE = {
-                        # bin for XOR
+IRREP_ID_TABLE = {      # bin for XOR
     'D2h': {'Ag' : 0,   # 000
             'B1g': 1,   # 001
             'B2g': 2,   # 010
@@ -124,7 +123,7 @@ CHARACTER_TABLE = {                              # XOR
 }
 
 #     D2h   C2h   C2v   D2   Cs   Ci   C2   C1
-SYMM_DECENT_Z = (
+SYMM_DESCENT_Z = (
     ('Ag' , 'Ag', 'A1', 'A' , 'A\'', 'Ag', 'A', 'A'),
     ('B1g', 'Ag', 'A2', 'B1', 'A\'', 'Ag', 'A', 'A'),
     ('B2g', 'Bg', 'B1', 'B2', 'A\"', 'Ag', 'B', 'A'),
@@ -134,7 +133,7 @@ SYMM_DECENT_Z = (
     ('B2u', 'Bu', 'B2', 'B2', 'A\"', 'Au', 'B', 'A'),
     ('B3u', 'Bu', 'B1', 'B3', 'A\"', 'Au', 'B', 'A'),
 )
-SYMM_DECENT_X = (
+SYMM_DESCENT_X = (
     ('Ag' , 'Ag', 'A1', 'A' , 'A\'', 'Ag', 'A', 'A'),
     ('B1g', 'Bg', 'B2', 'B1', 'A\"', 'Ag', 'B', 'A'),
     ('B2g', 'Bg', 'B1', 'B2', 'A\"', 'Ag', 'B', 'A'),
@@ -144,7 +143,7 @@ SYMM_DECENT_X = (
     ('B2u', 'Bu', 'B2', 'B2', 'A\'', 'Au', 'B', 'A'),
     ('B3u', 'Au', 'A1', 'B3', 'A\"', 'Au', 'A', 'A'),
 )
-SYMM_DECENT_Y = (
+SYMM_DESCENT_Y = (
     ('Ag' , 'Ag', 'A1', 'A' , 'A\'', 'Ag', 'A', 'A'),
     ('B1g', 'Bg', 'B2', 'B1', 'A\"', 'Ag', 'B', 'A'),
     ('B2g', 'Ag', 'A2', 'B2', 'A\'', 'Ag', 'A', 'A'),

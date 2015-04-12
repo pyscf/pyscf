@@ -10,17 +10,20 @@ import time
 import tempfile
 from functools import reduce
 import numpy
+import scipy.linalg
 import h5py
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf import mcscf
 from pyscf import ao2mo
+from pyscf import scf
 from pyscf.ao2mo import _ao2mo
+from pyscf.mcscf import mc_ao2mo
 
 libmc = pyscf.lib.load_library('libmcscf')
 
-NUMERICAL_ZERO = 1e-15
+NUMERICAL_ZERO = 1e-14
 # Ref JCP, 117, 9138
 
 # h1e is the CAS space effective 1e hamiltonian
@@ -385,7 +388,7 @@ def Sijrs(mc,orbe, eris, verbose=None):
     with ao2mo.load(feri) as cvcv:
         for i in range(ncore):
             djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-            gi = numpy.array(cvcv[i*nvirt:(i+1)*nvirt], copy=False)
+            gi = numpy.asarray(cvcv[i*nvirt:(i+1)*nvirt])
             gi = gi.reshape(nvirt,ncore,nvirt).transpose(1,2,0)
             t2i = (gi.ravel()/djba).reshape(ncore,nvirt,nvirt)
             # 2*ijab-ijba
@@ -470,7 +473,7 @@ def Srs(mc,orbe, dms, eris=None, verbose=None):
         h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['appa'][:,nocc:,nocc:].transpose(1,2,0,3)
 
-# check accuracy of make_a7 a7-a7.transpose(2,3,0,1)
+# a7 is very sensitive to the accuracy of HF orbital and CI wfn
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
     norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
     h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
@@ -510,7 +513,7 @@ def Sij(mc,orbe, dms, eris, verbose=None):
     else:
         hdm3 = make_hdm3(dm1,dm2,dm3,hdm1,hdm2)
 
-# check accuracy of make_a9 a9-a9.transpose(2,3,0,1)
+# a9 is very sensitive to the accuracy of HF orbital and CI wfn
     a9 = make_a9(h1e,h2e,hdm1,hdm2,hdm3)
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
@@ -567,7 +570,7 @@ def Sir(mc,orbe, dms, eris, verbose=None):
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
-def sc_nevpt(mc, verbose=logger.NOTE):
+def sc_nevpt(mc, verbose=None):
     '''Strongly contracted NEVPT2'''
 
     if isinstance(verbose, logger.Logger):
@@ -609,7 +612,10 @@ def sc_nevpt(mc, verbose=logger.NOTE):
     fock =(eris['h1eff']
          + numpy.einsum('ij,ijpq->pq', dm1, eris['aapp'])
          - numpy.einsum('ij,ipqj->pq', dm1, eris['appa']) * .5)
-    orbe = fock.diagonal()
+    fake_eris = lambda: None
+    fake_eris.__dict__.update(eris.items())
+    orbe = mc.get_fock(eris=fake_eris).diagonal()
+    fake_eris = None
 
     norm_Sr   , e_Sr    = Sr(mc,orbe, dms, eris)
     logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
@@ -694,21 +700,23 @@ def _ERIS(mc, mo, method='incore'):
     nmo = mo.shape[1]
     ncore = mc.ncore
     ncas = mc.ncas
-    nocc = ncore + ncas
-    nvir = mo.shape[1] - nocc
-    mo_cas = mo[:,ncore:nocc]
 
     if ((method == 'outcore') or
         (mcscf.mc_ao2mo._mem_usage(ncore, ncas, nmo)[0] +
          nmo**4*2/1e6 > mc.max_memory*.9) or
         (mc._scf._eri is None)):
-        vhfcore, aapp, appa, apcv, cvcv = \
+        aapp, appa, apcv, cvcv = \
                 trans_e1_outcore(mc, mo, max_memory=mc.max_memory,
                                  verbose=mc.verbose)
     else:
-        vhfcore, aapp, appa, apcv, cvcv = \
-                trans_e1_incore(mc._scf._eri, mo, mc.ncore, mc.ncas)
+        aapp, appa, apcv, cvcv = trans_e1_incore(mc, mo)
+
+    dmcore = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
+    vj, vk = mc._scf.get_jk(mc.mol, dmcore)
+    vhfcore = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
+
     eris = {}
+    eris['vhf_c'] = vhfcore
     eris['aapp'] = aapp
     eris['appa'] = appa
     eris['apcv'] = apcv
@@ -717,15 +725,19 @@ def _ERIS(mc, mo, method='incore'):
     return eris
 
 # see mcscf.mc_ao2mo
-def trans_e1_incore(eri_ao, mo, ncore, ncas):
+def trans_e1_incore(mc, mo):
+    eri_ao = mc._scf._eri
+    ncore = mc.ncore
+    ncas = mc.ncas
     nmo = mo.shape[1]
     nocc = ncore + ncas
-    eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo), compact=False)
-
-    load_buf = lambda bufid: eri1[bufid*nmo:bufid*nmo+nmo]
-    aapp, appa, apcv = _trans_aapp_(mo, ncore, ncas, load_buf)
-    vhfcore, cvcv = _trans_cvcv_(mo, ncore, ncas, load_buf)
-    return vhfcore, aapp, appa, apcv, cvcv
+    nav = nmo - ncore
+    eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo[:,ncore:]),
+                                      compact=False)
+    nao_pair = eri1.shape[1]
+    load_buf = lambda r0,r1: eri1[r0*nav:r1*nav]
+    aapp, appa, apcv, cvcv = _trans(mo, ncore, ncas, load_buf)
+    return aapp, appa, apcv, cvcv
 
 def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
@@ -738,24 +750,25 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     nao_pair = nao*(nao+1)//2
     nocc = ncore + ncas
     nvir = nmo - nocc
+    nav = nmo - ncore
 
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo), swapfile.name,
+    pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo[:,ncore:]), swapfile.name,
                                 max_memory=max_memory, ioblk_size=ioblk_size,
                                 verbose=log, compact=False)
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
-    def load_buf(bfn_id):
+    def load_buf(r0,r1):
         if mol.verbose >= pyscf.lib.logger.DEBUG1:
             time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
                                               *tuple(time1))
-        buf = numpy.empty((nmo,nao_pair))
+        buf = numpy.empty(((r1-r0)*nav,nao_pair))
         col0 = 0
         for ic in range(klaoblks):
             dat = fswap['0/%d'%ic]
             col1 = col0 + dat.shape[1]
-            buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
+            buf[:,col0:col1] = dat[r0*nav:r1*nav]
             col0 = col1
         if mol.verbose >= pyscf.lib.logger.DEBUG1:
             time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
@@ -763,70 +776,59 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     time0 = pyscf.lib.logger.timer(mol, 'halfe1', *time0)
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    aapp, appa, apcv = _trans_aapp_(mo, ncore, ncas, load_buf, ao_loc)
-    time0 = pyscf.lib.logger.timer(mol, 'trans_aapp', *time0)
     cvcvfile = tempfile.NamedTemporaryFile()
     with h5py.File(cvcvfile.name) as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
-        vhfcore = _trans_cvcv_(mo, ncore, ncas, load_buf, cvcv, ao_loc)[0]
+        aapp, appa, apcv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
     time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
     fswap.close()
-    return vhfcore, aapp, appa, apcv, cvcvfile
+    return aapp, appa, apcv, cvcvfile
 
-def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
-    nmo = mo.shape[1]
-    nocc = ncore + ncas
-    nvir = nmo - nocc
-    c_nmo = ctypes.c_int(nmo)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
-
-    klshape = (0, nmo, 0, nmo)
-
-    apcv = numpy.empty((ncas,nmo,ncore,nvir))
-    aapp = numpy.empty((ncas,ncas,nmo,nmo))
-    appa = numpy.empty((ncas,nmo,nmo,ncas))
-    ppp = numpy.empty((nmo,nmo,nmo))
-    for i in range(ncas):
-        buf = _ao2mo.nr_e2_(fload(ncore+i), mo, klshape,
-                            aosym='s4', mosym='s2', ao_loc=ao_loc)
-        for j in range(nmo):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        aapp[i] = ppp[ncore:nocc]
-        appa[i] = ppp[:,:,ncore:nocc]
-        apcv[i] = ppp[:,:ncore,nocc:]
-    return aapp, appa, apcv
-
-def _trans_cvcv_(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
+def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
     nao, nmo = mo.shape
     nocc = ncore + ncas
     nvir = nmo - nocc
-    c_nmo = ctypes.c_int(nmo)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
+    nav = nmo - ncore
 
     if cvcv is None:
         cvcv = numpy.zeros((ncore*nvir,ncore*nvir))
-    vj = numpy.zeros((nao,nao))
-    vk = numpy.zeros((nmo,nao))
-    vcv = numpy.empty((nvir,ncore*nvir))
-    tmp = numpy.empty((nao,nao))
+    apcv = numpy.empty((ncas,nmo,ncore*nvir))
+    aapp = numpy.empty((ncas,ncas,nmo*nmo))
+    appa = numpy.empty((ncas,nmo,nmo*ncas))
+    vcv = numpy.empty((nav,ncore*nvir))
+    apa = numpy.empty((ncas,nmo*ncas))
+    vpa = numpy.empty((nav,nmo*ncas))
+    app = numpy.empty((ncas,nmo*nmo))
     for i in range(ncore):
-        buf = fload(i)
-        funpack(ctypes.c_int(nao), buf[i].ctypes.data_as(ctypes.c_void_p),
-                tmp.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        vj += tmp
-        for j in range(nmo):
-            funpack(ctypes.c_int(nao), buf[j].ctypes.data_as(ctypes.c_void_p),
-                    tmp.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-            vk[:,j] += numpy.dot(tmp, mo[:,i])
-
+        buf = fload(i, i+1)
         klshape = (0, ncore, nocc, nvir)
-        _ao2mo.nr_e2_(buf[nocc:nmo], mo, klshape,
+        _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', vout=vcv, ao_loc=ao_loc)
-        cvcv[i*nvir:(i+1)*nvir] = vcv
-    vj = reduce(numpy.dot, (mo.T, vj, mo))
-    vk = numpy.dot(mo.T, vk)
-    return vj*2-vk, cvcv
+        cvcv[i*nvir:(i+1)*nvir] = vcv[ncas:]
+        apcv[:,i] = vcv[:ncas]
+
+        klshape = (0, nmo, ncore, ncas)
+        _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
+                      aosym='s4', mosym='s1', vout=apa, ao_loc=ao_loc)
+        appa[:,i] = apa
+    for i in range(ncas):
+        buf = fload(ncore+i, ncore+i+1)
+        klshape = (0, ncore, nocc, nvir)
+        _ao2mo.nr_e2_(buf, mo, klshape,
+                      aosym='s4', mosym='s1', vout=vcv, ao_loc=ao_loc)
+        apcv[i,ncore:] = vcv
+
+        klshape = (0, nmo, ncore, ncas)
+        _ao2mo.nr_e2_(buf, mo, klshape,
+                      aosym='s4', mosym='s1', vout=vpa, ao_loc=ao_loc)
+        appa[i,ncore:] = vpa
+
+        klshape = (0, nmo, 0, nmo)
+        _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
+                      aosym='s4', mosym='s1', vout=app, ao_loc=ao_loc)
+        aapp[i] = app
+    return (aapp.reshape(ncas,ncas,nmo,nmo), appa.reshape(ncas,nmo,nmo,ncas),
+            apcv.reshape(ncas,nmo,ncore,nvir), cvcv)
 
 
 
@@ -850,6 +852,7 @@ if __name__ == '__main__':
     mol.build()
 
     m = scf.RHF(mol)
+    m.conv_tol = 1e-20
     ehf = m.scf()
     mc = mcscf.CASCI(m, 6, 8)
     ci_e = mc.kernel()[0]
@@ -858,7 +861,7 @@ if __name__ == '__main__':
     print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    print(sc_nevpt(mc), -0.16978532268234559)
+    print(sc_nevpt(mc), -0.16978579267520275)
 
 
     mol = gto.Mole()
@@ -884,6 +887,7 @@ if __name__ == '__main__':
     mol.build()
 
     m = scf.RHF(mol)
+    m.conv_tol = 1e-20
     ehf = m.scf()
     mc = mcscf.CASCI(m,8,10)
     mc.kernel()

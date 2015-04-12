@@ -23,6 +23,7 @@ mol.atom = [
 
 mol.basis = {'H': '6-31g',
              'C': '6-31g',}
+mol.max_memory = 20
 mol.build()
 
 mf = scf.RHF(mol)
@@ -63,6 +64,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests for C6H6")
+    print("Full Tests for density fitting C6H6")
     unittest.main()
 
