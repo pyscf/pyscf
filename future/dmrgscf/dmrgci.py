@@ -124,6 +124,9 @@ class DMRGCI(object):
 
         return onepdm, twopdm
 
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
+
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
         if fciRestart is None:
             fciRestart = self.restart
@@ -260,16 +263,16 @@ if __name__ == '__main__':
     mol.build(
         verbose = 5,
         output = 'out-dmrgci',
-        atom = [['H', (0.,0.,i)] for i in range(8)],
+        atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True,
+        symmetry = 'D2h'#True,
     )
     m = scf.RHF(mol)
     m.scf()
 
     mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
-    mc.fcisolver.tol = 1e-9
+    mc.fcisolver.conv_tol = 1e-9
     emc_1 = mc.mc2step()[0]
 
     mc = mcscf.CASCI(m, 4, 4)
@@ -281,7 +284,7 @@ if __name__ == '__main__':
     mol.build(
         verbose = 5,
         output = 'out-casscf',
-        atom = [['H', (0.,0.,i)] for i in range(8)],
+        atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
         symmetry = True,
     )

@@ -256,7 +256,7 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
 // These integrals will be calculated, in next (ish,jsh) pair. Because
 // fjk_s8 is based on shell index, which will includes
 // (ksh==ish,lsh>jsh) by permutation symmetry
-                if ((ksh == ish) & (lsh > jsh)) {
+                if ((ksh == ish) && (lsh > jsh)) {
                         break;
                 }
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
@@ -291,7 +291,7 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
 }
 
 /*
- * drv loop over kl, generate eris of ij for given kl, call fjk to
+ * drv loop over ij, generate eris of kl for given ij, call fjk to
  * calculate vj, vk.
  * 
  * n_dm is the number of dms for one [array(ij|kl)],

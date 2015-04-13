@@ -589,7 +589,9 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
-    mo_coeff1, fcivec, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
+    mo_coeff1 = numpy.empty_like(mo_coeff)
+    mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+    #mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
     fock = mc.get_fock(mo_coeff, ci, eris)
     if ncore > 0:
         w, c1 = scipy.linalg.eigh(fock[:ncore,:ncore])
@@ -597,7 +599,9 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     if nmo-nocc > 0:
         w, c1 = scipy.linalg.eigh(fock[nocc:,nocc:])
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-    return mo_coeff1, fcivec
+# still return ci coefficients, in case the canonicalization funciton changed
+# cas orbitals, the ci coefficients should also be updated.
+    return mo_coeff1, ci
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an

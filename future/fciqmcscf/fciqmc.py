@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 #
-# Author: Sandeep Sharma <sanshar@gmail.com>
+# Author: George Booth <george.booth24@gmail.com>
 #         Qiming Sun <osirpt.sun@gmail.com>
-#         George Booth <george.booth24@gmail.com>
 #
 
 import os, sys
@@ -117,6 +116,9 @@ class FCIQMCCI(object):
         onepdm /= (nelectrons-1)
 
         return onepdm, twopdm
+
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
 
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
         if fciRestart is None:

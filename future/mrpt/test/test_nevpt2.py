@@ -99,18 +99,10 @@ class KnowValues(unittest.TestCase):
         m = scf.RHF(mol)
         m.scf()
         mc = mcscf.CASCI(m, 6, 8)
+        mc.fcisolver.conv_tol = 1e-16
         mc.kernel()
         e = nevpt2.sc_nevpt(mc)
         self.assertAlmostEqual(e, -0.16978532268234559, 7)
-
-    def test_ERIS(self):
-        eris0 = nevpt2_o1._ERIS(mc, mc.mo_coeff)
-        eris1 = nevpt2_o2._ERIS(mc, mc.mo_coeff, 'incore')
-        eris2 = nevpt2_o2._ERIS(mc, mc.mo_coeff, 'outcore')
-        for k in eris0.keys():
-            self.assertTrue(numpy.allclose(eris0[k], eris1[k]))
-            with ao2mo.load(eris2[k]) as d2:
-                self.assertTrue(numpy.allclose(eris0[k], d2))
 
 
 if __name__ == "__main__":

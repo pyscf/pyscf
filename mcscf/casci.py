@@ -82,8 +82,14 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label)
 
+        occ, ucas = scipy.linalg.eigh(-(casdm1a+casdm1b))
+        log.info('Natural occ %s', str(-occ))
+        for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
+            if ucas[k,i] < 0:
+                ucas[:,i] *= -1
+        mo_cas = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
         log.info('Natural orbital in CAS space')
-        dump_mat.dump_rec(log.stdout, mo_coeff[:,ncore:nocc], label, start=1)
+        dump_mat.dump_rec(log.stdout, mo_cas, label, start=1)
 
         s = reduce(numpy.dot, (casscf.mo_coeff.T, casscf._scf.get_ovlp(),
                                casscf._scf.mo_coeff))
@@ -152,6 +158,10 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
             ucas[:,i] *= -1
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+    if log.verbose >= logger.INFO:
+        log.info('Natural orbital in CAS space')
+        label = ['%d%3s %s%-4s' % x for x in mc.mol.spheric_labels()]
+        dump_mat.dump_rec(log.stdout, mo_coeff1[:,ncore:nocc], label, start=1)
 
 # where_natorb gives the location of the natural orbital for the input cas
 # orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
@@ -166,10 +176,12 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
 #       [2(=0B011), 0(=0B101), 1(=0B110)]
 # to indicate which CASorb-strings address to be loaded in each natorb-strings slot
     where_natorb = mo_1to1map(ucas)
-    guide_stringsa = fci.cistring.gen_strings4orblist(where_natorb, nelecas[0])
-    guide_stringsb = fci.cistring.gen_strings4orblist(where_natorb, nelecas[1])
-    old_det_idxa = numpy.argsort(guide_stringsa)
-    old_det_idxb = numpy.argsort(guide_stringsb)
+    #guide_stringsa = fci.cistring.gen_strings4orblist(where_natorb, nelecas[0])
+    #guide_stringsb = fci.cistring.gen_strings4orblist(where_natorb, nelecas[1])
+    #old_det_idxa = numpy.argsort(guide_stringsa)
+    #old_det_idxb = numpy.argsort(guide_stringsb)
+    #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
+    ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
 
     h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, mc.get_hcore(),
                                mo_coeff[:,ncore:nocc]))
@@ -177,14 +189,13 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     h1eff = reduce(numpy.dot, (ucas.T, h1eff, ucas))
     aaaa = eris.aapp[:,:,ncore:nocc,ncore:nocc].copy()
     aaaa = ao2mo.incore.full(ao2mo.restore(8, aaaa, ncas), ucas)
-    e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
-                                        ci0=ci[old_det_idxa[:,None],old_det_idxb])
+    e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0)
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
     return mo_coeff1, fcivec, occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
-    mo_coeff, fcivec = cas_natorb(mc, mo_coeff, ci, eris, verbose=verbose)[:2]
-    return mo_coeff, fcivec
+    #mo_coeff, ci = cas_natorb(mc, mo_coeff, ci, eris, verbose=verbose)[:2]
+    return mo_coeff, ci
 
 
 def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
