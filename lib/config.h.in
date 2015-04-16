@@ -1,11 +1,3 @@
-/*
-#cmakedefine HAVE_OPENMP
-
-#if defined HAVE_OPENMP
-#include <omp.h>
-#endif
-*/
-
 #if defined _OPENMP
 #include <omp.h>
 #endif
