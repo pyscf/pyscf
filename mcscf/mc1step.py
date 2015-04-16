@@ -273,6 +273,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         else:
 # Occasionally, all trial rotation goes to the branch "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
+            dx1 *= .2
             x0 = x0 + dx1
             g_orb = g_orb + h_op1(dx1) + h_opjk(dx1)
             jkcount += 1
@@ -467,7 +468,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
-        return e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_ci, fcivec, mo
     conv = False
     toloose = casscf.conv_tol_grad
     totmicro = totinner = 0

@@ -56,7 +56,7 @@ def density_fit(casscf, auxbasis='weigend', level=1):
 
         def update_ao2mo(self, mo):
             ncore = self.ncore
-            self._cderi = None # leave as much memory as possible for mc_ao2mo
+            #self._cderi = None # leave as much memory as possible for mc_ao2mo
             eris = mc_ao2mo._ERIS(self, mo, 'incore', 2)
             # using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
             t0 = (time.clock(), time.time())
