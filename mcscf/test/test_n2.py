@@ -102,7 +102,7 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(m, 4, 4)
         mo = m.mo_coeff
         h0 = mcscf.casci.h1e_for_cas(mc, mo, 4, 5)[0]
-        h1 = mcscf.mc1step.h1e_for_cas(mc, mo, mc.update_ao2mo(mo))
+        h1 = mcscf.mc1step.h1e_for_cas(mc, mo, mc.ao2mo(mo))
         self.assertTrue(numpy.allclose(h0, h1))
 
     def test_casci_uhf(self):

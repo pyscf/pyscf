@@ -10,8 +10,7 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import ao2mo
 
-_loaderpath = os.path.join(os.path.dirname(lib.__file__), 'vhf')
-libcvhf2 = numpy.ctypeslib.load_library('libcvhf', _loaderpath)
+libcvhf2 = lib.load_library('libcvhf')
 
 
 numpy.random.seed(15)

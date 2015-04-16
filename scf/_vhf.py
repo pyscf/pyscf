@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os
+import os, sys
 import ctypes
 import _ctypes
 import numpy
@@ -260,6 +260,8 @@ def direct_mapdm(intor, intsymm, jkdescript,
     dm1 = (ctypes.c_void_p*(njk*n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
         if dmsym in ('ij', 'kl', 'il', 'kj'):
+            sys.stderr.write('not support DM description %s, transpose to %s\n' %
+                             (dmsym, dmsym[::-1]))
             f1 = _fpointer('CVHFnr%s_%s_%s'%(intsymm, dmsym[::-1], vsym))
         else:
             f1 = _fpointer('CVHFnr%s_%s_%s'%(intsymm, dmsym, vsym))

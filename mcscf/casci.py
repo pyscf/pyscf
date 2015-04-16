@@ -129,6 +129,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     '''Restore natrual orbitals
     '''
+    from pyscf.mcscf import mc_ao2mo
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:

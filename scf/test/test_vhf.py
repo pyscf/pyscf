@@ -57,10 +57,10 @@ class KnowValues(unittest.TestCase):
                     k0 += dk
                 j0 += dj
             i0 += di
-        vj0 = numpy.einsum('nijkl,kl->nij', eri0, dm)
-        vk0 = numpy.einsum('nijkl,kj->nil', eri0, dm)
+        vj0 = numpy.einsum('nijkl,lk->nij', eri0, dm)
+        vk0 = numpy.einsum('nijkl,jk->nil', eri0, dm)
         vj1, vk1 = _vhf.direct_mapdm('cint2e_ip1_sph', 's2kl',
-                                     ('kl->s1ij', 'kj->s1il'),
+                                     ('lk->s1ij', 'jk->s1il'),
                                      dm, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
@@ -69,11 +69,11 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((nao,nao))
         vj0, vk0 = _vhf.direct_mapdm('cint2e_ip1_sph', 's2kl',
-                                     ('kl->s1ij', 'kj->s1il'),
+                                     ('lk->s1ij', 'jk->s1il'),
                                      dm, 3, mol._atm, mol._bas, mol._env)
         dms = (dm,dm)
         vj1, vk1 = _vhf.direct_bindm('cint2e_ip1_sph', 's2kl',
-                                     ('kl->s1ij', 'kj->s1il'),
+                                     ('lk->s1ij', 'jk->s1il'),
                                      dms, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
