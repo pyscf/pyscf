@@ -125,7 +125,7 @@ class CASSCF(mc1step.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
-        if eris is None: eris = self.update_ao2mo(mo_coeff)
+        if eris is None: eris = self.ao2mo(mo_coeff)
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
@@ -161,7 +161,7 @@ class CASSCF(mc1step.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
-        if eris is None: eris = self.update_ao2mo(mo_coeff)
+        if eris is None: eris = self.ao2mo(mo_coeff)
         ncore = self.ncore
         nocc = ncore + self.ncas
         nmo = mo_coeff.shape[1]

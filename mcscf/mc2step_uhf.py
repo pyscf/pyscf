@@ -23,7 +23,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     ncore = casscf.ncore
     ncas = casscf.ncas
     nocc = (ncas + ncore[0], ncas + ncore[1])
-    eris = casscf.update_ao2mo(mo)
+    eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
@@ -64,7 +64,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
             casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None # to avoid using too much memory
-            eris = casscf.update_ao2mo(mo)
+            eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
             log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \

@@ -80,6 +80,10 @@ class Logger:
     def timer_debug1(self, msg, cpu0=None, wall0=None):
         if self.verbose >= DEBUG1:
             return self.timer(msg, cpu0, wall0)
+        elif wall0:
+            return time.clock(), time.time()
+        else:
+            return time.clock()
 
 def flush(rec, msg, *args):
     rec.stdout.write(msg%args)

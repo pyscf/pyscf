@@ -1,6 +1,6 @@
 add_library(cvhf SHARED 
   moleintor.c
-  int2e_sph_o5.c nr_incore_o0.c nr_direct.c optimizer.c
+  int2e_sph.c nr_incore.c nr_direct.c optimizer.c nr_direct_dot.c
   time_rev.c r_direct_o1.c rkb_screen.c
   r_direct_dot.c rah_direct_dot.c rha_direct_dot.c)
 

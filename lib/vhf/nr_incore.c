@@ -1,5 +1,6 @@
 /*
- *
+ * Incore version of non-relativistic integrals JK contraction
+ * ic in CVHFic... is short for incore
  */
 
 #include <stdlib.h>
@@ -11,10 +12,11 @@
 #include "np_helper/np_helper.h"
 #include "fblas.h"
 
+
 /*
  * J
  */
-void CVHFnrs8_ij_s2kl_o0(double *eri, double *dm, double *vj,
+void CVHFics8_ij_s2kl_o0(double *eri, double *dm, double *vj,
                          int nao, int ic, int jc)
 {
         int i, j, ij;
@@ -46,7 +48,7 @@ void CVHFnrs8_ij_s2kl_o0(double *eri, double *dm, double *vj,
         *vj_ij += eri[ij] * dm_ij;
 }
 
-void CVHFnrs4_ij_s2kl_o0(double *eri, double *dm, double *vj,
+void CVHFics4_ij_s2kl_o0(double *eri, double *dm, double *vj,
                          int nao, int ic, int jc)
 {
         int i, j, ij;
@@ -67,7 +69,7 @@ void CVHFnrs4_ij_s2kl_o0(double *eri, double *dm, double *vj,
         }
 }
 
-void CVHFnrs2kl_kl_s1ij_o0(double *eri, double *dm, double *vj,
+void CVHFics2kl_kl_s1ij_o0(double *eri, double *dm, double *vj,
                            int nao, int ic, int jc)
 {
         int i, j, ij;
@@ -86,7 +88,7 @@ void CVHFnrs2kl_kl_s1ij_o0(double *eri, double *dm, double *vj,
 /*
  * K
  */
-void CVHFnrs8_jk_s1il_o0(double *eri, double *dm, double *vk,
+void CVHFics8_jk_s1il_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -148,7 +150,7 @@ void CVHFnrs8_jk_s1il_o0(double *eri, double *dm, double *vk,
         }
 }
 
-void CVHFnrs8_jk_s2il_o0(double *eri, double *dm, double *vk,
+void CVHFics8_jk_s2il_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
         int k, l;
@@ -250,7 +252,7 @@ void CVHFnrs8_jk_s2il_o0(double *eri, double *dm, double *vk,
         }
 }
 
-void CVHFnrs4_jk_s1il_o0(double *eri, double *dm, double *vk,
+void CVHFics4_jk_s1il_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -278,13 +280,13 @@ void CVHFnrs4_jk_s1il_o0(double *eri, double *dm, double *vk,
         }
 }
 
-void CVHFnrs4_il_s1jk_o0(double *eri, double *dm, double *vk,
+void CVHFics4_il_s1jk_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
-        CVHFnrs4_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics4_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
 }
 
-void CVHFnrs4_jk_s2il_o0(double *eri, double *dm, double *vk,
+void CVHFics4_jk_s2il_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -339,10 +341,10 @@ void CVHFnrs4_jk_s2il_o0(double *eri, double *dm, double *vk,
         }
 }
 
-void CVHFnrs4_il_s2jk_o0(double *eri, double *dm, double *vk,
+void CVHFics4_il_s2jk_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
-        CVHFnrs4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
 }
 
 
@@ -359,14 +361,14 @@ void CVHFnrs4_il_s2jk_o0(double *eri, double *dm, double *vk,
  * being stored in C-order *contiguously*.  so call CVHFunpack_nrblock2tril
  * to generate eris
  */
-void CVHFnrs8_ij_s2kl(double *eri, double *dm, double *vj,
+void CVHFics8_ij_s2kl(double *eri, double *dm, double *vj,
                       int nao, int ic, int jc)
 {
-        CVHFnrs8_ij_s2kl_o0(eri, dm, vj, nao, ic, jc);
+        CVHFics8_ij_s2kl_o0(eri, dm, vj, nao, ic, jc);
 }
 // tri_dm: fold upper triangular dm to lower triangle,
 // tri_dm[i*(i+1)/2+j] = dm[i*nao+j] + dm[j*nao+i]  for i > j
-void CVHFnrs8_tridm_vj(double *eri, double *tri_dm, double *vj,
+void CVHFics8_tridm_vj(double *eri, double *tri_dm, double *vj,
                        int nao, int ic, int jc)
 {
         int i, j, ij;
@@ -388,19 +390,19 @@ void CVHFnrs8_tridm_vj(double *eri, double *tri_dm, double *vj,
         }
         *vj_ij += eri[ij] * dm_ijc;
 }
-void CVHFnrs8_jk_s1il(double *eri, double *dm, double *vk,
+void CVHFics8_jk_s1il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        CVHFnrs8_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics8_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
 }
 /*
  * einsum ijkl,jk->(s2)il
  * output vk should be Hermitian
  */
-void CVHFnrs8_jk_s2il(double *eri, double *dm, double *vk,
+void CVHFics8_jk_s2il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        CVHFnrs8_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics8_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
 }
 
 
@@ -408,44 +410,44 @@ void CVHFnrs8_jk_s2il(double *eri, double *dm, double *vk,
  * einsum ijkl,jk->il
  * 4-fold symmetry for eri: i>=j,k>=l
  */
-void CVHFnrs4_jk_s1il(double *eri, double *dm, double *vk,
+void CVHFics4_jk_s1il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        CVHFnrs4_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics4_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
 }
-void CVHFnrs4_il_s1jk(double *eri, double *dm, double *vk,
+void CVHFics4_il_s1jk(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        CVHFnrs4_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics4_jk_s1il_o0(eri, dm, vk, nao, ic, jc);
 }
 /*
  * output vk should be Hermitian
  */
-void CVHFnrs4_jk_s2il(double *eri, double *dm, double *vk,
+void CVHFics4_jk_s2il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        CVHFnrs4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
 }
-void CVHFnrs4_il_s2jk(double *eri, double *dm, double *vk,
+void CVHFics4_il_s2jk(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
-        CVHFnrs4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
+        CVHFics4_jk_s2il_o0(eri, dm, vk, nao, ic, jc);
 }
-void CVHFnrs4_ij_s2kl(double *eri, double *dm, double *vj,
+void CVHFics4_ij_s2kl(double *eri, double *dm, double *vj,
                       int nao, int ic, int jc)
 {
-        CVHFnrs4_ij_s2kl_o0(eri, dm, vj, nao, ic, jc);
+        CVHFics4_ij_s2kl_o0(eri, dm, vj, nao, ic, jc);
 }
-void CVHFnrs4_kl_s2ij(double *eri, double *dm, double *vj,
+void CVHFics4_kl_s2ij(double *eri, double *dm, double *vj,
                       int nao, int ic, int jc)
 {
         if (ic >= jc) {
-                CVHFnrs2kl_kl_s1ij_o0(eri, dm, vj, nao, ic, jc);
+                CVHFics2kl_kl_s1ij_o0(eri, dm, vj, nao, ic, jc);
         }
 }
 
 
-void CVHFnrs1_ij_s1kl(double *eri, double *dm, double *vj,
+void CVHFics1_ij_s1kl(double *eri, double *dm, double *vj,
                       int nao, int ic, int jc)
 {
         int i;
@@ -454,14 +456,14 @@ void CVHFnrs1_ij_s1kl(double *eri, double *dm, double *vj,
                 vj[i] += eri[i] * dm_ij;
         }
 }
-void CVHFnrs1_kl_s1ij(double *eri, double *dm, double *vj,
+void CVHFics1_kl_s1ij(double *eri, double *dm, double *vj,
                       int nao, int ic, int jc)
 {
         const int INC1 = 1;
         int nn = nao * nao;
         vj[ic*nao+jc] += ddot_(&nn, eri, &INC1, dm, &INC1);
 }
-void CVHFnrs1_jk_s1il(double *eri, double *dm, double *vk,
+void CVHFics1_jk_s1il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -470,7 +472,7 @@ void CVHFnrs1_jk_s1il(double *eri, double *dm, double *vk,
                 vk[ic*nao+l] += eri[kl] * dm[jc*nao+k];
         } }
 }
-void CVHFnrs1_il_s1jk(double *eri, double *dm, double *vk,
+void CVHFics1_il_s1jk(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -481,7 +483,7 @@ void CVHFnrs1_il_s1jk(double *eri, double *dm, double *vk,
 }
 
 
-void CVHFnrs2ij_ij_s1kl(double *eri, double *dm, double *vj,
+void CVHFics2ij_ij_s1kl(double *eri, double *dm, double *vj,
                         int nao, int ic, int jc)
 {
         int i;
@@ -498,15 +500,15 @@ void CVHFnrs2ij_ij_s1kl(double *eri, double *dm, double *vj,
                 vj[i] += eri[i] * dm_ij;
         }
 }
-void CVHFnrs2ij_kl_s2ij(double *eri, double *dm, double *vj,
+void CVHFics2ij_kl_s2ij(double *eri, double *dm, double *vj,
                         int nao, int ic, int jc)
 {
         if (ic < jc) {
                 return;
         }
-        CVHFnrs1_kl_s1ij(eri, dm, vj, nao, ic, jc);
+        CVHFics1_kl_s1ij(eri, dm, vj, nao, ic, jc);
 }
-void CVHFnrs2ij_jk_s1il(double *eri, double *dm, double *vk,
+void CVHFics2ij_jk_s1il(double *eri, double *dm, double *vk,
                         int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -525,7 +527,7 @@ void CVHFnrs2ij_jk_s1il(double *eri, double *dm, double *vk,
                 }
         }
 }
-void CVHFnrs2ij_il_s1jk(double *eri, double *dm, double *vk,
+void CVHFics2ij_il_s1jk(double *eri, double *dm, double *vk,
                         int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -546,7 +548,7 @@ void CVHFnrs2ij_il_s1jk(double *eri, double *dm, double *vk,
 }
 
 
-void CVHFnrs2kl_ij_s2kl(double *eri, double *dm, double *vj,
+void CVHFics2kl_ij_s2kl(double *eri, double *dm, double *vj,
                         int nao, int ic, int jc)
 {
         int i, j, ij;
@@ -557,12 +559,12 @@ void CVHFnrs2kl_ij_s2kl(double *eri, double *dm, double *vj,
                 }
         }
 }
-void CVHFnrs2kl_kl_s1ij(double *eri, double *dm, double *vj,
+void CVHFics2kl_kl_s1ij(double *eri, double *dm, double *vj,
                         int nao, int ic, int jc)
 {
-        CVHFnrs2kl_kl_s1ij_o0(eri, dm, vj, nao, ic, jc);
+        CVHFics2kl_kl_s1ij_o0(eri, dm, vj, nao, ic, jc);
 }
-void CVHFnrs2kl_jk_s1il(double *eri, double *dm, double *vk,
+void CVHFics2kl_jk_s1il(double *eri, double *dm, double *vk,
                         int nao, int ic, int jc)
 {
         int k, l, kl;
@@ -575,7 +577,7 @@ void CVHFnrs2kl_jk_s1il(double *eri, double *dm, double *vk,
                 kl++;
         }
 }
-void CVHFnrs2kl_il_s1jk(double *eri, double *dm, double *vk,
+void CVHFics2kl_il_s1jk(double *eri, double *dm, double *vk,
                         int nao, int ic, int jc)
 {
         int k, l, kl;

@@ -464,7 +464,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     ncas = casscf.ncas
     nocc = ncore + ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
-    eris = casscf.update_ao2mo(mo)
+    eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
@@ -526,7 +526,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
         mo = numpy.dot(mo, u)
 
         eris = None
-        eris = casscf.update_ao2mo(mo)
+        eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
         elast = e_tot
@@ -582,11 +582,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
-    if eris is None:
-        if hasattr(mc, 'update_ao2mo'):
-            eris = mc.update_ao2mo(mo_coeff)
-        else: # CASCI
-            eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    if eris is None: eris = mc.ao2mo(mo_coeff)
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
@@ -898,6 +894,9 @@ class CASSCF(casci.CASCI):
         return rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose)
 
     def update_ao2mo(self, mo):
+        raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')
+
+    def ao2mo(self, mo):
 #        nmo = mo.shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas

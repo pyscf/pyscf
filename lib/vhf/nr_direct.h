@@ -16,53 +16,27 @@ struct _VHFEnvs {
         int *tao; // time reversal mappings, index start from 1
 };
 
-void CVHFunpack_nrblock2rect (double *buf, double *eri,
-                              int ish, int jsh, int dkl, int nao, int *ao_loc);
-void CVHFunpack_nrblock2tril (double *buf, double *eri,
-                              int ish, int jsh, int dkl, int nao, int *ao_loc);
-void CVHFunpack_nrblock2trilu(double *buf, double *eri,
-                              int ish, int jsh, int dkl, int nao, int *ao_loc);
-int CVHFfill_nr_s1(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ncomp, int ksh, int lsh,
-                   CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
-int CVHFfill_nr_s2ij(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                     double *eri, int ncomp, int ksh, int lsh,
-                     CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
-int CVHFfill_nr_s2kl(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                     double *eri, int ncomp, int ksh, int lsh,
-                     CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
-int CVHFfill_nr_s4(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ncomp, int ksh, int lsh,
-                   CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
-int CVHFfill_nr_s8(int (*intor)(), void (*funpack)(), int (*fprescreen)(),
-                   double *eri, int ncomp, int ksh, int lsh,
-                   CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
-void CVHFfill_dot_nrs8(int (*intor)(), void (*funpack)(), void (**fjk)(),
+void CVHFdot_nrs1(int (*intor)(), void (**fjk)(), double **dms, double *vjk,
+                 int n_dm, int ncomp, int ish, int jsh,
+                 CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
+
+void CVHFdot_nrs2ij(int (*intor)(), void (**fjk)(), double **dms, double *vjk,
+                    int n_dm, int ncomp, int ish, int jsh,
+                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
+
+void CVHFdot_nrs2kl(int (*intor)(), void (**fjk)(), double **dms, double *vjk,
+                    int n_dm, int ncomp, int ish, int jsh,
+                    CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
+
+void CVHFdot_nrs4(int (*intor)(), void (**fjk)(), double **dms, double *vjk,
+                  int n_dm, int ncomp, int ish, int jsh,
+                  CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
+
+void CVHFdot_nrs8(int (*intor)(), void (**fjk)(), double **dms, double *vjk,
+                  int n_dm, int ncomp, int ish, int jsh,
+                  CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs);
+
+void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
                        double **dms, double *vjk,
-                       int n_dm, int ncomp, int ksh, int lsh,
-                       CINTOpt *cintopt, CVHFOpt *vhfopt,
-                       struct _VHFEnvs *envs);
-void CVHFfill_dot_nrs4(int (*intor)(), void (*funpack)(), void (**fjk)(),
-                       double **dms, double *vjk,
-                       int n_dm, int ncomp, int ksh, int lsh,
-                       CINTOpt *cintopt, CVHFOpt *vhfopt,
-                       struct _VHFEnvs *envs);
-void CVHFfill_dot_nrs2kl(int (*intor)(), void (*funpack)(), void (**fjk)(),
-                         double **dms, double *vjk,
-                         int n_dm, int ncomp, int ksh, int lsh,
-                         CINTOpt *cintopt, CVHFOpt *vhfopt,
-                         struct _VHFEnvs *envs);
-void CVHFfill_dot_nrs2ij(int (*intor)(), void (*funpack)(), void (**fjk)(),
-                         double **dms, double *vjk,
-                         int n_dm, int ncomp, int ksh, int lsh,
-                         CINTOpt *cintopt, CVHFOpt *vhfopt,
-                         struct _VHFEnvs *envs);
-void CVHFfill_dot_nrs1(int (*intor)(), void (*funpack)(), void (**fjk)(),
-                       double **dms, double *vjk,
-                       int n_dm, int ncomp, int ksh, int lsh,
-                       CINTOpt *cintopt, CVHFOpt *vhfopt,
-                       struct _VHFEnvs *envs);
-void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), void (*funpack)(),
-                       void (**fjk)(), double **dms, double *vjk,
                        int n_dm, int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt,
                        int *atm, int natm, int *bas, int nbas, double *env);

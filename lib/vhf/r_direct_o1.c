@@ -252,10 +252,10 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
 
         for (ksh = 0; ksh <= ish; ksh++) {
         for (lsh = 0; lsh <= ksh; lsh++) {
-// when ksh==ish, (lsh>jsh) will miss some integrals (k<i&l>j).
-// These integrals will be calculated, in next (ish,jsh) pair. Because
-// fjk_s8 is based on shell index, which will includes
-// (ksh==ish,lsh>jsh) by permutation symmetry
+/* when ksh==ish, (lsh<jsh) misses some integrals (eg k<i&&l>j).
+ * These integrals are calculated in the next (ish,jsh) pair. To show
+ * that, we just need to prove that every elements in shell^4 appeared
+ * only once in fjk_s8.  */
                 if ((ksh == ish) && (lsh > jsh)) {
                         break;
                 }
