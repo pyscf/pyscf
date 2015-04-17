@@ -31,13 +31,16 @@ def ccsdsolver(fock, eri, nocc):
 
 n = 12
 numpy.random.seed(1)
-eri_on_mo = ao2mo.restore(8, numpy.random.random((n,n,n,n)), n)*1e-4
+eri_on_mo = ao2mo.restore(8, numpy.random.random((n,n,n,n)), n)
 fock_on_mo = numpy.random.random((n,n))
 fock_on_mo = fock_on_mo + fock_on_mo.T
 for i in range(n):
-    fock_on_mo[i,i] += -100 + i*20
+    fock_on_mo[i,i] += i*10
 
 mycc = ccsdsolver(fock_on_mo, eri_on_mo, 2)
+#NOTE: switch on DIIS early, otherwise the CCSD might have converge issue
+mycc.diis_start_cycle = 0
+mycc.diis_start_energy_diff = 1e2
 mycc.verbose = 4
 ecc = mycc.kernel()[0]
 print('CCSD correlation energy = %.15g' % ecc)

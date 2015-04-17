@@ -135,7 +135,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
     #: woOVv -= numpy.einsum('ikja,kb->jiba', eris.ooov, t1)
     #: t2new += woOVv
         #: woOVv = -numpy.einsum('kija,kb->ijab', eris.ooov[:,:,p0:p1], t1)
-        tmp = numpy.asarray(eris.ovoo[p0:p1], order='C').transpose(2,0,1,3)
+        tmp = numpy.asarray(eris.ovoo[p0:p1].transpose(2,0,1,3), order='C')
         woOVv = lib.dot(tmp.reshape(-1,nocc), t1, -1).reshape(nocc,p1-p0,nvir,nvir)
         #: woOVv += numpy.einsum('jabc,ic->ijab', eris_ovvv, t1)
         lib.dot(t1, eris_ovvv.reshape(-1,nvir).T, 1, woOVv.reshape(nocc,-1), 1)
@@ -145,7 +145,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
 
         #: woovv = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
         #: woovv -= numpy.einsum('jc,icab->ijab', t1, eris_ovvv)
-        woovv = lib.dot(eris_ooov.transpose(0,1,3,2).reshape(-1,nocc),
+        woovv = lib.dot(numpy.asarray(eris_ooov.transpose(0,1,3,2), order='C').reshape(-1,nocc),
                         t1).reshape(p1-p0,nocc,nvir,nvir)
         for i in range(eris_ovvv.shape[0]):
             lib.dot(t1, eris_ovvv[i].reshape(nvir,-1), -1,
@@ -242,7 +242,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
         tmp = lib.dot(eris_oovv.reshape(-1,nvir),
                       t1.T).reshape(p1-p0,nocc,nvir,nocc).transpose(0,3,2,1).copy()
         lib.dot(eris_oOVv.reshape(-1,nvir), t1.T, 1, tmp.reshape(-1,nocc), 1)
-        tmp = tmp.transpose(3,1,2,0)
+        tmp = numpy.asarray(tmp.transpose(3,1,2,0), order='C')
         #: t2new += numpy.einsum('ka,ijbk->ijba', -t1[p0:p1], tmp)
         lib.dot(tmp.reshape(-1,p1-p0), t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
         tmp = None
@@ -409,7 +409,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         nvir = nmo - nocc
         mo_e = eris.fock.diagonal()
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-        t1 = numpy.zeros((nocc,nvir))
+        t1 = eris.fock[:nocc,nocc:] / eia
         t2 = numpy.empty((nocc,nocc,nvir,nvir))
         self.emp2 = 0
         for i in range(nocc):
@@ -530,12 +530,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         damp = lib.diis.DIIS(self)
         damp.space = self.diis_space
         damp.min_space = 1
-        def fupdate(t1, t2, istep, normt, de):
+        def fupdate_(t1, t2, istep, normt, de):
             if (istep > self.diis_start_cycle and
                 abs(de) < self.diis_start_energy_diff):
                 t1t2 = numpy.hstack((t1.ravel(),t2.ravel()))
 #NOTE: here overwriting .data to reduce memory usage, but the contents of
-# t1, t2 are CHANGED!
+# t1, t2 are CHANGED!  If the pass-in t1/t2 are used elsewhere, be very
+# careful to call this function
                 t1.data = t1t2.data
                 t2.data = t1t2.data
                 t1t2 = damp.update(t1t2)
@@ -543,7 +544,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 t2 = t1t2[t1.size:].reshape(t2.shape)
                 logger.debug(self, 'DIIS for step %d', istep)
             return t1, t2
-        return fupdate
+        return fupdate_
 
 CCSD = CC
 
