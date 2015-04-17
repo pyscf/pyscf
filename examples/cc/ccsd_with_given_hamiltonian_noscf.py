@@ -20,7 +20,7 @@ def ccsdsolver(fock, eri, nocc):
     mycc.nocc = nocc
 
     # hack the integral transformation function to insert our hamiltonian
-    def my_ao2mo():
+    def my_ao2mo(mo):
         mo = numpy.eye(mycc.nmo)
         eris = cc.ccsd._ERIS(mycc, mo)
         eris.fock = fock

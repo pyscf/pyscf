@@ -30,6 +30,7 @@ mol.basis = {"H": '6-31g',
 mol.build()
 
 rhf = scf.RHF(mol)
+rhf.conv_tol = 1e-14
 rhf.scf()
 
 
@@ -37,8 +38,8 @@ class KnowValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(rhf)
         mcc.conv_tol = 1e-9
-        mcc.conv_tol_normt = 1e-7
-        mcc.ccsd()
+        mcc.conv_tol_normt = 1e-6
+        mcc.kernel()
         self.assertTrue(numpy.allclose(mcc.t2,mcc.t2.transpose(1,0,3,2)))
         self.assertAlmostEqual(mcc.ecc, -0.5690403273511450, 8)
         self.assertAlmostEqual(abs(mcc.t2).sum(), 92.61277290776878, 6)

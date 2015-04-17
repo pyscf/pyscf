@@ -35,7 +35,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
 
-    blksize = cc.block_size()
+    blksize = cc.get_block_size()
     log.debug('block size = %d, nocc = %d is divided into %d blocks',
               blksize, cc.nocc, int((cc.nocc+blksize-1)/blksize))
     cput0 = log.timer('CCSD initialization', *cput0)
@@ -387,7 +387,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.max_memory = mf.max_memory
 
         self.max_cycle = 50
-        self.conv_tol = 1e-9
+        self.conv_tol = 1e-7
         self.conv_tol_normt = 1e-5
         self.diis_space = 6
         self.diis_start_cycle = 1
@@ -511,7 +511,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t2new = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
         return self.add_wvvVV_(t1, t2, eris, t2new, blksize=1)
 
-    def block_size(self):
+    def get_block_size(self):
         #return 8
         nmo = self.nmo
         nocc = self.nocc
@@ -525,24 +525,26 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return update_amps(*args, **kwargs)
 
     def diis(self):
-        nocc = self.nocc
-        nvir = self.nmo-self.nocc
-        nov = nocc*nvir
+        return self.diis_()
+    def diis_(self):
         damp = lib.diis.DIIS(self)
         damp.space = self.diis_space
         damp.min_space = 1
         def fupdate(t1, t2, istep, normt, de):
             if (istep > self.diis_start_cycle and
                 abs(de) < self.diis_start_energy_diff):
-                tbuf = numpy.empty(nov*(nov+1))
-                tbuf[:nov] = t1.ravel()
-                tbuf[nov:] = t2.ravel()
-                tbuf = damp.update(tbuf)
-                t1 = tbuf[:nov].reshape(nocc,nvir)
-                t2 = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
+                t1t2 = numpy.hstack((t1.ravel(),t2.ravel()))
+#NOTE: here overwriting .data to reduce memory usage, but the contents of
+# t1, t2 are CHANGED!
+                t1.data = t1t2.data
+                t2.data = t1t2.data
+                t1t2 = damp.update(t1t2)
+                t1 = t1t2[:t1.size].reshape(t1.shape)
+                t2 = t1t2[t1.size:].reshape(t2.shape)
                 logger.debug(self, 'DIIS for step %d', istep)
             return t1, t2
         return fupdate
+
 CCSD = CC
 
 class _ERIS:
@@ -584,13 +586,13 @@ class _ERIS:
             self.oOVv = self.feri1.create_dataset('oOVv', (nocc,nocc,nvir,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
-            pyscf.ao2mo.full(mol, orbv, self._tmpfile2.name, verbose=log)
+            pyscf.ao2mo.full(cc.mol, orbv, self._tmpfile2.name, verbose=log)
             self.feri2 = h5py.File(self._tmpfile2.name, 'r')
             self.vvvv = self.feri2['eri_mo']
             time1 = log.timer_debug1('transforming vvvv', *time0)
 
             tmpfile3 = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.general(mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
+            pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
                                 tmpfile3.name, verbose=log)
             time1 = log.timer_debug1('transforming oppp', *time1)
             with pyscf.ao2mo.load(tmpfile3.name) as eri1:
@@ -644,8 +646,8 @@ def residual_as_diis_errvec(mycc):
             if (istep > mycc.diis_start_cycle and
                 abs(de) < mycc.diis_start_energy_diff):
                 if damp.last_t1 is None:
-                    damp.last_t1 = t1.copy()
-                    damp.last_t2 = t2.copy()
+                    damp.last_t1 = t1
+                    damp.last_t2 = t2
                 else:
                     tbuf = numpy.empty(nov*(nov+1))
                     tbuf[:nov] = ((t1-damp.last_t1)*eia).ravel()
@@ -657,6 +659,8 @@ def residual_as_diis_errvec(mycc):
                     tbuf = numpy.empty(nov*(nov+1))
                     tbuf[:nov] = t1.ravel()
                     tbuf[nov:] = t2.ravel()
+                    t1.data = tbuf.data # release memory
+                    t2.data = tbuf.data
 
                     tbuf = damp.update(tbuf)
                     damp.last_t1 = t1 = tbuf[:nov].reshape(nocc,nvir)
@@ -722,17 +726,14 @@ if __name__ == '__main__':
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
-    print(abs(mcc.t2-mcc.t2.transpose(1,0,3,2)).sum())
 
     mcc.max_memory = 1
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
-    print(abs(mcc.t2-mcc.t2.transpose(1,0,3,2)).sum())
 
     mcc.diis = residual_as_diis_errvec(mcc)
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
-    print(abs(mcc.t2-mcc.t2.transpose(1,0,3,2)).sum())
 
