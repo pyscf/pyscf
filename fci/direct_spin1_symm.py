@@ -83,6 +83,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     link_indexb = reorder4irrep(eri, norb, link_indexb, orbsym)[1]
     dimirrep = numpy.array(dimirrep, dtype=numpy.int32)
 
+    assert(norb < 23)
     libfci.FCIcontract_2e_spin1_symm(eri.ctypes.data_as(ctypes.c_void_p),
                                      fcivec.ctypes.data_as(ctypes.c_void_p),
                                      ci1.ctypes.data_as(ctypes.c_void_p),
