@@ -6,7 +6,7 @@ from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib.parameters as param
-import pyscf.gto
+from pyscf import gto
 
 def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
@@ -64,14 +64,15 @@ def pre_orth_project_ano(mol, basname):
 
     aos = {}
     for symb in mol._basis.keys():
-        stdsymb = param.ELEMENTS[pyscf.gto.mole._ELEMENTDIC[symb.upper()]][0]
-        atm = pyscf.gto.Mole()
+        rawsymb = gto.mole._rm_digit(symb)
+        stdsymb = param.ELEMENTS[gto.mole._ELEMENTDIC[rawsymb.upper()]][0]
+        atm = gto.Mole()
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
         s0 = atm.intor_symmetric('cint1e_ovlp_sph')
 
-        basis_add = pyscf.gto.basis.load(basname, stdsymb)
-        atmp = pyscf.gto.Mole()
+        basis_add = gto.basis.load(basname, stdsymb)
+        atmp = gto.Mole()
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         ano = pyscf.scf.addons.project_mo_nr2nr(atmp, 1, atm)
