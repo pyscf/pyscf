@@ -142,6 +142,9 @@ class CheMPS2(object):
         rdm1 = numpy.einsum('ijkk->ij', rdm2) / (nelec-1)
         return rdm1, rdm2
 
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
+
 
 
 if __name__ == '__main__':

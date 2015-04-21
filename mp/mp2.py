@@ -21,13 +21,14 @@ t2[i,j,b,a] = (ia|jb) / D_ij^ab
 # (ij|kl) => (ij|ol) => (ol|ij) => (ol|oj) => (ol|ov) => (ov|ov)
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 
-def kernel(mp, mo_energy, mo_coeff, nocc, verbose=None):
-    nvir = len(mo_energy) - nocc
+def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+    nocc = mp.nocc
+    nvir = mp.nmo - nocc
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
     t2 = numpy.empty((nocc,nocc,nvir,nvir))
     emp2 = 0
 
-    with mp.ao2mo(mo_coeff, nocc) as ovov:
+    with mp.ao2mo(mo_coeff) as ovov:
         for i in range(nocc):
             djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
             gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
@@ -39,14 +40,15 @@ def kernel(mp, mo_energy, mo_coeff, nocc, verbose=None):
 
     return emp2, t2
 
-def make_rdm1(mp, mo_energy, mo_coeff, nocc, verbose=None):
-    nmo = len(mo_energy)
+def make_rdm1(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+    nmo = mp.nmo
+    nocc = mp.nocc
     nvir = nmo - nocc
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
     emp2 = 0
-    with mp.ao2mo(mo_coeff, nocc) as ovov:
+    with mp.ao2mo(mo_coeff) as ovov:
         for i in range(nocc):
             djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
             gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
@@ -77,28 +79,30 @@ class MP2(object):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
+        self.nocc = self.mol.nelectron // 2
+        self.nmo = len(mf.mo_energy)
+
         self.emp2 = None
         self.t2 = None
 
-    def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
+    def kernel(self, mo_energy=None, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
-        if nocc is None:
-            nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, nocc, verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
     # return eri_ovov array[nocc*nvir,nocc*nvir]
-    def ao2mo(self, mo_coeff, nocc):
+    def ao2mo(self, mo_coeff):
         log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
         log.debug('transform (ia|jb)')
-        nmo = mo_coeff.shape[1]
+        nmo = self.nmo
+        nocc = self.nocc
         nvir = nmo - nocc
         co = mo_coeff[:,:nocc]
         cv = mo_coeff[:,nocc:]

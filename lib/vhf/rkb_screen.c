@@ -9,6 +9,7 @@
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
+#include "fblas.h"
 #include "optimizer.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
@@ -41,13 +42,12 @@ int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
         assert(l < n);
         double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
         double dmin = opt->direct_scf_cutoff * qijkl;
-        return qijkl > opt->direct_scf_cutoff
-             &&((opt->dm_cond[j*n+i] > dmin)
-             || (opt->dm_cond[l*n+k] > dmin)
-             || (opt->dm_cond[j*n+k] > dmin)
-             || (opt->dm_cond[j*n+l] > dmin)
-             || (opt->dm_cond[i*n+k] > dmin)
-             || (opt->dm_cond[i*n+l] > dmin));
+        return (opt->dm_cond[j*n+i] > dmin)
+            || (opt->dm_cond[l*n+k] > dmin)
+            || (opt->dm_cond[j*n+k] > dmin)
+            || (opt->dm_cond[j*n+l] > dmin)
+            || (opt->dm_cond[i*n+k] > dmin)
+            || (opt->dm_cond[i*n+l] > dmin);
 }
 
 int CVHFrkbllll_vkscreen(int *shls, CVHFOpt *opt,
@@ -91,13 +91,12 @@ int CVHFrkbssll_prescreen(int *shls, CVHFOpt *opt,
         double *dmsl = opt->dm_cond + n*n*SL;
         double qijkl = opt->q_cond[n*n*SS+i*n+j] * opt->q_cond[k*n+l];
         double dmin = opt->direct_scf_cutoff * qijkl;
-        return qijkl > opt->direct_scf_cutoff
-             &&((opt->dm_cond[n*n*SS+j*n+i] > dmin)
-             || (opt->dm_cond[l*n+k] > dmin)
-             || (dmsl[j*n+k] > dmin)
-             || (dmsl[j*n+l] > dmin)
-             || (dmsl[i*n+k] > dmin)
-             || (dmsl[i*n+l] > dmin));
+        return (opt->dm_cond[n*n*SS+j*n+i] > dmin)
+            || (opt->dm_cond[l*n+k] > dmin)
+            || (dmsl[j*n+k] > dmin)
+            || (dmsl[j*n+l] > dmin)
+            || (dmsl[i*n+k] > dmin)
+            || (dmsl[i*n+l] > dmin);
 }
 
 // be careful with the order in dms_cond, the current order (dmll, dmss, dmsl)

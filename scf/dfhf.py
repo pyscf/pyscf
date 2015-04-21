@@ -76,7 +76,7 @@ def density_fit_(mf, auxbasis='weigend'):
 
 
 OCCDROP = 1e-12
-BLOCKDIM = 120
+BLOCKDIM = 240
 def get_jk_(mf, mol, dms, hermi=1):
     from pyscf import df
     from pyscf.ao2mo import _ao2mo
@@ -98,7 +98,7 @@ def get_jk_(mf, mol, dms, hermi=1):
             if (nao_pair*mf._naoaux*8/1e6+pyscf.lib.current_memory()[0]
                 < mf.max_memory*.9):
                 with df.load(mf._cderi) as feri:
-                    cderi = numpy.array(feri)
+                    cderi = numpy.asarray(feri)
                 mf._cderi = cderi
 
     if len(dms) == 0:

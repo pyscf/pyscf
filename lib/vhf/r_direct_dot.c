@@ -586,7 +586,7 @@ void CVHFrs8_ji_s2kl(double complex *eri,
 {
         CVHFrs4_ji_s2kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
                         dm_cond, nbas, dm_atleast);
-        if ((shls[0] != shls[2]) | (shls[1] != shls[3])) {
+        if ((shls[0] != shls[2]) || (shls[1] != shls[3])) {
                 CVHFrs4_lk_s2ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
                                 dm_cond, nbas, dm_atleast);
         }
@@ -598,7 +598,7 @@ void CVHFrs8_lk_s2ij(double complex *eri,
 {
         CVHFrs4_lk_s2ij(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
                         dm_cond, nbas, dm_atleast);
-        if ((shls[0] != shls[2]) | (shls[1] != shls[3])) {
+        if ((shls[0] != shls[2]) || (shls[1] != shls[3])) {
                 CVHFrs4_ji_s2kl(eri, dm, vj, nao, ncomp, shls, ao_loc, tao,
                                 dm_cond, nbas, dm_atleast);
         }
@@ -611,7 +611,7 @@ void CVHFrs8_jk_s1il(double complex *eri,
 {
         CVHFrs4_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
                         dm_cond, nbas, dm_atleast);
-        if ((shls[0] != shls[2]) | (shls[1] != shls[3])) {
+        if ((shls[0] != shls[2]) || (shls[1] != shls[3])) {
                 CVHFrs4_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
                                 dm_cond, nbas, dm_atleast);
         }
@@ -623,7 +623,7 @@ void CVHFrs8_li_s1kj(double complex *eri,
 {
         CVHFrs4_li_s1kj(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
                         dm_cond, nbas, dm_atleast);
-        if ((shls[0] != shls[2]) | (shls[1] != shls[3])) {
+        if ((shls[0] != shls[2]) || (shls[1] != shls[3])) {
                 CVHFrs4_jk_s1il(eri, dm, vk, nao, ncomp, shls, ao_loc, tao,
                                 dm_cond, nbas, dm_atleast);
         }

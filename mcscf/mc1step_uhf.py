@@ -368,7 +368,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     ncas = casscf.ncas
     nocc = (ncas + ncore[0], ncas + ncore[1])
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
-    eris = casscf.update_ao2mo(mo)
+    eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
@@ -429,7 +429,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
         mo = list(map(numpy.dot, mo, u))
 
         eris = None # to avoid using too much memory
-        eris = casscf.update_ao2mo(mo)
+        eris = casscf.ao2mo(mo)
         t3m = log.timer('update eri', *t3m)
 
         elast = e_tot
@@ -639,7 +639,7 @@ class CASSCF(casci_uhf.CASCI):
     def rotate_orb(self, mo, casdm1, casdm2, eris, x0=0):
         return rotate_orb_ah(self, mo, casdm1, casdm2, eris, x0, self.verbose)
 
-    def update_ao2mo(self, mo):
+    def ao2mo(self, mo):
 #        nmo = mo[0].shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas

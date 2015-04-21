@@ -15,10 +15,10 @@
 int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
                         int seekdim);
 
-void CVHFnrs8_tridm_vj(double *eri, double *tri_dm, double *vj,
-                       int nao, int ic, int jc);
-void CVHFnrs8_jk_s2il(double *eri, double *dm, double *vk,
-                      int nao, int ic, int jc);
+void CVHFics8_tridm_vj(const double *eri, const double *tri_dm, double *vj,
+                       int n, int i, int j);
+void CVHFics8_jk_s2il(const double *eri, const double *dm, double *vk,
+                      int n, int i, int j);
 
 /*
  * transform ket, s2 to label AO symmetry
@@ -127,8 +127,8 @@ void MCSCFnrs4_aapp_jk(double *eri, double *xpa, double *mo_coeff,
                         k = klocs[kl];
                         l = llocs[kl];
                         peri = eri + kl * nao_pair;
-                        CVHFnrs8_jk_s2il(peri, dm, kpriv, nao, k, l);
-                        CVHFnrs8_tridm_vj(peri, tridm, jpriv, nao, k, l);
+                        CVHFics8_jk_s2il(peri, dm, kpriv, nao, k, l);
+                        CVHFics8_tridm_vj(peri, tridm, jpriv, nao, k, l);
                         NPdunpack_tril(nao, peri, buf, 0);
                         AO2MOmmm_nr_s2_igtj(xpa+kl*ij_pair, buf, &envs, 0);
                 }
@@ -145,3 +145,4 @@ void MCSCFnrs4_aapp_jk(double *eri, double *xpa, double *mo_coeff,
         free(klocs);
         free(llocs);
 }
+

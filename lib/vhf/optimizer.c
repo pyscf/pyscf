@@ -91,13 +91,12 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
         assert(l < n);
         double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
         double dmin = opt->direct_scf_cutoff * qijkl;
-        return qijkl > opt->direct_scf_cutoff
-             &&((4*opt->dm_cond[j*n+i] > dmin)
-             || (4*opt->dm_cond[l*n+k] > dmin)
-             || (  opt->dm_cond[j*n+k] > dmin)
-             || (  opt->dm_cond[j*n+l] > dmin)
-             || (  opt->dm_cond[i*n+k] > dmin)
-             || (  opt->dm_cond[i*n+l] > dmin));
+        return (4*opt->dm_cond[j*n+i] > dmin)
+            || (4*opt->dm_cond[l*n+k] > dmin)
+            || (  opt->dm_cond[j*n+k] > dmin)
+            || (  opt->dm_cond[j*n+l] > dmin)
+            || (  opt->dm_cond[i*n+k] > dmin)
+            || (  opt->dm_cond[i*n+l] > dmin);
 }
 
 // return flag to decide whether transpose01324

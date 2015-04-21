@@ -125,7 +125,7 @@ class CASSCF(mc1step.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
-        if eris is None: eris = self.update_ao2mo(mo_coeff)
+        if eris is None: eris = self.ao2mo(mo_coeff)
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
@@ -142,10 +142,7 @@ class CASSCF(mc1step.CASSCF):
         mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
 
         where_natorb = mo_1to1map(ucas)
-        guide_stringsa = fci.cistring.gen_strings4orblist(where_natorb, nelecas[0])
-        guide_stringsb = fci.cistring.gen_strings4orblist(where_natorb, nelecas[1])
-        old_det_idxa = numpy.argsort(guide_stringsa)
-        old_det_idxb = numpy.argsort(guide_stringsb)
+        ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
 
         h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, self.get_hcore(),
                                    mo_coeff[:,ncore:nocc]))
@@ -153,8 +150,7 @@ class CASSCF(mc1step.CASSCF):
         h1eff = reduce(numpy.dot, (ucas.T, h1eff, ucas))
         aaaa = eris.aapp[:,:,ncore:nocc,ncore:nocc].copy()
         aaaa = ao2mo.incore.full(ao2mo.restore(8, aaaa, ncas), ucas)
-        e_cas, fcivec = self.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
-                                              ci0=ci[old_det_idxa[:,None],old_det_idxb])
+        e_cas, fcivec = self.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0)
         log.debug('In Natural orbital, CI energy = %.12g', e_cas)
         return mo_coeff1, fcivec, occ
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
@@ -165,11 +161,13 @@ class CASSCF(mc1step.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
-        if eris is None: eris = self.update_ao2mo(mo_coeff)
+        if eris is None: eris = self.ao2mo(mo_coeff)
         ncore = self.ncore
         nocc = ncore + self.ncas
         nmo = mo_coeff.shape[1]
-        mo_coeff1, fcivec, occ = self.cas_natorb(mo_coeff, ci, eris, verbose)
+        mo_coeff1 = numpy.empty_like(mo_coeff)
+        mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+        #mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
         fock = self.get_fock(mo_coeff, ci, eris)
         if ncore > 0:
             w, c1 = _symm_eigh(fock[:ncore,:ncore], self.orbsym[:ncore])
@@ -177,7 +175,7 @@ class CASSCF(mc1step.CASSCF):
         if nmo-nocc > 0:
             w, c1 = _symm_eigh(fock[nocc:,nocc:], self.orbsym[nocc:])
             mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-        return mo_coeff1, fcivec
+        return mo_coeff1, ci
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
         self.mo_coeff, self.ci = self.canonicalize(self, mo_coeff, ci, verbose=verbose)
         return self.mo_coeff, self.ci

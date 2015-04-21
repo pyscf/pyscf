@@ -273,6 +273,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         else:
 # Occasionally, all trial rotation goes to the branch "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
+            dx1 *= .2
             x0 = x0 + dx1
             g_orb = g_orb + h_op1(dx1) + h_opjk(dx1)
             jkcount += 1
@@ -463,11 +464,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     ncas = casscf.ncas
     nocc = ncore + ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
-    eris = casscf.update_ao2mo(mo)
+    eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
-        return e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_ci, fcivec, mo
     conv = False
     toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
@@ -525,7 +526,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
         mo = numpy.dot(mo, u)
 
         eris = None
-        eris = casscf.update_ao2mo(mo)
+        eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
         elast = e_tot
@@ -581,15 +582,13 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
-    if eris is None:
-        if hasattr(mc, 'update_ao2mo'):
-            eris = mc.update_ao2mo(mo_coeff)
-        else: # CASCI
-            eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    if eris is None: eris = mc.ao2mo(mo_coeff)
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
-    mo_coeff1, fcivec, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
+    mo_coeff1 = numpy.empty_like(mo_coeff)
+    mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+    #mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
     fock = mc.get_fock(mo_coeff, ci, eris)
     if ncore > 0:
         w, c1 = scipy.linalg.eigh(fock[:ncore,:ncore])
@@ -597,7 +596,9 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     if nmo-nocc > 0:
         w, c1 = scipy.linalg.eigh(fock[nocc:,nocc:])
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-    return mo_coeff1, fcivec
+# still return ci coefficients, in case the canonicalization funciton changed
+# cas orbitals, the ci coefficients should also be updated.
+    return mo_coeff1, ci
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
@@ -893,6 +894,9 @@ class CASSCF(casci.CASCI):
         return rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose)
 
     def update_ao2mo(self, mo):
+        raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')
+
+    def ao2mo(self, mo):
 #        nmo = mo.shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas

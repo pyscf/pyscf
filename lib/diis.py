@@ -12,9 +12,11 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib.logger as log
+from pyscf.lib import logger
 
 
+INCORE_SIZE = 1e7
+BLOCK_SIZE  = int(20e6) # ~ 160/320 MB
 # PCCP, 4, 11
 # GEDIIS, JCTC, 2, 835
 # C2DIIS, IJQC, 45, 31
@@ -27,13 +29,14 @@ class DIIS:
             self.verbose = dev.verbose
             self.stdout = dev.stdout
         else:
-            self.verbose = log.INFO
+            self.verbose = logger.INFO
             self.stdout = sys.stdout
         self.space = 6
         self.min_space = 1
         if not isinstance(filename, str):
             self._tmpfile = tempfile.NamedTemporaryFile()
             self.filename = self._tmpfile.name
+            self._buffer = {}
             self._diisfile = h5py.File(self.filename)
             self._head = 0
             self._H = None
@@ -51,13 +54,16 @@ class DIIS:
         if self._head >= self.space:
             self._head = 0
         key = 'e%d' % self._head
-        if key in self._diisfile:
-            self._diisfile['e%d'%self._head][:] = x
+        if x.size < INCORE_SIZE:
+            self._buffer[key] = x.ravel()
+        elif key in self._diisfile:
+            self._diisfile['e%d'%self._head][:] = x.ravel()
         else:
-            self._diisfile['e%d'%self._head] = x
+            self._diisfile['e%d'%self._head] = x.ravel()
         self._head += 1
 
     def push_vec(self, x):
+        x = x.ravel()
         if self._H is None:
             self._H = numpy.ones((self.space+1,self.space+1), x.dtype)
             self._H[0,0] = 0
@@ -66,7 +72,9 @@ class DIIS:
 # generate error vector based on the given trial vectors
         if self._err_vec_touched:
             key = 'x%d' % (self._head - 1)
-            if key in self._diisfile:
+            if x.size < INCORE_SIZE:
+                self._buffer[key] = x
+            elif key in self._diisfile:
                 self._diisfile[key][:] = x
             else:
                 self._diisfile[key] = x
@@ -75,24 +83,38 @@ class DIIS:
         else:
             if self._head >= self.space:
                 self._head = 0
-            if 'x%d' % self._head in self._diisfile:
-                self._diisfile['e%d'%self._head][:] = x - self._xopt
-                self._diisfile['x%d'%self._head][:] = x
-                self._head += 1
+            if x.size < INCORE_SIZE:
+                self._buffer['e%d'%self._head] = x - self._xopt
+                self._buffer['x%d'%self._head] = x
             else:
-                self._diisfile['e%d'%self._head] = x - self._xopt
-                self._diisfile['x%d'%self._head] = x
-                self._head += 1
+                if 'x%d' % self._head not in self._diisfile:
+                    self._diisfile.create_dataset('e%d'%self._head, (x.size,), x.dtype)
+                    self._diisfile.create_dataset('x%d'%self._head, (x.size,), x.dtype)
+                self._diisfile['x%d'%self._head][:] = x
+                for p0,p1 in prange(0, x.size, BLOCK_SIZE):
+                    self._diisfile['e%d'%self._head][p0:p1] = x[p0:p1] - self._xopt[p0:p1]
+            self._head += 1
 
     def get_err_vec(self, idx):
-        return numpy.array(self._diisfile['e%d'%idx])
+        if self._buffer:
+            return self._buffer['e%d'%idx]
+        else:
+            return self._diisfile['e%d'%idx]
 
     def get_vec(self, idx):
-        return numpy.array(self._diisfile['x%d'%idx])
+        if self._buffer:
+            return self._buffer['x%d'%idx]
+        else:
+            return self._diisfile['x%d'%idx]
 
     def get_num_vec(self):
         key = 'x%d'%(self.space-1)
-        if key in self._diisfile:
+        if self._buffer:
+            if key in self._buffer:
+                return self.space
+            else:
+                return self._head
+        elif key in self._diisfile:
             return self.space
         else:
             return self._head
@@ -109,31 +131,39 @@ class DIIS:
 
         G = numpy.zeros(nd+1, x.dtype)
         G[0] = 1
-        dt = self.get_err_vec(self._head-1)
+        dt = numpy.array(self.get_err_vec(self._head-1), copy=False)
         for i in range(nd):
-            di = self.get_err_vec(i)
-            self._H[self._head,i+1] = numpy.dot(numpy.array(dt).ravel(),
-                                                numpy.array(di).ravel())
-            self._H[i+1,self._head] = self._H[self._head,i+1].conj()
+            tmp = 0
+            for p0,p1 in prange(0, x.size, BLOCK_SIZE):
+                tmp += numpy.dot(dt[p0:p1].conj(), self.get_err_vec(i)[p0:p1])
+            self._H[self._head,i+1] = tmp
+            self._H[i+1,self._head] = tmp.conj()
+        dt = None
 
         try:
             c = numpy.linalg.solve(self._H[:nd+1,:nd+1], G)
         except numpy.linalg.linalg.LinAlgError:
-            log.warn(self, 'singularity in diis')
+            logger.warn(self, 'singularity in diis')
             H = self._H[:nd+1,:nd+1].copy()
             for i in range(1,nd):
                 H[i,i] += 1e-10
             c = numpy.linalg.solve(H, G)
-        log.debug1(self, 'diis-c %s', c)
+        logger.debug1(self, 'diis-c %s', c)
 
-        self._xopt = numpy.zeros_like(x)
-        for i, ci in enumerate(c[1:]):
-            self._xopt += self.get_vec(i) * ci
-        return self._xopt
+        self._xopt = None
+        self._xopt = x.ravel() * c[1]
+        for i, ci in enumerate(c[2:]):
+            for p0,p1 in prange(0, x.size, BLOCK_SIZE):
+                self._xopt[p0:p1] += self.get_vec(i+1)[p0:p1] * ci
+        return self._xopt.reshape(x.shape)
 
 #class CDIIS
 #class EDIIS
 #class GDIIS
+
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
 
 if __name__ == '__main__':
