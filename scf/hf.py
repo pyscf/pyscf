@@ -841,7 +841,7 @@ class SCF(object):
             dm = self.init_guess_by_atom(mol)
         elif key.lower() == 'chkfile':
             try:
-                dm = self.init_guess_by_chkfile(mol)
+                dm = self.init_guess_by_chkfile()
             except:
                 log.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                          self.chkfile)
