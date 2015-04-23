@@ -41,7 +41,6 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     nb, nlinkb = link_indexb.shape[:2]
     f1e_tril = pyscf.lib.pack_tril(f1e)
     ci1 = numpy.zeros((na,nb))
-    assert(norb < 23)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
                             ci1.ctypes.data_as(ctypes.c_void_p),
@@ -86,7 +85,6 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = fcivec.reshape(na,nb)
     ci1 = numpy.empty_like(fcivec)
 
-    assert(norb < 23)
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
                                 fcivec.ctypes.data_as(ctypes.c_void_p),
                                 ci1.ctypes.data_as(ctypes.c_void_p),

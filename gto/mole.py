@@ -876,7 +876,7 @@ class Mole(object):
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
 
     '''
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.verbose = log.NOTE
         self.output = None
         self.max_memory = param.MEMORY_MAX
@@ -916,6 +916,7 @@ class Mole(object):
         self._basis = None
         self._built = False
         self._keys = set(self.__dict__.keys())
+        self.__dict__.update(kwargs)
 
     def check_sanity(self, obj):
         '''Check misinput of a class attribute due to typos, check whether a

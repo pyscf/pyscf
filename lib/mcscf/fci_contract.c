@@ -31,8 +31,9 @@
  */
 typedef struct {
         unsigned int addr;
-        unsigned char ia;
+        unsigned short ia;
         char sign;
+        char _padding;
 } _LinkT;
 #define EXTRACT_IA(I)   (I.ia)
 #define EXTRACT_SIGN(I) (I.sign)
@@ -362,7 +363,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                 shared(eri, ci0, ci1, norb, na, nlink, clink, \
                        strk0, strk1, bufbas, buf, ib, blen), \
                 private(strk, pbuf)
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(guided, 1)
 /* strk starts from MAX(strk0, ib), because [0:ib,0:ib] have been evaluated */
                         for (strk = MAX(strk0, ib); strk < strk1; strk++) {
                                 pbuf = buf + (strk-strk0)*blen*nnorb;
@@ -868,7 +869,7 @@ void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
         shared(eri, ci0, ci1, norb, na, nlink, clink, \
                dimirrep, totirrep, strk0, strk1, bufbas, buf, ib, blen), \
         private(strk, pbuf)
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(guided, 1)
                         for (strk = MAX(strk0, ib); strk < strk1; strk++) {
                                 pbuf = buf + (strk-strk0)*blen*nnorb;
                                 ctr_rhf2esym_kern(eri, ci0, ci1, pbuf,
