@@ -40,6 +40,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 
     return emp2, t2
 
+# Need less memory
 def make_rdm1_ao(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     nmo = mp.nmo
     nocc = mp.nocc

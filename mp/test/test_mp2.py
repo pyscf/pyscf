@@ -41,23 +41,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emp2, -0.204019967288338, 11)
         self.assertTrue(numpy.allclose(t2, t2ref0))
 
-        t2s = numpy.zeros((nocc*2,nocc*2,nvir*2,nvir*2))
-        t2s[ ::2, ::2, ::2, ::2] = t2ref0 - t2ref0.transpose(0,1,3,2)
-        t2s[1::2,1::2,1::2,1::2] = t2ref0 - t2ref0.transpose(0,1,3,2)
-        t2s[ ::2,1::2,1::2, ::2] = t2ref0
-        t2s[1::2, ::2, ::2,1::2] = t2ref0
-        t2s[ ::2,1::2, ::2,1::2] = -t2ref0.transpose(0,1,3,2)
-        t2s[1::2, ::2,1::2, ::2] = -t2ref0.transpose(0,1,3,2)
-        dm1occ =-.5 * numpy.einsum('ikab,jkab->ij', t2s, t2s)
-        dm1vir = .5 * numpy.einsum('ijac,ijbc->ab', t2s, t2s)
-        dm1ref = numpy.zeros((nmo,nmo))
-        dm1ref[:nocc,:nocc] = dm1occ[ ::2, ::2]+dm1occ[1::2,1::2]
-        dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
-        dm1ref = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
-
-        rdm1 = mp.mp2.make_rdm1(pt, mf.mo_energy, mf.mo_coeff, nocc)
-        self.assertTrue(numpy.allclose(rdm1, dm1ref))
-
     def test_mp2_outcore(self):
         pt = mp.mp2.MP2(mf)
         pt.max_memory = 1
@@ -93,7 +76,7 @@ class KnowValues(unittest.TestCase):
         dm1ref[:nocc,:nocc] = dm1occ[ ::2, ::2]+dm1occ[1::2,1::2]
         dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
         dm1refao = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
-        rdm1 = mp.mp2.make_rdm1_without_t2(pt, mf.mo_energy, mf.mo_coeff)
+        rdm1 = mp.mp2.make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
         self.assertTrue(numpy.allclose(rdm1, dm1refao))
         self.assertTrue(numpy.allclose(pt.make_rdm1(), dm1ref))
 
