@@ -40,7 +40,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 
     return emp2, t2
 
-def make_rdm1(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+def make_rdm1_ao(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     nmo = mp.nmo
     nocc = mp.nocc
     nvir = nmo - nocc
@@ -69,6 +69,43 @@ def make_rdm1(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     rdm1[nocc:,nocc:] = dm1vir * 2
     rdm1 = reduce(numpy.dot, (mo_coeff, rdm1, mo_coeff.T))
     return rdm1
+
+def make_rdm1(mp, t2, verbose=logger.NOTE):
+    if isinstance(verbose, numpy.ndarray):
+        raise RuntimeError('''
+You see this error message because of the API updates in pyscf v1.0-alpha.
+The old make_rdm1 has been renamed to make_rdm1_ao.
+Given t2 amplitude, current function returns 1-RDM in MO basis''')
+    nmo = mp.nmo
+    nocc = mp.nocc
+    nvir = nmo - nocc
+    dm1occ = numpy.zeros((nocc,nocc))
+    dm1vir = numpy.zeros((nvir,nvir))
+    for i in range(nocc):
+        dm1vir += numpy.einsum('jca,jcb->ab', t2[i], t2[i]) * 2 \
+                - numpy.einsum('jca,jbc->ab', t2[i], t2[i])
+        dm1occ += numpy.einsum('iab,jab->ij', t2[i], t2[i]) * 2 \
+                - numpy.einsum('iab,jba->ij', t2[i], t2[i])
+    rdm1 = numpy.zeros((nmo,nmo))
+# *2 for beta electron
+    rdm1[:nocc,:nocc] =-dm1occ * 2
+    rdm1[nocc:,nocc:] = dm1vir * 2
+    return rdm1
+
+
+def make_rdm2(mp, t2, verbose=logger.NOTE):
+    '''2-RDM in MO basis'''
+    nmo = mp.nmo
+    nocc = mp.nocc
+    nvir = nmo - nocc
+    dm2 = numpy.zeros((nmo,nmo,nmo,nmo)) # Chemist notation
+    #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,3,1,2)*2 - t2.transpose(0,2,1,3)
+    #dm2[nocc:,:nocc,nocc:,:nocc] = t2.transpose(3,0,2,1)*2 - t2.transpose(2,0,3,1)
+    for i in range(nocc):
+        t2i = t2[i]
+        dm2[i,nocc:,:nocc,nocc:] = t2i.transpose(2,0,1)*2 - t2i.transpose(1,0,2)
+        dm2[nocc:,i,nocc:,:nocc] = dm2[i,nocc:,:nocc,nocc:].transpose(0,2,1)
+    return dm2
 
 
 class MP2(object):
@@ -118,6 +155,14 @@ class MP2(object):
         time1 = log.timer('Integral transformation', *time0)
         return ao2mo.load(eri)
 
+    def make_rdm1(self, t2=None):
+        if t2 is None: t2 = self.t2
+        return make_rdm1(self, t2, self.verbose)
+
+    def make_rdm2(self, t2=None):
+        if t2 is None: t2 = self.t2
+        return make_rdm2(self, t2, self.verbose)
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -154,18 +199,7 @@ if __name__ == '__main__':
     pt.max_memory = 1
     print('direct', numpy.allclose(pt.kernel()[1], t2ref0))
 
-    t2s = numpy.zeros((nocc*2,nocc*2,nvir*2,nvir*2))
-    t2s[ ::2, ::2, ::2, ::2] = t2ref0 - t2ref0.transpose(0,1,3,2)
-    t2s[1::2,1::2,1::2,1::2] = t2ref0 - t2ref0.transpose(0,1,3,2)
-    t2s[ ::2,1::2,1::2, ::2] = t2ref0
-    t2s[1::2, ::2, ::2,1::2] = t2ref0
-    t2s[ ::2,1::2, ::2,1::2] = -t2ref0.transpose(0,1,3,2)
-    t2s[1::2, ::2,1::2, ::2] = -t2ref0.transpose(0,1,3,2)
-    dm1occ =-.5 * numpy.einsum('ikab,jkab->ij', t2s, t2s)
-    dm1vir = .5 * numpy.einsum('ijac,ijbc->ab', t2s, t2s)
-    dm1ref = numpy.zeros((nmo,nmo))
-    dm1ref[:nocc,:nocc] = dm1occ[ ::2, ::2]+dm1occ[1::2,1::2]
-    dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
-    dm1ref = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
-    rdm1 = make_rdm1(pt, mf.mo_energy, mf.mo_coeff, nocc)
-    print(numpy.allclose(rdm1, dm1ref))
+    rdm1 = make_rdm1_without_t2(pt, mf.mo_energy, mf.mo_coeff)
+    print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
+                                            mf.mo_coeff.T)), rdm1))
+
