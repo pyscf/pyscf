@@ -5,7 +5,6 @@
 
 import sys
 import tempfile
-from functools import reduce
 import numpy
 import scipy.linalg
 import h5py
@@ -13,7 +12,7 @@ from pyscf.lib import logger
 
 # default max_memory 2000 MB
 
-def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
+def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12, lindep=1e-16,
              max_memory=2000, eig_pick=None, dot=numpy.dot, callback=None,
              verbose=logger.WARN):
     if isinstance(verbose, logger.Logger):
@@ -22,10 +21,10 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
         log = logger.Logger(sys.stdout, verbose)
     toloose = numpy.sqrt(tol)
     # if trial vectors are held in memory, store as many as possible
-    maxspace = max(int((max_memory-1e3)*1e6/x0.nbytes/2), maxspace)
+    max_space = max(int((max_memory-1e3)*1e6/x0.nbytes/2), max_space)
 
-    xs = _TrialXs(x0.nbytes, maxspace, max_memory)
-    ax = _TrialXs(x0.nbytes, maxspace, max_memory)
+    xs = _TrialXs(x0.nbytes, max_space, max_memory)
+    ax = _TrialXs(x0.nbytes, max_space, max_memory)
     if eig_pick is None:
         eig_pick = lambda w, v: 0
     #e0_hist = []
@@ -38,7 +37,6 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
 
     heff = numpy.zeros((max_cycle+1,max_cycle+1), dtype=x0.dtype)
     ovlp = numpy.zeros((max_cycle+1,max_cycle+1), dtype=x0.dtype)
-    v_prev = numpy.eye(1, dtype=x0.dtype)
     e = 0
     for istep in range(min(max_cycle,x0.size)):
         subspace = len(xs)
@@ -62,16 +60,6 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
         de = w[index] - e
         e = w[index]
 
-## Seldomly, precond may produce unacceptable basis, which leads eigvalue collapse.
-## clear basis and start the iteration again
-#        nprev = len(v_prev)
-#        sim = reduce(numpy.dot,(v_prev, ovlp[:nprev,:subspace+1],v[:,index]))
-#        if abs(sim) < .8:
-#            xs = _TrialXs(x0.nbytes, maxspace, max_memory)
-#            ax = _TrialXs(x0.nbytes, maxspace, max_memory)
-#            e = 0
-#            continue
-
         x0  = xt  * v[subspace,index]
         ax0 = axt * v[subspace,index]
         for i in reversed(range(subspace)):
@@ -87,9 +75,10 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
         if rr/numpy.sqrt(rr.size) < tol or abs(de) < tol or seig[0] < lindep:
             break
 
+# refresh and restart
 # floating size of subspace, prevent the new intital guess going too bad
-        if subspace < maxspace \
-           or (subspace<maxspace+2 and seig[0] > toloose):
+        if subspace < max_space \
+           or (subspace<max_space+2 and seig[0] > toloose):
             xs.append(xt)
             ax.append(axt)
         else:
@@ -97,10 +86,9 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, maxspace=12, lindep=1e-16,
 # linear dependent which seems reducing the accuracy. Removing all trial
 # vectors and restarting iteration with better initial guess gives better
 # accuracy, though more iterations are required.
-            xs = _TrialXs(x0.nbytes, maxspace, max_memory)
-            ax = _TrialXs(x0.nbytes, maxspace, max_memory)
+            xs = _TrialXs(x0.nbytes, max_space, max_memory)
+            ax = _TrialXs(x0.nbytes, max_space, max_memory)
             e = 0
-        v_prev = v[:,index]
 
         if callable(callback):
             callback(istep, xs, ax)
@@ -114,8 +102,8 @@ dsyev = davidson
 
 
 class _TrialXs(list):
-    def __init__(self, xbytes, maxspace, max_memory):
-        if xbytes*maxspace*2 > max_memory*1e6:
+    def __init__(self, xbytes, max_space, max_memory):
+        if xbytes*max_space*2 > max_memory*1e6:
             _fd = tempfile.NamedTemporaryFile()
             self.scr_h5 = h5py.File(_fd.name, 'w')
         else:
@@ -274,7 +262,7 @@ if __name__ == '__main__':
     #x0 = (u[:,0]+.01)/numpy.linalg.norm(u[:,0]+.01)
     #print(dsyev(aop, x0, precond, eig_pick=lambda w,y: numpy.argmax(abs(w)<1e-4))[0])
     #print(dsyev(aop, x0, precond)[0] - -42.8144765196)
-    e0,x0 = dsyev(aop, x0, precond, max_cycle=30, maxspace=6, max_memory=.0001)
+    e0,x0 = dsyev(aop, x0, precond, max_cycle=30, max_space=6, max_memory=.0001)
     print(e0 - e[0])
 
 ##########

@@ -7,9 +7,8 @@
 DIIS
 """
 
-import os, sys
+import sys
 import tempfile
-from functools import reduce
 import numpy
 import h5py
 from pyscf.lib import logger
@@ -21,7 +20,7 @@ BLOCK_SIZE  = int(20e6) # ~ 160/320 MB
 # GEDIIS, JCTC, 2, 835
 # C2DIIS, IJQC, 45, 31
 # SCF-EDIIS, JCP 116, 8255
-class DIIS:
+class DIIS(object):
     '''diis.space is the maximum of the allowed space
     diis.min_space is the minimal number of vectors to store before damping'''
     def __init__(self, dev=None, filename=None):
@@ -129,25 +128,25 @@ class DIIS:
         if nd < self.min_space:
             return x
 
-        G = numpy.zeros(nd+1, x.dtype)
-        G[0] = 1
+        g = numpy.zeros(nd+1, x.dtype)
+        g[0] = 1
         dt = numpy.array(self.get_err_vec(self._head-1), copy=False)
         for i in range(nd):
             tmp = 0
             for p0,p1 in prange(0, x.size, BLOCK_SIZE):
                 tmp += numpy.dot(dt[p0:p1].conj(), self.get_err_vec(i)[p0:p1])
             self._H[self._head,i+1] = tmp
-            self._H[i+1,self._head] = tmp.conj()
+            self._H[i+1,self._head] = tmp.conjugate()
         dt = None
 
         try:
-            c = numpy.linalg.solve(self._H[:nd+1,:nd+1], G)
+            c = numpy.linalg.solve(self._H[:nd+1,:nd+1], g)
         except numpy.linalg.linalg.LinAlgError:
             logger.warn(self, 'singularity in diis')
-            H = self._H[:nd+1,:nd+1].copy()
+            h = self._H[:nd+1,:nd+1].copy()
             for i in range(1,nd):
-                H[i,i] += 1e-10
-            c = numpy.linalg.solve(H, G)
+                h[i,i] += 1e-10
+            c = numpy.linalg.solve(h, g)
         logger.debug1(self, 'diis-c %s', c)
 
         self._xopt = None
@@ -165,6 +164,3 @@ def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
 
-
-if __name__ == '__main__':
-    c = DIIS()

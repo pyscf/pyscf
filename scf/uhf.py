@@ -4,14 +4,11 @@
 import time
 from functools import reduce
 import numpy
-import scipy.linalg
 import pyscf.gto
 import pyscf.lib
-import pyscf.lib.logger as log
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import chkfile
-from pyscf.scf import diis
 from pyscf.scf import _vhf
 
 
@@ -321,7 +318,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
 
     log.info(' ** Mulliken pop alpha/beta **')
     for i, s in enumerate(label):
-        log.info('pop of  %s %10.5f  / %10.5f', \
+        log.info('pop of  %s %10.5f  / %10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
 
     log.info(' ** Mulliken atomic charges  **')
@@ -391,9 +388,9 @@ class UHF(hf.SCF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        log.info(self, 'number electrons alpha = %d, beta = %d', \
-                 self.nelectron_alpha,
-                 self.mol.nelectron-self.nelectron_alpha)
+        logger.info(self, 'number electrons alpha = %d, beta = %d',
+                    self.nelectron_alpha,
+                    self.mol.nelectron-self.nelectron_alpha)
 
     def eig(self, fock, s):
         e_a, c_a = hf.SCF.eig(self, fock[0], s)
@@ -403,14 +400,14 @@ class UHF(hf.SCF):
     def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
         f = (h1e+vhf[0], h1e+vhf[1])
         if 0 <= cycle < self.diis_start_cycle-1:
-            f = (hf.damping(s1e, dm[0], f[0], self.damp_factor), \
+            f = (hf.damping(s1e, dm[0], f[0], self.damp_factor),
                  hf.damping(s1e, dm[1], f[1], self.damp_factor))
-            f = (hf.level_shift(s1e, dm[0], f[0], self.level_shift_factor), \
+            f = (hf.level_shift(s1e, dm[0], f[0], self.level_shift_factor),
                  hf.level_shift(s1e, dm[1], f[1], self.level_shift_factor))
         elif 0 <= cycle:
-            fac = self.level_shift_factor \
-                    * numpy.exp(self.diis_start_cycle-cycle-1)
-            f = (hf.level_shift(s1e, dm[0], f[0], fac), \
+            fac = (self.level_shift_factor *
+                   numpy.exp(self.diis_start_cycle-cycle-1))
+            f = (hf.level_shift(s1e, dm[0], f[0], fac),
                  hf.level_shift(s1e, dm[1], f[1], fac))
         if adiis is not None and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm, numpy.array(f))
@@ -424,20 +421,20 @@ class UHF(hf.SCF):
         mo_occ[0][:n_a] = 1
         mo_occ[1][:n_b] = 1
         if n_a < mo_energy[0].size:
-            log.info(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
-                     n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
+            logger.info(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+                        n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
         else:
-            log.info(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,', \
-                     n_a, mo_energy[0][n_a-1])
-        log.debug(self, '  mo_energy = %s', mo_energy[0])
-        log.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
-                 n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
-        log.debug(self, '  mo_energy = %s', mo_energy[1])
+            logger.info(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,',
+                        n_a, mo_energy[0][n_a-1])
+        logger.debug(self, '  mo_energy = %s', mo_energy[0])
+        logger.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+                    n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
+        logger.debug(self, '  mo_energy = %s', mo_energy[1])
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                                       mo_coeff[1][:,mo_occ[1]>0]),
                                       self.get_ovlp())
-            log.debug(self, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+            logger.debug(self, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
         return mo_occ
 
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
@@ -464,10 +461,9 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_1e(mol)
 
-    def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None: mol = self.mol
-        if chkfile is None: chkfile = self.chkfile
-        return init_guess_by_chkfile(mol, chkfile, project=project)
+    def init_guess_by_chkfile(self, chk=None, project=True):
+        if chk is None: chk = self.chkfile
+        return init_guess_by_chkfile(self.mol, chk, project=project)
 
     def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
@@ -479,7 +475,7 @@ class UHF(hf.SCF):
             vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
         else:
             vj, vk = hf.get_jk(mol, dm, hermi, self.opt)
-        log.timer(self, 'vj and vk', *t0)
+        logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -516,7 +512,7 @@ class UHF(hf.SCF):
 #            self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
 #            self.mo_energy = (self.mo_energy[1], self.mo_energy[0])
 
-        log.timer(self, 'SCF', *cput0)
+        logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)
@@ -551,9 +547,9 @@ class UHF_DIIS(pyscf.lib.diis.DIIS):
     def update(self, s, d, f):
         sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
         sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
-        errvec = numpy.hstack((sdf_a.T.conj() - sdf_a, \
+        errvec = numpy.hstack((sdf_a.T.conj() - sdf_a,
                                sdf_b.T.conj() - sdf_b))
-        log.debug1(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
+        logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         pyscf.lib.diis.DIIS.push_err_vec(self, errvec)
         return pyscf.lib.diis.DIIS.update(self, f)
 

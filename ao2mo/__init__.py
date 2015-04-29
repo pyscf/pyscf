@@ -47,7 +47,6 @@ def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    from pyscf.ao2mo import incore
     from pyscf.ao2mo import addons
     mol = gto.M(
         verbose = 0,

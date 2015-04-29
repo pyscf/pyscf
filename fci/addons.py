@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import sys
 import numpy
 from pyscf.fci import cistring
 
@@ -12,8 +11,8 @@ def large_ci(ci, norb, nelec, tol=.1):
     idx = numpy.argwhere(abs(ci) > tol)
     res = []
     for i,j in idx:
-        res.append((ci[i,j], \
-                    bin(cistring.addr2str(norb, neleca, i)), \
+        res.append((ci[i,j],
+                    bin(cistring.addr2str(norb, neleca, i)),
                     bin(cistring.addr2str(norb, nelecb, j))))
     return res
 
@@ -121,7 +120,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     of the reordered orbitals and original orbitals is  new = old[idx]).  Eg.
     orbidx = [2,0,1] to map   old orbital  a b c  ->   new orbital  c a b
     old-strings   0b011, 0b101, 0b110
-              ==  (1,2), (1,3), (2,3) 
+              ==  (1,2), (1,3), (2,3)
     orb-strings   (3,1), (3,2), (1,2)
               ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
     then argsort to translate the string representation to the address
@@ -133,8 +132,8 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
         neleca, nelecb = nelec
     if orbidxb is None:
         orbidxb = orbidxa
-    guide_stringsa = fci.cistring.gen_strings4orblist(orbidxa, neleca)
-    guide_stringsb = fci.cistring.gen_strings4orblist(orbidxb, nelecb)
+    guide_stringsa = cistring.gen_strings4orblist(orbidxa, neleca)
+    guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
     old_det_idxa = numpy.argsort(guide_stringsa)
     old_det_idxb = numpy.argsort(guide_stringsb)
     return ci[old_det_idxa[:,None],old_det_idxb]

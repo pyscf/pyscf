@@ -200,7 +200,7 @@ if __name__ == '__main__':
     pt.max_memory = 1
     print('direct', numpy.allclose(pt.kernel()[1], t2ref0))
 
-    rdm1 = make_rdm1_without_t2(pt, mf.mo_energy, mf.mo_coeff)
+    rdm1 = make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
     print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
                                             mf.mo_coeff.T)), rdm1))
 

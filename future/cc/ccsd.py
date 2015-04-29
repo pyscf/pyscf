@@ -71,7 +71,6 @@ def update_amps(cc, t1, t2, eris, blksize=1):
     nvir = nmo - nocc
     nov = nocc*nvir
     fock = eris.fock
-    t2shape = t2.shape
     t1new = numpy.zeros_like(t1)
     t2new = numpy.zeros_like(t2)
 
@@ -371,7 +370,7 @@ def energy(cc, t1, t2, eris, blksize=1):
     return e
 
 
-class CC(object):
+class CCSD(object):
     def __init__(self, mf):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
@@ -546,7 +545,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             return t1, t2
         return fupdate_
 
-CCSD = CC
+CC = CCSD
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
@@ -710,7 +709,7 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf() # -76.0267656731
 
-    mcc = CC(rhf)
+    mcc = CCSD(rhf)
     eris = mcc.ao2mo()
     emp2, t1, t2 = mcc.init_amps(eris)
     print(abs(t2).sum() - 4.9556571218177)

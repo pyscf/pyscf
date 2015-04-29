@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
 import _ctypes
 import time
@@ -305,7 +304,7 @@ def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
     return nelec, excsum, vmat
 
 
-class _NumInt:
+class _NumInt(object):
     def __init__(self):
         self.non0tab = None
 
@@ -353,7 +352,6 @@ def prange(start, end, step):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import lib
     from pyscf import dft
 
     mol = gto.M(

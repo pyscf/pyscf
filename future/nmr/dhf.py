@@ -12,10 +12,10 @@ import time
 from functools import reduce
 import numpy
 import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
-import pyscf.lib.logger as log
 import pyscf.lib.parameters as param
-import pyscf.scf as scf
+from pyscf import scf
 from pyscf.scf import _vhf
 from pyscf.nmr import hf
 
@@ -95,7 +95,6 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
     n2c = n4c // 2
     c = mol.light_speed
 
-    sg = mol.intor('cint1e_govlp', 3)
     tg = mol.intor('cint1e_spgsp', 3)
     vg = mol.intor('cint1e_gnuc', 3)
     wg = mol.intor('cint1e_spgnucsp', 3)
@@ -228,22 +227,23 @@ class NMR(hf.NMR):
 
     def dump_flags(self):
         hf.NMR.dump_flags(self)
-        log.info(self, 'MB basis = %s', self.mb)
+        logger.info(self, 'MB basis = %s', self.mb)
 
     def shielding(self, mo1=None):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         facppm = 1e6/param.LIGHTSPEED**2
         t0 = (time.clock(), time.time())
         msc_dia = self.dia() * facppm
-        t0 = log.timer(self, 'h11', *t0)
+        t0 = logger.timer(self, 'h11', *t0)
         msc_para, para_pos, para_neg, para_occ = \
                 [x*facppm for x in self.para_(mo10=mo1)]
         e11 = msc_para + msc_dia
 
-        log.timer(self, 'NMR shielding', *cput0)
+        logger.timer(self, 'NMR shielding', *cput0)
         if self.verbose > param.VERBOSE_QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
                 hf._write(self.stdout, e11[i], \

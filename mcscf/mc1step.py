@@ -3,17 +3,17 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import time
 import copy
-import tempfile
 from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib
+import pyscf.gto
 import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
-from pyscf.mcscf import aug_hessian
 from pyscf.mcscf import mc_ao2mo
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
@@ -162,8 +162,6 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
     else:
         log = logger.Logger(casscf.stdout, casscf.verbose)
 
-    ncas = casscf.ncas
-    nelecas = casscf.nelecas
     nmo = mo.shape[1]
 
     t2m = (time.clock(), time.time())
@@ -172,7 +170,10 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
     log.debug('    |g|=%4.3g', norm_gorb)
     t3m = log.timer('gen h_op', *t2m)
 
-    precond = lambda x, e: x/(h_diag-(e-casscf.ah_level_shift))
+    def precond(x, e):
+        hdiagd = h_diag-(e-casscf.ah_level_shift)
+        hdiagd[abs(hdiagd)<1e-8] = 1e-8
+        return x/hdiagd
 
 # Dynamically increase the number of micro cycles when approach convergence?
     if norm_gorb < 0.01:
@@ -216,7 +217,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
                                xs=xsinit, ax=axinit, verbose=log,
                                tol=casscf.ah_conv_tol,
                                max_cycle=casscf.ah_max_cycle,
-                               max_stepsize=1.5, lindep=casscf.ah_lindep):
+                               lindep=casscf.ah_lindep):
             if (ah_conv or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
                 ((abs(w-wlast) < ah_start_tol) and
                  (numpy.linalg.norm(residual) < casscf.ah_start_tol) and
@@ -294,8 +295,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
 
 
 def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
-                max_cycle=10, max_stepsize=.6, lindep=1e-14,
-                verbose=logger.WARN):
+                max_cycle=10, lindep=1e-14, verbose=logger.WARN):
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -309,7 +309,6 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         ax.append(h_op(x0))
         nx = 1
 
-    w0 = 0
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1))
     ovlp = numpy.eye(max_cycle+nx+1)
     conv = False
@@ -338,7 +337,6 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
             conv = True
             break
         yield conv, istep, w_t, xtrial, hx, dx, s0
-        w0 = w_t
         x0 = precond(dx, w_t)
         xs.append(x0)
         ax.append(h_op(x0))
@@ -380,7 +378,6 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
     ncore = casscf.ncore
-    nmo = mo.shape[1]
     nocc = ncore + ncas
     mocc = mo[:,:nocc]
 
@@ -419,7 +416,6 @@ def hessian_oc(casscf, mo, dci, fcivec, eris):
     ncore = casscf.ncore
     nmo = mo.shape[1]
     nocc = ncore + ncas
-    mocc = mo[:,:nocc]
 
     tdm1, tdm2 = casscf.fcisolver.trans_rdm12(dci, fcivec, ncas, nelecas)
     tdm1 = (tdm1 + tdm1.T)
@@ -446,7 +442,7 @@ def hessian_oc(casscf, mo, dci, fcivec, eris):
     return casscf.pack_uniq_var(g - g.T)
 
 
-def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
+def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
            ci0=None, verbose=None,
            dump_chk=True, dump_chk_ci=False,
            **cikwargs):
@@ -460,9 +456,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
 
     mo = mo_coeff
     nmo = mo.shape[1]
-    ncore = casscf.ncore
     ncas = casscf.ncas
-    nocc = ncore + ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
@@ -475,6 +469,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     imicro = 0
     norm_gorb = norm_gci = 0
     casdm1_old = 0
+    elast = e_tot
 
     if casscf.diis:
         adiis = pyscf.lib.diis.DIIS(casscf)
@@ -517,7 +512,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
             if (norm_t < toloose or norm_gci < toloose or
                 (norm_gorb < toloose and norm_ddm < toloose) or
-                (imicro >= casscf.max_cycle_micro)):
+                (imicro >= micro)):
                 break
 
         totmicro += imicro
@@ -575,7 +570,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     return casci.cas_natorb(mc, mo_coeff, ci, eris, verbose)
 
-def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
+def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=logger.NOTE):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -730,7 +725,7 @@ class CASSCF(casci.CASCI):
 #   the J/K evaluation required by AH.  When the system symmetry is higher
 #   than the one given by mol.symmetry/mol.groupname,  symmetry broken might
 #   occur due to this approximation,  e.g.  with the default ah_start_tol,
-#   C2 (16o, 8e) under D2h symmetry might break the degeneracy between 
+#   C2 (16o, 8e) under D2h symmetry might break the degeneracy between
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-9
@@ -788,13 +783,14 @@ class CASSCF(casci.CASCI):
         if micro is None:
             micro = self.max_cycle_micro
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                kernel(self, mo_coeff, \
-                       tol=self.conv_tol, macro=macro, micro=micro, \
+                kernel(self, mo_coeff,
+                       tol=self.conv_tol, macro=macro, micro=micro,
                        ci0=ci0, verbose=self.verbose, **cikwargs)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
@@ -816,8 +812,8 @@ class CASSCF(casci.CASCI):
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc2step.kernel(self, mo_coeff, \
-                               tol=self.conv_tol, macro=macro, micro=micro, \
+                mc2step.kernel(self, mo_coeff,
+                               tol=self.conv_tol, macro=macro, micro=micro,
                                ci0=ci0, verbose=self.verbose, **cikwargs)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
@@ -841,7 +837,6 @@ class CASSCF(casci.CASCI):
             else:
                 idx[self.frozen] = False
             v = []
-            m1 = mat[ncore:nocc,:ncore]
             v.append(mat[ncore:nocc,:ncore][idx[ncore:nocc,None]&idx[:ncore]])
             v.append(mat[nocc:,:nocc][idx[nocc:,None]&idx[:nocc]])
         else:
@@ -1089,7 +1084,7 @@ class CASSCF(casci.CASCI):
                     for j in range(i+1):
                         heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                         seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-                w, v = scipy.linalg.eigh(heff, seff)
+                e, v = scipy.linalg.eigh(heff, seff)
                 ci1 = 0
                 for i in range(nd):
                     ci1 += xs[i] * v[i,0]

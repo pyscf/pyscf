@@ -5,11 +5,11 @@
 
 import time
 import copy
-import tempfile
 from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
+import pyscf.gto
 import pyscf.scf
 from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step
@@ -71,9 +71,10 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     hdm2[0] = hdm2apap
 
     tmp = casdm2s[1].transpose(1,2,0,3) + casdm2s[1].transpose(0,2,1,3)
-    hdm2apAP = numpy.einsum('uvtw,tpqw->upvq', tmp, eris.apPA) # (jp|RK) *[e(jq,SK) + e(jq,LS)] => qSpR
+    # (jp|RK) *[e(jq,SK) + e(jq,LS)] => qSpR
+    hdm2apAP = numpy.einsum('uvtw,tpqw->upvq', tmp, eris.apPA)
     # (JP|rk) *[e(sk,JQ) + e(ls,JQ)] => QsPr
-    hdm2APap = hdm2apAP.transpose(2,3,0,1)
+    #hdm2APap = hdm2apAP.transpose(2,3,0,1)
 
     tmp = casdm2s[2].transpose(1,2,0,3) + casdm2s[2].transpose(0,2,1,3)
     hdm2APAP = numpy.einsum('uvtw,tpqw->upvq', tmp, eris.APPA)
@@ -209,8 +210,6 @@ def rotate_orb_ah(casscf, mo, casdm1s, casdm2s, eris, x0=0, verbose=None):
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
 
-    ncas = casscf.ncas
-    nelecas = casscf.nelecas
     nmo = mo[0].shape[1]
 
     t2m = (time.clock(), time.time())
@@ -300,9 +299,7 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
     ncas = casscf.ncas
     nelecas = casscf.nelecas
     ncore = casscf.ncore
-    nmo = mo[0].shape[1]
     nocc = (ncas + ncore[0], ncas + ncore[1])
-    mocc = (mo[0][:,:nocc[0]], mo[1][:,:nocc[1]])
 
     hcore = casscf.get_hcore()
     h1effa = reduce(numpy.dot, (rmat[0][:,:nocc[0]].T, mo[0].T, hcore[0], mo[0][:,:nocc[0]]))
@@ -372,7 +369,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
-        return e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_ci, fcivec, mo
     conv = False
     toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
@@ -502,7 +499,6 @@ class CASSCF(casci_uhf.CASCI):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** UHF-CASSCF flags ********')
-        ncore = self.ncore
         nmo = self.mo_coeff[0].shape[1]
         nvir_alpha = nmo - self.ncore[0] - self.ncas
         nvir_beta  = nmo - self.ncore[1]  - self.ncas
@@ -541,7 +537,8 @@ class CASSCF(casci_uhf.CASCI):
         if micro is None:
             micro = self.max_cycle_micro
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 
@@ -688,7 +685,6 @@ class CASSCF(casci_uhf.CASCI):
         ncas = self.ncas
         ncore = self.ncore
         nocc = (ncas + ncore[0], ncas + ncore[1])
-        nmo = mo[0].shape[1]
         ra, rb = r
         vhf3ca = numpy.einsum('srqp,sr->qp', eris.Icvcv, ra[:ncore[0],ncore[0]:])
         vhf3ca += numpy.einsum('qpsr,sr->qp', eris.cvCV, rb[:ncore[1],ncore[1]:]) * 2

@@ -147,7 +147,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     dm = dhf.init_guess_by_chkfile(mol, chkfile_name, project)
-    n2c = dm.shape[0] / 2
+    n2c = dm.shape[0] // 2
     return dm[:n2c,:n2c].copy()
 
 def get_init_guess(mol, key='minao'):
@@ -175,10 +175,11 @@ class UHF(hf.SCF):
         logger.info(self, 'X equation %s', self.xequation)
 
     def build_(self, mol=None):
-        if mol is None: mol = self.mol
-        mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            mole.check_sanity(self, self._keys, self.stdout)
 
         if self.direct_scf:
+            if mol is None: mol = self.mol
             def set_vkscreen(opt, name):
                 opt._this.contents.r_vkscreen = \
                     ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
@@ -197,10 +198,9 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None: mol = self.mol
-        if chkfile is None: chkfile = self.chkfile
-        return init_guess_by_chkfile(mol, chkfile, project=project)
+    def init_guess_by_chkfile(self, chk=None, project=True):
+        if chk is None: chk = self.chkfile
+        return init_guess_by_chkfile(self.mol, chk, project=project)
 
     def eig(self, h, s):
         e, c = scipy.linalg.eigh(h, s)
@@ -219,10 +219,9 @@ class UHF(hf.SCF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        n2c = mo_energy.size
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:mol.nelectron] = 1
-        if mol.nelectron < mo_energy.size:
+        if mol.nelectron < len(mo_energy):
             logger.info(self, 'nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
@@ -275,7 +274,7 @@ def _uncontract_mol(mol, xuncontract=False):
         else: #isinstance(xuncontract, (tuple, list)):
             ia = mol.bas_atom(ib)
             uncontract_me = ((mol.atom_pure_symbol(ia) in xuncontract) or
-                             (mol.atom_symbol(ia) in unxuncontract))
+                             (mol.atom_symbol(ia) in xuncontract))
 
         if uncontract_me:
             np = mol._bas[ib,mole.NPRIM_OF]

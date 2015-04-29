@@ -3,16 +3,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
-import copy
-import tempfile
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
+import pyscf.gto
 import pyscf.scf
 import pyscf.symm
-from pyscf.mcscf import casci
-from pyscf.mcscf import aug_hessian
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
 from pyscf import ao2mo
@@ -38,7 +34,8 @@ class CASSCF(mc1step.CASSCF):
         if micro is None:
             micro = self.max_cycle_micro
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 

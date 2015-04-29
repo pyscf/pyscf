@@ -7,8 +7,8 @@ import tempfile
 import time
 from functools import reduce
 import numpy
-import h5py
 import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf import fci
@@ -19,7 +19,6 @@ from pyscf.mcscf import addons
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     ncore_a, ncore_b = ncore
     nocc_a = ncore_a + ncas
-    nocc_b = ncore_b + ncas
     mo_core = (mo_coeff[0][:,:ncore_a]      , mo_coeff[1][:,:ncore_a]      )
     mo_cas  = (mo_coeff[0][:,ncore_a:nocc_a], mo_coeff[1][:,ncore_a:nocc_a])
     mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_a:]       )
@@ -157,9 +156,9 @@ class CASCI(object):
         return self._scf.get_veff(mol, dm)
 
     def get_h2cas(self, mo_coeff=None):
-        return self.ao2mo(self, mo_coeff)
+        return self.ao2mo(mo_coeff)
     def get_h2eff(self, mo_coeff=None):
-        return self.ao2mo(self, mo_coeff)
+        return self.ao2mo(mo_coeff)
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
@@ -176,10 +175,8 @@ class CASCI(object):
             eri_ab = eri[:na,:na,na:,na:].copy()
             eri_bb = eri[na:,na:,na:,na:].copy()
         else:
-            ftmp = tempfile.NamedTemporaryFile()
             moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
-                                                  verbose=self.verbose)
+            eri = pyscf.ao2mo.full(self.mol, mo_coeff, verbose=self.verbose)
             na = mo_coeff[0].shape[1]
             nab = moab.shape[1]
             eri = pyscf.ao2mo.restore(1, eri, nab)
@@ -206,7 +203,8 @@ class CASCI(object):
         if ci0 is None:
             ci0 = self.ci
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 

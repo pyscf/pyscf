@@ -14,11 +14,12 @@
 #              MO integrals
 #
 
-import os
+import sys
 import ctypes
 import numpy
 import scipy.linalg
 import pyscf.lib
+import pyscf.gto
 import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import rdm
@@ -149,7 +150,6 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
         neleca, nelecb = nelec
     h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
-    na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     addr = numpy.argsort(hdiag)[:np]
     addra = addr // nb
@@ -306,9 +306,9 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
             return pw, pv
         elif len(addr) == na*nb:
             if fci.nroots > 1:
-                ci0 = numpy.empty((nroots,na*nb))
-                ci0[:,addr] = pv[:,:nroots].T
-                return pw[:nroots], ci0.reshape(nroots,na,nb)
+                ci0 = numpy.empty((fci.nroots,na*nb))
+                ci0[:,addr] = pv[:,:fci.nroots].T
+                return pw[:fci.nroots], ci0.reshape(fci.nroots,na,nb)
             elif abs(pw[0]-pw[1]) > 1e-12:
                 ci0 = numpy.empty((na*nb))
                 ci0[addr] = pv[:,0]
@@ -337,6 +337,7 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
         #h0e0 = h0 - numpy.eye(len(addr))*(e0-level_shift)
         h0e0inv = numpy.dot(pspaceci/(pspaceig-(e0-level_shift)), pspaceci.T)
         hdiaginv = 1/(hdiag - (e0-level_shift))
+        hdiaginv[abs(hdiaginv)>1e8] = 1e8
         h0x0 = x0 * hdiaginv
         #h0x0[addr] = numpy.linalg.solve(h0e0, x0[addr])
         h0x0[addr] = numpy.dot(h0e0inv, x0[addr])
@@ -353,13 +354,21 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
-    return lambda x, e, *args: x/(hdiag-(e-level_shift))
+    def precond(x, e, *args):
+        hdiagd = hdiag-(e-level_shift)
+        hdiagd[abs(hdiagd)<1e-8] = 1e-8
+        return x/hdiagd
+    return precond
 
 
 class FCISolver(object):
-    def __init__(self, mol):
-        self.mol = mol
-        self.verbose = 0
+    def __init__(self, mol=None):
+        if mol is None:
+            self.stdout = sys.stdout
+            self.verbose = pyscf.lib.logger.NOTE
+        else:
+            self.stdout = mol.stdout
+            self.verbose = mol.verbose
         self.max_cycle = 50
         self.max_space = 12
         self.conv_tol = 1e-9
@@ -377,9 +386,8 @@ class FCISolver(object):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = pyscf.lib.logger.Logger(self.mol.stdout, verbose)
+        if verbose is None: verbose = self.verbose
+        log = pyscf.lib.logger.Logger(self.stdout, verbose)
         log.info('******** CI flags ********')
         log.info('fci module = %s', self.__module__)
         log.info('max. cycles = %d', self.max_cycle)
@@ -408,10 +416,14 @@ class FCISolver(object):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0, precond, **kwargs):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
-                                  self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, verbose=self.verbose,
-                                  **kwargs)
+        opts = {'tol': self.conv_tol,
+                'max_cycle': self.max_cycle,
+                'max_space': self.max_space,
+                'lindep': self.lindep,
+                'max_memory': self.max_memory,
+                'verbose': self.verbose}
+        opts.update(kwargs)
+        return pyscf.lib.davidson(op, x0, precond, **opts)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
@@ -420,7 +432,8 @@ class FCISolver(object):
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        self.mol.check_sanity(self)
+        if self.verbose > pyscf.lib.logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, **kwargs)
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
@@ -428,29 +441,34 @@ class FCISolver(object):
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
-    def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
-    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12s(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return make_rdm12s(fcivec, norb, nelec, link_index, reorder)
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
-    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
+
+    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return trans_rdm12s(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
+                     reorder=True):
+        return trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
 
-    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
+                    reorder=True):
+        return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
 
 if __name__ == '__main__':

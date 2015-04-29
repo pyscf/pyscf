@@ -12,11 +12,11 @@
 #              MO integrals
 #
 
-import os
+import sys
 import ctypes
 import numpy
-import scipy.linalg
 import pyscf.lib
+import pyscf.gto
 import pyscf.symm
 import pyscf.ao2mo
 from pyscf.fci import cistring
@@ -153,7 +153,8 @@ class FCISolver(direct_spin0.FCISolver):
                                                 self.level_shift)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        self.mol.check_sanity(self)
+        if self.verbose > pyscf.lib.logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
         e, ci = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
                                         **kwargs)
 # when norb is small, ci is obtained by exactly diagonalization. It can happen
@@ -167,28 +168,30 @@ class FCISolver(direct_spin0.FCISolver):
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
-    def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return direct_spin0.make_rdm1s(fcivec, norb, nelec, link_index)
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return direct_spin0.make_rdm1(fcivec, norb, nelec, link_index)
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin0.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return direct_spin0.make_rdm12(fcivec, norb, nelec, link_index,
+                                       reorder)
 
-    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return direct_spin0.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return direct_spin0.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin0.trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
+                    reorder=True):
+        return direct_spin0.trans_rdm12(cibra, ciket, norb, nelec, link_index,
+                                        reorder)
 
 
 
 if __name__ == '__main__':
-    import time
     from functools import reduce
     from pyscf import gto
     from pyscf import scf

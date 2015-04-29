@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys
+import sys
 import ctypes
 import _ctypes
 import time
@@ -14,7 +14,6 @@ from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
-from pyscf.scf import hf
 
 # least memory requirements:
 # nmo  ncore  ncas  outcore  incore
@@ -104,7 +103,6 @@ def light_e1_outcore(mol, mo, ncore, ncas,
 
     mo = numpy.asarray(mo, order='F')
     nao, nmo = mo.shape
-    nij_pair = ncas * nmo
     pashape = (0, nmo, ncore, ncas)
     if approx == 1:
         jc = numpy.empty((nao,nao,ncore))
@@ -123,7 +121,7 @@ def light_e1_outcore(mol, mo, ncore, ncas,
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     log.debug('mem cache %.8g MB', mem_words*8/1e6)
     ti0 = log.timer('Initializing light_e1_outcore', *time0)
-    klaoblks = nstep = len(shranges)
+    nstep = len(shranges)
     paapp = 0
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
@@ -295,7 +293,6 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
 
 def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo.shape[1]
-    nocc = ncore + ncas
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
@@ -339,7 +336,6 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 # approx = 3: aapp, appa
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore', approx=0):
-        mol = casscf.mol
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         nmo = mo.shape[1]

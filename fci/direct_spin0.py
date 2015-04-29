@@ -12,11 +12,12 @@
 #              MO integrals
 #
 
-import os
+import sys
 import ctypes
 import numpy
 import scipy.linalg
 import pyscf.lib
+import pyscf.gto
 import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import rdm
@@ -151,7 +152,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown), __name__))
-    return kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0, **kwargs)
+    return kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
@@ -165,6 +166,7 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
                          norb, nelec, link_index)
     return (rdm1, rdm1)
 
+# Chemist notation
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     #dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_spin0', fcivec, fcivec,
     #                          norb, nelec, link_index, 1)
@@ -234,9 +236,9 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
             return pw, pv
         elif len(addr) == na*na:
             if fci.nroots > 1:
-                ci0 = numpy.empty((nroots,na*na))
-                ci0[:,addr] = pv[:,:nroots].T
-                return pw[:nroots], ci0.reshape(nroots,na,na)
+                ci0 = numpy.empty((fci.nroots,na*na))
+                ci0[:,addr] = pv[:,:fci.nroots].T
+                return pw[:fci.nroots], ci0.reshape(fci.nroots,na,na)
             elif abs(pw[0]-pw[1]) > 1e-12:
                 ci0 = numpy.empty((na*na))
                 ci0[addr] = pv[:,0]
@@ -291,22 +293,29 @@ class FCISolver(direct_spin1.FCISolver):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0, precond, **kwargs):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
-                                  self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, verbose=self.verbose,
-                                  **kwargs)
+        opts = {'tol': self.conv_tol,
+                'max_cycle': self.max_cycle,
+                'max_space': self.max_space,
+                'lindep': self.lindep,
+                'max_memory': self.max_memory,
+                'verbose': self.verbose}
+        opts.update(kwargs)
+        return pyscf.lib.davidson(op, x0, precond, **opts)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                                 self.level_shift)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        self.mol.check_sanity(self)
+        if self.verbose > pyscf.lib.logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
         e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, **kwargs)
 # when norb is small, ci is obtained by exactly diagonalization. It can happen
 # that the ground state is triplet (ci = -ci.T), symmetrize the coefficients
 # will lead to ci = 0
-#        ci = pyscf.lib.transpose_sum(ci, inplace=True) * .5
+        ci = pyscf.lib.transpose_sum(ci, inplace=True) * .5
+        if numpy.linalg.norm(ci) < .9:
+            raise RuntimeError("Ground state might be triplet.  Run again with davidson_only=True")
         return e, ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
@@ -314,23 +323,27 @@ class FCISolver(direct_spin1.FCISolver):
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
-    def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
-    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
+
+    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
+                    reorder=True):
+        return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
 
 

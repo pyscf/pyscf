@@ -7,13 +7,10 @@
 DIIS
 """
 
-import os
-import tempfile
 from functools import reduce
 import numpy
-import h5py
 import pyscf.lib.diis
-import pyscf.lib.logger as log
+from pyscf.lib import logger
 
 
 # J. Mol. Struct. 114, 31-34
@@ -27,7 +24,7 @@ class DIIS(pyscf.lib.diis.DIIS):
     def update(self, s, d, f):
         sdf = reduce(numpy.dot, (s,d,f))
         errvec = sdf.T.conj() - sdf
-        log.debug1(self, 'diis-norm(errvec) = %g', numpy.linalg.norm(errvec))
+        logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         return pyscf.lib.diis.DIIS.update(self, f, xerr=errvec)
 
-SCF_DIIS = DIIS
+SCFDIIS = SCF_DIIS = DIIS

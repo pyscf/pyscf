@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import ctypes
 import _ctypes
 from functools import reduce
@@ -198,7 +197,7 @@ if __name__ == '__main__':
 
     mol = gto.Mole()
     mol.verbose = 0
-    mol.output = None#"out_h2o"
+    mol.output = None
     mol.atom = [
         ['H', ( 1.,-1.    , 0.   )],
         ['H', ( 0.,-1.    ,-1.   )],

@@ -7,7 +7,6 @@ import time
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
-import pyscf.scf
 from pyscf.mcscf import mc1step_uhf
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
@@ -27,7 +26,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
-        return e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
     toloose = casscf.conv_tol_grad

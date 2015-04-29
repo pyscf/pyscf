@@ -10,7 +10,6 @@ import time
 import tempfile
 from functools import reduce
 import numpy
-import scipy.linalg
 import h5py
 import pyscf.lib
 from pyscf.lib import logger
@@ -19,7 +18,6 @@ from pyscf import mcscf
 from pyscf import ao2mo
 from pyscf import scf
 from pyscf.ao2mo import _ao2mo
-from pyscf.mcscf import mc_ao2mo
 
 libmc = pyscf.lib.load_library('libmcscf')
 
@@ -35,7 +33,7 @@ NUMERICAL_ZERO = 1e-14
 
 def make_a16(h1e, h2e, dms, civec, norb, nelec, link_index=None):
     dm3 = dms['3']
-    dm4 = dms['4']
+    #dm4 = dms['4']
     if 'f3ca' in dms and 'f3ac' in dms:
         f3ca = dms['f3ca']
         f3ac = dms['f3ac']
@@ -83,7 +81,7 @@ def make_a16(h1e, h2e, dms, civec, norb, nelec, link_index=None):
 def make_a22(h1e, h2e, dms, civec, norb, nelec, link_index=None):
     dm2 = dms['2']
     dm3 = dms['3']
-    dm4 = dms['4']
+    #dm4 = dms['4']
     if 'f3ca' in dms and 'f3ac' in dms:
         f3ca = dms['f3ca']
         f3ac = dms['f3ac']
@@ -140,7 +138,6 @@ def make_a22(h1e, h2e, dms, civec, norb, nelec, link_index=None):
 
 
 def make_a17(h1e,h2e,dm2,dm3):
-    norb = h1e.shape[0]
     h1e = h1e - numpy.einsum('mjjn->mn',h2e)
 
     a17 = -numpy.einsum('pi,cabi->abcp',h1e,dm2)\
@@ -211,7 +208,6 @@ def make_a3(h1e,h2e,dm1,dm2,hdm1):
     return a3
 
 def make_k27(h1e,h2e,dm1,dm2):
-    delta = numpy.eye(dm2.shape[0])
     k27 = -numpy.einsum('ai,pi->pa',h1e,dm1)\
          -numpy.einsum('iajk,pkij->pa',h2e,dm2)\
          +numpy.einsum('iaji,pj->pa',h2e,dm1)
@@ -282,7 +278,7 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
     dm1 = dms['1']
     dm2 = dms['2']
     dm3 = dms['3']
-    dm4 = dms['4']
+    #dm4 = dms['4']
 
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
@@ -314,16 +310,7 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
         +  numpy.einsum('ipqr,rpqa,ia->i',h2e_v,dm2,h1e_v)*2.0\
         +  numpy.einsum('ip,pa,ia->i',h1e_v,dm1,h1e_v)
 
-    mo_ener = orbe[mc.ncore+mc.ncas:]
-    norm_t = 0.0
-    ener_t = 0.0
-    for i in xrange(norm.shape[0]):
-      if norm[i] < NUMERICAL_ZERO:
-        continue
-      else:
-        norm_t += norm[i]
-        ener_t -= norm[i]/(ener[i]/norm[i] + mo_ener[i])
-    return norm_t, ener_t
+    return _norm_to_energy(norm, ener, orbe[mc.ncore+mc.ncas:])
 
 def Si(mc, orbe, dms, eris=None, verbose=None):
     #Subspace S_i^{(1)}
@@ -331,7 +318,7 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
     dm1 = dms['1']
     dm2 = dms['2']
     dm3 = dms['3']
-    dm4 = dms['4']
+    #dm4 = dms['4']
 
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
@@ -535,7 +522,6 @@ def Sir(mc,orbe, dms, eris, verbose=None):
         h2e_v2 = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_cas,mo_core],compact=False)
         h2e_v2 = h2e_v2.reshape(mo_virt.shape[1],mc.ncas,mc.ncas,mc.ncore).transpose(0,2,1,3)
         core_dm = numpy.dot(mo_core,mo_core.T)*2
-        corevhf = mc.get_veff(mc.mol, core_dm)
     else:
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
@@ -609,9 +595,6 @@ def sc_nevpt(mc, verbose=None):
     dms['f3ac'] = f3ac
     time1 = log.timer('eri-4pdm contraction', *time1)
 
-    fock =(eris['h1eff']
-         + numpy.einsum('ij,ijpq->pq', dm1, eris['aapp'])
-         - numpy.einsum('ij,ipqj->pq', dm1, eris['appa']) * .5)
     fake_eris = lambda: None
     fake_eris.__dict__.update(eris.items())
     orbe = mc.get_fock(eris=fake_eris).diagonal()
@@ -690,6 +673,7 @@ def _extract_orbs(mc, mo_coeff):
     mo_vir = mo_coeff[:,nocc:]
     return mo_core, mo_cas, mo_vir
 
+
 def _norm_to_energy(norm, h, diff):
     idx = abs(norm) > NUMERICAL_ZERO
     ener_t = -(norm[idx] / (diff[idx] + h[idx]/norm[idx])).sum()
@@ -734,7 +718,6 @@ def trans_e1_incore(mc, mo):
     nav = nmo - ncore
     eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo[:,ncore:]),
                                       compact=False)
-    nao_pair = eri1.shape[1]
     load_buf = lambda r0,r1: eri1[r0*nav:r1*nav]
     aapp, appa, apcv, cvcv = _trans(mo, ncore, ncas, load_buf)
     return aapp, appa, apcv, cvcv
@@ -834,11 +817,7 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
 
 
 if __name__ == '__main__':
-    from functools import reduce
     from pyscf import gto
-    from pyscf import scf
-    from pyscf import ao2mo
-    from pyscf import mcscf
 
     mol = gto.Mole()
     mol.verbose = 0

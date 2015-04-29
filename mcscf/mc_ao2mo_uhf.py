@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys
+import sys
 import ctypes
 import time
 import tempfile
@@ -11,7 +11,6 @@ import pyscf.lib.numpy_helper
 from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf.ao2mo import _ao2mo
-from pyscf.mcscf import mc_ao2mo
 
 libmcscf = pyscf.lib.load_library('libmcscf')
 
@@ -29,8 +28,6 @@ libmcscf = pyscf.lib.load_library('libmcscf')
 def trans_e1_incore(eri_ao, mo, ncore, ncas):
     nmo = mo[0].shape[1]
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
-    c_nmo = ctypes.c_int(nmo)
 
     erib = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[1][:,:nocc[1]],mo[1]),
                                       compact=False)
@@ -74,7 +71,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
-    def load_buf(bfn_id):
+    def load_bufa(bfn_id):
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('between load_buf', *tuple(time1))
         buf = numpy.empty((nmo,nao_pair))
@@ -91,11 +88,11 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
-            _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf,
+            _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_bufa,
                          ao_loc)
     time0 = log.timer('trans_AAPP', *time0)
     jC_PP, jC_pp, kC_PP, ICVCV = \
-            _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf,
+            _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_bufa,
                          ao_loc)[:4]
     time0 = log.timer('trans_CVCV', *time0)
     tmp = None
@@ -109,7 +106,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
-    def load_buf(bfn_id):
+    def load_bufb(bfn_id):
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('between load_buf', *tuple(time1))
         buf = numpy.empty((nmo,nao_pair))
@@ -125,10 +122,10 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
     time0 = log.timer('halfe1-alpha', *time0)
     time1 = [time.clock(), time.time()]
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
-            _trans_aapp_(mo, ncore, ncas, load_buf, ao_loc)
+            _trans_aapp_(mo, ncore, ncas, load_bufb, ao_loc)
     time0 = log.timer('trans_aapp', *time0)
     jc_pp, jc_PP, kc_pp, Icvcv, cvCV = \
-            _trans_cvcv_(mo, ncore, ncas, load_buf, ao_loc)
+            _trans_cvcv_(mo, ncore, ncas, load_bufb, ao_loc)
     time0 = log.timer('trans_cvcv', *time0)
     fswap.close()
 
@@ -180,7 +177,6 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
 
 def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
-    nocc = (ncore[0] + ncas, ncore[1] + ncas)
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
@@ -228,7 +224,6 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore'):
-        mol = casscf.mol
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         nmo = mo[0].shape[1]
@@ -272,7 +267,6 @@ def _mem_usage(ncore, ncas, nmo):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    from pyscf import ao2mo
     from pyscf.mcscf import mc1step_uhf
 
     mol = gto.Mole()

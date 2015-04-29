@@ -2,11 +2,10 @@
 
 from functools import reduce
 import numpy
-import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
 import pyscf.fci
-from pyscf.tools.mo_mapping import mo_1to1map
+
 
 def sort_mo(casscf, mo_coeff, caslst, base=1):
     '''Pick orbitals for CAS space
@@ -111,7 +110,6 @@ def project_init_guess(casscf, init_mo):
             print('E(%2.1f) = %.12f' % (b, mc.kernel(mo)[0]))
             init_mo = mc.mo_coeff
     '''
-    from pyscf import scf
     from pyscf import lo
 
     def project(mfmo, init_mo, ncore, s):
@@ -314,7 +312,6 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     S^2 = 3.9831589, 2S+1 = 4.1149284
     '''
     from pyscf import scf
-    from pyscf import fci
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ovlp is None: ovlp = casscf._scf.get_ovlp()
@@ -324,11 +321,11 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     if isinstance(ncore, (int, numpy.integer)):
         nocc = ncore + ncas
         mocas = mo_coeff[:,ncore:nocc]
-        return fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        return pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
     else:
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
-        sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        sscas = pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
         mocore = (mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
         sscore = scf.uhf.spin_square(mocore, ovlp)
         logger.debug(casscf, 'S^2 of core %f, S^2 of cas %f', sscore[0], sscas[0])

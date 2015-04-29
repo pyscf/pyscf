@@ -263,7 +263,7 @@ class KnowValues(unittest.TestCase):
 
         vj0, vk0 = scf._vhf.incore(rhf._eri, dm1, 1)
         vj1, vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs8',
-                         'CVHFnreri_ji_s2kl', 'CVHFnreri_jk_s2il')
+                         'CVHFnrs8_ji_s2kl', 'CVHFnrs8_jk_s2il')
         vj1 = lib.hermi_triu(vj1, 1)
         vk1 = lib.hermi_triu(vk1, 1)
         self.assertTrue(numpy.allclose(vj0,vj1))

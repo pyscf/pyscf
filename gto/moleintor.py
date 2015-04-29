@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import numpy
 import ctypes
 import _ctypes
@@ -15,7 +14,7 @@ _cint.CINTcgto_spheric.restype = ctypes.c_int
 _cint.CINTcgto_spinor.restype = ctypes.c_int
 
 def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
-    '''One electron integral generator.
+    r'''One electron integral generator.
 
     Args:
         intor_name : str
@@ -187,7 +186,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         return mat
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
-    '''For given 2, 3 or 4 shells, interface for libcint to get 1e, 2e,
+    r'''For given 2, 3 or 4 shells, interface for libcint to get 1e, 2e,
     2-center-2e or 3-center-2e integrals
 
     Args:

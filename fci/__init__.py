@@ -59,7 +59,6 @@ def FCI(mol, mo, singlet=True):
             if eri is None: eri = self.eri
             if norb is None: norb = mo.shape[1]
             if nelec is None: nelec = mol.nelectron
-            mol.check_sanity(self)
             self.eci, self.ci = \
                     cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0, **kwargs)
             return self.eci, self.ci

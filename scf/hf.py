@@ -3,21 +3,22 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os, sys
+'''
+Hartree-Fock
+'''
+
+import sys
 import tempfile
-import ctypes
 import time
 from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.gto
 import pyscf.lib
-import pyscf.lib.logger as log
 from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import diis
 from pyscf.scf import _vhf
-
 
 
 def kernel(mf, conv_tol=1e-10, dump_chk=True, dm0=None, callback=None,
@@ -26,8 +27,8 @@ def kernel(mf, conv_tol=1e-10, dump_chk=True, dm0=None, callback=None,
 
     Args:
         mf : an instance of SCF class
-            To hold the options to control SCF.  Besides the control parameters,
-            one can modify the mf function members to change the behavior of SCF.
+            To hold the flags to control SCF.  Besides the control parameters,
+            one can modify its function members to change the behavior of SCF.
             The member functions which are called in kernel are
 
             | mf.get_init_guess
@@ -73,8 +74,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     cond = numpy.linalg.cond(s1e)
     if cond*1e-17 > conv_tol:
-        log.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
-                 'SCF may be inaccurate and hard to converge.', cond)
+        logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
+                    'SCF may be inaccurate and hard to converge.', cond)
 
     if mf.DIIS:
         adiis = mf.DIIS(mf)
@@ -84,7 +85,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     vhf = mf.get_veff(mol, dm)
     hf_energy = mf.energy_tot(dm, h1e, vhf)
-    log.info(mf, 'init E=%.15g', hf_energy)
+    logger.info(mf, 'init E=%.15g', hf_energy)
 
     if dump_chk:
         # dump mol after reading initialized DM
@@ -92,7 +93,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     scf_conv = False
     cycle = 0
-    cput1 = log.timer(mf, 'initialize scf', *cput0)
+    cput1 = logger.timer(mf, 'initialize scf', *cput0)
     while not scf_conv and cycle < max(1, mf.max_cycle):
         dm_last = dm
         last_hf_e = hf_energy
@@ -104,11 +105,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         vhf = mf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
-        log.info(mf, 'cycle= %d E=%.15g, delta_E= %g', \
-                 cycle+1, hf_energy, hf_energy-last_hf_e)
+        logger.info(mf, 'cycle= %d E=%.15g, delta_E= %g',
+                    cycle+1, hf_energy, hf_energy-last_hf_e)
 
-        if abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_tol \
-           and mf.check_dm_conv(dm, dm_last, conv_tol):
+        if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_tol
+            and mf.check_dm_conv(dm, dm_last, conv_tol)):
             scf_conv = True
 
 #TODO        if callback is not None:
@@ -119,12 +120,13 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 #TODO                traceback.print_exc(file=sys.stderr)
         if dump_chk:
             mf.dump_chk(hf_energy, mo_energy, mo_coeff, mo_occ)
-        cput1 = log.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
+        cput1 = logger.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
-    log.timer(mf, 'scf_cycle', *cput0)
+    logger.timer(mf, 'scf_cycle', *cput0)
 
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
+
 
 def energy_elec(mf, dm, h1e=None, vhf=None):
     r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
@@ -133,7 +135,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     ... math::
 
         E = \sum_{ij}h_{ij} \gamma_{ji}
-          + \frac{1}{2} \sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl \rangle
+          + \frac{1}{2}\sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl\rangle
 
     Args:
         mf : an instance of SCF class
@@ -164,15 +166,15 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
     e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
-    log.debug1(mf, 'E_coul = %.15g', e_coul)
+    logger.debug1(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
+
 
 def energy_tot(mf, dm, h1e=None, vhf=None):
     r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
     See :func:`scf.hf.energy_elec` for the electron part
     '''
     return energy_elec(mf, h1e, vhf, dm)[0] + mf.mol.energy_nuc()
-
 
 
 def get_hcore(mol):
@@ -190,10 +192,12 @@ def get_hcore(mol):
       + mol.intor_symmetric('cint1e_nuc_sph')
     return h
 
+
 def get_ovlp(mol):
     '''Overlap matrix
     '''
     return mol.intor_symmetric('cint1e_ovlp_sph')
+
 
 def init_guess_by_minao(mol):
     '''Generate initial guess density matrix based on ANO basis, then project
@@ -228,7 +232,7 @@ def init_guess_by_minao(mol):
                 basis_new.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
         return occ, basis_new
 
-    atmlst = set([pyscf.gto.mole._rm_digit(pyscf.gto.mole._symbol(k)) \
+    atmlst = set([pyscf.gto.mole._rm_digit(pyscf.gto.mole._symbol(k))
                   for k in mol._basis.keys()])
     basis = {}
     occdic = {}
@@ -246,11 +250,12 @@ def init_guess_by_minao(mol):
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(mol.atom, basis, [])
     c = addons.project_mo_nr2nr(pmol, 1, mol)
 
-    dm = numpy.dot(c*occ,c.T)
+    dm = numpy.dot(c*occ, c.T)
 # normalize eletron number
 #    s = mol.intor_symmetric('cint1e_ovlp_sph')
 #    dm *= mol.nelectron / (dm*s).sum()
     return dm
+
 
 def init_guess_by_1e(mol):
     '''Generate initial guess density matrix from core hamiltonian
@@ -260,6 +265,7 @@ def init_guess_by_1e(mol):
     '''
     mf = RHF(mol)
     return mf.init_guess_by_1e(mol)
+
 
 def init_guess_by_atom(mol):
     '''Generate initial guess density matrix from superposition of atomic HF
@@ -284,9 +290,10 @@ def init_guess_by_atom(mol):
         dm[p0:p1,p0:p1] = numpy.dot(mo_c*mo_occ, mo_c.T.conj())
         p0 = p1
 
-    for k,v in atm_scf.items():
-        log.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
+    for k, v in atm_scf.items():
+        logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
     return dm
+
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     '''Read the HF results from checkpoint file, then project it to the
@@ -309,12 +316,13 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         if numpy.iscomplexobj(mo):
             raise RuntimeError('TODO: project DHF orbital to RHF orbital')
         dm = make_rdm1(fproj(mo), mo_occ)
-    else: #UHF
+    else:  # UHF
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
         dm = make_rdm1(fproj(mo[0]), mo_occ[0]) \
            + make_rdm1(fproj(mo[1]), mo_occ[1])
     return dm
+
 
 def get_init_guess(mol, key='minao'):
     '''Pick a init_guess method
@@ -333,6 +341,7 @@ def get_init_guess(mol, key='minao'):
         raise RuntimeError('Call pyscf.scf.hf.init_guess_by_chkfile instead')
     else:
         return init_guess_by_minao(mol)
+
 
 # eigenvalue of d is 1
 def level_shift(s, d, f, factor):
@@ -357,8 +366,9 @@ def level_shift(s, d, f, factor):
     if factor < 1e-3:
         return f
     else:
-        dm_vir = s - reduce(numpy.dot, (s,d,s))
+        dm_vir = s - reduce(numpy.dot, (s, d, s))
         return f + dm_vir * factor
+
 
 def damping(s, d, f, factor):
     if factor < 1e-3:
@@ -367,10 +377,11 @@ def damping(s, d, f, factor):
         #dm_vir = s - reduce(numpy.dot, (s,d,s))
         #sinv = numpy.linalg.inv(s)
         #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
-        dm_vir = numpy.eye(s.shape[0])-numpy.dot(s,d)
+        dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
         f0 = reduce(numpy.dot, (dm_vir, f, d, s))
         f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
         return f - f0
+
 
 # full density matrix for RHF
 def make_rdm1(mo_coeff, mo_occ):
@@ -384,6 +395,7 @@ def make_rdm1(mo_coeff, mo_occ):
     '''
     mocc = mo_coeff[:,mo_occ>0]
     return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.T.conj())
+
 
 ################################################
 # for general DM
@@ -433,6 +445,7 @@ def dot_eri_dm(eri, dm, hermi=0):
         vk = numpy.array([v[1] for v in vjk])
     return vj, vk
 
+
 def get_jk(mol, dm, hermi=1, vhfopt=None):
     '''Compute J, K matrices for the given density matrix
 
@@ -474,6 +487,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
                          vhfopt=vhfopt, hermi=hermi)
     return vj, vk
 
+
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     '''Hartree-Fock potential matrix for the given density matrix
 
@@ -485,8 +499,8 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
 
     Kwargs:
         dm_last : ndarray or a list of ndarrays or 0
-            The density matrix baseline.  When it is not 0, this function computes
-            the increment of HF potential w.r.t. the reference HF potential matrix.
+            The density matrix baseline.  If not 0, this function computes the
+            increment of HF potential w.r.t. the reference HF potential matrix.
         vhf_last : ndarray or a list of ndarrays or 0
             The reference HF potential matrix.
         hermi : int
@@ -522,6 +536,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     return numpy.array(vhf_last, copy=False) + vj - vk * .5
 
+
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
@@ -538,10 +553,10 @@ def analyze(mf, verbose=logger.DEBUG):
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info('occupied MO #%d energy= %.15g occ= %g', \
+            log.info('occupied MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info('virtual MO #%d energy= %.15g occ= %g', \
+            log.info('virtual MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients **')
@@ -550,8 +565,9 @@ def analyze(mf, verbose=logger.DEBUG):
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
 
+
 def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
-    '''Mulliken population analysis
+    r'''Mulliken population analysis
 
     .. math:: M_{ij} = D_{ij} S_{ji}
 
@@ -586,6 +602,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         chg[ia] = nuc - chg[ia]
         log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
+
 
 def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
                                 pre_orth_method='ANO'):
@@ -622,7 +639,7 @@ def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
     c_inv = numpy.dot(orth_coeff.T, mol.intor_symmetric('cint1e_ovlp_sph'))
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))
-    else: # ROHF
+    else:  # ROHF
         dm = reduce(numpy.dot, (c_inv, dm[0]+dm[1], c_inv.T.conj()))
 
     log.info(' ** Mulliken pop on meta-lowdin orthogonal AOs  **')
@@ -636,7 +653,7 @@ class SCF(object):
         verbose : int
             Print level.  Default value equals to :class:`Mole.verbose`
         max_memory : float or int
-            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+            Allowed memory in MB.  Default equals to :class:`Mole.max_memory`
         chkfile : str
             checkpoint file to save MOs, orbital energies etc.
         conv_tol : float
@@ -666,7 +683,7 @@ class SCF(object):
             SCF converged or not
         hf_energy : float
             Total HF energy (electronic energy plus nuclear repulsion)
-        mo_energy : 
+        mo_energy :
             Orbital energies
         mo_occ
             Orbital occupancy
@@ -684,7 +701,7 @@ class SCF(object):
     '''
     def __init__(self, mol):
         if not mol._built:
-            sys.stderr.write('Warning: mol.build() is not called in input\n' )
+            sys.stderr.write('Warning: mol.build() is not called in input\n')
             mol.build()
         self.mol = mol
         self.verbose = mol.verbose
@@ -720,33 +737,32 @@ class SCF(object):
     def build(self, mol=None):
         return self.build_(mol)
     def build_(self, mol=None):
-        if mol is None:
-            mol = self.mol
-        mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         if not self._is_mem_enough() and self.direct_scf:
+            if mol is None: mol = self.mol
             self.opt = _vhf.VHFOpt(mol, 'cint2e_sph', 'CVHFnrs8_prescreen',
                                    'CVHFsetnr_direct_scf',
                                    'CVHFsetnr_direct_scf_dm')
             self.opt.direct_scf_tol = self.direct_scf_tol
 
     def dump_flags(self):
-        log.info(self, '\n')
-        log.info(self, '******** SCF flags ********')
-        log.info(self, 'method = %s', self.__class__.__name__)
-        log.info(self, 'initial guess = %s', self.init_guess)
-        log.info(self, 'damping factor = %g', self.damp_factor)
-        log.info(self, 'level shift factor = %g', self.level_shift_factor)
-        log.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
-        log.info(self, 'DIIS space = %d', self.diis_space)
-        log.info(self, 'SCF tol = %g', self.conv_tol)
-        log.info(self, 'max. SCF cycles = %d', self.max_cycle)
-        log.info(self, 'direct_scf = %s', self.direct_scf)
+        logger.info(self, '\n')
+        logger.info(self, '******** SCF flags ********')
+        logger.info(self, 'method = %s', self.__class__.__name__)
+        logger.info(self, 'initial guess = %s', self.init_guess)
+        logger.info(self, 'damping factor = %g', self.damp_factor)
+        logger.info(self, 'level shift factor = %g', self.level_shift_factor)
+        logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
+        logger.info(self, 'DIIS space = %d', self.diis_space)
+        logger.info(self, 'SCF tol = %g', self.conv_tol)
+        logger.info(self, 'max. SCF cycles = %d', self.max_cycle)
+        logger.info(self, 'direct_scf = %s', self.direct_scf)
         if self.direct_scf:
-            log.info(self, 'direct_scf_tol = %g', \
-                     self.direct_scf_tol)
+            logger.info(self, 'direct_scf_tol = %g', self.direct_scf_tol)
         if self.chkfile:
-            log.info(self, 'chkfile to save SCF result = %s', self.chkfile)
+            logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
 
 
     def eig(self, h, s):
@@ -794,8 +810,8 @@ class SCF(object):
             f = level_shift(s1e, dm*.5, f, self.level_shift_factor)
         elif 0 <= cycle:
             # decay the level_shift_factor
-            fac = self.level_shift_factor \
-                    * numpy.exp(self.diis_start_cycle-cycle-1)
+            fac = (self.level_shift_factor *
+                   numpy.exp(self.diis_start_cycle-cycle-1))
             f = level_shift(s1e, dm*.5, f, fac)
         if adiis is not None and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm, f)
@@ -811,26 +827,27 @@ class SCF(object):
 
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
-        log.info(self, 'Initial guess from superpostion of atomic densties.')
+        logger.info(self, 'Initial guess from superpostion of atomic densties.')
         return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
-        log.info(self, 'Initial guess from hcore.')
+        logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
-        if isinstance(chkfile, pyscf.gto.Mole):
+    def init_guess_by_chkfile(self, chk=None, project=True):
+        if isinstance(chk, pyscf.gto.Mole):
             raise RuntimeError('''
-    You see this error message because of the API updates. The first argument is chkfile string.''')
-        if chkfile is None: chkfile = self.chkfile
-        return init_guess_by_chkfile(self.mol, chkfile, project=project)
-    def from_chk(self, chkfile=None, project=True):
-        return self.init_guess_by_chkfile(chkfile, project)
+    You see this error message because of the API updates.
+    The first argument is chk file name.''')
+        if chk is None: chk = self.chkfile
+        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def from_chk(self, chk=None, project=True):
+        return self.init_guess_by_chkfile(chk, project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
@@ -843,8 +860,8 @@ class SCF(object):
             try:
                 dm = self.init_guess_by_chkfile()
             except:
-                log.warn(self, 'Fail in reading %s. Use MINAO initial guess',
-                         self.chkfile)
+                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
+                            self.chkfile)
                 dm = self.init_guess_by_minao(mol)
         else:
             dm = self.init_guess_by_minao(mol)
@@ -876,11 +893,11 @@ class SCF(object):
         nocc = self.mol.nelectron // 2
         mo_occ[:nocc] = 2
         if nocc < mo_occ.size:
-            log.info(self, 'HOMO = %.12g, LUMO = %.12g,', \
-                      mo_energy[nocc-1], mo_energy[nocc])
+            logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
+                        mo_energy[nocc-1], mo_energy[nocc])
         else:
-            log.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
-        log.debug(self, '  mo_energy = %s', mo_energy)
+            logger.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
+        logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
     # full density matrix for RHF
@@ -902,8 +919,8 @@ class SCF(object):
         dm_last = numpy.array(dm_last)
         delta_dm = abs(dm-dm_last).sum()
         dm_change = delta_dm/abs(dm_last).sum()
-        log.info(self, '          sum(delta_dm)=%g (~ %g%%)\n', \
-                 delta_dm, dm_change*100)
+        logger.info(self, '          sum(delta_dm)=%g (~ %g%%)\n',
+                    delta_dm, dm_change*100)
         return dm_change < conv_tol*1e2
 
     def kernel(self, dm0=None):
@@ -934,20 +951,21 @@ class SCF(object):
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, dm0=dm0)
 
-        log.timer(self, 'SCF', *cput0)
+        logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)
         return self.hf_energy
 
     def get_jk(self, mol=None, dm=None, hermi=1):
-        '''Compute J, K matrices for the given density matrix.  See :func:`scf.hf.get_jk`
+        '''Compute J, K matrices for the given density matrix.
+        See :func:`scf.hf.get_jk`
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        cpu0 = (time.clock(), time.time())
         vj, vk = get_jk(mol, dm, hermi, self.opt)
-        log.timer(self, 'vj and vk', *t0)
+        logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -959,7 +977,7 @@ class SCF(object):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
             return numpy.array(vhf_last, copy=False) + vj - vk * .5
         else:
@@ -970,12 +988,12 @@ class SCF(object):
         if hf_energy is None: hf_energy = self.hf_energy
         if converged is None: converged = self.converged
         if converged:
-            log.note(self, 'converged SCF energy = %.15g',
-                     hf_energy)
+            logger.note(self, 'converged SCF energy = %.15g',
+                        hf_energy)
         else:
-            log.note(self, 'SCF not converge.')
-            log.note(self, 'SCF energy = %.15g after %d cycles',
-                     hf_energy, self.max_cycle)
+            logger.note(self, 'SCF not converge.')
+            logger.note(self, 'SCF energy = %.15g after %d cycles',
+                        hf_energy, self.max_cycle)
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
@@ -1002,8 +1020,8 @@ class SCF(object):
 
 class HF1e(SCF):
     def scf(self, *args):
-        log.info(self, '\n')
-        log.info(self, '******** 1 electron system ********')
+        logger.info(self, '\n')
+        logger.info(self, '******** 1 electron system ********')
         self.converged = True
         h1e = self.get_hcore(self.mol)
         s1e = self.get_ovlp(self.mol)
@@ -1016,6 +1034,7 @@ class HF1e(SCF):
 
 class RHF(SCF):
     __doc__ = SCF.__doc__
+
     def __init__(self, mol):
         if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
@@ -1031,14 +1050,14 @@ class RHF(SCF):
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        cpu0 = (time.clock(), time.time())
         if self._eri is not None or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
             vj, vk = get_jk(mol, dm, hermi, self.opt)
-        log.timer(self, 'vj and vk', *t0)
+        logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -1058,40 +1077,44 @@ class RHF(SCF):
 # keep mo_energy, mo_coeff, mo_occ as RHF structure
 class ROHF(RHF):
     __doc__ = SCF.__doc__
+
     def __init__(self, mol):
         SCF.__init__(self, mol)
         self._eri = None
 
     def dump_flags(self):
         SCF.dump_flags(self)
-        log.info(self, 'num. doubly occ = %d, num. singly occ = %d', \
-                 (self.mol.nelectron-self.mol.spin)//2, self.mol.spin)
+        logger.info(self, 'num. doubly occ = %d, num. singly occ = %d',
+                    (self.mol.nelectron-self.mol.spin)//2, self.mol.spin)
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
         dm = init_guess_by_minao(mol)
-        return numpy.array((dm*.5,dm*.5))
+        return numpy.array((dm*.5, dm*.5))
 
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
         dm = init_guess_by_atom(mol)
-        return numpy.array((dm*.5,dm*.5))
+        return numpy.array((dm*.5, dm*.5))
 
     def init_guess_by_1e(self, mol=None):
         if mol is None:
             mol = self.mol
-        log.info(self, 'Initial guess from hcore.')
+        logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
         mo_energy, mo_coeff = RHF.eig(self, h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, mol=None, chkfile_name=None, project=True):
+    def init_guess_by_chkfile(self, chk=None, project=True):
         from pyscf.scf import addons
-        if mol is None: mol = self.mol
-        if chkfile_name is None: chkfile_name = self.chkfile
-        chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+        if isinstance(chk, pyscf.gto.Mole):
+            raise RuntimeError('''
+    You see this error message because of the API updates.
+    The first argument is chk file name.''')
+        if chk is None: chk = self.chkfile
+        chk_mol, scf_rec = chkfile.load_scf(chk)
 
         def fproj(mo):
             if project:
@@ -1104,7 +1127,7 @@ class ROHF(RHF):
             if numpy.iscomplexobj(mo):
                 raise RuntimeError('TODO: project DHF orbital to ROHF orbital')
             dm = self.make_rdm1(fproj(mo), mo_occ)
-        else: #UHF
+        else:  # UHF
             mo = scf_rec['mo_coeff']
             mo_occ = scf_rec['mo_occ']
             dm =(make_rdm1(fproj(mo[0]), mo_occ[0]),
@@ -1122,8 +1145,6 @@ class ROHF(RHF):
         '''
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
         ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
-        nocc = ncore + nopen
         feff, fa, fb = h
         mo_energy, mo_coeff = SCF.eig(self, feff, s)
         mopen = mo_coeff[:,ncore:]
@@ -1138,11 +1159,11 @@ class ROHF(RHF):
         Ref. http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 
         ======== ======== ====== =========
-        space     closed   open   virtual 
+        space     closed   open   virtual
         ======== ======== ====== =========
-        closed      Fc      Fb     Fc     
-        open        Fb      Fc     Fa     
-        virtual     Fc      Fa     Fc     
+        closed      Fc      Fb     Fc
+        open        Fb      Fc     Fa
+        virtual     Fc      Fa     Fc
         ======== ======== ====== =========
 
         where Fc stands for the Fa + Fb
@@ -1177,8 +1198,8 @@ class ROHF(RHF):
             f = level_shift(s1e, dm[0], f, self.level_shift_factor)
         elif 0 <= cycle:
             # decay the level_shift_factor
-            fac = self.level_shift_factor \
-                    * numpy.exp(self.diis_start_cycle-cycle-1)
+            fac = (self.level_shift_factor *
+                   numpy.exp(self.diis_start_cycle-cycle-1))
             f = level_shift(s1e, dm[0], f, fac)
         if adiis is not None and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm[0], f)
@@ -1196,19 +1217,19 @@ class ROHF(RHF):
         nocc = ncore + nopen
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = 1
-        if nocc < mo_energy.size:
-            log.info(self, 'HOMO = %.12g, LUMO = %.12g,', \
-                     mo_energy[nocc-1], mo_energy[nocc])
+        if nocc < len(mo_energy):
+            logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
+                        mo_energy[nocc-1], mo_energy[nocc])
             if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                log.warn(self.mol, '!! HOMO %.12g == LUMO %.12g', \
-                         mo_energy[nocc-1], mo_energy[nocc])
+                logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
+                            mo_energy[nocc-1], mo_energy[nocc])
         else:
-            log.info(self, 'HOMO = %.12g, no LUMO,', mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g, no LUMO,', mo_energy[nocc-1])
         if nopen > 0:
             for i in range(ncore, nocc):
-                log.debug(self, 'singly occupied orbital energy = %.12g', \
-                          mo_energy[i])
-        log.debug(self, '  mo_energy = %s', mo_energy)
+                logger.debug(self, 'singly occupied orbital energy = %.12g',
+                             mo_energy[i])
+        logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
@@ -1224,7 +1245,7 @@ class ROHF(RHF):
         import pyscf.scf.uhf
         if dm is None: dm = self.make_rdm1()
         ee, ecoul = pyscf.scf.uhf.energy_elec(self, dm, h1e, vhf)
-        log.debug1(self, 'E_coul = %.15g', ecoul)
+        logger.debug1(self, 'E_coul = %.15g', ecoul)
         return ee, ecoul
 
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
@@ -1236,7 +1257,7 @@ class ROHF(RHF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            dm = numpy.array((dm*.5,dm*.5))
+            dm = numpy.array((dm*.5, dm*.5))
         nset = len(dm) // 2
         if self.direct_scf:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
@@ -1248,7 +1269,7 @@ class ROHF(RHF):
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset) \
                 + numpy.array(vhf_last, copy=False)
         else:
-            dm = numpy.vstack((dm[nset:],dm[:nset]-dm[nset:]))
+            dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
             vj, vk = self.get_jk(mol, dm, hermi)
             vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
             vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
@@ -1259,9 +1280,9 @@ class ROHF(RHF):
 if __name__ == '__main__':
     mol = pyscf.gto.Mole()
     mol.verbose = 5
-    mol.output = None#'out_hf'
+    mol.output = None
 
-    mol.atom = [['He', (0.,0.,0.)], ]
+    mol.atom = [['He', (0, 0, 0)], ]
     mol.basis = 'ccpvdz'
     mol.build()
 

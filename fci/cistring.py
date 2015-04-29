@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
 import math
 import numpy
@@ -101,7 +100,7 @@ def reform_linkstr_index(link_index):
             link_new[k,j] = (ai,str1,sign,0)
     return link_new
 
-# p^+ q|0> where p > q, link_index [pq, *, str1, sign] 
+# p^+ q|0> where p > q, link_index [pq, *, str1, sign]
 def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)

@@ -39,6 +39,7 @@ CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 def current_memory():
     if 0:
+        import resource
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
     elif sys.platform.startswith('linux'):
         try:
@@ -53,7 +54,7 @@ def current_memory():
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
     arr = (ctypes.c_int * npm.size)(*npm)
-    # cannot return LP_c_double class, 
+    # cannot return LP_c_double class,
     #Xreturn npm.ctypes.data_as(c_int_p), which destructs npm before return
     return arr
 def f_int_arr(m):
@@ -89,7 +90,7 @@ def remove_dup(test, lst, from_end=False):
         return seen
 
 def remove_if(test, lst):
-    return list(filter(lambda x: not test(x), lst))
+    return [x for x in lst if not test(x)]
 
 def find_if(test, lst):
     for l in lst:
@@ -110,7 +111,7 @@ def tril_equal_pace(n, base=0, npace=0, minimal=1):
         m1 = m2
 
 
-class ctypes_stdout:
+class ctypes_stdout(object):
     '''make c-printf output to string, but keep python print in /dev/pts/1.
     Note it cannot correctly handle c-printf with GCC, don't know why.
     Usage:
@@ -144,7 +145,7 @@ class ctypes_stdout:
             #f.seek(0)
             return open(self.ftmp, 'r').read()
 
-class capture_stdout:
+class capture_stdout(object):
     '''redirect all stdout (c printf & python print) into a string
     Usage:
         with capture_stdout() as stdout:
@@ -175,7 +176,7 @@ class capture_stdout:
             #f.seek(0)
             return open(self.ftmp, 'r').read()
 
-class quite_run:
+class quite_run(object):
     '''output nothing
 
     Examples

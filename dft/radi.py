@@ -34,7 +34,7 @@ BRAGG_RADII = numpy.array((
 
 # from Gerald Knizia's CtDftGrid, which is based on
 #       http://en.wikipedia.org/wiki/Covalent_radius
-# and 
+# and
 #       Beatriz Cordero, Veronica Gomez, Ana E. Platero-Prats, Marc Reves,
 #       Jorge Echeverria, Eduard Cremades, Flavia Barragan and Santiago
 #       Alvarez.  Covalent radii revisited. Dalton Trans., 2008, 2832-2838,
@@ -69,18 +69,18 @@ def becke(n, **kwargs):
     raise RuntimeError('Not implemented')
 
 # scale rad and rad_weight if necessary
-# gauss-legendre 
+# gauss-legendre
 def delley(n, **kwargs):
     '''Delley'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     r_outer = 12.
     step = 1. / (n+1)
-    RFac = r_outer / numpy.log(1 - (n*step)**2)
+    rfac = r_outer / numpy.log(1 - (n*step)**2)
     for i in range(1, n+1):
-        xi = RFac * numpy.log(1-(i*step)**2);
+        xi = rfac * numpy.log(1-(i*step)**2)
         r[i-1] = xi
-        dri = RFac * (-2.0*i*(step)**2) / ((1-(i*step)**2)) # d xi / dr
+        dri = rfac * (-2.0*i*(step)**2) / ((1-(i*step)**2)) # d xi / dr
         dr[i-1] = dri
     w = r*r * dr * 4 * numpy.pi
     return r, w
@@ -95,11 +95,10 @@ def mura_knowles(n, charge=None, **kwargs):
         far = 5.2
     else:
         far = 7
-    step = 1. / n
     for i in range(n):
         x = (i+.5) / n
         r[i] = -far * numpy.log(1-x**3)
-        dr[i] = far * 3*x*x/((1-x**3)*n);
+        dr[i] = far * 3*x*x/((1-x**3)*n)
     w = r*r * dr * 4 * numpy.pi
     return r, w
 
@@ -147,8 +146,6 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
 
-    atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
-    atm_dist = _inter_distance(mol)
     rad = numpy.array([atomic_radii[mol.atom_charge(ia)-1] \
                        for ia in range(mol.natm)])
     rr = rad.reshape(-1,1)/rad
@@ -163,8 +160,6 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
-    atm_dist = _inter_distance(mol)
     rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)-1] \
                                   for ia in range(mol.natm)]))
     rr = rad.reshape(-1,1)/rad
@@ -175,7 +170,6 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 
 def _inter_distance(mol):
 # see gto.mole.energy_nuc
-    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atm))])
     coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atm))])
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()

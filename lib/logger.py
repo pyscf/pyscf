@@ -30,7 +30,7 @@ CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
 
-class Logger:
+class Logger(object):
     def __init__(self, stdout, verbose):
         self.stdout = stdout
         self.verbose = verbose
@@ -66,9 +66,6 @@ class Logger:
 
     def log(self, msg, *args):
         log(self, msg, *args)
-
-    def stdout(self, msg, *args):
-        stdout(self, msg, *args)
 
     def timer(self, msg, cpu0=None, wall0=None):
         if cpu0:

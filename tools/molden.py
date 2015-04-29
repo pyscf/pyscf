@@ -20,7 +20,6 @@ def header(mol, fout):
         coord = mol.atom_coord(ia)
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
     fout.write('[GTO]\n')
-    lbl = mol.spheric_labels()
     for ia in range(mol.natm):
         fout.write('%d 0\n' %(ia+1))
         for b in mol._basis[mol.atom_symbol(ia)]:
@@ -53,8 +52,7 @@ def order_ao_index(mol):
     off = 0
     for ib in range(mol.nbas):
         l = mol.bas_angular(ib)
-        nc = mol.bas_nctr(ib)
-        for n in range(nc):
+        for n in range(mol.bas_nctr(ib)):
             if l == 2:
                 idx.extend([off+2,off+3,off+1,off+4,off+0])
             elif l == 3:
@@ -98,7 +96,7 @@ def dump_scf(mf, filename):
     import pyscf.scf
     with open(filename, 'w') as f:
         header(mf.mol, f)
-        if isinstance(mf, pyscf.scf.hf.UHF) or 'UHF' == mf.__class__.__name__:
+        if isinstance(mf, pyscf.scf.uhf.UHF) or 'UHF' == mf.__class__.__name__:
             orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha', \
                           ene=mf.mo_energy[0], occ=mf.mo_occ[0])
             orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta', \

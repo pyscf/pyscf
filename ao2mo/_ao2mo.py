@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import ctypes
 import _ctypes
 import numpy
@@ -201,7 +200,6 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
-    nao = mo_coeff.shape[0]
     i0, icount, j0, jcount = shape
     ij_count = icount * jcount
 

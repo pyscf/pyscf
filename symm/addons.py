@@ -54,7 +54,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo):
     pyscf.lib.logger.debug(mol, 'irreps of each MO %s', str(orbsym))
     return orbsym
 
-def symmetrize_orb(mol, irrep_name, symm_orb, mo):
+def symmetrize_orb(mol, symm_orb, mo):
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     mo_s = numpy.dot(mo.T, s)
     mo1 = 0

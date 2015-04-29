@@ -3,11 +3,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
-import time
-import numpy
-import h5py
 import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
 import pyscf.symm
 import pyscf.scf
@@ -31,7 +28,8 @@ class CASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 

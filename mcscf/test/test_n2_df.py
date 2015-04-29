@@ -116,34 +116,6 @@ class KnowValues(unittest.TestCase):
 #        emc = mc.mc2step()[0]
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 
-    def test_mc1step_natorb(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
-        mc.natorb = True
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-    def test_mc2step_natorb(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
-        mc.natorb = True
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-#    def test_mc1step_uhf_natorb(self):
-#        mf = scf.UHF(mol)
-#        mf.scf()
-#        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
-#        mc.natorb = True
-#        emc = mc.mc1step()[0]
-#        self.assertAlmostEqual(emc, -108.913786407955, 7)
-#
-#    def test_mc2step_uhf_natorb(self):
-#        mf = scf.UHF(mol)
-#        mf.scf()
-#        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
-#        mc.natorb = True
-#        emc = mc.mc2step()[0]
-#        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")
     unittest.main()

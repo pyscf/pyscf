@@ -9,10 +9,9 @@ import gc
 import time
 import math
 import itertools
-from functools import reduce
 import numpy
 import pyscf.lib.parameters as param
-import pyscf.lib.logger as log
+from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
@@ -730,7 +729,8 @@ def search_ao_nr(mol, atm_id, l, m, atmshell):
                 return ibf + (atmshell-l1-1)*(l1*2+1) + (l1+m)
         ibf += (l1*2+1) * nc
 
-#TODO:def search_ao_r(mol, atm_id, l, j, m, atmshell):
+def search_ao_r(mol, atm_id, l, j, m, atmshell):
+    raise RuntimeError('TODO')
 #TODO:    ibf = 0
 #TODO:    for ib in range(len(mol._bas)):
 #TODO:        ia = mol.bas_atom(ib)
@@ -753,6 +753,33 @@ def is_same_mol(mol1, mol2):
            or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
             return False
     return True
+
+
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    '''Check misinput of class attributes, check whether a class method is
+    overwritten.  It does not check the attributes which are prefixed with
+    "_".
+
+    Args:
+        obj : this object should have attribute _keys to store all the
+        name of the attributes of the object
+    '''
+    objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
+    keysub = set(objkeys) - set(keysref)
+    if keysub:
+        keyin = keysub.intersection(dir(obj.__class__))
+        if keyin:
+            msg = ('overwrite keys %s of %s\n' %
+                   (' '.join(keyin), str(obj.__class__)))
+            sys.stderr.write(msg)
+            stdout.write(msg)
+        keydiff = keysub - set(dir(obj.__class__))
+        if keydiff:
+            msg = ('%s has no attributes %s\n' %
+                   (str(obj.__class__), ' '.join(keydiff)))
+            sys.stderr.write(msg)
+            stdout.write(msg)
+
 
 # for _atm, _bas, _env
 CHARGE_OF  = 0
@@ -877,7 +904,7 @@ class Mole(object):
 
     '''
     def __init__(self, **kwargs):
-        self.verbose = log.NOTE
+        self.verbose = logger.NOTE
         self.output = None
         self.max_memory = param.MEMORY_MAX
 
@@ -919,28 +946,17 @@ class Mole(object):
         self.__dict__.update(kwargs)
 
     def check_sanity(self, obj):
-        '''Check misinput of a class attribute due to typos, check whether a
-        class method is overwritten.  It does not check the attributes which
-        are prefixed with "_".
+        '''Check misinput of class attributes, check whether a class method is
+        overwritten.  It does not check the attributes which are prefixed with
+        "_".
 
         Args:
             obj : this object should have attribute _keys to store all the
             name of the attributes of the object
         '''
         if hasattr(obj, '_keys'):
-            if self.verbose > log.QUIET:
-                objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
-                keysub = set(objkeys) - set(obj._keys)
-                if keysub:
-                    keyin = keysub.intersection(dir(obj.__class__))
-                    if keyin:
-                        log.warn(self, 'overwrite keys %s of %s',
-                                 ' '.join(keyin), str(obj.__class__))
-
-                    keydiff = keysub - set(dir(obj.__class__))
-                    if keydiff:
-                        sys.stderr.write('%s has no attributes %s\n' %
-                                         (str(obj.__class__), ' '.join(keydiff)))
+            if self.verbose > logger.QUIET:
+                check_sanity(obj, obj._keys, self.stdout)
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -959,7 +975,6 @@ class Mole(object):
     def unpack_(self, moldic):
         self.__dict__.update(moldic)
         return self
-
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
@@ -1054,7 +1069,8 @@ class Mole(object):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self.atom, self._basis)
                     sys.stderr.write('Warn: unable to identify input symmetry %s,'
-                                     'use %s instead.\n' (self.symmetry, self.topgroup))
+                                     'use %s instead.\n' %
+                                     (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
             else:
                 self.topgroup, orig, axes = \
@@ -1089,12 +1105,12 @@ class Mole(object):
             self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir)
                                for ir in self.irrep_id]
 
-        if dump_input and not self._built and self.verbose > log.NOTICE:
+        if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
-        log.debug2(self, 'arg.atm = %s', str(self._atm))
-        log.debug2(self, 'arg.bas = %s', str(self._bas))
-        log.debug2(self, 'arg.env = %s', str(self._env))
+        logger.debug2(self, 'arg.atm = %s', str(self._atm))
+        logger.debug2(self, 'arg.bas = %s', str(self._bas))
+        logger.debug2(self, 'arg.env = %s', str(self._env))
 
         self._built = True
         #return self._atm, self._bas, self._env
@@ -1139,8 +1155,8 @@ class Mole(object):
                 self.stdout.write('INFO: ******************** input file end ********************\n')
                 self.stdout.write('\n')
                 finput.close()
-            except:
-                log.warn(self, 'input file does not exist')
+            except IOError:
+                logger.warn(self, 'input file does not exist')
 
         self.stdout.write('System: %s\n' % str(os.uname()))
         self.stdout.write('Date: %s\n' % time.ctime())
@@ -1173,7 +1189,7 @@ class Mole(object):
                               '%s Bohr\n' \
                               % (ia+1, _symbol(atom[0]), atom[1],
                                  [x/param.BOHR for x in atom[1]]))
-        for kn, vn in self.nucmod.items():
+        for kn in self.nucmod.keys():
             if kn in self.mass:
                 mass = self.mass[kn]
             else:
@@ -1210,25 +1226,25 @@ class Mole(object):
                         self.stdout.write(' %4.12g' % c)
                     self.stdout.write('\n')
 
-        log.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
+        logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
         if self.symmetry:
             if self.topgroup == self.groupname:
-                log.info(self, 'point group symmetry = %s', self.topgroup)
+                logger.info(self, 'point group symmetry = %s', self.topgroup)
             else:
-                log.info(self, 'point group symmetry = %s, use subgroup %s',
-                         self.topgroup, self.groupname)
+                logger.info(self, 'point group symmetry = %s, use subgroup %s',
+                            self.topgroup, self.groupname)
             for ir in range(self.symm_orb.__len__()):
-                log.info(self, 'num. orbitals of irrep %s = %d', \
-                         self.irrep_name[ir], self.symm_orb[ir].shape[1])
-        log.info(self, 'number of shells = %d', self.nbas)
-        log.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
-        log.info(self, 'number of NR cGTOs = %d', self.nao_nr())
-        if self.verbose >= log.DEBUG1:
+                logger.info(self, 'num. orbitals of irrep %s = %d',
+                            self.irrep_name[ir], self.symm_orb[ir].shape[1])
+        logger.info(self, 'number of shells = %d', self.nbas)
+        logger.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
+        logger.info(self, 'number of NR cGTOs = %d', self.nao_nr())
+        if self.verbose >= logger.DEBUG1:
             for i in range(len(self._bas)):
                 exps = self.bas_exp(i)
-                log.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
+                logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
-        log.info(self, 'CPU time: %12.2f', time.clock())
+        logger.info(self, 'CPU time: %12.2f', time.clock())
 
     def set_common_origin_(self, coord):
         '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
@@ -1252,7 +1268,7 @@ class Mole(object):
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
     def set_rinv_orig_(self, coord):
-        self.rinv_origin_(coord)
+        self.set_rinv_origin_(coord)
 
 #NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):
@@ -1645,7 +1661,7 @@ class Mole(object):
         return moleintor.getints(intor, self._atm, self._bas, self._env,
                                  bras, kets, comp, 0)
 
-    def intor_by_shell(intor, shells, comp=1):
+    def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
                                           self._env, comp)
 
@@ -1711,9 +1727,9 @@ def _update_from_cmdargs_(mol):
     if mol.output is not None:
         if os.path.isfile(mol.output):
             #os.remove(mol.output)
-            if mol.verbose > log.QUIET:
+            if mol.verbose > logger.QUIET:
                 print('overwrite output file: %s' % mol.output)
         else:
-            if mol.verbose > log.QUIET:
+            if mol.verbose > logger.QUIET:
                 print('output file: %s' % mol.output)
 

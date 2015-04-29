@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import numpy
 import scipy.linalg
 from pyscf.lib import logger
@@ -183,4 +184,5 @@ if __name__ == '__main__':
     seff = numpy.eye(5)
     xs = numpy.random.random((4,20))
     seff[1:,1:] = numpy.dot(xs, xs.T)
-    print(_opt_step_as_orz_lambda(heff, seff, xs, lambda0=1, max_stepsize=.9))
+    print(_opt_step_as_orz_lambda(heff, seff, xs, avoid_singular,
+                                  lambda0=1, max_stepsize=.9))

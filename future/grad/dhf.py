@@ -9,7 +9,7 @@ Relativistic Dirac-Hartree-Fock
 
 import numpy
 import pyscf.lib
-import pyscf.lib.logger as log
+from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.grad import hf
 
@@ -25,7 +25,6 @@ def get_hcore(mol):
     n4c = n2c * 2
     c = mol.light_speed
 
-    s  = mol.intor('cint1e_ipovlp', comp=3)
     t  = mol.intor('cint1e_ipkin', comp=3)
     vn = mol.intor('cint1e_ipnuc', comp=3)
     wn = mol.intor('cint1e_ipspnucsp', comp=3)
@@ -66,22 +65,22 @@ def get_veff(mol, dm, level='SSSS'):
 def get_coulomb_hf(mol, dm, level='SSSS'):
     '''Dirac-Hartree-Fock Coulomb repulsion'''
     if level.upper() == 'LLLL':
-        log.info(mol, 'Compute Gradients: (LL|LL)')
+        logger.info(mol, 'Compute Gradients: (LL|LL)')
         vj, vk = _call_vhf1_llll(mol, dm)
 #L2SL the response of the large and small components on the large component density
 #LS2L the response of the large component on the L+S density
 #NOSS just exclude SSSS
 #TODO    elif level.upper() == 'LS2L':
-#TODO        log.info(mol, 'Compute Gradients: (LL|LL) + (SS|dLL)')
+#TODO        logger.info(mol, 'Compute Gradients: (LL|LL) + (SS|dLL)')
 #TODO        vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_ls2l_o1, mol, dm)
 #TODO    elif level.upper() == 'L2SL':
-#TODO        log.info(mol, 'Compute Gradients: (LL|LL) + (dSS|LL)')
+#TODO        logger.info(mol, 'Compute Gradients: (LL|LL) + (dSS|LL)')
 #TODO        vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_l2sl_o1, mol, dm)
 #TODO    elif level.upper() == 'NOSS':
-#TODO        log.info(mol, 'Compute Gradients: (LL|LL) + (dSS|LL) + (SS|dLL)')
+#TODO        logger.info(mol, 'Compute Gradients: (LL|LL) + (dSS|LL) + (SS|dLL)')
 #TODO        vj, vk = scf.hf.get_vj_vk(pycint.rkb_vhf_coul_grad_xss_o1, mol, dm)
     else:
-        log.info(mol, 'Compute Gradients: (LL|LL) + (SS|LL) + (SS|SS)')
+        logger.info(mol, 'Compute Gradients: (LL|LL) + (SS|LL) + (SS|SS)')
         vj, vk = _call_vhf1(mol, dm)
     return vj - vk
 
@@ -129,7 +128,6 @@ class UHF(hf.RHF):
 
 
 def _call_vhf1_llll(mol, dm):
-    c1 = .5/mol.light_speed
     n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
@@ -188,7 +186,7 @@ if __name__ == "__main__":
     print(method.scf())
     g = UHF(method)
     print(g.grad())
-#[[ 0   0                0             ]
-# [ 0  -4.27565134e-03  -1.20060029e-02]
-# [ 0   4.27565134e-03  -1.20060029e-02]]
+#[[ 0   0               -2.40120097e-02]
+# [ 0   4.27565134e-03   1.20060029e-02]
+# [ 0  -4.27565134e-03   1.20060029e-02]]
 

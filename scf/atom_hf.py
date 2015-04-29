@@ -4,9 +4,8 @@
 #
 
 import numpy
-import scipy.linalg
-import pyscf.gto as gto
-import pyscf.lib.logger as log
+from pyscf import gto
+from pyscf.lib import logger
 import pyscf.lib.parameters as param
 from pyscf.scf import hf
 
@@ -35,17 +34,17 @@ def get_atm_nrhf(mol):
 class AtomSphericAverageRHF(hf.RHF):
     def __init__(self, mol):
         self._eri = None
+        self._occ = None
         hf.SCF.__init__(self, mol)
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        log.debug(self.mol, 'occupation averaged SCF for atom  %s', \
-                  self.mol.atom_symbol(0))
+        logger.debug(self.mol, 'occupation averaged SCF for atom  %s',
+                     self.mol.atom_symbol(0))
 
     def eig(self, f, s):
         atm = self.mol
         symb = atm.atom_symbol(0)
-        nuc = gto.mole._charge(symb)
         idx_by_l = [[] for i in range(param.L_MAX)]
         i0 = 0
         for ib in range(atm.nbas):
@@ -64,7 +63,7 @@ class AtomSphericAverageRHF(hf.RHF):
         for l in range(param.L_MAX):
             if idx_by_l[l]:
                 n2occ, frac = frac_occ(symb, l)
-                log.debug1(self, 'l = %d, occ = %d + %.4g', l, n2occ, frac)
+                logger.debug1(self, 'l = %d, occ = %d + %.4g', l, n2occ, frac)
 
                 idx = numpy.array(idx_by_l[l])
                 f1 = 0
@@ -76,7 +75,7 @@ class AtomSphericAverageRHF(hf.RHF):
                 s1 *= 1./(l*2+1)
                 e, c = hf.SCF.eig(self, f1, s1)
                 for i, ei in enumerate(e):
-                    log.debug1(self, 'l = %d, e_%d = %.9g', l, i, ei)
+                    logger.debug1(self, 'l = %d, e_%d = %.9g', l, i, ei)
 
                 for m in range(l*2+1):
                     mo_e[idx] = e

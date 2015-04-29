@@ -8,14 +8,11 @@ from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib
-import pyscf.lib.logger as log
 from pyscf.lib import logger
 import pyscf.symm
-from pyscf.scf import diis
 from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
-from pyscf.scf import _vhf
 
 
 def analyze(mf, verbose=logger.DEBUG):
@@ -38,7 +35,7 @@ def analyze(mf, verbose=logger.DEBUG):
     for ir in range(nirrep):
         if (noccsa[ir]+noccsb[ir]) % 2:
             tot_sym ^= mol.irrep_id[ir]
-    if groupname in ('Dooh', 'Coov'):
+    if mol.groupname in ('Dooh', 'Coov'):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
         log.info('total symmetry = %s', \
@@ -176,8 +173,8 @@ class UHF(uhf.UHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        log.info(self, '%s with symmetry adapted basis',
-                 self.__class__.__name__)
+        logger.info(self, '%s with symmetry adapted basis',
+                    self.__class__.__name__)
         float_irname = []
         fix_na = 0
         fix_nb = 0
@@ -190,27 +187,27 @@ class UHF(uhf.UHF):
                 float_irname.append(irname)
         float_irname = set(float_irname)
         if fix_na+fix_nb > 0:
-            log.info(self, 'fix %d electrons in irreps: %s',
-                     fix_na+fix_nb, str(self.irrep_nelec.items()))
+            logger.info(self, 'fix %d electrons in irreps: %s',
+                        fix_na+fix_nb, str(self.irrep_nelec.items()))
             if ((fix_na+fix_nb > self.mol.nelectron) or
                 (fix_na>self.nelectron_alpha) or
                 (fix_nb+self.nelectron_alpha>self.mol.nelectron)):
-                log.error(self, 'electron number error in irrep_nelec %s',
-                          self.irrep_nelec.items())
+                logger.error(self, 'electron number error in irrep_nelec %s',
+                             self.irrep_nelec.items())
                 raise ValueError('irrep_nelec')
         if float_irname:
-            log.info(self, '%d free electrons in irreps %s',
-                     self.mol.nelectron-fix_na-fix_nb,
-                     ' '.join(float_irname))
+            logger.info(self, '%d free electrons in irreps %s',
+                        self.mol.nelectron-fix_na-fix_nb,
+                        ' '.join(float_irname))
         elif fix_na+fix_nb != self.mol.nelectron:
-            log.error(self, 'electron number error in irrep_nelec %d',
-                      self.irrep_nelec.items())
+            logger.error(self, 'electron number error in irrep_nelec %d',
+                         self.irrep_nelec.items())
             raise ValueError('irrep_nelec')
 
     def build_(self, mol=None):
         for irname in self.irrep_nelec.keys():
             if irname not in self.mol.irrep_name:
-                log.warn(self, '!! No irrep %s', irname)
+                logger.warn(self, '!! No irrep %s', irname)
         return uhf.UHF.build_(self, mol)
 
     def eig(self, h, s):
@@ -304,15 +301,15 @@ class UHF(uhf.UHF):
                 irlumob = irname
             p0 += nso
 
-        log.info(self, 'alpha HOMO (%s) = %.15g, LUMO (%s) = %.15g',
-                 irhomoa, ehomoa, irlumoa, elumoa)
-        log.info(self, 'beta  HOMO (%s) = %.15g, LUMO (%s) = %.15g',
-                 irhomob, ehomob, irlumob, elumob)
+        logger.info(self, 'alpha HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+                    irhomoa, ehomoa, irlumoa, elumoa)
+        logger.info(self, 'beta  HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+                    irhomob, ehomob, irlumob, elumob)
         if self.verbose >= logger.DEBUG:
             ehomo = max(ehomoa,ehomob)
             elumo = min(elumoa,elumob)
-            log.debug(self, 'alpha irrep_nelec = %s', noccsa)
-            log.debug(self, 'beta  irrep_nelec = %s', noccsb)
+            logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
+            logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
             hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo, 'alpha-')
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
         return mo_occ
@@ -326,7 +323,7 @@ class UHF(uhf.UHF):
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, dm0=dm0)
 
-        log.timer(self, 'SCF', *cput0)
+        logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
 
         ea = numpy.hstack(self.mo_energy[0])

@@ -2,8 +2,6 @@
 # $Id$
 # -*- coding: utf-8
 
-import os
-import random
 import time
 import tempfile
 import numpy
@@ -272,8 +270,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
     mem_words = max_memory * 1e6 / 8
-    iobuf_size = min(float(nkl_pair)/(nkl_pair+nao_pair)*mem_words,
-                     IOBUF_WORDS_PREFER) * 8
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
@@ -743,7 +739,6 @@ def _stand_sym_code(sym):
 
 
 if __name__ == '__main__':
-    import time
     from pyscf import scf
     from pyscf import gto
     from pyscf.ao2mo import incore

@@ -2,7 +2,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import optparse
 import pyscf.lib.logger
 

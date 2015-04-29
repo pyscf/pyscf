@@ -14,10 +14,9 @@ from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib
-import pyscf.lib.logger as log
+import pyscf.gto
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import diis
 from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
@@ -29,7 +28,6 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None):
     interaction between large and small components are added; Finally,
     converge the SCF with the small component contributions (SS|SS)
     '''
-    mol = mf.mol
     if dm0 is None:
         dm = mf.get_init_guess()
     else:
@@ -61,7 +59,7 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None):
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None):
     if coulomb_allow.upper() == 'LLLL':
-        log.info(mol, 'Coulomb integral: (LL|LL)')
+        logger.info(mol, 'Coulomb integral: (LL|LL)')
         j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj = numpy.zeros_like(dm)
@@ -70,14 +68,14 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
         vk[...,:n2c,:n2c] = k1
     elif coulomb_allow.upper() == 'SSLL' \
       or coulomb_allow.upper() == 'LLSS':
-        log.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL)')
+        logger.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL)')
         vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
         j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj[...,:n2c,:n2c] += j1
         vk[...,:n2c,:n2c] += k1
     else: # coulomb_allow == 'SSSS'
-        log.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
+        logger.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
         vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
         j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
@@ -97,7 +95,6 @@ def get_hcore(mol):
     n4c = n2c * 2
     c = mol.light_speed
 
-    s  = mol.intor_symmetric('cint1e_ovlp')
     t  = mol.intor_symmetric('cint1e_spsp') * .5
     vn = mol.intor_symmetric('cint1e_nuc')
     wn = mol.intor_symmetric('cint1e_spnucsp')
@@ -179,9 +176,9 @@ def time_reversal_matrix(mol, mat):
     tao = mol.time_reversal_map()
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
-    taoL = numpy.array([abs(x)-1 for x in tao]) # -1 to fit C-array
+    taoL = numpy.array([abs(x)-1 for x in tao]) # -1 for C-array
     idx = numpy.hstack((taoL, taoL+n2c))
-    signL = list(map(lambda x: 1 if x>0 else -1, tao))
+    signL = [(1 if x>0 else -1) for x in tao]
     sign = numpy.hstack((signL, signL))
 
     tmat = numpy.empty_like(mat)
@@ -191,10 +188,10 @@ def time_reversal_matrix(mol, mat):
     return tmat.conjugate()
 
 def analyze(mf, verbose=logger.DEBUG):
-    from pyscf.tools import dump_mat
+    #from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
-    mo_coeff = mf.mo_coeff
+    #mo_coeff = mf.mo_coeff
     log = logger.Logger(mf.stdout, verbose)
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
@@ -286,16 +283,16 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_chkfile(self, mol=None, chkfile=None, project=True):
-        if mol is None: mol = self.mol
-        if chkfile is None: chkfile = self.chkfile
-        return init_guess_by_chkfile(mol, chkfile, project=project)
+    def init_guess_by_chkfile(self, chk=None, project=True):
+        if chk is None: chk = self.chkfile
+        return init_guess_by_chkfile(self.mol, chk, project=project)
 
     def build_(self, mol=None):
-        if mol is None: mol = self.mol
-        mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         if self.direct_scf:
+            if mol is None: mol = self.mol
             def set_vkscreen(opt, name):
                 opt._this.contents.r_vkscreen = \
                     ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
@@ -320,9 +317,8 @@ class UHF(hf.SCF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        n4c = mo_energy.size
+        n4c = len(mo_energy)
         n2c = n4c // 2
-        c = mol.light_speed
         mo_occ = numpy.zeros(n2c * 2)
         if mo_energy[n2c] > -1.999 * mol.light_speed**2:
             mo_occ[n2c:n2c+mol.nelectron] = 1
@@ -332,12 +328,12 @@ class UHF(hf.SCF):
                 if e > -1.999 * mol.light_speed**2 and n < mol.nelectron:
                     mo_occ[i] = 1
                     n += 1
-        if self.verbose >= log.INFO:
-            log.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,', \
-                     n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1], \
-                     n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
-            log.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
-            log.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
+        if self.verbose >= logger.INFO:
+            logger.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,',
+                        n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1],
+                        n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
+            logger.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
+            logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
 
     # full density matrix for UHF
@@ -349,14 +345,14 @@ class UHF(hf.SCF):
 #TODO    def get_gaunt_vj_vk(self, mol, dm):
 #TODO        '''Dirac-Coulomb-Gaunt'''
 #TODO        import pyscf.lib.pycint as pycint
-#TODO        log.info(self, 'integral for Gaunt term')
+#TODO        logger.info(self, 'integral for Gaunt term')
 #TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt, mol, dm)
 #TODO        return -vj, -vk
 #TODO
 #TODO    def get_gaunt_vj_vk_screen(self, mol, dm):
 #TODO        '''Dirac-Coulomb-Gaunt'''
 #TODO        import pyscf.lib.pycint as pycint
-#TODO        log.info(self, 'integral for Gaunt term')
+#TODO        logger.info(self, 'integral for Gaunt term')
 #TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
 #TODO        return -vj, -vk
 
@@ -370,7 +366,7 @@ class UHF(hf.SCF):
                                 self.opt_llll, self.opt_ssll, self.opt_ssss)
         mol.verbose = verbose_bak
         mol.stdout  = stdout_bak
-        log.timer(self, 'vj and vk', *t0)
+        logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -405,7 +401,7 @@ class UHF(hf.SCF):
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, dm0=dm0)
 
-        log.timer(self, 'SCF', *cput0)
+        logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)
@@ -416,14 +412,14 @@ class UHF(hf.SCF):
 
 class HF1e(UHF):
     def scf(self, *args):
-        log.info(self, '\n')
-        log.info(self, '******** 1 electron system ********')
+        logger.info(self, '\n')
+        logger.info(self, '******** 1 electron system ********')
         self.converged = True
         h1e = self.get_hcore(self.mol)
         s1e = self.get_ovlp(self.mol)
         self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
         self.mo_occ = numpy.zeros_like(self.mo_energy)
-        n2c = self.mo_occ.size // 2
+        n2c = len(self.mo_occ) // 2
         self.mo_occ[n2c] = 1
         self.hf_energy = self.mo_energy[n2c] + self.mol.energy_nuc()
         return self.hf_energy
@@ -437,7 +433,7 @@ class RHF(UHF):
 
     # full density matrix for RHF
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
-        '''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
+        r'''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
         D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
         RHF average the density of spin up and spin down:
         D(RHF) = (D(UHF) + T[D(UHF)])/2
@@ -450,9 +446,8 @@ class RHF(UHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        n4c = mo_energy.size
+        n4c = len(mo_energy)
         n2c = n4c // 2
-        c = mol.light_speed
         mo_occ = numpy.zeros(n2c * 2)
         if mo_energy[n2c] > -1.999 * mol.light_speed**2:
             mo_occ[n2c:n2c+mol.nelectron] = 1
@@ -462,12 +457,12 @@ class RHF(UHF):
                 if e > -1.999 * mol.light_speed**2 and n < mol.nelectron:
                     mo_occ[i] = 1
                     n += 1
-        if self.verbose >= log.INFO:
-            log.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,', \
-                     (n2c+mol.nelectron)//2, mo_energy[n2c+mol.nelectron-1], \
-                     (n2c+mol.nelectron)//2+1, mo_energy[n2c+mol.nelectron])
-            log.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
-            log.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
+        if self.verbose >= logger.INFO:
+            logger.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,',
+                        (n2c+mol.nelectron)//2, mo_energy[n2c+mol.nelectron-1],
+                        (n2c+mol.nelectron)//2+1, mo_energy[n2c+mol.nelectron])
+            logger.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
+            logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
 
 
@@ -566,7 +561,6 @@ def _proj_dmll(mol_nr, dm_nr, mol):
 
 
 if __name__ == '__main__':
-    import pyscf.gto
     mol = pyscf.gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf'

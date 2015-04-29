@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys
+import sys
 import ctypes
 import _ctypes
 import numpy
@@ -252,10 +252,7 @@ def direct_mapdm(intor, intsymm, jkdescript,
     dotsym = _INTSYMAP[intsymm]
     fdot = _fpointer('CVHFdot_nr'+dotsym)
 
-    if isinstance(jkdescript, str):
-        descr_sym = [[jkdescript.split('->')]]
-    else:
-        descr_sym = [x.split('->') for x in jkdescript]
+    descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dm1 = (ctypes.c_void_p*(njk*n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
@@ -327,10 +324,7 @@ def direct_bindm(intor, intsymm, jkdescript,
     dotsym = _INTSYMAP[intsymm]
     fdot = _fpointer('CVHFdot_nr'+dotsym)
 
-    if isinstance(jkdescript, str):
-        descr_sym = [[jkdescript.split('->')]]
-    else:
-        descr_sym = [x.split('->') for x in jkdescript]
+    descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(n_dm))()
     dm1 = (ctypes.c_void_p*(n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
@@ -419,10 +413,7 @@ def rdirect_mapdm(intor, intsymm, jkdescript,
     fdot = _fpointer('CVHFdot_r'+dotsym)
 
     unpackas = _INTUNPACKMAP_R[intsymm]
-    if isinstance(jkdescript, str):
-        descr_sym = [[jkdescript.split('->')]]
-    else:
-        descr_sym = [x.split('->') for x in jkdescript]
+    descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dm1 = (ctypes.c_void_p*(njk*n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
@@ -489,10 +480,7 @@ def rdirect_bindm(intor, intsymm, jkdescript,
     fdot = _fpointer('CVHFdot_r'+dotsym)
 
     unpackas = _INTUNPACKMAP_R[intsymm]
-    if isinstance(jkdescript, str):
-        descr_sym = [[jkdescript.split('->')]]
-    else:
-        descr_sym = [x.split('->') for x in jkdescript]
+    descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(n_dm))()
     dm1 = (ctypes.c_void_p*(n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):

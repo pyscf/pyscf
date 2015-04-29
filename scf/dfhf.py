@@ -61,7 +61,7 @@ def density_fit_(mf, auxbasis='weigend'):
     '''
     import pyscf.scf
     def get_jk(mol, dm, hermi=1):
-        if mol is None: mol = self.mol
+        if mol is None: mol = mf.mol
         if dm is None: dm = mf.make_rdm1()
         if isinstance(mf, pyscf.scf.dhf.UHF):
             return r_get_jk_(mf, mol, dm, hermi)
@@ -230,7 +230,7 @@ def r_get_jk_(mf, mol, dms, hermi=1):
             mf._cderi = df.r_incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
                                                  aosym='s2', verbose=log)
         else:
-            assert(0)
+            raise RuntimeError('TODO')
             mf._cderi_file = tempfile.NamedTemporaryFile()
             mf._cderi = mf._cderi_file.name
             mf._cderi = df.r_outcore.cholesky_eri(mol, mf._cderi,

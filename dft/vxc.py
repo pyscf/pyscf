@@ -7,10 +7,8 @@
 XC functional, this is the interface to libxc
 '''
 
-import os
 import ctypes
 import re
-import numpy
 import pyscf.lib
 
 libdft = pyscf.lib.load_library('libdft')

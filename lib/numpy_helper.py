@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
 import numpy
 from pyscf.lib import misc
@@ -96,7 +95,7 @@ def transpose(a, inplace=False):
     arow, acol = a.shape
     if inplace:
         assert(arow == acol)
-        nrblk = (arow-1) // BLOCK_DIM + 1
+        #nrblk = (arow-1) // BLOCK_DIM + 1
         ncblk = (acol-1) // BLOCK_DIM + 1
         tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM), a.dtype)
         for j in range(ncblk):

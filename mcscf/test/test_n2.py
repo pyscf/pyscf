@@ -114,22 +114,6 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
 
-    def test_mc1step_uhf_natorb(self):
-        mf = scf.UHF(mol)
-        mf.scf()
-        mc = mcscf.CASSCF(mf, 4, 4)
-        mc.natorb = True
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-    def test_mc2step_uhf_natorb(self):
-        mf = scf.UHF(mol)
-        mf.scf()
-        mc = mcscf.CASSCF(mf, 4, 4)
-        mc.natorb = True
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
     def test_frozen1s(self):
         mc = mcscf.CASSCF(msym, 4, 4)
         mc.frozen = 3

@@ -12,7 +12,6 @@ import numpy
 import pyscf.lib
 import pyscf.lib.logger as log
 import pyscf.scf
-from pyscf.scf import _vhf
 from pyscf.dft import vxc
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
@@ -73,8 +72,7 @@ class RKS(pyscf.scf.hf.RHF):
         return vj + vx
 
     def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None:
-            h1e = mf.get_hcore()
+        if h1e is None: h1e = self.get_hcore()
         e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
         tot_e = e1 + self._ecoul + self._exc
         log.debug(self, 'Ecoul = %s  Exc = %s', self._ecoul, self._exc)

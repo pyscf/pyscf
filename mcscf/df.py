@@ -4,10 +4,7 @@
 #
 
 import time
-from functools import reduce
 import ctypes
-import _ctypes
-import tempfile
 import numpy
 import pyscf.lib
 from pyscf.ao2mo import _ao2mo

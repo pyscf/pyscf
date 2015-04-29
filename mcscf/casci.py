@@ -3,13 +3,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import h5py
 import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
 import pyscf.scf
 from pyscf import ao2mo
@@ -54,7 +53,6 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     from pyscf.tools import dump_mat
-    from pyscf.mcscf import mc_ao2mo
     from pyscf.mcscf import addons
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ci is None: ci = casscf.ci
@@ -115,7 +113,6 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
-    ncore = mc.ncore
     ncas = mc.ncas
     nelecas = mc.nelecas
 
@@ -130,6 +127,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     '''Restore natrual orbitals
     '''
     from pyscf.mcscf import mc_ao2mo
+    from pyscf.tools import dump_mat
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -162,7 +160,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
 #       CAS orbital      1  2  3
 #       natural orbital  3  1  2        <= by mo_1to1map
 #       CASorb-strings   0b011, 0b101, 0b110
-#                    ==  (1,2), (1,3), (2,3) 
+#                    ==  (1,2), (1,3), (2,3)
 #       natorb-strings   (3,1), (3,2), (1,2)
 #                    ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
 # then argsort to translate the string representation to the address
@@ -337,9 +335,9 @@ class CASCI(object):
         return vj - vk * .5
 
     def get_h2cas(self, mo_coeff=None):
-        return self.ao2mo(self, mo_coeff)
+        return self.ao2mo(mo_coeff)
     def get_h2eff(self, mo_coeff=None):
-        return self.ao2mo(self, mo_coeff)
+        return self.ao2mo(mo_coeff)
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
@@ -370,7 +368,8 @@ class CASCI(object):
         if ci0 is None:
             ci0 = self.ci
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 

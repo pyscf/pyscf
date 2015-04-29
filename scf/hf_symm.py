@@ -8,12 +8,9 @@ from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib
-import pyscf.lib.logger as log
 from pyscf.lib import logger
 import pyscf.symm
-from pyscf.scf import diis
 from pyscf.scf import hf
-from pyscf.scf import _vhf
 
 
 
@@ -35,12 +32,10 @@ def analyze(mf, verbose=logger.DEBUG):
     orbsym = numpy.array(orbsym)
     tot_sym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-    log.info('total symmetry = %s', \
+    log.info('total symmetry = %s',
              pyscf.symm.irrep_name(mol.groupname, tot_sym))
-    log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), \
-             *mol.irrep_name)
-    log.info('double occ                 ' + (' %4d'*nirrep), \
-             *noccs)
+    log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
+    log.info('double occ                 ' + (' %4d'*nirrep), *noccs)
     log.info('**** MO energy ****')
     irname_full = {}
     for k,ir in enumerate(mol.irrep_id):
@@ -51,7 +46,7 @@ def analyze(mf, verbose=logger.DEBUG):
             irorbcnt[j] += 1
         else:
             irorbcnt[j] = 1
-        log.info('MO #%d (%s #%d), energy= %.15g occ= %g', \
+        log.info('MO #%d (%s #%d), energy= %.15g occ= %g',
                  k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
     if verbose >= logger.DEBUG:
@@ -138,8 +133,8 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        log.info(self, '%s with symmetry adapted basis',
-                 self.__class__.__name__)
+        logger.info(self, '%s with symmetry adapted basis',
+                    self.__class__.__name__)
         float_irname = []
         fix_ne = 0
         for ir in range(self.mol.symm_orb.__len__()):
@@ -149,24 +144,24 @@ class RHF(hf.RHF):
             else:
                 float_irname.append(irname)
         if fix_ne > 0:
-            log.info(self, 'fix %d electrons in irreps %s', \
-                     fix_ne, self.irrep_nelec.items())
+            logger.info(self, 'fix %d electrons in irreps %s',
+                        fix_ne, self.irrep_nelec.items())
             if fix_ne > self.mol.nelectron:
-                log.error(self, 'number of electrons error in irrep_nelec %s', \
-                          self.irrep_nelec.items())
+                logger.error(self, 'num. electron error in irrep_nelec %s',
+                             self.irrep_nelec.items())
                 raise ValueError('irrep_nelec')
         if float_irname:
-            log.info(self, '%d free electrons in irreps %s', \
-                     self.mol.nelectron-fix_ne, ' '.join(float_irname))
+            logger.info(self, '%d free electrons in irreps %s',
+                        self.mol.nelectron-fix_ne, ' '.join(float_irname))
         elif fix_ne != self.mol.nelectron:
-            log.error(self, 'number of electrons error in irrep_nelec %s', \
-                      self.irrep_nelec.items())
+            logger.error(self, 'number of electrons error in irrep_nelec %s',
+                         self.irrep_nelec.items())
             raise ValueError('irrep_nelec')
 
     def build_(self, mol=None):
         for irname in self.irrep_nelec.keys():
             if irname not in self.mol.irrep_name:
-                log.warn(self, '!! No irrep %s', irname)
+                logger.warn(self, '!! No irrep %s', irname)
         return hf.RHF.build_(self, mol)
 
     def eig(self, h, s):
@@ -228,10 +223,10 @@ class RHF(hf.RHF):
             if elumo in mo_energy[p0:p0+nso]:
                 irlumo = irname
             p0 += nso
-        log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
-                 irhomo, ehomo, irlumo, elumo)
+        logger.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+                    irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
-            log.debug(self, 'irrep_nelec = %s', noccs)
+            logger.debug(self, 'irrep_nelec = %s', noccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
         return mo_occ
 
@@ -244,7 +239,7 @@ class RHF(hf.RHF):
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, dm0=dm0)
 
-        log.timer(self, 'SCF', *cput0)
+        logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
 
         # sort MOs wrt orbital energies, it should be done last.
@@ -311,8 +306,8 @@ class ROHF(hf.ROHF):
 
     def dump_flags(self):
         hf.ROHF.dump_flags(self)
-        log.info(self, '%s with symmetry adapted basis',
-                 self.__class__.__name__)
+        logger.info(self, '%s with symmetry adapted basis',
+                    self.__class__.__name__)
 #TODO: improve the sainity check
         float_irname = []
         fix_na = 0
@@ -327,21 +322,21 @@ class ROHF(hf.ROHF):
                 float_irname.append(irname)
         float_irname = set(float_irname)
         if fix_na+fix_nb > 0:
-            log.info(self, 'fix %d electrons in irreps: %s',
-                     fix_na+fix_nb, str(self.irrep_nelec.items()))
+            logger.info(self, 'fix %d electrons in irreps: %s',
+                        fix_na+fix_nb, str(self.irrep_nelec.items()))
             if ((fix_na+fix_nb > self.mol.nelectron) or
                 (fix_na>nelectron_alpha) or
                 (fix_nb+nelectron_alpha>self.mol.nelectron)):
-                log.error(self, 'electron number error in irrep_nelec %s',
-                          self.irrep_nelec.items())
+                logger.error(self, 'electron number error in irrep_nelec %s',
+                             self.irrep_nelec.items())
                 raise ValueError('irrep_nelec')
         if float_irname:
-            log.info(self, '%d free electrons in irreps %s',
-                     self.mol.nelectron-fix_na-fix_nb,
-                     ' '.join(float_irname))
+            logger.info(self, '%d free electrons in irreps %s',
+                        self.mol.nelectron-fix_na-fix_nb,
+                        ' '.join(float_irname))
         elif fix_na+fix_nb != self.mol.nelectron:
-            log.error(self, 'electron number error in irrep_nelec %d',
-                      self.irrep_nelec.items())
+            logger.error(self, 'electron number error in irrep_nelec %d',
+                         self.irrep_nelec.items())
             raise ValueError('irrep_nelec')
 
     def build_(self, mol=None):
@@ -352,14 +347,12 @@ class ROHF(hf.ROHF):
         assert(na >= nb and nopen >= na-nb)
         for irname in self.irrep_nelec.keys():
             if irname not in self.mol.irrep_name:
-                log.warn(self, '!! No irrep %s', irname)
+                logger.warn(self, '!! No irrep %s', irname)
         return hf.RHF.build_(self, mol)
 
     # same to RHF.eig
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
-        nocc = ncore + nopen
         feff, fa, fb = h
         nirrep = self.mol.symm_orb.__len__()
         fa = pyscf.symm.symmetrize_matrix(fa, self.mol.symm_orb)
@@ -492,20 +485,20 @@ class ROHF(hf.ROHF):
         self._irrep_doccs = ndoccs
         self._irrep_soccs = nsoccs
 
-        log.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
-                 irhomo, ehomo, irlumo, elumo)
+        logger.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+                    irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
-            log.debug(self, 'double occ irrep_nelec = %s', ndoccs)
-            log.debug(self, 'single occ irrep_nelec = %s', nsoccs)
+            logger.debug(self, 'double occ irrep_nelec = %s', ndoccs)
+            logger.debug(self, 'single occ irrep_nelec = %s', nsoccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
             p0 = 0
             for ir in range(nirrep):
                 irname = mol.irrep_name[ir]
                 nso = mol.symm_orb[ir].shape[1]
-                log.debug1(self, '_core_mo_energy of %s = %s',
-                           irname, self._core_mo_energy[p0:p0+nso])
-                log.debug1(self, '_open_mo_energy of %s = %s',
-                           irname, self._open_mo_energy[p0:p0+nso])
+                logger.debug1(self, '_core_mo_energy of %s = %s',
+                              irname, self._core_mo_energy[p0:p0+nso])
+                logger.debug1(self, '_open_mo_energy of %s = %s',
+                              irname, self._open_mo_energy[p0:p0+nso])
                 p0 += nso
         return mo_occ
 
@@ -529,7 +522,7 @@ class ROHF(hf.ROHF):
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, dm0=dm0)
 
-        log.timer(self, 'SCF', *cput0)
+        logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
 
         # sort MOs wrt orbital energies, it should be done last.
@@ -566,17 +559,15 @@ class ROHF(hf.ROHF):
             nsoccs.append(sum(orbsym[mo_occ==1] == ir))
             if nsoccs[k] % 2:
                 tot_sym ^= ir
-        if groupname in ('Dooh', 'Coov'):
+        if mol.groupname in ('Dooh', 'Coov'):
             log.info('TODO: total symmetry for %s', mol.groupname)
         else:
-            log.info('total symmetry = %s', \
+            log.info('total symmetry = %s',
                      pyscf.symm.irrep_name(mol.groupname, tot_sym))
-        log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), \
+        log.info('occupancy for each irrep:  ' + (' %4s'*nirrep),
                  *mol.irrep_name)
-        log.info('double occ                 ' + (' %4d'*nirrep), \
-                 *ndoccs)
-        log.info('single occ                 ' + (' %4d'*nirrep), \
-                 *nsoccs)
+        log.info('double occ                 ' + (' %4d'*nirrep), *ndoccs)
+        log.info('single occ                 ' + (' %4d'*nirrep), *nsoccs)
         log.info('**** MO energy ****')
         irname_full = {}
         for k,ir in enumerate(mol.irrep_id):
@@ -587,7 +578,7 @@ class ROHF(hf.ROHF):
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            log.info('MO #%d (%s #%d), energy= %.15g occ= %g', \
+            log.info('MO #%d (%s #%d), energy= %.15g occ= %g',
                      k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
         if verbose >= logger.DEBUG:
@@ -622,22 +613,21 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):
         nso = mol.symm_orb[ir].shape[1]
         nocc = (mo_occ[p0:p0+nso]>0).sum()
         if nocc == 0:
-            log.debug(mol, '%s%s nocc = 0', title, irname)
+            logger.debug(mol, '%s%s nocc = 0', title, irname)
         elif nocc == nso:
-            log.debug(mol, '%s%s nocc = %d, HOMO = %.12g,', \
-                      title, irname, \
-                      nocc, mo_energy[p0+nocc-1])
+            logger.debug(mol, '%s%s nocc = %d, HOMO = %.12g,',
+                         title, irname, nocc, mo_energy[p0+nocc-1])
         else:
-            log.debug(mol, '%s%s nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
-                      title, irname, \
-                      nocc, mo_energy[p0+nocc-1], mo_energy[p0+nocc])
+            logger.debug(mol, '%s%s nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+                         title, irname,
+                         nocc, mo_energy[p0+nocc-1], mo_energy[p0+nocc])
             if mo_energy[p0+nocc-1]+1e-3 > elumo:
-                log.warn(mol, '!! %s%s HOMO %.12g > system LUMO %.12g', \
-                         title, irname, mo_energy[p0+nocc-1], elumo)
+                logger.warn(mol, '!! %s%s HOMO %.12g > system LUMO %.12g',
+                            title, irname, mo_energy[p0+nocc-1], elumo)
             if mo_energy[p0+nocc] < ehomo+1e-3:
-                log.warn(mol, '!! %s%s LUMO %.12g < system HOMO %.12g', \
-                         title, irname, mo_energy[p0+nocc], ehomo)
-        log.debug(mol, '   mo_energy = %s', mo_energy[p0:p0+nso])
+                logger.warn(mol, '!! %s%s LUMO %.12g < system HOMO %.12g',
+                            title, irname, mo_energy[p0+nocc], ehomo)
+        logger.debug(mol, '   mo_energy = %s', mo_energy[p0:p0+nso])
         p0 += nso
 
 

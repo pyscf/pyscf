@@ -29,41 +29,38 @@ def grad_elec(mfg, mo_energy=None, mo_coeff=None, mo_occ=None):
     log.timer(mfg, 'gradients of 2e part', *t0)
     f1 = h1 + vhf
     dme0 = mfg.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
-    gs = []
+    gs = numpy.empty((mol.natm,3))
     for ia in range(mol.natm):
-        f = mfg.matblock_by_atom(mol, ia, f1) + mfg._grad_rinv(mol, ia)
-        s = mfg.matblock_by_atom(mol, ia, s1)
-        for i in range(3):
-            v = numpy.einsum('ij,ji', dm0, f[i]) \
-              - numpy.einsum('ij,ji', dme0, s[i])
-            gs.append(2 * v.real)
-    gs = numpy.array(gs).reshape((mol.natm,3))
+# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
+        f =-(mfg.matblock_by_atom(mol, ia, f1) + mfg._grad_rinv(mol, ia))
+        s = -mfg.matblock_by_atom(mol, ia, s1)
+        v = numpy.einsum('ij,kji->k', dm0, f) \
+          - numpy.einsum('ij,kji->k', dme0, s)
+        gs[ia] = 2 * v.real
     log.debug(mfg, 'gradients of electronic part')
     log.debug(mfg, str(gs))
     return gs
 
 def grad_nuc(mol):
-    gs = []
+    gs = numpy.empty((mol.natm,3))
     for j in range(mol.natm):
         q2 = mol.atom_charge(j)
         r2 = mol.atom_coord(j)
-        f = [0, 0, 0]
+        f = numpy.zeros(3)
         for i in range(mol.natm):
             if i != j:
                 q1 = mol.atom_charge(i)
                 r1 = mol.atom_coord(i)
                 r = numpy.sqrt(numpy.dot(r1-r2,r1-r2))
-                for i in range(3):
-                    f[i] += q1 * q2 * (r2[i] - r1[i])/ r**3
-        gs.extend(f)
-    gs = numpy.array(gs).reshape((mol.natm,3))
+                f += q1 * q2 * (r2-r1) / r**3
+        gs[j] = -f
     return gs
 
 
 def get_hcore(mol):
-        h = mol.intor('cint1e_ipkin_sph', comp=3) \
-                + mol.intor('cint1e_ipnuc_sph', comp=3)
-        return h
+    h =(mol.intor('cint1e_ipkin_sph', comp=3)
+      + mol.intor('cint1e_ipnuc_sph', comp=3))
+    return h
 
 def get_ovlp(mol):
     return mol.intor('cint1e_ipovlp_sph', comp=3)
@@ -77,7 +74,7 @@ def get_coulomb_hf(mol, dm):
     #return vj - vk*.5
     vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
-                               ('kl->s1ij', 'kj->s1il'),
+                               ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
     return vj - vk*.5
@@ -97,7 +94,7 @@ def matblock_by_atom(mol, atm_id, mat):
     return v
 
 
-class RHF:
+class RHF(object):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
@@ -136,7 +133,7 @@ class RHF:
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     def _grad_rinv(self, mol, ia):
-        ''' for given atom, <|\\nabla r^{-1}|> '''
+        r''' for given atom, <|\nabla r^{-1}|> '''
         mol.set_rinv_origin_(mol.atom_coord(ia))
         return mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
 
@@ -167,7 +164,7 @@ class RHF:
             self.dump_flags()
         grads = self.grad_elec(mo_energy, mo_coeff, mo_occ) + self.grad_nuc()
         for ia in range(self.mol.natm):
-            log.note(self, 'atom %d %s, force = (%.14g, %.14g, %.14g)', \
+            log.note(self, 'atom %d %s, force = (%.14g, %.14g, %.14g)',
                      ia, self.mol.atom_symbol(ia), *grads[ia])
         log.timer(self, 'HF gradients', *cput0)
         return grads
@@ -201,7 +198,7 @@ if __name__ == '__main__':
     rhf.scf()
     g = RHF(rhf)
     print(g.grad())
-#[[ 0   0                0             ]
-# [ 0  -4.39690522e-03  -1.20567128e-02]
-# [ 0   4.39690522e-03  -1.20567128e-02]]
+#[[ 0   0               -2.41134256e-02]
+# [ 0   4.39690522e-03   1.20567128e-02]
+# [ 0  -4.39690522e-03   1.20567128e-02]]
 

@@ -57,7 +57,7 @@ def preiao(mol, mocc, minao='minao'):
     # C^T<u|a>S^{-1}<a|u>
     pc1 = reduce(numpy.dot, (mocc.T, s12.T, sblock_inv, s12))
 
-    a = simple_iao(mol, minao)
+    a = simple_preiao(mol, minao)
     pa = reduce(numpy.dot, (pc1.T, pc1, a))
     c = a - reduce(numpy.dot, (mocc, mocc.T, s, a)) \
       - numpy.dot(sinv, pa) + reduce(numpy.dot, (mocc, mocc.T, pa)) * 2
@@ -96,7 +96,7 @@ def minao_mol(mol, minao='minao'):
                   for k in mol.basis.keys()])
     basis = {}
     for symb in atmlst:
-        basis[symb] = minao_basis(symb)
+        basis[symb] = minao_basis(symb, minao)
 
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(mol.atom, basis, [])

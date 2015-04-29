@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import os, sys
-import tempfile
 from functools import reduce
 import numpy
 
@@ -88,5 +86,6 @@ def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
 
 
 if __name__ == '__main__':
-    # molpro_fcidump.py chkfile output
+    import sys
+    # fcidump.py chkfile output
     from_chkfile(sys.argv[2], sys.argv[1])

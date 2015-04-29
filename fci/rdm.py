@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import ctypes
 import _ctypes
 import numpy
