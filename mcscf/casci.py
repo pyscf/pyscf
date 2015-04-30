@@ -319,7 +319,7 @@ class CASCI(object):
         log.info('max_memory %d (MB)', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
-        except:
+        except AttributeError:
             pass
 
     def get_hcore(self, mol=None):

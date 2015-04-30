@@ -399,7 +399,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
     if _env:
         _env = numpy.hstack((pre_env,numpy.hstack(_env)))
     else:
-        _env = pre_env
+        _env = numpy.array(pre_env, copy=False)
     return _atm, _bas, _env
 
 def tot_electrons(mol):
@@ -1161,17 +1161,16 @@ class Mole(object):
         self.stdout.write('System: %s\n' % str(os.uname()))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
-            dn = os.path.dirname(os.path.realpath(__file__))
-            self.stdout.write('GIT version: ')
+            dn = os.path.abspath(os.path.join(__file__, '..', '..', '.git',
+                                              'refs', 'heads'))
             # or command(git log -1 --pretty=%H)
+            version_msg = []
             for branch in 'dev', 'master':
-                fname = '/'.join((dn, "../.git/refs/heads", branch))
-                fin = open(fname, 'r')
-                d = fin.readline()
-                fin.close()
-                self.stdout.write(' '.join((branch, d[:-1], '; ')))
-            self.stdout.write('\n\n')
-        except:
+                with open(os.path.join(dn, branch), 'r') as fin:
+                    d = fin.readline()
+                version_msg.append(' '.join((branch, d[:-1])))
+            self.stdout.write('GIT version: %s\n\n' % '; '.join(version_msg))
+        except IOError:
             pass
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
@@ -1708,7 +1707,7 @@ def _update_from_cmdargs_(mol):
     # pass sys.args when using ipython
     try:
         __IPYTHON__
-        print('Warn: Ipython shell catchs sys.args')
+        sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
         return None
     except:
         pass

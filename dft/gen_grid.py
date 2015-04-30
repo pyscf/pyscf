@@ -253,16 +253,14 @@ class Grids(object):
         self.weights = None
 
     def dump_flags(self):
-        try:
-            logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
-            logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
-            logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
-            logger.info(self, 'grids dens level: %d', self.level)
-            logger.info(self, 'symmetrized grids: %d', self.symmetry)
-            if self.atomic_radii is not None:
-                logger.info(self, 'adjust function', self.atomic_radii.__doc__)
-        except:
-            pass
+        logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
+        logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
+        logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
+        logger.info(self, 'grids dens level: %d', self.level)
+        logger.info(self, 'symmetrized grids: %d', self.symmetry)
+        if self.atomic_radii is not None:
+            logger.info(self, 'atom radii adjust function: %s',
+                        self.atomic_radii.__doc__)
 
     def setup_grids(self, mol=None):
         return self.setup_grids_(mol)

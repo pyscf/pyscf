@@ -859,7 +859,7 @@ class SCF(object):
         elif key.lower() == 'chkfile':
             try:
                 dm = self.init_guess_by_chkfile()
-            except:
+            except IOError, KeyError:
                 logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(mol)
@@ -1118,7 +1118,7 @@ class ROHF(RHF):
 
         def fproj(mo):
             if project:
-                return addons.project_mo_nr2nr(chk_mol, mo, mol)
+                return addons.project_mo_nr2nr(chk_mol, mo, self.mol)
             else:
                 return mo
         if scf_rec['mo_coeff'].ndim == 2:

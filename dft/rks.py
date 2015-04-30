@@ -31,11 +31,7 @@ class RKS(pyscf.scf.hf.RHF):
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
         log.info(self, 'XC functionals = %s', self.xc)
-        try:
-            log.info(self, 'DFT grids')
-            self.grids.dump_flags()
-        except:
-            pass
+        self.grids.dump_flags()
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Coulomb + XC functional'''

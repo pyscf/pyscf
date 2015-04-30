@@ -38,16 +38,12 @@ def load_library(libname):
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 def current_memory():
-    if 0:
-        import resource
-        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
-    elif sys.platform.startswith('linux'):
-        try:
-            with open("/proc/%s/statm" % os.getpid()) as f:
-                vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
-                return rss/1e6, vms/1e6
-        except:
-            return 0, 0
+    #import resource
+    #return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
+    if sys.platform.startswith('linux'):
+        with open("/proc/%s/statm" % os.getpid()) as f:
+            vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
+            return rss/1e6, vms/1e6
     else:
         return 0, 0
 
