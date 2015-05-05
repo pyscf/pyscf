@@ -385,7 +385,7 @@ class CASCI(object):
         return cas_natorb(self, mo_coeff, ci, eris, verbose)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris, verbose)
-        return self.ci, self.mo_coeff
+        return self.mo_coeff, self.ci, occ
 
     def get_fock(self, mo_coeff=None, ci=None, eris=None, verbose=None):
         return get_fock(self, mo_coeff, ci, eris, verbose)
