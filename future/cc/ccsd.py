@@ -48,7 +48,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
     conv = False
     for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(cc, t1, t2, eris, blksize)
+        t1new, t2new = cc.update_amps(t1, t2, eris, blksize)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
@@ -521,7 +521,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return min(nocc, max(1, int(rest/unit/8)*8))
 
     def update_amps(self, *args, **kwargs):
-        return update_amps(*args, **kwargs)
+        return update_amps(self, *args, **kwargs)
 
     def diis(self):
         return self.diis_()

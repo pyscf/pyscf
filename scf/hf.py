@@ -646,6 +646,17 @@ def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
     return mulliken_pop(mol, dm, numpy.eye(orth_coeff.shape[0]), log)
 
 
+def eig(h, s):
+    '''Solver for generalized eigenvalue problem
+
+    .. math:: HC = SCE
+    '''
+    e, c = scipy.linalg.eigh(h, s)
+    idx = numpy.argmax(abs(c.real), axis=0)
+    c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
+    return e, c
+
+
 class SCF(object):
     '''SCF base class.   non-relativistic RHF.
 
@@ -766,14 +777,7 @@ class SCF(object):
 
 
     def eig(self, h, s):
-        '''Solver for generalized eigenvalue problem
-
-        .. math:: HC = SCE
-        '''
-        e, c = scipy.linalg.eigh(h, s)
-        idx = numpy.argmax(abs(c.real), axis=0)
-        c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
-        return e, c
+        return eig(h, s)
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol

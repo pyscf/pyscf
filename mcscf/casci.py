@@ -6,11 +6,10 @@
 import time
 from functools import reduce
 import numpy
-import scipy.linalg
 import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
-import pyscf.scf
+from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.tools.mo_mapping import mo_1to1map
@@ -80,7 +79,8 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label)
 
-        occ, ucas = scipy.linalg.eigh(-(casdm1a+casdm1b))
+        # note the last two args of ._eig for mc1step_symm
+        occ, ucas = casscf._eig(-(casdm1a+casdm1b), ncore, nocc)
         log.info('Natural occ %s', str(-occ))
         for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
             if ucas[k,i] < 0:
@@ -140,19 +140,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     nocc = ncore + ncas
     nelecas = mc.nelecas
     casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
-    occ, ucas = scipy.linalg.eigh(-casdm1)
+    occ, ucas = mc._eig(-casdm1, ncore, nocc)
     occ = -occ
     log.info('Natural occ %s', str(occ))
-# restore phase
-    for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
-        if ucas[k,i] < 0:
-            ucas[:,i] *= -1
-    mo_coeff1 = mo_coeff.copy()
-    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
-    if log.verbose >= logger.INFO:
-        log.info('Natural orbital in CAS space')
-        label = ['%d%3s %s%-4s' % x for x in mc.mol.spheric_labels()]
-        dump_mat.dump_rec(log.stdout, mo_coeff1[:,ncore:nocc], label, start=1)
 
 # where_natorb gives the location of the natural orbital for the input cas
 # orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
@@ -173,6 +163,17 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     #old_det_idxb = numpy.argsort(guide_stringsb)
     #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
     ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
+
+# restore phase, to ensure the reordered ci vector is the correct initial guess
+    for i, k in enumerate(where_natorb):
+        if ucas[i,k] < 0:
+            ucas[:,k] *= -1
+    mo_coeff1 = mo_coeff.copy()
+    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+    if log.verbose >= logger.INFO:
+        log.info('Natural orbital in CAS space')
+        label = ['%d%3s %s%-4s' % x for x in mc.mol.spheric_labels()]
+        dump_mat.dump_rec(log.stdout, mo_coeff1[:,ncore:nocc], label, start=1)
 
     h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, mc.get_hcore(),
                                mo_coeff[:,ncore:nocc]))
@@ -334,6 +335,9 @@ class CASCI(object):
         vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
         return vj - vk * .5
 
+    def _eig(self, h, *args):
+        return scf.hf.eig(h, None)
+
     def get_h2cas(self, mo_coeff=None):
         return self.ao2mo(mo_coeff)
     def get_h2eff(self, mo_coeff=None):
@@ -397,6 +401,10 @@ class CASCI(object):
         log = logger.Logger(self.stdout, self.verbose)
         return analyze(self, mo_coeff, ci, verbose=log)
 
+    def sort_mo(self, caslst, mo_coeff=None, base=1):
+        from pyscf.mcscf import addons
+        if mo_coeff is None: mo_ceff = self.mo_coeff
+        return addons.sort_mo(self, mo_coeff, caslst, base)
 
 
 if __name__ == '__main__':

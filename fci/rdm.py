@@ -134,6 +134,8 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 #
 # 3-particle and 4-particle density matrix for RHF-FCI wfn
 #
+# NOTE the dm3 is calculated as <p^+ q r^+ s t^+ u>
+# call reorder_dm123 to transform dm3 to regular 3-pdm
 def make_dm123(fname, cibra, ciket, norb, nelec):
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2

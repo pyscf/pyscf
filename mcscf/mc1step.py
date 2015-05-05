@@ -583,13 +583,16 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=logger.NOTE):
     nmo = mo_coeff.shape[1]
     mo_coeff1 = numpy.empty_like(mo_coeff)
     mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+# Keep the active space unchanged by default.  The rotation in active space
+# may cause problem for external FCI solver.
     #mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
     fock = mc.get_fock(mo_coeff, ci, eris)
     if ncore > 0:
-        w, c1 = scipy.linalg.eigh(fock[:ncore,:ncore])
+        # note the last two args of ._eig for mc1step_symm
+        w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
     if nmo-nocc > 0:
-        w, c1 = scipy.linalg.eigh(fock[nocc:,nocc:])
+        w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
 # still return ci coefficients, in case the canonicalization funciton changed
 # cas orbitals, the ci coefficients should also be updated.
@@ -765,6 +768,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
         log.info('augmented hessian level shift = %d', self.ah_level_shift)
         log.info('diis = %s', self.diis)
+        log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
@@ -923,6 +927,11 @@ class CASSCF(casci.CASCI):
             return mc_ao2mo._ERIS(self, mo, 'incore', 0)
         else:
             return mc_ao2mo._ERIS(self, mo, 'incore', 1)
+
+    def get_h2eff(self, mo_coeff=None):
+        return self.get_h2cas(mo_coeff)
+    def get_h2cas(self, mo_coeff=None):
+        return casci.CASCI.ao2mo(self, mo_coeff)
 
     def update_jk_in_ah(self, mo, r, casdm1, eris):
 # J3 = eri_popc * pc + eri_cppo * cp
