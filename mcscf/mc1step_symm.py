@@ -23,7 +23,7 @@ class CASSCF(mc1step.CASSCF):
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore)
 
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -51,14 +51,14 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc1step.kernel(self, mo_coeff, \
-                               tol=self.conv_tol, macro=macro, micro=micro, \
-                               ci0=ci0, verbose=self.verbose, **cikwargs)
+                mc1step.kernel(self, mo_coeff,
+                               tol=self.conv_tol, macro=macro, micro=micro,
+                               ci0=ci0, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -84,9 +84,9 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc2step.kernel(self, mo_coeff, \
-                               tol=self.conv_tol, macro=macro, micro=micro, \
-                               ci0=ci0, verbose=self.verbose, **cikwargs)
+                mc2step.kernel(self, mo_coeff,
+                               tol=self.conv_tol, macro=macro, micro=micro,
+                               ci0=ci0, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff

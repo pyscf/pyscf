@@ -351,8 +351,7 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
            ci0=None, verbose=None,
-           dump_chk=True, dump_chk_ci=False,
-           **cikwargs):
+           dump_chk=True, dump_chk_ci=False):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -366,7 +365,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
     nocc = (ncas + ncore[0], ncas + ncore[1])
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         return True, e_tot, e_ci, fcivec, mo
@@ -430,7 +429,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
         t3m = log.timer('update eri', *t3m)
 
         elast = e_tot
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
         log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         log.info('               |grad[o]|=%4.3g, |grad[c]|=%4.3g, |dm1|=%4.3g',
@@ -527,7 +526,7 @@ class CASSCF(casci_uhf.CASCI):
 
     def kernel(self, *args, **kwargs):
         return self.mc1step(*args, **kwargs)
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -545,12 +544,12 @@ class CASSCF(casci_uhf.CASCI):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 kernel(self, mo_coeff, \
                        tol=self.conv_tol, macro=macro, micro=micro, \
-                       ci0=ci0, verbose=self.verbose, **cikwargs)
+                       ci0=ci0, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None, **cikwargs):
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
         from pyscf.mcscf import mc2step_uhf
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -566,19 +565,19 @@ class CASSCF(casci_uhf.CASCI):
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc2step_uhf.kernel(self, mo_coeff, \
-                                   tol=self.conv_tol, macro=macro, micro=micro, \
-                                   ci0=ci0, verbose=self.verbose, **cikwargs)
+                mc2step_uhf.kernel(self, mo_coeff,
+                                   tol=self.conv_tol, macro=macro, micro=micro,
+                                   ci0=ci0, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def casci(self, mo_coeff, ci0=None, eris=None, **cikwargs):
+    def casci(self, mo_coeff, ci0=None, eris=None):
         if eris is None:
             fcasci = self
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
-        return casci_uhf.kernel(fcasci, mo_coeff, ci0=ci0, verbose=0, **cikwargs)
+        return casci_uhf.kernel(fcasci, mo_coeff, ci0=ci0, verbose=0)
 
     def pack_uniq_var(self, mat):
         v = []

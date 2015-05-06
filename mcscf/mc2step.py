@@ -10,7 +10,7 @@ from pyscf.mcscf import mc1step
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
-           ci0=None, verbose=None, **cikwargs):
+           ci0=None, verbose=None):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -22,7 +22,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
     ncore = casscf.ncore
     ncas = casscf.ncas
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         return True, e_tot, e_ci, fcivec, mo
@@ -68,7 +68,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
         totinner += ninner
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
         log.info('macro iter %d (%d JK, %d micro), CASSCF E = %.15g, dE = %.8g,',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
         log.info('               |grad[o]|=%4.3g, |dm1|=%4.3g',

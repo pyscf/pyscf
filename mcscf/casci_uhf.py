@@ -54,7 +54,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
              reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
     return h1eff, energy_core
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=None):
     '''UHF-CASCI solver
     '''
     if verbose is None: verbose = casci.verbose
@@ -78,7 +78,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
 
     # FCI
     e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
-                                           ci0=ci0, **cikwargs)
+                                           ci0=ci0)
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
@@ -197,7 +197,7 @@ class CASCI(object):
 
     def kernel(self, *args, **kwargs):
         return self.casci(*args, **kwargs)
-    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+    def casci(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if ci0 is None:
@@ -209,7 +209,7 @@ class CASCI(object):
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci

@@ -126,7 +126,7 @@ def project_init_guess(casscf, init_mo):
         if casscf.verbose >= logger.DEBUG:
             nocc = ncore + casscf.ncas
             s = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
-            idx = numpy.argwhere(abs(s) > 0.5)
+            idx = numpy.argwhere(abs(s) > 0.4)
             for i,j in idx:
                 logger.debug(casscf, 'Init guess <mo-CAS|mo-hf>  %d  %d  %12.8f',
                              ncore+i+1, j+1, s[i,j])
@@ -271,14 +271,14 @@ def get_fock(casscf, mo_coeff=None, ci=None):
     else:
         return casscf.get_fock(mo_coeff, ci)
 
-def cas_natorb(casscf, mo_coeff=None, ci=None):
+def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
     '''Restore natrual orbitals
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
         raise RuntimeError('TODO: UCAS natrual orbitals')
     else:
-        return casscf.cas_natorb(mo_coeff, ci)
+        return casscf.cas_natorb(mo_coeff, ci, sort=sort)
 
 def map2hf(casscf, mf_mo=None, base=1, tol=.5):
     '''The overlap between the CASSCF optimized orbitals and the canonical HF orbitals.

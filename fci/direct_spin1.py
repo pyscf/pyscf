@@ -297,7 +297,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag)
+    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, fci.pspace_size)
     pw, pv = scipy.linalg.eigh(h0)
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
@@ -382,6 +382,7 @@ class FCISolver(object):
         # enforce the solution on the initial guess state
         self.davidson_only = False
         self.nroots = 1
+        self.pspace_size = 400
 
         self._keys = set(self.__dict__.keys())
 
@@ -421,7 +422,7 @@ class FCISolver(object):
                 'max_space': self.max_space,
                 'lindep': self.lindep,
                 'max_memory': self.max_memory,
-                'verbose': self.verbose}
+                'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)
 

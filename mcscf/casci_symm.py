@@ -20,7 +20,7 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 
-    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+    def casci(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -45,7 +45,7 @@ class CASCI(casci.CASCI):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci = \
-                casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+                casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
 
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
