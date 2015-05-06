@@ -821,8 +821,12 @@ class Mole(object):
         spin : int
             2S, num. alpha electrons - num. beta electrons
         symmetry : bool or str
-            Whether to use symmetry.  If given a string of point group
-            name, the given point group symmetry will be used.
+            Whether to use symmetry.  When this variable is set to True, the
+            molecule will be rotated and the highest rotation axis will be
+            placed z-axis.
+            If a string is given as the name of point group, the given point
+            group symmetry will be used.  Note that the input molecular
+            coordinates will not be changed in this case.
 
         atom : list or str
             To define molecluar structure.  The internal format is
@@ -978,10 +982,11 @@ class Mole(object):
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
-    def build_(self, dump_input=True, parse_arg=True, \
-               verbose=None, output=None, max_memory=None, \
-               atom=None, basis=None, nucmod=None, mass=None, grids=None, \
-               charge=None, spin=None, symmetry=None, light_speed=None):
+    def build_(self, dump_input=True, parse_arg=True,
+               verbose=None, output=None, max_memory=None,
+               atom=None, basis=None, nucmod=None, mass=None, grids=None,
+               charge=None, spin=None, symmetry=None,
+               symmetry_subgroup=None, light_speed=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -1036,6 +1041,7 @@ class Mole(object):
         if charge is not None: self.charge = charge
         if spin is not None: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
+        if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
         if light_speed is not None: self.light_speed = light_speed
 
         if parse_arg:
@@ -1082,7 +1088,8 @@ class Mole(object):
                     assert(self.symmetry_subgroup in
                            pyscf.symm.param.SUBGROUP[self.groupname])
                     if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
-                        raise RuntimeError('TODO: rotate mirror')
+                        raise RuntimeError('TODO: rotate mirror or axes')
+                    self.groupname = self.symmetry_subgroup
             self.atom = self.format_atom(self.atom, orig, axes)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
