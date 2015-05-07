@@ -570,7 +570,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False, verbose=None):
     return casci.cas_natorb(mc, mo_coeff, ci, eris, sort, verbose)
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-                 verbose=logger.NOTE):
+                 cas_natorb=False, verbose=logger.NOTE):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -581,12 +581,15 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
-    mo_coeff1 = numpy.empty_like(mo_coeff)
-    mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
-# Keep the active space unchanged by default.  The rotation in active space
-# may cause problem for external FCI solver.
-    #mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, verbose)
     fock = mc.get_fock(mo_coeff, ci, eris)
+    if cas_natorb:
+        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort=sort,
+                                           verbose=verbose)
+    else:
+# Keep the active space unchanged by default.  The rotation in active space
+# may cause problem for external CI solver eg DMRG.
+        mo_coeff1 = numpy.empty_like(mo_coeff)
+        mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
     if ncore > 0:
         # note the last two args of ._eig for mc1step_symm
         w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
@@ -1126,12 +1129,12 @@ class CASSCF(casci.CASCI):
         return self._scf.get_jk(mol, dm, hermi=1)
 
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, verbose)
+                     cas_natorb=False, verbose=None):
+        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      verbose=None):
+                      cas_natorb=False, verbose=None):
         self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              sort, verbose)
+                                              sort, cas_natorb, verbose)
         return self.mo_coeff, self.ci
 
 
