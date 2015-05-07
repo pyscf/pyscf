@@ -47,6 +47,7 @@ class DIIS(object):
 
     def __del__(self):
         self._diisfile.close()
+        self._tmpfile = None
 
     def push_err_vec(self, x):
         self._err_vec_touched = True
