@@ -30,6 +30,8 @@ CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
 
+sys.verbose = NOTE
+
 class Logger(object):
     def __init__(self, stdout, verbose):
         self.stdout = stdout
