@@ -899,6 +899,9 @@ class SCF(object):
         if nocc < mo_occ.size:
             logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
                         mo_energy[nocc-1], mo_energy[nocc])
+            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+                logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
+                            mo_energy[nocc-1], mo_energy[nocc])
         else:
             logger.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)

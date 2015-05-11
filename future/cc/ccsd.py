@@ -573,9 +573,9 @@ class _ERIS:
             self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
         else:
             time0 = time.clock(), time.time()
-            self._tmpfile1 = tempfile.NamedTemporaryFile()
-            self._tmpfile2 = tempfile.NamedTemporaryFile()
-            self.feri1 = h5py.File(self._tmpfile1.name)
+            _tmpfile1 = tempfile.NamedTemporaryFile()
+            _tmpfile2 = tempfile.NamedTemporaryFile()
+            self.feri1 = h5py.File(_tmpfile1.name)
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
             nvpair = nvir * (nvir+1) // 2
@@ -586,8 +586,8 @@ class _ERIS:
             self.oOVv = self.feri1.create_dataset('oOVv', (nocc,nocc,nvir,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
-            pyscf.ao2mo.full(cc.mol, orbv, self._tmpfile2.name, verbose=log)
-            self.feri2 = h5py.File(self._tmpfile2.name, 'r')
+            pyscf.ao2mo.full(cc.mol, orbv, _tmpfile2.name, verbose=log)
+            self.feri2 = h5py.File(_tmpfile2.name, 'r')
             self.vvvv = self.feri2['eri_mo']
             time1 = log.timer_debug1('transforming vvvv', *time0)
 
@@ -609,11 +609,9 @@ class _ERIS:
             self.oOoO = numpy.asarray(self.oOoO)
 
     def __del__(self):
-        if hasattr(self, '_tmpfile1'):
+        if hasattr(self, 'feri1'):
             self.feri1.close()
             self.feri2.close()
-            self._tmpfile1 = None
-            self._tmpfile2 = None
 
 
 # assume nvir > nocc, minimal requirements on memory in loop of update_amps

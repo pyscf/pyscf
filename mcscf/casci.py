@@ -211,8 +211,10 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
     return mo_coeff1, fcivec, occ
 
-def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False, verbose=None):
-    #mo_coeff, ci = cas_natorb(mc, mo_coeff, ci, eris, sort, verbose=verbose)[:2]
+def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
+                 cas_natorb=False, verbose=None):
+    if cas_natorb:
+        mo_coeff, ci = cas_natorb(mc, mo_coeff, ci, eris, sort, verbose=verbose)[:2]
     return mo_coeff, ci
 
 
@@ -422,12 +424,12 @@ class CASCI(object):
         return get_fock(self, mo_coeff, ci, eris, verbose)
 
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, verbose)
+                     cas_natorb=False, verbose=None):
+        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      verbose=None):
+                      cas_natorb=False, verbose=None):
         self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              sort, verbose)
+                                              sort, cas_natorb, verbose)
         return self.mo_coeff, self.ci
 
     def analyze(self, mo_coeff=None, ci=None):
