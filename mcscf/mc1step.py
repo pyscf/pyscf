@@ -15,6 +15,7 @@ import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
 from pyscf.mcscf import mc_ao2mo
+from pyscf.future.dmrgscf.dmrgci import DMRGCI
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
@@ -509,6 +510,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                       imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
+            if isinstance(casscf.fcisolver, DMRGCI):
+                if (norm_t < self.dmrg_switch_tol or norm_gci < self.dmrg_switch_tol):
+                    self.fcisolver.fix_quanta = True
+                else :
+                    self.fcisolver.fix_quanta = False
             if (norm_t < toloose or norm_gci < toloose or
                 (norm_gorb < toloose and norm_ddm < toloose) or
                 (imicro >= micro)):
@@ -753,6 +759,7 @@ class CASSCF(casci.CASCI):
         self.diis = False
 
         self.fcisolver.max_cycle = 50
+        self.dmrg_switch_tol = 1.0e-3
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -782,6 +789,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
         log.info('augmented hessian level shift = %d', self.ah_level_shift)
         log.info('diis = %s', self.diis)
+        log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB', self.max_memory)
         try:
