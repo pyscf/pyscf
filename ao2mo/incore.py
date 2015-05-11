@@ -229,9 +229,10 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     fdrv = getattr(_ao2mo.libao2mo, 'AO2MOnr_e1incore_drv')
     eri1 = numpy.empty((nij_pair,nao_pair))
 
+    bufs = numpy.empty((BLOCK, nij_pair))
     for blk0 in range(0, nao_pair, BLOCK):
         blk1 = min(blk0+BLOCK, nao_pair)
-        buf = numpy.empty((blk1-blk0,nij_pair))
+        buf = bufs[:blk1-blk0]
         fdrv(ftrans, fmmm,
              buf.ctypes.data_as(ctypes.c_void_p),
              eri_ao.ctypes.data_as(ctypes.c_void_p),

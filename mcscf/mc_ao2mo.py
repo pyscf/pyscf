@@ -123,20 +123,25 @@ def light_e1_outcore(mol, mo, ncore, ncas,
     ti0 = log.timer('Initializing light_e1_outcore', *time0)
     nstep = len(shranges)
     paapp = 0
+    maxbuflen = max([x[2] for x in shranges])
+    bufs1 = numpy.empty((maxbuflen, nao_pair))
+    bufs2 = numpy.empty((maxbuflen, pashape[1]*pashape[3]))
+    bufs3 = numpy.empty((maxbuflen, nao*ncore))
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *(sh_range[:3]))
-        buf = numpy.empty((sh_range[2],nao_pair))
+        buf = bufs1[:sh_range[2]]
         _ao2mo.nr_e1fill_('cint2e_sph', sh_range[:3],
                           mol._atm, mol._bas, mol._env, 's4', 1, ao2mopt, buf)
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
+        bufpa = bufs2[:sh_range[2]]
 # jc_pp, kc_pp
         if approx == 1: # aapp, appa and vhf, jcp, kcp
-            bufpa = _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1')
+            _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('buffer-pa', *ti1)
-            buf1 = numpy.empty((sh_range[2],nao*ncore))
+            buf1 = bufs3[:sh_range[2]]
             fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
             ftrans = _fpointer('AO2MOtranse1_nr_s4')
             fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
@@ -148,7 +153,6 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                  ctypes.c_int(0), ctypes.c_int(nao),
                  ctypes.c_int(0), ctypes.c_int(ncore),
                  ctypes.POINTER(ctypes.c_void_p)(), ctypes.c_int(0))
-            buf = buf1
             p0 = 0
             for ij in range(sh_range[0], sh_range[1]):
                 i,j = _ao2mo._extract_pair(ij)
@@ -160,25 +164,24 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                 dj = j1 - j0
                 if i == j:
                     dij = di * (di+1) // 2
-                    buf1 = numpy.empty((di,di,nao*ncore))
+                    buf = numpy.empty((di,di,nao*ncore))
                     idx = numpy.tril_indices(di)
-                    buf1[idx] = buf[p0:p0+dij]
-                    buf1[idx[1],idx[0]] = buf[p0:p0+dij]
-                    buf1 = buf1.reshape(di,di,nao,ncore)
-                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uvc', buf1, mo[:,:ncore])
-                    kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf1, mo[i0:i1,:ncore])
+                    buf[idx] = buf1[p0:p0+dij]
+                    buf[idx[1],idx[0]] = buf1[p0:p0+dij]
+                    buf = buf.reshape(di,di,nao,ncore)
+                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
+                    kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf, mo[i0:i1,:ncore])
                 else:
                     dij = di * dj
-                    buf1 = buf[p0:p0+dij].reshape(di,dj,nao,ncore)
-                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uvc', buf1, mo[:,:ncore])
+                    buf = buf1[p0:p0+dij].reshape(di,dj,nao,ncore)
+                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
                     jc[j0:j1,i0:i1] = jc[i0:i1,j0:j1].transpose(1,0,2)
-                    kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf1, mo[i0:i1,:ncore])
-                    kc[i0:i1] += numpy.einsum('uvpc,vc->upc', buf1, mo[j0:j1,:ncore])
+                    kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf, mo[i0:i1,:ncore])
+                    kc[i0:i1] += numpy.einsum('uvpc,vc->upc', buf, mo[j0:j1,:ncore])
                 p0 += dij
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('jc and kc buffer', *ti1)
         elif approx == 2: # aapp, appa, vhf
-            bufpa = numpy.empty((buf.shape[0], pashape[1]*pashape[3]))
             fdrv = libmcscf.MCSCFnrs4_aapp_jk
             fdrv(buf.ctypes.data_as(ctypes.c_void_p),
                  bufpa.ctypes.data_as(ctypes.c_void_p),
@@ -194,7 +197,7 @@ def light_e1_outcore(mol, mo, ncore, ncas,
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('bufpa + core vj and vk', *ti1)
         else: # aapp, appa
-            bufpa = _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1')
+            _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
 
 # aapp, appa
         aapp_buf[paapp:paapp+sh_range[2]] = \
@@ -224,14 +227,13 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                     appa_buf[:,i0+i] += pyscf.lib.dot(mo1.T, buf1[i])
                 buf1 = bufpa[p0:p0+dij].reshape(di,-1)
             mo1 = mo[i0:i1,ncore:nocc].copy()
-            appa_buf[:,j0:j1] += \
-                    pyscf.lib.dot(mo1.T, buf1).reshape(ncas,dj,-1)
+            appa_buf[:,j0:j1] += pyscf.lib.dot(mo1.T, buf1).reshape(ncas,dj,-1)
             p0 += dij
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('aapp and appa buffer', *ti1)
 
-        buf = buf1 = bufpa = None
         ti0 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
+    bufs1 = bufs2 = bufs3 = None
 
     aapp_buf = pyscf.lib.transpose(aapp_buf.reshape(nao_pair,-1))
     aapp = _ao2mo.nr_e2_(aapp_buf, mo, (0,nmo,0,nmo), 's4', 's1', ao_loc=ao_loc)

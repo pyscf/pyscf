@@ -1136,6 +1136,10 @@ class CASSCF(casci.CASCI):
     def get_jk(self, mol, dm, hermi=1):
         return self._scf.get_jk(mol, dm, hermi=1)
 
+    def dump_chk(self, *args, **kwargs):
+        from pyscf.mcscf import chkfile
+        chkfile.dump_mcscf(self.mol, self.chkfile, *args, **kwargs)
+
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
                      cas_natorb=False, verbose=None):
         return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
