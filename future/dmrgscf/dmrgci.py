@@ -66,6 +66,7 @@ class DMRGCI(object):
         self.integralFile = "FCIDUMP"
         self.configFile = "dmrg.conf"
         self.outputFile = "dmrg.out"
+        self.twopdm = True
         self.maxIter = 20
         self.twodot_to_onedot = 15
         self.tol = 1e-8
@@ -86,6 +87,10 @@ class DMRGCI(object):
             self.groupname = None
 
         self.generate_schedule()
+        self.has_threepdm = False
+        self.has_nevpt = False
+        self.onlywriteIntegral = False
+        self.extraline = []
 
         self._keys = set(self.__dict__.keys())
 
@@ -189,16 +194,36 @@ class DMRGCI(object):
         return onepdm, twopdm
 
     def make_rdm123(self, fcivec, norb, nelec, link_index=None, **kwargs):
+        import os
+        if self.has_threepdm == False:
+            self.twopdm = False
+            self.extraline.append('restart_threepdm')
+            if isinstance(nelec, (int, numpy.integer)):
+                neleca = nelec//2 + nelec%2
+                nelecb = nelec - neleca
+            else :
+                neleca, nelecb = nelec
+            writeDMRGConfFile(neleca, nelecb, True, self)
+            if self.verbose >= logger.DEBUG1:
+                inFile = os.path.join(self.scratchDirectory,self.configFile)
+                logger.debug1(self, 'Block Input conf')
+                logger.debug1(self, open(inFile, 'r').read())
+            executeBLOCK(self)
+            if self.verbose >= logger.DEBUG1:
+                outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                logger.debug1(self, open(outFile).read())
+            self.hasthreepdm = True
+            self.extraline.pop()
+
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
             nelectrons = nelec
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        import os
         f = open(os.path.join(self.scratchDirectory, "spatial_threepdm.0.0.txt"), 'r')
 
-        twopdm = numpy.zeros( (norb, norb, norb, norb) )
+        threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
         assert(norb_read == norb)
 
@@ -221,10 +246,30 @@ class DMRGCI(object):
 
         return onepdm, twopdm, threepdm
 
-    def nevpt_intermediate(self, type, norb, state, **kwargs):
-
+    def nevpt_intermediate(self, type, norb, nelec, state, **kwargs):
         import os
-        f = open(os.path.join(self.scratchDirectory, "%s.%d.%d.txt" %(type, state, state)), 'r')
+
+        if self.has_nevpt == False:
+            self.twopdm = False
+            self.extraline.append('restart_nevpt2_npdm')
+            if isinstance(nelec, (int, numpy.integer)):
+                neleca = nelec//2 + nelec%2
+                nelecb = nelec - neleca
+            else :
+                neleca, nelecb = nelec
+            writeDMRGConfFile(neleca, nelecb, True, self)
+            if self.verbose >= logger.DEBUG1:
+                inFile = os.path.join(self.scratchDirectory,self.configFile)
+                logger.debug1(self, 'Block Input conf')
+                logger.debug1(self, open(inFile, 'r').read())
+            executeBLOCK(self)
+            if self.verbose >= logger.DEBUG1:
+                outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                logger.debug1(self, open(outFile).read())
+            self.has_nevpt = True
+            self.extraline.pop()
+
+        f = open(os.path.join(self.scratchDirectory, "%s_matrix.%d.%d.txt" %(type, state, state)), 'r')
 
         a16 = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -309,10 +354,13 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
     f.write('outputlevel 2\n')
     f.write('hf_occ integral\n')
-    f.write('twopdm\n')
+    if(DMRGCI.twopdm):
+        f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):
-      f.write('nonspinAdapted\n')
+        f.write('nonspinAdapted\n')
     f.write('prefix  %s\n'%DMRGCI.scratchDirectory)
+    for line in DMRGCI.extraline:
+        f.write('%s\n'%line)
     f.close()
     #no reorder
     #f.write('noreorder\n')
@@ -321,12 +369,10 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI):
     integralFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.integralFile)
 # ensure 4-fold symmetry
     eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
-    print  DMRGCI.mol.symmetry
-    print  DMRGCI.orbsym
     if DMRGCI.mol.symmetry and DMRGCI.orbsym:
-        if DMRGCI.mol.symmetry == 'Dooh':
+        if DMRGCI.groupname.lower() == 'dooh':
             orbsym = [IRREP_MAP['D2h'][i % 10] for i in DMRGCI.orbsym]
-        elif DMRGCI.mol.symmetry == 'Cooh':
+        elif DMRGCI.groupname.lower() == 'cooh':
             orbsym = [IRREP_MAP['C2h'][i % 10] for i in DMRGCI.orbsym]
         else:
             orbsym = [IRREP_MAP[DMRGCI.groupname][i] for i in DMRGCI.orbsym]
@@ -366,8 +412,8 @@ def executeBLOCK(DMRGCI):
 
     inFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
     outFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.outputFile)
-    from subprocess import call
-    call("%s  %s  %s > %s"%(DMRGCI.mpiprefix, DMRGCI.executable, inFile, outFile), shell=True)
+    from subprocess import check_call
+    check_call("%s  %s  %s > %s"%(DMRGCI.mpiprefix, DMRGCI.executable, inFile, outFile), shell=True)
 
 def readEnergy(DMRGCI):
     import struct, os
@@ -376,6 +422,7 @@ def readEnergy(DMRGCI):
     file1.close()
 
     return calc_e
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -389,8 +436,7 @@ if __name__ == '__main__':
         output = 'out-dmrgci',
         atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = 'd2h',
-        #symmetry = 'dooh',
+        symmetry = True
     )
     m = scf.RHF(mol)
     m.scf()
@@ -411,8 +457,7 @@ if __name__ == '__main__':
         output = 'out-casscf',
         atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = 'd2h'
-        #symmetry = True,
+        symmetry = True
     )
     m = scf.RHF(mol)
     m.scf()
