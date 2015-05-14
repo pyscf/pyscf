@@ -156,7 +156,7 @@ class DMRGCI(object):
             nelectrons = nelec[0]+nelec[1]
 
         import os
-        f = open(os.path.join(self.scratchDirectory, "spatial_twopdm.0.0.txt"), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.0.0.txt"), 'r')
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -179,7 +179,7 @@ class DMRGCI(object):
             nelectrons = nelec[0]+nelec[1]
 
         import os
-        f = open(os.path.join(self.scratchDirectory, "spatial_twopdm.0.0.txt"), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.0.0.txt"), 'r')
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -221,7 +221,7 @@ class DMRGCI(object):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        f = open(os.path.join(self.scratchDirectory, "spatial_threepdm.0.0.txt"), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.0.0.txt"), 'r')
 
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -269,7 +269,7 @@ class DMRGCI(object):
             self.has_nevpt = True
             self.extraline.pop()
 
-        f = open(os.path.join(self.scratchDirectory, "%s_matrix.%d.%d.txt" %(type, state, state)), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "%s_matrix.%d.%d.txt" %(type, state, state)), 'r')
 
         a16 = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -417,7 +417,7 @@ def executeBLOCK(DMRGCI):
 
 def readEnergy(DMRGCI):
     import struct, os
-    file1 = open(os.path.join(DMRGCI.scratchDirectory, "dmrg.e"),"rb")
+    file1 = open(os.path.join('%s/%s/'%(DMRGCI.scratchDirectory,"node0"), "dmrg.e"),"rb")
     calc_e = struct.unpack('d', file1.read(8))[0]
     file1.close()
 
