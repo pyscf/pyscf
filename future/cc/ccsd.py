@@ -406,6 +406,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.ecc = None
         self.t1 = None
         self.t2 = None
+        self.l1 = None
+        self.l2 = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -454,6 +456,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                         self.ecc+self._scf.hf_energy, self.ecc)
         logger.timer(self, 'CCSD', *cput0)
         return self.ecc, self.t1, self.t2
+
+    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None):
+        from pyscf.cc import ccsd_lambda
+        return ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                  tol=self.conv_tol_normt,
+                                  max_memory=self.max_memory-lib.current_memory()[0],
+                                  verbose=self.verbose)
 
     def ao2mo(self, mo_coeff=None):
         #nocc = self.nocc
