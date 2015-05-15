@@ -1,2 +1,4 @@
 from pyscf.cc import ccsd
-from pyscf.cc.ccsd import CCSD
+
+def CCSD(mf, frozen=[]):
+    return ccsd.CCSD(mf, frozen)

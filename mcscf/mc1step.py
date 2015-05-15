@@ -192,7 +192,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         # increase the AH accuracy when approach convergence
         if norm_gprev*.1 < casscf.ah_start_tol:
             ah_start_tol = norm_gprev*.1
-            log.debug1('Set AH start tol to %g', ah_start_tol)
+            log.debug1('... Set AH start tol to %g', ah_start_tol)
         else:
             ah_start_tol = casscf.ah_start_tol
         ah_start_tol = max(ah_start_tol, casscf.ah_conv_tol)
@@ -228,7 +228,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
                 dxmax = numpy.max(abs(dx1))
                 if dxmax > casscf.max_orb_stepsize:
                     scale = casscf.max_orb_stepsize / dxmax
-                    log.debug1('scale rotation size %g', scale)
+                    log.debug1('... scale rotation size %g', scale)
                     dx1 = dx1 * scale
                     dx = dx + dx1
                     g_orb1 = g_orb + h_op1(dx1) + h_opjk(dx1)
@@ -243,12 +243,12 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dx1 = numpy.linalg.norm(dx1)
-                log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, max(|x|)=%4.3g, eig=%4.3g',
-                           imic, norm_gorb, norm_dx1, dxmax, w)
+                log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, max(|x|)=%4.3g, eig=%4.3g, seig=%4.3g',
+                           imic, norm_gorb, norm_dx1, dxmax, w, seig)
 
                 if norm_gorb > norm_gprev:
                     dx -= dx1
-                    log.debug1('norm_gorb > nrom_gorb_pref')
+                    log.debug1('... norm_gorb > nrom_gorb_pref')
                     if numpy.linalg.norm(dx) > 1e-14:
                         break
                 else:
@@ -263,7 +263,8 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
             if seig < casscf.ah_lindep*1e2:
                 xcollect.pop(-1)
                 jkcollect.pop(-1)
-                break
+                #log.debug1('... break micro_inner, seig = %g', seig)
+                #break
 
             if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad*.5):
                 break
@@ -272,7 +273,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         if numpy.linalg.norm(dx) > 1e-14:
             x0 = x0 + dx
         else:
-# Occasionally, all trial rotation goes to the branch "norm_gorb > norm_gprev".
+# Occasionally, all trial rotation goes to the case "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
             dx1 *= .2
             x0 = x0 + dx1
@@ -331,7 +332,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        log.debug1('AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
+        log.debug1('... AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
         if norm_dx < tol or s0 < lindep:
             conv = True
@@ -348,17 +349,17 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
 
 def _regular_step(heff, ovlp, xs, log):
     w, v = scipy.linalg.eigh(heff, ovlp)
-    log.debug2('AH eigs %s', str(w))
+    log.debug3('AH eigs %s', str(w))
 
     for index, x in enumerate(abs(v[0])):
         if x > .1:
             break
 
     if w[1] < 0:
-        log.debug1('Negative hessian eigenvalue found %s',
+        log.debug2('Negative hessian eigenvalue found %s',
                    str(scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])[0][:5]))
     if index > 0 and w[0] < -1e-5:
-        log.debug('AH might follow negative hessians %s', str(w[:index]))
+        log.debug1('AH might follow negative hessians %s', str(w[:index]))
 
     if abs(v[0,index]) < 1e-4:
         raise RuntimeError('aug_hess diverge')
@@ -471,7 +472,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
     elast = e_tot
 
     if casscf.diis:
-        adiis = pyscf.lib.diis.DIIS(casscf)
+        if isinstance(casscf.diis, pyscf.lib.diis.DIIS):
+            adiis = casscf.diis
+        else:
+            adiis = pyscf.lib.diis.DIIS(casscf)
     dodiis = False
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -556,7 +560,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, log)
+    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, verbose=log)
     casscf.save_mo_coeff(mo, imacro, imicro)
 
     log.note('1-step CASSCF, energy = %.15g', e_tot)
@@ -597,6 +601,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             idx = numpy.argsort(w)
             w = w[idx]
             c1 = c1[:,idx]
+            if hasattr(mc, 'orbsym'): # for mc1step_symm
+                mc.orbsym[:ncore] = mc.orbsym[:ncore][idx]
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
         if log.verbose >= logger.DEBUG:
             for i in range(ncore):
@@ -607,6 +613,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             idx = numpy.argsort(w)
             w = w[idx]
             c1 = c1[:,idx]
+            if hasattr(mc, 'orbsym'): # for mc1step_symm
+                mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
         if log.verbose >= logger.DEBUG:
             for i in range(ncore):

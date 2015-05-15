@@ -92,7 +92,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, log)
+    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, verbose=log)
     casscf.save_mo_coeff(mo, imacro, imicro)
 
     log.note('2-step CASSCF, energy = %.15g', e_tot)

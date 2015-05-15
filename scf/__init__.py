@@ -28,8 +28,7 @@ to control the SCF method.
         initial guess method.  It can be one of 'minao', 'atom', '1e', 'chkfile'.
         Default is 'minao'
     DIIS : class listed in :mod:`scf.diis`
-        DIIS model.  Default is :class:`diis.SCF_DIIS`. Set it to None to
-        turn off DIIS.
+        Default is :class:`diis.SCF_DIIS`. Set it to None/False to turn off DIIS.
     diis_space : int
         DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
     diis_start_cycle : int

@@ -78,7 +78,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
                     'SCF may be inaccurate and hard to converge.', cond)
 
     if mf.DIIS:
-        adiis = mf.DIIS(mf)
+        adiis = mf.DIIS(mf, mf.diis_file)
         adiis.space = mf.diis_space
     else:
         adiis = None
@@ -675,12 +675,13 @@ class SCF(object):
             initial guess method.  It can be one of 'minao', 'atom', '1e', 'chkfile'.
             Default is 'minao'
         DIIS : class listed in :mod:`scf.diis`
-            DIIS model.  Default is :class:`diis.SCF_DIIS`. Set it to None to
-            turn off DIIS.
+            Default is :class:`diis.SCF_DIIS`. Set it to None to turn off DIIS.
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
         diis_start_cycle : int
             The step to start DIIS.  Default is 3.
+        diis_file: 'str'
+            File to store DIIS vectors and error vectors.
         level_shift_factor : float or int
             Level shift (in AU) for virtual space.  Default is 0.
         direct_scf : bool
@@ -729,6 +730,7 @@ class SCF(object):
         self.DIIS = diis.SCF_DIIS
         self.diis_space = 8
         self.diis_start_cycle = 3
+        self.diis_file = None
         self.damp_factor = 0
         self.level_shift_factor = 0
         self.direct_scf = True
@@ -796,15 +798,15 @@ class SCF(object):
             h1e : 2D ndarray
                 Core hamiltonian
             s1e : 2D ndarray
-                Overlap matrix, for DIIS if required
+                Overlap matrix, for DIIS
             vhf : 2D ndarray
                 HF potential matrix
             dm : 2D ndarray
-                Density matrix, for DIIS if required
+                Density matrix, for DIIS
 
         Kwargs:
             cycle : int
-                Then present SCF iteration step, for DIIS if required
+                Then present SCF iteration step, for DIIS
             adiis : an instance of :attr:`SCF.DIIS` class
                 the object to hold intermediate Fock and error vectors
         '''
@@ -817,7 +819,7 @@ class SCF(object):
             fac = (self.level_shift_factor *
                    numpy.exp(self.diis_start_cycle-cycle-1))
             f = level_shift(s1e, dm*.5, f, fac)
-        if adiis is not None and cycle >= self.diis_start_cycle:
+        if adiis and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm, f)
         return f
 
@@ -1045,7 +1047,7 @@ class RHF(SCF):
     def __init__(self, mol):
         if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
-# Note: self._eri requires large mount of memory
+# Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
         self._eri = None
 

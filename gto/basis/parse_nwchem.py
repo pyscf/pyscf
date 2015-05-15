@@ -68,10 +68,10 @@ def parse(basisfile, symb):
 def search_seg(basisfile, symb):
     fin = open(basisfile, 'r')
     fdata = fin.read().split('#BASIS SET')
+    fin.close()
     for dat in fdata[1:]:
         if symb+' ' in dat:
-            break
-    fin.close()
-    # remove blank lines
-    return [x for x in dat.split('\n')[1:] if x.strip() and 'END' not in x]
+            # remove blank lines
+            return [x for x in dat.split('\n')[1:] if x.strip() and 'END' not in x]
+    raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 

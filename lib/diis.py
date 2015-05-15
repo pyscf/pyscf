@@ -32,22 +32,30 @@ class DIIS(object):
             self.stdout = sys.stdout
         self.space = 6
         self.min_space = 1
-        if not isinstance(filename, str):
-            self._tmpfile = tempfile.NamedTemporaryFile()
-            self.filename = self._tmpfile.name
-            self._buffer = {}
-            self._diisfile = h5py.File(self.filename)
-            self._head = 0
-            self._H = None
-            self._xopt = None
-            self._err_vec_touched = False
+
+        self.filename = filename
+        if isinstance(filename, str):
+            self._diisfile = h5py.File(filename, 'w')
         else:
-            self.filename = filename
-            raise RuntimeError('TODO: initialized from given file %s' % filename)
+            self._tmpfile = tempfile.NamedTemporaryFile()
+            self._diisfile = h5py.File(self._tmpfile.name, 'w')
+        self._buffer = {}
+        self._head = 0
+        self._H = None
+        self._xopt = None
+        self._err_vec_touched = False
 
     def __del__(self):
         self._diisfile.close()
         self._tmpfile = None
+
+    def _store(self, key, value):
+        if key in self._diisfile:
+            self._diisfile[key][:] = value
+        else:
+            self._diisfile[key] = value
+# to avoid "Unable to find a valid file signature" error when reopen from crash
+        self._diisfile.flush()
 
     def push_err_vec(self, x):
         self._err_vec_touched = True
@@ -56,10 +64,12 @@ class DIIS(object):
         key = 'e%d' % self._head
         if x.size < INCORE_SIZE:
             self._buffer[key] = x.ravel()
-        elif key in self._diisfile:
-            self._diisfile['e%d'%self._head][:] = x.ravel()
+            if isinstance(self.filename, str):
+                # save the error vector if filename is given, this file can be
+                # used to restore the DIIS state
+                self._store(key, x.ravel())
         else:
-            self._diisfile['e%d'%self._head] = x.ravel()
+            self._store(key, x.ravel())
         self._head += 1
 
     def push_vec(self, x):
@@ -74,25 +84,29 @@ class DIIS(object):
             key = 'x%d' % (self._head - 1)
             if x.size < INCORE_SIZE:
                 self._buffer[key] = x
-            elif key in self._diisfile:
-                self._diisfile[key][:] = x
+                if isinstance(self.filename, str):
+                    self._store(key, x)
             else:
-                self._diisfile[key] = x
+                self._store(key, x)
         elif self._xopt is None: # pass the first trial vectors
             self._xopt = x
         else:
             if self._head >= self.space:
                 self._head = 0
+            ekey = 'e%d'%self._head
+            xkey = 'x%d'%self._head
             if x.size < INCORE_SIZE:
-                self._buffer['e%d'%self._head] = x - self._xopt
-                self._buffer['x%d'%self._head] = x
+                self._buffer[ekey] = x - self._xopt
+                self._buffer[xkey] = x
+                if isinstance(self.filename, str):
+                    self._store(ekey, self._buffer[ekey])
+                    self._store(xkey, x)
             else:
-                if 'x%d' % self._head not in self._diisfile:
-                    self._diisfile.create_dataset('e%d'%self._head, (x.size,), x.dtype)
-                    self._diisfile.create_dataset('x%d'%self._head, (x.size,), x.dtype)
-                self._diisfile['x%d'%self._head][:] = x
+                if ekey not in self._diisfile:
+                    self._diisfile.create_dataset(ekey, (x.size,), x.dtype)
                 for p0,p1 in prange(0, x.size, BLOCK_SIZE):
-                    self._diisfile['e%d'%self._head][p0:p1] = x[p0:p1] - self._xopt[p0:p1]
+                    self._diisfile[ekey][p0:p1] = x[p0:p1] - self._xopt[p0:p1]
+                self._store(xkey, x)
             self._head += 1
 
     def get_err_vec(self, idx):

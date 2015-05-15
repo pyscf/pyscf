@@ -136,7 +136,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
     old_det_idxa = numpy.argsort(guide_stringsa)
     old_det_idxb = numpy.argsort(guide_stringsb)
-    return ci[old_det_idxa[:,None],old_det_idxb]
+    return ci.take(old_det_idxa, axis=0).take(old_det_idxb, axis=1)
 
 
 if __name__ == '__main__':

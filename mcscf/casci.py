@@ -158,6 +158,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         idx = numpy.argsort(occ)
         occ = occ[idx]
         ucas = ucas[:,idx]
+        if hasattr(mc, 'orbsym'): # for casci_symm
+            mc.orbsym[ncore:nocc] = mc.orbsym[ncore:nocc][idx]
+            mc.fcisolver.orbsym = mc.orbsym[ncore:nocc]
 
     occ = -occ
 
