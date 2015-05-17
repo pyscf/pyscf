@@ -18,7 +18,6 @@ from pyscf import mcscf
 from pyscf import ao2mo
 from pyscf import scf
 from pyscf.ao2mo import _ao2mo
-from pyscf.future.dmrgscf.dmrgci import DMRGCI
 
 libmc = pyscf.lib.load_library('libmcscf')
 
@@ -296,12 +295,10 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
         h1e_v = eris['h1eff'][nocc:,ncore:nocc] - numpy.einsum('mbbn->mn',h2e_v)
 
 
-    if isinstance(mc.fcisolver, DMRGCI):
-        print "IS DMRGCI"
+    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         state = 0
         a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,state)
     else:
-        print "NOT DMRGCI"
         a16 = make_a16(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
     a17 = make_a17(h1e,h2e,dm2,dm3)
     a19 = make_a19(h1e,h2e,dm1,dm2)
@@ -340,7 +337,7 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
         h2e_v = eris['aapp'][:,:,ncore:nocc,:ncore].transpose(2,0,3,1)
         h1e_v = eris['h1eff'][ncore:nocc,:ncore]
 
-    if isinstance(mc.fcisolver, DMRGCI):
+    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         #mc.fcisolver.make_a22(mc.ncas, state)
         state = 0
         a22 = mc.fcisolver.nevpt_intermediate('A22',mc.ncas,mc.nelecas,state)
@@ -576,15 +573,13 @@ def sc_nevpt(mc, verbose=None):
     time0 = (time.clock(), time.time())
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    print 'mc.fcisolver'
-    print type(mc.fcisolver)
-    if isinstance(mc.fcisolver, DMRGCI):
-      print "IS DMRG"
-      dm1, dm2, dm3 = mc.fcisolver.make_rdm123(None,mc.ncas,mc.nelecas,None)
+    logger.debug(mc, 'mc.fcisolver = %s', type(mc.fcisolver))
+    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
+        logger.info(mc, 'DMRG-NEVPT')
+        dm1, dm2, dm3 = mc.fcisolver.make_rdm123(None,mc.ncas,mc.nelecas,None)
     else:
-      print "NOT DMRG"
-      dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
-                                       mc.ci, mc.ci, mc.ncas, mc.nelecas)
+        dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
+                                           mc.ci, mc.ci, mc.ncas, mc.nelecas)
     dm4 = None
 
     #hdm1 = make_hdm1(dm1)
@@ -600,7 +595,7 @@ def sc_nevpt(mc, verbose=None):
     time1 = log.timer('integral transformation', *time1)
     nocc = mc.ncore + mc.ncas
 
-    if not isinstance(mc.fcisolver, DMRGCI):
+    if not hasattr(mc.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
         link_indexa = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[0])
         link_indexb = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[1])
         aaaa = eris['aapp'][:,:,mc.ncore:nocc,mc.ncore:nocc].copy()
