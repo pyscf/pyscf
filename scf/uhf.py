@@ -397,19 +397,14 @@ class UHF(hf.SCF):
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
         f = (h1e+vhf[0], h1e+vhf[1])
         if 0 <= cycle < self.diis_start_cycle-1:
             f = (hf.damping(s1e, dm[0], f[0], self.damp_factor),
                  hf.damping(s1e, dm[1], f[1], self.damp_factor))
-            f = (hf.level_shift(s1e, dm[0], f[0], self.level_shift_factor),
-                 hf.level_shift(s1e, dm[1], f[1], self.level_shift_factor))
-        elif 0 <= cycle:
-            fac = (self.level_shift_factor *
-                   numpy.exp(self.diis_start_cycle-cycle-1))
-            f = (hf.level_shift(s1e, dm[0], f[0], fac),
-                 hf.level_shift(s1e, dm[1], f[1], fac))
-        if adiis is not None and cycle >= self.diis_start_cycle:
+        f = (hf.level_shift(s1e, dm[0], f[0], self.level_shift_factor),
+             hf.level_shift(s1e, dm[1], f[1], self.level_shift_factor))
+        if adiis and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm, numpy.array(f))
         return f
 
@@ -468,35 +463,39 @@ class UHF(hf.SCF):
     def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
-        if self._is_mem_enough() or self._eri is not None:
+        cpu0 = (time.clock(), time.time())
+        if self._eri is not None or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
         else:
             vj, vk = hf.get_jk(mol, dm, hermi, self.opt)
-        logger.timer(self, 'vj and vk', *t0)
+        logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrices.
         See :func:`scf.uhf.get_veff`
+
+        Args:
+            mol : an instance of :class:`Mole`
+
+            dm : a list of ndarrays
+                A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
-        if self._is_mem_enough() or self._eri is not None:
+        if (self._eri is not None or self._is_mem_enough() or
+            not self.direct_scf):
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = _makevhf(vj, vk, nset)
-        if self.direct_scf:
+        else:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
             vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
-        else:
-            vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = _makevhf(vj, vk, nset)
         return vhf
 
     def scf(self, dm0=None):

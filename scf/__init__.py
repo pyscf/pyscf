@@ -32,7 +32,7 @@ to control the SCF method.
     diis_space : int
         DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
     diis_start_cycle : int
-        The step to start DIIS.  Default is 3.
+        The step to start DIIS.  Default is 0.
     level_shift_factor : float or int
         Level shift (in AU) for virtual space.  Default is 0.
     direct_scf : bool

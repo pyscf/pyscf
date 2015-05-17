@@ -384,6 +384,7 @@ def parse_xc_name(xc_name='LDA,VWN'):
                         'BR89', 'BJ06' , 'TB09' , 'RPP09' , '2D_PRHG07' ,
                         '2D_PRHG07_PRP10',):
             x_code = XC_CODES['XC_MGGA_X_'+x_name]
+            raise RuntimeError('TODO: meta-GGA')
         else:
             raise KeyError('Unknown exchange functional %s' % x_name)
 
@@ -400,6 +401,7 @@ def parse_xc_name(xc_name='LDA,VWN'):
             c_code = XC_CODES['XC_GGA_C_'+c_name]
         elif c_name in ('TPSS', 'VSXC',):
             c_code = XC_CODES['XC_MGGA_C_'+c_name]
+            raise RuntimeError('TODO: meta-GGA')
         elif _is_hybrid_xc(c_name):
             raise KeyError('xc = %s, C functional %s is hybrid' % (xc_name, c_name))
         elif _is_x_and_c(c_name):

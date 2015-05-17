@@ -68,6 +68,15 @@ int VXCdel_libxc(xc_func_type *func_x, xc_func_type *func_c)
         return 0;
 }
 
+// y += x
+static void addvec(double *y, double *x, int n)
+{
+        int i;
+        for (i = 0; i < n; i++) {
+                y[i] += x[i];
+        }
+}
+
 /* Extracted from comments of libxc:gga.c
  
     sigma_st       = grad rho_s . grad rho_t
@@ -111,7 +120,7 @@ void VXCnr_eval_xc(int x_id, int c_id, int spin, int relativity, int np,
                 // exc is the energy density
                 // note libxc have added exc/ec to vrho/vcrho
                 xc_lda_exc_vxc(&func_x, np, rho, exc, vrho);
-                memset(vsigma, 0, sizeof(double)*np);
+                //memset(vsigma, 0, sizeof(double)*np);
                 break;
         case XC_FAMILY_GGA:
         case XC_FAMILY_HYB_GGA:
@@ -132,8 +141,10 @@ void VXCnr_eval_xc(int x_id, int c_id, int spin, int relativity, int np,
                 case XC_FAMILY_GGA:
                         xc_gga_exc_vxc(&func_c, np, rho, sigma, ec,
                                        vcrho, vcsigma);
-                        for (i = 0; i < np; i++) {
-                                vsigma[i] += vcsigma[i];
+                        if (spin == XC_POLARIZED) {
+                                addvec(vsigma, vcsigma, np*3);
+                        } else {
+                                addvec(vsigma, vcsigma, np);
                         }
                         break;
                 default:
@@ -142,9 +153,11 @@ void VXCnr_eval_xc(int x_id, int c_id, int spin, int relativity, int np,
                                 func_c.info->name);
                         exit(1);
                 }
-                for (i = 0; i < np; i++) {
-                        exc[i] += ec[i];
-                        vrho[i] += vcrho[i];
+                addvec(exc, ec, np);
+                if (spin == XC_POLARIZED) {
+                        addvec(vrho, vcrho, np*2);
+                } else {
+                        addvec(vrho, vcrho, np);
                 }
         }
 
@@ -167,7 +180,7 @@ void VXCnr_eval_x(int x_id, int spin, int relativity, int np,
                 // ex is the energy density
                 // note libxc have added ex/ec to vrho/vcrho
                 xc_lda_exc_vxc(&func_x, np, rho, ex, vrho);
-                memset(vsigma, 0, sizeof(double)*np);
+                //memset(vsigma, 0, sizeof(double)*np);
                 break;
         case XC_FAMILY_GGA:
         case XC_FAMILY_HYB_GGA:

@@ -679,7 +679,7 @@ class SCF(object):
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
         diis_start_cycle : int
-            The step to start DIIS.  Default is 3.
+            The step to start DIIS.  Default is 0.
         diis_file: 'str'
             File to store DIIS vectors and error vectors.
         level_shift_factor : float or int
@@ -729,7 +729,7 @@ class SCF(object):
         self.init_guess = 'minao'
         self.DIIS = diis.SCF_DIIS
         self.diis_space = 8
-        self.diis_start_cycle = 3
+        self.diis_start_cycle = 0
         self.diis_file = None
         self.damp_factor = 0
         self.level_shift_factor = 0
@@ -813,12 +813,7 @@ class SCF(object):
         f = h1e + vhf
         if 0 <= cycle < self.diis_start_cycle-1:
             f = damping(s1e, dm*.5, f, self.damp_factor)
-            f = level_shift(s1e, dm*.5, f, self.level_shift_factor)
-        elif 0 <= cycle:
-            # decay the level_shift_factor
-            fac = (self.level_shift_factor *
-                   numpy.exp(self.diis_start_cycle-cycle-1))
-            f = level_shift(s1e, dm*.5, f, fac)
+        f = level_shift(s1e, dm*.5, f, self.level_shift_factor)
         if adiis and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm, f)
         return f
@@ -865,7 +860,7 @@ class SCF(object):
         elif key.lower() == 'chkfile':
             try:
                 dm = self.init_guess_by_chkfile()
-            except IOError, KeyError:
+            except (IOError, KeyError):
                 logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(mol)
@@ -1204,13 +1199,8 @@ class ROHF(RHF):
 
         if 0 <= cycle < self.diis_start_cycle-1:
             f = damping(s1e, dm[0], f, self.damp_factor)
-            f = level_shift(s1e, dm[0], f, self.level_shift_factor)
-        elif 0 <= cycle:
-            # decay the level_shift_factor
-            fac = (self.level_shift_factor *
-                   numpy.exp(self.diis_start_cycle-cycle-1))
-            f = level_shift(s1e, dm[0], f, fac)
-        if adiis is not None and cycle >= self.diis_start_cycle:
+        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
+        if adiis and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm[0], f)
 # attach alpha and beta fock, because Roothaan effective Fock cannot provide
 # correct orbital energy.  To define orbital energy in self.eig, we use alpha
@@ -1268,7 +1258,14 @@ class ROHF(RHF):
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
         nset = len(dm) // 2
-        if self.direct_scf:
+        if (self._eri is not None or self._is_mem_enough() or
+            not self.direct_scf):
+            dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
+            vj, vk = self.get_jk(mol, dm, hermi)
+            vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
+            vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
+            vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
+        else:
             ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
             ddm = numpy.vstack((ddm[nset:],             # closed shell
                                 ddm[:nset]-ddm[nset:])) # open shell
@@ -1277,12 +1274,6 @@ class ROHF(RHF):
             vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset) \
                 + numpy.array(vhf_last, copy=False)
-        else:
-            dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
-            vj, vk = self.get_jk(mol, dm, hermi)
-            vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
-            vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
-            vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         return vhf
 
 
