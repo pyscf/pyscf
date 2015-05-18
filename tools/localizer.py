@@ -10,7 +10,7 @@
 # in both cases with an analytic gradient and hessian
 #
 # Reference: C. Edmiston and K. Ruedenberg, Reviews of Modern Physics 35, 457-464 (1963). http://dx.doi.org/10.1103/RevModPhys.35.457
-#            http://sebwouters.github.io/CheMPS2/classCheMPS2_1_1EdmistonRuedenberg.html
+#            http://sebwouters.github.io/CheMPS2/doxygen/classCheMPS2_1_1EdmistonRuedenberg.html
 #
 
 from pyscf import gto, scf
