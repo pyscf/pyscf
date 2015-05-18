@@ -17,7 +17,9 @@
 #
 # \frac{\partial E}{\partial x_{ov}} = 4 * f_{vo}
 #
-# \frac{\partial^2 E}{\partial x_{ov} \partial x_{pw}} = 4 * delta_{op} * f_{vw} - 4 * delta_{vw} * f_{op}
+# \frac{\partial^2 E}{\partial x_{ov} \partial x_{pw}} = 4 * delta_{op} * f_{vw}
+#                                                      - 4 * delta_{vw} * f_{op}
+#                                                      + 4 * [ 4 * (vo|wp) - (vw|op) - (vp|wo) ]
 #
 
 from pyscf import gto, scf
@@ -28,7 +30,35 @@ import numpy as np
 import scipy
 import scipy.sparse.linalg
 
-def __wrapAugmentedHessian( FOCK_mo, numPairs, numVirt ):
+class __JKengine:
+
+    def __init__( self, myMF, orbitals=None ):
+    
+        self.mf = myMF
+        self.dm_prev  = 0
+        self.vhf_prev = 0
+        self.orbs     = orbitals
+        #self.iter     = 0
+        
+    def getJK_mo( self, dm_mo ):
+    
+        dm_ao = np.dot( np.dot( self.orbs, dm_mo ), self.orbs.T )
+        JK_ao = self.mf.get_veff( self.mf.mol, dm_ao, dm_last=self.dm_prev, vhf_last=self.vhf_prev )
+        self.dm_prev  = dm_ao
+        self.vhf_prev = JK_ao
+        JK_mo = np.dot( np.dot( self.orbs.T, JK_ao ), self.orbs )
+        #self.iter += 1
+        return JK_mo
+        
+    def getJK_ao( self, dm_ao ):
+    
+        JK_ao = self.mf.get_veff( self.mf.mol, dm_ao, dm_last=self.dm_prev, vhf_last=self.vhf_prev )
+        self.dm_prev  = dm_ao
+        self.vhf_prev = JK_ao
+        #self.iter += 1
+        return JK_ao
+
+def __wrapAugmentedHessian( FOCK_mo, numPairs, numVirt, myJK_mo ):
 
     def matvec( vector ):
 
@@ -38,6 +68,10 @@ def __wrapAugmentedHessian( FOCK_mo, numPairs, numVirt ):
         outblock  = 4 * FOCK_mo[:numPairs,numPairs:] * xscalar \
                   + 4 * np.dot( xblock, FOCK_mo[numPairs:,numPairs:] ) \
                   - 4 * np.dot( FOCK_mo[:numPairs,:numPairs], xblock )
+        fakedens  = np.zeros( [ FOCK_mo.shape[0], FOCK_mo.shape[0] ], dtype=float )
+        fakedens[:numPairs,numPairs:] = xblock
+        fakedens[numPairs:,:numPairs] = xblock.T
+        outblock += 8 * ( myJK_mo.getJK_mo( fakedens )[:numPairs,numPairs:] )
     
         result = np.zeros( [ len(vector) ], dtype=float )
         result[ len(vector)-1 ] = 4 * np.einsum( 'ij,ij->', xblock, FOCK_mo[:numPairs,numPairs:] )
@@ -67,14 +101,12 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
             dm_ao = np.dot( np.dot( myMF.mo_coeff, np.diag( myMF.mo_occ ) ), myMF.mo_coeff.T )
     else:
         dm_ao = np.array( dm_guess, copy=True )
-
-    vhf_ao  = myMF.get_veff( myMF.mol, dm_ao )
-    FOCK_ao = OEI_ao + vhf_ao
+        
+    myJK_ao = __JKengine( myMF )
+    FOCK_ao = OEI_ao + myJK_ao.getJK_ao( dm_ao )
     energies, orbitals = scipy.linalg.eigh( a=FOCK_ao, b=S_ao )
-    dm_prev = np.array( dm_ao, copy=True )
     dm_ao   = 2 * np.dot( orbitals[:,:numPairs], orbitals[:,:numPairs].T )
-    vhf_ao  = myMF.get_veff( myMF.mol, dm_ao, dm_last=dm_prev, vhf_last=vhf_ao )
-    FOCK_ao = OEI_ao + vhf_ao
+    FOCK_ao = OEI_ao + myJK_ao.getJK_ao( dm_ao )
     FOCK_mo = np.dot( orbitals.T, np.dot( FOCK_ao, orbitals ))
     grdnorm = 4 * np.linalg.norm( FOCK_mo[:numPairs,numPairs:] )
     energy  = myMF.mol.energy_nuc() + 0.5 * np.einsum( 'ij,ij->', OEI_ao + FOCK_ao, dm_ao )
@@ -86,12 +118,14 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
     while ( grdnorm > 1e-8 ):
     
         iteration += 1
-        AugmentedHessian = scipy.sparse.linalg.LinearOperator( ( numVars+1, numVars+1 ), __wrapAugmentedHessian( FOCK_mo, numPairs, numVirt ), dtype=float )
+        tempJK_mo = __JKengine( myMF, orbitals )
+        AugmentedHessian = scipy.sparse.linalg.LinearOperator( ( numVars+1, numVars+1 ), __wrapAugmentedHessian( FOCK_mo, numPairs, numVirt, tempJK_mo ), dtype=float )
         ini_guess = np.ones( [ numVars+1 ], dtype=float )
         for occ in range( numPairs ):
             for virt in range( numVirt ):
                 ini_guess[ occ + numPairs * virt ] = - FOCK_mo[ occ, numPairs + virt ] / max( FOCK_mo[ numPairs + virt, numPairs + virt ] - FOCK_mo[ occ, occ ], 1e-6 )
         eigenval, eigenvec = scipy.sparse.linalg.eigsh( AugmentedHessian, k=1, which='SA', v0=ini_guess, ncv=1024, maxiter=(numVars+1) )
+        #logger.note(myMF, "   RHF:NewtonRaphson :: # JK computs  (iteration %d) = %d", iteration, tempJK_mo.iter)
         eigenvec = eigenvec / eigenvec[ numVars ]
         update   = np.reshape( eigenvec[:-1], ( numPairs, numVirt ), order='F' )
         xmat     = np.zeros( [ OEI_ao.shape[0], OEI_ao.shape[0] ], dtype=float )
@@ -99,10 +133,8 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
         xmat[numPairs:,:numPairs] = update.T
         unitary  = scipy.linalg.expm( xmat )
         orbitals = np.dot( orbitals, unitary )
-        dm_prev  = np.array( dm_ao, copy=True )
         dm_ao    = 2 * np.dot( orbitals[:,:numPairs], orbitals[:,:numPairs].T )
-        vhf_ao   = myMF.get_veff( myMF.mol, dm_ao, dm_last=dm_prev, vhf_last=vhf_ao )
-        FOCK_ao  = OEI_ao + vhf_ao
+        FOCK_ao  = OEI_ao + myJK_ao.getJK_ao( dm_ao )
         FOCK_mo  = np.dot( orbitals.T, np.dot( FOCK_ao, orbitals ))
         grdnorm  = 4 * np.linalg.norm( FOCK_mo[:numPairs,numPairs:] )
         energy   = myMF.mol.energy_nuc() + 0.5 * np.einsum( 'ij,ij->', OEI_ao + FOCK_ao, dm_ao )
