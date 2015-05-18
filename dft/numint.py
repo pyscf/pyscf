@@ -374,7 +374,8 @@ class _NumInt(object):
                     wv[0]  = weight * vrho * .5
                     wv[1:] = rho[1:] * (weight * vsigma * 2)
                     aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrids, non0tab)
+                    vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
+                                            non0tab)
                 else:
                     exc, vrho, vsigma = eval_xc(x_id, c_id, rho, rho,
                                                 spin=0, verbose=verbose)
@@ -382,7 +383,8 @@ class _NumInt(object):
                     nelec[idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
                     aow = ao * (.5*weight*vrho).reshape(-1,1)
-                    vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ngrids, non0tab)
+                    vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0,
+                                            non0tab)
             wv = aow = None
         for i in range(nset):
             vmat[i] = vmat[i] + vmat[i].T
@@ -435,7 +437,7 @@ class _NumInt(object):
                 if isgga:
                     rho = numpy.hstack((rho_a[0].reshape(-1,1),
                                         rho_b[0].reshape(-1,1)))
-                    sigma = numpy.empty((ngrids,3))
+                    sigma = numpy.empty((ip1-ip0,3))
                     sigma[:,0] = numpy.einsum('ip,ip->p', rho_a[1:], rho_a[1:])
                     sigma[:,1] = numpy.einsum('ip,ip->p', rho_a[1:], rho_b[1:])
                     sigma[:,2] = numpy.einsum('ip,ip->p', rho_b[1:], rho_b[1:])
@@ -453,13 +455,13 @@ class _NumInt(object):
                     wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
                     wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
                     aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrids,
+                    vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
                                               non0tab)
                     wv[0]  = weight * vrho[:,1] * .5
                     wv[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
                     wv[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
                     aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrids,
+                    vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
                                               non0tab)
 
                 else:
@@ -474,9 +476,11 @@ class _NumInt(object):
                     excsum[idm] += (den*exc).sum()
 
                     aow = ao * (.5*weight*vrho[:,0]).reshape(-1,1)
-                    vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ngrids, non0tab)
+                    vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0,
+                                              non0tab)
                     aow = ao * (.5*weight*vrho[:,1]).reshape(-1,1)
-                    vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ngrids, non0tab)
+                    vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0,
+                                              non0tab)
             wv = aow = None
         for i in range(nset):
             vmat[0,i] = vmat[0,i] + vmat[0,i].T
