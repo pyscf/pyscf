@@ -21,6 +21,13 @@ var/
 .installed.cfg
 *.egg
 
+# Local log files
+*~
+
+# Calculation examples
+*.molden
+
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
