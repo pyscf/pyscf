@@ -6,6 +6,19 @@
 #
 # Augmented Hessian Newton-Raphson optimization of the RHF energy
 #
+# The gradient and hessian were determined from the equations in
+# http://sebwouters.github.io/CheMPS2/doxygen/classCheMPS2_1_1CASSCF.html
+# by throwing out all active space components.
+#
+# In the following:
+#    * (o,p) denote occupied spatial RHF orbitals
+#    * (v,w) denote virtual  spatial RHF orbitals
+#    * f is the Fock operator
+#
+# \frac{\partial E}{\partial x_{ov}} = 4 * f_{vo}
+#
+# \frac{\partial^2 E}{\partial x_{ov} \partial x_{pw}} = 4 * delta_{op} * f_{vw} - 4 * delta_{vw} * f_{op}
+#
 
 from pyscf import gto, scf
 from pyscf.lib import logger
