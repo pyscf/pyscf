@@ -32,8 +32,8 @@
 typedef struct {
         unsigned int addr;
         unsigned short ia;
-        char sign;
-        char _padding;
+        signed char sign;
+        signed char _padding;
 } _LinkT;
 #define EXTRACT_IA(I)   (I.ia)
 #define EXTRACT_SIGN(I) (I.sign)

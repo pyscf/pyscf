@@ -164,6 +164,7 @@ class RHF(hf.RHF):
                 logger.warn(self, '!! No irrep %s', irname)
         return hf.RHF.build_(self, mol)
 
+#TODO: force E1gx/E1gy ... use the same coefficients
     def eig(self, h, s):
         nirrep = self.mol.symm_orb.__len__()
         h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)

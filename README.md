@@ -103,7 +103,8 @@ Known problems
 
   This problem relates to MKL v11.1 on intel64 architecture.  Currently,
   there is no solution for the combination of Python + MKL 11.1 + AVX.
-  You need either change to other MKL version or drop mkl_avx:
+  You need either change to other MKL version (10.*, 11.0, 11.2) or
+  disable mkl_avx:
 
         BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
 

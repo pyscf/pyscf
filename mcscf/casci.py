@@ -315,7 +315,6 @@ class CASCI(object):
         self.max_memory = mf.max_memory
         self.ncas = ncas
         if isinstance(nelecas, (int, numpy.integer)):
-            assert(nelecas%2 == 0)
             nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
             self.nelecas = (neleca, nelecb)

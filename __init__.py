@@ -7,15 +7,20 @@ Features
 --------
 
 1. Common quantum chemistry methods
-    * Non-relativistic and relativistic Hartree-Fock
-    * Non-relativistic DFT
+    * Hartree-Fock
+    * DFT
     * CASSCF and FCI
+    * Full CI
     * MP2
+    * SC-NEVPT2
     * CCSD
-    * General non-relativistic integral transformation
-    * Non-relativistic DFT
-    * Hartree-Fock Gradient
-    * Hartree-Fock NMR
+    * CCSD lambda
+    * EOM-CCSD
+    * Density fitting
+    * relativistic correction
+    * General integral transformation
+    * Gradient
+    * NMR
 2. Interface to integral package `Libcint <https://github.com/sunqm/libcint>`_
 3. Interface to DMRG `CheMPS2 <https://github.com/SebWouters/CheMPS2>`_
 4. Interface to DMRG `Block <https://github.com/sanshar/Block>`_
@@ -41,20 +46,20 @@ to try out the package::
 
 Submodules
 ----------
-In pyscf, most submodules requires explict import::
+In pyscf, submodules require explict import::
 
     >>> from pyscf import gto, scf
 
 :mod:`gto`
     Molecular structure and basis sets.
 scf
-    Non-relativistic and relativistic SCF.
+    Non-relativistic and relativistic Hartree-Fock.
 mcscf
     CASCI, 1-step and 2-step CASSCF
 ao2mo
     General 2-electron AO to MO integral transformation
 dft
-    Non-relativistic RKS
+    Non-relativistic DFT
 df
     Density fitting
 fci
@@ -70,7 +75,7 @@ grad
 lo
     Localization and orbital orthogonalization
 lib
-    Basic functions and C extension
+    Basic functions and C extensions
 nmr
     NMR
 mp
@@ -78,15 +83,15 @@ mp
 symm
     Symmetry
 tools
-    Convert pyscf data to the data format for other packages
+
 
 Pure function and Class
 -----------------------
-The class in each method are designed to hold only the final results and the
-control parameters such as maximum number of iterations, convergence
-threshold, etc.  The intermediate status are not saved in the class.  If the
-class.kernel() function is finished without any errors,  the solution will be
-saved in the class (see documentation for each class).
+The class are designed to hold only the final results and the control
+parameters such as maximum number of iterations, convergence threshold, etc.
+The intermediate status are not saved in the class.  If the .kernel() function
+is finished without any errors,  the solution will be saved in the class (see
+documentation).
 
 Most useful functions are implemented at module level, and can be accessed in
 both class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
