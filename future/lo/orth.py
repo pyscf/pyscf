@@ -129,8 +129,8 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None):
     s = mol.intor_symmetric('cint1e_ovlp_sph')
 
     if pre_orth_ao is None:
-        nbf = mol.nao_nr()
-        pre_orth_ao = numpy.eye(nbf)
+#        pre_orth_ao = numpy.eye(mol.nao_nr())
+        pre_orth_ao = pre_orth_project_ano(mol, 'ANO')
 
     if method == 'lowdin':
         s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))

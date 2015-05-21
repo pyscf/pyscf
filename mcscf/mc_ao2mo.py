@@ -340,14 +340,18 @@ class _ERIS(object):
     def __init__(self, casscf, mo, method='incore', approx=0):
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
-        nmo = mo.shape[1]
+        nao, nmo = mo.shape
         ncore = self.ncore
         ncas = self.ncas
 
-        if (method == 'outcore' or
-            ((_mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 +
-              pyscf.lib.current_memory()[0]) > casscf.max_memory*.9) or
-            (casscf._scf._eri is None)):
+        if (method == 'incore' and casscf._scf._eri is not None and
+            ((_mem_usage(ncore, ncas, nmo)[0] +
+              pyscf.lib.current_memory()[0]) > casscf.max_memory*.9)):
+            self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
+            self.Iapcv, self.Icvcv = \
+                    trans_e1_incore(casscf._scf._eri, mo,
+                                    casscf.ncore, casscf.ncas)
+        else:
             log = logger.Logger(casscf.stdout, casscf.verbose)
             max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
             if approx == 0:
@@ -360,19 +364,12 @@ class _ERIS(object):
                         light_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory,
                                          approx=approx, verbose=log)
-        elif method == 'incore' and casscf._scf._eri is not None:
-            self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
-            self.Iapcv, self.Icvcv = \
-                    trans_e1_incore(casscf._scf._eri, mo,
-                                    casscf.ncore, casscf.ncas)
-        else:
-            raise KeyError('update ao2mo')
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
     outcore = (ncore**2*nvir**2 + ncas*nmo*ncore*nvir + ncore*nmo**2*3 +
                ncas**2*nmo**2*2 + nmo**3*2) * 8/1e6
-    incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
+    incore = outcore + (ncore+ncas)*nmo**3*4/1e6
     if outcore > 10000:
         sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore
