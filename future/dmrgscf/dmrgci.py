@@ -54,7 +54,7 @@ IRREP_MAP = {'D2h': (1,         # Ag
 
 
 class DMRGCI(object):
-    def __init__(self, mol, maxM=None):
+    def __init__(self, mol, maxM=None, tol=None):
         self.mol = mol
         self.verbose = mol.verbose
         self.stdout = mol.stdout
@@ -69,11 +69,18 @@ class DMRGCI(object):
         self.twopdm = True
         self.maxIter = 20
         self.twodot_to_onedot = 15
-        self.tol = 1e-8
+        self.dmrg_switch_tol = 1e-3
+        if tol == None:
+            self.tol = 1e-8
+        else:
+            self.tol = tol/10
         if maxM == None:
             self.maxM = 1000
+        else:
+            self.maxM = maxM
         self.startM =  None
         self.restart = False
+        self.force_restart = False
         self.nonspinAdapted = False
         self.scheduleSweeps = []
         self.scheduleMaxMs  = []
@@ -102,7 +109,7 @@ class DMRGCI(object):
         if len(self.scheduleSweeps) == 0:
             startM = self.startM
             N_sweep = 0
-            if self.restart:
+            if self.restart or self.force_restart :
                 Tol = self.tol/10.0
             else:
                 Tol = 1.0e-4
@@ -147,6 +154,7 @@ class DMRGCI(object):
         log.info('twodot_to_onedot = %d', self.twodot_to_onedot)
         log.info('tol = %g', self.tol)
         log.info('maxM = %d', self.maxM)
+        log.infor('fullrestart = %s', str(self.restart or self.force_restart))
 
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -283,7 +291,7 @@ class DMRGCI(object):
 
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
         if fciRestart is None:
-            fciRestart = self.restart
+            fciRestart = self.restart or self.force_restart
         if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2 + nelec%2
             nelecb = nelec - neleca
@@ -428,7 +436,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import mcscf
-
+    settings.MPIPREFIX =''
     b = 1.4
     mol = gto.Mole()
     mol.build(

@@ -7,6 +7,7 @@ import time
 import numpy
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
+from pyscf.dmrgscf.dmrgci import DMRGCI
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
@@ -76,6 +77,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
+
+        if isinstance(casscf.fcisolver, DMRGCI):
+            if (norm_gorb < casscf.dmrg_switch_tol or norm_ddm < casscf.dmrg_switch_tol*10.0):
+                casscf.fcisolver.restart = True
+            else :
+                casscf.fcisolver.restart = False
 
         if (abs(elast - e_tot) < tol and
             norm_gorb < toloose and norm_ddm < toloose):
