@@ -15,7 +15,7 @@ import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
 from pyscf.mcscf import mc_ao2mo
-from pyscf.future.dmrgscf.dmrgci import DMRGCI
+from pyscf.dmrgscf.dmrgci import DMRGCI
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
@@ -515,10 +515,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
             if isinstance(casscf.fcisolver, DMRGCI):
-                if (norm_t < self.dmrg_switch_tol or norm_gci < self.dmrg_switch_tol):
-                    self.fcisolver.fix_quanta = True
+                if (norm_t < casscf.dmrg_switch_tol or norm_gci < casscf.dmrg_switch_tol):
+                    casscf.fcisolver.restart = True
                 else :
-                    self.fcisolver.fix_quanta = False
+                    casscf.fcisolver.restart = False
             if (norm_t < toloose or norm_gci < toloose or
                 (norm_gorb < toloose and norm_ddm < toloose) or
                 (imicro >= micro)):
