@@ -444,7 +444,7 @@ def readEnergy(DMRGCI):
     return calc_e
 
 
-def DMRGSCF(mf, norb, nelec, *args, **kwags):
+def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRGCI solver'''
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol)
