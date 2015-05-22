@@ -124,7 +124,7 @@ class CASSCF(mc1step.CASSCF):
         c = numpy.zeros((norb,norb))
         for i0 in set(orbsym):
             lst = numpy.where(orbsym == i0)[0]
-            if lst:
+            if len(lst) > 0:
                 w, v = scf.hf.eig(mat[lst[:,None],lst], None)
                 e[lst] = w
                 c[lst[:,None],lst] = v
