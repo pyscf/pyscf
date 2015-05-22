@@ -23,15 +23,15 @@ class CASSCF(mc1step.CASSCF):
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore)
 
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None:
-            macro = self.max_cycle_macro
-        if micro is None:
-            micro = self.max_cycle_micro
+        if macro is None: macro = self.max_cycle_macro
+        if micro is None: micro = self.max_cycle_micro
+        if callback is None: callback = self.callback
 
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
@@ -53,20 +53,20 @@ class CASSCF(mc1step.CASSCF):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc1step.kernel(self, mo_coeff,
                                tol=self.conv_tol, macro=macro, micro=micro,
-                               ci0=ci0, verbose=self.verbose)
+                               ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None:
-            macro = self.max_cycle_macro
-        if micro is None:
-            micro = self.max_cycle_micro
+        if macro is None: macro = self.max_cycle_macro
+        if micro is None: micro = self.max_cycle_micro
+        if callback is None: callback = self.callback
 
         self.mol.check_sanity(self)
 
@@ -86,7 +86,7 @@ class CASSCF(mc1step.CASSCF):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo_coeff,
                                tol=self.conv_tol, macro=macro, micro=micro,
-                               ci0=ci0, verbose=self.verbose)
+                               ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff

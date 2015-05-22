@@ -9,8 +9,8 @@ import scipy.linalg
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step_uhf
 
-def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
-           ci0=None, verbose=None):
+def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
+           ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -68,6 +68,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
 
             log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \
                       imicro, norm_t, norm_gorb, norm_dm1)
+
+            if callable(callback):
+                callback(locals())
+
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < toloose or norm_gorb < toloose:
                 break
@@ -87,9 +91,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         if (abs(elast - e_tot) < tol and
             norm_gorb < toloose and norm_dm1 < toloose):
             conv = True
-            break
         else:
             elast = e_tot
+
+        if dump_chk:
+            casscf.dump_chk(locals())
+
+        if conv:
+            break
 
     if conv:
         log.info('2-step CASSCF converged in %d macro (%d ah %d micro) steps',

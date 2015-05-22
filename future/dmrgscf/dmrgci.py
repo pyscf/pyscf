@@ -98,6 +98,7 @@ class DMRGCI(object):
         self.has_nevpt = False
         self.onlywriteIntegral = False
         self.extraline = []
+        self.dmrg_switch_tol = 1.0e-3
 
         self._keys = set(self.__dict__.keys())
 
@@ -135,7 +136,7 @@ class DMRGCI(object):
             self.scheduleNoises.append(0.0)
             self.twodot_to_onedot = N_sweep+2
             self.maxIter = self.twodot_to_onedot+20
-          
+
 
     def dump_flags(self, verbose=None):
         if verbose is None:
@@ -154,7 +155,8 @@ class DMRGCI(object):
         log.info('twodot_to_onedot = %d', self.twodot_to_onedot)
         log.info('tol = %g', self.tol)
         log.info('maxM = %d', self.maxM)
-        log.infor('fullrestart = %s', str(self.restart or self.force_restart))
+        log.info('fullrestart = %s', str(self.restart or self.force_restart))
+        log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
 
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -312,6 +314,16 @@ class DMRGCI(object):
 
         return calc_e, None
 
+    def restart_scheduler_(self):
+        def callback(self, envs):
+            if (envs['norm_gorb'] < self.dmrg_switch_tol or
+                ('norm_gci' in envs and envs['norm_gci'] < self.dmrg_switch_tol) or
+                ('norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10)):
+                self.restart = True
+            else :
+                self.restart = False
+
+
 def make_schedule(sweeps, Ms, tols, noises):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):
         schedule = ['schedule']
@@ -432,6 +444,14 @@ def readEnergy(DMRGCI):
     return calc_e
 
 
+def DMRGSCF(mf, norb, nelec, *args, **kwags):
+    '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRGCI solver'''
+    mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
+    mc.fcisolver = DMRGCI(mf.mol)
+    mc.callback = mc.fcisolver.restart_scheduler_()
+    return mc
+
+
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
@@ -449,8 +469,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.scf()
 
-    mc = mcscf.CASSCF(m, 4, 4)
-    mc.fcisolver = DMRGCI(mol)
+    mc = DMRGSCF(m, 4, 4)
     mc.fcisolver.tol = 1e-9
     emc_1 = mc.mc2step()[0]
 

@@ -21,7 +21,7 @@ from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
 
-def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None):
+def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None, callback=None):
     '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
     SCF is carried out in three steps.  First the 2-electron part is
     approximated by large component integrals (LL|LL); Next, (SS|LL) the
@@ -35,14 +35,14 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None):
 
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 4e-3, dump_chk, dm0=dm)
+                = hf.kernel(mf, 4e-3, dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
     if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' \
                          or mf._coulomb_now.upper() == 'LLSS'):
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 4e-4, dump_chk, dm0=dm)
+                = hf.kernel(mf, 4e-4, dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
 
@@ -54,7 +54,7 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None):
     if mf.with_gaunt:
         mf.get_veff = mf.get_vhf_with_gaunt
 
-    return hf.kernel(mf, conv_tol, dump_chk, dm0=dm)
+    return hf.kernel(mf, conv_tol, dump_chk, dm0=dm, callback=callback)
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None):
@@ -399,7 +399,7 @@ class UHF(hf.SCF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = kernel(self, self.conv_tol, dm0=dm0)
+                = kernel(self, self.conv_tol, dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)

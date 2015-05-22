@@ -15,6 +15,7 @@ from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import aug_hessian
 from pyscf.mcscf import mc_ao2mo_uhf
+from pyscf.mcscf import chkfile
 
 #FIXME:  when the number of core orbitals are different for alpha and beta,
 # the convergence are very unstable and slow
@@ -350,7 +351,7 @@ def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
-           ci0=None, verbose=None,
+           ci0=None, callback=None, verbose=None,
            dump_chk=True, dump_chk_ci=False):
     if verbose is None:
         verbose = casscf.verbose
@@ -406,18 +407,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
             log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
                       '|g[c]|=%4.3g, |dm1|=%4.3g',
                       imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_dm1)
+
+            if callable(callback):
+                callback(locals())
+
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if (norm_t < toloose or norm_gorb < toloose or
                 norm_gci < toloose or norm_dm1 < toloose):
-                if casscf.natorb:
-                    natocc, natorb = scipy.linalg.eigh(-casdm1[0])
-                    u[0][:,ncore[0]:nocc[0]] = \
-                            numpy.dot(u[0][:,ncore[0]:nocc[0]], natorb)
-                    log.debug1('natural occ alpha = %s', str(natocc))
-                    natocc, natorb = scipy.linalg.eigh(-casdm1[1])
-                    u[1][:,ncore[1]:nocc[1]] = \
-                            numpy.dot(u[1][:,ncore[1]:nocc[1]], natorb)
-                    log.debug1('natural occ beta = %s', str(natocc))
                 break
 
         totinner += ninner
@@ -442,14 +438,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=2, \
             conv = True
 
         if dump_chk:
-            casscf.save_mo_coeff(mo, imacro, imicro)
-            casscf.dump_chk(mo,
-                            mcscf_energy=e_tot, e_cas=e_ci,
-                            ci_vector=(fcivec if dump_chk_ci else None),
-                            iter_macro=imacro+1,
-                            iter_micro_tot=totmicro,
-                            converged=(conv if (conv or (imacro+1 >= macro)) else None),
-                           )
+            casscf.dump_chk(locals())
+
         if conv: break
 
     if conv:
@@ -481,7 +471,7 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_start_tol = .5e-3
         self.ah_start_cycle = 2
         self.chkfile = mf.chkfile
-        self.natorb = False
+        self.callback = None
 
         self.fcisolver.max_cycle = 50
 
@@ -526,15 +516,15 @@ class CASSCF(casci_uhf.CASCI):
 
     def kernel(self, *args, **kwargs):
         return self.mc1step(*args, **kwargs)
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None:
-            macro = self.max_cycle_macro
-        if micro is None:
-            micro = self.max_cycle_micro
+        if macro is None: macro = self.max_cycle_macro
+        if micro is None: micro = self.max_cycle_micro
+        if callback is None: callback = self.callback
 
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
@@ -544,21 +534,21 @@ class CASSCF(casci_uhf.CASCI):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 kernel(self, mo_coeff, \
                        tol=self.conv_tol, macro=macro, micro=micro, \
-                       ci0=ci0, verbose=self.verbose)
+                       ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
         from pyscf.mcscf import mc2step_uhf
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None:
-            macro = self.max_cycle_macro
-        if micro is None:
-            micro = self.max_cycle_micro
+        if macro is None: macro = self.max_cycle_macro
+        if micro is None: micro = self.max_cycle_micro
+        if callback is None: callback = self.callback
 
         self.mol.check_sanity(self)
 
@@ -567,7 +557,8 @@ class CASSCF(casci_uhf.CASCI):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step_uhf.kernel(self, mo_coeff,
                                    tol=self.conv_tol, macro=macro, micro=micro,
-                                   ci0=ci0, verbose=self.verbose)
+                                   ci0=ci0, callback=callback,
+                                   verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
@@ -722,12 +713,13 @@ class CASSCF(casci_uhf.CASCI):
         casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, self.ncas, self.nelecas)
         return casdm1, casdm2, g
 
-    def save_mo_coeff(self, mo_coeff, *args):
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo_coeff)
-
-    def dump_chk(self, *args, **kwargs):
-        from pyscf.mcscf import chkfile
-        chkfile.dump_mcscf(self.mol, self.chkfile, *args, **kwargs)
+    def dump_chk(self, envs):
+        chkfile.dump_mcscf(self.mol, self.chkfile, envs['mo'],
+                           mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
+                           ci_vector=(envs['fcivec'] if envs['dump_chk_ci'] else None),
+                           iter_macro=(envs['imacro']+1),
+                           iter_micro_tot=(envs['totmicro']),
+                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])))
 
 
 # to avoid calculating AO integrals

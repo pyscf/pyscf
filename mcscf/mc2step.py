@@ -7,11 +7,10 @@ import time
 import numpy
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
-from pyscf.dmrgscf.dmrgci import DMRGCI
 
 
-def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
-           ci0=None, verbose=None):
+def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
+           ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -62,6 +61,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
 
             log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \
                       imicro, norm_t, norm_gorb, norm_ddm)
+
+            if callable(callback):
+                callback(locals())
+
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < toloose or norm_gorb < toloose:
                 break
@@ -78,18 +81,17 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4, \
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
-        if isinstance(casscf.fcisolver, DMRGCI):
-            if (norm_gorb < casscf.dmrg_switch_tol or norm_ddm < casscf.dmrg_switch_tol*10.0):
-                casscf.fcisolver.restart = True
-            else :
-                casscf.fcisolver.restart = False
-
         if (abs(elast - e_tot) < tol and
             norm_gorb < toloose and norm_ddm < toloose):
             conv = True
-            break
         else:
             elast = e_tot
+
+        if dump_chk:
+            casscf.dump_chk(locals())
+
+        if conv:
+            break
 
     if conv:
         log.info('2-step CASSCF converged in %d macro (%d JK %d micro) steps',

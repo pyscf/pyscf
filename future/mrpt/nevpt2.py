@@ -298,6 +298,7 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         state = 0
         a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,state)
+    else:
         a16 = make_a16(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
     a17 = make_a17(h1e,h2e,dm2,dm3)
     a19 = make_a19(h1e,h2e,dm1,dm2)
