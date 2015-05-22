@@ -471,6 +471,7 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_start_tol = .5e-3
         self.ah_start_cycle = 2
         self.chkfile = mf.chkfile
+        self.natorb = False
         self.callback = None
 
         self.fcisolver.max_cycle = 50
