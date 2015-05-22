@@ -53,7 +53,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)
-            casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None
             eris = casscf.ao2mo(mo)
@@ -103,7 +102,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
     log.debug('CASSCF canonicalization')
     mo, fcivec = casscf.canonicalize(mo, fcivec, eris, sort=casscf.natorb,
                                      verbose=log)
-    casscf.save_mo_coeff(mo, imacro, imicro)
+    if dump_chk:
+        casscf.dump_chk(locals())
 
     log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)

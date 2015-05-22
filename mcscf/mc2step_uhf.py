@@ -60,7 +60,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
                             numpy.dot(u[1][:,ncore[1]:nocc[1]], natorb)
                     log.debug1('natural occ beta = %s', str(natocc))
             mo = list(map(numpy.dot, mo, u))
-            casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None # to avoid using too much memory
             eris = casscf.ao2mo(mo)

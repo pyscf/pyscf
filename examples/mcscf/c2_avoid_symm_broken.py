@@ -20,10 +20,10 @@ hf_energy = myhf.scf()
 print('SCF E=%.15g' % hf_energy)
 
 cas = mcscf.CASSCF(myhf, 16, (4,4))
-#def save_mo_coeff(mo_coeff, imacro, imicro):
+#def save_mo_coeff(envs):
 #    label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
-#    dump_mat.dump_rec(mol.stdout, mo_coeff, label, start=1, digits=9)
-#cas.save_mo_coeff = save_mo_coeff
+#    dump_mat.dump_rec(mol.stdout, envs['mo_coeff'], label, start=1, digits=9)
+#cas.callback = save_mo_coeff
 e_cas = cas.mc1step()[0]
 cas.analyze()
 print('CASSCF E = %.15g, ref = -75.6299729925424' % e_cas)
