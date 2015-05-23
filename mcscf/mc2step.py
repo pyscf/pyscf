@@ -37,16 +37,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         ninner = 0
         t3m = t2m
         casdm1_old = casdm1
-        fcasdm1 = lambda: casdm1
-        fcasdm2 = lambda: casdm2
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
+        t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
-            t3m = log.timer('update CAS DM', *t3m)
 
-            for u, g_orb, njk in casscf.rotate_orb_cc(mo, fcasdm1, fcasdm2, eris,
-                                                      verbose=log):
-                break
+            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+            u, g_orb, njk = rota.next()
+            rota.close()
             ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)

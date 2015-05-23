@@ -26,8 +26,8 @@ def save_mo_coeff(envs):
     imacro = envs['imacro']
     imicro = envs['imicro']
     if imacro % 3 == 2:
-        fname = 'mcscf-mo-%d-%d.npy' % (imacro+1, imicro)
-        print('Save MO of step %d-%d in file %s' % (imacro+1, imicro, fname))
+        fname = 'mcscf-mo-%d-%d.npy' % (imacro+1, imicro+1)
+        print('Save MO of step %d-%d in file %s' % (imacro+1, imicro+1, fname))
         numpy.save(fname, envs['mo_coeff'])
 mc.callback = save_mo_coeff
 mc.max_orb_stepsize = .01 # max. orbital-rotation angle

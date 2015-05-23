@@ -346,7 +346,7 @@ class _ERIS(object):
 
         if (method == 'incore' and casscf._scf._eri is not None and
             ((_mem_usage(ncore, ncas, nmo)[0] +
-              pyscf.lib.current_memory()[0]) > casscf.max_memory*.9)):
+              pyscf.lib.current_memory()[0]) < casscf.max_memory*.9)):
             self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
             self.Iapcv, self.Icvcv = \
                     trans_e1_incore(casscf._scf._eri, mo,

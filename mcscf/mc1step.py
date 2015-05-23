@@ -154,7 +154,7 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     return g_orb, h_op1, h_opjk, h_diag
 
 
-def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
+def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -163,7 +163,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
     nmo = mo.shape[1]
 
     t2m = (time.clock(), time.time())
-    g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, fcasdm1(), fcasdm2(), eris)
+    g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, casdm1, casdm2, eris)
     norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%4.3g', norm_gorb)
     t3m = log.timer('gen h_op', *t2m)
@@ -179,12 +179,12 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
     else:
         max_cycle = casscf.max_cycle_micro_inner
 
-    xcollect = [g_orb]
-    jkcollect = [h_opjk(g_orb)]
+    xcollect = []
+    jkcollect = []
     x0 = 0
     u = numpy.eye(nmo)
     jkcount = 0
-    dx1 = g_orb
+    x0_guess = g_orb
     while True:
         norm_gprev = numpy.linalg.norm(g_orb)
         # increase the AH accuracy when approach convergence
@@ -201,17 +201,20 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         g_op = lambda: g_orb
         def h_op(x):
             jk = h_opjk(x)
-# exclude possible linear dependent vectors
-            if numpy.linalg.norm(x) > casscf.ah_conv_tol:
+            if len(xcollect) < casscf.ah_guess_space:
                 xcollect.append(x)
                 jkcollect.append(jk)
-            return h_op1(x) + jkcollect[-1]
-# Divide the hessian into two parts, approx the JK part
+            return h_op1(x) + jk
+# Divide the hessian into two parts, approx the JK part:
+# In the same macro iteration, the change in JK should be small.  The reason
+# is that JK is associated with the core DM1 and active space DM1.  The core
+# DM is not changed because eris are not changed, only the active space DM1
+# are slightly changed due to the update_casdm function
         xsinit = [x for x in xcollect]
         axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
 
         for ah_conv, ihop, w, dxi, hdxi, residual, seig \
-                in davidson_cc(h_op, g_op, precond, dx1,
+                in davidson_cc(h_op, g_op, precond, x0_guess,
                                xs=xsinit, ax=axinit, verbose=log,
                                tol=casscf.ah_conv_tol,
                                max_cycle=casscf.ah_max_cycle,
@@ -222,47 +225,48 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
                  (ihop >= casscf.ah_start_cycle)) or
                 (seig < casscf.ah_lindep)):
                 imic += 1
-                dx1 = dxi
-                dxmax = numpy.max(abs(dx1))
+                dxmax = numpy.max(abs(dxi))
                 if dxmax > casscf.max_orb_stepsize:
                     scale = casscf.max_orb_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
-                    dx1 = dx1 * scale
-                    dx = dx + dx1
-                    g_orb1 = g_orb + h_op1(dx1) + h_opjk(dx1)
+                    dxi *= scale
+                    dx = dx + dxi
+                    g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
                     jkcount += 1
                 else:
-                    dx = dx + dx1
+                    dx = dx + dxi
                     g_orb1 = g_orb + hdxi  # hdxi not good enough?
-                    #g_orb1 = g_orb + h_op1(dx1) + h_opjk(dx1)
+                    #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
                     #jkcount += 1
 # Gradually lower the start_tol, so the following steps get more precisely
                     ah_start_tol *= .4
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
-                norm_dx1 = numpy.linalg.norm(dx1)
+                norm_dxi = numpy.linalg.norm(dxi)
                 log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, max(|x|)=%4.3g, eig=%4.3g, seig=%4.3g',
-                           imic, norm_gorb, norm_dx1, dxmax, w, seig)
+                           imic, norm_gorb, norm_dxi, dxmax, w, seig)
 
-                if norm_gorb > norm_gprev:
-                    dx -= dx1
-                    log.debug1('... norm_gorb > nrom_gorb_pref')
+                if 0 and norm_gorb > norm_gprev:
+# Do we need force the gradients decaying?
+# If in the concave region, how to avoid steping backward (along the negative hessian)?
+                    dx -= dxi
+                    log.debug('    norm_gorb > nrom_gorb_prev')
                     if numpy.linalg.norm(dx) > 1e-14:
                         break
                 else:
                     norm_gprev = norm_gorb
                     g_orb = g_orb1
-                    dr = casscf.unpack_uniq_var(dx1)
+                    dr = casscf.unpack_uniq_var(dxi)
                     u = numpy.dot(u, expmat(dr))
 
-# It's better to exclude the pseudo-linear-dependent trial vectors for the
-# next round of orbital rotation since these vectors might break
+# It's better to exclude the pseudo-linear-dependent trial vectors before the
+# next cycle of orbital rotation since these vectors might break
 # scipy.linalg.eigh or stop davidson_cc early before updating the solutions
-            if seig < casscf.ah_lindep*1e2:
+            if seig < casscf.ah_lindep*1e2 and xcollect:
                 xcollect.pop(-1)
                 jkcollect.pop(-1)
-                #log.debug1('... break micro_inner, seig = %g', seig)
-                #break
+                log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
+                           seig, len(xcollect))
 
             if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad*.5):
                 break
@@ -273,28 +277,29 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, verbose=None):
         else:
 # Occasionally, all trial rotation goes to the case "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
-            dx1 *= .2
-            x0 = x0 + dx1
-            g_orb = g_orb + h_op1(dx1) + h_opjk(dx1)
+            dxi *= .2
+            x0 = x0 + dxi
+            g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
             jkcount += 1
-            dr = casscf.unpack_uniq_var(dx1)
+            dr = casscf.unpack_uniq_var(dxi)
             u = numpy.dot(u, expmat(dr))
             log.debug('orbital rotation step not found, try to guess |g[o]|=%4.3g, |dx|=%4.3g',
-                      numpy.linalg.norm(g_orb), numpy.linalg.norm(dx1))
+                      numpy.linalg.norm(g_orb), numpy.linalg.norm(dxi))
 
         jkcount += ihop + 1
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        yield u, g_orb, jkcount
+        casdm1, casdm2 = (yield u, g_orb, jkcount)
 
-        g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, fcasdm1(), fcasdm2(), eris)
+        g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, casdm1, casdm2, eris)
         norm_gorb = numpy.linalg.norm(g_orb)
         log.debug('    |g|=%4.3g', norm_gorb)
         g_orb = g_orb + h_op1(x0) + h_opjk(x0)
+        x0_guess = x0
         jkcount += 1
 
 
 def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
-                max_cycle=10, lindep=1e-14, verbose=logger.WARN):
+                max_cycle=30, lindep=1e-14, verbose=logger.WARN):
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -325,16 +330,18 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
             heff[nx,i+1] = heff[i+1,nx] = numpy.dot(xs[nx-1], ax[i])
             ovlp[nx,i+1] = ovlp[i+1,nx] = numpy.dot(xs[nx-1], xs[i])
         nvec = nx + 1
+        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+        if istep > 0 and s0 < lindep:
+            break
         xtrial, w_t, v_t, index = \
                 _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
-        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('... AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if norm_dx < tol or s0 < lindep:
+        if norm_dx < tol:
             conv = True
             break
         yield conv, istep, w_t, xtrial, hx, dx, s0
@@ -482,15 +489,17 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
     for imacro in range(macro):
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         t3m = log.timer('CAS DM', *t2m)
-        fcasdm1 = lambda: casdm1
-        fcasdm2 = lambda: casdm2
         casdm1_old = casdm1
-        imicro = 0
-        for u, g_orb, njk in casscf.rotate_orb_cc(mo, fcasdm1, fcasdm2, eris,
-                                                  verbose=log):
-            t3m = log.timer('orbital rotation', *t3m)
-            imicro += 1
 
+        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+        for imicro in range(micro):
+            if imicro == 0:
+                u, g_orb, njk = micro_iter.next()
+                norm_gorb0 = norm_gorb = numpy.linalg.norm(g_orb)
+            else:
+                u, g_orb, njk = micro_iter.send((casdm1,casdm2))
+                norm_gorb = numpy.linalg.norm(g_orb)
+            t3m = log.timer('orbital rotation', *t3m)
             casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             dodiis |= (casscf.diis and imacro > 1 and e_tot - elast > -1e-4)
             if dodiis:
@@ -500,26 +509,24 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                 casdm1 = dm12[:ncas*ncas].reshape(ncas,ncas)
                 casdm2 = dm12[ncas*ncas:].reshape((ncas,)*4)
 
-            norm_gorb = numpy.linalg.norm(g_orb)
-            if imicro == 1:
-                norm_gorb0 = numpy.linalg.norm(g_orb)
             norm_gci = numpy.linalg.norm(gci)
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
-            casdm1_old = casdm1
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('update CAS DM', *t3m)
             log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
                       '|g[c]|=%4.3g, |ddm|=%4.3g',
-                      imicro, e_ci, norm_t, norm_gorb, norm_gci, norm_ddm)
+                      imicro+1, e_ci, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
             if (norm_t < toloose or norm_gci < toloose or
-                (norm_gorb < toloose and norm_ddm < toloose) or
-                (imicro >= micro)):
+                (norm_gorb < toloose and norm_ddm < toloose)):
                 break
+
+            casdm1_old = casdm1
+        micro_iter.close()
 
         totmicro += imicro
         totinner += njk
@@ -764,6 +771,13 @@ class CASSCF(casci.CASCI):
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-9
         self.ah_start_tol = .5e-3
         self.ah_start_cycle = 2
+# IN EXPERIMENT: need more tests. ah_guess_space introduces
+        self.ah_guess_space = 30
+# * Classic orbital rotation by AH can be simulated by setting eg
+#               max_cycle_micro_inner = 1
+#               ah_start_tol = 1e-7
+#               max_orb_stepsize = 1.5
+#               ah_guess_space = 0
         self.chkfile = mf.chkfile
         self.ci_response_space = 2
         self.diis = False
@@ -922,8 +936,8 @@ class CASSCF(casci.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
-        return rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose)
+    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose):
+        return rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose)
 
     def update_ao2mo(self, mo):
         raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')
