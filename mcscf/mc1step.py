@@ -186,10 +186,10 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     jkcount = 0
     x0_guess = g_orb
     while True:
-        norm_gprev = numpy.linalg.norm(g_orb)
+        norm_gprev = norm_gorb
         # increase the AH accuracy when approach convergence
-        if norm_gprev*.1 < casscf.ah_start_tol:
-            ah_start_tol = norm_gprev*.1
+        if norm_gorb < casscf.ah_start_tol:
+            ah_start_tol = norm_gorb
             log.debug1('... Set AH start tol to %g', ah_start_tol)
         else:
             ah_start_tol = casscf.ah_start_tol
@@ -221,7 +221,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
                                lindep=casscf.ah_lindep):
             if (ah_conv or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
                 ((abs(w-wlast) < ah_start_tol) and
-                 (numpy.linalg.norm(residual) < casscf.ah_start_tol) and
+                 (numpy.linalg.norm(residual)**2 < ah_start_tol) and
                  (ihop >= casscf.ah_start_cycle)) or
                 (seig < casscf.ah_lindep)):
                 imic += 1
@@ -238,15 +238,15 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
                     g_orb1 = g_orb + hdxi  # hdxi not good enough?
                     #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
                     #jkcount += 1
-# Gradually lower the start_tol, so the following steps get more precisely
-                    ah_start_tol *= .4
+# Gradually lower the start_tol, so the following steps get more accurately
+                    ah_start_tol *= .3
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
                 log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, max(|x|)=%4.3g, eig=%4.3g, seig=%4.3g',
                            imic, norm_gorb, norm_dxi, dxmax, w, seig)
 
-                if 0 and norm_gorb > norm_gprev:
+                if norm_gorb > norm_gprev * casscf.ah_grad_trust_region:
 # Do we need force the gradients decaying?
 # If in the concave region, how to avoid steping backward (along the negative hessian)?
                     dx -= dxi
@@ -332,6 +332,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         nvec = nx + 1
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         if istep > 0 and s0 < lindep:
+            yield conv, istep, w_t, xtrial, hx, dx, s0
             break
         xtrial, w_t, v_t, index = \
                 _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
@@ -342,17 +343,14 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         log.debug1('... AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
         if norm_dx < tol:
-            conv = True
+            yield True, istep, w_t, xtrial, hx, dx, s0
             break
-        yield conv, istep, w_t, xtrial, hx, dx, s0
-        x0 = precond(dx, w_t)
-        xs.append(x0)
-        ax.append(h_op(x0))
+        else:
+            yield conv, istep, w_t, xtrial, hx, dx, s0
+            x0 = precond(dx, w_t)
+            xs.append(x0)
+            ax.append(h_op(x0))
 
-    if x0.size == 0:
-        yield conv, istep, 0, x0, 0, x0, 1
-    else:
-        yield conv, istep, w_t, xtrial, hx, dx, s0
 
 def _regular_step(heff, ovlp, xs, log):
     w, v = scipy.linalg.eigh(heff, ovlp)
@@ -778,6 +776,12 @@ class CASSCF(casci.CASCI):
 #               ah_start_tol = 1e-7
 #               max_orb_stepsize = 1.5
 #               ah_guess_space = 0
+# IN EXPERIMENT: ah_grad_trust_region, ah_guess_space, need more tests.
+# ah_grad_trust_region allow gradients increase for AH optimization
+# ah_guess_space approximate the JK part of hessian from previous steps
+        self.ah_grad_trust_region = 1.5
+        self.ah_guess_space = 0
+
         self.chkfile = mf.chkfile
         self.ci_response_space = 2
         self.diis = False

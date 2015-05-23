@@ -86,7 +86,7 @@ Documentation
 -------------
 
 There is an online documentation  http://sunqm.net/pyscf.  And you can
-also download the PDF version from  http://sunqm.net/pyscf/PySCF-0.10.pdf
+also download the PDF version from  http://sunqm.net/pyscf/PySCF-1.0.pdf
 
 
 Known problems
