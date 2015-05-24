@@ -322,6 +322,7 @@ class DMRGCI(object):
                 self.restart = True
             else :
                 self.restart = False
+        return callback
 
 
 def make_schedule(sweeps, Ms, tols, noises):
