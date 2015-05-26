@@ -10,7 +10,7 @@
 # in both cases with an analytic gradient and hessian
 #
 # Reference: C. Edmiston and K. Ruedenberg, Reviews of Modern Physics 35, 457-464 (1963). http://dx.doi.org/10.1103/RevModPhys.35.457
-#            http://sebwouters.github.io/CheMPS2/classCheMPS2_1_1EdmistonRuedenberg.html
+#            http://sebwouters.github.io/CheMPS2/doxygen/classCheMPS2_1_1EdmistonRuedenberg.html
 #
 
 from pyscf import gto, scf
@@ -297,6 +297,7 @@ class localizer:
         threshold = 1e-6
         iteration = 0
         logger.debug(self, "Localizer :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
+        logger.debug(self, "Localizer :: Linear size of the augmented Hessian = %d", self.numVars+1)
 
         while ( gradient_norm > threshold ):
 
@@ -306,11 +307,20 @@ class localizer:
             augmented[:-1,:-1] = self.__hessian()
             augmented[:-1,self.numVars] = gradient
             augmented[self.numVars,:-1] = gradient
-            eigenvals, eigenvecs = np.linalg.eigh( augmented )
-            idx = eigenvals.argsort()
-            eigenvals = eigenvals[idx]
-            eigenvecs = eigenvecs[:,idx]
-            flatx = eigenvecs[:-1,0] / eigenvecs[self.numVars,0]
+            
+            if ( self.numVars+1 > 1024 ):
+                ini_guess = np.zeros( [self.numVars+1], dtype=float )
+                ini_guess[ self.numVars ] = 1.0
+                for elem in range( self.numVars ):
+                    ini_guess[ elem ] = - gradient[ elem ] / max( augmented[ elem, elem ], 1e-6 )
+                eigenval, eigenvec = scipy.sparse.linalg.eigsh( augmented, k=1, which='SA', v0=ini_guess, ncv=1024, maxiter=(self.numVars+1) )
+                flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
+            else:
+                eigenvals, eigenvecs = np.linalg.eigh( augmented )
+                idx = eigenvals.argsort()
+                eigenvals = eigenvals[idx]
+                eigenvecs = eigenvecs[:,idx]
+                flatx = eigenvecs[:-1,0] / eigenvecs[self.numVars,0]
 
             gradient_norm = np.linalg.norm( gradient )
             update_norm = np.linalg.norm( flatx )

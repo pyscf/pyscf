@@ -145,7 +145,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.max_cycle = max_cycle
 
     unknown = []
-    for k, v in kwargs:
+    for k, v in kwargs.items():
         setattr(cis, k, v)
         if not hasattr(cis, k):
             unknown.append(k)

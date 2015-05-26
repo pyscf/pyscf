@@ -25,10 +25,7 @@ NUMERICAL_ZERO = 1e-14
 # Ref JCP, 117, 9138
 
 # h1e is the CAS space effective 1e hamiltonian
-# h2e is the CAS space 2e integrals in physics notation
-# a' -> p
-# b' -> q
-# c' -> r
+# h2e is the CAS space 2e integrals in  notation # a' -> p # b' -> q # c' -> r
 # d' -> s
 
 def make_a16(h1e, h2e, dms, civec, norb, nelec, link_index=None):
@@ -298,7 +295,11 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
         h1e_v = eris['h1eff'][nocc:,ncore:nocc] - numpy.einsum('mbbn->mn',h2e_v)
 
 
-    a16 = make_a16(h1e,h2e,dms, mc.ci, mc.ncas, mc.nelecas)
+    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
+        state = 0
+        a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,state)
+    else:
+        a16 = make_a16(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
     a17 = make_a17(h1e,h2e,dm2,dm3)
     a19 = make_a19(h1e,h2e,dm1,dm2)
 
@@ -336,7 +337,12 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
         h2e_v = eris['aapp'][:,:,ncore:nocc,:ncore].transpose(2,0,3,1)
         h1e_v = eris['h1eff'][ncore:nocc,:ncore]
 
-    a22 = make_a22(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
+    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
+        #mc.fcisolver.make_a22(mc.ncas, state)
+        state = 0
+        a22 = mc.fcisolver.nevpt_intermediate('A22',mc.ncas,mc.nelecas,state)
+    else:
+        a22 = make_a22(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
     a23 = make_a23(h1e,h2e,dm1,dm2,dm3)
     a25 = make_a25(h1e,h2e,dm1,dm2)
     delta = numpy.eye(mc.ncas)
@@ -567,8 +573,13 @@ def sc_nevpt(mc, verbose=None):
     time0 = (time.clock(), time.time())
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
-                                       mc.ci, mc.ci, mc.ncas, mc.nelecas)
+    logger.debug(mc, 'mc.fcisolver = %s', type(mc.fcisolver))
+    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
+        logger.info(mc, 'DMRG-NEVPT')
+        dm1, dm2, dm3 = mc.fcisolver.make_rdm123(None,mc.ncas,mc.nelecas,None)
+    else:
+        dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
+                                           mc.ci, mc.ci, mc.ncas, mc.nelecas)
     dm4 = None
 
     #hdm1 = make_hdm1(dm1)
@@ -582,17 +593,18 @@ def sc_nevpt(mc, verbose=None):
 
     eris = _ERIS(mc, mc.mo_coeff)
     time1 = log.timer('integral transformation', *time1)
-
-    link_indexa = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[0])
-    link_indexb = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[1])
     nocc = mc.ncore + mc.ncas
-    aaaa = eris['aapp'][:,:,mc.ncore:nocc,mc.ncore:nocc].copy()
-    f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, mc.ci, mc.ncas,
-                         mc.nelecas, (link_indexa,link_indexb))
-    f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, mc.ci, mc.ncas,
-                         mc.nelecas, (link_indexa,link_indexb))
-    dms['f3ca'] = f3ca
-    dms['f3ac'] = f3ac
+
+    if not hasattr(mc.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
+        link_indexa = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[0])
+        link_indexb = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[1])
+        aaaa = eris['aapp'][:,:,mc.ncore:nocc,mc.ncore:nocc].copy()
+        f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, mc.ci, mc.ncas,
+                             mc.nelecas, (link_indexa,link_indexb))
+        f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, mc.ci, mc.ncas,
+                             mc.nelecas, (link_indexa,link_indexb))
+        dms['f3ca'] = f3ca
+        dms['f3ac'] = f3ac
     time1 = log.timer('eri-4pdm contraction', *time1)
 
     fake_eris = lambda: None

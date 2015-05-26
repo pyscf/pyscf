@@ -234,7 +234,7 @@ class KnowValues(unittest.TestCase):
             mf0.chkfile = ftmp.name
             h = mf0.get_hcore(mol)
             s = mf0.get_ovlp(mol)
-            f = mf0.get_fock(h, s, numpy.zeros_like(h), 0)
+            f = mf0.get_fock(h, s, numpy.zeros_like(h), numpy.zeros_like(h))
             e, mo = mf0.eig(f, s)
             occ = mf0.get_occ(e, mo)
             mf0.dump_chk(0, e, mo, occ)

@@ -10,6 +10,9 @@ import pyscf.lib
 from pyscf.lib import logger
 
 
+OCCDROP = 1e-12
+BLOCKDIM = 240
+
 def density_fit(mf, auxbasis='weigend'):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
@@ -45,6 +48,8 @@ def density_fit(mf, auxbasis='weigend'):
             self.auxbasis = auxbasis
             self._cderi = None
             self.direct_scf = False
+            self.occdrop = OCCDROP
+            self.blockdim = BLOCKDIM
             self._keys = self._keys.union(['auxbasis'])
 
         def get_jk(self, mol=None, dm=None, hermi=1):
@@ -55,24 +60,6 @@ def density_fit(mf, auxbasis='weigend'):
             else:
                 return get_jk_(self, mol, dm, hermi)
     return HF()
-
-def density_fit_(mf, auxbasis='weigend'):
-    '''Replace J K constructor of HF object.  See the usage of :func:`density_fit`
-    '''
-    import pyscf.scf
-    def get_jk(mol, dm, hermi=1):
-        if mol is None: mol = mf.mol
-        if dm is None: dm = mf.make_rdm1()
-        if isinstance(mf, pyscf.scf.dhf.UHF):
-            return r_get_jk_(mf, mol, dm, hermi)
-        else:
-            return get_jk_(mf, mol, dm, hermi)
-    mf.get_jk = get_jk
-    mf.auxbasis = auxbasis
-    mf._cderi = None
-    mf.direct_scf = False
-    mf._keys = mf._keys.union(['auxbasis'])
-    return mf
 
 
 OCCDROP = 1e-12
@@ -132,10 +119,10 @@ def get_jk_(mf, mol, dms, hermi=1):
                 dmtril[k][i*(i+1)//2+i] *= .5
 
             e, c = scipy.linalg.eigh(dm)
-            pos = e > OCCDROP
-            neg = e < -OCCDROP
+            pos = e > mf.occdrop
+            neg = e < -mf.occdrop
 
-            #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
+            #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>mf.occdrop])
             #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
             cpos.append(numpy.asarray(numpy.einsum('ij,j->ij', c[:,pos],
                                                    numpy.sqrt(e[pos])), order='F'))
@@ -144,7 +131,7 @@ def get_jk_(mf, mol, dms, hermi=1):
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
-            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+            for b0, b1 in prange(0, mf._naoaux, mf.blockdim):
                 eri1 = numpy.array(feri[b0:b1], copy=False)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
@@ -184,7 +171,7 @@ def get_jk_(mf, mol, dms, hermi=1):
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
-            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+            for b0, b1 in prange(0, mf._naoaux, mf.blockdim):
                 eri1 = numpy.array(feri[b0:b1], copy=False)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
@@ -255,7 +242,7 @@ def r_get_jk_(mf, mol, dms, hermi=1):
         dmss = numpy.asarray(dm[n2c:,n2c:], order='C') * c1**2
         with df.load(mf._cderi[0]) as ferill:
             with df.load(mf._cderi[1]) as feriss: # python2.6 not support multiple with
-                for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
+                for b0, b1 in prange(0, mf._naoaux, mf.blockdim):
                     erill = numpy.array(ferill[b0:b1], copy=False)
                     eriss = numpy.array(feriss[b0:b1], copy=False)
                     buf = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)

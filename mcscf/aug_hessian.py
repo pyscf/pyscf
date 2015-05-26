@@ -99,6 +99,10 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7,
             heff[istep+1,i+1] = heff[i+1,istep+1] = dot(xs[istep], ax[i])
             ovlp[istep+1,i+1] = ovlp[i+1,istep+1] = dot(xs[istep], xs[i])
         nvec = len(xs) + 1
+        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+        if istep > 0 and s0 < lindep:
+            yield istep, w_t, xtrial, dx
+            break
         xtrial, w_t, v_t, index = \
                 _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
                               pick_mode, log)
@@ -106,19 +110,16 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7,
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
-        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
         log.debug1('AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if ((norm_dx < tol and abs(w_t-w0) < tol) or s0 < lindep):
+        if abs(w_t-w0) < tol:
+            yield istep, w_t, xtrial, dx
             break
-        yield istep, w_t, xtrial, dx
-        w0 = w_t
-        x0 = precond(dx, w_t)
+        else:
+            yield istep, w_t, xtrial, dx
+            w0 = w_t
+            x0 = precond(dx, w_t)
 
-    if x0.size == 0:
-        yield istep, 0, x0, x0
-    else:
-        yield istep, w_t, xtrial, dx
 
 # As did in orz, optimize the stepsize by searching the best lambda
 def _opt_step_as_orz_lambda(heff, ovlp, xs, pick_mode, lambda0,

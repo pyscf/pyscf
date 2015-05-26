@@ -179,8 +179,8 @@ def gen_atomic_grids(mol, mol_grids={}, radi_method=radi.gauss_chebyshev,
                 angs = prune_scheme(chg, rad, n_ang)
             else:
                 angs = [n_ang] * n_rad
-            pyscf.lib.logger.debug1(mol, 'atom %s rad-grids = %d, ang-grids = %s',
-                                    symb, n_rad, angs)
+            pyscf.lib.logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
+                                   symb, n_rad, angs)
 
             angs = numpy.array(angs)
             coords = []

@@ -66,7 +66,7 @@ def order_ao_index(mol):
             off += l * 2 + 1
     return idx
 
-def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None, \
+def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                   occ=None):
     import pyscf.symm
     aoidx = order_ao_index(mol)
@@ -90,6 +90,13 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None, \
         for i,j in enumerate(aoidx):
             fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
+def from_mo(mol, outfile, mo_coeff, spin='Alpha', symm=None, ene=None,
+            occ=None):
+    with open(outfile, 'w') as f:
+        header(mol, f)
+        orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ)
+
+
 def from_scf(mf, filename):
     dump_scf(mf, filename)
 def dump_scf(mf, filename):
@@ -97,12 +104,12 @@ def dump_scf(mf, filename):
     with open(filename, 'w') as f:
         header(mf.mol, f)
         if isinstance(mf, pyscf.scf.uhf.UHF) or 'UHF' == mf.__class__.__name__:
-            orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha', \
+            orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha',
                           ene=mf.mo_energy[0], occ=mf.mo_occ[0])
-            orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta', \
+            orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta',
                           ene=mf.mo_energy[1], occ=mf.mo_occ[1])
         else:
-            orbital_coeff(mf.mol, f, mf.mo_coeff, \
+            orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ)
 
 def from_chkfile(outfile, chkfile, key='scf/mo_coeff'):
@@ -121,6 +128,7 @@ def from_chkfile(outfile, chkfile, key='scf/mo_coeff'):
             orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1])
         else:
             orbital_coeff(mol, f, mo, ene=ene, occ=occ)
+
 
 
 if __name__ == '__main__':

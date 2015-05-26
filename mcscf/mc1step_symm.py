@@ -23,15 +23,15 @@ class CASSCF(mc1step.CASSCF):
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore)
 
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None:
-            macro = self.max_cycle_macro
-        if micro is None:
-            micro = self.max_cycle_micro
+        if macro is None: macro = self.max_cycle_macro
+        if micro is None: micro = self.max_cycle_micro
+        if callback is None: callback = self.callback
 
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
@@ -42,7 +42,8 @@ class CASSCF(mc1step.CASSCF):
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
-                                                self.mo_coeff)
+                                                self.mo_coeff,
+                                                s=self._scf.get_ovlp())
 
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
@@ -53,20 +54,20 @@ class CASSCF(mc1step.CASSCF):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc1step.kernel(self, mo_coeff,
                                tol=self.conv_tol, macro=macro, micro=micro,
-                               ci0=ci0, verbose=self.verbose)
+                               ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None):
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None:
-            macro = self.max_cycle_macro
-        if micro is None:
-            micro = self.max_cycle_micro
+        if macro is None: macro = self.max_cycle_macro
+        if micro is None: micro = self.max_cycle_micro
+        if callback is None: callback = self.callback
 
         self.mol.check_sanity(self)
 
@@ -76,7 +77,8 @@ class CASSCF(mc1step.CASSCF):
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
-                                                self.mo_coeff)
+                                                self.mo_coeff,
+                                                s=self._scf.get_ovlp())
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
             ncore = self.ncore
@@ -86,7 +88,7 @@ class CASSCF(mc1step.CASSCF):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 mc2step.kernel(self, mo_coeff,
                                tol=self.conv_tol, macro=macro, micro=micro,
-                               ci0=ci0, verbose=self.verbose)
+                               ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
@@ -112,10 +114,10 @@ class CASSCF(mc1step.CASSCF):
         return self.pack_uniq_var(g_orb), sym_h_op1, sym_h_opjk, \
                self.pack_uniq_var(h_diag)
 
-    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
-        for u, g_orb, njk \
-                in mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
-            yield _symmetrize(u, self.orbsym, self.mol.groupname), g_orb, njk
+    def update_rotate_matrix(self, dx, u0=1):
+        dr = self.unpack_uniq_var(dx)
+        dr = _symmetrize(dr, self.orbsym, self.mol.groupname)
+        return numpy.dot(u0, mc1step.expmat(dr))
 
     def _eig(self, mat, b0, b1):
         orbsym = numpy.array(self.orbsym[b0:b1])
@@ -124,9 +126,10 @@ class CASSCF(mc1step.CASSCF):
         c = numpy.zeros((norb,norb))
         for i0 in set(orbsym):
             lst = numpy.where(orbsym == i0)[0]
-            w, v = scf.hf.eig(mat[lst[:,None],lst], None)
-            e[lst] = w
-            c[lst[:,None],lst] = v
+            if len(lst) > 0:
+                w, v = scf.hf.eig(mat[lst[:,None],lst], None)
+                e[lst] = w
+                c[lst[:,None],lst] = v
         return e, c
 
 def _symmetrize(mat, orbsym, groupname, wfnsym=0):

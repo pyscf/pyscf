@@ -14,7 +14,7 @@ from pyscf.scf import dfhf
 from pyscf import df
 
 
-def density_fit(casscf, auxbasis='weigend', level=1):
+def density_fit(casscf, auxbasis='weigend'):
     '''For the given CASSCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
 
@@ -23,10 +23,6 @@ def density_fit(casscf, auxbasis='weigend', level=1):
 
     Kwargs:
         auxbasis : str
-
-        level : int
-            level 1 only modifies the JK part of orbital hessian
-            level 2 changes the integral transformation mc_ao2mo
 
     Returns:
         An CASSCF object with a modified J, K matrix constructor which uses density
@@ -40,9 +36,6 @@ def density_fit(casscf, auxbasis='weigend', level=1):
     >>> mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
     -100.005306000435510
     '''
-
-    if level != 1:
-        raise RuntimeError('TODO: density_fit level = 2')
 
     class CASSCF(casscf.__class__):
         def __init__(self):

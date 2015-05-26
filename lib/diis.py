@@ -10,6 +10,7 @@ DIIS
 import sys
 import tempfile
 import numpy
+import scipy.linalg
 import h5py
 from pyscf.lib import logger
 
@@ -158,10 +159,9 @@ class DIIS(object):
             c = numpy.linalg.solve(self._H[:nd+1,:nd+1], g)
         except numpy.linalg.linalg.LinAlgError:
             logger.warn(self, 'singularity in diis')
-            h = self._H[:nd+1,:nd+1].copy()
-            for i in range(1,nd):
-                h[i,i] += 1e-10
-            c = numpy.linalg.solve(h, g)
+            w, v = scipy.linalg.eigh(self._H[:nd+1,:nd+1])
+            idx = abs(w)>1e-14
+            c = numpy.dot(v[:,idx]*(1/w[idx]), numpy.dot(v[:,idx].T.conj(), g))
         logger.debug1(self, 'diis-c %s', c)
 
         self._xopt = None
