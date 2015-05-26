@@ -98,6 +98,7 @@ from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
 from pyscf.scf import x2c
 from pyscf.scf.x2c import sfx2c1e, sfx2c
+from pyscf.scf.newton import newton
 
 
 
