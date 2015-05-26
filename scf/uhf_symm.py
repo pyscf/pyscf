@@ -23,10 +23,11 @@ def analyze(mf, verbose=logger.DEBUG):
     mol = mf.mol
     log = pyscf.lib.logger.Logger(mf.stdout, verbose)
     nirrep = len(mol.irrep_id)
+    ovlp_ao = mf.get_ovlp()
     orbsyma = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[0])
+                                        mo_coeff[0], s=ovlp_ao)
     orbsymb = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[1])
+                                        mo_coeff[1], s=ovlp_ao)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
     tot_sym = 0
@@ -50,7 +51,7 @@ def analyze(mf, verbose=logger.DEBUG):
              *noccsb)
 
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                            mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
+                            mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
     log.info('multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
 
     if verbose >= logger.INFO:
@@ -100,9 +101,9 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), log)
+    return mf.mulliken_pop(mol, dm, ovlp_ao, log)
 
-def get_irrep_nelec(mol, mo_coeff, mo_occ):
+def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Alpha/beta electron numbers for each irreducible representation.
 
     Args:
@@ -127,9 +128,9 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ):
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
     orbsyma = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[0])
+                                        mo_coeff[0], s)
     orbsymb = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[1])
+                                        mo_coeff[1], s)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
     irrep_nelec = dict([(mol.irrep_name[k], (int(sum(mo_occ[0][orbsyma==ir])),
@@ -357,10 +358,11 @@ class UHF(uhf.UHF):
     def analyze(self, mo_verbose=logger.DEBUG):
         return analyze(self, mo_verbose)
 
-    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
+    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return get_irrep_nelec(mol, mo_coeff, mo_occ)
+        if s is None: s = self.get_ovlp()
+        return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
 

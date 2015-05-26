@@ -540,6 +540,33 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     return numpy.array(vhf_last, copy=False) + vj - vk * .5
 
+def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    '''F = h^{core} + V^{HF}
+
+    Args:
+        h1e : 2D ndarray
+            Core hamiltonian
+        s1e : 2D ndarray
+            Overlap matrix, for DIIS
+        vhf : 2D ndarray
+            HF potential matrix
+        dm : 2D ndarray
+            Density matrix, for DIIS
+
+    Kwargs:
+        cycle : int
+            Then present SCF iteration step, for DIIS
+        adiis : an instance of :attr:`SCF.DIIS` class
+            the object to hold intermediate Fock and error vectors
+    '''
+    f = h1e + vhf
+    if 0 <= cycle < mf.diis_start_cycle-1:
+        f = damping(s1e, dm*.5, f, mf.damp_factor)
+    f = level_shift(s1e, dm*.5, f, mf.level_shift_factor)
+    if adiis and cycle >= mf.diis_start_cycle:
+        f = adiis.update(s1e, dm, f)
+    return f
+
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
@@ -802,31 +829,7 @@ class SCF(object):
     def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
         return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis)
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        '''F = h^{core} + V^{HF}
-
-        Args:
-            h1e : 2D ndarray
-                Core hamiltonian
-            s1e : 2D ndarray
-                Overlap matrix, for DIIS
-            vhf : 2D ndarray
-                HF potential matrix
-            dm : 2D ndarray
-                Density matrix, for DIIS
-
-        Kwargs:
-            cycle : int
-                Then present SCF iteration step, for DIIS
-            adiis : an instance of :attr:`SCF.DIIS` class
-                the object to hold intermediate Fock and error vectors
-        '''
-        f = h1e + vhf
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = damping(s1e, dm*.5, f, self.damp_factor)
-        f = level_shift(s1e, dm*.5, f, self.level_shift_factor)
-        if adiis and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dm, f)
-        return f
+        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis)
 
     def dump_chk(self, envs):
         if self.chkfile:
@@ -964,8 +967,8 @@ class SCF(object):
         self.build()
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_coeff, self.mo_occ \
-                = kernel(self, self.conv_tol, dm0=dm0, callback=self.callback)
+                self.mo_energy, self.mo_coeff, self.mo_occ = \
+                kernel(self, self.conv_tol, dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
@@ -1032,6 +1035,10 @@ class SCF(object):
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
+
+    def density_fit(self, auxbasis='weigend'):
+        import pyscf.scf.dfhf
+        return pyscf.scf.dfhf.density_fit(self, auxbasis)
 
 
 ############
@@ -1193,14 +1200,13 @@ class ROHF(RHF):
             provide correct orbital energies.
         '''
 # Fc = (Fa+Fb)/2
+        dmsf = dm[0]+dm[1]
+        mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
         fa0 = h1e + vhf[0]
         fb0 = h1e + vhf[1]
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
-        dmsf = dm[0]+dm[1]
-        sds = -reduce(numpy.dot, (s1e, dmsf, s1e))
-        _, mo_space = scipy.linalg.eigh(sds, s1e)
         fa = reduce(numpy.dot, (mo_space.T, fa0, mo_space))
         fb = reduce(numpy.dot, (mo_space.T, fb0, mo_space))
         feff = (fa + fb) * .5
@@ -1274,13 +1280,14 @@ class ROHF(RHF):
         nset = len(dm) // 2
         if (self._eri is not None or self._is_mem_enough() or
             not self.direct_scf):
+            dm = numpy.array(dm, copy=False)
             dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
             vj, vk = self.get_jk(mol, dm, hermi)
             vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
             vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         else:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             ddm = numpy.vstack((ddm[nset:],             # closed shell
                                 ddm[:nset]-ddm[nset:])) # open shell
             vj, vk = self.get_jk(mol, ddm, hermi)

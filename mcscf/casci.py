@@ -62,13 +62,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncore + ncas
-    nmo = mo_coeff.shape[1]
 
     casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
-    dm1a = addons._make_rdm1_on_mo(casdm1a, ncore, ncas, nmo, False)
-    dm1b = addons._make_rdm1_on_mo(casdm1b, ncore, ncas, nmo, False)
-    dm1a = reduce(numpy.dot, (mo_coeff, dm1a, mo_coeff.T))
-    dm1b = reduce(numpy.dot, (mo_coeff, dm1b, mo_coeff.T))
+    mocore = mo_coeff[:,:ncore]
+    mocas = mo_coeff[:,ncore:nocc]
+    dm1b = numpy.dot(mocore, mocore.T)
+    dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+    dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
 
     if log.verbose >= logger.INFO:
         label = ['%d%3s %s%-4s' % x for x in casscf.mol.spheric_labels()]
@@ -442,6 +442,37 @@ class CASCI(object):
         from pyscf.mcscf import addons
         if mo_coeff is None: mo_ceff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
+
+    def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
+                   ncore=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if ncas is None: ncas = self.ncas
+        if nelecas is None: nelecas = self.nelecas
+        if ncore is None: ncore = self.ncore
+
+        casdm1a, casdm1b = self.fcisolver.make_rdm1s(ci, ncas, nelecas)
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:ncore+ncas]
+        dm1b = numpy.dot(mocore, mocore.T)
+        dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+        return dm1a, dm1b
+
+    def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
+                  ncore=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if ncas is None: ncas = self.ncas
+        if nelecas is None: nelecas = self.nelecas
+        if ncore is None: ncore = self.ncore
+
+        casdm1 = self.fcisolver.make_rdm1(ci, ncas, nelecas)
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:ncore+ncas]
+        dm1 = numpy.dot(mocore, mocore.T) * 2
+        dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T))
+        return dm1
 
 
 if __name__ == '__main__':

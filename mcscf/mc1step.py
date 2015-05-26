@@ -160,8 +160,6 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     else:
         log = logger.Logger(casscf.stdout, casscf.verbose)
 
-    nmo = mo.shape[1]
-
     t2m = (time.clock(), time.time())
     g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, casdm1, casdm2, eris)
     norm_gorb = numpy.linalg.norm(g_orb)
@@ -182,18 +180,16 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     xcollect = []
     jkcollect = []
     x0 = 0
-    u = numpy.eye(nmo)
+    u = 1
     jkcount = 0
     x0_guess = g_orb
     while True:
         norm_gprev = norm_gorb
         # increase the AH accuracy when approach convergence
-        if norm_gorb < casscf.ah_start_tol:
-            ah_start_tol = norm_gorb
-            log.debug1('... Set AH start tol to %g', ah_start_tol)
-        else:
-            ah_start_tol = casscf.ah_start_tol
-        ah_start_tol = max(ah_start_tol, casscf.ah_conv_tol)
+        ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
+        ah_start_tol = max(min(norm_gorb*.1, casscf.ah_start_tol), ah_conv_tol)
+        log.debug1('... Set ah_start_tol %g, ah_conv_tol %g',
+                   ah_start_tol, ah_conv_tol)
         imic = 0
         wlast = 0
         dx = 0
@@ -213,13 +209,12 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
         xsinit = [x for x in xcollect]
         axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
 
-        for ah_conv, ihop, w, dxi, hdxi, residual, seig \
+        for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, x0_guess,
                                xs=xsinit, ax=axinit, verbose=log,
-                               tol=casscf.ah_conv_tol,
-                               max_cycle=casscf.ah_max_cycle,
+                               tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
                                lindep=casscf.ah_lindep):
-            if (ah_conv or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
+            if (ah_end or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
                 ((abs(w-wlast) < ah_start_tol) and
                  (numpy.linalg.norm(residual)**2 < ah_start_tol) and
                  (ihop >= casscf.ah_start_cycle)) or
@@ -243,8 +238,9 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
-                log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, max(|x|)=%4.3g, eig=%4.3g, seig=%4.3g',
-                           imic, norm_gorb, norm_dxi, dxmax, w, seig)
+                log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, '
+                          'max(|x|)=%4.3g, eig=%4.3g, dw=%4.3g, seig=%4.3g',
+                           imic, norm_gorb, norm_dxi, dxmax, w, w-wlast, seig)
 
                 if norm_gorb > norm_gprev * casscf.ah_grad_trust_region:
 # Do we need force the gradients decaying?
@@ -256,8 +252,10 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
                 else:
                     norm_gprev = norm_gorb
                     g_orb = g_orb1
-                    dr = casscf.unpack_uniq_var(dxi)
-                    u = numpy.dot(u, expmat(dr))
+                    u = casscf.update_rotate_matrix(dxi, u)
+
+                if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad*.5):
+                    break
 
 # It's better to exclude the pseudo-linear-dependent trial vectors before the
 # next cycle of orbital rotation since these vectors might break
@@ -267,12 +265,9 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
                 jkcollect.pop(-1)
                 log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
                            seig, len(xcollect))
-
-            if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad*.5):
-                break
             wlast = w
 
-        if numpy.linalg.norm(dx) > 1e-14:
+        if numpy.linalg.norm(dx) > 0:
             x0 = x0 + dx
         else:
 # Occasionally, all trial rotation goes to the case "norm_gorb > norm_gprev".
@@ -280,13 +275,13 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
             dxi *= .2
             x0 = x0 + dxi
             g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
+            norm_gorb = numpy.linalg.norm(g_orb)
             jkcount += 1
-            dr = casscf.unpack_uniq_var(dxi)
-            u = numpy.dot(u, expmat(dr))
+            u = casscf.update_rotate_matrix(dxi, u)
             log.debug('orbital rotation step not found, try to guess |g[o]|=%4.3g, |dx|=%4.3g',
-                      numpy.linalg.norm(g_orb), numpy.linalg.norm(dxi))
+                      norm_gorb, numpy.linalg.norm(dxi))
 
-        jkcount += ihop + 1
+        jkcount += ihop + 2
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         casdm1, casdm2 = (yield u, g_orb, jkcount)
 
@@ -306,6 +301,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
     else:
         log = logger.Logger(sys.stdout, verbose)
 
+    toloose = numpy.sqrt(tol) * .1
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = [x for x in xs]
     ax = [x for x in ax]
@@ -317,12 +313,23 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
 
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1))
     ovlp = numpy.eye(max_cycle+nx+1)
-    conv = False
+    w_t = 0
+    g = g_op()
     for i,xi in enumerate(xs):
+        heff[i+1,0] = heff[0,i+1] = numpy.dot(xi, g)
         for j in range(i+1):
             heff[i+1,j+1] = heff[j+1,i+1] = numpy.dot(xi, ax[j])
             ovlp[i+1,j+1] = ovlp[j+1,i+1] = numpy.dot(xi, xs[j])
+    nvec = len(xs) + 1
+    xtrial, w_t, v_t, index = \
+            _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
+    hx = _dgemv(v_t[1:], ax)
+    # note g*v_t[0], as the first trial vector is (1,0,0,...)
+    dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
     for istep in range(min(max_cycle,x0.size)):
+        x0 = precond(dx, w_t)
+        xs.append(x0)
+        ax.append(h_op(x0))
         g = g_op()
         nx = len(xs)
         for i in range(nx):
@@ -331,9 +338,10 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
             ovlp[nx,i+1] = ovlp[i+1,nx] = numpy.dot(xs[nx-1], xs[i])
         nvec = nx + 1
         s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        if istep > 0 and s0 < lindep:
-            yield conv, istep, w_t, xtrial, hx, dx, s0
+        if s0 < lindep:
+            yield True, istep, w_t, xtrial, hx, dx, s0
             break
+        wlast = w_t
         xtrial, w_t, v_t, index = \
                 _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
         hx = _dgemv(v_t[1:], ax)
@@ -342,14 +350,11 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
         log.debug1('... AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
-        if norm_dx < tol:
+        if abs(w_t-wlast) < tol and norm_dx < toloose:
             yield True, istep, w_t, xtrial, hx, dx, s0
             break
         else:
-            yield conv, istep, w_t, xtrial, hx, dx, s0
-            x0 = precond(dx, w_t)
-            xs.append(x0)
-            ax.append(h_op(x0))
+            yield False, istep, w_t, xtrial, hx, dx, s0
 
 
 def _regular_step(heff, ovlp, xs, log):
@@ -473,7 +478,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = 0
-    casdm1_old = 0
+    casdm1 = 0
     elast = e_tot
 
     if casscf.diis:
@@ -545,8 +550,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
         log.timer('CASCI solver', *t2m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
-        if abs(e_tot - elast) < tol \
-           and (norm_gorb0 < toloose and norm_ddm < toloose):
+        if (abs(e_tot - elast) < tol
+            and (norm_gorb0 < toloose and norm_ddm < toloose)):
             conv = True
 
         if dump_chk:
@@ -669,14 +674,14 @@ class CASSCF(casci.CASCI):
         ah_level_shift : float, for AH solver.
             Level shift for the Davidson diagonalization in AH solver.  Default is 0.
         ah_conv_tol : float, for AH solver.
-            converge threshold for Davidson diagonalization in AH solver.  Default is 1e-8.
+            converge threshold for Davidson diagonalization in AH solver.  Default is 1e-7.
         ah_max_cycle : float, for AH solver.
             Max number of iterations allowd in AH solver.  Default is 20.
         ah_lindep : float, for AH solver.
             Linear dependence threshold for AH solver.  Default is 1e-14.
         ah_start_tol : flat, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is .5e-3.
+            This value is to control the start point. Default is 1e-4.
         ah_start_cycle : int, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
             This value is to control the start point. Default is 2.
@@ -748,7 +753,7 @@ class CASSCF(casci.CASCI):
         self.conv_tol_grad = 1e-4
         # for augmented hessian
         self.ah_level_shift = 0#1e-2
-        self.ah_conv_tol = 1e-8
+        self.ah_conv_tol = 1e-7
         self.ah_max_cycle = 20
         self.ah_lindep = 1e-14
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
@@ -767,14 +772,13 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-9
-        self.ah_start_tol = .5e-3
+        self.ah_start_tol = 1e-4
         self.ah_start_cycle = 2
-# IN EXPERIMENT: need more tests. ah_guess_space introduces
-        self.ah_guess_space = 30
-# * Classic orbital rotation by AH can be simulated by setting eg
+# * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
 #               max_orb_stepsize = 1.5
+#               ah_grad_trust_region = 1e6
 #               ah_guess_space = 0
 # IN EXPERIMENT: ah_grad_trust_region, ah_guess_space, need more tests.
 # ah_grad_trust_region allow gradients increase for AH optimization
@@ -806,19 +810,27 @@ class CASSCF(casci.CASCI):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
+        if self.frozen:
+            log.info('frozen orbitals %s', str(self.frozen))
         log.info('max. macro cycles = %d', self.max_cycle_macro)
         log.info('max. micro cycles = %d', self.max_cycle_micro)
-        log.info('conv_tol = %g, (%g for gradients)', \
+        log.info('conv_tol = %g, (%g for gradients)',
                  self.conv_tol, self.conv_tol_grad)
         log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('max. orb step = %g', self.max_orb_stepsize)
         log.info('max. ci step = %g', self.max_ci_stepsize)
-        log.info('augmented hessian max. cycle = %d', self.ah_max_cycle)
+        log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
         log.info('augmented hessian level shift = %d', self.ah_level_shift)
+        log.info('augmented hessian start_tol = %g', self.ah_start_tol)
+        log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
+        log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
+        log.info('augmented hessian guess space = %d', self.ah_guess_space)
+        log.info('ci_response_space = %d', self.ci_response_space)
         log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)
+        log.info('natorb = %s', self.natorb)
         log.info('max_memory %d MB', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
@@ -881,61 +893,34 @@ class CASSCF(casci.CASCI):
         log = logger.Logger(self.stdout, self.verbose)
         return casci.kernel(fcasci, mo_coeff, ci0=ci0, verbose=log)
 
-    def pack_uniq_var(self, mat):
-        ncore = self.ncore
-        nocc = ncore + self.ncas
-        if self.frozen:
-            nmo = self.mo_coeff.shape[1]
-            idx = numpy.ones(nmo, dtype=numpy.bool)
-            if isinstance(self.frozen, (int, numpy.integer)):
-                idx[:self.frozen] = False
+    def uniq_var_indices(self, nmo, ncore, ncas, frozen):
+        nocc = ncore + ncas
+        mask = numpy.zeros((nmo,nmo),dtype=bool)
+        mask[ncore:nocc,:ncore] = True
+        mask[nocc:,:nocc] = True
+        if frozen:
+            if isinstance(frozen, (int, numpy.integer)):
+                mask[:frozen] = mask[:,:frozen] = False
             else:
-                idx[self.frozen] = False
-            v = []
-            v.append(mat[ncore:nocc,:ncore][idx[ncore:nocc,None]&idx[:ncore]])
-            v.append(mat[nocc:,:nocc][idx[nocc:,None]&idx[:nocc]])
-        else:
-            v = []
-            # active-core
-            v.append(mat[ncore:nocc,:ncore].ravel())
-            #TODO:if self.inner_rotation:
-            #TODO:    # active-active
-            #TODO:    v.append(mat[ncore:nocc,ncore:nocc].ravel())
-            # virtual-core, virtual-active
-            v.append(mat[nocc:,:nocc].ravel())
-        return numpy.hstack(v)
+                mask[frozen] = mask[:,frozen] = False
+        return mask
+
+    def pack_uniq_var(self, mat):
+        nmo = self.mo_coeff.shape[1]
+        idx = self.uniq_var_indices(nmo, self.ncore, self.ncas, self.frozen)
+        return mat[idx]
 
     # to anti symmetric matrix
     def unpack_uniq_var(self, v):
-        ncore = self.ncore
-        ncas = self.ncas
-        nocc = ncore + ncas
         nmo = self.mo_coeff.shape[1]
-        nvir = nmo - nocc
+        idx = self.uniq_var_indices(nmo, self.ncore, self.ncas, self.frozen)
         mat = numpy.zeros((nmo,nmo))
-        if self.frozen:
-            idx = numpy.ones(nmo, dtype=numpy.bool)
-            if isinstance(self.frozen, (int, numpy.integer)):
-                idx[:self.frozen] = False
-            else:
-                idx[self.frozen] = False
-            ncore1 = idx[:ncore].sum()
-            ncas1 = idx[ncore:nocc].sum()
-            nocc1 = ncore1 + ncas1
-            nvir1 = idx[nocc:].sum()
-            if ncore1 > 0:
-                mat[ncore:nocc,:ncore][idx[ncore:nocc,None]&idx[:ncore]] = v[:ncas1*ncore1]
-            if nvir1 > 0:
-                mat[nocc:,:nocc][idx[nocc:,None]&idx[:nocc]] = v[-nvir1*nocc1:]
-        else:
-            if ncore > 0:
-                mat[ncore:nocc,:ncore] = v[:ncas*ncore].reshape(ncas,ncore)
-            # virtual-core, virtual-active
-            if nvir > 0:
-                mat[nocc:,:nocc] = v[-nvir*nocc:].reshape(nvir,nocc)
-        mat[:ncore,ncore:nocc] = -mat[ncore:nocc,:ncore].T
-        mat[:nocc,nocc:] = -mat[nocc:,:nocc].T
-        return mat
+        mat[idx] = v
+        return mat - mat.T
+
+    def update_rotate_matrix(self, dx, u0=1):
+        dr = self.unpack_uniq_var(dx)
+        return numpy.dot(u0, expmat(dr))
 
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
@@ -972,6 +957,8 @@ class CASSCF(casci.CASCI):
 #        eris.Icvcv = cPCv.transpose(2,3,0,1).copy()
 #        return eris
 
+        if hasattr(self._scf, '_cderi'):
+            raise RuntimeError('TODO: density fitting')
         mem = mc_ao2mo._mem_usage(self.ncore, self.ncas,
                                   self.mo_coeff.shape[1])[1]
         if mem > self.max_memory*.9:
@@ -1225,7 +1212,7 @@ if __name__ == '__main__':
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
-    print(emc - -15.950852049859)
+    print(emc - -15.950852049859-mol.energy_nuc())
 
 
     mol.atom = [

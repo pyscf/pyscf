@@ -144,17 +144,6 @@ def project_init_guess(casscf, init_mo):
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
 
-def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
-    nocc = ncas + ncore
-    dm1 = numpy.zeros((nmo,nmo))
-    idx = numpy.arange(ncore)
-    if docc:
-        dm1[idx,idx] = 2
-    else:
-        dm1[idx,idx] = 1
-    dm1[ncore:nocc,ncore:nocc] = casdm1
-    return dm1
-
 # on AO representation
 def make_rdm1(casscf, mo_coeff=None, ci=None):
     '''One-particle densit matrix in AO representation
@@ -182,46 +171,13 @@ def make_rdm1(casscf, mo_coeff=None, ci=None):
     [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
       2.          2.          2.          2.        ]
     '''
-    if ci is None: ci = casscf.ci
-    if mo_coeff is None:
-        mo_coeff = casscf.mo_coeff
-    if _is_uhf_mo(mo_coeff):
-        return sum(make_rdm1s(casscf, ci, mo_coeff))
-    nelecas = casscf.nelecas
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    nmo = mo_coeff.shape[1]
-    casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
-    rdm1 = _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, True)
-    rdm1 = reduce(numpy.dot, (mo_coeff, rdm1, mo_coeff.T))
-    return rdm1
+    return casscf.make_rdm1(mo_coeff, ci)
 
 # make both alpha and beta density matrices
 def make_rdm1s(casscf, mo_coeff=None, ci=None):
     '''Alpha and beta one-particle densit matrices in AO representation
     '''
-    if ci is None: ci = casscf.ci
-    if mo_coeff is None:
-        mo_coeff = casscf.mo_coeff
-    if _is_uhf_mo(mo_coeff):
-        nmo = mo_coeff[0].shape[1]
-    else:
-        nmo = mo_coeff.shape[1]
-    nelecas = casscf.nelecas
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    rdm1a, rdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
-    if _is_uhf_mo(mo_coeff):
-        rdm1a = _make_rdm1_on_mo(rdm1a, ncore[0], ncas, nmo, False)
-        rdm1b = _make_rdm1_on_mo(rdm1b, ncore[1], ncas, nmo, False)
-        rdm1a = reduce(numpy.dot, (mo_coeff[0], rdm1a, mo_coeff[0].T))
-        rdm1b = reduce(numpy.dot, (mo_coeff[1], rdm1b, mo_coeff[1].T))
-    else:
-        rdm1a = _make_rdm1_on_mo(rdm1a, ncore, ncas, nmo, False)
-        rdm1b = _make_rdm1_on_mo(rdm1b, ncore, ncas, nmo, False)
-        rdm1a = reduce(numpy.dot, (mo_coeff, rdm1a, mo_coeff.T))
-        rdm1b = reduce(numpy.dot, (mo_coeff, rdm1b, mo_coeff.T))
-    return rdm1a, rdm1b
+    return casscf.make_rdm1s(mo_coeff, ci)
 
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)

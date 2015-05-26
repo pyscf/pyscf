@@ -42,7 +42,8 @@ class CASSCF(mc1step.CASSCF):
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
-                                                self.mo_coeff)
+                                                self.mo_coeff,
+                                                s=self._scf.get_ovlp())
 
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
@@ -76,7 +77,8 @@ class CASSCF(mc1step.CASSCF):
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
-                                                self.mo_coeff)
+                                                self.mo_coeff,
+                                                s=self._scf.get_ovlp())
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
             ncore = self.ncore
@@ -112,10 +114,10 @@ class CASSCF(mc1step.CASSCF):
         return self.pack_uniq_var(g_orb), sym_h_op1, sym_h_opjk, \
                self.pack_uniq_var(h_diag)
 
-    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
-        for u, g_orb, njk \
-                in mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, verbose):
-            yield _symmetrize(u, self.orbsym, self.mol.groupname), g_orb, njk
+    def update_rotate_matrix(self, dx, u0=1):
+        dr = self.unpack_uniq_var(dx)
+        dr = _symmetrize(dr, self.orbsym, self.mol.groupname)
+        return numpy.dot(u0, mc1step.expmat(dr))
 
     def _eig(self, mat, b0, b1):
         orbsym = numpy.array(self.orbsym[b0:b1])

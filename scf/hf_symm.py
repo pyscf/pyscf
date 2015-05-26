@@ -27,8 +27,9 @@ def analyze(mf, verbose=logger.DEBUG):
     log = pyscf.lib.logger.Logger(mf.stdout, verbose)
     mol = mf.mol
     nirrep = len(mol.irrep_id)
+    ovlp_ao = mf.get_ovlp()
     orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                       mo_coeff)
+                                       mo_coeff, s=ovlp_ao)
     orbsym = numpy.array(orbsym)
     tot_sym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
@@ -63,9 +64,9 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, mf.get_ovlp(), log)
+    return mf.mulliken_pop(mol, dm, ovlp_ao, log)
 
-def get_irrep_nelec(mol, mo_coeff, mo_occ):
+def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Electron numbers for each irreducible representation.
 
     Args:
@@ -90,7 +91,7 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ):
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
     orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                       mo_coeff)
+                                       mo_coeff, s)
     orbsym = numpy.array(orbsym)
     irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
                         for k, ir in enumerate(mol.irrep_id)])
@@ -263,11 +264,12 @@ class RHF(hf.RHF):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
-    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
+    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return get_irrep_nelec(mol, mo_coeff, mo_occ)
+        if s is None: s = self.get_ovlp()
+        return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
 
 class ROHF(hf.ROHF):
@@ -337,7 +339,7 @@ class ROHF(hf.ROHF):
                         self.mol.nelectron-fix_na-fix_nb,
                         ' '.join(float_irname))
         elif fix_na+fix_nb != self.mol.nelectron:
-            logger.error(self, 'electron number error in irrep_nelec %d',
+            logger.error(self, 'electron number error in irrep_nelec %s',
                          self.irrep_nelec.items())
             raise ValueError('irrep_nelec')
 
@@ -388,7 +390,7 @@ class ROHF(hf.ROHF):
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
 
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
 # Roothaan's effective fock
 # http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 #          |  closed     open    virtual
@@ -403,8 +405,7 @@ class ROHF(hf.ROHF):
         nopen = self.mol.spin
         nocc = ncore + nopen
         dmsf = dm[0]+dm[1]
-        sds = -reduce(numpy.dot, (s1e, dmsf, s1e))
-        _, mo_space = scipy.linalg.eigh(sds, s1e)
+        mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
         fa = reduce(numpy.dot, (mo_space.T, fa0, mo_space))
         fb = reduce(numpy.dot, (mo_space.T, fb0, mo_space))
         feff = (fa + fb) * .5
@@ -416,13 +417,13 @@ class ROHF(hf.ROHF):
         f = reduce(numpy.dot, (cinv.T, feff, cinv))
 
         if 0 <= cycle < self.diis_start_cycle-1:
-            f = hf.damping(s1e, dmsf*.5, f, self.damp_factor)
-            f = hf.level_shift(s1e, dmsf*.5, f, self.level_shift_factor)
+            f = hf.damping(s1e, dm[0], f, self.damp_factor)
+            f = hf.level_shift(s1e, dm[0], f, self.level_shift_factor)
         elif 0 <= cycle:
             # decay the level_shift_factor
             fac = self.level_shift_factor \
                     * numpy.exp(self.diis_start_cycle-cycle-1)
-            f = hf.level_shift(s1e, dmsf*.5, f, fac)
+            f = hf.level_shift(s1e, dm[0], f, fac)
         if adiis is not None and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dmsf, f)
         return (f, fa0, fb0)
@@ -551,8 +552,9 @@ class ROHF(hf.ROHF):
         log = logger.Logger(self.stdout, verbose)
         mol = self.mol
         nirrep = len(mol.irrep_id)
+        ovlp_ao = self.get_ovlp()
         orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                           mo_coeff)
+                                           mo_coeff, s=ovlp_ao)
         orbsym = numpy.array(orbsym)
         tot_sym = 0
         ndoccs = []
@@ -598,7 +600,7 @@ class ROHF(hf.ROHF):
             dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_pop(mol, dm, self.get_ovlp(), verbose)
+        return self.mulliken_pop(mol, dm, ovlp_ao, verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm
