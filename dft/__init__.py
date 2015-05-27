@@ -6,7 +6,7 @@ from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
-from pyscf.scf.df import density_fit
+from pyscf.df import density_fit
 
 # register the XC keywords in module
 curmod = sys.modules[__name__]

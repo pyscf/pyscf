@@ -119,10 +119,8 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     '''reorder the CI coefficients wrt the reordering of orbitals (The relation
     of the reordered orbitals and original orbitals is  new = old[idx]).  Eg.
     orbidx = [2,0,1] to map   old orbital  a b c  ->   new orbital  c a b
-    old-strings   0b011, 0b101, 0b110
-              ==  (1,2), (1,3), (2,3)
-    orb-strings   (3,1), (3,2), (1,2)
-              ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
+    old-strings   0b011, 0b101, 0b110 ==  (1,2), (1,3), (2,3)
+    orb-strings   (3,1), (3,2), (1,2) ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
     then argsort to translate the string representation to the address
     [2(=0B011), 0(=0B101), 1(=0B110)]
     '''
