@@ -417,15 +417,10 @@ class ROHF(hf.ROHF):
         f = reduce(numpy.dot, (cinv.T, feff, cinv))
 
         if 0 <= cycle < self.diis_start_cycle-1:
-            f = hf.damping(s1e, dm[0], f, self.damp_factor)
-            f = hf.level_shift(s1e, dm[0], f, self.level_shift_factor)
-        elif 0 <= cycle:
-            # decay the level_shift_factor
-            fac = self.level_shift_factor \
-                    * numpy.exp(self.diis_start_cycle-cycle-1)
-            f = hf.level_shift(s1e, dm[0], f, fac)
-        if adiis is not None and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dmsf, f)
+            f = damping(s1e, dm[0], f, self.damp_factor)
+        if adiis and cycle >= self.diis_start_cycle:
+            f = adiis.update(s1e, dm[0], f)
+        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
         return (f, fa0, fb0)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):

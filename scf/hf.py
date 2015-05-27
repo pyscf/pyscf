@@ -562,9 +562,9 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
     f = h1e + vhf
     if 0 <= cycle < mf.diis_start_cycle-1:
         f = damping(s1e, dm*.5, f, mf.damp_factor)
-    f = level_shift(s1e, dm*.5, f, mf.level_shift_factor)
     if adiis and cycle >= mf.diis_start_cycle:
         f = adiis.update(s1e, dm, f)
+    f = level_shift(s1e, dm*.5, f, mf.level_shift_factor)
     return f
 
 
@@ -1219,9 +1219,9 @@ class ROHF(RHF):
 
         if 0 <= cycle < self.diis_start_cycle-1:
             f = damping(s1e, dm[0], f, self.damp_factor)
-        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
         if adiis and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm[0], f)
+        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
 # attach alpha and beta fock, because Roothaan effective Fock cannot provide
 # correct orbital energy.  To define orbital energy in self.eig, we use alpha
 # fock and beta fock.
