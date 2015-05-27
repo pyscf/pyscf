@@ -146,10 +146,10 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
     if 0 <= cycle < mf.diis_start_cycle-1:
         f = (hf.damping(s1e, dm[0], f[0], mf.damp_factor),
              hf.damping(s1e, dm[1], f[1], mf.damp_factor))
-    f = (hf.level_shift(s1e, dm[0], f[0], mf.level_shift_factor),
-         hf.level_shift(s1e, dm[1], f[1], mf.level_shift_factor))
     if adiis and cycle >= mf.diis_start_cycle:
         f = adiis.update(s1e, dm, numpy.array(f))
+    f = (hf.level_shift(s1e, dm[0], f[0], mf.level_shift_factor),
+         hf.level_shift(s1e, dm[1], f[1], mf.level_shift_factor))
     return f
 
 def energy_elec(mf, dm, h1e=None, vhf=None):
