@@ -1100,8 +1100,8 @@ class Mole(object):
         self.nbas = len(self._bas)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
-            sys.stderr.write('Electron number %d and spin %d are not consistent\n' %
-                             (self.nelectron, self.spin))
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
+                               (self.nelectron, self.spin))
 
         if self.symmetry:
             import pyscf.symm

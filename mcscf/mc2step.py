@@ -10,7 +10,8 @@ from pyscf.mcscf import mc1step
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
-           ci0=None, callback=None, verbose=None, dump_chk=True):
+           ci0=None, callback=None, verbose=None,
+           dump_chk=True, dump_chk_ci=False):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
