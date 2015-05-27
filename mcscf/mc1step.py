@@ -627,7 +627,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                 mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
         if log.verbose >= logger.DEBUG:
-            for i in range(ncore):
+            for i in range(nmo-nocc):
                 log.debug('i = %d, <i|F|i> = %12.8f', nocc+i+1, w[i])
 # still return ci coefficients, in case the canonicalization funciton changed
 # cas orbitals, the ci coefficients should also be updated.
