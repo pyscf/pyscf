@@ -363,7 +363,7 @@ class CASCI(object):
         if dm is None:
             mocore = self.mo_coeff[:,:self.ncore]
             dm = numpy.dot(mocore, mocore.T) * 2
-# don't call self._scf.get_veff, because ROHF return alpha,beta potential separately
+# don't call self._scf.get_veff, _scf object might be from DFT
         vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
         return vj - vk * .5
 

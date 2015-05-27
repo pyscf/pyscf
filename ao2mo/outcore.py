@@ -660,7 +660,8 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
         iobuf_words = int(mem_words // 2)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
-    e1buflen = int(min(iobuf_words//(comp*nij_pair), nao_pair))
+    e1buflen = int(min(iobuf_words//(comp*nij_pair),
+                       mem_words//(comp*nao_pair), nao_pair))
     return e1buflen, mem_words, iobuf_words, ioblk_words
 
 def guess_e2bufsize(ioblk_size, nrows, ncols):
