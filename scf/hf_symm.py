@@ -178,6 +178,8 @@ class RHF(hf.RHF):
             es.append(e)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
+        if self.level_shift_factor > 1e-3:
+            e -= self.level_shift_factor
         return e, c
 
     def get_occ(self, mo_energy, mo_coeff=None):
@@ -388,6 +390,8 @@ class ROHF(hf.ROHF):
         self._open_mo_energy = numpy.hstack(eopen)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
+        if self.level_shift_factor > 1e-3:
+            e -= self.level_shift_factor
         return e, c
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):

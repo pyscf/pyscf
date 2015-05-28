@@ -816,7 +816,10 @@ class SCF(object):
 
 
     def eig(self, h, s):
-        return eig(h, s)
+        e, c = eig(h, s)
+        if self.level_shift_factor > 1e-3:
+            e -= self.level_shift_factor
+        return e, c
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -1177,6 +1180,8 @@ class ROHF(RHF):
         idx = ea.argsort()
         mo_energy[ncore:] = ea[idx]
         mo_coeff[:,ncore:] = mopen[:,idx]
+        if self.level_shift_factor > 1e-3:
+            mo_energy -= self.level_shift_factor
         return mo_energy, mo_coeff
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
