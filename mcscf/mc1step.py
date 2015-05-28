@@ -184,6 +184,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     jkcount = 0
     x0_guess = g_orb
     while True:
+        g_orb0 = g_orb
         norm_gprev = norm_gorb
         # increase the AH accuracy when approach convergence
         ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
@@ -283,7 +284,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
 
         jkcount += ihop + 2
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        casdm1, casdm2 = (yield u, g_orb, jkcount)
+        casdm1, casdm2 = (yield u, g_orb0, jkcount)
 
         g_orb, h_op1, h_opjk, h_diag = casscf.gen_g_hop(mo, casdm1, casdm2, eris)
         norm_gorb = numpy.linalg.norm(g_orb)

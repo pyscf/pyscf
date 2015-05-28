@@ -48,8 +48,6 @@ def density_fit(mf, auxbasis='weigend'):
             self.auxbasis = auxbasis
             self._cderi = None
             self.direct_scf = False
-            self.occdrop = OCCDROP
-            self.blockdim = BLOCKDIM
             self._keys = self._keys.union(['auxbasis'])
 
         def get_jk(self, mol=None, dm=None, hermi=1):
@@ -62,8 +60,6 @@ def density_fit(mf, auxbasis='weigend'):
     return HF()
 
 
-OCCDROP = 1e-12
-BLOCKDIM = 240
 def get_jk_(mf, mol, dms, hermi=1):
     from pyscf import df
     from pyscf.ao2mo import _ao2mo
@@ -119,10 +115,10 @@ def get_jk_(mf, mol, dms, hermi=1):
                 dmtril[k][i*(i+1)//2+i] *= .5
 
             e, c = scipy.linalg.eigh(dm)
-            pos = e > mf.occdrop
-            neg = e < -mf.occdrop
+            pos = e > OCCDROP
+            neg = e < -OCCDROP
 
-            #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>mf.occdrop])
+            #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
             #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
             cpos.append(numpy.asarray(numpy.einsum('ij,j->ij', c[:,pos],
                                                    numpy.sqrt(e[pos])), order='F'))
@@ -131,7 +127,7 @@ def get_jk_(mf, mol, dms, hermi=1):
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
-            for b0, b1 in prange(0, mf._naoaux, mf.blockdim):
+            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = numpy.array(feri[b0:b1], copy=False)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
@@ -171,7 +167,7 @@ def get_jk_(mf, mol, dms, hermi=1):
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
-            for b0, b1 in prange(0, mf._naoaux, mf.blockdim):
+            for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = numpy.array(feri[b0:b1], copy=False)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
@@ -242,7 +238,7 @@ def r_get_jk_(mf, mol, dms, hermi=1):
         dmss = numpy.asarray(dm[n2c:,n2c:], order='C') * c1**2
         with df.load(mf._cderi[0]) as ferill:
             with df.load(mf._cderi[1]) as feriss: # python2.6 not support multiple with
-                for b0, b1 in prange(0, mf._naoaux, mf.blockdim):
+                for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                     erill = numpy.array(ferill[b0:b1], copy=False)
                     eriss = numpy.array(feriss[b0:b1], copy=False)
                     buf = numpy.empty((b1-b0,n2c,n2c), dtype=numpy.complex)

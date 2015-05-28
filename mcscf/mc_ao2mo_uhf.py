@@ -229,21 +229,11 @@ class _ERIS(object):
         nmo = mo[0].shape[1]
         ncore = self.ncore
         ncas = self.ncas
+        mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
+        mem_now = pyscf.lib.current_memory()[0]
 
-        if (method == 'outcore' or
-            ((_mem_usage(ncore, ncas, nmo)[0] + nmo**4*2/1e6 +
-              pyscf.lib.current_memory()[0]) > casscf.max_memory*.9) or
-            (casscf._scf._eri is None)):
-            log = logger.Logger(casscf.stdout, casscf.verbose)
-            max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
-            self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
-            self.aapp, self.aaPP, self.AApp, self.AAPP, \
-            self.appa, self.apPA, self.APPA, \
-            self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
-            self.Icvcv, self.ICVCV, self.cvCV = \
-                    trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
-                                     max_memory=max_memory, verbose=log)
-        elif method == 'incore' and casscf._scf._eri is not None:
+        if (method == 'incore' and casscf._scf._eri is not None and
+            ((mem_incore+mem_now) < casscf.max_memory*.9)):
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \
             self.appa, self.apPA, self.APPA, \
@@ -252,17 +242,30 @@ class _ERIS(object):
                     trans_e1_incore(casscf._scf._eri, mo,
                                     casscf.ncore, casscf.ncas)
         else:
-            raise KeyError('update ao2mo')
+            log = logger.Logger(casscf.stdout, casscf.verbose)
+            max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
+            if ((mem_outcore+mem_now) < casscf.max_memory*.9):
+                assert(max_memory > mem_outcore)
+                self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
+                self.aapp, self.aaPP, self.AApp, self.AAPP, \
+                self.appa, self.apPA, self.APPA, \
+                self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
+                self.Icvcv, self.ICVCV, self.cvCV = \
+                        trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
+                                         max_memory=max_memory, verbose=log)
+            else:
+                raise RuntimeError('.max_memory not enough')
+                assert(max_memory > mem_basic)
 
 def _mem_usage(ncore, ncas, nmo):
     ncore = (ncore[0] + ncore[1]) * .5
     nvir = nmo - ncore
-    outcore = (ncore**2*nvir**2*3 + ncas*nmo*ncore*nvir*4 + ncore*nmo**2*3 +
-               ncas**2*nmo**2*7 + nmo**3*2) * 8/1e6
+    basic = (ncas**2*nmo**2*7 + nmo**3*2) * 8/1e6
+    outcore = basic + (ncore**2*nvir**2*3 + ncas*nmo*ncore*nvir*4 + ncore*nmo**2*3) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
     if outcore > 10000:
         sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
-    return incore, outcore
+    return incore, outcore, basic
 
 if __name__ == '__main__':
     from pyscf import scf
