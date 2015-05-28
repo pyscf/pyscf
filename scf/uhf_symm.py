@@ -233,6 +233,9 @@ class UHF(uhf.UHF):
             es.append(e)
         eb = numpy.hstack(es)
         cb = hf_symm.so2ao_mo_coeff(self.mol.symm_orb, cs)
+        if self.level_shift_factor > 1e-3:
+            ea -= self.level_shift_factor
+            eb -= self.level_shift_factor
         return numpy.array((ea,eb)), (ca,cb)
 
     def get_occ(self, mo_energy, mo_coeff=None):
