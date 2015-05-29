@@ -337,7 +337,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 # approx = 2: aapp, appa, vhf
 # approx = 3: aapp, appa
 class _ERIS(object):
-    def __init__(self, casscf, mo, method='incore', approx=0):
+    def __init__(self, casscf, mo, method='incore', approx=1):
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         nao, nmo = mo.shape
@@ -355,7 +355,7 @@ class _ERIS(object):
         else:
             log = logger.Logger(casscf.stdout, casscf.verbose)
             max_memory = max(2000, casscf.max_memory*.9-mem_now)
-            if (approx == 0 and (mem_outcore+mem_now) < casscf.max_memory*.9):
+            if (mem_outcore+mem_now) < casscf.max_memory*.9:
                 assert(max_memory > mem_outcore)
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
                 self.Iapcv, self.Icvcv = \
