@@ -244,7 +244,7 @@ def eval_xc(x_id, c_id, rho, sigma, spin=0, relativity=0, verbose=None):
 
 
 def _dot_ao_ao(mol, ao1, ao2, nao, ngrids, non0tab):
-    #return pyscf.lib.dot(ao, dm)
+    return pyscf.lib.dot(ao1.T, ao2)
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     vv = numpy.empty((nao,nao))

@@ -178,8 +178,6 @@ class RHF(hf.RHF):
             es.append(e)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
-        if self.level_shift_factor > 1e-3:
-            e -= self.level_shift_factor
         return e, c
 
     def get_occ(self, mo_energy, mo_coeff=None):
@@ -390,8 +388,6 @@ class ROHF(hf.ROHF):
         self._open_mo_energy = numpy.hstack(eopen)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
-        if self.level_shift_factor > 1e-3:
-            e -= self.level_shift_factor
         return e, c
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
@@ -424,7 +420,7 @@ class ROHF(hf.ROHF):
             f = damping(s1e, dm[0], f, self.damp_factor)
         if adiis and cycle >= self.diis_start_cycle:
             f = adiis.update(s1e, dm[0], f)
-        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
+        f = hf.level_shift(s1e, dm[0], f, self.level_shift_factor)
         return (f, fa0, fb0)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
