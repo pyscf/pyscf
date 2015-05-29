@@ -960,12 +960,7 @@ class CASSCF(casci.CASCI):
 
         if hasattr(self._scf, '_cderi'):
             raise RuntimeError('TODO: density fitting')
-        mem = mc_ao2mo._mem_usage(self.ncore, self.ncas,
-                                  self.mo_coeff.shape[1])[1]
-        if mem > self.max_memory*.9:
-            return mc_ao2mo._ERIS(self, mo, 'incore', 0)
-        else:
-            return mc_ao2mo._ERIS(self, mo, 'incore', 1)
+        return mc_ao2mo._ERIS(self, mo, 'incore')
 
     def get_h2eff(self, mo_coeff=None):
         return self.get_h2cas(mo_coeff)

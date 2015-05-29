@@ -106,6 +106,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, adiis)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
+        if cycle > 1 and mf.level_shift_factor > 0:
+            mo_energy[mo_occ==0] -= mf.level_shift_factor
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
@@ -367,7 +369,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    if factor < 1e-3:
+    if factor < 0:
         return f
     else:
         dm_vir = s - reduce(numpy.dot, (s, d, s))
@@ -816,10 +818,7 @@ class SCF(object):
 
 
     def eig(self, h, s):
-        e, c = eig(h, s)
-        if self.level_shift_factor > 1e-3:
-            e -= self.level_shift_factor
-        return e, c
+        return eig(h, s)
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -1180,8 +1179,6 @@ class ROHF(RHF):
         idx = ea.argsort()
         mo_energy[ncore:] = ea[idx]
         mo_coeff[:,ncore:] = mopen[:,idx]
-        if self.level_shift_factor > 1e-3:
-            mo_energy -= self.level_shift_factor
         return mo_energy, mo_coeff
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):

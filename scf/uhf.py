@@ -406,9 +406,6 @@ class UHF(hf.SCF):
     def eig(self, fock, s):
         e_a, c_a = hf.SCF.eig(self, fock[0], s)
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
-        if self.level_shift_factor > 1e-3:
-            e_a -= self.level_shift_factor
-            e_b -= self.level_shift_factor
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
