@@ -42,9 +42,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
 
-    h_diag = numpy.empty((nvir,nocc))
-    h_diag[:] = -foo.diagonal() * 2
-    h_diag[:] += fvv.diagonal().reshape(-1,1) * 2
+    h_diag = (fvv.diagonal().reshape(-1,1)-foo.diagonal()) * 2
 
     def h_op1(x):
         x = x.reshape(-1,nocc)
@@ -194,12 +192,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     g = numpy.hstack((focka[viridxa[:,None],occidxa].reshape(-1),
                       fockb[viridxb[:,None],occidxb].reshape(-1)))
 
-    h_diaga = numpy.empty((nvira,nocca))
-    h_diagb = numpy.empty((nvirb,noccb))
-    h_diaga[:]  =-focka[occidxa,occidxa]
-    h_diaga[:] += focka[viridxa,viridxa].reshape(-1,1)
-    h_diagb[:]  =-fockb[occidxb,occidxb]
-    h_diagb[:] += fockb[viridxb,viridxb].reshape(-1,1)
+    h_diaga =(focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa])
+    h_diagb =(fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb])
     h_diag = numpy.hstack((h_diaga.reshape(-1), h_diagb.reshape(-1)))
 
     def h_op1(x):
@@ -360,7 +354,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(u.shape[1])))
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        mo_coeff, mo_occ, fock_ao = (yield u, g_orb, jkcount)
+        #mo_coeff, mo_occ, fock_ao = (yield u, g_orb, jkcount)
+        mo_coeff, mo_occ, fock_ao = (yield u, x0_guess, jkcount)
 
         g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao, h1e)
         norm_gorb = numpy.linalg.norm(g_orb)
@@ -484,7 +479,9 @@ def newton(mf):
             logger.info(self, 'ah_guess_space = %d',   self.ah_guess_space)
             logger.info(self, 'ah_grad_trust_region = %g', self.ah_grad_trust_region)
 
-        def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+        def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                      diis_start_cycle=None, level_shift_factor=None,
+                      damp_factor=None):
             return h1e + vhf
 
         def kernel(self, mo_coeff=None, mo_occ=None):
