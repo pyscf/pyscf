@@ -151,3 +151,15 @@ def X2C(mol, *args):
 def density_fit(mf, auxbasis='weigend'):
     return mf.density_fit(auxbasis)
 
+def RKS(mol, *args):
+    from pyscf import dft
+    return dft.RKS(mol)
+
+def ROKS(mol, *args):
+    from pyscf import dft
+    return dft.ROKS(mol)
+
+def UKS(mol, *args):
+    from pyscf import dft
+    return dft.UKS(mol)
+

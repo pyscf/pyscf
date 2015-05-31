@@ -33,7 +33,11 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    if (ks._eri is not None or ks._is_mem_enough() or
+    hyb = vxc.hybrid_coeff(x_code, spin=1)
+
+    if abs(hyb) < 1e-10:
+        vj = ks.get_j(mol, dm, hermi)
+    elif (ks._eri is not None or ks._is_mem_enough() or
         not ks.direct_scf):
         vj, vk = ks.get_jk(mol, dm, hermi)
     else:
@@ -46,7 +50,6 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, dm, hermi)
         ks._vj_last, ks._vk_last = vj, vk
 
-    hyb = vxc.hybrid_coeff(x_code, spin=1)
     if abs(hyb) > 1e-10:
         if nset == 1:
             ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0])

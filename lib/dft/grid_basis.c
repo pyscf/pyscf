@@ -12,7 +12,7 @@
 #define NPRIM_CART      256
 #define NPRIMAX         64
 #define BLKSIZE         224
-#define EXPCUTOFF       30  // 1e-13
+#define EXPCUTOFF       40  // 4e-18
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 #define NOTZERO(e)      ((e)>1e-18 || (e)<-1e-18)
@@ -880,7 +880,8 @@ void VXCeval_ao_drv(void (*eval_gto)(),
         }
 }
 
-void VXCnr_ao_screen(char *non0table, double *coord, int ngrids, int blksize,
+void VXCnr_ao_screen(signed char *non0table, double *coord,
+                     int ngrids, int blksize,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+blksize-1) / blksize;
@@ -891,7 +892,7 @@ void VXCnr_ao_screen(char *non0table, double *coord, int ngrids, int blksize,
         double dr[3];
         double *p_exp, *pcoeff, *pcoord, *ratm;
 
-        memset(non0table, 0, sizeof(char) * nblk*nbas);
+        memset(non0table, 0, sizeof(signed char) * nblk*nbas);
 
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF];
@@ -931,3 +932,18 @@ next_blk:
         }
 }
 
+void VXCoriginal_becke(double *out, double *g, int n)
+{
+        int i;
+        double s;
+#pragma omp parallel default(none) \
+        shared(out, g, n) private(i, s)
+{
+#pragma omp for nowait schedule(static)
+        for (i = 0; i < n; i++) {
+                s = (3 - g[i]*g[i]) * g[i] * .5;
+                s = (3 - s*s) * s * .5;
+                out[i] = (3 - s*s) * s * .5;
+        }
+}
+}
