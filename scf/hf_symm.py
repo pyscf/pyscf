@@ -357,10 +357,9 @@ class ROHF(hf.ROHF):
     # same to RHF.eig
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2
-        feff, fa, fb = h
         nirrep = self.mol.symm_orb.__len__()
-        fa = pyscf.symm.symmetrize_matrix(fa, self.mol.symm_orb)
-        h = pyscf.symm.symmetrize_matrix(feff, self.mol.symm_orb)
+        fa = pyscf.symm.symmetrize_matrix(self._focka_ao, self.mol.symm_orb)
+        h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)
         s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
         cs = []
         es = []
@@ -390,7 +389,9 @@ class ROHF(hf.ROHF):
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
 # Roothaan's effective fock
 # http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 #          |  closed     open    virtual
@@ -399,15 +400,21 @@ class ROHF(hf.ROHF):
 #  open    |    Fb        Fc       Fa
 #  virtual |    Fc        Fa       Fc
 # Fc = (Fa+Fb)/2
-        fa0 = h1e + vhf[0]
-        fb0 = h1e + vhf[1]
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
+        self._focka_ao = h1e + vhf[0]
+        fockb_ao = h1e + vhf[1]
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         dmsf = dm[0]+dm[1]
         mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
-        fa = reduce(numpy.dot, (mo_space.T, fa0, mo_space))
-        fb = reduce(numpy.dot, (mo_space.T, fb0, mo_space))
+        fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
+        fb = reduce(numpy.dot, (mo_space.T, fockb_ao, mo_space))
         feff = (fa + fb) * .5
         feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
         feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
@@ -416,12 +423,12 @@ class ROHF(hf.ROHF):
         cinv = numpy.dot(mo_space.T, s1e)
         f = reduce(numpy.dot, (cinv.T, feff, cinv))
 
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = damping(s1e, dm[0], f, self.damp_factor)
-        if adiis and cycle >= self.diis_start_cycle:
+        if 0 <= cycle < diis_start_cycle-1:
+            f = hf.damping(s1e, dm[0], f, damp_factor)
+        if adiis and cycle >= diis_start_cycle:
             f = adiis.update(s1e, dm[0], f)
-        f = hf.level_shift(s1e, dm[0], f, self.level_shift_factor)
-        return (f, fa0, fb0)
+        f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
+        return f
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy

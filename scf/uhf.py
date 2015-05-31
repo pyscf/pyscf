@@ -141,16 +141,21 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
     return vhf
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-    f = (h1e+vhf[0], h1e+vhf[1])
-    if 0 <= cycle < mf.diis_start_cycle-1:
-        f = (hf.damping(s1e, dm[0], f[0], mf.damp_factor),
-             hf.damping(s1e, dm[1], f[1], mf.damp_factor))
-    if adiis and cycle >= mf.diis_start_cycle:
+def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+    f = h1e + vhf
+    if f.ndim == 2:
+        f = (f, f)
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = [dm*.5] * 2
+    if 0 <= cycle < diis_start_cycle-1:
+        f = (hf.damping(s1e, dm[0], f[0], damp_factor),
+             hf.damping(s1e, dm[1], f[1], damp_factor))
+    if adiis and cycle >= diis_start_cycle:
         f = adiis.update(s1e, dm, numpy.array(f))
-    f = (hf.level_shift(s1e, dm[0], f[0], mf.level_shift_factor),
-         hf.level_shift(s1e, dm[1], f[1], mf.level_shift_factor))
-    return f
+    f = (hf.level_shift(s1e, dm[0], f[0], level_shift_factor),
+         hf.level_shift(s1e, dm[1], f[1], level_shift_factor))
+    return numpy.array(f)
 
 def energy_elec(mf, dm, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
@@ -408,8 +413,17 @@ class UHF(hf.SCF):
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis)
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
+        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
+                         diis_start_cycle, level_shift_factor, damp_factor)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy

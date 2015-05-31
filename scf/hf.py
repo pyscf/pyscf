@@ -106,8 +106,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, adiis)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
-        if cycle > 1 and mf.level_shift_factor > 0:
-            mo_energy[mo_occ==0] -= mf.level_shift_factor
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
@@ -129,8 +127,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         cput1 = logger.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
+    # An extra diagonalization, to remove level shift
+    fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
+    mo_energy, mo_coeff = mf.eig(fock, s1e)
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
     logger.timer(mf, 'scf_cycle', *cput0)
-
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
 
 
@@ -542,7 +543,8 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     return numpy.array(vhf_last, copy=False) + vj - vk * .5
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
     '''F = h^{core} + V^{HF}
 
     Args:
@@ -560,13 +562,17 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
             Then present SCF iteration step, for DIIS
         adiis : an instance of :attr:`SCF.DIIS` class
             the object to hold intermediate Fock and error vectors
+        diis_start_cycle : int
+            The step to start DIIS.  Default is 0.
+        level_shift_factor : float or int
+            Level shift (in AU) for virtual space.  Default is 0.
     '''
     f = h1e + vhf
-    if 0 <= cycle < mf.diis_start_cycle-1:
-        f = damping(s1e, dm*.5, f, mf.damp_factor)
-    if adiis and cycle >= mf.diis_start_cycle:
+    if 0 <= cycle < diis_start_cycle-1:
+        f = damping(s1e, dm*.5, f, damp_factor)
+    if adiis and cycle >= diis_start_cycle:
         f = adiis.update(s1e, dm, f)
-    f = level_shift(s1e, dm*.5, f, mf.level_shift_factor)
+    f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
 
 
@@ -828,10 +834,22 @@ class SCF(object):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis)
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis)
+    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
+        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
+                              diis_start_cycle, level_shift_factor, damp_factor)
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
+        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
+                         diis_start_cycle, level_shift_factor, damp_factor)
 
     def dump_chk(self, envs):
         if self.chkfile:
@@ -1182,16 +1200,17 @@ class ROHF(RHF):
         '''
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
         ncore = (self.mol.nelectron-self.mol.spin) // 2
-        feff, fa, fb = h
-        mo_energy, mo_coeff = SCF.eig(self, feff, s)
+        mo_energy, mo_coeff = SCF.eig(self, h, s)
         mopen = mo_coeff[:,ncore:]
-        ea = numpy.einsum('ik,ik->k', mopen, numpy.dot(fa, mopen))
+        ea = numpy.einsum('ik,ik->k', mopen, self._focka_ao.dot(mopen))
         idx = ea.argsort()
         mo_energy[ncore:] = ea[idx]
         mo_coeff[:,ncore:] = mopen[:,idx]
         return mo_energy, mo_coeff
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
         '''Roothaan's effective fock.
         Ref. http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 
@@ -1211,16 +1230,22 @@ class ROHF(RHF):
             Attach alpha and beta fock, because Roothaan effective Fock cannot
             provide correct orbital energies.
         '''
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
 # Fc = (Fa+Fb)/2
         dmsf = dm[0]+dm[1]
         mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
-        fa0 = h1e + vhf[0]
-        fb0 = h1e + vhf[1]
+        self._focka_ao = h1e + vhf[0]
+        fockb_ao = h1e + vhf[1]
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
-        fa = reduce(numpy.dot, (mo_space.T, fa0, mo_space))
-        fb = reduce(numpy.dot, (mo_space.T, fb0, mo_space))
+        fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
+        fb = reduce(numpy.dot, (mo_space.T, fockb_ao, mo_space))
         feff = (fa + fb) * .5
         feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
         feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
@@ -1229,16 +1254,18 @@ class ROHF(RHF):
         cinv = numpy.dot(mo_space.T, s1e)
         f = reduce(numpy.dot, (cinv.T, feff, cinv))
 
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = damping(s1e, dm[0], f, self.damp_factor)
-        if adiis and cycle >= self.diis_start_cycle:
+        if 0 <= cycle < diis_start_cycle-1:
+            f = damping(s1e, dm[0], f, damp_factor)
+        if adiis and cycle >= diis_start_cycle:
+            #f = adiis.update(s1e, dmsf*.5, f)
             f = adiis.update(s1e, dm[0], f)
-        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
+        #f = level_shift(s1e, dmsf*.5, f, level_shift_factor)
+        f = level_shift(s1e, dm[0], f, level_shift_factor)
 # attach alpha and beta fock, because Roothaan effective Fock cannot provide
 # correct orbital energy.  To define orbital energy in self.eig, we use alpha
 # fock and beta fock.
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
-        return f, fa0, fb0
+        return f
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy

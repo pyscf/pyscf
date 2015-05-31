@@ -74,7 +74,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
-        mf = scf.density_fit_(scf.RHF(mol))
+        mf = scf.density_fit(scf.RHF(mol))
         vhf1 = mf.get_veff(mol, dm, hermi=0)
         naux = mf._cderi.shape[0]
         cderi = numpy.empty((naux,nao,nao))
