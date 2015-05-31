@@ -989,6 +989,16 @@ class SCF(object):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
+    def get_j(self, mol=None, dm=None, hermi=1):
+        '''Compute J matrix for the given density matrix.
+        '''
+        return self.get_jk(mol, dm, hermi)[0]
+
+    def get_k(self, mol=None, dm=None, hermi=1):
+        '''Compute K matrix for the given density matrix.
+        '''
+        return self.get_jk(mol, dm, hermi)[1]
+
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff`
@@ -1266,7 +1276,7 @@ class ROHF(RHF):
         import pyscf.scf.uhf
         if dm is None: dm = self.make_rdm1()
         ee, ecoul = pyscf.scf.uhf.energy_elec(self, dm, h1e, vhf)
-        logger.debug1(self, 'E_coul = %.15g', ecoul)
+        logger.debug(self, 'Ecoul = %.15g', ecoul)
         return ee, ecoul
 
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)

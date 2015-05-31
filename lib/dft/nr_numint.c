@@ -26,45 +26,42 @@ static void dot_ao_dm(double *vm, double *ao, double *dm,
                 return;
         }
 
-        int bas_id, nd;
-        int empty = 1;
-        int b0 = 0;
-        int b1 = BOXSIZE;
-        int blen = BOXSIZE;
+        char empty[nbas];
+        int nbox = (int)((nao-1)/BOXSIZE) + 1;
+        int box_id, bas_id, nd, b0, blen;
         int ao_id = 0;
+        for (box_id = 0; box_id < nbox; box_id++) {
+                empty[box_id] = 1;
+        }
 
-        memset(vm, 0, sizeof(double) * ngrids * nocc);
-
+        box_id = 0;
+        b0 = BOXSIZE;
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 nd = (bas[ANG_OF] * 2 + 1) * bas[NCTR_OF];
-                if (non0table[bas_id] != 0) {
-                        empty = 0;
-                }
+                assert(nd < BOXSIZE);
                 ao_id += nd;
-
-                while (ao_id >= b1) { // current AO out of box
-                        if (!empty) {
-                                dgemm_(&TRANS_N, &TRANS_N, &nocc, &ngrids, &blen,
-                                       &D1, dm+b0*nocc, &nocc, ao+b0, &nao,
-                                       &D1, vm, &nocc);
-                        }
-
-                        if (ao_id > b1 && non0table[bas_id] != 0) {
-                                empty = 0;
-                        } else {
-                                empty = 1;
-                        }
+                empty[box_id] &= !non0table[bas_id];
+                if (ao_id == b0) {
+                        box_id++;
                         b0 += BOXSIZE;
-                        b1 += BOXSIZE;
+                } else if (ao_id > b0) {
+                        box_id++;
+                        b0 += BOXSIZE;
+                        empty[box_id] = !non0table[bas_id];
                 }
-
                 bas += BAS_SLOTS;
         }
 
-        blen = nao - b0;
-        if (!empty && blen > 0) {
-                dgemm_(&TRANS_N, &TRANS_N, &nocc, &ngrids, &blen,
-                       &D1, dm+b0*nocc, &nocc, ao+b0, &nao, &D1, vm, &nocc);
+        memset(vm, 0, sizeof(double) * ngrids * nocc);
+
+        for (box_id = 0; box_id < nbox; box_id++) {
+                if (!empty[box_id]) {
+                        b0 = box_id * BOXSIZE;
+                        blen = MIN(nao-b0, BOXSIZE);
+                        dgemm_(&TRANS_N, &TRANS_N, &nocc, &ngrids, &blen,
+                               &D1, dm+b0*nocc, &nocc, ao+b0, &nao,
+                               &D1, vm, &nocc);
+                }
         }
 }
 
@@ -107,84 +104,49 @@ static void dot_ao_ao(double *vv, double *ao1, double *ao2,
                 return;
         }
 
-        int ib, jb, ndi, ndj;
-        int ia, ja;
-        int b0i = 0;
-        int b1i = BOXSIZE;
-        int bleni = BOXSIZE;
-        int b0j = 0;
-        int b1j = BOXSIZE;
-        int blenj = BOXSIZE;
-        int iempty, jempty;
+        char empty[nbas];
+        int nbox = (int)((nao-1)/BOXSIZE) + 1;
+        int box_id, bas_id, nd, b0;
+        int ao_id = 0;
+        for (box_id = 0; box_id < nbox; box_id++) {
+                empty[box_id] = 1;
+        }
 
-        iempty = 1;
-        ia = 0;
-        for (ib = 0; ib < nbas; ib++) {
-                ndi = (bas[ib*BAS_SLOTS+ANG_OF] * 2 + 1)
-                        * bas[ib*BAS_SLOTS+NCTR_OF];
-                if (non0table[ib] != 0) {
-                        iempty = 0;
+        box_id = 0;
+        b0 = BOXSIZE;
+        for (bas_id = 0; bas_id < nbas; bas_id++) {
+                nd = (bas[ANG_OF] * 2 + 1) * bas[NCTR_OF];
+                assert(nd < BOXSIZE);
+                ao_id += nd;
+                empty[box_id] &= !non0table[bas_id];
+                if (ao_id == b0) {
+                        box_id++;
+                        b0 += BOXSIZE;
+                } else if (ao_id > b0) {
+                        box_id++;
+                        b0 += BOXSIZE;
+                        empty[box_id] = !non0table[bas_id];
                 }
-                ia += ndi;
+                bas += BAS_SLOTS;
+        }
 
-                while (ia >= b1i) { // current AO out of box
-                        if (!iempty) {
+        int ib, jb, b0i, b0j, leni, lenj;
 
-                                b0j = 0;
-                                b1j = BOXSIZE;
-                                blenj = BOXSIZE;
-                                jempty = 1;
-                                ja = 0;
-                                for (jb = 0; jb < nbas; jb++) {
-                                        ndj = (bas[jb*BAS_SLOTS+ANG_OF]*2+1)
-                                                * bas[jb*BAS_SLOTS+NCTR_OF];
-                                        if (non0table[jb] != 0) {
-                                                jempty = 0;
-                                        }
-                                        ja += ndj;
-
-                                        while (ja >= b1j) { // current AO out of box
-                                                if (!jempty) {
-                                                        dgemm_(&TRANS_N, &TRANS_T,
-                                                               &blenj, &bleni, &ngrids,
-                                                               &D1, ao2+b0j, &nao, ao1+b0i, &nao,
-                                                               &D1, vv+b0i*nao+b0j, &nao);
-
-                                                }
-
-                                                if (ja > b1j && non0table[jb] != 0) {
-                                                        jempty = 0;
-                                                } else {
-                                                        jempty = 1;
-                                                }
-                                                b0j += BOXSIZE;
-                                                b1j += BOXSIZE;
-                                        }
-                                }
-
-                                blenj = nao - b0j;
-                                if (!jempty && blenj > 0) {
-                                        dgemm_(&TRANS_N, &TRANS_T, &blenj, &bleni, &ngrids,
+        for (ib = 0; ib < nbox; ib++) {
+                if (!empty[ib]) {
+                        b0i = ib * BOXSIZE;
+                        leni = MIN(nao-b0i, BOXSIZE);
+                        for (jb = 0; jb < nbox; jb++) {
+                                if (!empty[jb]) {
+                                        b0j = jb * BOXSIZE;
+                                        lenj = MIN(nao-b0j, BOXSIZE);
+                                        dgemm_(&TRANS_N, &TRANS_T,
+                                               &lenj, &leni, &ngrids,
                                                &D1, ao2+b0j, &nao, ao1+b0i, &nao,
                                                &D1, vv+b0i*nao+b0j, &nao);
                                 }
                         }
-
-                        if (ia > b1i && non0table[ib] != 0) {
-                                iempty = 0;
-                        } else {
-                                iempty = 1;
-                        }
-                        b0i += BOXSIZE;
-                        b1i += BOXSIZE;
                 }
-        }
-
-        bleni = nao - b0i;
-        if (!iempty && bleni > 0) {
-                dgemm_(&TRANS_N, &TRANS_T, &nao, &bleni, &ngrids,
-                       &D1, ao2, &nao, ao1+b0i, &nao,
-                       &D1, vv+b0i*nao, &nao);
         }
 }
 

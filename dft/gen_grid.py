@@ -151,10 +151,15 @@ def stratmann(g):
 
 def original_becke(g):
     '''Becke, JCP, 88, 2547 (1988)'''
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    return g
+    # g = (3 - g**2) * g * .5
+    # g = (3 - g**2) * g * .5
+    # g = (3 - g**2) * g * .5
+    # return g
+    g1 = numpy.empty_like(g)
+    libdft.VXCoriginal_becke(g1.ctypes.data_as(ctypes.c_void_p),
+                             g.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(g.size))
+    return g1
 
 def gen_atomic_grids(mol, mol_grids={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune_scheme=treutler_prune):
@@ -211,7 +216,7 @@ def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
         for i in range(mol.natm):
             for j in range(i):
                 g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
-                if atomic_radii_adjust is not None:
+                if callable(atomic_radii_adjust):
                     g = atomic_radii_adjust(i, j, g)
                 g = becke_scheme(g)
                 pbecke[i] *= .5 * (1-g)
@@ -303,7 +308,8 @@ def _default_rad(nuc, level=3):
                          (30, 35, 45, 50, 60, 70, 80 ),
                          (35, 40, 50, 55, 65, 75, 85 ),
                          (40, 45, 55, 60, 70, 80, 90 ),
-                         (45, 50, 60, 65, 75, 85, 95 ),))
+                         (45, 50, 60, 65, 75, 85, 95 ),
+                         (50, 55, 65, 70, 80, 90, 100),))
     period = (nuc > tab).sum()
     return grids[level,period]
 
@@ -314,7 +320,8 @@ def _default_ang(nuc, level=3):
                          (23, 29, 29, 29, 29, 29, 29 ),
                          (29, 35, 35, 35, 35, 35, 35 ),
                          (35, 41, 41, 41, 41, 41, 41 ),
-                         (41, 47, 47, 47, 47, 47, 47 ),))
+                         (41, 47, 47, 47, 47, 47, 47 ),
+                         (47, 53, 53, 53, 53, 53, 53 ),))
     period = (nuc > tab).sum()
     return SPHERICAL_POINTS_ORDER[order[level,period]]
 
