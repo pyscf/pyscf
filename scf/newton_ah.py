@@ -601,7 +601,9 @@ def newton(mf):
 def aux_fock_(newton_mf, start_tol=1e-3):
     log = logger.Logger(newton_mf.stdout, newton_mf.verbose)
     newton_mf._last_hf_e = 0
-    def get_fock(h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    def get_fock(h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
         mol = newton_mf.mol
         fock = newton_mf._scf.get_fock_(h1e, s1e, vhf, dm, cycle, adiis)
         hf_energy = newton_mf.energy_tot(dm, h1e, vhf)

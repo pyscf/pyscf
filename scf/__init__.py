@@ -98,7 +98,7 @@ from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
 from pyscf.scf import x2c
 from pyscf.scf.x2c import sfx2c1e, sfx2c
-from pyscf.scf.newton import newton
+from pyscf.scf import newton_ah
 
 
 
@@ -151,6 +151,10 @@ def X2C(mol, *args):
 
 def density_fit(mf, auxbasis='weigend'):
     return mf.density_fit(auxbasis)
+
+def newton(mf):
+    '''augmented hessian for Newton Raphson'''
+    return newton_ah.newton(mf)
 
 def RKS(mol, *args):
     from pyscf import dft
