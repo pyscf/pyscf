@@ -239,31 +239,6 @@ class UHF(hf.SCF):
         self.opt_ssss = None
         self._keys = set(self.__dict__.keys())
 
-    def eig(self, h, s):
-        e, c = scipy.linalg.eigh(h, s)
-        idx = numpy.argmax(abs(c.real), axis=0)
-        c[:,c[idx,range(len(e))].real<0] *= -1
-        return e, c
-        #try:
-        #    import pyscf.lib.jacobi
-        #    return pyscf.lib.jacobi.zgeeigen(h, s)[:2]
-        #except ImportError:
-        #    e, c = scipy.linalg.eigh(h, s)
-        #    return e, c
-
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        f = h1e + vhf
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = hf.damping(s1e, dm, f, self.damp_factor)
-            f = hf.level_shift(s1e, dm, f, self.level_shift_factor)
-        elif 0 <= cycle:
-            fac = self.level_shift_factor \
-                    * numpy.exp(self.diis_start_cycle-cycle-1)
-            f = hf.level_shift(s1e, dm, f, fac)
-        if adiis is not None and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dm, f)
-        return f
-
     def get_hcore(self, mol=None):
         if mol is None:
             mol = self.mol

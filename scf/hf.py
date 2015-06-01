@@ -86,6 +86,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if mf.DIIS:
         adiis = mf.DIIS(mf, mf.diis_file)
         adiis.space = mf.diis_space
+        adiis.rollback = mf.diis_space_rollback
     else:
         adiis = None
 
@@ -775,6 +776,8 @@ class SCF(object):
         self.diis_space = 8
         self.diis_start_cycle = 0
         self.diis_file = None
+# Give diis_space_rollback=True a trial if other efforts not converge
+        self.diis_space_rollback = False
         self.damp_factor = 0
         self.level_shift_factor = 0
         self.direct_scf = True
@@ -932,11 +935,14 @@ class SCF(object):
             logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
                         mo_energy[nocc-1], mo_energy[nocc])
             if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
+                logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
                             mo_energy[nocc-1], mo_energy[nocc])
         else:
             logger.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
-        logger.debug(self, '  mo_energy = %s', mo_energy)
+        if self.verbose >= logger.DEBUG:
+            numpy.set_printoptions(threshold=len(mo_energy))
+            logger.debug(self, '  mo_energy = %s', mo_energy)
+            numpy.set_printoptions()
         return mo_occ
 
     # full density matrix for RHF
