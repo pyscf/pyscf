@@ -397,7 +397,6 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
-        self.DIIS = UHF_DIIS
         self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
         self._eri = None
         self._keys = self._keys.union(['nelectron_alpha'])
@@ -435,13 +434,32 @@ class UHF(hf.SCF):
         if n_a < mo_energy[0].size:
             logger.info(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,',
                         n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
+            if mo_energy[0][n_a-1]+1e-3 > mo_energy[0][n_a]:
+                logger.warn(self, '!! alpha HOMO %.12g >= LUMO %.12g',
+                            mo_energy[0][n_a-1], mo_energy[0][n_a])
         else:
             logger.info(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,',
                         n_a, mo_energy[0][n_a-1])
-        logger.debug(self, '  mo_energy = %s', mo_energy[0])
-        logger.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,',
-                    n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
-        logger.debug(self, '  mo_energy = %s', mo_energy[1])
+        if self.verbose >= logger.DEBUG:
+            numpy.set_printoptions(threshold=len(mo_energy[0]))
+            logger.debug(self, '  mo_energy = %s', mo_energy[0])
+
+        if n_b > 0:
+            logger.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+                        n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
+            if mo_energy[1][n_b-1]+1e-3 > mo_energy[1][n_b]:
+                logger.warn(self, '!! beta HOMO %.12g >= LUMO %.12g',
+                            mo_energy[1][n_b-1], mo_energy[1][n_b])
+        else:
+            logger.info(self, 'beta  nocc = %d, no HOMO, LUMO = %.12g,',
+                        n_b, mo_energy[1][n_b])
+        if mo_energy[0][n_a-1]+1e-3 > mo_energy[1][n_b]:
+            logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
+                        mo_energy[0][n_a-1], mo_energy[1][n_b])
+        if self.verbose >= logger.DEBUG:
+            logger.debug(self, '  mo_energy = %s', mo_energy[1])
+            numpy.set_printoptions()
+
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                                       mo_coeff[1][:,mo_occ[1]>0]),
@@ -561,16 +579,6 @@ class UHF(hf.SCF):
             ovlp = self.get_ovlp()
         return spin_square(mo_coeff, ovlp)
 
-
-class UHF_DIIS(pyscf.lib.diis.DIIS):
-    def update(self, s, d, f):
-        sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
-        sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
-        errvec = numpy.hstack((sdf_a.T.conj() - sdf_a,
-                               sdf_b.T.conj() - sdf_b))
-        logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
-        pyscf.lib.diis.DIIS.push_err_vec(self, errvec)
-        return pyscf.lib.diis.DIIS.update(self, f)
 
 def _makevhf(vj, vk, nset):
     if nset == 1:
