@@ -254,6 +254,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
     x0 = 0
     x0_guess = g_orb
     while True:
+        g_orb0 = g_orb
         norm_gprev = norm_gorb
         # increase the AH accuracy when approach convergence
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
@@ -354,8 +355,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(u.shape[1])))
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        #mo_coeff, mo_occ, fock_ao = (yield u, g_orb, jkcount)
-        mo_coeff, mo_occ, fock_ao = (yield u, x0_guess, jkcount)
+        mo_coeff, mo_occ, fock_ao = (yield u, g_orb0, jkcount)
 
         g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao, h1e)
         norm_gorb = numpy.linalg.norm(g_orb)
