@@ -1142,11 +1142,14 @@ class ROHF(RHF):
     def __init__(self, mol):
         SCF.__init__(self, mol)
         self._eri = None
+        self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
+        self._keys = self._keys.union(['nelectron_alpha'])
 
     def dump_flags(self):
         SCF.dump_flags(self)
+        nb = self.mol.nelectron-self.nelectron_alpha
         logger.info(self, 'num. doubly occ = %d, num. singly occ = %d',
-                    (self.mol.nelectron-self.mol.spin)//2, self.mol.spin)
+                    nb, self.nelectron_alpha-nb)
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
@@ -1205,7 +1208,7 @@ class ROHF(RHF):
                 (fock_eff, fock_alpha, fock_beta), which is provided by :func:`ROHF.get_fock_`
         '''
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
+        ncore = self.mol.nelectron-self.nelectron_alpha
         mo_energy, mo_coeff = SCF.eig(self, h, s)
         mopen = mo_coeff[:,ncore:]
         ea = numpy.einsum('ik,ik->k', mopen, self._focka_ao.dot(mopen))
@@ -1247,8 +1250,8 @@ class ROHF(RHF):
         mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
         self._focka_ao = h1e + vhf[0]
         fockb_ao = h1e + vhf[1]
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
+        ncore = self.mol.nelectron - self.nelectron_alpha
+        nopen = self.nelectron_alpha - ncore
         nocc = ncore + nopen
         fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
         fb = reduce(numpy.dot, (mo_space.T, fockb_ao, mo_space))
@@ -1276,8 +1279,8 @@ class ROHF(RHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
+        ncore = self.mol.nelectron-self.nelectron_alpha
+        nopen = self.nelectron_alpha - ncore
         nocc = ncore + nopen
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = 1

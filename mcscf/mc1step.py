@@ -888,7 +888,8 @@ class CASSCF(casci.CASCI):
 
     def casci(self, mo_coeff, ci0=None, eris=None):
         if eris is None:
-            fcasci = self
+            fcasci = copy.copy(self)
+            fcasci.ao2mo = self.get_h2cas
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
         log = logger.Logger(self.stdout, self.verbose)
