@@ -13,7 +13,7 @@ from pyscf import ao2mo
 
 '''
 spin-adapted MP2
-t2[i,j,b,a] = (ia|jb) / D_ij^ab
+t2[i,j,a,b] = (ia|jb) / D_ij^ab
 '''
 
 # the MO integral for MP2 is (ov|ov). The most efficient integral
@@ -30,10 +30,11 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 
     with mp.ao2mo(mo_coeff) as ovov:
         for i in range(nocc):
-            djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
+            dajb = (eia[i].reshape(-1,1) +
+                    eia.reshape(1,-1)).reshape(nvir,nocc,nvir)
             gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
-            gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
-            t2[i] = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
+            gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
+            t2[i] = (gi/dajb.transpose(1,0,2)).reshape(nocc,nvir,nvir)
             # 2*ijab-ijba
             theta = gi*2 - gi.transpose(0,2,1)
             emp2 += numpy.einsum('jab,jab', t2[i], theta)
@@ -51,10 +52,11 @@ def make_rdm1_ao(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     emp2 = 0
     with mp.ao2mo(mo_coeff) as ovov:
         for i in range(nocc):
-            djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
-            gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir]).reshape(nvir,nocc,nvir)
-            gi = gi.transpose(1,2,0)
-            t2i = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
+            dajb = (eia[i].reshape(-1,1) +
+                    eia.reshape(1,-1)).reshape(nvir,nocc,nvir)
+            gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
+            gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
+            t2i = (gi/dajb.transpose(1,0,2)).reshape(nocc,nvir,nvir)
             # 2*ijab-ijba
             theta = gi*2 - gi.transpose(0,2,1)
             emp2 += numpy.einsum('jab,jab', t2i, theta)
@@ -104,7 +106,7 @@ def make_rdm2(mp, t2, verbose=logger.NOTE):
     #dm2[nocc:,:nocc,nocc:,:nocc] = t2.transpose(3,0,2,1)*2 - t2.transpose(2,0,3,1)
     for i in range(nocc):
         t2i = t2[i]
-        dm2[i,nocc:,:nocc,nocc:] = t2i.transpose(2,0,1)*2 - t2i.transpose(1,0,2)
+        dm2[i,nocc:,:nocc,nocc:] = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
         dm2[nocc:,i,nocc:,:nocc] = dm2[i,nocc:,:nocc,nocc:].transpose(0,2,1)
     return dm2
 
@@ -191,7 +193,7 @@ if __name__ == '__main__':
     g = ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
     eia = mf.mo_energy[:nocc,None] - mf.mo_energy[nocc:]
     t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
-    t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,3,1)
+    t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
 
     pt = MP2(mf)
     emp2, t2 = pt.kernel()
@@ -204,3 +206,8 @@ if __name__ == '__main__':
     print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
                                             mf.mo_coeff.T)), rdm1))
 
+    h1e = reduce(numpy.dot, (mf.mo_coeff, mf.get_hcore(), mf.mo_coeff))
+    eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+    rdm2 = pt.make_rdm2()
+    print numpy.dot(rdm1.flatten(), h1e.flatten())
+    print .5 * numpy.dot(eri.flatten(), rdm2.flatten())
