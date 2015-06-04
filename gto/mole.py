@@ -70,8 +70,7 @@ def atom_types(atoms, basis=None):
         elif basis is None:
             atmgroup[a[0]] = [ia]
         else:
-            rawsymb = _rm_digit(a[0])
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            stdsymb = _std_symbol(a[0])
             if a[0] in basis:
                 if stdsymb in basis and basis[a[0]] == basis[stdsymb]:
                     if stdsymb in atmgroup:
@@ -121,8 +120,7 @@ def format_atom(atoms, origin=0, axes=1):
             symb = param.ELEMENTS[int(dat[0])][0]
         else:
             rawsymb = _rm_digit(dat[0])
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-            symb = dat[0].replace(rawsymb, stdsymb)
+            symb = dat[0].replace(rawsymb, _std_symbol(rawsymb))
         c = numpy.array([float(x) for x in dat[1:4]]) - origin
         return [symb, numpy.dot(axes, c).tolist()]
 
@@ -140,8 +138,7 @@ def format_atom(atoms, origin=0, axes=1):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
                     rawsymb = _rm_digit(atom[0])
-                    stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-                    symb = atom[0].replace(rawsymb, stdsymb)
+                    symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
                     c = numpy.array(atom[1:4]) - origin
                 else:
@@ -180,7 +177,7 @@ def format_basis(basis_tab):
 
         if isinstance(basis_tab[atom], str):
             rawsymb = _rm_digit(symb)
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            stdsymb = _std_symbol(rawsymb)
             symb = symb.replace(rawsymb, stdsymb)
             fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
         else:
@@ -298,7 +295,7 @@ def make_atm_env(atom, ptr=0):
     _env.append(param.ELEMENTS[_atm[CHARGE_OF]][1])
     _atm[CHARGE_OF] = _charge(atom[0])
     _atm[PTR_COORD] = ptr
-    _atm[NUC_MOD_OF] = param.MI_NUC_POINT
+    _atm[NUC_MOD_OF] = NUC_POINT
     _atm[PTR_MASS ] = ptr + 3
     return numpy.array(_atm, numpy.int32), numpy.array(_env)
 
@@ -347,27 +344,35 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
         symb = atom[0]
         atm0, env0 = make_atm_env(atom, ptr_env)
         ptr_env = ptr_env + len(env0)
-        if isinstance(nucmod, int):
-            assert(nucmod in (0, 1))
-            atm0[NUC_MOD_OF] = nucmod
-        elif ia+1 in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[ia+1]
-        elif symb in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[symb]
-        elif _rm_digit(symb) in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[_rm_digit(symb)]
-        if ia+1 in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[ia+1]))
-            ptr_env = ptr_env + 1
-        elif symb in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[symb]))
-            ptr_env = ptr_env + 1
-        elif _rm_digit(symb) in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
-            ptr_env = ptr_env + 1
+        if nucmod:
+            if isinstance(nucmod, int):
+                assert(nucmod in (NUC_POINT, NUC_GAUSS))
+                atm0[NUC_MOD_OF] = nucmod
+            elif isinstance(nucmod, str):
+                if 'G' in nucmod.upper(): # 'gauss_nuc'
+                    atm0[NUC_MOD_OF] = NUC_GAUSS
+                else:
+                    atm0[NUC_MOD_OF] = NUC_POINT
+            elif ia+1 in nucmod:
+                atm0[NUC_MOD_OF] = nucmod[ia+1]
+            elif symb in nucmod:
+                atm0[NUC_MOD_OF] = nucmod[symb]
+            elif _rm_digit(symb) in nucmod:
+                atm0[NUC_MOD_OF] = nucmod[_rm_digit(symb)]
+
+        if mass:
+            if ia+1 in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[ia+1]))
+                ptr_env = ptr_env + 1
+            elif symb in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[symb]))
+                ptr_env = ptr_env + 1
+            elif _rm_digit(symb) in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
+                ptr_env = ptr_env + 1
         _atm.append(atm0)
         _env.append(env0)
 
@@ -664,6 +669,30 @@ def spheric_labels(mol):
         count[ia,l] += nc
     return label
 
+def cart_labels(mol):
+    '''Labels for Cartesian GTO functions
+
+    Returns:
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+    '''
+    count = numpy.zeros((mol.natm, 9), dtype=int)
+    label = []
+    for ib in range(len(mol._bas)):
+        ia = mol.bas_atom(ib)
+        l = mol.bas_angular(ib)
+        strl = param.ANGULAR[l]
+        nc = mol.bas_nctr(ib)
+        symb = mol.atom_symbol(ia)
+        for n in range(count[ia,l]+l+1, count[ia,l]+l+1+nc):
+            for lx in reversed(range(l+1)):
+                for ly in reversed(range(l+1-lx)):
+                    lz = l - lx - ly
+                    label.append((ia, symb, '%d%s' % (n, strl),
+                                  ''.join(('x'*lx, 'y'*ly, 'z'*lz))))
+        count[ia,l] += nc
+    return label
+
+
 def spinor_labels(mol):
     raise RuntimeError('TODO')
 
@@ -802,6 +831,9 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_ENV_START   = 20
+# parameters from libcint
+NUC_POINT = 1
+NUC_GAUSS = 2
 
 
 class Mole(object):
@@ -1697,6 +1729,7 @@ def _rm_digit(symb):
         return symb
     else:
         return ''.join([i for i in symb if i.isalpha()])
+
 def _charge(symb_or_chg):
     if isinstance(symb_or_chg, str):
         return param.ELEMENTS_PROTON[_rm_digit(symb_or_chg)]
@@ -1706,6 +1739,13 @@ def _charge(symb_or_chg):
 def _symbol(symb_or_chg):
     if isinstance(symb_or_chg, str):
         return symb_or_chg
+    else:
+        return param.ELEMENTS[symb_or_chg][0]
+
+def _std_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, str):
+        rawsymb = _rm_digit(symb_or_chg)
+        return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
     else:
         return param.ELEMENTS[symb_or_chg][0]
 
