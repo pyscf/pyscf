@@ -304,15 +304,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
     if not fci.davidson_only:
         if len(addr) == 1:
             return pw, pv
-        elif len(addr) == na*nb:
+        else:
             if fci.nroots > 1:
-                ci0 = numpy.empty((fci.nroots,na*nb))
-                ci0[:,addr] = pv[:,:fci.nroots].T
-                return pw[:fci.nroots], ci0.reshape(fci.nroots,na,nb)
+                civec = numpy.empty((fci.nroots,na*nb))
+                civec[:,addr] = pv[:,:fci.nroots].T
+                return pw[:fci.nroots], civec.reshape(fci.nroots,na,nb)
             elif abs(pw[0]-pw[1]) > 1e-12:
-                ci0 = numpy.empty((na*nb))
-                ci0[addr] = pv[:,0]
-                return pw[0], ci0.reshape(na,nb)
+                civec = numpy.empty((na*nb))
+                civec[addr] = pv[:,0]
+                return pw[0], civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
