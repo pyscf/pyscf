@@ -13,7 +13,6 @@ import pyscf.gto
 import pyscf.scf
 from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step
-from pyscf.mcscf import aug_hessian
 from pyscf.mcscf import mc_ao2mo_uhf
 from pyscf.mcscf import chkfile
 
@@ -319,8 +318,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
                      + numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
-                      '|g[c]|=%4.3g, |ddm|=%4.3g',
+            log.debug('micro %d  e_ci= %.12g  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
+                      '|g[c]|= %4.3g  |ddm|= %4.3g',
                       imicro+1, e_ci, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
@@ -345,9 +344,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK, %d micro), CASSCF E = %.15g, dE = %.8g,',
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
                  imacro, njk, imicro, e_tot, e_tot-elast)
-        log.info('               |grad[o]|=%4.3g, |grad[c]|=%4.3g, |ddm|=%4.3g',
+        log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)

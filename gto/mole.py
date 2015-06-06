@@ -10,6 +10,7 @@ import time
 import math
 import itertools
 import numpy
+import ctypes
 import pyscf.lib.parameters as param
 from pyscf.lib import logger
 from pyscf.gto import cmd_args
@@ -62,6 +63,47 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
+def cart2sph(l):
+    '''Cartesian to real spheric transformation matrix'''
+    nf = (l+1)*(l+2)//2
+    cmat = numpy.eye(nf)
+    if l in (0, 1):
+        return cmat
+    else:
+        nd = l * 2 + 1
+        c2sph = numpy.zeros((nf,nd), order='F')
+        fn = moleintor._cint.CINTc2s_ket_sph
+        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+           cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
+        return c2sph
+
+def cart2j_kappa(kappa):
+    '''Cartesian to spinor, indexed by kappa'''
+    assert(kappa != 0)
+    if kappa < 0:
+        l = -kappa - 1
+        nd = l * 2 + 2
+    else:
+        l = kappa
+        nd = l * 2
+    nf = (l+1)*(l+2)//2
+    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    cmat = numpy.eye(nf)
+    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l),
+       ctypes.c_int(kappa))
+    return c2spinor
+
+def cart2j_l(l):
+    '''Cartesian to spinor, indexed by l'''
+    nf = (l+1)*(l+2)//2
+    nd = l * 4 + 2
+    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    cmat = numpy.eye(nf)
+    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l), ctypes.c_int(0))
+    return c2spinor
+
 def atom_types(atoms, basis=None):
     atmgroup = {}
     for ia, a in enumerate(atoms):
@@ -70,8 +112,7 @@ def atom_types(atoms, basis=None):
         elif basis is None:
             atmgroup[a[0]] = [ia]
         else:
-            rawsymb = _rm_digit(a[0])
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            stdsymb = _std_symbol(a[0])
             if a[0] in basis:
                 if stdsymb in basis and basis[a[0]] == basis[stdsymb]:
                     if stdsymb in atmgroup:
@@ -121,8 +162,7 @@ def format_atom(atoms, origin=0, axes=1):
             symb = param.ELEMENTS[int(dat[0])][0]
         else:
             rawsymb = _rm_digit(dat[0])
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-            symb = dat[0].replace(rawsymb, stdsymb)
+            symb = dat[0].replace(rawsymb, _std_symbol(rawsymb))
         c = numpy.array([float(x) for x in dat[1:4]]) - origin
         return [symb, numpy.dot(axes, c).tolist()]
 
@@ -140,8 +180,7 @@ def format_atom(atoms, origin=0, axes=1):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
                     rawsymb = _rm_digit(atom[0])
-                    stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-                    symb = atom[0].replace(rawsymb, stdsymb)
+                    symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
                     c = numpy.array(atom[1:4]) - origin
                 else:
@@ -180,7 +219,7 @@ def format_basis(basis_tab):
 
         if isinstance(basis_tab[atom], str):
             rawsymb = _rm_digit(symb)
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            stdsymb = _std_symbol(rawsymb)
             symb = symb.replace(rawsymb, stdsymb)
             fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
         else:
@@ -298,7 +337,7 @@ def make_atm_env(atom, ptr=0):
     _env.append(param.ELEMENTS[_atm[CHARGE_OF]][1])
     _atm[CHARGE_OF] = _charge(atom[0])
     _atm[PTR_COORD] = ptr
-    _atm[NUC_MOD_OF] = param.MI_NUC_POINT
+    _atm[NUC_MOD_OF] = NUC_POINT
     _atm[PTR_MASS ] = ptr + 3
     return numpy.array(_atm, numpy.int32), numpy.array(_env)
 
@@ -347,27 +386,32 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
         symb = atom[0]
         atm0, env0 = make_atm_env(atom, ptr_env)
         ptr_env = ptr_env + len(env0)
-        if isinstance(nucmod, int):
-            assert(nucmod in (0, 1))
-            atm0[NUC_MOD_OF] = nucmod
-        elif ia+1 in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[ia+1]
-        elif symb in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[symb]
-        elif _rm_digit(symb) in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[_rm_digit(symb)]
-        if ia+1 in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[ia+1]))
-            ptr_env = ptr_env + 1
-        elif symb in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[symb]))
-            ptr_env = ptr_env + 1
-        elif _rm_digit(symb) in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
-            ptr_env = ptr_env + 1
+        if nucmod:
+            if isinstance(nucmod, int):
+                assert(nucmod in (NUC_POINT, NUC_GAUSS))
+                atm0[NUC_MOD_OF] = nucmod
+            elif isinstance(nucmod, str):
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
+            elif ia+1 in nucmod:
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
+            elif symb in nucmod:
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[symb])
+            elif _rm_digit(symb) in nucmod:
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[_rm_digit(symb)])
+
+        if mass:
+            if ia+1 in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[ia+1]))
+                ptr_env = ptr_env + 1
+            elif symb in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[symb]))
+                ptr_env = ptr_env + 1
+            elif _rm_digit(symb) in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
+                ptr_env = ptr_env + 1
         _atm.append(atm0)
         _env.append(env0)
 
@@ -637,11 +681,18 @@ def energy_nuc(mol):
     e = (qq/r).sum() * .5
     return e
 
-def spheric_labels(mol):
+def spheric_labels(mol, fmt=True):
     '''Labels for spheric GTO functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
 
     Returns:
         List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        or formatted strings based on the argument "fmt"
 
     Examples:
 
@@ -662,7 +713,48 @@ def spheric_labels(mol):
                 label.append((ia, symb, '%d%s' % (n, strl), \
                               '%s' % param.REAL_SPHERIC[l][l+m]))
         count[ia,l] += nc
-    return label
+    if isinstance(fmt, str):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d%3s %s%-4s' % x for x in label]
+    else:
+        return label
+
+def cart_labels(mol, fmt=True):
+    '''Labels for Cartesian GTO functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
+
+    Returns:
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        or formatted strings based on the argument "fmt"
+    '''
+    count = numpy.zeros((mol.natm, 9), dtype=int)
+    label = []
+    for ib in range(len(mol._bas)):
+        ia = mol.bas_atom(ib)
+        l = mol.bas_angular(ib)
+        strl = param.ANGULAR[l]
+        nc = mol.bas_nctr(ib)
+        symb = mol.atom_symbol(ia)
+        for n in range(count[ia,l]+l+1, count[ia,l]+l+1+nc):
+            for lx in reversed(range(l+1)):
+                for ly in reversed(range(l+1-lx)):
+                    lz = l - lx - ly
+                    label.append((ia, symb, '%d%s' % (n, strl),
+                                  ''.join(('x'*lx, 'y'*ly, 'z'*lz))))
+        count[ia,l] += nc
+    if isinstance(fmt, str):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d%3s %s%-4s' % x for x in label]
+    else:
+        return label
+
 
 def spinor_labels(mol):
     raise RuntimeError('TODO')
@@ -802,6 +894,9 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_ENV_START   = 20
+# parameters from libcint
+NUC_POINT = 1
+NUC_GAUSS = 2
 
 
 class Mole(object):
@@ -1676,8 +1771,11 @@ class Mole(object):
     def get_enuc(self):
         return energy_nuc(self)
 
-    def spheric_labels(self):
-        return spheric_labels(self)
+    def cart_labels(self, fmt=False):
+        return cart_labels(self, fmt)
+
+    def spheric_labels(self, fmt=False):
+        return spheric_labels(self, fmt)
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
@@ -1697,6 +1795,7 @@ def _rm_digit(symb):
         return symb
     else:
         return ''.join([i for i in symb if i.isalpha()])
+
 def _charge(symb_or_chg):
     if isinstance(symb_or_chg, str):
         return param.ELEMENTS_PROTON[_rm_digit(symb_or_chg)]
@@ -1708,6 +1807,21 @@ def _symbol(symb_or_chg):
         return symb_or_chg
     else:
         return param.ELEMENTS[symb_or_chg][0]
+
+def _std_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, str):
+        rawsymb = _rm_digit(symb_or_chg)
+        return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+    else:
+        return param.ELEMENTS[symb_or_chg][0]
+
+def _parse_nuc_mod(str_or_int):
+    if isinstance(str_or_int, int):
+        return str_or_int
+    elif 'G' in str_or_int.upper(): # 'gauss_nuc'
+        return NUC_GAUSS
+    else:
+        return NUC_POINT
 
 def _update_from_cmdargs_(mol):
     # Ipython shell conflicts with optparse

@@ -16,12 +16,12 @@ from pyscf.tools.mo_mapping import mo_1to1map
 
 
 class CASSCF(mc1step.CASSCF):
-    def __init__(self, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
         assert(mf.mol.symmetry)
 # Ag, A1 or A
 #TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
-        mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore)
+        mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                 callback=None):

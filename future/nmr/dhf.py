@@ -45,8 +45,8 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
             h11[i,n2c:,:n2c] = t11[i] * .5
             h11[i,:n2c,n2c:] = t11[i].conj().T * .5
         a11 = [numpy.real(numpy.einsum('ij,ji', dm0, x)) for x in h11]
-        # param.MI_POS XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-        #           => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
+        #    XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
+        #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
         msc_dia.append(a11)
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 

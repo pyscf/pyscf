@@ -292,7 +292,7 @@ def analyze(mf, verbose=logger.DEBUG):
     log = logger.Logger(mf.stdout, verbose)
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
-    log.info('multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+    log.info('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
     log.info('**** MO energy ****')
     for i in range(mo_energy[0].__len__()):
@@ -311,7 +311,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      i+1, mo_energy[1][i], mo_occ[1][i])
     if mf.verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients for alpha spin **')
-        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
+        label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1)
         log.debug(' ** MO coefficients for beta spin **')
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
@@ -330,7 +330,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         log = logger.Logger(mol.stdout, verbose)
     pop_a = numpy.einsum('ij->i', dm[0]*ovlp)
     pop_b = numpy.einsum('ij->i', dm[1]*ovlp)
-    label = mol.spheric_labels()
+    label = mol.spheric_labels(False)
 
     log.info(' ** Mulliken pop alpha/beta **')
     for i, s in enumerate(label):
@@ -403,7 +403,7 @@ class UHF(hf.SCF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d, beta = %d',
+        logger.info(self, 'number electrons alpha = %d  beta = %d',
                     self.nelectron_alpha,
                     self.mol.nelectron-self.nelectron_alpha)
 
@@ -432,26 +432,26 @@ class UHF(hf.SCF):
         mo_occ[0][:n_a] = 1
         mo_occ[1][:n_b] = 1
         if n_a < mo_energy[0].size:
-            logger.info(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'alpha nocc = %d  HOMO = %.12g  LUMO = %.12g',
                         n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
             if mo_energy[0][n_a-1]+1e-3 > mo_energy[0][n_a]:
                 logger.warn(self, '!! alpha HOMO %.12g >= LUMO %.12g',
                             mo_energy[0][n_a-1], mo_energy[0][n_a])
         else:
-            logger.info(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,',
+            logger.info(self, 'alpha nocc = %d  HOMO = %.12g  no LUMO',
                         n_a, mo_energy[0][n_a-1])
         if self.verbose >= logger.DEBUG:
             numpy.set_printoptions(threshold=len(mo_energy[0]))
             logger.debug(self, '  mo_energy = %s', mo_energy[0])
 
         if n_b > 0:
-            logger.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'beta  nocc = %d  HOMO = %.12g  LUMO = %.12g',
                         n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
             if mo_energy[1][n_b-1]+1e-3 > mo_energy[1][n_b]:
                 logger.warn(self, '!! beta HOMO %.12g >= LUMO %.12g',
                             mo_energy[1][n_b-1], mo_energy[1][n_b])
         else:
-            logger.info(self, 'beta  nocc = %d, no HOMO, LUMO = %.12g,',
+            logger.info(self, 'beta  nocc = %d  no HOMO  LUMO = %.12g',
                         n_b, mo_energy[1][n_b])
         if mo_energy[0][n_a-1]+1e-3 > mo_energy[1][n_b]:
             logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
@@ -464,7 +464,7 @@ class UHF(hf.SCF):
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                                       mo_coeff[1][:,mo_occ[1]>0]),
                                       self.get_ovlp())
-            logger.debug(self, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+            logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
     def make_rdm1(self, mo_coeff=None, mo_occ=None):

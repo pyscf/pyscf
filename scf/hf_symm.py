@@ -51,7 +51,7 @@ def analyze(mf, verbose=logger.DEBUG):
                  k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
     if verbose >= logger.DEBUG:
-        label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
+        label = mol.spheric_labels(True)
         molabel = []
         irorbcnt = {}
         for k, j in enumerate(orbsym):
@@ -225,7 +225,7 @@ class RHF(hf.RHF):
             if elumo in mo_energy[p0:p0+nso]:
                 irlumo = irname
             p0 += nso
-        logger.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+        logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                     irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
             logger.debug(self, 'irrep_nelec = %s', noccs)
@@ -490,7 +490,7 @@ class ROHF(hf.ROHF):
         self._irrep_doccs = ndoccs
         self._irrep_soccs = nsoccs
 
-        logger.info(self, 'HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+        logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                     irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
             logger.debug(self, 'double occ irrep_nelec = %s', ndoccs)
@@ -589,7 +589,7 @@ class ROHF(hf.ROHF):
                      k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
         if verbose >= logger.DEBUG:
-            label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
+            label = mol.spheric_labels(True)
             molabel = []
             irorbcnt = {}
             for k, j in enumerate(orbsym):
@@ -622,10 +622,10 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):
         if nocc == 0:
             logger.debug(mol, '%s%s nocc = 0', title, irname)
         elif nocc == nso:
-            logger.debug(mol, '%s%s nocc = %d, HOMO = %.12g,',
+            logger.debug(mol, '%s%s nocc = %d  HOMO = %.12g',
                          title, irname, nocc, mo_energy[p0+nocc-1])
         else:
-            logger.debug(mol, '%s%s nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+            logger.debug(mol, '%s%s nocc = %d  HOMO = %.12g  LUMO = %.12g',
                          title, irname,
                          nocc, mo_energy[p0+nocc-1], mo_energy[p0+nocc])
             if mo_energy[p0+nocc-1]+1e-3 > elumo:

@@ -92,7 +92,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     vhf = mf.get_veff(mol, dm)
     hf_energy = mf.energy_tot(dm, h1e, vhf)
-    logger.info(mf, 'init E=%.15g', hf_energy)
+    logger.info(mf, 'init E= %.15g', hf_energy)
 
     if dump_chk:
         # dump mol after reading initialized DM
@@ -112,7 +112,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         vhf = mf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
-        logger.info(mf, 'cycle= %d E=%.15g, delta_E= %g',
+        logger.info(mf, 'cycle= %d E= %.15g  delta_E= %g',
                     cycle+1, hf_energy, hf_energy-last_hf_e)
 
         if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_tol
@@ -174,7 +174,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
     e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
-    logger.debug1(mf, 'E_coul = %.15g', e_coul)
+    logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
 
 
@@ -600,7 +600,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      i+1, mo_energy[i], mo_occ[i])
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients **')
-        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
+        label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
@@ -626,7 +626,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij->i', dm*ovlp).real
     else: # ROHF
         pop = numpy.einsum('ij->i', (dm[0]+dm[1])*ovlp).real
-    label = mol.spheric_labels()
+    label = mol.spheric_labels(False)
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(label):
@@ -932,13 +932,13 @@ class SCF(object):
         nocc = self.mol.nelectron // 2
         mo_occ[:nocc] = 2
         if nocc < mo_occ.size:
-            logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
             if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
                 logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
                             mo_energy[nocc-1], mo_energy[nocc])
         else:
-            logger.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g', mo_energy[nocc-1])
         if self.verbose >= logger.DEBUG:
             numpy.set_printoptions(threshold=len(mo_energy))
             logger.debug(self, '  mo_energy = %s', mo_energy)
@@ -964,7 +964,7 @@ class SCF(object):
         dm_last = numpy.array(dm_last)
         delta_dm = abs(dm-dm_last).sum()
         dm_change = delta_dm/abs(dm_last).sum()
-        logger.info(self, '          sum(delta_dm)=%g (~ %g%%)\n',
+        logger.info(self, '          sum(delta_dm)= %g (~ %g%%)\n',
                     delta_dm, dm_change*100)
         return dm_change < conv_tol*1e2
 
@@ -1148,7 +1148,7 @@ class ROHF(RHF):
     def dump_flags(self):
         SCF.dump_flags(self)
         nb = self.mol.nelectron-self.nelectron_alpha
-        logger.info(self, 'num. doubly occ = %d, num. singly occ = %d',
+        logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
                     nb, self.nelectron_alpha-nb)
 
     def init_guess_by_minao(self, mol=None):
@@ -1285,13 +1285,13 @@ class ROHF(RHF):
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = 1
         if nocc < len(mo_energy):
-            logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
             if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
                 logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
                             mo_energy[nocc-1], mo_energy[nocc])
         else:
-            logger.info(self, 'HOMO = %.12g, no LUMO,', mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g  no LUMO', mo_energy[nocc-1])
         if nopen > 0:
             for i in range(ncore, nocc):
                 logger.debug(self, 'singly occupied orbital energy = %.12g',

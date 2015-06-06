@@ -43,8 +43,8 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
             h11 = h11 + g11[numpy.array((0,3,6,1,4,7,2,5,8))]
         a11 = [numpy.einsum('ij,ji', dm0, (x+x.T)*.5) for x in h11]
         msc_dia.append(a11)
-        # param.MI_POS XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-        #           => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
+        #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
+        #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
@@ -250,7 +250,7 @@ class NMR(object):
         return dia(mol, dm0, gauge_orig, shielding_nuc)
 
     def para(self, *args, **kwargs):
-        return self.para(*args, **kwargs)
+        return self.para_(*args, **kwargs)
     def para_(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
               shielding_nuc=None):
         if mol is None:           mol = self.mol

@@ -203,7 +203,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      i+1, mo_energy[i], mo_occ[i])
 #TODO    if mf.verbose >= logger.DEBUG:
 #TODO        log.debug(' ** MO coefficients **')
-#TODO        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
+#TODO        label = mf.mol.spinor_labels(True)
 #TODO        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
 #TODO    dm = mf.make_rdm1(mo_coeff, mo_occ)
 #TODO    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
@@ -304,7 +304,7 @@ class UHF(hf.SCF):
                     mo_occ[i] = 1
                     n += 1
         if self.verbose >= logger.INFO:
-            logger.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,',
+            logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
                         n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1],
                         n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
             logger.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])

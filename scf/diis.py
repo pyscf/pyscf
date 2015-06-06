@@ -9,6 +9,7 @@ DIIS
 
 from functools import reduce
 import numpy
+import scipy.linalg
 import pyscf.lib.diis
 from pyscf.lib import logger
 

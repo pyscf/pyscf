@@ -232,24 +232,24 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
     if not fci.davidson_only:
-        if len(addr) == 1:
+        if na*na == 1:
             return pw, pv
         elif len(addr) == na*na:
             if fci.nroots > 1:
-                ci0 = numpy.empty((fci.nroots,na*na))
-                ci0[:,addr] = pv[:,:fci.nroots].T
-                return pw[:fci.nroots], ci0.reshape(fci.nroots,na,na)
+                civec = numpy.empty((fci.nroots,na*na))
+                civec[:,addr] = pv[:,:fci.nroots].T
+                return pw[:fci.nroots], civec.reshape(fci.nroots,na,na)
             elif abs(pw[0]-pw[1]) > 1e-12:
-                ci0 = numpy.empty((na*na))
-                ci0[addr] = pv[:,0]
-                ci0 = ci0.reshape(na,na)
-                ci0 = pyscf.lib.transpose_sum(ci0, inplace=True) * .5
+                civec = numpy.empty((na*na))
+                civec[addr] = pv[:,0]
+                civec = civec.reshape(na,na)
+                civec = pyscf.lib.transpose_sum(civec, inplace=True) * .5
                 # direct diagonalization may lead to triplet ground state
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-                if numpy.allclose(numpy.linalg.norm(ci0), 1):
-                    return pw[0], ci0.reshape(na,na)
+                if numpy.allclose(numpy.linalg.norm(civec), 1):
+                    return pw[0], civec.reshape(na,na)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 

@@ -10,15 +10,16 @@ LIGHTSPEED = 137.0359895
 # BOHR = .529 177 210 92(17) e-10m  #http://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 BOHR = 0.52917721092  # Angstroms
 
-ANGULAR = {
-        0: 's',
-        1: 'p',
-        2: 'd',
-        3: 'f',
-        4: 'g',
-        5: 'h',
-        6: 'i',
-        7: 'j' }
+ANGULAR = 'spdfghij'
+ANGULARMAP = {'s': 0,
+              'p': 1,
+              'd': 2,
+              'f': 3,
+              'g': 4,
+              'h': 5,
+              'i': 6,
+              'j': 7}
+
 REAL_SPHERIC = (
     ('',), \
     ('x', 'y', 'z'), \
@@ -189,34 +190,18 @@ VERBOSE_CRIT   = -1
 VERBOSE_ALERT  = -2
 VERBOSE_PANIC  = -3
 
-#
-# parameters in moleinfo_mod
-MI_POSX = 1
-MI_POSY = 2
-MI_POSZ = 3
-MI_POS1 = 4
-MI_POSXX = 1
-MI_POSXY = 2
-MI_POSXZ = 3
-MI_POSYX = 4
-MI_POSYY = 5
-MI_POSYZ = 6
-MI_POSZX = 7
-MI_POSZY = 8
-MI_POSZZ = 9
+POSX = 1
+POSY = 2
+POSZ = 3
+POS1 = 4
+POSXX = 1
+POSXY = 2
+POSXZ = 3
+POSYX = 4
+POSYY = 5
+POSYZ = 6
+POSZX = 7
+POSZY = 8
+POSZZ = 9
 
-# thresholds
-MI_NON_REL  = 0
-MI_SCAL_REL = 1
-MI_2C_REL   = 2
-MI_4C_REL   = 4
-MI_2C_NESC  = 21
-MI_2C_SESC  = 22
-MI_2C_UESC  = 23
-MI_NUC_POINT= 1
-MI_NUC_GAUSS= 2
-MI_GAUGE_GIAO = 1
-MI_GAUGE_COMMON = 2
-MI_GAUGE_MASS = 3
-MI_REMOTE   = 1.e3
 

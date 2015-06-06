@@ -48,7 +48,7 @@ def dump_rec(stdout, c, label=None, label2=None, ncol=5, digits=5, start=0):
 
 def dump_mo(mol, c, label=None):
     if label is None:
-        label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
+        label = mol.spheric_labels(True)
     dump_rec(mol.stdout, c, label, start=1)
 
 

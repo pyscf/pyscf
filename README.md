@@ -65,6 +65,16 @@ Installation
   After installing the NECI, create a file future/fciqmc/settings.py
   to store the path where the NECI was installed.
 
+* Using optimized integral library on X86 platform.  Qcint
+  (https://github.com/sunqm/qcint.git) is a branch of libcint library.
+  It is heavily optimized against X86_64 platforms.  To replace the
+  default libcint library with qcint library, edit the URL of the
+  integral library in lib/CMakeLists.txt file
+
+        ExternalProject_Add(libcint
+          GIT_REPOSITORY https://github.com/sunqm/qcint.git
+          ...
+
 
 Adding new features
 -------------------
