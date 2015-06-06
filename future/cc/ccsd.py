@@ -57,7 +57,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, energy(cc, t1, t2, eris, blksize)
-        log.info('istep = %d, E(CCSD) = %.15g, dE = %.9g, norm(t1,t2) = %.6g',
+        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
         cput0 = log.timer('CCSD iter', *cput0)
         if abs(eccsd-eold) < tol and normt < tolnormt:
@@ -446,11 +446,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                        verbose=self.verbose)
         if self._conv:
             logger.info(self, 'CCSD converged')
-            logger.info(self, ' E(CCSD) = %.16g, E_corr = %.16g',
+            logger.info(self, ' E(CCSD) = %.16g  E_corr = %.16g',
                         self.ecc+self._scf.hf_energy, self.ecc)
         else:
             logger.info(self, 'CCSD not converge')
-            logger.info(self, ' E(CCSD) = %.16g, E_corr = %.16g',
+            logger.info(self, ' E(CCSD) = %.16g  E_corr = %.16g',
                         self.ecc+self._scf.hf_energy, self.ecc)
         logger.timer(self, 'CCSD', *cput0)
         return self.ecc, self.t1, self.t2

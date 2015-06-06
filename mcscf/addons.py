@@ -284,7 +284,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         sscas = pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
         mocore = (mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
         sscore = scf.uhf.spin_square(mocore, ovlp)
-        logger.debug(casscf, 'S^2 of core %f, S^2 of cas %f', sscore[0], sscas[0])
+        logger.debug(casscf, 'S^2 of core %f  S^2 of cas %f', sscore[0], sscas[0])
         ss = sscas[0]+sscore[0]
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1

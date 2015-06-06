@@ -222,11 +222,11 @@ class UHF(hf.SCF):
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:mol.nelectron] = 1
         if mol.nelectron < len(mo_energy):
-            logger.info(self, 'nocc = %d, HOMO = %.12g, LUMO = %.12g,', \
+            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
         else:
-            logger.info(self, 'nocc = %d, HOMO = %.12g, no LUMO,', \
+            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO', \
                         mol.nelectron, mo_energy[mol.nelectron-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ

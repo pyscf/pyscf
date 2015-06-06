@@ -250,7 +250,7 @@ class NMR(object):
         return dia(mol, dm0, gauge_orig, shielding_nuc)
 
     def para(self, *args, **kwargs):
-        return self.para(*args, **kwargs)
+        return self.para_(*args, **kwargs)
     def para_(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
               shielding_nuc=None):
         if mol is None:           mol = self.mol

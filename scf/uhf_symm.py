@@ -52,7 +52,7 @@ def analyze(mf, verbose=logger.DEBUG):
 
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
-    log.info('multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+    log.info('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
     if verbose >= logger.INFO:
         log.info('**** MO energy ****')
@@ -77,7 +77,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
 
     if mf.verbose >= logger.DEBUG:
-        label = ['%d%3s %s%-4s' % x for x in mol.spheric_labels()]
+        label = mol.spheric_labels(True)
         molabel = []
         irorbcnt = {}
         for k, j in enumerate(orbsyma):
@@ -302,9 +302,9 @@ class UHF(uhf.UHF):
                 irlumob = irname
             p0 += nso
 
-        logger.info(self, 'alpha HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+        logger.info(self, 'alpha HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                     irhomoa, ehomoa, irlumoa, elumoa)
-        logger.info(self, 'beta  HOMO (%s) = %.15g, LUMO (%s) = %.15g',
+        logger.info(self, 'beta  HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                     irhomob, ehomob, irlumob, elumob)
         if self.verbose >= logger.DEBUG:
             ehomo = max(ehomoa,ehomob)

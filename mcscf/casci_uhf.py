@@ -240,7 +240,7 @@ class CASCI(object):
 
         if verbose >= logger.INFO:
             log = logger.Logger(self.stdout, verbose)
-            label = ['%d%3s %s%-4s' % x for x in self.mol.spheric_labels()]
+            label = self.mol.spheric_labels(True)
             if log.verbose >= logger.DEBUG:
                 log.info('alpha density matrix (on AO)')
                 dump_mat.dump_tri(self.stdout, dm1a, label)
@@ -251,15 +251,15 @@ class CASCI(object):
                                    self._scf.mo_coeff[0]))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('alpha <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+                log.info('alpha <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
             s = reduce(numpy.dot, (mo_coeff[1].T, self._scf.get_ovlp(),
                                    self._scf.mo_coeff[1]))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+                log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
             ss = self.spin_square(ci, mo_coeff, self._scf.get_ovlp())
-            log.info('\nS^2 = %.7f, 2S+1 = %.7f', ss[0], ss[1])
+            log.info('\nS^2 = %.7f  2S+1 = %.7f', ss[0], ss[1])
 
             log.info('\n** Largest CI components **')
             log.info(' string alpha, string beta, CI coefficients')

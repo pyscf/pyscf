@@ -302,9 +302,9 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
     if not fci.davidson_only:
-        if len(addr) == 1:
+        if na*nb == 1:
             return pw, pv
-        else:
+        elif len(addr) == na*nb:
             if fci.nroots > 1:
                 civec = numpy.empty((fci.nroots,na*nb))
                 civec[:,addr] = pv[:,:fci.nroots].T

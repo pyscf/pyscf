@@ -239,8 +239,8 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
-                log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, '
-                          'max(|x|)=%4.3g, eig=%4.3g, dw=%4.3g, seig=%4.3g',
+                log.debug('    inner iter %d  |g[o]|= %4.3g  |dx|= %4.3g  '
+                          'max(|x|)= %4.3g  eig= %4.3g  dw= %4.3g  seig= %4.3g',
                            imic, norm_gorb, norm_dxi, dxmax, w, w-wlast, seig)
 
                 if norm_gorb > norm_gprev * casscf.ah_grad_trust_region:
@@ -279,7 +279,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
             norm_gorb = numpy.linalg.norm(g_orb)
             jkcount += 1
             u = casscf.update_rotate_matrix(dxi, u)
-            log.debug('orbital rotation step not found, try to guess |g[o]|=%4.3g, |dx|=%4.3g',
+            log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dx|= %4.3g',
                       norm_gorb, numpy.linalg.norm(dxi))
 
         jkcount += ihop + 2
@@ -349,7 +349,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
         norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
-        log.debug1('... AH step %d, index=%d, bar|dx|=%.5g, eig=%.5g, v[0]=%.5g, lindep=%.5g', \
+        log.debug1('... AH step %d  index= %d  bar|dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
         if abs(w_t-wlast) < tol and norm_dx < toloose:
             yield True, istep, w_t, xtrial, hx, dx, s0
@@ -517,8 +517,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d, e_ci = %.12g, |u-1|=%4.3g, |g[o]|=%4.3g, ' \
-                      '|g[c]|=%4.3g, |ddm|=%4.3g',
+            log.debug('micro %d  e_ci = %.12g  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
+                      '|g[c]|= %4.3g  |ddm|= %4.3g',
                       imicro+1, e_ci, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
@@ -543,9 +543,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK, %d micro), CASSCF E = %.15g, dE = %.8g,',
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
                  imacro, njk, imicro, e_tot, e_tot-elast)
-        log.info('               |grad[o]|=%4.3g, |grad[c]|=%4.3g, |ddm|=%4.3g',
+        log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
@@ -617,7 +617,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
         if log.verbose >= logger.DEBUG:
             for i in range(ncore):
-                log.debug('i = %d, <i|F|i> = %12.8f', i+1, w[i])
+                log.debug('i = %d  <i|F|i> = %12.8f', i+1, w[i])
     if nmo-nocc > 0:
         w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         if sort:
@@ -629,7 +629,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
         if log.verbose >= logger.DEBUG:
             for i in range(nmo-nocc):
-                log.debug('i = %d, <i|F|i> = %12.8f', nocc+i+1, w[i])
+                log.debug('i = %d  <i|F|i> = %12.8f', nocc+i+1, w[i])
 # still return ci coefficients, in case the canonicalization funciton changed
 # cas orbitals, the ci coefficients should also be updated.
     return mo_coeff1, ci

@@ -10,6 +10,7 @@ import time
 import math
 import itertools
 import numpy
+import ctypes
 import pyscf.lib.parameters as param
 from pyscf.lib import logger
 from pyscf.gto import cmd_args
@@ -61,6 +62,47 @@ def gto_norm(l, expnt):
         return math.sqrt(f)
     else:
         raise ValueError('l should be > 0')
+
+def cart2sph(l):
+    '''Cartesian to real spheric transformation matrix'''
+    nf = (l+1)*(l+2)//2
+    cmat = numpy.eye(nf)
+    if l in (0, 1):
+        return cmat
+    else:
+        nd = l * 2 + 1
+        c2sph = numpy.zeros((nf,nd), order='F')
+        fn = moleintor._cint.CINTc2s_ket_sph
+        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+           cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
+        return c2sph
+
+def cart2j_kappa(kappa):
+    '''Cartesian to spinor, indexed by kappa'''
+    assert(kappa != 0)
+    if kappa < 0:
+        l = -kappa - 1
+        nd = l * 2 + 2
+    else:
+        l = kappa
+        nd = l * 2
+    nf = (l+1)*(l+2)//2
+    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    cmat = numpy.eye(nf)
+    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l),
+       ctypes.c_int(kappa))
+    return c2spinor
+
+def cart2j_l(l):
+    '''Cartesian to spinor, indexed by l'''
+    nf = (l+1)*(l+2)//2
+    nd = l * 4 + 2
+    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    cmat = numpy.eye(nf)
+    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l), ctypes.c_int(0))
+    return c2spinor
 
 def atom_types(atoms, basis=None):
     atmgroup = {}
@@ -349,16 +391,13 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
                 assert(nucmod in (NUC_POINT, NUC_GAUSS))
                 atm0[NUC_MOD_OF] = nucmod
             elif isinstance(nucmod, str):
-                if 'G' in nucmod.upper(): # 'gauss_nuc'
-                    atm0[NUC_MOD_OF] = NUC_GAUSS
-                else:
-                    atm0[NUC_MOD_OF] = NUC_POINT
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
             elif ia+1 in nucmod:
-                atm0[NUC_MOD_OF] = nucmod[ia+1]
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
             elif symb in nucmod:
-                atm0[NUC_MOD_OF] = nucmod[symb]
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[symb])
             elif _rm_digit(symb) in nucmod:
-                atm0[NUC_MOD_OF] = nucmod[_rm_digit(symb)]
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[_rm_digit(symb)])
 
         if mass:
             if ia+1 in mass:
@@ -642,11 +681,18 @@ def energy_nuc(mol):
     e = (qq/r).sum() * .5
     return e
 
-def spheric_labels(mol):
+def spheric_labels(mol, fmt=True):
     '''Labels for spheric GTO functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
 
     Returns:
         List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        or formatted strings based on the argument "fmt"
 
     Examples:
 
@@ -667,13 +713,25 @@ def spheric_labels(mol):
                 label.append((ia, symb, '%d%s' % (n, strl), \
                               '%s' % param.REAL_SPHERIC[l][l+m]))
         count[ia,l] += nc
-    return label
+    if isinstance(fmt, str):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d%3s %s%-4s' % x for x in label]
+    else:
+        return label
 
-def cart_labels(mol):
+def cart_labels(mol, fmt=True):
     '''Labels for Cartesian GTO functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
 
     Returns:
         List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        or formatted strings based on the argument "fmt"
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
     label = []
@@ -690,7 +748,12 @@ def cart_labels(mol):
                     label.append((ia, symb, '%d%s' % (n, strl),
                                   ''.join(('x'*lx, 'y'*ly, 'z'*lz))))
         count[ia,l] += nc
-    return label
+    if isinstance(fmt, str):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d%3s %s%-4s' % x for x in label]
+    else:
+        return label
 
 
 def spinor_labels(mol):
@@ -1708,8 +1771,11 @@ class Mole(object):
     def get_enuc(self):
         return energy_nuc(self)
 
-    def spheric_labels(self):
-        return spheric_labels(self)
+    def cart_labels(self, fmt=False):
+        return cart_labels(self, fmt)
+
+    def spheric_labels(self, fmt=False):
+        return spheric_labels(self, fmt)
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
@@ -1748,6 +1814,14 @@ def _std_symbol(symb_or_chg):
         return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
     else:
         return param.ELEMENTS[symb_or_chg][0]
+
+def _parse_nuc_mod(str_or_int):
+    if isinstance(str_or_int, int):
+        return str_or_int
+    elif 'G' in str_or_int.upper(): # 'gauss_nuc'
+        return NUC_GAUSS
+    else:
+        return NUC_POINT
 
 def _update_from_cmdargs_(mol):
     # Ipython shell conflicts with optparse

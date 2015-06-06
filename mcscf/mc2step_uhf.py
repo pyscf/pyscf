@@ -59,7 +59,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g', \
                       imicro, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
@@ -73,9 +73,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         totmicro += imicro+1
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK, %d micro), CASSCF E = %.15g, dE = %.8g,',
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
-        log.info('               |grad[o]|=%4.3g, |dm1|=%4.3g',
+        log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
                  norm_gorb, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t3m)
