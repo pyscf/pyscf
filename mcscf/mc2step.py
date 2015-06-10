@@ -13,6 +13,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
            ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
+    if callback is None:
+        callback = casscf.callback
+
+
     log = logger.Logger(casscf.stdout, verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 2-step CASSCF')
@@ -53,7 +57,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)
-            casscf.save_mo_coeff(mo, imacro, imicro)
+           # casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None
             eris = casscf.ao2mo(mo)
@@ -62,8 +66,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \
                       imicro, norm_t, norm_gorb, norm_ddm)
 
+
             if callable(callback):
                 callback(locals())
+            
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < toloose or norm_gorb < toloose:
@@ -103,7 +109,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
     log.debug('CASSCF canonicalization')
     mo, fcivec = casscf.canonicalize(mo, fcivec, eris, sort=casscf.natorb,
                                      verbose=log)
-    casscf.save_mo_coeff(mo, imacro, imicro)
+    #casscf.save_mo_coeff(mo, imacro, imicro)
 
     log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)

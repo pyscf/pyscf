@@ -1141,7 +1141,8 @@ class CASSCF(casci.CASCI):
     def dump_chk(self, envs):
         chkfile.dump_mcscf(self.mol, self.chkfile, envs['mo'],
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
-                           ci_vector=(envs['fcivec'] if envs['dump_chk_ci'] else None),
+                           ci_vector=(envs['fcivec'] if not hasattr(self.fcisolver, 'nevpt_intermediate') else None),
+    
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
                            converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])))

@@ -8,6 +8,7 @@ import os, sys
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
+from pyscf import mcscf
 
 '''
 DMRG solver for CASSCF.
@@ -215,12 +216,14 @@ class DMRGCI(object):
                 neleca, nelecb = nelec
             writeDMRGConfFile(neleca, nelecb, True, self)
             if self.verbose >= logger.DEBUG1:
-                inFile = os.path.join(self.scratchDirectory,self.configFile)
+                inFile = self.configFile
+                #inFile = os.path.join(self.scratchDirectory,self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
             executeBLOCK(self)
             if self.verbose >= logger.DEBUG1:
-                outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                outFile = self.outputFile
+                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
                 logger.debug1(self, open(outFile).read())
             self.hasthreepdm = True
             self.extraline.pop()
@@ -269,12 +272,14 @@ class DMRGCI(object):
                 neleca, nelecb = nelec
             writeDMRGConfFile(neleca, nelecb, True, self)
             if self.verbose >= logger.DEBUG1:
-                inFile = os.path.join(self.scratchDirectory,self.configFile)
+                #inFile = os.path.join(self.scratchDirectory,self.configFile)
+                inFile = self.configFile
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
             executeBLOCK(self)
             if self.verbose >= logger.DEBUG1:
-                outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                outFile = self.outputFile
+                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
                 logger.debug1(self, open(outFile).read())
             self.has_nevpt = True
             self.extraline.pop()
@@ -303,12 +308,17 @@ class DMRGCI(object):
         writeIntegralFile(h1e, eri, norb, neleca, nelecb, self)
         writeDMRGConfFile(neleca, nelecb, fciRestart, self)
         if self.verbose >= logger.DEBUG1:
-            inFile = os.path.join(self.scratchDirectory,self.configFile)
+            inFile = self.configFile
+            #inFile = os.path.join(self.scratchDirectory,self.configFile)
             logger.debug1(self, 'Block Input conf')
             logger.debug1(self, open(inFile, 'r').read())
+        if self.onlywriteIntegral :
+            logger.info(self,'Finish write integral')
+            exit()
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = os.path.join(self.scratchDirectory,self.outputFile)
+            outFile = self.outputFile
+            #outFile = os.path.join(self.scratchDirectory,self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
@@ -322,6 +332,7 @@ class DMRGCI(object):
                 self.restart = True
             else :
                 self.restart = False
+        return callback
 
 
 def make_schedule(sweeps, Ms, tols, noises):
@@ -335,7 +346,8 @@ def make_schedule(sweeps, Ms, tols, noises):
         return 'schedule default'
 
 def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
-    confFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
+    confFile = DMRGCI.configFile
+    #confFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
 
     f = open(confFile, 'w')
     f.write('nelec %i\n'%(neleca+nelecb))
@@ -368,8 +380,9 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
             f.write('sym c2h\n' )
         else:
             f.write('sym %s\n' % DMRGCI.groupname.lower())
-    f.write('orbitals %s\n' % os.path.join(DMRGCI.scratchDirectory,
-                                           DMRGCI.integralFile))
+    f.write('orbitals %s\n' % DMRGCI.integralFile)
+    #f.write('orbitals %s\n' % os.path.join(DMRGCI.scratchDirectory,
+    #                                       DMRGCI.integralFile))
     f.write('maxiter %i\n'%DMRGCI.maxIter)
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
     f.write('outputlevel 2\n')
@@ -386,7 +399,8 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
     #f.write('noreorder\n')
 
 def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI):
-    integralFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.integralFile)
+    #integralFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.integralFile)
+    integralFile = DMRGCI.integralFile
 # ensure 4-fold symmetry
     eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
     if DMRGCI.mol.symmetry and DMRGCI.orbsym:
@@ -430,10 +444,16 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI):
 
 def executeBLOCK(DMRGCI):
 
-    inFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
-    outFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.outputFile)
+    inFile = DMRGCI.configFile
+    outFile = DMRGCI.outputFile
+    #inFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
+    #outFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.outputFile)
     from subprocess import check_call
-    check_call("%s  %s  %s > %s"%(DMRGCI.mpiprefix, DMRGCI.executable, inFile, outFile), shell=True)
+    try:
+        output = check_call("%s  %s  %s > %s"%(DMRGCI.mpiprefix, DMRGCI.executable, inFile, outFile), shell=True)
+    except ValueError:
+        print output
+        exit()
 
 def readEnergy(DMRGCI):
     import struct, os
