@@ -9,6 +9,7 @@ DIIS
 
 from functools import reduce
 import numpy
+import scipy.linalg
 import pyscf.lib.diis
 from pyscf.lib import logger
 
@@ -21,10 +22,28 @@ from pyscf.lib import logger
 # error vector = SDF-FDS
 # error vector = F_ai ~ (S-SDS)*S^{-1}FDS = FDS - SDFDS ~ FDS-SDF in converge
 class DIIS(pyscf.lib.diis.DIIS):
+    def __init__(self, mf, filename):
+        pyscf.lib.diis.DIIS.__init__(self, mf, filename)
+        self.rollback = False
     def update(self, s, d, f):
-        sdf = reduce(numpy.dot, (s,d,f))
-        errvec = sdf.T.conj() - sdf
+        if isinstance(f, numpy.ndarray) and f.ndim == 2:
+            sdf = reduce(numpy.dot, (s,d,f))
+            errvec = sdf.T.conj() - sdf
+        else:
+            sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
+            sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
+            errvec = numpy.hstack((sdf_a.T.conj() - sdf_a,
+                                   sdf_b.T.conj() - sdf_b))
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
-        return pyscf.lib.diis.DIIS.update(self, f, xerr=errvec)
+        xnew = pyscf.lib.diis.DIIS.update(self, f, xerr=errvec)
+        if self.rollback > 0 and len(self._bookkeep) == self.space:
+            self._bookkeep = self._bookkeep[-self.rollback:]
+        return xnew
+
+    def get_num_vec(self):
+        if self.rollback:
+            return self._head
+        else:
+            return len(self._bookkeep)
 
 SCFDIIS = SCF_DIIS = DIIS

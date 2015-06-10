@@ -224,28 +224,42 @@ class CASCI(object):
         from pyscf.tools import dump_mat
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
+        nelecas = casscf.nelecas
+        ncas = casscf.ncas
+        ncore = casscf.ncore
+
+        casdm1a, casdm1b = self.fcisolver.make_rdm1s(ci, ncas, nelecas)
+        mocore = mo_coeff[0][:,:ncore[0]]
+        mocas = mo_coeff[0][:,ncore[0]:ncore[0]+ncas]
+        dm1a = numpy.dot(mocore, mocore.T)
+        dm1a += reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+        mocore = mo_coeff[1][:,:ncore[1]]
+        mocas = mo_coeff[1][:,ncore[1]:ncore[1]+ncas]
+        dm1b = numpy.dot(mocore, mocore.T)
+        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+
         if verbose >= logger.INFO:
             log = logger.Logger(self.stdout, verbose)
-            dm1a, dm1b = addons.make_rdm1s(self, mo_coeff, ci)
-            label = ['%d%3s %s%-4s' % x for x in self.mol.spheric_labels()]
-            log.info('alpha density matrix (on AO)')
-            dump_mat.dump_tri(self.stdout, dm1a, label)
-            log.info('beta density matrix (on AO)')
-            dump_mat.dump_tri(self.stdout, dm1b, label)
+            label = self.mol.spheric_labels(True)
+            if log.verbose >= logger.DEBUG:
+                log.info('alpha density matrix (on AO)')
+                dump_mat.dump_tri(self.stdout, dm1a, label)
+                log.info('beta density matrix (on AO)')
+                dump_mat.dump_tri(self.stdout, dm1b, label)
 
             s = reduce(numpy.dot, (mo_coeff[0].T, self._scf.get_ovlp(),
                                    self._scf.mo_coeff[0]))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('alpha <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+                log.info('alpha <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
             s = reduce(numpy.dot, (mo_coeff[1].T, self._scf.get_ovlp(),
                                    self._scf.mo_coeff[1]))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('beta <mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+                log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
             ss = self.spin_square(ci, mo_coeff, self._scf.get_ovlp())
-            log.info('\nS^2 = %.7f, 2S+1 = %.7f', ss[0], ss[1])
+            log.info('\nS^2 = %.7f  2S+1 = %.7f', ss[0], ss[1])
 
             log.info('\n** Largest CI components **')
             log.info(' string alpha, string beta, CI coefficients')
@@ -256,6 +270,31 @@ class CASCI(object):
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
         return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
+    def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
+                   ncore=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if ncas is None: ncas = self.ncas
+        if nelecas is None: nelecas = self.nelecas
+        if ncore is None: ncore = self.ncore
+
+        casdm1a, casdm1b = self.fcisolver.make_rdm1s(ci, ncas, nelecas)
+
+        mocore = mo_coeff[0][:,:ncore[0]]
+        mocas = mo_coeff[0][:,ncore[0]:ncore[0]+ncas]
+        dm1a = numpy.dot(mocore, mocore.T)
+        dm1a += reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+
+        mocore = mo_coeff[1][:,:ncore[1]]
+        mocas = mo_coeff[1][:,ncore[1]:ncore[1]+ncas]
+        dm1b = numpy.dot(mocore, mocore.T)
+        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+        return dm1a, dm1b
+
+    def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
+                  ncore=None):
+        dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
+        return dm1a+dm1b
 
 
 if __name__ == '__main__':

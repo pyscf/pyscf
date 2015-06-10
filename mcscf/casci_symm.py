@@ -37,7 +37,8 @@ class CASCI(casci.CASCI):
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
-                                                self.mo_coeff)
+                                                self.mo_coeff,
+                                                s=self._scf.get_ovlp())
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
             ncore = self.ncore

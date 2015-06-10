@@ -182,7 +182,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.lindep = lindep
     cis.max_cycle = max_cycle
     unknown = []
-    for k, v in kwargs:
+    for k, v in kwargs.items():
         setattr(cis, k, v)
         if not hasattr(cis, k):
             unknown.append(k)
@@ -302,17 +302,17 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
     if not fci.davidson_only:
-        if len(addr) == 1:
+        if na*nb == 1:
             return pw, pv
         elif len(addr) == na*nb:
             if fci.nroots > 1:
-                ci0 = numpy.empty((fci.nroots,na*nb))
-                ci0[:,addr] = pv[:,:fci.nroots].T
-                return pw[:fci.nroots], ci0.reshape(fci.nroots,na,nb)
+                civec = numpy.empty((fci.nroots,na*nb))
+                civec[:,addr] = pv[:,:fci.nroots].T
+                return pw[:fci.nroots], civec.reshape(fci.nroots,na,nb)
             elif abs(pw[0]-pw[1]) > 1e-12:
-                ci0 = numpy.empty((na*nb))
-                ci0[addr] = pv[:,0]
-                return pw[0], ci0.reshape(na,nb)
+                civec = numpy.empty((na*nb))
+                civec[addr] = pv[:,0]
+                return pw[0], civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 

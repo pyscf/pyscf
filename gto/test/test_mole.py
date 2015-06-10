@@ -11,7 +11,7 @@ mol0.atom = [
     [1  , (0.,1.,1.)],  # D
     ["O1", (0.,0.,0.)],
     [1  , (1.,1.,0.)], ] # H
-mol0.nucmod = { "O":param.MI_NUC_GAUSS, 3:param.MI_NUC_GAUSS }
+mol0.nucmod = { "O":'gaussian', 3:'g' }
 mol0.mass = { "O":18, 1:3 }
 mol0.basis = {
     "O": [(0, 0, (15, 1)), ],

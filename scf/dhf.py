@@ -203,7 +203,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      i+1, mo_energy[i], mo_occ[i])
 #TODO    if mf.verbose >= logger.DEBUG:
 #TODO        log.debug(' ** MO coefficients **')
-#TODO        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
+#TODO        label = mf.mol.spinor_labels(True)
 #TODO        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
 #TODO    dm = mf.make_rdm1(mo_coeff, mo_occ)
 #TODO    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
@@ -238,31 +238,6 @@ class UHF(hf.SCF):
         self.opt_ssll = None
         self.opt_ssss = None
         self._keys = set(self.__dict__.keys())
-
-    def eig(self, h, s):
-        e, c = scipy.linalg.eigh(h, s)
-        idx = numpy.argmax(abs(c.real), axis=0)
-        c[:,c[idx,range(len(e))].real<0] *= -1
-        return e, c
-        #try:
-        #    import pyscf.lib.jacobi
-        #    return pyscf.lib.jacobi.zgeeigen(h, s)[:2]
-        #except ImportError:
-        #    e, c = scipy.linalg.eigh(h, s)
-        #    return e, c
-
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        f = h1e + vhf
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = hf.damping(s1e, dm, f, self.damp_factor)
-            f = hf.level_shift(s1e, dm, f, self.level_shift_factor)
-        elif 0 <= cycle:
-            fac = self.level_shift_factor \
-                    * numpy.exp(self.diis_start_cycle-cycle-1)
-            f = hf.level_shift(s1e, dm, f, fac)
-        if adiis is not None and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dm, f)
-        return f
 
     def get_hcore(self, mol=None):
         if mol is None:
@@ -329,7 +304,7 @@ class UHF(hf.SCF):
                     mo_occ[i] = 1
                     n += 1
         if self.verbose >= logger.INFO:
-            logger.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,',
+            logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
                         n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1],
                         n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
             logger.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])

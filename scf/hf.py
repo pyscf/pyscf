@@ -86,12 +86,13 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if mf.DIIS:
         adiis = mf.DIIS(mf, mf.diis_file)
         adiis.space = mf.diis_space
+        adiis.rollback = mf.diis_space_rollback
     else:
         adiis = None
 
     vhf = mf.get_veff(mol, dm)
     hf_energy = mf.energy_tot(dm, h1e, vhf)
-    logger.info(mf, 'init E=%.15g', hf_energy)
+    logger.info(mf, 'init E= %.15g', hf_energy)
 
     if dump_chk:
         # dump mol after reading initialized DM
@@ -111,7 +112,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         vhf = mf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
-        logger.info(mf, 'cycle= %d E=%.15g, delta_E= %g',
+        logger.info(mf, 'cycle= %d E= %.15g  delta_E= %g',
                     cycle+1, hf_energy, hf_energy-last_hf_e)
 
         if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_tol
@@ -127,8 +128,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         cput1 = logger.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
+    # An extra diagonalization, to remove level shift
+    fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
+    mo_energy, mo_coeff = mf.eig(fock, s1e)
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
     logger.timer(mf, 'scf_cycle', *cput0)
-
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
 
 
@@ -170,7 +174,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
     e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
-    logger.debug1(mf, 'E_coul = %.15g', e_coul)
+    logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
 
 
@@ -367,7 +371,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    if factor < 1e-3:
+    if factor < 0:
         return f
     else:
         dm_vir = s - reduce(numpy.dot, (s, d, s))
@@ -540,6 +544,38 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     return numpy.array(vhf_last, copy=False) + vj - vk * .5
 
+def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+    '''F = h^{core} + V^{HF}
+
+    Args:
+        h1e : 2D ndarray
+            Core hamiltonian
+        s1e : 2D ndarray
+            Overlap matrix, for DIIS
+        vhf : 2D ndarray
+            HF potential matrix
+        dm : 2D ndarray
+            Density matrix, for DIIS
+
+    Kwargs:
+        cycle : int
+            Then present SCF iteration step, for DIIS
+        adiis : an instance of :attr:`SCF.DIIS` class
+            the object to hold intermediate Fock and error vectors
+        diis_start_cycle : int
+            The step to start DIIS.  Default is 0.
+        level_shift_factor : float or int
+            Level shift (in AU) for virtual space.  Default is 0.
+    '''
+    f = h1e + vhf
+    if 0 <= cycle < diis_start_cycle-1:
+        f = damping(s1e, dm*.5, f, damp_factor)
+    if adiis and cycle >= diis_start_cycle:
+        f = adiis.update(s1e, dm, f)
+    f = level_shift(s1e, dm*.5, f, level_shift_factor)
+    return f
+
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
@@ -564,7 +600,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      i+1, mo_energy[i], mo_occ[i])
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients **')
-        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
+        label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
@@ -590,7 +626,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij->i', dm*ovlp).real
     else: # ROHF
         pop = numpy.einsum('ij->i', (dm[0]+dm[1])*ovlp).real
-    label = mol.spheric_labels()
+    label = mol.spheric_labels(False)
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(label):
@@ -740,6 +776,8 @@ class SCF(object):
         self.diis_space = 8
         self.diis_start_cycle = 0
         self.diis_file = None
+# Give diis_space_rollback=True a trial if other efforts not converge
+        self.diis_space_rollback = False
         self.damp_factor = 0
         self.level_shift_factor = 0
         self.direct_scf = True
@@ -799,34 +837,22 @@ class SCF(object):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis)
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        '''F = h^{core} + V^{HF}
-
-        Args:
-            h1e : 2D ndarray
-                Core hamiltonian
-            s1e : 2D ndarray
-                Overlap matrix, for DIIS
-            vhf : 2D ndarray
-                HF potential matrix
-            dm : 2D ndarray
-                Density matrix, for DIIS
-
-        Kwargs:
-            cycle : int
-                Then present SCF iteration step, for DIIS
-            adiis : an instance of :attr:`SCF.DIIS` class
-                the object to hold intermediate Fock and error vectors
-        '''
-        f = h1e + vhf
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = damping(s1e, dm*.5, f, self.damp_factor)
-        f = level_shift(s1e, dm*.5, f, self.level_shift_factor)
-        if adiis and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dm, f)
-        return f
+    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
+        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
+                              diis_start_cycle, level_shift_factor, damp_factor)
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
+        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
+                         diis_start_cycle, level_shift_factor, damp_factor)
 
     def dump_chk(self, envs):
         if self.chkfile:
@@ -906,14 +932,17 @@ class SCF(object):
         nocc = self.mol.nelectron // 2
         mo_occ[:nocc] = 2
         if nocc < mo_occ.size:
-            logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
             if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
+                logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
                             mo_energy[nocc-1], mo_energy[nocc])
         else:
-            logger.info(self, 'HOMO = %.12g,', mo_energy[nocc-1])
-        logger.debug(self, '  mo_energy = %s', mo_energy)
+            logger.info(self, 'HOMO = %.12g', mo_energy[nocc-1])
+        if self.verbose >= logger.DEBUG:
+            numpy.set_printoptions(threshold=len(mo_energy))
+            logger.debug(self, '  mo_energy = %s', mo_energy)
+            numpy.set_printoptions()
         return mo_occ
 
     # full density matrix for RHF
@@ -935,7 +964,7 @@ class SCF(object):
         dm_last = numpy.array(dm_last)
         delta_dm = abs(dm-dm_last).sum()
         dm_change = delta_dm/abs(dm_last).sum()
-        logger.info(self, '          sum(delta_dm)=%g (~ %g%%)\n',
+        logger.info(self, '          sum(delta_dm)= %g (~ %g%%)\n',
                     delta_dm, dm_change*100)
         return dm_change < conv_tol*1e2
 
@@ -964,8 +993,8 @@ class SCF(object):
         self.build()
         self.dump_flags()
         self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_coeff, self.mo_occ \
-                = kernel(self, self.conv_tol, dm0=dm0, callback=self.callback)
+                self.mo_energy, self.mo_coeff, self.mo_occ = \
+                kernel(self, self.conv_tol, dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
@@ -983,6 +1012,16 @@ class SCF(object):
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
+
+    def get_j(self, mol=None, dm=None, hermi=1):
+        '''Compute J matrix for the given density matrix.
+        '''
+        return self.get_jk(mol, dm, hermi)[0]
+
+    def get_k(self, mol=None, dm=None, hermi=1):
+        '''Compute K matrix for the given density matrix.
+        '''
+        return self.get_jk(mol, dm, hermi)[1]
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
@@ -1032,6 +1071,10 @@ class SCF(object):
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
+
+    def density_fit(self, auxbasis='weigend'):
+        import pyscf.scf.dfhf
+        return pyscf.scf.dfhf.density_fit(self, auxbasis)
 
 
 ############
@@ -1099,11 +1142,14 @@ class ROHF(RHF):
     def __init__(self, mol):
         SCF.__init__(self, mol)
         self._eri = None
+        self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
+        self._keys = self._keys.union(['nelectron_alpha'])
 
     def dump_flags(self):
         SCF.dump_flags(self)
-        logger.info(self, 'num. doubly occ = %d, num. singly occ = %d',
-                    (self.mol.nelectron-self.mol.spin)//2, self.mol.spin)
+        nb = self.mol.nelectron-self.nelectron_alpha
+        logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
+                    nb, self.nelectron_alpha-nb)
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
@@ -1162,17 +1208,18 @@ class ROHF(RHF):
                 (fock_eff, fock_alpha, fock_beta), which is provided by :func:`ROHF.get_fock_`
         '''
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
-        feff, fa, fb = h
-        mo_energy, mo_coeff = SCF.eig(self, feff, s)
+        ncore = self.mol.nelectron-self.nelectron_alpha
+        mo_energy, mo_coeff = SCF.eig(self, h, s)
         mopen = mo_coeff[:,ncore:]
-        ea = numpy.einsum('ik,ik->k', mopen, numpy.dot(fa, mopen))
+        ea = numpy.einsum('ik,ik->k', mopen, self._focka_ao.dot(mopen))
         idx = ea.argsort()
         mo_energy[ncore:] = ea[idx]
         mo_coeff[:,ncore:] = mopen[:,idx]
         return mo_energy, mo_coeff
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
         '''Roothaan's effective fock.
         Ref. http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 
@@ -1192,17 +1239,22 @@ class ROHF(RHF):
             Attach alpha and beta fock, because Roothaan effective Fock cannot
             provide correct orbital energies.
         '''
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
 # Fc = (Fa+Fb)/2
-        fa0 = h1e + vhf[0]
-        fb0 = h1e + vhf[1]
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
-        nocc = ncore + nopen
         dmsf = dm[0]+dm[1]
-        sds = -reduce(numpy.dot, (s1e, dmsf, s1e))
-        _, mo_space = scipy.linalg.eigh(sds, s1e)
-        fa = reduce(numpy.dot, (mo_space.T, fa0, mo_space))
-        fb = reduce(numpy.dot, (mo_space.T, fb0, mo_space))
+        mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
+        self._focka_ao = h1e + vhf[0]
+        fockb_ao = h1e + vhf[1]
+        ncore = self.mol.nelectron - self.nelectron_alpha
+        nopen = self.nelectron_alpha - ncore
+        nocc = ncore + nopen
+        fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
+        fb = reduce(numpy.dot, (mo_space.T, fockb_ao, mo_space))
         feff = (fa + fb) * .5
         feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
         feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
@@ -1211,33 +1263,35 @@ class ROHF(RHF):
         cinv = numpy.dot(mo_space.T, s1e)
         f = reduce(numpy.dot, (cinv.T, feff, cinv))
 
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = damping(s1e, dm[0], f, self.damp_factor)
-        f = level_shift(s1e, dm[0], f, self.level_shift_factor)
-        if adiis and cycle >= self.diis_start_cycle:
+        if 0 <= cycle < diis_start_cycle-1:
+            f = damping(s1e, dm[0], f, damp_factor)
+        if adiis and cycle >= diis_start_cycle:
+            #f = adiis.update(s1e, dmsf*.5, f)
             f = adiis.update(s1e, dm[0], f)
+        #f = level_shift(s1e, dmsf*.5, f, level_shift_factor)
+        f = level_shift(s1e, dm[0], f, level_shift_factor)
 # attach alpha and beta fock, because Roothaan effective Fock cannot provide
 # correct orbital energy.  To define orbital energy in self.eig, we use alpha
 # fock and beta fock.
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
-        return f, fa0, fb0
+        return f
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
+        ncore = self.mol.nelectron-self.nelectron_alpha
+        nopen = self.nelectron_alpha - ncore
         nocc = ncore + nopen
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = 1
         if nocc < len(mo_energy):
-            logger.info(self, 'HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
             if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
                 logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
                             mo_energy[nocc-1], mo_energy[nocc])
         else:
-            logger.info(self, 'HOMO = %.12g, no LUMO,', mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g  no LUMO', mo_energy[nocc-1])
         if nopen > 0:
             for i in range(ncore, nocc):
                 logger.debug(self, 'singly occupied orbital energy = %.12g',
@@ -1258,7 +1312,7 @@ class ROHF(RHF):
         import pyscf.scf.uhf
         if dm is None: dm = self.make_rdm1()
         ee, ecoul = pyscf.scf.uhf.energy_elec(self, dm, h1e, vhf)
-        logger.debug1(self, 'E_coul = %.15g', ecoul)
+        logger.debug(self, 'Ecoul = %.15g', ecoul)
         return ee, ecoul
 
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
@@ -1274,13 +1328,14 @@ class ROHF(RHF):
         nset = len(dm) // 2
         if (self._eri is not None or self._is_mem_enough() or
             not self.direct_scf):
+            dm = numpy.array(dm, copy=False)
             dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
             vj, vk = self.get_jk(mol, dm, hermi)
             vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
             vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
             vhf = pyscf.scf.uhf._makevhf(vj, vk, nset)
         else:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             ddm = numpy.vstack((ddm[nset:],             # closed shell
                                 ddm[:nset]-ddm[nset:])) # open shell
             vj, vk = self.get_jk(mol, ddm, hermi)

@@ -10,7 +10,8 @@ from pyscf.mcscf import mc1step
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
-           ci0=None, callback=None, verbose=None, dump_chk=True):
+           ci0=None, callback=None, verbose=None,
+           dump_chk=True, dump_chk_ci=False):
     if verbose is None:
         verbose = casscf.verbose
     if callback is None:
@@ -41,29 +42,26 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         ninner = 0
         t3m = t2m
         casdm1_old = casdm1
-        fcasdm1 = lambda: casdm1
-        fcasdm2 = lambda: casdm2
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
+        t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
-            t3m = log.timer('update CAS DM', *t3m)
 
-            for u, g_orb, njk in casscf.rotate_orb_cc(mo, fcasdm1, fcasdm2, eris,
-                                                      verbose=log):
-                break
+            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+            u, g_orb, njk = rota.next()
+            rota.close()
             ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)
-           # casscf.save_mo_coeff(mo, imacro, imicro)
 
             eris = None
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g', \
                       imicro, norm_t, norm_gorb, norm_ddm)
 
 
@@ -79,9 +77,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         totmicro += imicro+1
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK, %d micro), CASSCF E = %.15g, dE = %.8g,',
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
-        log.info('               |grad[o]|=%4.3g, |dm1|=%4.3g',
+        log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
                  norm_gorb, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t3m)
@@ -109,7 +107,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
     log.debug('CASSCF canonicalization')
     mo, fcivec = casscf.canonicalize(mo, fcivec, eris, sort=casscf.natorb,
                                      verbose=log)
-    #casscf.save_mo_coeff(mo, imacro, imicro)
+    if dump_chk:
+        casscf.dump_chk(locals())
 
     log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)

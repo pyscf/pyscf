@@ -63,7 +63,7 @@ class AtomSphericAverageRHF(hf.RHF):
         for l in range(param.L_MAX):
             if idx_by_l[l]:
                 n2occ, frac = frac_occ(symb, l)
-                logger.debug1(self, 'l = %d, occ = %d + %.4g', l, n2occ, frac)
+                logger.debug1(self, 'l = %d  occ = %d + %.4g', l, n2occ, frac)
 
                 idx = numpy.array(idx_by_l[l])
                 f1 = 0
@@ -75,7 +75,7 @@ class AtomSphericAverageRHF(hf.RHF):
                 s1 *= 1./(l*2+1)
                 e, c = hf.SCF.eig(self, f1, s1)
                 for i, ei in enumerate(e):
-                    logger.debug1(self, 'l = %d, e_%d = %.9g', l, i, ei)
+                    logger.debug1(self, 'l = %d  e_%d = %.9g', l, i, ei)
 
                 for m in range(l*2+1):
                     mo_e[idx] = e

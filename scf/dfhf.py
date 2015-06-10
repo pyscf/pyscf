@@ -10,6 +10,9 @@ import pyscf.lib
 from pyscf.lib import logger
 
 
+OCCDROP = 1e-12
+BLOCKDIM = 240
+
 def density_fit(mf, auxbasis='weigend'):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
@@ -54,30 +57,27 @@ def density_fit(mf, auxbasis='weigend'):
                 return r_get_jk_(self, mol, dm, hermi)
             else:
                 return get_jk_(self, mol, dm, hermi)
+
+        def get_j(self, mol=None, dm=None, hermi=1):
+            if mol is None: mol = self.mol
+            if dm is None: dm = self.make_rdm1()
+            if isinstance(self, pyscf.scf.dhf.UHF):
+                return r_get_jk_(self, mol, dm, hermi)[0]
+            else:
+                return get_jk_(self, mol, dm, hermi, with_k=False)[0]
+
+        def get_k(self, mol=None, dm=None, hermi=1):
+            if mol is None: mol = self.mol
+            if dm is None: dm = self.make_rdm1()
+            if isinstance(self, pyscf.scf.dhf.UHF):
+                return r_get_jk_(self, mol, dm, hermi)[1]
+            else:
+                return get_jk_(self, mol, dm, hermi, with_j=False)[1]
+
     return HF()
 
-def density_fit_(mf, auxbasis='weigend'):
-    '''Replace J K constructor of HF object.  See the usage of :func:`density_fit`
-    '''
-    import pyscf.scf
-    def get_jk(mol, dm, hermi=1):
-        if mol is None: mol = mf.mol
-        if dm is None: dm = mf.make_rdm1()
-        if isinstance(mf, pyscf.scf.dhf.UHF):
-            return r_get_jk_(mf, mol, dm, hermi)
-        else:
-            return get_jk_(mf, mol, dm, hermi)
-    mf.get_jk = get_jk
-    mf.auxbasis = auxbasis
-    mf._cderi = None
-    mf.direct_scf = False
-    mf._keys = mf._keys.union(['auxbasis'])
-    return mf
 
-
-OCCDROP = 1e-12
-BLOCKDIM = 240
-def get_jk_(mf, mol, dms, hermi=1):
+def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
     from pyscf import df
     from pyscf.ao2mo import _ao2mo
     t0 = (time.clock(), time.time())
@@ -127,50 +127,54 @@ def get_jk_(mf, mol, dms, hermi=1):
         cpos = []
         cneg = []
         for k, dm in enumerate(dms):
-            dmtril.append(pyscf.lib.pack_tril(dm+dm.T))
-            for i in range(nao):
-                dmtril[k][i*(i+1)//2+i] *= .5
+            if with_j:
+                dmtril.append(pyscf.lib.pack_tril(dm+dm.T))
+                for i in range(nao):
+                    dmtril[k][i*(i+1)//2+i] *= .5
 
-            e, c = scipy.linalg.eigh(dm)
-            pos = e > OCCDROP
-            neg = e < -OCCDROP
+            if with_k:
+                e, c = scipy.linalg.eigh(dm)
+                pos = e > OCCDROP
+                neg = e < -OCCDROP
 
-            #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
-            #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
-            cpos.append(numpy.asarray(numpy.einsum('ij,j->ij', c[:,pos],
-                                                   numpy.sqrt(e[pos])), order='F'))
-            cneg.append(numpy.asarray(numpy.einsum('ij,j->ij', c[:,neg],
-                                                   numpy.sqrt(-e[neg])),order='F'))
+                #:vk = numpy.einsum('pij,jk->kpi', cderi, c[:,abs(e)>OCCDROP])
+                #:vk = numpy.einsum('kpi,kpj->ij', vk, vk)
+                tmp = numpy.einsum('ij,j->ij', c[:,pos], numpy.sqrt(e[pos]))
+                cpos.append(numpy.asarray(tmp, order='F'))
+                tmp = numpy.einsum('ij,j->ij', c[:,neg], numpy.sqrt(-e[neg]))
+                cneg.append(numpy.asarray(tmp, order='F'))
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
+            buf = numpy.empty((BLOCKDIM*nao,nao))
             for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = numpy.array(feri[b0:b1], copy=False)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
                 for k in range(nset):
-                    buf = reduce(numpy.dot, (eri1, dmtril[k], eri1))
-                    vj[k] += pyscf.lib.unpack_tril(buf, hermi)
-                    if cpos[k].shape[1] > 0:
-                        buf = numpy.empty(((b1-b0)*cpos[k].shape[1],nao))
+                    if with_j:
+                        buf1 = reduce(numpy.dot, (eri1, dmtril[k], eri1))
+                        vj[k] += pyscf.lib.unpack_tril(buf1, hermi)
+                    if with_k and cpos[k].shape[1] > 0:
+                        buf1 = buf[:(b1-b0)*cpos[k].shape[1]]
                         fdrv(ftrans, fmmm,
-                             buf.ctypes.data_as(ctypes.c_void_p),
+                             buf1.ctypes.data_as(ctypes.c_void_p),
                              eri1.ctypes.data_as(ctypes.c_void_p),
                              cpos[k].ctypes.data_as(ctypes.c_void_p),
                              ctypes.c_int(b1-b0), ctypes.c_int(nao),
                              ctypes.c_int(0), ctypes.c_int(cpos[k].shape[1]),
                              ctypes.c_int(0), ctypes.c_int(0))
-                        vk[k] += pyscf.lib.dot(buf.T, buf)
-                    if cneg[k].shape[1] > 0:
-                        buf = numpy.empty(((b1-b0)*cneg[k].shape[1],nao))
+                        vk[k] += pyscf.lib.dot(buf1.T, buf1)
+                    if with_k and cneg[k].shape[1] > 0:
+                        buf1 = buf[:(b1-b0)*cneg[k].shape[1]]
                         fdrv(ftrans, fmmm,
-                             buf.ctypes.data_as(ctypes.c_void_p),
+                             buf1.ctypes.data_as(ctypes.c_void_p),
                              eri1.ctypes.data_as(ctypes.c_void_p),
                              cneg[k].ctypes.data_as(ctypes.c_void_p),
                              ctypes.c_int(b1-b0), ctypes.c_int(nao),
                              ctypes.c_int(0), ctypes.c_int(cneg[k].shape[1]),
                              ctypes.c_int(0), ctypes.c_int(0))
-                        vk[k] -= pyscf.lib.dot(buf.T, buf)
+                        vk[k] -= pyscf.lib.dot(buf1.T, buf1)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('jk', *t1)
     else:
@@ -184,28 +188,30 @@ def get_jk_(mf, mol, dms, hermi=1):
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
+            buf = numpy.empty((2,BLOCKDIM,nao,nao))
             for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = numpy.array(feri[b0:b1], copy=False)
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
                 for k in range(nset):
-                    buf = numpy.empty((b1-b0,nao,nao))
+                    buf1 = buf[0,:b1-b0]
                     fdrv(ftrans, fmmm,
-                         buf.ctypes.data_as(ctypes.c_void_p),
-                         eri1.ctypes.data_as(ctypes.c_void_p),
-                         dms[k].ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(b1-b0), *rargs)
-                    rho = numpy.einsum('kii->k', buf)
-                    vj[k] += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
-
-                    buf1 = numpy.empty((b1-b0,nao,nao))
-                    fdrv(ftrans, fcopy,
                          buf1.ctypes.data_as(ctypes.c_void_p),
                          eri1.ctypes.data_as(ctypes.c_void_p),
                          dms[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(b1-b0), *rargs)
-                    vk[k] += pyscf.lib.dot(buf.reshape(-1,nao).T,
-                                           buf1.reshape(-1,nao))
+                    rho = numpy.einsum('kii->k', buf1)
+                    vj[k] += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
+
+                    if with_k:
+                        buf2 = buf[1,:b1-b0]
+                        fdrv(ftrans, fcopy,
+                             buf2.ctypes.data_as(ctypes.c_void_p),
+                             eri1.ctypes.data_as(ctypes.c_void_p),
+                             dms[k].ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(b1-b0), *rargs)
+                        vk[k] += pyscf.lib.dot(buf1.reshape(-1,nao).T,
+                                               buf2.reshape(-1,nao))
                 if mf.verbose >= logger.DEBUG1:
                     t1 = log.timer('jk', *t1)
 

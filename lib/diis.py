@@ -41,9 +41,10 @@ class DIIS(object):
             self._tmpfile = tempfile.NamedTemporaryFile()
             self._diisfile = h5py.File(self._tmpfile.name, 'w')
         self._buffer = {}
+        self._bookkeep = [] # keep the ordering of input vectors
         self._head = 0
         self._H = None
-        self._xopt = None
+        self._xprev = None
         self._err_vec_touched = False
 
     def __del__(self):
@@ -51,63 +52,63 @@ class DIIS(object):
         self._tmpfile = None
 
     def _store(self, key, value):
-        if key in self._diisfile:
-            self._diisfile[key][:] = value
-        else:
-            self._diisfile[key] = value
-# to avoid "Unable to find a valid file signature" error when reopen from crash
-        self._diisfile.flush()
+        if value.size < INCORE_SIZE:
+            self._buffer[key] = value
 
-    def push_err_vec(self, x):
+        # save the error vector if filename is given, this file can be used to
+        # restore the DIIS state
+        if value.size >= INCORE_SIZE or isinstance(self.filename, str):
+            if key in self._diisfile:
+                self._diisfile[key][:] = value
+            else:
+                self._diisfile[key] = value
+# to avoid "Unable to find a valid file signature" error when reopen from crash
+            self._diisfile.flush()
+
+    def push_err_vec(self, xerr):
         self._err_vec_touched = True
         if self._head >= self.space:
             self._head = 0
         key = 'e%d' % self._head
-        if x.size < INCORE_SIZE:
-            self._buffer[key] = x.ravel()
-            if isinstance(self.filename, str):
-                # save the error vector if filename is given, this file can be
-                # used to restore the DIIS state
-                self._store(key, x.ravel())
-        else:
-            self._store(key, x.ravel())
-        self._head += 1
+        self._store(key, xerr.ravel())
 
     def push_vec(self, x):
         x = x.ravel()
         if self._H is None:
-            self._H = numpy.ones((self.space+1,self.space+1), x.dtype)
-            self._H[0,0] = 0
+            self._H = numpy.zeros((self.space+1,self.space+1), x.dtype)
+            self._H[0,1:] = self._H[1:,0] = 1
 
-# we assumed that push_err_vec is called in advance, otherwise assuming
-# generate error vector based on the given trial vectors
+        if len(self._bookkeep) >= self.space:
+            self._bookkeep.pop(0)
+
         if self._err_vec_touched:
-            key = 'x%d' % (self._head - 1)
-            if x.size < INCORE_SIZE:
-                self._buffer[key] = x
-                if isinstance(self.filename, str):
-                    self._store(key, x)
-            else:
-                self._store(key, x)
-        elif self._xopt is None: # pass the first trial vectors
-            self._xopt = x
+            self._bookkeep.append(self._head)
+            key = 'x%d' % (self._head)
+            self._store(key, x)
+            self._head += 1
+
+        elif self._xprev is None:
+# If push_err_vec is not called in advance, the error vector is generated
+# as the diff of the current vec and previous returned vec (._xprev)
+# So store the first trial vec as the previous returned vec
+            self._xprev = x
+
         else:
             if self._head >= self.space:
                 self._head = 0
+            self._bookkeep.append(self._head)
             ekey = 'e%d'%self._head
             xkey = 'x%d'%self._head
+            self._store(xkey, x)
             if x.size < INCORE_SIZE:
-                self._buffer[ekey] = x - self._xopt
-                self._buffer[xkey] = x
+                self._buffer[ekey] = x - self._xprev
                 if isinstance(self.filename, str):
                     self._store(ekey, self._buffer[ekey])
-                    self._store(xkey, x)
             else:
                 if ekey not in self._diisfile:
                     self._diisfile.create_dataset(ekey, (x.size,), x.dtype)
                 for p0,p1 in prange(0, x.size, BLOCK_SIZE):
-                    self._diisfile[ekey][p0:p1] = x[p0:p1] - self._xopt[p0:p1]
-                self._store(xkey, x)
+                    self._diisfile[ekey][p0:p1] = x[p0:p1] - self._xprev[p0:p1]
             self._head += 1
 
     def get_err_vec(self, idx):
@@ -123,16 +124,7 @@ class DIIS(object):
             return self._diisfile['x%d'%idx]
 
     def get_num_vec(self):
-        key = 'x%d'%(self.space-1)
-        if self._buffer:
-            if key in self._buffer:
-                return self.space
-            else:
-                return self._head
-        elif key in self._diisfile:
-            return self.space
-        else:
-            return self._head
+        return len(self._bookkeep)
 
     def update(self, x, xerr=None):
         '''use DIIS method to solve Eq.  operator(x) = x.'''
@@ -144,32 +136,39 @@ class DIIS(object):
         if nd < self.min_space:
             return x
 
-        g = numpy.zeros(nd+1, x.dtype)
-        g[0] = 1
         dt = numpy.array(self.get_err_vec(self._head-1), copy=False)
         for i in range(nd):
             tmp = 0
+            dti = self.get_err_vec(i)
             for p0,p1 in prange(0, x.size, BLOCK_SIZE):
-                tmp += numpy.dot(dt[p0:p1].conj(), self.get_err_vec(i)[p0:p1])
+                tmp += numpy.dot(dt[p0:p1].conj(), dti[p0:p1])
             self._H[self._head,i+1] = tmp
             self._H[i+1,self._head] = tmp.conjugate()
         dt = None
+        h = self._H[:nd+1,:nd+1]
+        g = numpy.zeros(nd+1, x.dtype)
+        g[0] = 1
 
         try:
-            c = numpy.linalg.solve(self._H[:nd+1,:nd+1], g)
+            c = numpy.linalg.solve(h, g)
         except numpy.linalg.linalg.LinAlgError:
             logger.warn(self, 'singularity in diis')
-            w, v = scipy.linalg.eigh(self._H[:nd+1,:nd+1])
+            w, v = scipy.linalg.eigh(h)
             idx = abs(w)>1e-14
             c = numpy.dot(v[:,idx]*(1/w[idx]), numpy.dot(v[:,idx].T.conj(), g))
         logger.debug1(self, 'diis-c %s', c)
 
-        self._xopt = None
-        self._xopt = x.ravel() * c[1]
-        for i, ci in enumerate(c[2:]):
+        if self._xprev is None:
+            xnew = numpy.zeros_like(x.ravel())
+        else:
+            self._xprev = None # release memory first
+            self._xprev = xnew = numpy.zeros_like(x.ravel())
+
+        for i, ci in enumerate(c[1:]):
+            xi = self.get_vec(i)
             for p0,p1 in prange(0, x.size, BLOCK_SIZE):
-                self._xopt[p0:p1] += self.get_vec(i+1)[p0:p1] * ci
-        return self._xopt.reshape(x.shape)
+                xnew[p0:p1] += xi[p0:p1] * ci
+        return xnew.reshape(x.shape)
 
 #class CDIIS
 #class EDIIS

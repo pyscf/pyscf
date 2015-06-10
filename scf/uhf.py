@@ -141,6 +141,22 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
     return vhf
 
+def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+    f = h1e + vhf
+    if f.ndim == 2:
+        f = (f, f)
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = [dm*.5] * 2
+    if 0 <= cycle < diis_start_cycle-1:
+        f = (hf.damping(s1e, dm[0], f[0], damp_factor),
+             hf.damping(s1e, dm[1], f[1], damp_factor))
+    if adiis and cycle >= diis_start_cycle:
+        f = adiis.update(s1e, dm, numpy.array(f))
+    f = (hf.level_shift(s1e, dm[0], f[0], level_shift_factor),
+         hf.level_shift(s1e, dm[1], f[1], level_shift_factor))
+    return numpy.array(f)
+
 def energy_elec(mf, dm, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
 
@@ -276,7 +292,7 @@ def analyze(mf, verbose=logger.DEBUG):
     log = logger.Logger(mf.stdout, verbose)
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
-    log.info('multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+    log.info('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
     log.info('**** MO energy ****')
     for i in range(mo_energy[0].__len__()):
@@ -295,7 +311,7 @@ def analyze(mf, verbose=logger.DEBUG):
                      i+1, mo_energy[1][i], mo_occ[1][i])
     if mf.verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients for alpha spin **')
-        label = ['%d%3s %s%-4s' % x for x in mf.mol.spheric_labels()]
+        label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1)
         log.debug(' ** MO coefficients for beta spin **')
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
@@ -314,7 +330,7 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
         log = logger.Logger(mol.stdout, verbose)
     pop_a = numpy.einsum('ij->i', dm[0]*ovlp)
     pop_b = numpy.einsum('ij->i', dm[1]*ovlp)
-    label = mol.spheric_labels()
+    label = mol.spheric_labels(False)
 
     log.info(' ** Mulliken pop alpha/beta **')
     for i, s in enumerate(label):
@@ -381,14 +397,13 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
-        self.DIIS = UHF_DIIS
         self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
         self._eri = None
         self._keys = self._keys.union(['nelectron_alpha'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d, beta = %d',
+        logger.info(self, 'number electrons alpha = %d  beta = %d',
                     self.nelectron_alpha,
                     self.mol.nelectron-self.nelectron_alpha)
 
@@ -397,16 +412,17 @@ class UHF(hf.SCF):
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None):
-        f = (h1e+vhf[0], h1e+vhf[1])
-        if 0 <= cycle < self.diis_start_cycle-1:
-            f = (hf.damping(s1e, dm[0], f[0], self.damp_factor),
-                 hf.damping(s1e, dm[1], f[1], self.damp_factor))
-        f = (hf.level_shift(s1e, dm[0], f[0], self.level_shift_factor),
-             hf.level_shift(s1e, dm[1], f[1], self.level_shift_factor))
-        if adiis and cycle >= self.diis_start_cycle:
-            f = adiis.update(s1e, dm, numpy.array(f))
-        return f
+    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                  diis_start_cycle=None, level_shift_factor=None,
+                  damp_factor=None):
+        if diis_start_cycle is None:
+            diis_start_cycle = self.diis_start_cycle
+        if level_shift_factor is None:
+            level_shift_factor = self.level_shift_factor
+        if damp_factor is None:
+            damp_factor = self.damp_factor
+        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
+                         diis_start_cycle, level_shift_factor, damp_factor)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -416,20 +432,39 @@ class UHF(hf.SCF):
         mo_occ[0][:n_a] = 1
         mo_occ[1][:n_b] = 1
         if n_a < mo_energy[0].size:
-            logger.info(self, 'alpha nocc = %d, HOMO = %.12g, LUMO = %.12g,',
+            logger.info(self, 'alpha nocc = %d  HOMO = %.12g  LUMO = %.12g',
                         n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
+            if mo_energy[0][n_a-1]+1e-3 > mo_energy[0][n_a]:
+                logger.warn(self, '!! alpha HOMO %.12g >= LUMO %.12g',
+                            mo_energy[0][n_a-1], mo_energy[0][n_a])
         else:
-            logger.info(self, 'alpha nocc = %d, HOMO = %.12g, no LUMO,',
+            logger.info(self, 'alpha nocc = %d  HOMO = %.12g  no LUMO',
                         n_a, mo_energy[0][n_a-1])
-        logger.debug(self, '  mo_energy = %s', mo_energy[0])
-        logger.info(self, 'beta  nocc = %d, HOMO = %.12g, LUMO = %.12g,',
-                    n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
-        logger.debug(self, '  mo_energy = %s', mo_energy[1])
+        if self.verbose >= logger.DEBUG:
+            numpy.set_printoptions(threshold=len(mo_energy[0]))
+            logger.debug(self, '  mo_energy = %s', mo_energy[0])
+
+        if n_b > 0:
+            logger.info(self, 'beta  nocc = %d  HOMO = %.12g  LUMO = %.12g',
+                        n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
+            if mo_energy[1][n_b-1]+1e-3 > mo_energy[1][n_b]:
+                logger.warn(self, '!! beta HOMO %.12g >= LUMO %.12g',
+                            mo_energy[1][n_b-1], mo_energy[1][n_b])
+        else:
+            logger.info(self, 'beta  nocc = %d  no HOMO  LUMO = %.12g',
+                        n_b, mo_energy[1][n_b])
+        if mo_energy[0][n_a-1]+1e-3 > mo_energy[1][n_b]:
+            logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
+                        mo_energy[0][n_a-1], mo_energy[1][n_b])
+        if self.verbose >= logger.DEBUG:
+            logger.debug(self, '  mo_energy = %s', mo_energy[1])
+            numpy.set_printoptions()
+
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                                       mo_coeff[1][:,mo_occ[1]>0]),
                                       self.get_ovlp())
-            logger.debug(self, 'multiplicity <S^2> = %.8g, 2S+1 = %.8g', ss, s)
+            logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
@@ -544,16 +579,6 @@ class UHF(hf.SCF):
             ovlp = self.get_ovlp()
         return spin_square(mo_coeff, ovlp)
 
-
-class UHF_DIIS(pyscf.lib.diis.DIIS):
-    def update(self, s, d, f):
-        sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
-        sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
-        errvec = numpy.hstack((sdf_a.T.conj() - sdf_a,
-                               sdf_b.T.conj() - sdf_b))
-        logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
-        pyscf.lib.diis.DIIS.push_err_vec(self, errvec)
-        return pyscf.lib.diis.DIIS.update(self, f)
 
 def _makevhf(vj, vk, nset):
     if nset == 1:

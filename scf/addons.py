@@ -22,13 +22,13 @@ def frac_occ(mf, tol=1e-3):
             ndocc = nocc - int(lst[:nocc].sum())
             frac = 2.*(nocc-ndocc)/nsocc
             mo_occ[nsocc:ndocc] = frac
-            logger.warn(mf, 'fraction occ = %6g, [%d:%d]',
+            logger.warn(mf, 'fraction occ = %6g  [%d:%d]',
                         frac, ndocc, ndocc+nsocc)
         if nocc < mo_occ.size:
-            logger.info(mf, 'HOMO = %.12g, LUMO = %.12g,',
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
         else:
-            logger.info(mf, 'HOMO = %.12g,', mo_energy[nocc-1])
+            logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
@@ -49,10 +49,10 @@ def dynamic_occ(mf, tol=1e-3):
             mo_occ[ndocc:nocc] = 0
             logger.warn(mf, 'set charge = %d', mol.charge+(nocc-ndocc)*2)
         if nocc < mo_occ.size:
-            logger.info(mf, 'HOMO = %.12g, LUMO = %.12g,',
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
         else:
-            logger.info(mf, 'HOMO = %.12g,', mo_energy[nocc-1])
+            logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ

@@ -69,7 +69,7 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12, lindep=1e-16
         seig = scipy.linalg.eigh(ovlp[:subspace+1,:subspace+1])[0]
         dx = ax0 - e * x0
         rr = numpy.linalg.norm(dx)
-        log.debug('davidson %d %d, rr=%g, e=%.12g, seig=%g',
+        log.debug('davidson %d %d  rr= %g  e= %.12g  seig= %g',
                   istep, subspace, rr, e, seig[0])
 
         if rr/numpy.sqrt(rr.size) < tol or abs(de) < tol or seig[0] < lindep:
@@ -164,7 +164,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
             x1 -= (s12/innerprod[i]) * xs[i]
         h[cycle,cycle] += innerprod[cycle]                      # (*)
         innerprod.append(dot(x1.conj(), x1).real)
-        log.debug('krylov cycle %d, r = %g', cycle, numpy.sqrt(innerprod[-1]))
+        log.debug('krylov cycle %d  r = %g', cycle, numpy.sqrt(innerprod[-1]))
         if innerprod[-1] < lindep:
             break
         xs.append(x1)

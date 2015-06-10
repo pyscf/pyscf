@@ -16,7 +16,8 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
 # 4-fold symmetry
 def write_eri(fout, eri, nmo, tol=1e-15):
     npair = nmo*(nmo+1)//2
-    if eri.size == npair**2: # 4-fold symmetry
+    if eri.ndim == 2: # 4-fold symmetry
+        assert(eri.size == npair**2)
         ij = 0
         for i in range(nmo):
             for j in range(0, i+1):
@@ -29,6 +30,7 @@ def write_eri(fout, eri, nmo, tol=1e-15):
                         kl += 1
                 ij += 1
     else:
+        assert(eri.size == npair*(npair+1)//2)
         ij = 0
         ijkl = 0
         for i in range(nmo):

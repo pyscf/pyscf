@@ -124,9 +124,11 @@ def pre_orth_ao_atm_scf(mol):
     return c
 
 
-def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None):
+def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
+            s=None):
     from pyscf.lo import nao
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    if s is None:
+        s = mol.intor_symmetric('cint1e_ovlp_sph')
 
     if pre_orth_ao is None:
 #        pre_orth_ao = numpy.eye(mol.nao_nr())

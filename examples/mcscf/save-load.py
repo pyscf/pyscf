@@ -22,12 +22,14 @@ m.scf()
 mc = mcscf.CASSCF(m, 6, (4,2))  # 6 active orbitals, 4 alpha, 2 beta electrons
 # Change the default CASSCF save_mo_coeff function. Frequently save CASSCF
 # orbitals.
-def save_mo_coeff(mo_coeff, imacro, imicro):
+def save_mo_coeff(envs):
+    imacro = envs['imacro']
+    imicro = envs['imicro']
     if imacro % 3 == 2:
         fname = 'mcscf-mo-%d-%d.npy' % (imacro+1, imicro+1)
-        print('Save MO of step %d-%d in file %s' % (imacro, imicro, fname))
-        numpy.save(fname, mo_coeff)
-mc.save_mo_coeff = save_mo_coeff
+        print('Save MO of step %d-%d in file %s' % (imacro+1, imicro+1, fname))
+        numpy.save(fname, envs['mo_coeff'])
+mc.callback = save_mo_coeff
 mc.max_orb_stepsize = .01 # max. orbital-rotation angle
 mc.max_cycle_micro = 1    # small value for frequently calling CI solver
 mc.max_cycle_macro = 10

@@ -65,6 +65,16 @@ Installation
   After installing the NECI, create a file future/fciqmc/settings.py
   to store the path where the NECI was installed.
 
+* Using optimized integral library on X86 platform.  Qcint
+  (https://github.com/sunqm/qcint.git) is a branch of libcint library.
+  It is heavily optimized against X86_64 platforms.  To replace the
+  default libcint library with qcint library, edit the URL of the
+  integral library in lib/CMakeLists.txt file
+
+        ExternalProject_Add(libcint
+          GIT_REPOSITORY https://github.com/sunqm/qcint.git
+          ...
+
 
 Adding new features
 -------------------
@@ -86,7 +96,7 @@ Documentation
 -------------
 
 There is an online documentation  http://sunqm.net/pyscf.  And you can
-also download the PDF version from  http://sunqm.net/pyscf/PySCF-0.10.pdf
+also download the PDF version from  http://sunqm.net/pyscf/PySCF-1.0.pdf
 
 
 Known problems
@@ -110,7 +120,11 @@ Known problems
 
 * tests fail
 
+  mcscf/test/test_bz.py        test_mc1step_9o8e
+  mcscf/test/test_c2h4.py      test_mc1step_4o4e_smallstep
+  mcscf/test/test_c2h4.py      test_mc2step_4o4e_smallstep
   mcscf/test/test_addons.py    test_spin_square
+  cc/test/test_h2o.py          test_h2o_without_scf
 
 
 * Program exits with

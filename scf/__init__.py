@@ -93,7 +93,6 @@ from pyscf.scf import uhf_symm
 from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import addons
-from pyscf.scf.dfhf import density_fit, density_fit_
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
@@ -148,4 +147,19 @@ def DHF(mol, *args):
 
 def X2C(mol, *args):
     return x2c.UHF(mol, *args)
+
+def density_fit(mf, auxbasis='weigend'):
+    return mf.density_fit(auxbasis)
+
+def RKS(mol, *args):
+    from pyscf import dft
+    return dft.RKS(mol)
+
+def ROKS(mol, *args):
+    from pyscf import dft
+    return dft.ROKS(mol)
+
+def UKS(mol, *args):
+    from pyscf import dft
+    return dft.UKS(mol)
 

@@ -6,6 +6,7 @@ from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
+from pyscf.df import density_fit
 
 # register the XC keywords in module
 curmod = sys.modules[__name__]
@@ -40,3 +41,4 @@ def UKS(mol, *args):
         return uks.UKS(mol, *args)
     else:
         return uks_symm.UKS(mol, *args)
+

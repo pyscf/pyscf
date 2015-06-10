@@ -337,42 +337,45 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 # approx = 2: aapp, appa, vhf
 # approx = 3: aapp, appa
 class _ERIS(object):
-    def __init__(self, casscf, mo, method='incore', approx=0):
+    def __init__(self, casscf, mo, method='incore', approx=1):
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         nao, nmo = mo.shape
         ncore = self.ncore
         ncas = self.ncas
+        mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
+        mem_now = pyscf.lib.current_memory()[0]
 
         if (method == 'incore' and casscf._scf._eri is not None and
-            ((_mem_usage(ncore, ncas, nmo)[0] +
-              pyscf.lib.current_memory()[0]) > casscf.max_memory*.9)):
+            ((mem_incore+mem_now) < casscf.max_memory*.9)):
             self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
             self.Iapcv, self.Icvcv = \
                     trans_e1_incore(casscf._scf._eri, mo,
                                     casscf.ncore, casscf.ncas)
         else:
             log = logger.Logger(casscf.stdout, casscf.verbose)
-            max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
-            if approx == 0:
+            max_memory = max(2000, casscf.max_memory*.9-mem_now)
+            if (mem_outcore+mem_now) < casscf.max_memory*.9:
+                assert(max_memory > mem_outcore)
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
                 self.Iapcv, self.Icvcv = \
                         trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
-                                         max_memory=max_memory, verbose=log)
+                                         max_memory=max_memory-mem_outcore, verbose=log)
             else:
+                assert(max_memory > mem_basic)
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa = \
                         light_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
-                                         max_memory=max_memory,
+                                         max_memory=max_memory-mem_basic,
                                          approx=approx, verbose=log)
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
-    outcore = (ncore**2*nvir**2 + ncas*nmo*ncore*nvir + ncore*nmo**2*3 +
-               ncas**2*nmo**2*2 + nmo**3*2) * 8/1e6
+    basic = (ncas**2*nmo**2*2 + nmo**3*2) * 8/1e6
+    outcore = basic + (ncore**2*nvir**2 + ncas*nmo*ncore*nvir + ncore*nmo**2*3) * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
     if outcore > 10000:
         sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
-    return incore, outcore
+    return incore, outcore, basic
 
 
 if __name__ == '__main__':
