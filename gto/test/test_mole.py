@@ -51,7 +51,7 @@ C    SP
                       'H': '6-31g'}
         mol1.build()
         v = gto.mole.intor_cross('cint1e_ovlp_sph', mol0, mol1)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 7.3215230702679968, 1)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 3.6489423434168562, 1)
 
     def test_num_basis(self):
         self.assertEqual(mol0.nao_nr(), 34)

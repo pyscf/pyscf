@@ -37,7 +37,7 @@ class KnowValues(unittest.TestCase):
 
     def test_rcas_natorb(self):
         mo1, ci1, mocc1 = mcscf.addons.cas_natorb(mcr)
-        self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 11.4470460817871, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 9.9260608594977491, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mocc1), 2.59144951056707, 7)
 
 #TODO:    def test_ucas_natorb(self):
@@ -58,14 +58,14 @@ class KnowValues(unittest.TestCase):
         dmr = mcscf.addons.make_rdm1(mcr)
         dm1, dm2 = mcscf.addons.make_rdm12(mcr)
         self.assertTrue(numpy.allclose(dmr, dm1))
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 5.89864105161976, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(dm2), 36.3246393695163, 5)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 3.8205551262007567, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 14.987267883423314, 5)
 
     def test_make_rdm1s(self):
         dm1 = mcscf.addons.make_rdm1s(mcr)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.17096923, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7015404376335805, 6)
         dm1 = mcscf.addons.make_rdm1s(mcu)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.17096923, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7015404376335805, 6)
 
     def test_sort_mo(self):
         mo1 = numpy.arange(mfr.mo_energy.size).reshape(1,-1)

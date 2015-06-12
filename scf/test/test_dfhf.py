@@ -99,7 +99,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((4,nao,nao))
         vhf = mf.get_veff(mol, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(vhf), 188.34081056589872, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(vhf), 288.09692010645102, 9)
 
 if __name__ == "__main__":
     print("Full Tests for df")

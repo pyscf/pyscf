@@ -28,8 +28,6 @@ mol.build()
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
 mf.scf()
-mo = mf.mo_coeff.copy()
-mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
 
 
 class KnowValues(unittest.TestCase):
@@ -58,8 +56,7 @@ class KnowValues(unittest.TestCase):
     def test_mc2step_9o8e_a(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
-        mo = mf.mo_coeff.copy()
-        mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
+        mo = mc.sort_mo([16,17,20,21,22,23,24,25,26])
         emc = mc.mc2step(mo)[0]
         self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
@@ -79,6 +76,7 @@ class KnowValues(unittest.TestCase):
 
     def test_mc1step_9o8e_a(self):
         mc = mcscf.CASSCF(mf, 9, 8)
+        mc.verbose =4
         mc.conv_tol = 1e-8
         mo = mf.mo_coeff.copy()
         mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
