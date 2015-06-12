@@ -34,7 +34,7 @@ class KnowValues(unittest.TestCase):
         mol2.basis = {'H': 'cc-pvdz', 'O': 'cc-pvdz'}
         mol2.build(False, False)
         mo2 = scf.addons.project_mo_nr2nr(mol, mo1, mol2)
-        self.assertAlmostEqual(abs(mo2).sum(), 108.7133838914646, 12)
+        self.assertAlmostEqual(abs(mo2).sum(), 83.342096002254607, 12)
 
     def test_project_mo_r2r(self):
         nao = mol.nao_2c()
@@ -52,7 +52,7 @@ class KnowValues(unittest.TestCase):
         mol2.basis = {'H': 'cc-pvdz', 'O': 'cc-pvdz'}
         mol2.build(False, False)
         mo2 = scf.addons.project_mo_r2r(mol, mo1, mol2)
-        self.assertAlmostEqual(abs(mo2).sum(), 2825.412778091546, 12)
+        self.assertAlmostEqual(abs(mo2).sum(), 2159.3715489514038, 12)
 
     def test_project_mo_nr2r(self):
         numpy.random.seed(15)
@@ -63,7 +63,7 @@ class KnowValues(unittest.TestCase):
         mol2.basis = {'H': 'cc-pvdz', 'O': 'cc-pvdz'}
         mol2.build(False, False)
         mo2 = scf.addons.project_mo_nr2r(mol, mo1, mol2)
-        self.assertAlmostEqual(abs(mo2).sum(), 224.6914959998213, 12)
+        self.assertAlmostEqual(abs(mo2).sum(), 172.66468850263556, 12)
 
     def test_frac_occ(self):
         mol = gto.Mole()

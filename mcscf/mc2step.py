@@ -14,6 +14,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
            dump_chk=True, dump_chk_ci=False):
     if verbose is None:
         verbose = casscf.verbose
+    if callback is None:
+        callback = casscf.callback
+
+
     log = logger.Logger(casscf.stdout, verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 2-step CASSCF')
@@ -60,8 +64,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g', \
                       imicro, norm_t, norm_gorb, norm_ddm)
 
+
             if callable(callback):
                 callback(locals())
+            
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < toloose or norm_gorb < toloose:

@@ -24,7 +24,7 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.uhf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 23.074873357239472, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 13.649710173723337, 9)
 
     def test_energy_tot(self):
         numpy.random.seed(1)
@@ -32,7 +32,7 @@ class KnowValues(unittest.TestCase):
         dm = (numpy.random.random((nao,nao)),
               numpy.random.random((nao,nao)))
         e = mf.energy_elec(dm)[0]
-        self.assertAlmostEqual(e, -9.9092383592937665, 9)
+        self.assertAlmostEqual(e, 57.122667754846844, 9)
 
     def test_mulliken_pop(self):
         numpy.random.seed(1)
@@ -40,13 +40,13 @@ class KnowValues(unittest.TestCase):
         dm = (numpy.random.random((nao,nao)),
               numpy.random.random((nao,nao)))
         pop, chg = mf.mulliken_pop(mol, dm)
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 6.641191810110950, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 8.3342045408596057, 9)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 9.4803469531219982, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 12.32518616560702, 9)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 9.5893817617320511, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 12.375953469399407, 9)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 9.4950935664854565, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 12.177668274788502, 9)
 
     def test_analyze(self):
         numpy.random.seed(5)
@@ -64,7 +64,7 @@ class KnowValues(unittest.TestCase):
         d2 = numpy.random.random((nao,nao))
         d = (d1+d1.T, d2+d2.T)
         v = scf.uhf.get_veff(mol, d)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 260.17203605790604, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 398.09239104094513, 9)
 
     def test_spin_square(self):
         self.assertAlmostEqual(mf.spin_square(mf.mo_coeff)[0], 0, 9)

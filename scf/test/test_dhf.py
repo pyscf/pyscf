@@ -24,15 +24,15 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = mf.init_guess_by_minao()
-        self.assertAlmostEqual(abs(dm).sum(), 24.811421734595683, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 14.899439258242364, 9)
 
     def test_get_hcore(self):
         h = mf.get_hcore()
-        self.assertAlmostEqual(numpy.linalg.norm(h), 134.8106114049241, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(h), 159.55593668675903, 9)
 
     def test_get_ovlp(self):
         s = mf.get_ovlp()
-        self.assertAlmostEqual(numpy.linalg.norm(s), 7.5890669376212792, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(s), 9.0156256929936056, 9)
 
     def test_1e(self):
         mf = scf.dhf.HF1e(mol)
@@ -53,7 +53,7 @@ class KnowValues(unittest.TestCase):
     def test_get_veff(self):
         dm = mf.make_rdm1()
         v = mf.get_veff(mol, dm)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 46.091738455019588, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 56.050212950364084, 9)
 
 
 if __name__ == "__main__":
