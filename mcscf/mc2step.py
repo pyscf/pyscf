@@ -67,7 +67,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
 
             if callable(callback):
                 callback(locals())
-            
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < toloose or norm_gorb < toloose:

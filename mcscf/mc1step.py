@@ -207,8 +207,12 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
 # is that JK is associated with the core DM1 and active space DM1.  The core
 # DM is not changed because eris are not changed, only the active space DM1
 # are slightly changed due to the update_casdm function
-        xsinit = [x for x in xcollect]
-        axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
+        if norm_gorb > casscf.conv_tol_grad*5e1:
+            xsinit = [x for x in xcollect]
+            axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
+        else:
+            xsinit = []
+            axinit = []
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, x0_guess,
@@ -317,16 +321,28 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
     w_t = 0
     g = g_op()
     for i,xi in enumerate(xs):
-        heff[i+1,0] = heff[0,i+1] = numpy.dot(xi, g)
         for j in range(i+1):
-            heff[i+1,j+1] = heff[j+1,i+1] = numpy.dot(xi, ax[j])
             ovlp[i+1,j+1] = ovlp[j+1,i+1] = numpy.dot(xi, xs[j])
     nvec = len(xs) + 1
+    s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+
+    if nvec > 2 and s0 < lindep:
+        xs = [x0]
+        ax = [h_op(x0)]
+        heff[0,1] = heff[1,0] = numpy.dot(x0, g)
+        heff[1,1] = heff[1,1] = numpy.dot(x0, ax[0])
+        nvec = 2
+    else:
+        for i,xi in enumerate(xs):
+            heff[i+1,0] = heff[0,i+1] = numpy.dot(xi, g)
+            for j in range(i+1):
+                heff[i+1,j+1] = heff[j+1,i+1] = numpy.dot(xi, ax[j])
     xtrial, w_t, v_t, index = \
             _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
     hx = _dgemv(v_t[1:], ax)
     # note g*v_t[0], as the first trial vector is (1,0,0,...)
     dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
+
     for istep in range(min(max_cycle,x0.size)):
         x0 = precond(dx, w_t)
         xs.append(x0)
@@ -785,7 +801,7 @@ class CASSCF(casci.CASCI):
 # ah_grad_trust_region allow gradients increase for AH optimization
 # ah_guess_space approximate the JK part of hessian from previous steps
         self.ah_grad_trust_region = 1.5
-        self.ah_guess_space = 0
+        self.ah_guess_space = 20
 
         self.chkfile = mf.chkfile
         self.ci_response_space = 2
@@ -871,7 +887,7 @@ class CASSCF(casci.CASCI):
         else:
             self.mo_coeff = mo_coeff
         if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = self.max_cycle_micro
+        if micro is None: micro = 1 # self.max_cycle_micro
         if callback is None: callback = self.callback
 
         self.mol.check_sanity(self)
@@ -1141,13 +1157,18 @@ class CASSCF(casci.CASCI):
         return self._scf.get_jk(mol, dm, hermi=1)
 
     def dump_chk(self, envs):
+        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+            civec = None
+        elif envs['dump_chk_ci']:
+            civec = envs['fcivec']
+        else:
+            civec = None
         chkfile.dump_mcscf(self.mol, self.chkfile, envs['mo'],
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
-                           ci_vector=(envs['fcivec'] if not hasattr(self.fcisolver, 'nevpt_intermediate') else None),
-    
+                           ci_vector=civec,
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
-                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])))
+                           converged=envs['conv'])
 
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
                      cas_natorb=False, verbose=None):
