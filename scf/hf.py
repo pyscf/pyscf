@@ -1246,22 +1246,21 @@ class ROHF(RHF):
         if damp_factor is None:
             damp_factor = self.damp_factor
 # Fc = (Fa+Fb)/2
-        dmsf = dm[0]+dm[1]
-        mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
         self._focka_ao = h1e + vhf[0]
         fockb_ao = h1e + vhf[1]
-        ncore = self.mol.nelectron - self.nelectron_alpha
-        nopen = self.nelectron_alpha - ncore
-        nocc = ncore + nopen
-        fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
-        fb = reduce(numpy.dot, (mo_space.T, fockb_ao, mo_space))
-        feff = (fa + fb) * .5
-        feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
-        feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
-        feff[nocc:,ncore:nocc] = fa[nocc:,ncore:nocc]
-        feff[ncore:nocc,nocc:] = fa[ncore:nocc,nocc:]
-        cinv = numpy.dot(mo_space.T, s1e)
-        f = reduce(numpy.dot, (cinv.T, feff, cinv))
+        fc = (self._focka_ao + fockb_ao) * .5
+# Projector for core, open-shell, and virtual
+        nao = s1e.shape[0]
+        pc = numpy.dot(dm[1], s1e)
+        po = numpy.dot(dm[0]-dm[1], s1e)
+        pv = numpy.eye(nao) - numpy.dot(dm[0], s1e)
+        f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
+        f += reduce(numpy.dot, (po.T, fc, po)) * .5
+        f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
+        f += reduce(numpy.dot, (po.T, fockb_ao, pc))
+        f += reduce(numpy.dot, (po.T, self._focka_ao, pv))
+        f += reduce(numpy.dot, (pv.T, fc, pc))
+        f = f + f.T
 
         if 0 <= cycle < diis_start_cycle-1:
             f = damping(s1e, dm[0], f, damp_factor)
