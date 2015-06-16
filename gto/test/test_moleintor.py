@@ -55,37 +55,37 @@ def finger(mat):
 class KnowValues(unittest.TestCase):
     def test_intor_nr(self):
         s = mol.intor('cint1e_ovlp_sph')
-        self.assertAlmostEqual(finger(s), 497.34740945610434, 11)
+        self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr1(self):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
-        self.assertAlmostEqual(finger(s), 497.34740945610434, 11)
+        self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr2(self):
         s = mol.intor_asymmetric('cint1e_ovlp_sph')
-        self.assertAlmostEqual(finger(s), 497.34740945610434, 11)
+        self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr_cross(self):
         bra = range(mol.nbas//4)
         ket = range(mol.nbas//4, mol.nbas)
         s = mol.intor_cross('cint1e_ovlp_sph', bra, ket)
-        self.assertAlmostEqual(finger(s), 80.608860927958361, 11)
+        self.assertAlmostEqual(finger(s), 99.38188078749701, 11)
 
     def test_intor_r(self):
         s = mol.intor('cint1e_ovlp')
-        self.assertAlmostEqual(finger(s), 1282.9000123790504, 11)
+        self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
 
     def test_intor_r1(self):
         s = mol.intor_symmetric('cint1e_ovlp')
-        self.assertAlmostEqual(finger(s), 1282.9000123790504, 11)
+        self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
 
     def test_intor_r2(self):
         s = mol.intor_asymmetric('cint1e_ovlp')
-        self.assertAlmostEqual(finger(s), 1282.9000123790504, 11)
+        self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
 
     def test_intor_r_comp(self):
         s = mol.intor('cint1e_ipkin', comp=3)
-        self.assertAlmostEqual(finger(s), 3070.844024815065, 11)
+        self.assertAlmostEqual(finger(s), 4409.86758420756, 11)
 
 
 if __name__ == "__main__":

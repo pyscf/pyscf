@@ -6,5 +6,5 @@ set_target_properties(ao2mo PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(ao2mo cvhf cint ${BLAS_LIBRARIES})
+target_link_libraries(ao2mo cvhf cint np_helper ${BLAS_LIBRARIES})
 

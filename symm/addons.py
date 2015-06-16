@@ -6,7 +6,7 @@ from functools import reduce
 import numpy
 import pyscf.lib.logger
 
-def label_orb_symm(mol, irrep_name, symm_orb, mo):
+def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None):
     ''' Label the symmetry of given orbitals
 
     irrep_name can be either the symbol or the ID of the irreducible
@@ -40,7 +40,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo):
     [0, 5, 0, 5, 6, 7, 0, 2, 3, 5]
     '''
     nmo = mo.shape[1]
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    if s is None:
+        s = mol.intor_symmetric('cint1e_ovlp_sph')
     mo_s = numpy.dot(mo.T, s)
     orbsym = [None] * nmo
     for i,ir in enumerate(irrep_name):
@@ -54,7 +55,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo):
     pyscf.lib.logger.debug(mol, 'irreps of each MO %s', str(orbsym))
     return orbsym
 
-def symmetrize_orb(mol, irrep_name, symm_orb, mo):
+def symmetrize_orb(mol, symm_orb, mo):
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     mo_s = numpy.dot(mo.T, s)
     mo1 = 0

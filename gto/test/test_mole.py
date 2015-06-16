@@ -11,7 +11,7 @@ mol0.atom = [
     [1  , (0.,1.,1.)],  # D
     ["O1", (0.,0.,0.)],
     [1  , (1.,1.,0.)], ] # H
-mol0.nucmod = { "O":param.MI_NUC_GAUSS, 3:param.MI_NUC_GAUSS }
+mol0.nucmod = { "O":'gaussian', 3:'g' }
 mol0.mass = { "O":18, 1:3 }
 mol0.basis = {
     "O": [(0, 0, (15, 1)), ],
@@ -51,7 +51,7 @@ C    SP
                       'H': '6-31g'}
         mol1.build()
         v = gto.mole.intor_cross('cint1e_ovlp_sph', mol0, mol1)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 7.3215230702679968, 1)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 3.6489423434168562, 1)
 
     def test_num_basis(self):
         self.assertEqual(mol0.nao_nr(), 34)

@@ -13,11 +13,11 @@
 #              MO integrals
 #
 
-import os
+import sys
 import ctypes
 import numpy
-import scipy.linalg
 import pyscf.lib
+import pyscf.gto
 import pyscf.symm
 import pyscf.ao2mo
 from pyscf.fci import cistring
@@ -106,7 +106,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.max_cycle = max_cycle
 
     unknown = []
-    for k, v in kwargs:
+    for k, v in kwargs.items():
         setattr(cis, k, v)
         if not hasattr(cis, k):
             unknown.append(k)
@@ -170,12 +170,6 @@ class FCISolver(direct_spin1.FCISolver):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
-    def eig(self, op, x0, precond, **kwargs):
-        return pyscf.lib.davidson(op, x0, precond, self.conv_tol,
-                                  self.max_cycle, self.max_space, self.lindep,
-                                  self.max_memory, verbose=self.verbose,
-                                  **kwargs)
-
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                                 self.level_shift)
@@ -184,7 +178,8 @@ class FCISolver(direct_spin1.FCISolver):
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        self.mol.check_sanity(self)
+        if self.verbose > pyscf.lib.logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
         return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                        **kwargs)
 
@@ -193,33 +188,38 @@ class FCISolver(direct_spin1.FCISolver):
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
-    def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
 
-    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index,
+                                        reorder)
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index,
+                                       reorder)
 
-    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
+                     reorder=True):
+        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index,
+                                         reorder)
 
-    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
+                    reorder=True):
+        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index,
+                                        reorder)
 
 
 if __name__ == '__main__':
-    import time
     from functools import reduce
     from pyscf import gto
     from pyscf import scf

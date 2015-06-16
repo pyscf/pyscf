@@ -4,7 +4,7 @@
 
 import os
 import imp
-import pyscf.gto.basis.parse_nwchem
+from pyscf.gto.basis import parse_nwchem
 
 def parse(string):
     '''Parse the basis text which is in NWChem format, return an internal
@@ -28,7 +28,7 @@ def parse(string):
     ...       0.2222899              0.70011547             0.39195739
     ... """)}
     '''
-    return pyscf.gto.basis.parse_nwchem.parse_str(string)
+    return parse_nwchem.parse_str(string)
 
 def load(basis_name, symb):
     '''Convert the basis of the given symbol to internal format
@@ -72,11 +72,7 @@ def load(basis_name, symb):
         '6311gs'     : '6-311gs.dat'    ,
         '6311gsp'    : '6-311gsp.dat'   ,
         '6311gps'    : '6-311gsp.dat'   ,
-        '321g'       : '3-21g.dat'      ,
-        '431g'       : '4-31g.dat'      ,
-        '631g'       : '6-31g.dat'      ,
         '631g*'      : '6-31gs.dat'     ,
-        '6311g'      : '6-311g.dat'     ,
         '6311g*'     : '6-311gs.dat'    ,
         '6311g*+'    : '6-311gsp.dat'   ,
         '6311g+*'    : '6-311gsp.dat'   ,

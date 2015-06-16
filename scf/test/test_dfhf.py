@@ -74,7 +74,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
-        mf = scf.density_fit_(scf.RHF(mol))
+        mf = scf.density_fit(scf.RHF(mol))
         vhf1 = mf.get_veff(mol, dm, hermi=0)
         naux = mf._cderi.shape[0]
         cderi = numpy.empty((naux,nao,nao))
@@ -99,7 +99,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((4,nao,nao))
         vhf = mf.get_veff(mol, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(vhf), 188.34081056589872, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(vhf), 288.09692010645102, 9)
 
 if __name__ == "__main__":
     print("Full Tests for df")

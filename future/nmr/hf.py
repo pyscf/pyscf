@@ -13,6 +13,7 @@ import time
 from functools import reduce
 import numpy
 import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
 import pyscf.lib.parameters as param
 import pyscf.scf
@@ -42,8 +43,8 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
             h11 = h11 + g11[numpy.array((0,3,6,1,4,7,2,5,8))]
         a11 = [numpy.einsum('ij,ji', dm0, (x+x.T)*.5) for x in h11]
         msc_dia.append(a11)
-        # param.MI_POS XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-        #           => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
+        #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
+        #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
@@ -86,7 +87,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
 
 def make_h10giao(mol, dm0):
     vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
-                               'a4ij', ('kl->s1ij', 'kj->s1il'),
+                               'a4ij', ('lk->s1ij', 'jk->s1il'),
                                dm0, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
 # J = i[(i i|\mu g\nu) + (i gi|\mu \nu)]
@@ -213,13 +214,14 @@ class NMR(object):
         if self.cphf:
             logger.info(self, 'Solving MO10 eq. with CPHF')
         if not self._scf.converged:
-            log.warn(self, 'underneath SCF of NMR not converged')
+            logger.warn(self, 'underneath SCF of NMR not converged')
         logger.info(self, '\n')
 
     def shielding(self, mo1=None):
-        cput0 = t1 = (time.clock(), time.time())
+        cput0 = (time.clock(), time.time())
         self.dump_flags()
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         facppm = 1e6/param.LIGHTSPEED**2
         msc_para, para_vir, para_occ = [x*facppm for x in self.para_(mo10=mo1)]
@@ -248,7 +250,7 @@ class NMR(object):
         return dia(mol, dm0, gauge_orig, shielding_nuc)
 
     def para(self, *args, **kwargs):
-        return para(*args, **kwargs)
+        return self.para_(*args, **kwargs)
     def para_(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
               shielding_nuc=None):
         if mol is None:           mol = self.mol

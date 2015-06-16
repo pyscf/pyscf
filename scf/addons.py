@@ -2,12 +2,12 @@
 
 from functools import reduce
 import numpy
-import pyscf.gto.mole as mole
-import pyscf.gto.moleintor as moleintor
-import pyscf.lib.logger as log
+from pyscf.gto import mole
+from pyscf.gto import moleintor
+from pyscf.lib import logger
 import pyscf.symm
 from pyscf.scf import hf
-from pyscf.scf import chkfile
+
 
 def frac_occ(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
@@ -22,13 +22,14 @@ def frac_occ(mf, tol=1e-3):
             ndocc = nocc - int(lst[:nocc].sum())
             frac = 2.*(nocc-ndocc)/nsocc
             mo_occ[nsocc:ndocc] = frac
-            log.warn(mf, 'fraction occ = %6g, [%d:%d]', frac, ndocc, ndocc+nsocc)
+            logger.warn(mf, 'fraction occ = %6g  [%d:%d]',
+                        frac, ndocc, ndocc+nsocc)
         if nocc < mo_occ.size:
-            log.info(mf, 'HOMO = %.12g, LUMO = %.12g,', \
-                      mo_energy[nocc-1], mo_energy[nocc])
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                        mo_energy[nocc-1], mo_energy[nocc])
         else:
-            log.info(mf, 'HOMO = %.12g,', mo_energy[nocc-1])
-        log.debug(mf, '  mo_energy = %s', mo_energy)
+            logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
 def frac_occ_(mf, tol=1e-3):
@@ -46,13 +47,13 @@ def dynamic_occ(mf, tol=1e-3):
             lst = abs(mo_energy - mo_energy[nocc-1]) < tol
             ndocc = nocc - int(lst[:nocc].sum())
             mo_occ[ndocc:nocc] = 0
-            log.warn(mf, 'set charge = %d', mol.charge+(nocc-ndocc)*2)
+            logger.warn(mf, 'set charge = %d', mol.charge+(nocc-ndocc)*2)
         if nocc < mo_occ.size:
-            log.info(mf, 'HOMO = %.12g, LUMO = %.12g,', \
-                      mo_energy[nocc-1], mo_energy[nocc])
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                        mo_energy[nocc-1], mo_energy[nocc])
         else:
-            log.info(mf, 'HOMO = %.12g,', mo_energy[nocc-1])
-        log.debug(mf, '  mo_energy = %s', mo_energy)
+            logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
 def dynamic_occ_(mf, tol=1e-3):
@@ -69,10 +70,10 @@ def float_occ(mf):
         n_a = int((mo_energy[0]<(ee[mol.nelectron-1]+1e-3)).sum())
         n_b = mol.nelectron - n_a
         if n_a != mf.nelectron_alpha:
-            log.info(mf, 'change num. alpha/beta electrons ' \
-                     ' %d / %d -> %d / %d', \
-                     mf.nelectron_alpha,
-                     mol.nelectron-mf.nelectron_alpha, n_a, n_b)
+            logger.info(mf, 'change num. alpha/beta electrons '
+                        ' %d / %d -> %d / %d',
+                        mf.nelectron_alpha,
+                        mol.nelectron-mf.nelectron_alpha, n_a, n_b)
             mf.nelectron_alpha = n_a
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     return get_occ
@@ -95,20 +96,20 @@ break symmetry as the occupied orbitals'''
             mo_occ[ndocc:nocc] = 0
             i = ndocc
             nmo = len(mo_energy)
-            log.info(mf, 'symm_allow_occ [:%d] = 2', ndocc)
+            logger.info(mf, 'symm_allow_occ [:%d] = 2', ndocc)
             while i < nmo and nocc_left > 0:
                 deg = (abs(mo_energy[i:i+5]-mo_energy[i]) < tol).sum()
                 if deg <= nocc_left:
                     mo_occ[i:i+deg] = 2
                     nocc_left -= deg
-                    log.info(mf, 'symm_allow_occ [%d:%d] = 2, energy = %.12g',
-                             i, i+nocc_left, mo_energy[i])
+                    logger.info(mf, 'symm_allow_occ [%d:%d] = 2, energy = %.12g',
+                                i, i+nocc_left, mo_energy[i])
                     break
                 else:
                     i += deg
-        log.info(mf, 'HOMO = %.12g, LUMO = %.12g,', \
-                  mo_energy[nocc-1], mo_energy[nocc])
-        log.debug(mf, '  mo_energy = %s', mo_energy)
+        logger.info(mf, 'HOMO = %.12g, LUMO = %.12g,',
+                    mo_energy[nocc-1], mo_energy[nocc])
+        logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     return get_occ
 def symm_allow_occ_(mf, tol=1e-3):
@@ -128,8 +129,8 @@ def follow_state(mf, occorb=None):
             #choose a subset of mo_coeff, which maximizes <old|now>
             idx = numpy.argsort(numpy.einsum('ij,ij->j', s, s))
             mo_occ[idx[-nocc:]] = 2
-            log.debug(mf, '  mo_occ = %s', mo_occ)
-            log.debug(mf, '  mo_energy = %s', mo_energy)
+            logger.debug(mf, '  mo_occ = %s', mo_occ)
+            logger.debug(mf, '  mo_energy = %s', mo_energy)
         occstat[0] = mo_coeff[:,mo_occ>0]
         return mo_occ
     return get_occ

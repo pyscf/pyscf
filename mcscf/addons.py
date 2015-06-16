@@ -2,11 +2,10 @@
 
 from functools import reduce
 import numpy
-import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
 import pyscf.fci
-from pyscf.tools.mo_mapping import mo_1to1map
+
 
 def sort_mo(casscf, mo_coeff, caslst, base=1):
     '''Pick orbitals for CAS space
@@ -111,7 +110,6 @@ def project_init_guess(casscf, init_mo):
             print('E(%2.1f) = %.12f' % (b, mc.kernel(mo)[0]))
             init_mo = mc.mo_coeff
     '''
-    from pyscf import scf
     from pyscf import lo
 
     def project(mfmo, init_mo, ncore, s):
@@ -128,7 +126,7 @@ def project_init_guess(casscf, init_mo):
         if casscf.verbose >= logger.DEBUG:
             nocc = ncore + casscf.ncas
             s = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
-            idx = numpy.argwhere(abs(s) > 0.5)
+            idx = numpy.argwhere(abs(s) > 0.4)
             for i,j in idx:
                 logger.debug(casscf, 'Init guess <mo-CAS|mo-hf>  %d  %d  %12.8f',
                              ncore+i+1, j+1, s[i,j])
@@ -145,17 +143,6 @@ def project_init_guess(casscf, init_mo):
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
-
-def _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, docc=True):
-    nocc = ncas + ncore
-    dm1 = numpy.zeros((nmo,nmo))
-    idx = numpy.arange(ncore)
-    if docc:
-        dm1[idx,idx] = 2
-    else:
-        dm1[idx,idx] = 1
-    dm1[ncore:nocc,ncore:nocc] = casdm1
-    return dm1
 
 # on AO representation
 def make_rdm1(casscf, mo_coeff=None, ci=None):
@@ -184,46 +171,13 @@ def make_rdm1(casscf, mo_coeff=None, ci=None):
     [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
       2.          2.          2.          2.        ]
     '''
-    if ci is None: ci = casscf.ci
-    if mo_coeff is None:
-        mo_coeff = casscf.mo_coeff
-    if _is_uhf_mo(mo_coeff):
-        return sum(make_rdm1s(casscf, ci, mo_coeff))
-    nelecas = casscf.nelecas
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    nmo = mo_coeff.shape[1]
-    casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
-    rdm1 = _make_rdm1_on_mo(casdm1, ncore, ncas, nmo, True)
-    rdm1 = reduce(numpy.dot, (mo_coeff, rdm1, mo_coeff.T))
-    return rdm1
+    return casscf.make_rdm1(mo_coeff, ci)
 
 # make both alpha and beta density matrices
 def make_rdm1s(casscf, mo_coeff=None, ci=None):
     '''Alpha and beta one-particle densit matrices in AO representation
     '''
-    if ci is None: ci = casscf.ci
-    if mo_coeff is None:
-        mo_coeff = casscf.mo_coeff
-    if _is_uhf_mo(mo_coeff):
-        nmo = mo_coeff[0].shape[1]
-    else:
-        nmo = mo_coeff.shape[1]
-    nelecas = casscf.nelecas
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    rdm1a, rdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
-    if _is_uhf_mo(mo_coeff):
-        rdm1a = _make_rdm1_on_mo(rdm1a, ncore[0], ncas, nmo, False)
-        rdm1b = _make_rdm1_on_mo(rdm1b, ncore[1], ncas, nmo, False)
-        rdm1a = reduce(numpy.dot, (mo_coeff[0], rdm1a, mo_coeff[0].T))
-        rdm1b = reduce(numpy.dot, (mo_coeff[1], rdm1b, mo_coeff[1].T))
-    else:
-        rdm1a = _make_rdm1_on_mo(rdm1a, ncore, ncas, nmo, False)
-        rdm1b = _make_rdm1_on_mo(rdm1b, ncore, ncas, nmo, False)
-        rdm1a = reduce(numpy.dot, (mo_coeff, rdm1a, mo_coeff.T))
-        rdm1b = reduce(numpy.dot, (mo_coeff, rdm1b, mo_coeff.T))
-    return rdm1a, rdm1b
+    return casscf.make_rdm1s(mo_coeff, ci)
 
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
@@ -273,14 +227,14 @@ def get_fock(casscf, mo_coeff=None, ci=None):
     else:
         return casscf.get_fock(mo_coeff, ci)
 
-def cas_natorb(casscf, mo_coeff=None, ci=None):
+def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
     '''Restore natrual orbitals
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
         raise RuntimeError('TODO: UCAS natrual orbitals')
     else:
-        return casscf.cas_natorb(mo_coeff, ci)
+        return casscf.cas_natorb(mo_coeff, ci, sort=sort)
 
 def map2hf(casscf, mf_mo=None, base=1, tol=.5):
     '''The overlap between the CASSCF optimized orbitals and the canonical HF orbitals.
@@ -314,7 +268,6 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     S^2 = 3.9831589, 2S+1 = 4.1149284
     '''
     from pyscf import scf
-    from pyscf import fci
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ovlp is None: ovlp = casscf._scf.get_ovlp()
@@ -324,14 +277,14 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     if isinstance(ncore, (int, numpy.integer)):
         nocc = ncore + ncas
         mocas = mo_coeff[:,ncore:nocc]
-        return fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        return pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
     else:
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
-        sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        sscas = pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
         mocore = (mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
         sscore = scf.uhf.spin_square(mocore, ovlp)
-        logger.debug(casscf, 'S^2 of core %f, S^2 of cas %f', sscore[0], sscas[0])
+        logger.debug(casscf, 'S^2 of core %f  S^2 of cas %f', sscore[0], sscas[0])
         ss = sscas[0]+sscore[0]
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1

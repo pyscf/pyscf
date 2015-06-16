@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
 import tempfile
 import numpy
@@ -12,8 +11,9 @@ import pyscf.lib
 
 libao2mo = pyscf.lib.load_library('libao2mo')
 
-class load:
+class load(object):
     '''load 2e integrals from hdf5 file
+
     Usage:
         with load(erifile) as eri:
             print eri.shape
@@ -115,9 +115,9 @@ def restore(symmetry, eri, norb, tao=None):
         elif targetsym == '2ij':
             raise KeyError('TODO')
     elif eri.size == npair*norb**2 and eri.shape[0] == npair:
-            raise KeyError('TODO')
+        raise KeyError('TODO')
     elif eri.size == npair*norb**2 and eri.shape[-1] == npair:
-            raise KeyError('TODO')
+        raise KeyError('TODO')
     else:
         raise ValueError('eri.size = %d, norb = %d' % (eri.size, norb))
 

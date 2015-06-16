@@ -117,7 +117,7 @@ def real2spinor_whole(mol):
     return ua, ub
 
 def cart2spinor(l):
-    pass
+    raise RuntimeError('TODO')
 
 
 if __name__ == '__main__':

@@ -3,15 +3,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import time
 from functools import reduce
 import numpy
-import scipy.linalg
-import h5py
-import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
-import pyscf.scf
+from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.tools.mo_mapping import mo_1to1map
@@ -54,7 +51,6 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     from pyscf.tools import dump_mat
-    from pyscf.mcscf import mc_ao2mo
     from pyscf.mcscf import addons
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ci is None: ci = casscf.ci
@@ -66,23 +62,24 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncore + ncas
-    nmo = mo_coeff.shape[1]
 
     casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
-    dm1a = addons._make_rdm1_on_mo(casdm1a, ncore, ncas, nmo, False)
-    dm1b = addons._make_rdm1_on_mo(casdm1b, ncore, ncas, nmo, False)
-    dm1a = reduce(numpy.dot, (mo_coeff, dm1a, mo_coeff.T))
-    dm1b = reduce(numpy.dot, (mo_coeff, dm1b, mo_coeff.T))
+    mocore = mo_coeff[:,:ncore]
+    mocas = mo_coeff[:,ncore:nocc]
+    dm1b = numpy.dot(mocore, mocore.T)
+    dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+    dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
 
     if log.verbose >= logger.INFO:
-        label = ['%d%3s %s%-4s' % x for x in casscf.mol.spheric_labels()]
+        label = casscf.mol.spheric_labels(True)
         if log.verbose >= logger.DEBUG:
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1a, label)
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label)
 
-        occ, ucas = scipy.linalg.eigh(-(casdm1a+casdm1b))
+        # note the last two args of ._eig for mc1step_symm
+        occ, ucas = casscf._eig(-(casdm1a+casdm1b), ncore, nocc)
         log.info('Natural occ %s', str(-occ))
         for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
             if ucas[k,i] < 0:
@@ -95,7 +92,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
                                casscf._scf.mo_coeff))
         idx = numpy.argwhere(abs(s)>.4)
         for i,j in idx:
-            log.info('<mo-mcscf|mo-hf> %d, %d, %12.8f' % (i+1,j+1,s[i,j]))
+            log.info('<mo-mcscf|mo-hf> %d  %d  %12.8f', i+1, j+1, s[i,j])
 
         log.info('** Largest CI components **')
         log.info(' string alpha, string beta, CI coefficients')
@@ -115,7 +112,6 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
-    ncore = mc.ncore
     ncas = mc.ncas
     nelecas = mc.nelecas
 
@@ -126,10 +122,25 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     fock = h1 + eris.vhf_c + vj - vk * .5
     return fock
 
-def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
-    '''Restore natrual orbitals
+def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
+               verbose=None):
+    '''Transform active orbitals to natrual orbitals, and update the CI wfn
+
+    Args:
+        mc : a CASSCF/CASCI object or RHF object
+
+        sort : bool
+            Sort natural orbitals wrt the occupancy.  Be careful with this
+            option since the resultant natural orbitals might have the
+            different symmetry to the irreps indicated by CASSCF.orbsym
+
+    Returns:
+        A tuple, the first item is natural orbitals, the second is updated CI
+        coefficients, the third is the natural occupancy associated to the
+        natural orbitals.
     '''
     from pyscf.mcscf import mc_ao2mo
+    from pyscf.tools import dump_mat
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -142,19 +153,16 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     nocc = ncore + ncas
     nelecas = mc.nelecas
     casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
-    occ, ucas = scipy.linalg.eigh(-casdm1)
+    occ, ucas = mc._eig(-casdm1, ncore, nocc)
+    if sort:
+        idx = numpy.argsort(occ)
+        occ = occ[idx]
+        ucas = ucas[:,idx]
+        if hasattr(mc, 'orbsym'): # for casci_symm
+            mc.orbsym[ncore:nocc] = mc.orbsym[ncore:nocc][idx]
+            mc.fcisolver.orbsym = mc.orbsym[ncore:nocc]
+
     occ = -occ
-    log.info('Natural occ %s', str(occ))
-# restore phase
-    for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
-        if ucas[k,i] < 0:
-            ucas[:,i] *= -1
-    mo_coeff1 = mo_coeff.copy()
-    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
-    if log.verbose >= logger.INFO:
-        log.info('Natural orbital in CAS space')
-        label = ['%d%3s %s%-4s' % x for x in mc.mol.spheric_labels()]
-        dump_mat.dump_rec(log.stdout, mo_coeff1[:,ncore:nocc], label, start=1)
 
 # where_natorb gives the location of the natural orbital for the input cas
 # orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
@@ -162,7 +170,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
 #       CAS orbital      1  2  3
 #       natural orbital  3  1  2        <= by mo_1to1map
 #       CASorb-strings   0b011, 0b101, 0b110
-#                    ==  (1,2), (1,3), (2,3) 
+#                    ==  (1,2), (1,3), (2,3)
 #       natorb-strings   (3,1), (3,2), (1,2)
 #                    ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
 # then argsort to translate the string representation to the address
@@ -176,6 +184,26 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
     ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
 
+# restore phase, to ensure the reordered ci vector is the correct initial guess
+    for i, k in enumerate(where_natorb):
+        if ucas[i,k] < 0:
+            ucas[:,k] *= -1
+    mo_coeff1 = mo_coeff.copy()
+    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+    if log.verbose >= logger.INFO:
+        log.debug('where_natorb %s', str(where_natorb))
+        log.info('Natural occ %s', str(occ))
+        log.info('Natural orbital in CAS space')
+        label = mc.mol.spheric_labels(True)
+        dump_mat.dump_rec(log.stdout, mo_coeff1[:,ncore:nocc], label, start=1)
+
+        s = reduce(numpy.dot, (mo_coeff1[:,ncore:nocc].T, mc._scf.get_ovlp(),
+                               mc._scf.mo_coeff))
+        idx = numpy.argwhere(abs(s)>.4)
+        for i,j in idx:
+            log.info('<CAS-nat-orb|mo-hf>  %d  %d  %12.8f',
+                     ncore+i+1, j+1, s[i,j])
+
     h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, mc.get_hcore(),
                                mo_coeff[:,ncore:nocc]))
           + eris.vhf_c[ncore:nocc,ncore:nocc])
@@ -186,17 +214,21 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
     return mo_coeff1, fcivec, occ
 
-def canonicalize(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
-    #mo_coeff, ci = cas_natorb(mc, mo_coeff, ci, eris, verbose=verbose)[:2]
+def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
+                 cas_natorb=False, verbose=None):
+    if cas_natorb:
+        mo_coeff, ci = cas_natorb(mc, mo_coeff, ci, eris, sort, verbose=verbose)[:2]
     return mo_coeff, ci
 
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''CASCI solver
     '''
-    if verbose is None: verbose = casci.verbose
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(casci.stdout, verbose)
     if mo_coeff is None: mo_coeff = casci.mo_coeff
-    log = pyscf.lib.logger.Logger(casci.stdout, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start CASCI')
 
@@ -215,11 +247,11 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=None, **cikwargs):
 
     # FCI
     e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
-                                           ci0=ci0, **cikwargs)
+                                           ci0=ci0, verbose=log)
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    log.note('CASCI E = %.15g, E(CI) = %.15g', e_tot, e_cas)
+    log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -283,7 +315,6 @@ class CASCI(object):
         self.max_memory = mf.max_memory
         self.ncas = ncas
         if isinstance(nelecas, (int, numpy.integer)):
-            assert(nelecas%2 == 0)
             nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
             self.nelecas = (neleca, nelecb)
@@ -312,7 +343,7 @@ class CASCI(object):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** CASCI flags ********')
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
@@ -321,7 +352,7 @@ class CASCI(object):
         log.info('max_memory %d (MB)', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
-        except:
+        except AttributeError:
             pass
 
     def get_hcore(self, mol=None):
@@ -332,14 +363,17 @@ class CASCI(object):
         if dm is None:
             mocore = self.mo_coeff[:,:self.ncore]
             dm = numpy.dot(mocore, mocore.T) * 2
-# don't call self._scf.get_veff, because ROHF return alpha,beta potential separately
+# don't call self._scf.get_veff, _scf object might be from DFT
         vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
         return vj - vk * .5
 
+    def _eig(self, h, *args):
+        return scf.hf.eig(h, None)
+
     def get_h2cas(self, mo_coeff=None):
-        return self.ao2mo(self, mo_coeff)
+        return self.ao2mo(mo_coeff)
     def get_h2eff(self, mo_coeff=None):
-        return self.ao2mo(self, mo_coeff)
+        return self.ao2mo(mo_coeff)
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
@@ -362,7 +396,7 @@ class CASCI(object):
 
     def kernel(self, *args, **kwargs):
         return self.casci(*args, **kwargs)
-    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+    def casci(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -370,34 +404,75 @@ class CASCI(object):
         if ci0 is None:
             ci0 = self.ci
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
-    def cas_natorb(self, mo_coeff=None, ci=None, eris=None, verbose=None):
-        return cas_natorb(self, mo_coeff, ci, eris, verbose)
-    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
-        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris, verbose)
-        return self.ci, self.mo_coeff
+    def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                   verbose=None):
+        return cas_natorb(self, mo_coeff, ci, eris, sort, verbose)
+    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                    verbose=None):
+        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
+                                                 sort, verbose)
+        return self.mo_coeff, self.ci, occ
 
     def get_fock(self, mo_coeff=None, ci=None, eris=None, verbose=None):
         return get_fock(self, mo_coeff, ci, eris, verbose)
 
-    def canonicalize(self, mo_coeff=None, ci=None, eris=None, verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, verbose=verbose)
-    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, verbose=None):
+    def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                     cas_natorb=False, verbose=None):
+        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
+    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                      cas_natorb=False, verbose=None):
         self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              verbose=verbose)
+                                              sort, cas_natorb, verbose)
         return self.mo_coeff, self.ci
 
     def analyze(self, mo_coeff=None, ci=None):
         log = logger.Logger(self.stdout, self.verbose)
         return analyze(self, mo_coeff, ci, verbose=log)
 
+    def sort_mo(self, caslst, mo_coeff=None, base=1):
+        from pyscf.mcscf import addons
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo(self, mo_coeff, caslst, base)
+
+    def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
+                   ncore=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if ncas is None: ncas = self.ncas
+        if nelecas is None: nelecas = self.nelecas
+        if ncore is None: ncore = self.ncore
+
+        casdm1a, casdm1b = self.fcisolver.make_rdm1s(ci, ncas, nelecas)
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:ncore+ncas]
+        dm1b = numpy.dot(mocore, mocore.T)
+        dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+        return dm1a, dm1b
+
+    def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
+                  ncore=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci is None: ci = self.ci
+        if ncas is None: ncas = self.ncas
+        if nelecas is None: nelecas = self.nelecas
+        if ncore is None: ncore = self.ncore
+
+        casdm1 = self.fcisolver.make_rdm1(ci, ncas, nelecas)
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:ncore+ncas]
+        dm1 = numpy.dot(mocore, mocore.T) * 2
+        dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T))
+        return dm1
 
 
 if __name__ == '__main__':

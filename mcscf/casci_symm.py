@@ -3,11 +3,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
-import time
-import numpy
-import h5py
 import pyscf.lib
+import pyscf.gto
 from pyscf.lib import logger
 import pyscf.symm
 import pyscf.scf
@@ -23,7 +20,7 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 
-    def casci(self, mo_coeff=None, ci0=None, **cikwargs):
+    def casci(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -31,7 +28,8 @@ class CASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        self.mol.check_sanity(self)
+        if self.verbose > logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.dump_flags()
 
@@ -39,7 +37,8 @@ class CASCI(casci.CASCI):
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
                                                 self.mol.symm_orb,
-                                                self.mo_coeff)
+                                                self.mo_coeff,
+                                                s=self._scf.get_ovlp())
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
             ncore = self.ncore
@@ -47,7 +46,7 @@ class CASCI(casci.CASCI):
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
         self.e_tot, e_cas, self.ci = \
-                casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose, **cikwargs)
+                casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
 
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)

@@ -9,10 +9,10 @@ import gc
 import time
 import math
 import itertools
-from functools import reduce
 import numpy
+import ctypes
 import pyscf.lib.parameters as param
-import pyscf.lib.logger as log
+from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
@@ -31,6 +31,21 @@ def M(**kwargs):
     mol = Mole()
     mol.build_(**kwargs)
     return mol
+
+def _gaussian_int(n, alpha):
+    r'''int_0^inf x^n exp(-alpha x^2) dx'''
+    if hasattr(math, 'gamma'):
+        n1 = (n + 1) * .5
+        return math.gamma(n1) / (2. * alpha**n1)
+    else:
+        assert(isinstance(n, int))
+        n1 = (n + 1) * .5
+        if n % 2:
+            return math.factorial(n1-1) / (2. * alpha**n1)
+        else:
+            gamma = (math.factorial(n-1) / (math.factorial(n//2-1) * 2.**(n-1))
+                     * 1.7724538509055159)
+            return gamma / (2. * alpha**n1)
 
 def gto_norm(l, expnt):
     r'''Normalized factor for GTO   :math:`g=r^l e^{-\alpha r^2}`
@@ -57,11 +72,53 @@ def gto_norm(l, expnt):
     2.5264751109842591
     '''
     if l >= 0:
-        f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
-                / (math.factorial(2*l+2) * math.sqrt(math.pi))
-        return math.sqrt(f)
+        #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
+        #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
+        #return math.sqrt(f)
+        return 1/numpy.sqrt(_gaussian_int(l*2+2, 2*expnt))
     else:
         raise ValueError('l should be > 0')
+
+def cart2sph(l):
+    '''Cartesian to real spheric transformation matrix'''
+    nf = (l+1)*(l+2)//2
+    cmat = numpy.eye(nf)
+    if l in (0, 1):
+        return cmat
+    else:
+        nd = l * 2 + 1
+        c2sph = numpy.zeros((nf,nd), order='F')
+        fn = moleintor._cint.CINTc2s_ket_sph
+        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+           cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
+        return c2sph
+
+def cart2j_kappa(kappa):
+    '''Cartesian to spinor, indexed by kappa'''
+    assert(kappa != 0)
+    if kappa < 0:
+        l = -kappa - 1
+        nd = l * 2 + 2
+    else:
+        l = kappa
+        nd = l * 2
+    nf = (l+1)*(l+2)//2
+    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    cmat = numpy.eye(nf)
+    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l),
+       ctypes.c_int(kappa))
+    return c2spinor
+
+def cart2j_l(l):
+    '''Cartesian to spinor, indexed by l'''
+    nf = (l+1)*(l+2)//2
+    nd = l * 4 + 2
+    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    cmat = numpy.eye(nf)
+    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
+       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l), ctypes.c_int(0))
+    return c2spinor
 
 def atom_types(atoms, basis=None):
     atmgroup = {}
@@ -71,8 +128,7 @@ def atom_types(atoms, basis=None):
         elif basis is None:
             atmgroup[a[0]] = [ia]
         else:
-            rawsymb = _rm_digit(a[0])
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            stdsymb = _std_symbol(a[0])
             if a[0] in basis:
                 if stdsymb in basis and basis[a[0]] == basis[stdsymb]:
                     if stdsymb in atmgroup:
@@ -122,8 +178,7 @@ def format_atom(atoms, origin=0, axes=1):
             symb = param.ELEMENTS[int(dat[0])][0]
         else:
             rawsymb = _rm_digit(dat[0])
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-            symb = dat[0].replace(rawsymb, stdsymb)
+            symb = dat[0].replace(rawsymb, _std_symbol(rawsymb))
         c = numpy.array([float(x) for x in dat[1:4]]) - origin
         return [symb, numpy.dot(axes, c).tolist()]
 
@@ -141,8 +196,7 @@ def format_atom(atoms, origin=0, axes=1):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
                     rawsymb = _rm_digit(atom[0])
-                    stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-                    symb = atom[0].replace(rawsymb, stdsymb)
+                    symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
                     c = numpy.array(atom[1:4]) - origin
                 else:
@@ -178,11 +232,11 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom in basis_tab.keys():
         symb = _symbol(atom)
+        rawsymb = _rm_digit(symb)
+        stdsymb = _std_symbol(rawsymb)
+        symb = symb.replace(rawsymb, stdsymb)
 
         if isinstance(basis_tab[atom], str):
-            rawsymb = _rm_digit(symb)
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
-            symb = symb.replace(rawsymb, stdsymb)
             fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
         else:
             fmt_basis[symb] = basis_tab[atom]
@@ -299,7 +353,7 @@ def make_atm_env(atom, ptr=0):
     _env.append(param.ELEMENTS[_atm[CHARGE_OF]][1])
     _atm[CHARGE_OF] = _charge(atom[0])
     _atm[PTR_COORD] = ptr
-    _atm[NUC_MOD_OF] = param.MI_NUC_POINT
+    _atm[NUC_MOD_OF] = NUC_POINT
     _atm[PTR_MASS ] = ptr + 3
     return numpy.array(_atm, numpy.int32), numpy.array(_env)
 
@@ -325,9 +379,17 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
         cs = numpy.array([cs[i] * gto_norm(angl, es[i]) \
-                          for i in range(nprim)], order='F')
+                          for i in range(nprim)])
+# normalize contracted AO
+        ee = numpy.empty((nprim,nprim))
+        for i in range(nprim):
+            for j in range(i+1):
+                ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
+        s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+        cs = numpy.einsum('pi,i->pi', cs, s1)
+
         _env.append(es)
-        _env.append(cs.ravel(order='K'))
+        _env.append(cs.T.ravel())
         ptr_exp = ptr
         ptr_coeff = ptr_exp + nprim
         ptr = ptr_coeff + nprim * nctr
@@ -348,27 +410,32 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
         symb = atom[0]
         atm0, env0 = make_atm_env(atom, ptr_env)
         ptr_env = ptr_env + len(env0)
-        if isinstance(nucmod, int):
-            assert(nucmod in (0, 1))
-            atm0[NUC_MOD_OF] = nucmod
-        elif ia+1 in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[ia+1]
-        elif symb in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[symb]
-        elif _rm_digit(symb) in nucmod:
-            atm0[NUC_MOD_OF] = nucmod[_rm_digit(symb)]
-        if ia+1 in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[ia+1]))
-            ptr_env = ptr_env + 1
-        elif symb in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[symb]))
-            ptr_env = ptr_env + 1
-        elif _rm_digit(symb) in mass:
-            atm0[PTR_MASS] = ptr_env
-            env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
-            ptr_env = ptr_env + 1
+        if nucmod:
+            if isinstance(nucmod, int):
+                assert(nucmod in (NUC_POINT, NUC_GAUSS))
+                atm0[NUC_MOD_OF] = nucmod
+            elif isinstance(nucmod, str):
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
+            elif ia+1 in nucmod:
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
+            elif symb in nucmod:
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[symb])
+            elif _rm_digit(symb) in nucmod:
+                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[_rm_digit(symb)])
+
+        if mass:
+            if ia+1 in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[ia+1]))
+                ptr_env = ptr_env + 1
+            elif symb in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[symb]))
+                ptr_env = ptr_env + 1
+            elif _rm_digit(symb) in mass:
+                atm0[PTR_MASS] = ptr_env
+                env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
+                ptr_env = ptr_env + 1
         _atm.append(atm0)
         _env.append(env0)
 
@@ -400,7 +467,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
     if _env:
         _env = numpy.hstack((pre_env,numpy.hstack(_env)))
     else:
-        _env = pre_env
+        _env = numpy.array(pre_env, copy=False)
     return _atm, _bas, _env
 
 def tot_electrons(mol):
@@ -638,11 +705,18 @@ def energy_nuc(mol):
     e = (qq/r).sum() * .5
     return e
 
-def spheric_labels(mol):
+def spheric_labels(mol, fmt=True):
     '''Labels for spheric GTO functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
 
     Returns:
         List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        or formatted strings based on the argument "fmt"
 
     Examples:
 
@@ -663,7 +737,48 @@ def spheric_labels(mol):
                 label.append((ia, symb, '%d%s' % (n, strl), \
                               '%s' % param.REAL_SPHERIC[l][l+m]))
         count[ia,l] += nc
-    return label
+    if isinstance(fmt, str):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d%3s %s%-4s' % x for x in label]
+    else:
+        return label
+
+def cart_labels(mol, fmt=True):
+    '''Labels for Cartesian GTO functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
+
+    Returns:
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        or formatted strings based on the argument "fmt"
+    '''
+    count = numpy.zeros((mol.natm, 9), dtype=int)
+    label = []
+    for ib in range(len(mol._bas)):
+        ia = mol.bas_atom(ib)
+        l = mol.bas_angular(ib)
+        strl = param.ANGULAR[l]
+        nc = mol.bas_nctr(ib)
+        symb = mol.atom_symbol(ia)
+        for n in range(count[ia,l]+l+1, count[ia,l]+l+1+nc):
+            for lx in reversed(range(l+1)):
+                for ly in reversed(range(l+1-lx)):
+                    lz = l - lx - ly
+                    label.append((ia, symb, '%d%s' % (n, strl),
+                                  ''.join(('x'*lx, 'y'*ly, 'z'*lz))))
+        count[ia,l] += nc
+    if isinstance(fmt, str):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d%3s %s%-4s' % x for x in label]
+    else:
+        return label
+
 
 def spinor_labels(mol):
     raise RuntimeError('TODO')
@@ -730,7 +845,8 @@ def search_ao_nr(mol, atm_id, l, m, atmshell):
                 return ibf + (atmshell-l1-1)*(l1*2+1) + (l1+m)
         ibf += (l1*2+1) * nc
 
-#TODO:def search_ao_r(mol, atm_id, l, j, m, atmshell):
+def search_ao_r(mol, atm_id, l, j, m, atmshell):
+    raise RuntimeError('TODO')
 #TODO:    ibf = 0
 #TODO:    for ib in range(len(mol._bas)):
 #TODO:        ia = mol.bas_atom(ib)
@@ -754,6 +870,33 @@ def is_same_mol(mol1, mol2):
             return False
     return True
 
+
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    '''Check misinput of class attributes, check whether a class method is
+    overwritten.  It does not check the attributes which are prefixed with
+    "_".
+
+    Args:
+        obj : this object should have attribute _keys to store all the
+        name of the attributes of the object
+    '''
+    objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
+    keysub = set(objkeys) - set(keysref)
+    if keysub:
+        keyin = keysub.intersection(dir(obj.__class__))
+        if keyin:
+            msg = ('overwrite keys %s of %s\n' %
+                   (' '.join(keyin), str(obj.__class__)))
+            sys.stderr.write(msg)
+            stdout.write(msg)
+        keydiff = keysub - set(dir(obj.__class__))
+        if keydiff:
+            msg = ('%s has no attributes %s\n' %
+                   (str(obj.__class__), ' '.join(keydiff)))
+            sys.stderr.write(msg)
+            stdout.write(msg)
+
+
 # for _atm, _bas, _env
 CHARGE_OF  = 0
 PTR_COORD  = 1
@@ -775,6 +918,9 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_ENV_START   = 20
+# parameters from libcint
+NUC_POINT = 1
+NUC_GAUSS = 2
 
 
 class Mole(object):
@@ -794,8 +940,12 @@ class Mole(object):
         spin : int
             2S, num. alpha electrons - num. beta electrons
         symmetry : bool or str
-            Whether to use symmetry.  If given a string of point group
-            name, the given point group symmetry will be used.
+            Whether to use symmetry.  When this variable is set to True, the
+            molecule will be rotated and the highest rotation axis will be
+            placed z-axis.
+            If a string is given as the name of point group, the given point
+            group symmetry will be used.  Note that the input molecular
+            coordinates will not be changed in this case.
 
         atom : list or str
             To define molecluar structure.  The internal format is
@@ -876,8 +1026,8 @@ class Mole(object):
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
 
     '''
-    def __init__(self):
-        self.verbose = log.NOTE
+    def __init__(self, **kwargs):
+        self.verbose = logger.NOTE
         self.output = None
         self.max_memory = param.MEMORY_MAX
 
@@ -916,30 +1066,20 @@ class Mole(object):
         self._basis = None
         self._built = False
         self._keys = set(self.__dict__.keys())
+        self.__dict__.update(kwargs)
 
     def check_sanity(self, obj):
-        '''Check misinput of a class attribute due to typos, check whether a
-        class method is overwritten.  It does not check the attributes which
-        are prefixed with "_".
+        '''Check misinput of class attributes, check whether a class method is
+        overwritten.  It does not check the attributes which are prefixed with
+        "_".
 
         Args:
             obj : this object should have attribute _keys to store all the
             name of the attributes of the object
         '''
         if hasattr(obj, '_keys'):
-            if self.verbose > log.QUIET:
-                objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
-                keysub = set(objkeys) - set(obj._keys)
-                if keysub:
-                    keyin = keysub.intersection(dir(obj.__class__))
-                    if keyin:
-                        log.warn(self, 'overwrite keys %s of %s',
-                                 ' '.join(keyin), str(obj.__class__))
-
-                    keydiff = keysub - set(dir(obj.__class__))
-                    if keydiff:
-                        sys.stderr.write('%s has no attributes %s\n' %
-                                         (str(obj.__class__), ' '.join(keydiff)))
+            if self.verbose > logger.QUIET:
+                check_sanity(obj, obj._keys, self.stdout)
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -959,13 +1099,13 @@ class Mole(object):
         self.__dict__.update(moldic)
         return self
 
-
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
-    def build_(self, dump_input=True, parse_arg=True, \
-               verbose=None, output=None, max_memory=None, \
-               atom=None, basis=None, nucmod=None, mass=None, grids=None, \
-               charge=None, spin=None, symmetry=None, light_speed=None):
+    def build_(self, dump_input=True, parse_arg=True,
+               verbose=None, output=None, max_memory=None,
+               atom=None, basis=None, nucmod=None, mass=None, grids=None,
+               charge=None, spin=None, symmetry=None,
+               symmetry_subgroup=None, light_speed=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -1020,6 +1160,7 @@ class Mole(object):
         if charge is not None: self.charge = charge
         if spin is not None: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
+        if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
         if light_speed is not None: self.light_speed = light_speed
 
         if parse_arg:
@@ -1053,7 +1194,8 @@ class Mole(object):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self.atom, self._basis)
                     sys.stderr.write('Warn: unable to identify input symmetry %s,'
-                                     'use %s instead.\n' (self.symmetry, self.topgroup))
+                                     'use %s instead.\n' %
+                                     (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
             else:
                 self.topgroup, orig, axes = \
@@ -1065,7 +1207,8 @@ class Mole(object):
                     assert(self.symmetry_subgroup in
                            pyscf.symm.param.SUBGROUP[self.groupname])
                     if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
-                        raise RuntimeError('TODO: rotate mirror')
+                        raise RuntimeError('TODO: rotate mirror or axes')
+                    self.groupname = self.symmetry_subgroup
             self.atom = self.format_atom(self.atom, orig, axes)
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
@@ -1076,8 +1219,8 @@ class Mole(object):
         self.nbas = len(self._bas)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
-            sys.stderr.write('Electron number %d and spin %d are not consistent\n' %
-                             (self.nelectron, self.spin))
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
+                               (self.nelectron, self.spin))
 
         if self.symmetry:
             import pyscf.symm
@@ -1088,12 +1231,12 @@ class Mole(object):
             self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir)
                                for ir in self.irrep_id]
 
-        if dump_input and not self._built and self.verbose > log.NOTICE:
+        if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
-        log.debug2(self, 'arg.atm = %s', str(self._atm))
-        log.debug2(self, 'arg.bas = %s', str(self._bas))
-        log.debug2(self, 'arg.env = %s', str(self._env))
+        logger.debug2(self, 'arg.atm = %s', str(self._atm))
+        logger.debug2(self, 'arg.bas = %s', str(self._bas))
+        logger.debug2(self, 'arg.env = %s', str(self._env))
 
         self._built = True
         #return self._atm, self._bas, self._env
@@ -1138,23 +1281,22 @@ class Mole(object):
                 self.stdout.write('INFO: ******************** input file end ********************\n')
                 self.stdout.write('\n')
                 finput.close()
-            except:
-                log.warn(self, 'input file does not exist')
+            except IOError:
+                logger.warn(self, 'input file does not exist')
 
         self.stdout.write('System: %s\n' % str(os.uname()))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
-            dn = os.path.dirname(os.path.realpath(__file__))
-            self.stdout.write('GIT version: ')
+            dn = os.path.abspath(os.path.join(__file__, '..', '..', '.git',
+                                              'refs', 'heads'))
             # or command(git log -1 --pretty=%H)
+            version_msg = []
             for branch in 'dev', 'master':
-                fname = '/'.join((dn, "../.git/refs/heads", branch))
-                fin = open(fname, 'r')
-                d = fin.readline()
-                fin.close()
-                self.stdout.write(' '.join((branch, d[:-1], '; ')))
-            self.stdout.write('\n\n')
-        except:
+                with open(os.path.join(dn, branch), 'r') as fin:
+                    d = fin.readline()
+                version_msg.append(' '.join((branch, d[:-1])))
+            self.stdout.write('GIT version: %s\n\n' % '; '.join(version_msg))
+        except IOError:
             pass
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
@@ -1172,7 +1314,7 @@ class Mole(object):
                               '%s Bohr\n' \
                               % (ia+1, _symbol(atom[0]), atom[1],
                                  [x/param.BOHR for x in atom[1]]))
-        for kn, vn in self.nucmod.items():
+        for kn in self.nucmod.keys():
             if kn in self.mass:
                 mass = self.mass[kn]
             else:
@@ -1209,25 +1351,25 @@ class Mole(object):
                         self.stdout.write(' %4.12g' % c)
                     self.stdout.write('\n')
 
-        log.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
+        logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
         if self.symmetry:
             if self.topgroup == self.groupname:
-                log.info(self, 'point group symmetry = %s', self.topgroup)
+                logger.info(self, 'point group symmetry = %s', self.topgroup)
             else:
-                log.info(self, 'point group symmetry = %s, use subgroup %s',
-                         self.topgroup, self.groupname)
+                logger.info(self, 'point group symmetry = %s, use subgroup %s',
+                            self.topgroup, self.groupname)
             for ir in range(self.symm_orb.__len__()):
-                log.info(self, 'num. orbitals of irrep %s = %d', \
-                         self.irrep_name[ir], self.symm_orb[ir].shape[1])
-        log.info(self, 'number of shells = %d', self.nbas)
-        log.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
-        log.info(self, 'number of NR cGTOs = %d', self.nao_nr())
-        if self.verbose >= log.DEBUG1:
+                logger.info(self, 'num. orbitals of irrep %s = %d',
+                            self.irrep_name[ir], self.symm_orb[ir].shape[1])
+        logger.info(self, 'number of shells = %d', self.nbas)
+        logger.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
+        logger.info(self, 'number of NR cGTOs = %d', self.nao_nr())
+        if self.verbose >= logger.DEBUG1:
             for i in range(len(self._bas)):
                 exps = self.bas_exp(i)
-                log.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
+                logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
-        log.info(self, 'CPU time: %12.2f', time.clock())
+        logger.info(self, 'CPU time: %12.2f', time.clock())
 
     def set_common_origin_(self, coord):
         '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
@@ -1251,7 +1393,7 @@ class Mole(object):
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
     def set_rinv_orig_(self, coord):
-        self.rinv_origin_(coord)
+        self.set_rinv_origin_(coord)
 
 #NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):
@@ -1644,7 +1786,7 @@ class Mole(object):
         return moleintor.getints(intor, self._atm, self._bas, self._env,
                                  bras, kets, comp, 0)
 
-    def intor_by_shell(intor, shells, comp=1):
+    def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
                                           self._env, comp)
 
@@ -1653,8 +1795,11 @@ class Mole(object):
     def get_enuc(self):
         return energy_nuc(self)
 
-    def spheric_labels(self):
-        return spheric_labels(self)
+    def cart_labels(self, fmt=False):
+        return cart_labels(self, fmt)
+
+    def spheric_labels(self, fmt=False):
+        return spheric_labels(self, fmt)
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
@@ -1674,6 +1819,7 @@ def _rm_digit(symb):
         return symb
     else:
         return ''.join([i for i in symb if i.isalpha()])
+
 def _charge(symb_or_chg):
     if isinstance(symb_or_chg, str):
         return param.ELEMENTS_PROTON[_rm_digit(symb_or_chg)]
@@ -1686,12 +1832,27 @@ def _symbol(symb_or_chg):
     else:
         return param.ELEMENTS[symb_or_chg][0]
 
+def _std_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, str):
+        rawsymb = _rm_digit(symb_or_chg)
+        return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+    else:
+        return param.ELEMENTS[symb_or_chg][0]
+
+def _parse_nuc_mod(str_or_int):
+    if isinstance(str_or_int, int):
+        return str_or_int
+    elif 'G' in str_or_int.upper(): # 'gauss_nuc'
+        return NUC_GAUSS
+    else:
+        return NUC_POINT
+
 def _update_from_cmdargs_(mol):
     # Ipython shell conflicts with optparse
     # pass sys.args when using ipython
     try:
         __IPYTHON__
-        print('Warn: Ipython shell catchs sys.args')
+        sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
         return None
     except:
         pass
@@ -1710,9 +1871,9 @@ def _update_from_cmdargs_(mol):
     if mol.output is not None:
         if os.path.isfile(mol.output):
             #os.remove(mol.output)
-            if mol.verbose > log.QUIET:
+            if mol.verbose > logger.QUIET:
                 print('overwrite output file: %s' % mol.output)
         else:
-            if mol.verbose > log.QUIET:
+            if mol.verbose > logger.QUIET:
                 print('output file: %s' % mol.output)
 

@@ -40,13 +40,15 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 4.17096333, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
 
     def test_mc2step_4o4e(self):
         mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 4.17096333, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
 
     def test_mc1step_6o6e(self):
         mc = mcscf.density_fit(mcscf.CASSCF(m, 6, 6))
@@ -62,13 +64,15 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.density_fit(mcscf.CASSCF(msym, 4, 4))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 4.17096333, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
 
     def test_mc2step_symm_4o4e(self):
         mc = mcscf.density_fit(mcscf.CASSCF(msym, 4, 4))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 4.17096333, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
 
     def test_mc1step_symm_6o6e(self):
         mc = mcscf.density_fit(mcscf.CASSCF(msym, 6, 6))
@@ -84,13 +88,15 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASCI(m, 4, 4)
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -108.8896744464714, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 4.17125121, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
 
     def test_casci_symm_4o4e(self):
         mc = mcscf.CASCI(msym, 4, 4)
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -108.8896744464714, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 4.17125121, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
 
 #    def test_casci_uhf(self):
 #        mf = scf.UHF(mol)
@@ -113,34 +119,6 @@ class KnowValues(unittest.TestCase):
 #        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
 #        emc = mc.mc1step()[0]
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
-#        emc = mc.mc2step()[0]
-#        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-    def test_mc1step_natorb(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
-        mc.natorb = True
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-    def test_mc2step_natorb(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
-        mc.natorb = True
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -108.913786407955, 7)
-
-#    def test_mc1step_uhf_natorb(self):
-#        mf = scf.UHF(mol)
-#        mf.scf()
-#        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
-#        mc.natorb = True
-#        emc = mc.mc1step()[0]
-#        self.assertAlmostEqual(emc, -108.913786407955, 7)
-#
-#    def test_mc2step_uhf_natorb(self):
-#        mf = scf.UHF(mol)
-#        mf.scf()
-#        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
-#        mc.natorb = True
 #        emc = mc.mc2step()[0]
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 

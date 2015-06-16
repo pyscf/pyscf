@@ -32,10 +32,10 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(l, lab0)
 
     def test_symmetrize_orb(self):
-        c = addons.symmetrize_orb(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff)
+        c = addons.symmetrize_orb(mol, mol.symm_orb, mf.mo_coeff)
         self.assertTrue(numpy.allclose(c, mf.mo_coeff))
         numpy.random.seed(1)
-        c = addons.symmetrize_orb(mol, mol.irrep_name, mol.symm_orb,
+        c = addons.symmetrize_orb(mol, mol.symm_orb,
                                   numpy.random.random((mf.mo_coeff.shape)))
         self.assertAlmostEqual(numpy.linalg.norm(c), 14.054399033261175)
 

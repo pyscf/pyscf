@@ -24,7 +24,7 @@ mf.scf()
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.hf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 23.074873357239454, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 13.649710173723346, 9)
 
     def test_1e(self):
         mf = scf.hf.HF1e(mol)
@@ -35,20 +35,20 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         dm = numpy.random.random((nao,nao))
         e = mf.energy_elec(dm)[0]
-        self.assertAlmostEqual(e, -56.139015588339575, 9)
+        self.assertAlmostEqual(e, -59.332199154299914, 9)
 
     def test_mulliken_pop(self):
         numpy.random.seed(1)
         nao = mol.nao_nr()
         dm = numpy.random.random((nao,nao))
         pop, chg = mf.mulliken_pop(mol, dm)
-        self.assertAlmostEqual(abs(pop).sum(), 18.076192698218936, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.941032799355845, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
-        self.assertAlmostEqual(abs(pop).sum(), 17.35430883835847, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.056441149586863, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
-        self.assertAlmostEqual(abs(pop).sum(), 17.456435048220101, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.110720480307098, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(abs(pop).sum(), 17.481299501546292, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.117870793655456, 7)
 
     def test_analyze(self):
         numpy.random.seed(1)
@@ -75,7 +75,7 @@ class KnowValues(unittest.TestCase):
         d = numpy.random.random((nao,nao))
         d = d + d.T
         f = scf.hf.damping(s, d, scf.hf.get_hcore(mol), .5)
-        self.assertAlmostEqual(numpy.linalg.norm(f), 10748.99052829406, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(f), 23361.854064083178, 9)
 
     def test_level_shift(self):
         nao = mol.nao_nr()
@@ -84,7 +84,7 @@ class KnowValues(unittest.TestCase):
         d = numpy.random.random((nao,nao))
         d = d + d.T
         f = scf.hf.level_shift(s, d, scf.hf.get_hcore(mol), .5)
-        self.assertAlmostEqual(numpy.linalg.norm(f), 66.16324989296858, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(f), 94.230157719053565, 9)
 
     def test_get_veff(self):
         nao = mol.nao_nr()
@@ -93,7 +93,7 @@ class KnowValues(unittest.TestCase):
         d2 = numpy.random.random((nao,nao))
         d = (d1+d1.T, d2+d2.T)
         v = scf.hf.get_veff(mol, d)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 130.60201981225086, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 199.66041114502335, 9)
 
     def test_hf_symm(self):
         pmol = mol.copy()
@@ -164,8 +164,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(j0,j1))
         self.assertTrue(numpy.allclose(k0,k1))
         j1, k1 = scf.hf.dot_eri_dm(mf._eri, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(j1), 48.395346241533758, 0)
-        self.assertAlmostEqual(numpy.linalg.norm(k1), 26.760108454035048, 0)
+        self.assertAlmostEqual(numpy.linalg.norm(j1), 77.035779188661465, 0)
+        self.assertAlmostEqual(numpy.linalg.norm(k1), 46.253491700647963, 0)
 
 if __name__ == "__main__":
     print("Full Tests for rhf")

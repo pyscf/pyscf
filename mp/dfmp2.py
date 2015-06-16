@@ -2,20 +2,16 @@
 # $Id$
 # -*- coding: utf-8
 
-import time
-import tempfile
-from functools import reduce
-import numpy
-import h5py
-
-from pyscf.lib import logger
-from pyscf import df
-from pyscf.ao2mo import _ao2mo
-
-
 '''
 density fitting MP2,  3-center integrals incore.
 '''
+
+import time
+import tempfile
+import numpy
+from pyscf.lib import logger
+from pyscf import df
+
 
 # the MO integral for MP2 is (ov|ov). The most efficient integral
 # transformation is
@@ -23,12 +19,11 @@ density fitting MP2,  3-center integrals incore.
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 
 def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
-    nao, nmo = mo_coeff.shape
+    nmo = mo_coeff.shape[1]
     nvir = nmo - nocc
     auxmol = df.incore.format_aux_basis(mp.mol, mp.auxbasis)
     naoaux = auxmol.nao_nr()
 
-    buflen = int(mp.max_memory*1e6/8/(nvir*nocc*nvir))
     iolen = max(int(ioblk*1e6/8/(nvir*nocc)), 160)
 
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]

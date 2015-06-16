@@ -186,29 +186,29 @@ def subgroup(gpname, axes):
         x = (x+y) / numpy.linalg.norm(x+y)
         y = numpy.cross(z, x)
         return 'C2v', numpy.array((x,y,z))
-    elif re.search('S\d+', gpname):
-        n = int(re.search('\d+', gpname).group(0))
+    elif re.search(r'S\d+', gpname):
+        n = int(re.search(r'\d+', gpname).group(0))
         return 'C%d'%(n//2), axes
     else:
-        n = int(re.search('\d+', gpname).group(0))
-        if re.search('D\d+d', gpname):
+        n = int(re.search(r'\d+', gpname).group(0))
+        if re.search(r'D\d+d', gpname):
             gpname = 'C%dv' % n
         if n % 2 == 0:
-            subname = re.sub('\d+', '2', gpname)
+            subname = re.sub(r'\d+', '2', gpname)
         else:
             # Dnh -> C2v
             # Dn  -> C2
             # Cnh -> Cs
             # Cnv -> Cs
-            if re.search('D\d+h', gpname):
+            if re.search(r'D\d+h', gpname):
                 subname = 'C2v'
                 axes = axes[[1,2,0]]
-            elif re.search('D\d+', gpname):
+            elif re.search(r'D\d+', gpname):
                 subname = 'C2'
                 axes = axes[[1,2,0]]
-            elif re.search('C\d+h', gpname):
+            elif re.search(r'C\d+h', gpname):
                 subname = 'Cs'
-            elif re.search('C\d+v', gpname):
+            elif re.search(r'C\d+v', gpname):
                 subname = 'Cs'
                 axes = axes[[1,2,0]]
             else:
@@ -269,7 +269,6 @@ def symm_identical_atoms(gpname, atoms):
                         % str(center))
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
-    rawsys = SymmSys(atoms)
     coords = numpy.array([a[1] for a in atoms], dtype=float)
     idx = argsort_coords(coords)
     coords0 = coords[idx]
@@ -366,16 +365,6 @@ class SymmSys(object):
                 groups.append([index[lst[i+1]]])
         return groups
 
-    def remove_dupvec(self, vs):
-        def rm_iter(vs):
-            if len(vs) <= 1:
-                return vs
-            else:
-                x = numpy.sum(abs(vs[1:]-vs[0]), axis=1)
-                rest = rm_iter(vs[1:][x>GEOM_THRESHOLD])
-                return numpy.vstack((vs[0], rest))
-        return rm_iter(_pesudo_vectors(vs))
-
     def detect_icenter(self):
         return self.iden_op(-1)
 
@@ -464,7 +453,7 @@ class SymmSys(object):
             d = numpy.einsum('ij,ij->i', maybe_vec, maybe_vec)
             maybe_vec = maybe_vec[d>GEOM_THRESHOLD**2]
             maybe_vec /= numpy.sqrt(d[d>GEOM_THRESHOLD**2]).reshape(-1,1)
-            maybe_vec = self.remove_dupvec(maybe_vec) # also transfer to pseudo-vector
+            maybe_vec = _remove_dupvec(maybe_vec) # also transfer to pseudo-vector
 
             # remove the C2x which can be related by Cn rotation along z axis
             seen = numpy.zeros(len(maybe_vec), dtype=bool)
@@ -607,6 +596,17 @@ def _pesudo_vectors(vs):
     idx = numpy.logical_and(idy0, idz0)
     vs[numpy.logical_and(vs[:,0]<0, idx)] *= -1
     return vs
+
+
+def _remove_dupvec(vs):
+    def rm_iter(vs):
+        if len(vs) <= 1:
+            return vs
+        else:
+            x = numpy.sum(abs(vs[1:]-vs[0]), axis=1)
+            rest = rm_iter(vs[1:][x>GEOM_THRESHOLD])
+            return numpy.vstack((vs[0], rest))
+    return rm_iter(_pesudo_vectors(vs))
 
 
 if __name__ == "__main__":

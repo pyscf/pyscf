@@ -7,11 +7,12 @@ import time
 import numpy
 import scipy.linalg
 import pyscf.lib.logger as logger
-import pyscf.scf
+from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc1step_uhf
 
-def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
-           ci0=None, verbose=None, **cikwargs):
+def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
+           ci0=None, callback=None, verbose=None,
+           dump_chk=True, dump_chk_ci=False):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -22,53 +23,48 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
     nmo = mo[0].shape[1]
     ncore = casscf.ncore
     ncas = casscf.ncas
-    nocc = (ncas + ncore[0], ncas + ncore[1])
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, **cikwargs)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
-        return e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
     toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
-    casdm1 = 0
+    casdm1 = (0,0)
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
     for imacro in range(macro):
         ninner = 0
         t3m = t2m
         casdm1_old = casdm1
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
+        norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_old[0])
+                 + numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
+        t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
-            norm_dm1 = numpy.linalg.norm(numpy.array(casdm1) - casdm1_old)
-            t3m = log.timer('update CAS DM', *t3m)
-            u, dx, g_orb, nin = casscf.rotate_orb(mo, casdm1, casdm2, eris, 0)
-            ninner += nin
+            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+            u, g_orb, njk = rota.next()
+            rota.close()
+            ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
-            if norm_t < toloose or norm_gorb < toloose:
-                if casscf.natorb:
-                    natocc, natorb = scipy.linalg.eigh(-casdm1[0])
-                    u[0][:,ncore[0]:nocc[0]] = \
-                            numpy.dot(u[0][:,ncore[0]:nocc[0]], natorb)
-                    log.debug1('natural occ alpha = %s', str(natocc))
-                    natocc, natorb = scipy.linalg.eigh(-casdm1[1])
-                    u[1][:,ncore[1]:nocc[1]] = \
-                            numpy.dot(u[1][:,ncore[1]:nocc[1]], natorb)
-                    log.debug1('natural occ beta = %s', str(natocc))
             mo = list(map(numpy.dot, mo, u))
-            casscf.save_mo_coeff(mo, imacro, imicro)
 
-            eris = None # to avoid using too much memory
+            eris = None
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d, |u-1|=%4.3g, |g[o]|=%4.3g, |dm1|=%4.3g', \
-                      imicro, norm_t, norm_gorb, norm_dm1)
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g', \
+                      imicro, norm_t, norm_gorb, norm_ddm)
+
+            if callable(callback):
+                callback(locals())
+
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < toloose or norm_gorb < toloose:
                 break
@@ -76,27 +72,32 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=8, \
         totinner += ninner
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, **cikwargs)
-        log.info('macro iter %d (%d ah, %d micro), CASSCF E = %.15g, dE = %.8g,',
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast)
-        norm_gorb = numpy.linalg.norm(g_orb)
-        log.info('               |grad[o]|=%4.3g, |dm1|=%4.3g',
-                 norm_gorb, norm_dm1)
+        log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
+                 norm_gorb, norm_ddm)
+        log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(elast - e_tot) < tol and
-            norm_gorb < toloose and norm_dm1 < toloose):
+            norm_gorb < toloose and norm_ddm < toloose):
             conv = True
-            break
         else:
             elast = e_tot
 
+        if dump_chk:
+            casscf.dump_chk(locals())
+
+        if conv:
+            break
+
     if conv:
-        log.info('2-step CASSCF converged in %d macro (%d ah %d micro) steps',
+        log.info('2-step CASSCF converged in %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
     else:
-        log.info('2-step CASSCF not converged, %d macro (%d ah %d micro) steps',
+        log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
     log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)

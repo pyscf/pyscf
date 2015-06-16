@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
 import h5py
 import pyscf.gto
 

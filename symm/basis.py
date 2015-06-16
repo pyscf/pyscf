@@ -2,7 +2,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import re
+'''
+Generate symmetry adapted basis
+'''
+
 from functools import reduce
 import numpy
 import pyscf.lib
@@ -93,7 +96,7 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
     return so, irrep_ids
 
 def dump_symm_adapted_basis(mol, so):
-    pass
+    raise RuntimeError('TODO')
 
 def irrep_name(pgname, irrep_id):
     if pgname in ('Dooh', 'Coov'):

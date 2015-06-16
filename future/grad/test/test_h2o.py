@@ -32,7 +32,7 @@ class KnowValues(unittest.TestCase):
         uhf = scf.dhf.UHF(h2o)
         uhf.scf()
         g = grad.dhf.UHF(uhf)
-        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445561598123, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 7)
 
 #    def test_nr_uhf(self):
 #        uhf = scf.UHF(h2o)

@@ -13,7 +13,6 @@ import h5py
 import pyscf.lib
 from pyscf.lib import logger
 import pyscf.gto
-from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 from pyscf.df import incore
@@ -345,7 +344,6 @@ def _stand_sym_code(sym):
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     mol = pyscf.gto.Mole()
     mol.verbose = 0
     mol.output = None

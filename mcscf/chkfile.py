@@ -8,7 +8,6 @@
 
 import numpy
 import h5py
-#import pyscf.gto
 
 
 def dump_mcscf(mol, chkfile, mo_coeff,
@@ -29,7 +28,7 @@ def dump_mcscf(mol, chkfile, mo_coeff,
         fh5['mol'] = format(mol.pack())
     fh5['mcscf/mo_coeff'] = mo_coeff
     def store(key, val):
-      if val is not None: fh5[key] = val
+        if val is not None: fh5[key] = val
     store('mcscf/mcscf_energy', mcscf_energy)
     store('mcscf/e_cas', e_cas)
     store('mcscf/ci_vector', ci_vector)
@@ -37,5 +36,5 @@ def dump_mcscf(mol, chkfile, mo_coeff,
     store('mcscf/iter_micro_tot', iter_micro_tot)
     store('mcscf/converged', converged)
     fh5.close()
-  
+
 

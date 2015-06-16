@@ -8,9 +8,7 @@ Generate DFT grids and weights, based on the code provided by Gerald Knizia <>
 '''
 
 
-import os
 import ctypes
-from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.lib import logger
@@ -76,12 +74,12 @@ def sg1_prune(nuc, rads, n_ang):
         (0.25  , 0.5, 1.0, 4.5),
         (0.1667, 0.5, 0.9, 3.5),
         (0.1   , 0.4, 0.8, 2.5)))
-    if nuc <= 2: # H, He
-       place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
-    elif nuc <= 10: # Li - Ne
-       place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
+    if nuc <= 2:  # H, He
+        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
+    elif nuc <= 10:  # Li - Ne
+        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
     else:
-       place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
+        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
     return leb_ngrid[place]
 
 def nwchem_prune(nuc, rads, n_ang):
@@ -104,12 +102,12 @@ def nwchem_prune(nuc, rads, n_ang):
         idx = numpy.where(leb_ngrid==n_ang)[0][0]
         leb_l = numpy.array([1, 3, idx-1, idx, idx-1])
 
-    if nuc <= 2: # H, He
-       place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
-    elif nuc <= 10: # Li - Ne
-       place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
+    if nuc <= 2:  # H, He
+        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
+    elif nuc <= 10:  # Li - Ne
+        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
     else:
-       place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
+        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
     angs = leb_l[place]
     angs = leb_ngrid[angs]
     return angs
@@ -132,7 +130,7 @@ def treutler_prune(nuc, rads, n_ang):
 # Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996), eq.11
 def stratmann(g):
     '''Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996)'''
-    a = .64 # comment after eq. 14, 
+    a = .64  # comment after eq. 14
     if isinstance(g, numpy.ndarray):
         ma = g/a
         ma2 = ma * ma
@@ -153,10 +151,15 @@ def stratmann(g):
 
 def original_becke(g):
     '''Becke, JCP, 88, 2547 (1988)'''
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    return g
+    # g = (3 - g**2) * g * .5
+    # g = (3 - g**2) * g * .5
+    # g = (3 - g**2) * g * .5
+    # return g
+    g1 = numpy.empty_like(g)
+    libdft.VXCoriginal_becke(g1.ctypes.data_as(ctypes.c_void_p),
+                             g.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(g.size))
+    return g1
 
 def gen_atomic_grids(mol, mol_grids={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune_scheme=treutler_prune):
@@ -181,8 +184,8 @@ def gen_atomic_grids(mol, mol_grids={}, radi_method=radi.gauss_chebyshev,
                 angs = prune_scheme(chg, rad, n_ang)
             else:
                 angs = [n_ang] * n_rad
-            pyscf.lib.logger.debug1(mol, 'atom %s rad-grids = %d, ang-grids = %s',
-                                    symb, n_rad, angs)
+            pyscf.lib.logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
+                                   symb, n_rad, angs)
 
             angs = numpy.array(angs)
             coords = []
@@ -213,7 +216,7 @@ def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
         for i in range(mol.natm):
             for j in range(i):
                 g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
-                if atomic_radii_adjust is not None:
+                if callable(atomic_radii_adjust):
                     g = atomic_radii_adjust(i, j, g)
                 g = becke_scheme(g)
                 pbecke[i] *= .5 * (1-g)
@@ -255,16 +258,14 @@ class Grids(object):
         self.weights = None
 
     def dump_flags(self):
-        try:
-            logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
-            logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
-            logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
-            logger.info(self, 'grids dens level: %d', self.level)
-            logger.info(self, 'symmetrized grids: %d', self.symmetry)
-            if self.atomic_radii is not None:
-                logger.info(self, 'adjust function', self.atomic_radii.__doc__)
-        except:
-            pass
+        logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
+        logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
+        logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
+        logger.info(self, 'grids dens level: %d', self.level)
+        logger.info(self, 'symmetrized grids: %d', self.symmetry)
+        if self.atomic_radii is not None:
+            logger.info(self, 'atom radii adjust function: %s',
+                        self.atomic_radii.__doc__)
 
     def setup_grids(self, mol=None):
         return self.setup_grids_(mol)
@@ -307,7 +308,8 @@ def _default_rad(nuc, level=3):
                          (30, 35, 45, 50, 60, 70, 80 ),
                          (35, 40, 50, 55, 65, 75, 85 ),
                          (40, 45, 55, 60, 70, 80, 90 ),
-                         (45, 50, 60, 65, 75, 85, 95 ),))
+                         (45, 50, 60, 65, 75, 85, 95 ),
+                         (50, 55, 65, 70, 80, 90, 100),))
     period = (nuc > tab).sum()
     return grids[level,period]
 
@@ -318,7 +320,8 @@ def _default_ang(nuc, level=3):
                          (23, 29, 29, 29, 29, 29, 29 ),
                          (29, 35, 35, 35, 35, 35, 35 ),
                          (35, 41, 41, 41, 41, 41, 41 ),
-                         (41, 47, 47, 47, 47, 47, 47 ),))
+                         (41, 47, 47, 47, 47, 47, 47 ),
+                         (47, 53, 53, 53, 53, 53, 53 ),))
     period = (nuc > tab).sum()
     return SPHERICAL_POINTS_ORDER[order[level,period]]
 

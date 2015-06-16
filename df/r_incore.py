@@ -87,7 +87,6 @@ def cholesky_eri(mol, auxbasis='weigend', aosym='s1', verbose=0):
 
 if __name__ == '__main__':
     from pyscf import scf
-    from pyscf import ao2mo
     mol = pyscf.gto.Mole()
     mol.build(
         verbose = 0,

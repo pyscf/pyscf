@@ -114,7 +114,7 @@ class KnowValues(unittest.TestCase):
 
     def test_level_shift_uhf(self):
         uhf = scf.UHF(mol)
-        uhf.level_shift_factor = 1.2
+        uhf.level_shift_factor = .2
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_energy_nuc(self):
@@ -160,7 +160,7 @@ class KnowValues(unittest.TestCase):
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
-        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334710607028219, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334714065913508, 9)
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.hf.init_guess_by_chkfile(mol, ftmp.name, project=False)
@@ -183,7 +183,7 @@ class KnowValues(unittest.TestCase):
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
-        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0644293224517574, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0644296295351143, 8)
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.rhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
@@ -206,7 +206,7 @@ class KnowValues(unittest.TestCase):
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
-        self.assertAlmostEqual(numpy.linalg.norm(dm), 5.3700827555643791, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 5.3700828975288122, 9)
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.rhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
@@ -234,10 +234,11 @@ class KnowValues(unittest.TestCase):
             mf0.chkfile = ftmp.name
             h = mf0.get_hcore(mol)
             s = mf0.get_ovlp(mol)
-            f = mf0.get_fock(h, s, numpy.zeros_like(h), 0)
-            e, mo = mf0.eig(f, s)
-            occ = mf0.get_occ(e, mo)
-            mf0.dump_chk(0, e, mo, occ)
+            f = mf0.get_fock(h, s, numpy.zeros_like(h), numpy.zeros_like(h))
+            mo_energy, mo_coeff = mf0.eig(f, s)
+            mo_occ = mf0.get_occ(mo_energy, mo_coeff)
+            hf_energy = 0
+            mf0.dump_chk(locals())
         def check(HFclass, ref):
             mol1 = mol.copy()
             mol1.basis = 'cc-pvdz'
@@ -248,19 +249,19 @@ class KnowValues(unittest.TestCase):
             self.assertAlmostEqual(numpy.linalg.norm(dm1), ref, 9)
 
         save(scf.hf.RHF)
-        check(scf.hf.RHF, 12.960598264586917)
-        check(scf.hf.ROHF, 9.1645269211240379)
-        check(scf.uhf.UHF, 9.1645269211240379)
-        check(scf.dhf.UHF, 9.1645269211240095)
+        check(scf.hf.RHF, 5.2644790347333048)
+        check(scf.hf.ROHF, 3.7225488248743273)
+        check(scf.uhf.UHF, 3.7225488248743273)
+        check(scf.dhf.UHF, 3.7225488248743273)
 
         save(scf.uhf.UHF)
-        check(scf.hf.RHF, 12.960598264586917)
-        check(scf.hf.ROHF, 9.1645269211240379)
-        check(scf.uhf.UHF, 9.1645269211240379)
-        check(scf.dhf.UHF, 9.1645269211240095)
+        check(scf.hf.RHF, 5.2644790347333048)
+        check(scf.hf.ROHF, 3.7225488248743273)
+        check(scf.uhf.UHF, 3.7225488248743273)
+        check(scf.dhf.UHF, 3.7225488248743273)
 
         save(scf.dhf.UHF)
-        check(scf.dhf.UHF, 18.013448619780711)
+        check(scf.dhf.UHF, 7.3540281989311271)
 
 
 

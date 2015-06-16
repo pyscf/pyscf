@@ -2,8 +2,6 @@
 # $Id$
 # -*- coding: utf-8
 
-import os
-import random
 import time
 import tempfile
 import numpy
@@ -272,8 +270,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
     mem_words = max_memory * 1e6 / 8
-    iobuf_size = min(float(nkl_pair)/(nkl_pair+nao_pair)*mem_words,
-                     IOBUF_WORDS_PREFER) * 8
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
@@ -285,6 +281,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     ti0 = time_1pass
+    bufs1 = numpy.empty((iobuflen,nkl_pair))
     buf = numpy.empty((iobuflen, nao_pair))
     istep = 0
     for row0, row1 in prange(0, nij_pair, iobuflen):
@@ -304,8 +301,9 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
                 col0 = col1
             ti2 = log.timer('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
             tioi += ti2[1]-ti0[1]
-            pbuf = _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym,
-                                 ao_loc=ao_loc)
+            pbuf = bufs1[:nrow]
+            _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym,
+                          ao_loc=ao_loc, vout=pbuf)
 
             tw1 = time.time()
             if comp == 1:
@@ -434,17 +432,20 @@ def half_e1(mol, mo_coeffs, swapfile,
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
     nstep = len(shranges)
+    maxbuflen = max([x[2] for x in shranges])
+    bufs1 = numpy.empty((comp*maxbuflen,nao_pair))
+    bufs2 = numpy.empty((comp*maxbuflen,nij_pair))
     for istep,sh_range in enumerate(shranges):
         log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
                   istep+1, nstep, *(sh_range[:3]))
         buflen = sh_range[2]
-        iobuf = numpy.empty((comp,buflen,nij_pair))
+        iobuf = bufs2[:comp*buflen].reshape(comp,buflen,nij_pair)
         nmic = len(sh_range[3])
         p0 = 0
         for imic, aoshs in enumerate(sh_range[3]):
             log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
                        imic+1, nmic, *aoshs)
-            buf = numpy.empty((comp*aoshs[2],nao_pair)) # (@)
+            buf = bufs1[:comp*aoshs[2]] # (@)
             _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
                               aosym, comp, ao2mopt, vout=buf)
             buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
@@ -460,6 +461,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             for col0, col1 in prange(0, nij_pair, e2buflen):
                 dset[col0:col1] = pyscf.lib.transpose(iobuf[icomp,:,col0:col1])
         ti0 = log.timer('transposing to disk', *ti2)
+    bufs1 = bufs2 = None
     fswap.close()
     return swapfile
 
@@ -658,7 +660,8 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
         iobuf_words = int(mem_words // 2)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
-    e1buflen = int(min(iobuf_words//(comp*nij_pair), nao_pair))
+    e1buflen = int(min(iobuf_words//(comp*nij_pair),
+                       mem_words//(comp*nao_pair), nao_pair))
     return e1buflen, mem_words, iobuf_words, ioblk_words
 
 def guess_e2bufsize(ioblk_size, nrows, ncols):
@@ -743,7 +746,6 @@ def _stand_sym_code(sym):
 
 
 if __name__ == '__main__':
-    import time
     from pyscf import scf
     from pyscf import gto
     from pyscf.ao2mo import incore

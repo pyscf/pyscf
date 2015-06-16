@@ -14,11 +14,11 @@
 #              MO integrals
 #
 
-import os
+import sys
 import ctypes
 import numpy
-import scipy.linalg
 import pyscf.lib
+import pyscf.gto
 import pyscf.ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
@@ -179,8 +179,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb)
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    na, nlinka = link_indexa.shape[:2]
-    nb, nlinkb = link_indexb.shape[:2]
+    nb = link_indexb.shape[0]
     addr = numpy.argsort(hdiag)[:np]
     addra = addr // nb
     addrb = addr % nb
@@ -217,7 +216,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.max_cycle = max_cycle
 
     unknown = []
-    for k, v in kwargs:
+    for k, v in kwargs.items():
         setattr(cis, k, v)
         if not hasattr(cis, k):
             unknown.append(k)
@@ -288,7 +287,8 @@ class FCISolver(direct_spin1.FCISolver):
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        self.mol.check_sanity(self)
+        if self.verbose > pyscf.lib.logger.QUIET:
+            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
         return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                        **kwargs)
 
@@ -297,29 +297,35 @@ class FCISolver(direct_spin1.FCISolver):
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
-    def make_rdm1s(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
 
-    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index,
+                                        reorder)
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index,
+                                       reorder)
 
-    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
+                     reorder=True):
+        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index,
+                                         reorder)
 
-    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None, **kwargs):
-        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index, **kwargs)
+    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
+                    reorder=True):
+        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index,
+                                        reorder)
 
 
 

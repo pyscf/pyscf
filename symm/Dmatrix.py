@@ -10,7 +10,7 @@ from math import sqrt, factorial
 from functools import reduce
 import numpy
 
-import os; os.stderr.write('TODO: test Dmatrix\n')
+raise RuntimeError('TODO: test Dmatrix')
 
 def dmatrix(l, alpha, beta, gamma):
     if l == 0:

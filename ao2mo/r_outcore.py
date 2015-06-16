@@ -2,8 +2,6 @@
 # $Id$
 # -*- coding: utf-8
 
-import os
-import random
 import time
 import tempfile
 import numpy
@@ -70,7 +68,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         chunks = (1,nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
-                                      'c16', chunks=chnks)
+                                      'c16', chunks=chunks)
 
     if nij_pair == 0 or nkl_pair == 0:
         feri.close()
@@ -85,11 +83,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
-    e1buflen = guess_e1bufsize(max_memory, ioblk_size,
-                               nij_pair, nao_pair, comp)[0]
-    mem_words = max_memory * 1e6 / 16
-    iobuf_size = min(float(nkl_pair)/(nkl_pair+nao_pair)*mem_words,
-                     IOBUF_WORDS_PREFER) * 16
     e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, '
@@ -195,7 +188,7 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     fswap = h5py.File(swapfile, 'w')
     for icomp in range(comp):
-        g = fswap.create_group(str(icomp)) # for h5py old version
+        g = fswap.create_group(str(icomp))  # for h5py old version
 
     tao = numpy.array(mol.tmap(), dtype=numpy.int32)
 
@@ -360,8 +353,6 @@ def guess_nao_pair(mol, nao):
 
 
 if __name__ == '__main__':
-    import time
-    from pyscf import scf
     from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
