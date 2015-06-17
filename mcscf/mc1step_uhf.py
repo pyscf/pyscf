@@ -333,7 +333,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
             casdm1_old = casdm1
         micro_iter.close()
 
-        totmicro += imicro
+        totmicro += imicro + 1
         totinner += njk
 
         mo = list(map(numpy.dot, mo, u))
@@ -345,7 +345,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
         log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, njk, imicro, e_tot, e_tot-elast)
+                 imacro, njk, imicro+1, e_tot, e_tot-elast)
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
@@ -385,11 +385,11 @@ class CASSCF(casci_uhf.CASCI):
         self.conv_tol_grad = 1e-4
         # for augmented hessian
         self.ah_level_shift = 0#1e-2
-        self.ah_conv_tol = 1e-7
+        self.ah_conv_tol = 1e-10
         self.ah_max_cycle = 20
         self.ah_lindep = 1e-14
-        self.ah_start_tol = 1e-4
-        self.ah_start_cycle = 4
+        self.ah_start_tol = 1e-2
+        self.ah_start_cycle = 2
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
         self.chkfile = mf.chkfile
