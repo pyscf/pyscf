@@ -66,7 +66,7 @@ class CASSCF(mc1step.CASSCF):
         else:
             self.mo_coeff = mo_coeff
         if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = 1 # self.max_cycle_micro
+        if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
         self.mol.check_sanity(self)
