@@ -247,18 +247,21 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return x/hdiagd
 
-    max_cycle = mf.max_cycle_inner
+    if norm_gorb < 0.01:
+        max_cycle = mf.max_cycle_inner-int(numpy.log10(norm_gorb+1e-12))
+    else:
+        max_cycle = mf.max_cycle_inner
 
     xcollect = []
     jkcollect = []
     x0 = 0
     x0_guess = g_orb
+    ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
     while True:
         g_orb0 = g_orb
         norm_gprev = norm_gorb
         # increase the AH accuracy when approach convergence
-        ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
-        ah_start_tol = max(min(norm_gorb*.1, mf.ah_start_tol), ah_conv_tol)
+        ah_start_tol = max(min(norm_gorb**2*1e1, mf.ah_start_tol), ah_conv_tol)
         log.debug1('... Set ah_start_tol %g, ah_conv_tol %g',
                    ah_start_tol, ah_conv_tol)
         imic = 0
@@ -307,13 +310,13 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                     #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
                     #jkcount += 1
 # Gradually lower the start_tol, so the following steps get more accurately
-                    ah_start_tol *= .3
+                    ah_start_tol *= .2
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
-                log.debug('    inner iter %d, |g[o]|=%4.3g, |dx|=%4.3g, '
-                          'max(|x|)=%4.3g, eig=%4.3g, dw=%4.3g, seig=%4.3g',
-                           imic, norm_gorb, norm_dxi, dxmax, w, w-wlast, seig)
+                log.debug('    inner iter %d(%d)  |g[o]|= %4.3g  |dx|= %4.3g  '
+                          'max(|x|)= %4.3g  eig= %4.3g  dw= %4.3g  seig= %4.3g',
+                           imic, ihop+1, norm_gorb, norm_dxi, dxmax, w, w-wlast, seig)
 
                 if norm_gorb > norm_gprev * mf.ah_grad_trust_region:
 # Do we need force the gradients decaying?
@@ -341,17 +344,17 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
             x0 = x0 + dx
             norm_gorb = numpy.linalg.norm(g_orb)
         else:
-            dxi *= .2
+            dxi *= .1
             x0 = x0 + dxi
             g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
             norm_gorb = numpy.linalg.norm(g_orb)
             jkcount += 1
             u = mf.update_rotate_matrix(dxi, mo_occ, u)
-            log.debug('orbital rotation step not found, try to guess |g[o]|=%4.3g, |dx|=%4.3g',
+            log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dx|= %4.3g',
                       norm_gorb, numpy.linalg.norm(dxi))
 
         jkcount += ihop + 2
-        log.debug('    tot inner=%d, %d JK, |g[o]|=%4.3g, |u-1|=%4.3g',
+        log.debug('    tot inner=%d  %d JK  |g[o]|= %4.3g  |u-1|= %4.3g',
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(u.shape[1])))
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
@@ -359,7 +362,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
 
         g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao, h1e)
         norm_gorb = numpy.linalg.norm(g_orb)
-        log.debug('    |g|=%4.3g', norm_gorb)
+        log.debug('    |g|= %4.3g', norm_gorb)
         x0_guess = x0
 
 
@@ -397,7 +400,7 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
-        log.info('macro= %d E=%.15g, delta_E= %g, |g|=%g, %d JK',
+        log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
                  imacro, hf_energy, hf_energy-last_hf_e, norm_gorb,
                  jkcount)
 
@@ -417,7 +420,7 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
         u, g_orb, jkcount = rotaiter.send((mo_coeff, mo_occ, fock))
         jktot += jkcount
 
-    log.info('macro X = %d E=%.15g, |g|=%g, total %d JK',
+    log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, hf_energy, norm_gorb, jktot)
     mo_energy = mf.get_mo_energy(fock, mo_coeff)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
@@ -436,9 +439,9 @@ def newton(mf):
             self.max_orb_stepsize = .05
             self.conv_tol_grad = numpy.sqrt(mf.conv_tol)*10
 
-            self.ah_start_tol = 1e-4
+            self.ah_start_tol = 1e-2
             self.ah_level_shift = 0
-            self.ah_conv_tol = 1e-7
+            self.ah_conv_tol = 1e-10
             self.ah_lindep = 1e-14
             self.ah_start_cycle = 2
             self.ah_max_cycle = 30
