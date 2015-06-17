@@ -27,6 +27,11 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(m, 4, 4)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc,-108.91378640707609, 7)
+    
+    def test_mc2step_6o6e(self):
+        mc = mcscf.CASSCF(m, 6, 6)
+        emc = mc.mc2step()[0]
+        self.assertAlmostEqual(emc,-108.98028859357791, 7)
 
     def test_mc2step_4o4e(self):
         mc = mcscf.CASSCF(m, 4, 4)
