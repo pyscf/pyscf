@@ -372,15 +372,17 @@ class ROHF(hf.ROHF):
             if len(self._irrep_doccs) > 0:
                 ncore = self._irrep_doccs[ir]
                 ea = eopen[ir][ncore:]
-                idx = ea.argsort()
-                e[ncore:] = ea[idx]
-                c[:,ncore:] = c[:,ncore:][:,idx]
+                if len(ea) > 0:
+                    idx = ea.argsort()
+                    e[ncore:] = ea[idx]
+                    c[:,ncore:] = c[:,ncore:][:,idx]
             elif self.mol.irrep_name[ir] in self.irrep_nelec:
                 ncore = self.irrep_nelec[self.mol.irrep_name[ir]][1]
                 ea = eopen[ir][ncore:]
-                idx = ea.argsort()
-                e[ncore:] = ea[idx]
-                c[:,ncore:] = c[:,ncore:][:,idx]
+                if len(ea) > 0:
+                    idx = ea.argsort()
+                    e[ncore:] = ea[idx]
+                    c[:,ncore:] = c[:,ncore:][:,idx]
             cs.append(c)
             es.append(e)
         self._core_mo_energy = numpy.hstack(ecore)
@@ -469,8 +471,11 @@ class ROHF(hf.ROHF):
             mo_occ[core_idx] = 2
             mo_occ[open_idx[:nopen]] = 1
 
+        viridx = mo_occ==0
+        if self.verbose < logger.INFO or viridx.sum() == 0:
+            return mo_occ
         ehomo = max(mo_energy[mo_occ>0])
-        elumo = min(mo_energy[mo_occ==0])
+        elumo = min(mo_energy[viridx])
         ndoccs = []
         nsoccs = []
         p0 = 0
@@ -532,14 +537,19 @@ class ROHF(hf.ROHF):
         self.dump_energy(self.hf_energy, self.converged)
 
         # sort MOs wrt orbital energies, it should be done last.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
+        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2])
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1])
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
-        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort], \
+        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ==2][c_sort],
+                                       self.mo_energy[self.mo_occ==1][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0][:,o_sort], \
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2][:,c_sort],
+                                      self.mo_coeff[:,self.mo_occ==1][:,o_sort],
                                       self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
-        nocc = len(o_sort)
-        self.mo_occ[:nocc] = self.mo_occ[self.mo_occ>0][o_sort]
+        ncore = len(c_sort)
+        nocc = ncore + len(o_sort)
+        self.mo_occ[:ncore] = 2
+        self.mo_occ[ncore:nocc] = 1
         self.mo_occ[nocc:] = 0
 
         #if self.verbose >= logger.INFO:

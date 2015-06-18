@@ -279,6 +279,9 @@ class UHF(uhf.UHF):
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
+        viridx = mo_occ[0]==0
+        if self.verbose < logger.INFO or viridx.sum() == 0:
+            return mo_occ
         ehomoa = max(mo_energy[0][mo_occ[0]>0 ])
         elumoa = min(mo_energy[0][mo_occ[0]==0])
         ehomob = max(mo_energy[1][mo_occ[1]>0 ])
