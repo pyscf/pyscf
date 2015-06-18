@@ -20,9 +20,9 @@ void NPdgemm(const char trans_a, const char trans_b,
         b += offsetb;
         c += offsetc;
 
-        size_t stride, nblk;
+        size_t stride;
         int nthread = 1;
-        int i, di;
+        int i, di, nblk;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
