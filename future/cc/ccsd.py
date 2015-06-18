@@ -8,7 +8,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
 
@@ -563,23 +563,53 @@ class _ERIS:
         nocc = cc.nocc
         nmo = cc.nmo
         nvir = nmo - nocc
+        incore_size = (nmo*(nmo+1)//2)**2
         log = logger.Logger(cc.stdout, cc.verbose)
         if ((cc._scf._eri is not None) and (method == 'incore') and
-            ((nocc*nvir**3/2 + nvir**4/4 + nocc**2*nvir**2*2)*8/1e6 +
+            (max(incore_size*2,
+                 incore_size + nocc*nvir**3/2 + nvir**4/4 + nocc**2*nvir**2*2)*8/1e6 +
              _memory_usage(nmo, nocc) + lib.current_memory()[0]) < cc.max_memory):
             eri1 = pyscf.ao2mo.incore.full(cc._scf._eri, mo_coeff)
-            eri1 = pyscf.ao2mo.restore(1, eri1, nmo)
-            self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-            self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
-            self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-            self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-            self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
-            ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-            self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
+            #:eri1 = pyscf.ao2mo.restore(1, eri1, nmo)
+            #:self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+            #:self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+            #:self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+            #:self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+            #:self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+            #:ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+            #:self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
+            #:for i in range(nocc):
+            #:    for j in range(nvir):
+            #:        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
+            #:self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+            nvir_pair = nvir * (nvir+1) // 2
+            self.oooo = numpy.empty((nocc,nocc,nocc,nocc))
+            self.ooov = numpy.empty((nocc,nocc,nocc,nvir))
+            self.ovoo = numpy.empty((nocc,nvir,nocc,nocc))
+            self.oovv = numpy.empty((nocc,nocc,nvir,nvir))
+            self.ovov = numpy.empty((nocc,nvir,nocc,nvir))
+            self.ovvv = numpy.empty((nocc,nvir,nvir_pair))
+            self.vvvv = numpy.empty((nvir_pair,nvir_pair))
+            ij = 0
             for i in range(nocc):
-                for j in range(nvir):
-                    self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-            self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+                buf = unpack_tril(eri1[ij:ij+i+1])
+                for j in range(i+1):
+                    self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
+                    self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
+                    self.oovv[i,j] = self.oovv[j,i] = buf[j,nocc:,nocc:]
+                    ij += 1
+            ij1 = 0
+            for i in range(nocc,nmo):
+                buf = unpack_tril(eri1[ij:ij+i+1])
+                self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
+                self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
+                for j in range(nocc):
+                    self.ovvv[j,i-nocc] = lib.pack_tril(buf[j,nocc:,nocc:])
+                    ij += 1
+                for j in range(nocc, i+1):
+                    self.vvvv[ij1] = lib.pack_tril(buf[j,nocc:,nocc:])
+                    ij += 1
+                    ij1 += 1
         else:
             time0 = time.clock(), time.time()
             _tmpfile1 = tempfile.NamedTemporaryFile()
