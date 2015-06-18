@@ -28,10 +28,6 @@ with open('C6H6mo.molden', 'w') as f1:
     molden.header(mol, f1)
     molden.orbital_coeff(mol, f1, mf.mo_coeff, ene=mf.mo_energy, occ=mf.mo_occ)
 
-c_loc_orth = lo.orth.orth_ao(mol, 'meta_lowdin', lo.orth.pre_orth_ao(mol))
-with open('C6H6loc.molden', 'w') as f2:
-    molden.header(mol, f2)
-    molden.orbital_coeff(mol, f2, c_loc_orth)
-
-
+c_loc_orth = lo.orth.orth_ao(mol)
+molden.from_mo(mol, 'C6H6loc.molden', c_loc_orth)
 

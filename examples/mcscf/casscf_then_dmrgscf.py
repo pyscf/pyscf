@@ -3,6 +3,7 @@ from pyscf import scf
 from pyscf import mcscf
 from pyscf import dmrgscf
 
+b = 1.2
 mol = gto.Mole()
 mol.build(
     verbose = 5,

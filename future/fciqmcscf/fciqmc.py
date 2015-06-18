@@ -63,13 +63,15 @@ class FCIQMCCI(object):
 
         self.integralFile = "FCIDUMP"
         self.configFile = "neci.inp"
-        self.outputFile = "neci.out"
+        self.outputFileRoot = "neci.out"
+        self.outputFileCurrent = self.outputFileRoot
         self.maxwalkers = 10000
         self.maxIter = -1
         self.RDMSamples = 5000
         self.restart = False
         self.time = 10
         self.tau = -1.0
+        self.seed = 7
         self.orbsym = []
         if mol.symmetry:
             self.groupname = mol.groupname
@@ -137,7 +139,7 @@ class FCIQMCCI(object):
             logger.debug1(self, open(inFile, 'r').read())
         executeFCIQMC(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = self.outputFile   #os.path.join(self.scratchDirectory,self.outputFile)
+            outFile = self.outputFileCurrent   #os.path.join(self.scratchDirectory,self.outputFile)
             logger.debug1(self, open(outFile))
         calc_e = readEnergy(self)
 
@@ -150,11 +152,13 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
 
     f.write('title\n')
     f.write('\n')
-    f.write('system read\n')
+    f.write('system read noorder\n')
+    f.write('symignoreenergies\n')
     f.write('freeformat\n')
     f.write('electrons %i\n'%(neleca+nelecb))
     f.write('nonuniformrandexcits 4ind-weighted\n')
     f.write('hphf 0\n')
+    f.write('nobrillouintheorem\n')
     f.write('endsys\n')
     f.write('\n')
     f.write('calc\n')
@@ -166,6 +170,7 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('memoryfacspawn 1.0\n')
     f.write('totalwalkers %i\n'%(FCIQMCCI.maxwalkers))
     f.write('nmcyc %i\n'%(FCIQMCCI.maxIter))
+    f.write('seed %i\n'%(FCIQMCCI.seed))
     if (Restart):
         f.write('readpops')
     else :
@@ -179,12 +184,15 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('addtoinitiator 3\n')
     f.write('allrealcoeff\n')
     f.write('realspawncutoff 0.4\n')
-    f.write('semi-stochastic 1000\n')
-    f.write('trial-wavefunction 500\n')
+    f.write('semi-stochastic\n')
+    #f.write('cas-core 6 6\n')
+    f.write('mp1-core 1000\n')
+    #f.write('fci-core\n')
+#    f.write('trial-wavefunction 5\n')
     f.write('jump-shift\n')
     f.write('proje-changeref 1.5\n')
     f.write('stepsshift 10\n')
-    f.write('maxwalkerbloom 2\n')
+    f.write('maxwalkerbloom 3\n')
     f.write('endcalc\n')
     f.write('\n')
     f.write('integral\n')
@@ -194,7 +202,7 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('logging\n')
     f.write('popsfiletimer 60.0\n')
     f.write('binarypops\n')
-    f.write('calcrdmonfly 3 100 500\n')
+    f.write('calcrdmonfly 3 200 500\n')
     f.write('write-spin-free-rdm\n') 
     f.write('endlog\n') 
     f.write('end\n')
@@ -219,12 +227,29 @@ def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, FCIQMCCI):
 
 def executeFCIQMC(FCIQMCCI):
     inFile = os.path.join(FCIQMCCI.scratchDirectory,FCIQMCCI.configFile)
-    outFile = os.path.join(FCIQMCCI.scratchDirectory,FCIQMCCI.outputFile)
     from subprocess import call
-    call("%s  %s > %s"%(FCIQMCCI.executable, inFile, outFile), shell=True)
+    outfiletmp = FCIQMCCI.outputFileRoot
+    files = os.listdir(FCIQMCCI.scratchDirectory+'.')
+    i = 1
+#    print('files: ',files)
+    while outfiletmp in files:
+        outfiletmp = FCIQMCCI.outputFileRoot + '_{}'.format(i)
+        i += 1
+    logger.info(FCIQMCCI,'fciqmc outputfile: %s',outfiletmp)
+    FCIQMCCI.outputFileCurrent = outfiletmp
+    outFile = os.path.join(FCIQMCCI.scratchDirectory,outfiletmp)
+    if FCIQMCCI.executable == 'external':
+        logger.info(FCIQMCCI,'External FCIQMC calculation requested from dumped integrals.')
+        logger.info(FCIQMCCI,'Waiting for density matrices and output file to be returned.')
+        try:
+            raw_input("Press Enter to continue with calculation...")
+        except:
+            input("Press Enter to continue with calculation...")
+    else:
+        call("%s  %s > %s"%(FCIQMCCI.executable, inFile, outFile), shell=True)
 
 def readEnergy(FCIQMCCI):
-    file1 = open(os.path.join(FCIQMCCI.scratchDirectory, FCIQMCCI.outputFile),"r")
+    file1 = open(os.path.join(FCIQMCCI.scratchDirectory, FCIQMCCI.outputFileCurrent),"r")
     for line in file1:
         if "*TOTAL ENERGY* CALCULATED USING THE" in line:
             calc_e = float(line.split()[-1])

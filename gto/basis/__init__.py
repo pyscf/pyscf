@@ -93,6 +93,7 @@ def load(basis_name, symb):
         'def2tzvppd' : 'def2-tzvppd.dat',
         'def2tzvpp'  : 'def2-tzvpp.dat' ,
         'def2tzvp'   : 'def2-tzvp.dat'  ,
+        'tzv'        : 'tzv.dat'        ,
         'weigend'    : 'weigend_cfit.dat',
         'demon'      : 'demon_cfit.dat' ,
         'ahlrichs'   : 'ahlrichs_cfit.dat',

@@ -232,11 +232,11 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom in basis_tab.keys():
         symb = _symbol(atom)
+        rawsymb = _rm_digit(symb)
+        stdsymb = _std_symbol(rawsymb)
+        symb = symb.replace(rawsymb, stdsymb)
 
         if isinstance(basis_tab[atom], str):
-            rawsymb = _rm_digit(symb)
-            stdsymb = _std_symbol(rawsymb)
-            symb = symb.replace(rawsymb, stdsymb)
             fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
         else:
             fmt_basis[symb] = basis_tab[atom]

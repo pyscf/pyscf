@@ -7,3 +7,6 @@
 #       https://github.com/ghb24/NECI_STABLE
 FCIQMCEXE = '/path/to/FCIQMC/neci.x'
 
+#Alternatively, if you want to perform FCIQMC calculations on a seperate machine,
+#set the neci call to be 'external'. All calls will then just wait for user input.
+#FCIQMCEXE = 'external'
