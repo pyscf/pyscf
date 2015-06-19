@@ -296,6 +296,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     norm_gorb = norm_gci = 0
     casdm1 = (0,0)
     elast = e_tot
+    r0 = None
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
@@ -303,7 +304,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         t3m = log.timer('CAS DM', *t2m)
         casdm1_old = casdm1
 
-        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
         for imicro in range(micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
@@ -336,6 +337,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         totmicro += imicro + 1
         totinner += njk
 
+        r0 = casscf.pack_uniq_var(u)
         mo = list(map(numpy.dot, mo, u))
 
         eris = None
@@ -376,7 +378,7 @@ class CASSCF(casci_uhf.CASCI):
     def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
         casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
-        self.max_orb_stepsize = .04
+        self.max_orb_stepsize = .03
         self.max_ci_stepsize = .01
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
@@ -388,7 +390,7 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_conv_tol = 1e-10
         self.ah_max_cycle = 20
         self.ah_lindep = 1e-14
-        self.ah_start_tol = 1e-2
+        self.ah_start_tol = 1e-1
         self.ah_start_cycle = 2
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
@@ -546,8 +548,8 @@ class CASSCF(casci_uhf.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose):
-        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose)
+    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess, verbose):
+        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess, verbose)
 
     def ao2mo(self, mo):
 #        nmo = mo[0].shape[1]

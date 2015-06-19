@@ -154,7 +154,7 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     return g_orb, h_op1, h_opjk, h_diag
 
 
-def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
+def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -182,12 +182,15 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     x0 = 0
     u = 1
     jkcount = 0
-    x0_guess = g_orb
+    if x0_guess is None:
+        x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
     while True:
         # increase the AH accuracy when approach convergence
         ah_start_tol = max(min(norm_gorb**2*1e1, casscf.ah_start_tol), ah_conv_tol)
-        log.debug('Set ah_start_tol %g, ah_conv_tol %g', ah_start_tol, ah_conv_tol)
+        ah_start_cycle = min(casscf.ah_start_cycle, int(1-numpy.log10(norm_gorb)))
+        log.debug('Set ah_start_tol %g, ah_start_cycle %d',
+                  ah_start_tol, ah_start_cycle)
         g_orb0 = g_orb
         norm_gprev = norm_gorb
         imic = 0
@@ -221,7 +224,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
             if (ah_end or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
                 ((abs(w-wlast) < ah_start_tol) and
                  (numpy.linalg.norm(residual)**2 < ah_start_tol) and
-                 (ihop >= casscf.ah_start_cycle)) or
+                 (ihop >= ah_start_cycle)) or
                 (seig < casscf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
@@ -506,6 +509,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
         else:
             adiis = pyscf.lib.diis.DIIS(casscf)
     dodiis = False
+    r0 = None
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
@@ -513,7 +517,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
         t3m = log.timer('CAS DM', *t2m)
         casdm1_old = casdm1
 
-        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
         micro = max(micro, int(1-numpy.log10(de-1e-10)))
         for imicro in range(micro):
             if imicro == 0:
@@ -554,6 +558,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
         totmicro += imicro + 1
         totinner += njk
 
+        r0 = casscf.pack_uniq_var(u)
         mo = numpy.dot(mo, u)
 
         eris = None
@@ -775,8 +780,8 @@ class CASSCF(casci.CASCI):
         # for augmented hessian
         self.ah_level_shift = 0#1e-2
         self.ah_conv_tol = 1e-10
-        self.ah_max_cycle = 20
-        self.ah_lindep = 1e-14
+        self.ah_max_cycle = 30
+        self.ah_lindep = 1e-15
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
 #   In function rotate_orb_cc, the orbital rotation is carried out with the
 #   approximate aug_hessian step after a few davidson updates of the AH eigen
@@ -793,7 +798,7 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
-        self.ah_start_tol = 1e-2
+        self.ah_start_tol = 1e-1
         self.ah_start_cycle = 2
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
@@ -850,6 +855,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
         log.info('augmented hessian guess space = %d', self.ah_guess_space)
+        log.info('augmented hessian decay rate = %d', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
         log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)
@@ -949,8 +955,8 @@ class CASSCF(casci.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose):
-        return rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose)
+    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, r0, verbose):
+        return rotate_orb_cc(self, mo, casdm1, casdm2, eris, r0, verbose)
 
     def update_ao2mo(self, mo):
         raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')
