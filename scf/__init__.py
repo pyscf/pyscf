@@ -105,7 +105,10 @@ def RHF(mol, *args):
     '''This is a wrap function to decide which SCF class to use, RHF or ROHF
     '''
     if mol.nelectron == 1:
-        return rhf.HF1e(mol)
+        if mol.symmetry:
+            return rhf_symm.HF1e(mol)
+        else:
+            return rhf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
             return rhf.ROHF(mol, *args)
@@ -121,7 +124,10 @@ def ROHF(mol, *args):
     '''This is a wrap function to decide which ROHF class to use.
     '''
     if mol.nelectron == 1:
-        return rhf.HF1e(mol)
+        if mol.symmetry:
+            return rhf_symm.HF1e(mol)
+        else:
+            return rhf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         return rhf.ROHF(mol, *args)
     else:
@@ -131,7 +137,7 @@ def UHF(mol, *args):
     '''This is a wrap function to decide which UHF class to use.
     '''
     if mol.nelectron == 1:
-        return rhf.HF1e(mol)
+        return RHF(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         return uhf.UHF(mol, *args)
     else:

@@ -272,6 +272,32 @@ class RHF(hf.RHF):
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
 
+class HF1e(hf.SCF):
+    def scf(self, *args):
+        logger.info(self, '\n')
+        logger.info(self, '******** 1 electron system ********')
+        self.converged = True
+        h1e = self.get_hcore(self.mol)
+        s1e = self.get_ovlp(self.mol)
+        nirrep = self.mol.symm_orb.__len__()
+        h1e = pyscf.symm.symmetrize_matrix(h1e, self.mol.symm_orb)
+        s1e = pyscf.symm.symmetrize_matrix(s1e, self.mol.symm_orb)
+        cs = []
+        es = []
+        for ir in range(nirrep):
+            e, c = hf.SCF.eig(self, h1e[ir], s1e[ir])
+            cs.append(c)
+            es.append(e)
+        e = numpy.hstack(es)
+        idx = numpy.argsort(e)
+        self.mo_energy = e[idx]
+        self.mo_coeff = so2ao_mo_coeff(self.mol.symm_orb, cs)[:,idx]
+        self.mo_occ = numpy.zeros_like(self.mo_energy)
+        self.mo_occ[0] = 1
+        self.hf_energy = self.mo_energy[0] + self.mol.energy_nuc()
+        return self.hf_energy
+
+
 class ROHF(hf.ROHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed ROHF:
