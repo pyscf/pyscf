@@ -392,10 +392,11 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_start_cycle = 2
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
+        self.ah_decay_rate = .5
         self.chkfile = mf.chkfile
         self.natorb = False
         self.callback = None
-        #self.ci_response_space = 2
+        self.ci_response_space = 3
 
         self.fcisolver.max_cycle = 50
 
@@ -481,7 +482,7 @@ class CASSCF(casci_uhf.CASCI):
         else:
             self.mo_coeff = mo_coeff
         if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = 1 # self.max_cycle_micro
+        if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
         self.mol.check_sanity(self)

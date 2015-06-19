@@ -185,12 +185,11 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
     x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
     while True:
-        g_orb0 = g_orb
-        norm_gprev = norm_gorb
         # increase the AH accuracy when approach convergence
         ah_start_tol = max(min(norm_gorb**2*1e1, casscf.ah_start_tol), ah_conv_tol)
-        log.debug1('... Set ah_start_tol %g, ah_conv_tol %g',
-                   ah_start_tol, ah_conv_tol)
+        log.debug('Set ah_start_tol %g, ah_conv_tol %g', ah_start_tol, ah_conv_tol)
+        g_orb0 = g_orb
+        norm_gprev = norm_gorb
         imic = 0
         wlast = 0
         dx = 0
@@ -231,15 +230,16 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     dx = dx + dxi
-                    g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
-                    jkcount += 1
+                    g_orb1 = g_orb + hdxi * scale
+                    #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
+                    #jkcount += 1
                 else:
                     dx = dx + dxi
                     g_orb1 = g_orb + hdxi  # hdxi not good enough?
                     #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
                     #jkcount += 1
-# Gradually lower the start_tol, so the following steps get more accurately
-                    ah_start_tol *= .2
+## Gradually decrease start_tol/conv_tol, so the next step is more accurate
+                    ah_start_tol *= casscf.ah_decay_rate
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
@@ -279,10 +279,11 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, verbose=None):
 # It leads to the orbital rotation being stuck at x0=0
             dxi *= .1
             x0 = x0 + dxi
-            g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
-            norm_gorb = numpy.linalg.norm(g_orb)
-            jkcount += 1
             u = casscf.update_rotate_matrix(dxi, u)
+            g_orb = g_orb + hdxi * .1
+            #g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
+            #jkcount += 1
+            norm_gorb = numpy.linalg.norm(g_orb)
             log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dx|= %4.3g',
                       norm_gorb, numpy.linalg.norm(dxi))
 
@@ -803,8 +804,10 @@ class CASSCF(casci.CASCI):
 # IN EXPERIMENT: ah_grad_trust_region, ah_guess_space, need more tests.
 # ah_grad_trust_region allow gradients increase for AH optimization
 # ah_guess_space approximate the JK part of hessian from previous steps
+# ah_decay_rate gradually improve AH improve by decreasing start_tol/conv_tol
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
+        self.ah_decay_rate = .5
 
         self.chkfile = mf.chkfile
         self.ci_response_space = 3
