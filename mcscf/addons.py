@@ -44,7 +44,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         assert(casscf.ncas == len(caslst))
         nmo = mo_coeff.shape[1]
         if base != 0:
-            caslst = [i-1 for i in caslst]
+            caslst = [i-base for i in caslst]
         idx = [i for i in range(nmo) if i not in caslst]
         return numpy.hstack((mo_coeff[:,idx[:ncore]], mo_coeff[:,caslst], mo_coeff[:,idx[ncore:]]))
     else: # UHF-based CASSCF
@@ -57,7 +57,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
             assert(casscf.ncas == len(caslst[0]))
             assert(casscf.ncas == len(caslst[1]))
             if base != 0:
-                caslst = ([i-1 for i in caslst[0]], [i-1 for i in caslst[1]])
+                caslst = ([i-base for i in caslst[0]], [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
         idx = [i for i in range(nmo) if i not in caslst[0]]
         mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]], mo_coeff[0][:,caslst[0]],

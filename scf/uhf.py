@@ -398,7 +398,6 @@ class UHF(hf.SCF):
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
         self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
-        self._eri = None
         self._keys = self._keys.union(['nelectron_alpha'])
 
     def dump_flags(self):

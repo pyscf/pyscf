@@ -793,6 +793,7 @@ class SCF(object):
 
         self.opt = None
 
+        self._eri = None
         self._keys = set(self.__dict__.keys())
 
     def build(self, mol=None):
@@ -1101,7 +1102,6 @@ class RHF(SCF):
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
 # Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
-        self._eri = None
 
     def get_jk(self, mol=None, dm=None, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
@@ -1141,7 +1141,6 @@ class ROHF(RHF):
 
     def __init__(self, mol):
         SCF.__init__(self, mol)
-        self._eri = None
         self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
         self._keys = self._keys.union(['nelectron_alpha'])
 

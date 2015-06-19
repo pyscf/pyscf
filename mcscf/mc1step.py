@@ -1142,7 +1142,7 @@ class CASSCF(casci.CASCI):
                 # full response
                 e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=fcivec)
             else:
-                nd = max(self.ci_response_space, 2)
+                nd = min(max(self.ci_response_space, 2), fcivec.size)
                 logger.debug(self, 'CI step by %dD subspace response', nd)
                 xs = [fcivec.ravel()]
                 ax = [hc]
