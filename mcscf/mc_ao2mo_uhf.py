@@ -247,7 +247,7 @@ class _ERIS(object):
             log = logger.Logger(casscf.stdout, casscf.verbose)
             max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
             if ((mem_outcore+mem_now) < casscf.max_memory*.9):
-                if max_memory > mem_outcore:
+                if max_memory < mem_outcore:
                     log.warn('Not enough memory! You need increase CASSCF.max_memory')
                 self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
                 self.aapp, self.aaPP, self.AApp, self.AAPP, \
