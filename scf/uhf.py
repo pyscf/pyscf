@@ -174,7 +174,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     return e1+e_coul, e_coul
 
 # mo_a and mo_b are occupied orbitals
-def spin_square(mo, ovlp=1):
+def spin_square(mo, s=1):
     r'''Spin of the given UHF orbitals
 
     .. math::
@@ -254,7 +254,7 @@ def spin_square(mo, ovlp=1):
             Occupied alpha and occupied beta orbitals
 
     Kwargs:
-        ovlp : ndarray
+        s : ndarray
             AO overlap
 
     Returns:
@@ -274,7 +274,7 @@ def spin_square(mo, ovlp=1):
     mo_a, mo_b = mo
     nocc_a = mo_a.shape[1]
     nocc_b = mo_b.shape[1]
-    s = reduce(numpy.dot, (mo_a.T, ovlp, mo_b))
+    s = reduce(numpy.dot, (mo_a.T, s, mo_b))
     ssxy = (nocc_a+nocc_b) * .5 - (s**2).sum()
     ssz = (nocc_b-nocc_a)**2 * .25
     ss = ssxy + ssz
@@ -317,19 +317,19 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
 
-def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
+def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
     '''
-    if ovlp is None:
-        ovlp = hf.get_ovlp(mol)
+    if s is None:
+        s = hf.get_ovlp(mol)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    pop_a = numpy.einsum('ij->i', dm[0]*ovlp)
-    pop_b = numpy.einsum('ij->i', dm[1]*ovlp)
+    pop_a = numpy.einsum('ij->i', dm[0]*s)
+    pop_b = numpy.einsum('ij->i', dm[1]*s)
     label = mol.spheric_labels(False)
 
     log.info(' ** Mulliken pop alpha/beta **')
@@ -349,17 +349,22 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     return (pop_a,pop_b), chg
 
 def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG,
-                                pre_orth_method='ANO'):
+                                pre_orth_method='ANO', s=None):
+    return mulliken_meta(mol, dm_ao, verbose, pre_orth_method)
+def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
+                  s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     from pyscf.lo import orth
+    if s is None:
+        s = hf.get_ovlp(mol)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
     c = orth.pre_orth_ao(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
-    c_inv = numpy.linalg.inv(orth_coeff)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    c_inv = numpy.dot(orth_coeff.T, s)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
 
@@ -555,28 +560,29 @@ class UHF(hf.SCF):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
-    def mulliken_pop(self, mol=None, dm=None, ovlp=None, verbose=logger.DEBUG):
+    def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if ovlp is None: ovlp = self.get_ovlp(mol)
-        return mulliken_pop(mol, dm, ovlp, verbose)
+        if s is None: s = self.get_ovlp(mol)
+        return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
     def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None,
                                     verbose=logger.DEBUG,
-                                    pre_orth_method='ANO'):
+                                    pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        return mulliken_pop_meta_lowdin_ao(mol, dm, verbose, pre_orth_method)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, s=s, verbose=verbose,
+                                           pre_orth_method=pre_orth_method)
     def mulliken_meta(self, *args, **kwargs):
         return self.mulliken_pop_meta_lowdin_ao(*args, **kwargs)
 
-    def spin_square(self, mo_coeff=None, ovlp=None):
+    def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
                         self.mo_coeff[1][:,self.mo_occ[1]>0])
-        if ovlp is None:
-            ovlp = self.get_ovlp()
-        return spin_square(mo_coeff, ovlp)
+        if s is None:
+            s = self.get_ovlp()
+        return spin_square(mo_coeff, s)
 
 
 def _makevhf(vj, vk, nset):

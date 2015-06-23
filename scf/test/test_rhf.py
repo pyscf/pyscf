@@ -67,7 +67,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.2031790165528986, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449813782474, 9)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)

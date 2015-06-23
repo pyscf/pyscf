@@ -10,8 +10,8 @@ from pyscf import gto
 
 def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
-    e, v = numpy.linalg.eigh(s)
-    idx = e > 1e-14
+    e, v = scipy.linalg.eigh(s)
+    idx = e > 1e-15
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def schmidt(s):
@@ -144,9 +144,8 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         weight = numpy.ones(pre_orth_ao.shape[0])
         c_orth = nao._nao_sub(mol, weight, pre_orth_ao)
     # adjust phase
-    sc = numpy.dot(s, c_orth)
     for i in range(c_orth.shape[1]):
-        if sc[i,i] < 0:
+        if c_orth[i,i] < 0:
             c_orth[:,i] *= -1
     return c_orth
 

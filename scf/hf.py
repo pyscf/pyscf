@@ -603,10 +603,10 @@ def analyze(mf, verbose=logger.DEBUG):
         label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
 
 
-def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
+def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
 
     .. math:: M_{ij} = D_{ij} S_{ji}
@@ -616,16 +616,16 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
     .. math:: \delta_i = \sum_j M_{ij}
 
     '''
-    if ovlp is None:
-        ovlp = get_ovlp(mol)
+    if s is None:
+        s = get_ovlp(mol)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        pop = numpy.einsum('ij->i', dm*ovlp).real
+        pop = numpy.einsum('ij->i', dm*s).real
     else: # ROHF
-        pop = numpy.einsum('ij->i', (dm[0]+dm[1])*ovlp).real
+        pop = numpy.einsum('ij->i', (dm[0]+dm[1])*s).real
     label = mol.spheric_labels(False)
 
     log.info(' ** Mulliken pop  **')
@@ -645,7 +645,10 @@ def mulliken_pop(mol, dm, ovlp=None, verbose=logger.DEBUG):
 
 
 def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
-                                pre_orth_method='ANO'):
+                                pre_orth_method='ANO', s=None):
+    return mulliken_meta(mol, dm, verbose, pre_orth_method)
+def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
+                  s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     In the meta-lowdin, the AOs are grouped in three sets: core, valence and
     Rydberg, the orthogonalization are carreid out within each subsets.
@@ -670,13 +673,15 @@ def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
 
     '''
     from pyscf.lo import orth
+    if s is None:
+        s = get_ovlp(mol)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
     c = orth.pre_orth_ao(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c)
-    c_inv = numpy.dot(orth_coeff.T, mol.intor_symmetric('cint1e_ovlp_sph'))
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    c_inv = numpy.dot(orth_coeff.T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))
     else:  # ROHF
@@ -1054,18 +1059,19 @@ class SCF(object):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
-    def mulliken_pop(self, mol=None, dm=None, ovlp=None, verbose=logger.DEBUG):
+    def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if ovlp is None: ovlp = self.get_ovlp(mol)
-        return mulliken_pop(mol, dm, ovlp, verbose)
+        if s is None: s = self.get_ovlp(mol)
+        return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
     def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None,
                                     verbose=logger.DEBUG,
-                                    pre_orth_method='ANO'):
+                                    pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        return mulliken_pop_meta_lowdin_ao(mol, dm, verbose, pre_orth_method)
+        return mulliken_pop_meta_lowdin_ao(mol, dm, s=s, verbose=verbose,
+                                           pre_orth_method=pre_orth_method)
     def mulliken_meta(self, *args, **kwargs):
         return self.mulliken_pop_meta_lowdin_ao(*args, **kwargs)
 
