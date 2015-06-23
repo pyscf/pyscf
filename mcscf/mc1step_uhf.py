@@ -63,6 +63,9 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
+    def gorb_update(r0):
+        return g_orb + h_op1(r0) + h_opjk(r0)
+
     ############## hessian, diagonal ###########
     # part1
     tmp = casdm2s[0].transpose(1,2,0,3) + casdm2s[0].transpose(0,2,1,3)
@@ -211,7 +214,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
         x2a = x2a - x2a.T
         x2b = x2b - x2b.T
         return casscf.pack_uniq_var((x2a,x2b))
-    return g_orb, h_op1, h_opjk, h_diag
+    return g_orb, gorb_update, h_op1, h_opjk, h_diag
 
 
 # dc = h_{co} * dr
@@ -639,12 +642,26 @@ class CASSCF(casci_uhf.CASCI):
         return casdm1, casdm2, g
 
     def dump_chk(self, envs):
-        chkfile.dump_mcscf(self.mol, self.chkfile, envs['mo'],
+        ncore = self.ncore
+        nocca = self.ncore[0] + self.ncas
+        noccb = self.ncore[1] + self.ncas
+        occa, ucas = self._eig(-envs['casdm1'][0], ncore[0], nocca)
+        moa = envs['mo'][0].copy()
+        moa[:,ncore[0]:nocca] = numpy.dot(moa[:,ncore[0]:nocca], ucas)
+        occb, ucas = self._eig(-envs['casdm1'][1], ncore[1], noccb)
+        mob = envs['mo'][1].copy()
+        mob[:,ncore[1]:noccb] = numpy.dot(mob[:,ncore[1]:noccb], ucas)
+        mo = numpy.array((moa,mob))
+        occ = numpy.array((-occa,-occb))
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo)
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_occ', occ)
+        chkfile.dump_mcscf(self.mol, self.chkfile, mo,
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
                            ci_vector=(envs['fcivec'] if envs['dump_chk_ci'] else None),
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
-                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])))
+                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])),
+                           mo_occ=occ)
 
 
 # to avoid calculating AO integrals

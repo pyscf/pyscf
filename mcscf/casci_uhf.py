@@ -11,6 +11,7 @@ import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
 import pyscf.ao2mo
+from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
 
@@ -70,6 +71,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=None):
 
     # 1e
     h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
+    log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
@@ -154,6 +156,9 @@ class CASCI(object):
             dm = (numpy.dot(mocore[0], mocore[0].T),
                   numpy.dot(mocore[1], mocore[1].T))
         return self._scf.get_veff(mol, dm)
+
+    def _eig(self, h, *args):
+        return scf.hf.eig(h, None)
 
     def get_h2cas(self, mo_coeff=None):
         return self.ao2mo(mo_coeff)

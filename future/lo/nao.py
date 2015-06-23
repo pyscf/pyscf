@@ -219,7 +219,7 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         s1 = reduce(numpy.dot, (c.T, s, c))
         cnao[:,rydbg_lst] = numpy.dot(c, orth.lowdin(s1))
     assert(numpy.allclose(reduce(numpy.dot, (cnao.T, s, cnao)),
-                          numpy.eye(nbf), atol=1e-14))
+                          numpy.eye(nbf), atol=1e-10))
     return cnao
 
 def _core_val_ryd_list(mol):

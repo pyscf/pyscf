@@ -239,6 +239,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     # 1e
     h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
+    log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
