@@ -9,7 +9,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
-import pyscf.symm
+from pyscf import symm
 from pyscf.scf import hf
 
 
@@ -28,13 +28,12 @@ def analyze(mf, verbose=logger.DEBUG):
     mol = mf.mol
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                       mo_coeff, s=ovlp_ao)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
+                                 s=ovlp_ao)
     orbsym = numpy.array(orbsym)
-    tot_sym = 0
+    wfnsym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-    log.info('total symmetry = %s',
-             pyscf.symm.irrep_name(mol.groupname, tot_sym))
+    log.info('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
     log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
     log.info('double occ                 ' + (' %4d'*nirrep), *noccs)
     log.info('**** MO energy ****')
@@ -90,8 +89,7 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.hf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                       mo_coeff, s)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
     orbsym = numpy.array(orbsym)
     irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
                         for k, ir in enumerate(mol.irrep_id)])
@@ -168,8 +166,8 @@ class RHF(hf.RHF):
 #TODO: force E1gx/E1gy ... use the same coefficients
     def eig(self, h, s):
         nirrep = self.mol.symm_orb.__len__()
-        h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)
-        s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
+        h = symm.symmetrize_matrix(h, self.mol.symm_orb)
+        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
         cs = []
         es = []
         for ir in range(nirrep):
@@ -280,8 +278,8 @@ class HF1e(hf.SCF):
         h1e = self.get_hcore(self.mol)
         s1e = self.get_ovlp(self.mol)
         nirrep = self.mol.symm_orb.__len__()
-        h1e = pyscf.symm.symmetrize_matrix(h1e, self.mol.symm_orb)
-        s1e = pyscf.symm.symmetrize_matrix(s1e, self.mol.symm_orb)
+        h1e = symm.symmetrize_matrix(h1e, self.mol.symm_orb)
+        s1e = symm.symmetrize_matrix(s1e, self.mol.symm_orb)
         cs = []
         es = []
         for ir in range(nirrep):
@@ -384,9 +382,9 @@ class ROHF(hf.ROHF):
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nirrep = self.mol.symm_orb.__len__()
-        fa = pyscf.symm.symmetrize_matrix(self._focka_ao, self.mol.symm_orb)
-        h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)
-        s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
+        fa = symm.symmetrize_matrix(self._focka_ao, self.mol.symm_orb)
+        h = symm.symmetrize_matrix(h, self.mol.symm_orb)
+        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
         cs = []
         es = []
         ecore = []
@@ -591,22 +589,22 @@ class ROHF(hf.ROHF):
         mol = self.mol
         nirrep = len(mol.irrep_id)
         ovlp_ao = self.get_ovlp()
-        orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                           mo_coeff, s=ovlp_ao)
+        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
+                                     s=ovlp_ao)
         orbsym = numpy.array(orbsym)
-        tot_sym = 0
+        wfnsym = 0
         ndoccs = []
         nsoccs = []
         for k,ir in enumerate(mol.irrep_id):
             ndoccs.append(sum(orbsym[mo_occ==2] == ir))
             nsoccs.append(sum(orbsym[mo_occ==1] == ir))
             if nsoccs[k] % 2:
-                tot_sym ^= ir
+                wfnsym ^= ir
         if mol.groupname in ('Dooh', 'Coov'):
             log.info('TODO: total symmetry for %s', mol.groupname)
         else:
             log.info('total symmetry = %s',
-                     pyscf.symm.irrep_name(mol.groupname, tot_sym))
+                     symm.irrep_id2name(mol.groupname, wfnsym))
         log.info('occupancy for each irrep:  ' + (' %4s'*nirrep),
                  *mol.irrep_name)
         log.info('double occ                 ' + (' %4d'*nirrep), *ndoccs)

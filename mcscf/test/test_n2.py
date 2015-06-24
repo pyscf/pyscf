@@ -132,6 +132,12 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.91238513746941, 7)
 
+    def test_wfnsym(self):
+        mc = mcscf.CASSCF(msym, 4, (3,1))
+        mc.fcisolver.wfnsym = 4
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -108.74508322877787, 7)
+
 if __name__ == "__main__":
     print("Full Tests for N2")
     unittest.main()

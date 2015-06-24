@@ -2,6 +2,7 @@
 
 import numpy
 from pyscf.fci import cistring
+from pyscf import symm
 
 def large_ci(ci, norb, nelec, tol=.1):
     if isinstance(nelec, (int, numpy.integer)):
@@ -28,6 +29,92 @@ def initguess_triplet(norb, nelec, binstring):
     ci0[addr,0] = numpy.sqrt(.5)
     ci0[0,addr] =-numpy.sqrt(.5)
     return ci0
+
+def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
+    '''CI wavefunction initial guess which matches the given symmetry.
+    Based on RHF/ROHF orbitals
+    '''
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    orbsym = numpy.asarray(orbsym)
+    if not isinstance(orbsym[0], numpy.integer):
+        raise RuntimeError('TODO: convert irrep symbol to irrep id')
+
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    ci1 = numpy.zeros((na,nb))
+
+    orbleft = numpy.ones(norb, dtype=bool)
+    stra = numpy.zeros(norb, dtype=bool)
+    strb = numpy.zeros(norb, dtype=bool)
+    if irrep_nelec is not None:
+        for k,n in irrep_nelec.items():
+            orbleft[orbsym==k] = False
+            if isinstance(n, (int, numpy.integer)):
+                idx = numpy.where(orbsym==k)[0][:n//2]
+                stra[idx] = True
+                strb[idx] = True
+            else:
+                na, nb = n
+                stra[numpy.where(orbsym==k)[0][:na]] = True
+                strb[numpy.where(orbsym==k)[0][:nb]] = True
+                if (na-nb)%2:
+                    wfnsym ^= k
+
+    orbleft = numpy.where(orbleft)[0]
+    neleca_left = neleca - stra.sum()
+    nelecb_left = nelecb - strb.sum()
+    spin = neleca_left - nelecb_left
+    assert(neleca_left >= 0)
+    assert(nelecb_left >= 0)
+    assert(spin >= 0)
+
+# assume "nelecb_left" doubly occupied orbitals
+    if spin == 0:
+        assert(wfnsym == 0)
+        socclst = []
+    else:
+        socclst = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])]
+        if len(socclst) != spin:
+            raise RuntimeError('No occ pattern found for wfnsym %s' % wfnsym)
+    docclst = numpy.zeros(norb, dtype=bool)
+    docclst[orbleft] = True
+    docclst[socclst] = False
+    docclst = numpy.where(docclst)[0][:nelecb_left]
+
+    stra[docclst] = True
+    strb[docclst] = True
+    stra[socclst] = True
+    stra = ''.join([str(int(i)) for i in stra])[::-1]
+    strb = ''.join([str(int(i)) for i in strb])[::-1]
+    #print stra, strb
+    addra = cistring.str2addr(norb, neleca, int(stra,2))
+    addrb = cistring.str2addr(norb, nelecb, int(strb,2))
+    ci1[addra,addrb] = 1
+    return ci1
+
+def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
+    birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
+    for i in range(norb):
+        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= orbsym[i]
+        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= orbsym[i]
+    #print(airreps)
+    #print(birreps)
+    mask = (numpy.bitwise_xor(airreps.reshape(-1,1), birreps) == wfnsym)
+    ci1 = numpy.zeros_like(ci)
+    ci1[mask] = ci[mask]
+    return ci1
 
 
 # construct (N-1)-electron wavefunction by removing an alpha electron from
@@ -163,3 +250,13 @@ if __name__ == '__main__':
     print(cre_b(a6+b6, 4, 4, 1))
     print(cre_b(a6+b6, 4, 4, 2))
     print(cre_b(a6+b6, 4, 4, 3))
+
+    symm_initguess(6, (4,3), [0,1,0,0,3,0], wfnsym=1, irrep_nelec=None)
+    symm_initguess(6, (4,3), [0,1,0,0,3,0], wfnsym=0, irrep_nelec={0:[3,2],3:2})
+
+    norb = 6
+    nelec = neleca, nelecb = 4,3
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    ci = numpy.ones((na,nb))
+    print symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)

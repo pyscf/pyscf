@@ -98,12 +98,6 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
 def dump_symm_adapted_basis(mol, so):
     raise RuntimeError('TODO')
 
-def irrep_name(pgname, irrep_id):
-    if pgname in ('Dooh', 'Coov'):
-        return linearmole_irrep_id2symb(pgname, irrep_id)
-    else:
-        return param.CHARACTER_TABLE[pgname][irrep_id][0]
-
 def symmetrize_matrix(mat, so):
     return [reduce(numpy.dot, (c.T,mat,c)) for c in so]
 

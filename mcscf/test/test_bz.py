@@ -50,7 +50,7 @@ class KnowValues(unittest.TestCase):
     def test_mc2step_9o8e(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
-        mo = mc.sort_mo([16,17,20,21,22,23,24,25,26])
+        mo = mc.sort_mo([16,17,20,21,22,23,26,27,30])
         emc = mc.mc2step(mo)[0]
         self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
@@ -63,7 +63,7 @@ class KnowValues(unittest.TestCase):
     def test_mc1step_9o8e(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
-        mo = mc.sort_mo([16,17,20,21,22,23,24,25,26])
+        mo = mc.sort_mo([16,17,20,21,22,23,26,27,30])
         emc = mc.mc1step(mo)[0]
         self.assertAlmostEqual(emc, -230.72211519779304, 6)
 

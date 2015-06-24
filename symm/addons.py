@@ -5,6 +5,8 @@
 from functools import reduce
 import numpy
 import pyscf.lib.logger
+from pyscf.symm import basis
+from pyscf.symm import param
 
 THRESHOLD = 1e-9
 
@@ -88,6 +90,45 @@ def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
     return gpname[0].upper() + gpname[1:].lower()
 
+def irrep_name2id(gpname, symb):
+    gpname = std_symb(gpname)
+    if gpname in ('Dooh', 'Coov'):
+        return basis.linearmole_irrep_symb2id(gpname, symb)
+    else:
+        return param.IRREP_ID_TABLE[gpname][symb]
+
+def irrep_id2name(gpname, irrep_id):
+    gpname = std_symb(gpname)
+    if gpname in ('Dooh', 'Coov'):
+        return basis.linearmole_irrep_id2symb(gpname, irrep_id)
+    else:
+        return param.CHARACTER_TABLE[gpname][irrep_id][0]
+
+def irrep_name(pgname, irrep_id):
+    raise RuntimeError('This function was obsoleted. Use irrep_id2name')
+
+def route(target, nelec, orbsym):
+    '''Pick the orbitals to form the given symmetry.
+    If solution is not found, return []
+    '''
+    def riter(target, nelec, orbsym):
+        if nelec == 1:
+            if target in orbsym:
+                return [orbsym.index(target)]
+            else:
+                return []
+        else:
+            for i, ir in enumerate(orbsym):
+                off = i + 1
+                orb_left = orbsym[off:]
+                res = riter(target^ir, nelec-1, orb_left)
+                if res:
+                    return [i] + [off+x for x in res]
+            return []
+    if isinstance(orbsym, numpy.ndarray):
+        orbsym = orbsym.tolist()
+    return riter(target, nelec, orbsym)
+
 
 if __name__ == "__main__":
     import scipy.linalg
@@ -109,3 +150,7 @@ if __name__ == "__main__":
     u = scipy.linalg.expm(u - u.T)
     mo = symmetrize_orb(mol, numpy.dot(mf.mo_coeff, u))
     print(label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo))
+
+    orbsym = [0, 3, 0, 2, 5, 6]
+    res = route(7, 3, orbsym)
+    print(res, reduce(lambda x,y:x^y, [orbsym[i] for i in res]))

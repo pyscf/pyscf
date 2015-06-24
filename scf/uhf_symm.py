@@ -40,7 +40,7 @@ def analyze(mf, verbose=logger.DEBUG):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
         log.info('total symmetry = %s', \
-                 pyscf.symm.irrep_name(mol.groupname, tot_sym))
+                 pyscf.symm.irrep_id2name(mol.groupname, tot_sym))
     log.info('alpha occupancy for each irrep:  '+(' %4s'*nirrep), \
              *mol.irrep_name)
     log.info('                                 '+(' %4d'*nirrep), \

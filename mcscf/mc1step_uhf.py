@@ -389,7 +389,7 @@ class CASSCF(casci_uhf.CASCI):
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
-        self.ah_level_shift = 0#1e-2
+        self.ah_level_shift = 1e-4
         self.ah_conv_tol = 1e-10
         self.ah_max_cycle = 20
         self.ah_lindep = 1e-14
@@ -454,10 +454,8 @@ class CASSCF(casci_uhf.CASCI):
         except AttributeError:
             pass
 
-    def kernel(self, *args, **kwargs):
-        return self.mc1step(*args, **kwargs)
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
-                callback=None):
+    def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+               callback=None, _kern=kernel):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -469,39 +467,26 @@ class CASSCF(casci_uhf.CASCI):
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
+        self.mol.check_sanity(self)
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                kernel(self, mo_coeff, \
-                       tol=self.conv_tol, macro=macro, micro=micro, \
-                       ci0=ci0, callback=callback, verbose=self.verbose)
+                _kern(self, mo_coeff, \
+                      tol=self.conv_tol, macro=macro, micro=micro, \
+                      ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
+
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
+        return self.kernel(mo_coeff, ci0, macro, micro, callback)
 
     def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                 callback=None):
         from pyscf.mcscf import mc2step_uhf
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        else:
-            self.mo_coeff = mo_coeff
-        if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = self.max_cycle_micro
-        if callback is None: callback = self.callback
-
-        self.mol.check_sanity(self)
-
-        self.dump_flags()
-
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc2step_uhf.kernel(self, mo_coeff,
-                                   tol=self.conv_tol, macro=macro, micro=micro,
-                                   ci0=ci0, callback=callback,
-                                   verbose=self.verbose)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.kernel(mo_coeff, ci0, macro, micro, callback,
+                           mc2step_uhf.kernel)
 
     def casci(self, mo_coeff, ci0=None, eris=None):
         if eris is None:

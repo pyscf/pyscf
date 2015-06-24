@@ -64,30 +64,6 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -77.9916207, 6)
 
-    def test_mc1step_4o4e_smallstep(self):
-        mc = mcscf.CASSCF(mf, 4, 4)
-        mc.conv_tol = 1e-8
-        mc.max_orb_stepsize = .01
-        mc.max_ci_stepsize = .01
-        mc.max_cycle_micro = 1
-        mc.max_cycle_macro = 100
-        mc.max_cycle_micro_inner = 1
-        mc.ah_start_tol = 1e-7
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -78.0103838390, 7)
-
-    def test_mc2step_4o4e_smallstep(self):
-        mc = mcscf.CASSCF(mf, 4, 4)
-        mc.conv_tol = 1e-8
-        mc.max_orb_stepsize = .01
-        mc.max_ci_stepsize = .01
-        mc.max_cycle_micro = 1
-        mc.max_cycle_macro = 100
-        mc.max_cycle_micro_inner = 1
-        mc.ah_start_tol = 1e-7
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -78.0103838390, 7)
-
 
 if __name__ == "__main__":
     print("Full Tests for C2H4")

@@ -18,10 +18,12 @@ import ctypes
 import numpy
 import pyscf.lib
 import pyscf.gto
-import pyscf.symm
 import pyscf.ao2mo
+from pyscf.lib import logger
+from pyscf import symm
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
+from pyscf.fci import addons
 
 libfci = pyscf.lib.load_library('libfci')
 
@@ -97,13 +99,15 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, orbsym=[], **kwargs):
+           lindep=1e-8, max_cycle=50, orbsym=[], wfnsym=None, **kwargs):
+    assert(len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.orbsym = orbsym
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
+    cis.wfnsym = wfnsym
 
     unknown = []
     for k, v in kwargs.items():
@@ -113,7 +117,15 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown), __name__))
-    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+
+    wfnsym = _id_wfnsym(cis, norb, nelec, cis.wfnsym)
+    if cis.wfnsym is not None and ci0 is None:
+        ci0 = addons.symm_initguess(norb, nelec, orbsym, wfnsym)
+
+    e, c = direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+    if cis.wfnsym is not None:
+        c = addons.symmetrize_wfn(c, norb, nelec, orbsym, wfnsym)
+    return e, c
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
@@ -146,11 +158,35 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
+def _id_wfnsym(cis, norb, nelec, wfnsym):
+    if wfnsym is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        wfnsym = 0  # Ag, A1 or A
+        for i in cis.orbsym[nelecb:neleca]:
+            wfnsym ^= i
+    elif isinstance(wfnsym, str):
+        wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym) % 10
+    return wfnsym
+
 
 class FCISolver(direct_spin1.FCISolver):
     def __init__(self, mol, **kwargs):
         self.orbsym = []
+        self.wfnsym = None
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
+        self.davidson_only = True
+
+    def dump_flags(self, verbose=None):
+        direct_spin1.FCISolver.dump_flags(self, verbose)
+        if isinstance(self.wfnsym, str):
+            logger.info(self, 'specified total symmetry = %s', self.wfnsym)
+        elif isinstance(self.wfnsym, (int, numpy.integer)):
+            logger.info(self, 'specified total symmetry = %s',
+                        symm.irrep_id2name(self.mol.groupname, self.wfnsym))
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
@@ -178,10 +214,21 @@ class FCISolver(direct_spin1.FCISolver):
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        if self.verbose > pyscf.lib.logger.QUIET:
+        if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-        return direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
+
+        wfnsym = _id_wfnsym(self, norb, nelec, self.wfnsym)
+        logger.debug(self, 'total symmetry = %s',
+                     symm.irrep_id2name(self.mol.groupname, wfnsym))
+        if self.wfnsym is not None and ci0 is None:
+            ci0 = addons.symm_initguess(norb, nelec, self.orbsym, wfnsym)
+        e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                        **kwargs)
+        if self.wfnsym is not None:
+            # should I remove the non-symmetric contributions in each
+            # call of contract_2e?
+            c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
+        return e, c
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
@@ -248,7 +295,7 @@ if __name__ == '__main__':
     nb = cistring.num_strings(norb, nelec//2)
     fcivec = numpy.random.random((na,nb))
 
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
     cis = FCISolver(mol)
     cis.orbsym = orbsym
 
@@ -283,7 +330,7 @@ if __name__ == '__main__':
     na = cistring.num_strings(norb, nelec//2+1)
     nb = cistring.num_strings(norb, nelec//2)
     fcivec = numpy.random.random((na,nb))
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
     cis = FCISolver(mol)
     cis.orbsym = orbsym
     ci1 = cis.contract_2e(eri, fcivec, norb, nelec)

@@ -1228,7 +1228,7 @@ class Mole(object):
             self.symm_orb, self.irrep_id = \
                     pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,
                                                   self.atom, self._basis)
-            self.irrep_name = [pyscf.symm.irrep_name(self.groupname, ir)
+            self.irrep_name = [pyscf.symm.irrep_id2name(self.groupname, ir)
                                for ir in self.irrep_id]
 
         if dump_input and not self._built and self.verbose > logger.NOTE:

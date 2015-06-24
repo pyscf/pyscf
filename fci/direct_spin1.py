@@ -369,6 +369,7 @@ class FCISolver(object):
         else:
             self.stdout = mol.stdout
             self.verbose = mol.verbose
+        self.mol = mol
         self.max_cycle = 50
         self.max_space = 12
         self.conv_tol = 1e-9
