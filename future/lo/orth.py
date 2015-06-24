@@ -19,17 +19,17 @@ def schmidt(s):
     return scipy.linalg.solve_triangular(c, numpy.eye(c.shape[1]), lower=True,
                                          overwrite_b=False).T.conj()
 
-def vec_lowdin(c, metric=1):
-    ''' lowdin orth for the metric c.T*metric*c and get x, then c*x'''
+def vec_lowdin(c, s=1):
+    ''' lowdin orth for the metric c.T*s*c and get x, then c*x'''
     #u, w, vh = numpy.linalg.svd(c)
     #return numpy.dot(u, vh)
     # svd is slower than eigh
-    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,metric,c))))
+    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,s,c))))
 
-def vec_schmidt(c, metric=1):
-    ''' schmidt orth for the metric c.T*metric*c and get x, then c*x'''
-    if isinstance(metric, numpy.ndarray):
-        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,metric,c))))
+def vec_schmidt(c, s=1):
+    ''' schmidt orth for the metric c.T*s*c and get x, then c*x'''
+    if isinstance(s, numpy.ndarray):
+        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,s,c))))
     else:
         return numpy.linalg.qr(c)[0]
 
