@@ -36,6 +36,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
     toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
     casdm1 = 0
+    r0 = None
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
     for imacro in range(macro):
@@ -47,7 +48,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
             u, g_orb, njk = rota.next()
             rota.close()
             ninner += njk
@@ -64,7 +65,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g', \
                       imicro, norm_t, norm_gorb, norm_ddm)
 
-
             if callable(callback):
                 callback(locals())
 
@@ -72,8 +72,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
             if norm_t < toloose or norm_gorb < toloose:
                 break
 
+        r0 = casscf.pack_uniq_var(u)
         totinner += ninner
-        totmicro += imicro+1
+        totmicro += imicro + 1
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
         log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',

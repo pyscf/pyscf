@@ -353,16 +353,20 @@ class _ERIS(object):
                     trans_e1_incore(casscf._scf._eri, mo,
                                     casscf.ncore, casscf.ncas)
         else:
+            import gc
+            gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
             max_memory = max(2000, casscf.max_memory*.9-mem_now)
             if (mem_outcore+mem_now) < casscf.max_memory*.9:
-                assert(max_memory > mem_outcore)
+                if max_memory < mem_outcore:
+                    log.warn('Not enough memory! You need increase CASSCF.max_memory')
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
                 self.Iapcv, self.Icvcv = \
                         trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory-mem_outcore, verbose=log)
             else:
-                assert(max_memory > mem_basic)
+                if max_memory < mem_basic:
+                    log.warn('Not enough memory! You need increase CASSCF.max_memory')
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa = \
                         light_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory-mem_basic,

@@ -63,6 +63,9 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
+    def gorb_update(r0):
+        return g_orb + h_op1(r0) + h_opjk(r0)
+
     ############## hessian, diagonal ###########
     # part1
     tmp = casdm2s[0].transpose(1,2,0,3) + casdm2s[0].transpose(0,2,1,3)
@@ -211,7 +214,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
         x2a = x2a - x2a.T
         x2b = x2b - x2b.T
         return casscf.pack_uniq_var((x2a,x2b))
-    return g_orb, h_op1, h_opjk, h_diag
+    return g_orb, gorb_update, h_op1, h_opjk, h_diag
 
 
 # dc = h_{co} * dr
@@ -296,6 +299,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     norm_gorb = norm_gci = 0
     casdm1 = (0,0)
     elast = e_tot
+    r0 = None
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
     for imacro in range(macro):
@@ -303,7 +307,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         t3m = log.timer('CAS DM', *t2m)
         casdm1_old = casdm1
 
-        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, verbose=log)
+        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
         for imicro in range(micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
@@ -336,6 +340,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         totmicro += imicro + 1
         totinner += njk
 
+        r0 = casscf.pack_uniq_var(u)
         mo = list(map(numpy.dot, mo, u))
 
         eris = None
@@ -376,7 +381,7 @@ class CASSCF(casci_uhf.CASCI):
     def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
         casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
-        self.max_orb_stepsize = .04
+        self.max_orb_stepsize = .03
         self.max_ci_stepsize = .01
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
@@ -384,18 +389,19 @@ class CASSCF(casci_uhf.CASCI):
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
-        self.ah_level_shift = 0#1e-2
+        self.ah_level_shift = 1e-4
         self.ah_conv_tol = 1e-10
         self.ah_max_cycle = 20
         self.ah_lindep = 1e-14
-        self.ah_start_tol = 1e-2
+        self.ah_start_tol = 1e-1
         self.ah_start_cycle = 2
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
+        self.ah_decay_rate = .5
         self.chkfile = mf.chkfile
         self.natorb = False
         self.callback = None
-        #self.ci_response_space = 2
+        self.ci_response_space = 3
 
         self.fcisolver.max_cycle = 50
 
@@ -448,10 +454,8 @@ class CASSCF(casci_uhf.CASCI):
         except AttributeError:
             pass
 
-    def kernel(self, *args, **kwargs):
-        return self.mc1step(*args, **kwargs)
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
-                callback=None):
+    def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+               callback=None, _kern=kernel):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -463,39 +467,26 @@ class CASSCF(casci_uhf.CASCI):
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
+        self.mol.check_sanity(self)
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                kernel(self, mo_coeff, \
-                       tol=self.conv_tol, macro=macro, micro=micro, \
-                       ci0=ci0, callback=callback, verbose=self.verbose)
+                _kern(self, mo_coeff, \
+                      tol=self.conv_tol, macro=macro, micro=micro, \
+                      ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
+
+    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+                callback=None):
+        return self.kernel(mo_coeff, ci0, macro, micro, callback)
 
     def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                 callback=None):
         from pyscf.mcscf import mc2step_uhf
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        else:
-            self.mo_coeff = mo_coeff
-        if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = 1 # self.max_cycle_micro
-        if callback is None: callback = self.callback
-
-        self.mol.check_sanity(self)
-
-        self.dump_flags()
-
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
-                mc2step_uhf.kernel(self, mo_coeff,
-                                   tol=self.conv_tol, macro=macro, micro=micro,
-                                   ci0=ci0, callback=callback,
-                                   verbose=self.verbose)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.kernel(mo_coeff, ci0, macro, micro, callback,
+                           mc2step_uhf.kernel)
 
     def casci(self, mo_coeff, ci0=None, eris=None):
         if eris is None:
@@ -545,8 +536,8 @@ class CASSCF(casci_uhf.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose):
-        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, verbose)
+    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess, verbose):
+        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess, verbose)
 
     def ao2mo(self, mo):
 #        nmo = mo[0].shape[1]
@@ -636,12 +627,26 @@ class CASSCF(casci_uhf.CASCI):
         return casdm1, casdm2, g
 
     def dump_chk(self, envs):
-        chkfile.dump_mcscf(self.mol, self.chkfile, envs['mo'],
+        ncore = self.ncore
+        nocca = self.ncore[0] + self.ncas
+        noccb = self.ncore[1] + self.ncas
+        occa, ucas = self._eig(-envs['casdm1'][0], ncore[0], nocca)
+        moa = envs['mo'][0].copy()
+        moa[:,ncore[0]:nocca] = numpy.dot(moa[:,ncore[0]:nocca], ucas)
+        occb, ucas = self._eig(-envs['casdm1'][1], ncore[1], noccb)
+        mob = envs['mo'][1].copy()
+        mob[:,ncore[1]:noccb] = numpy.dot(mob[:,ncore[1]:noccb], ucas)
+        mo = numpy.array((moa,mob))
+        occ = numpy.array((-occa,-occb))
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo)
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_occ', occ)
+        chkfile.dump_mcscf(self.mol, self.chkfile, mo,
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
                            ci_vector=(envs['fcivec'] if envs['dump_chk_ci'] else None),
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
-                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])))
+                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])),
+                           mo_occ=occ)
 
 
 # to avoid calculating AO integrals

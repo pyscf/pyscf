@@ -30,6 +30,18 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
 
+    def test_1e_symm(self):
+        molsym = gto.M(
+            atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            basis = 'cc-pvdz',
+            symmetry = 1,
+        )
+        mf = scf.hf_symm.HF1e(molsym)
+        self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
+
     def test_energy_tot(self):
         numpy.random.seed(1)
         nao = mol.nao_nr()
@@ -55,7 +67,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.2031790165528986, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449813782474, 9)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)

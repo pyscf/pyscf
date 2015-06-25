@@ -5,8 +5,8 @@ from pyscf import gto
 from pyscf import mcscf
 
 mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
+mol.verbose = 5
+mol.output = '/dev/null'
 mol.atom = [
     ["C", (-0.65830719,  0.61123287, -0.00800148)],
     ["C", ( 0.73685281,  0.61123287, -0.00800148)],
@@ -50,13 +50,7 @@ class KnowValues(unittest.TestCase):
     def test_mc2step_9o8e(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
-        emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -230.72211519779304, 6)
-
-    def test_mc2step_9o8e_a(self):
-        mc = mcscf.CASSCF(mf, 9, 8)
-        mc.conv_tol = 1e-8
-        mo = mc.sort_mo([16,17,20,21,22,23,24,25,26])
+        mo = mc.sort_mo([16,17,20,21,22,23,26,27,30])
         emc = mc.mc2step(mo)[0]
         self.assertAlmostEqual(emc, -230.72211519779304, 6)
 
@@ -68,18 +62,8 @@ class KnowValues(unittest.TestCase):
 
     def test_mc1step_9o8e(self):
         mc = mcscf.CASSCF(mf, 9, 8)
-# without proper initial guess, it converges to wrong solution.  Big orbital
-# rotation stepsize may converge to the right one if lucky enough
         mc.conv_tol = 1e-8
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -230.72211519779304, 6)
-
-    def test_mc1step_9o8e_a(self):
-        mc = mcscf.CASSCF(mf, 9, 8)
-        mc.verbose =4
-        mc.conv_tol = 1e-8
-        mo = mf.mo_coeff.copy()
-        mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
+        mo = mc.sort_mo([16,17,20,21,22,23,26,27,30])
         emc = mc.mc1step(mo)[0]
         self.assertAlmostEqual(emc, -230.72211519779304, 6)
 

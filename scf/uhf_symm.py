@@ -40,7 +40,7 @@ def analyze(mf, verbose=logger.DEBUG):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
         log.info('total symmetry = %s', \
-                 pyscf.symm.irrep_name(mol.groupname, tot_sym))
+                 pyscf.symm.irrep_id2name(mol.groupname, tot_sym))
     log.info('alpha occupancy for each irrep:  '+(' %4s'*nirrep), \
              *mol.irrep_name)
     log.info('                                 '+(' %4d'*nirrep), \
@@ -101,7 +101,7 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, ovlp_ao, log)
+    return mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Alpha/beta electron numbers for each irreducible representation.
@@ -279,6 +279,9 @@ class UHF(uhf.UHF):
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
+        viridx = mo_occ[0]==0
+        if self.verbose < logger.INFO or viridx.sum() == 0:
+            return mo_occ
         ehomoa = max(mo_energy[0][mo_occ[0]>0 ])
         elumoa = min(mo_energy[0][mo_occ[0]==0])
         ehomob = max(mo_energy[1][mo_occ[1]>0 ])

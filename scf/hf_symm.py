@@ -9,7 +9,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
-import pyscf.symm
+from pyscf import symm
 from pyscf.scf import hf
 
 
@@ -28,13 +28,12 @@ def analyze(mf, verbose=logger.DEBUG):
     mol = mf.mol
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                       mo_coeff, s=ovlp_ao)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
+                                 s=ovlp_ao)
     orbsym = numpy.array(orbsym)
-    tot_sym = 0
+    wfnsym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-    log.info('total symmetry = %s',
-             pyscf.symm.irrep_name(mol.groupname, tot_sym))
+    log.info('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
     log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
     log.info('double occ                 ' + (' %4d'*nirrep), *noccs)
     log.info('**** MO energy ****')
@@ -64,7 +63,7 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, ovlp_ao, log)
+    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Electron numbers for each irreducible representation.
@@ -90,8 +89,7 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.hf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                       mo_coeff, s)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
     orbsym = numpy.array(orbsym)
     irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
                         for k, ir in enumerate(mol.irrep_id)])
@@ -168,8 +166,8 @@ class RHF(hf.RHF):
 #TODO: force E1gx/E1gy ... use the same coefficients
     def eig(self, h, s):
         nirrep = self.mol.symm_orb.__len__()
-        h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)
-        s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
+        h = symm.symmetrize_matrix(h, self.mol.symm_orb)
+        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
         cs = []
         es = []
         for ir in range(nirrep):
@@ -272,6 +270,32 @@ class RHF(hf.RHF):
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
 
+class HF1e(hf.SCF):
+    def scf(self, *args):
+        logger.info(self, '\n')
+        logger.info(self, '******** 1 electron system ********')
+        self.converged = True
+        h1e = self.get_hcore(self.mol)
+        s1e = self.get_ovlp(self.mol)
+        nirrep = self.mol.symm_orb.__len__()
+        h1e = symm.symmetrize_matrix(h1e, self.mol.symm_orb)
+        s1e = symm.symmetrize_matrix(s1e, self.mol.symm_orb)
+        cs = []
+        es = []
+        for ir in range(nirrep):
+            e, c = hf.SCF.eig(self, h1e[ir], s1e[ir])
+            cs.append(c)
+            es.append(e)
+        e = numpy.hstack(es)
+        idx = numpy.argsort(e)
+        self.mo_energy = e[idx]
+        self.mo_coeff = so2ao_mo_coeff(self.mol.symm_orb, cs)[:,idx]
+        self.mo_occ = numpy.zeros_like(self.mo_energy)
+        self.mo_occ[0] = 1
+        self.hf_energy = self.mo_energy[0] + self.mol.energy_nuc()
+        return self.hf_energy
+
+
 class ROHF(hf.ROHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed ROHF:
@@ -358,9 +382,9 @@ class ROHF(hf.ROHF):
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nirrep = self.mol.symm_orb.__len__()
-        fa = pyscf.symm.symmetrize_matrix(self._focka_ao, self.mol.symm_orb)
-        h = pyscf.symm.symmetrize_matrix(h, self.mol.symm_orb)
-        s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
+        fa = symm.symmetrize_matrix(self._focka_ao, self.mol.symm_orb)
+        h = symm.symmetrize_matrix(h, self.mol.symm_orb)
+        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
         cs = []
         es = []
         ecore = []
@@ -372,15 +396,17 @@ class ROHF(hf.ROHF):
             if len(self._irrep_doccs) > 0:
                 ncore = self._irrep_doccs[ir]
                 ea = eopen[ir][ncore:]
-                idx = ea.argsort()
-                e[ncore:] = ea[idx]
-                c[:,ncore:] = c[:,ncore:][:,idx]
+                if len(ea) > 0:
+                    idx = ea.argsort()
+                    e[ncore:] = ea[idx]
+                    c[:,ncore:] = c[:,ncore:][:,idx]
             elif self.mol.irrep_name[ir] in self.irrep_nelec:
                 ncore = self.irrep_nelec[self.mol.irrep_name[ir]][1]
                 ea = eopen[ir][ncore:]
-                idx = ea.argsort()
-                e[ncore:] = ea[idx]
-                c[:,ncore:] = c[:,ncore:][:,idx]
+                if len(ea) > 0:
+                    idx = ea.argsort()
+                    e[ncore:] = ea[idx]
+                    c[:,ncore:] = c[:,ncore:][:,idx]
             cs.append(c)
             es.append(e)
         self._core_mo_energy = numpy.hstack(ecore)
@@ -469,8 +495,11 @@ class ROHF(hf.ROHF):
             mo_occ[core_idx] = 2
             mo_occ[open_idx[:nopen]] = 1
 
+        viridx = mo_occ==0
+        if self.verbose < logger.INFO or viridx.sum() == 0:
+            return mo_occ
         ehomo = max(mo_energy[mo_occ>0])
-        elumo = min(mo_energy[mo_occ==0])
+        elumo = min(mo_energy[viridx])
         ndoccs = []
         nsoccs = []
         p0 = 0
@@ -532,14 +561,19 @@ class ROHF(hf.ROHF):
         self.dump_energy(self.hf_energy, self.converged)
 
         # sort MOs wrt orbital energies, it should be done last.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
+        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2])
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1])
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
-        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort], \
+        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ==2][c_sort],
+                                       self.mo_energy[self.mo_occ==1][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0][:,o_sort], \
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2][:,c_sort],
+                                      self.mo_coeff[:,self.mo_occ==1][:,o_sort],
                                       self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
-        nocc = len(o_sort)
-        self.mo_occ[:nocc] = self.mo_occ[self.mo_occ>0][o_sort]
+        ncore = len(c_sort)
+        nocc = ncore + len(o_sort)
+        self.mo_occ[:ncore] = 2
+        self.mo_occ[ncore:nocc] = 1
         self.mo_occ[nocc:] = 0
 
         #if self.verbose >= logger.INFO:
@@ -555,22 +589,22 @@ class ROHF(hf.ROHF):
         mol = self.mol
         nirrep = len(mol.irrep_id)
         ovlp_ao = self.get_ovlp()
-        orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                           mo_coeff, s=ovlp_ao)
+        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
+                                     s=ovlp_ao)
         orbsym = numpy.array(orbsym)
-        tot_sym = 0
+        wfnsym = 0
         ndoccs = []
         nsoccs = []
         for k,ir in enumerate(mol.irrep_id):
             ndoccs.append(sum(orbsym[mo_occ==2] == ir))
             nsoccs.append(sum(orbsym[mo_occ==1] == ir))
             if nsoccs[k] % 2:
-                tot_sym ^= ir
+                wfnsym ^= ir
         if mol.groupname in ('Dooh', 'Coov'):
             log.info('TODO: total symmetry for %s', mol.groupname)
         else:
             log.info('total symmetry = %s',
-                     pyscf.symm.irrep_name(mol.groupname, tot_sym))
+                     symm.irrep_id2name(mol.groupname, wfnsym))
         log.info('occupancy for each irrep:  ' + (' %4s'*nirrep),
                  *mol.irrep_name)
         log.info('double occ                 ' + (' %4d'*nirrep), *ndoccs)

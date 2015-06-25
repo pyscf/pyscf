@@ -44,7 +44,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         assert(casscf.ncas == len(caslst))
         nmo = mo_coeff.shape[1]
         if base != 0:
-            caslst = [i-1 for i in caslst]
+            caslst = [i-base for i in caslst]
         idx = [i for i in range(nmo) if i not in caslst]
         return numpy.hstack((mo_coeff[:,idx[:ncore]], mo_coeff[:,caslst], mo_coeff[:,idx[ncore:]]))
     else: # UHF-based CASSCF
@@ -57,7 +57,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
             assert(casscf.ncas == len(caslst[0]))
             assert(casscf.ncas == len(caslst[1]))
             if base != 0:
-                caslst = ([i-1 for i in caslst[0]], [i-1 for i in caslst[1]])
+                caslst = ([i-base for i in caslst[0]], [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
         idx = [i for i in range(nmo) if i not in caslst[0]]
         mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]], mo_coeff[0][:,caslst[0]],
@@ -113,18 +113,22 @@ def project_init_guess(casscf, init_mo):
     from pyscf import lo
 
     def project(mfmo, init_mo, ncore, s):
+        nocc = ncore + casscf.ncas
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
         logger.debug(casscf, 'Core indices %s', str(idx[-ncore:][::-1]))
         mocore = mfmo[:,idx[-ncore:][::-1]]
-        mou = init_mo[:,ncore:] \
-            - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:]))
-        mo = numpy.hstack((mocore, mou))
-        mo = lo.orth.vec_lowdin(mo, s)
+
+        mocas = init_mo[:,ncore:nocc] \
+            - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
+        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)))
+
+        mou = init_mo[:,nocc:] \
+            - reduce(numpy.dot, (mocc, mocc.T, s, init_mo[:,nocc:]))
+        mo = lo.orth.vec_lowdin(numpy.hstack((mocc, mou)), s)
 
         if casscf.verbose >= logger.DEBUG:
-            nocc = ncore + casscf.ncas
             s = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
             idx = numpy.argwhere(abs(s) > 0.4)
             for i,j in idx:

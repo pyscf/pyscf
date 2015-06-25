@@ -10,8 +10,8 @@ from pyscf import gto
 
 def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
-    e, v = numpy.linalg.eigh(s)
-    idx = e > 1e-14
+    e, v = scipy.linalg.eigh(s)
+    idx = e > 1e-15
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def schmidt(s):
@@ -19,17 +19,17 @@ def schmidt(s):
     return scipy.linalg.solve_triangular(c, numpy.eye(c.shape[1]), lower=True,
                                          overwrite_b=False).T.conj()
 
-def vec_lowdin(c, metric=1):
-    ''' lowdin orth for the metric c.T*metric*c and get x, then c*x'''
+def vec_lowdin(c, s=1):
+    ''' lowdin orth for the metric c.T*s*c and get x, then c*x'''
     #u, w, vh = numpy.linalg.svd(c)
     #return numpy.dot(u, vh)
     # svd is slower than eigh
-    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,metric,c))))
+    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,s,c))))
 
-def vec_schmidt(c, metric=1):
-    ''' schmidt orth for the metric c.T*metric*c and get x, then c*x'''
-    if isinstance(metric, numpy.ndarray):
-        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,metric,c))))
+def vec_schmidt(c, s=1):
+    ''' schmidt orth for the metric c.T*s*c and get x, then c*x'''
+    if isinstance(s, numpy.ndarray):
+        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,s,c))))
     else:
         return numpy.linalg.qr(c)[0]
 
@@ -144,9 +144,8 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         weight = numpy.ones(pre_orth_ao.shape[0])
         c_orth = nao._nao_sub(mol, weight, pre_orth_ao)
     # adjust phase
-    sc = numpy.dot(s, c_orth)
     for i in range(c_orth.shape[1]):
-        if sc[i,i] < 0:
+        if c_orth[i,i] < 0:
             c_orth[:,i] *= -1
     return c_orth
 
