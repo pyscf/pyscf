@@ -302,15 +302,16 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     dx = dx + dxi
-                    g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
-                    jkcount += 1
+                    g_orb1 = g_orb + hdxi * scale
+                    #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
+                    #jkcount += 1
                 else:
                     dx = dx + dxi
                     g_orb1 = g_orb + hdxi  # hdxi not good enough?
                     #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
                     #jkcount += 1
-# Gradually lower the start_tol, so the following steps get more accurately
-                    ah_start_tol *= .2
+# Gradually decrease start_tol/conv_tol, so the next step is more accurate
+                    ah_start_tol *= mf.ah_decay_rate
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
@@ -346,10 +347,11 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
         else:
             dxi *= .1
             x0 = x0 + dxi
-            g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
-            norm_gorb = numpy.linalg.norm(g_orb)
-            jkcount += 1
             u = mf.update_rotate_matrix(dxi, mo_occ, u)
+            g_orb = g_orb + hdxi * .1
+            #g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
+            #jkcount += 1
+            norm_gorb = numpy.linalg.norm(g_orb)
             log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dx|= %4.3g',
                       norm_gorb, numpy.linalg.norm(dxi))
 
@@ -396,8 +398,8 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
-        mo_energy = mf.get_mo_energy(fock, mo_coeff)
-        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
+        mf.get_occ(mo_energy, mo_coeff)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
         log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
@@ -422,8 +424,8 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
 
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, hf_energy, norm_gorb, jktot)
-    mo_energy = mf.get_mo_energy(fock, mo_coeff)
-    mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
+    mf.get_occ(mo_energy, mo_coeff)
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
 
 
@@ -447,6 +449,7 @@ def newton(mf):
             self.ah_max_cycle = 30
             self.ah_guess_space = 0
             self.ah_grad_trust_region = 1.5
+            self.ah_decay_rate = .5
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
@@ -481,6 +484,7 @@ def newton(mf):
             logger.info(self, 'ah_max_cycle = %d',     self.ah_max_cycle)
             logger.info(self, 'ah_guess_space = %d',   self.ah_guess_space)
             logger.info(self, 'ah_grad_trust_region = %g', self.ah_grad_trust_region)
+            logger.info(self, 'augmented hessian decay rate = %d', self.ah_decay_rate)
 
         def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                       diis_start_cycle=None, level_shift_factor=None,
@@ -517,10 +521,26 @@ def newton(mf):
             def update_mo_coeff(self, mo_coeff, u):
                 return numpy.dot(mo_coeff, u)
 
-            def get_mo_energy(self, fock, mo_coeff):
-                fc = numpy.dot(fock[0], mo_coeff)
-                mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
-                return mo_energy
+            def get_mo_energy(self, fock, s1e, mo_coeff, mo_occ):
+                dm = self.make_rdm1(mo_coeff, mo_occ)
+                focka_ao, fockb_ao = fock
+                fc = (focka_ao + fockb_ao) * .5
+# Projector for core, open-shell, and virtual
+                nao = s1e.shape[0]
+                pc = numpy.dot(dm[1], s1e)
+                po = numpy.dot(dm[0]-dm[1], s1e)
+                pv = numpy.eye(nao) - numpy.dot(dm[0], s1e)
+                f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
+                f += reduce(numpy.dot, (po.T, fc, po)) * .5
+                f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
+                f += reduce(numpy.dot, (po.T, fockb_ao, pc))
+                f += reduce(numpy.dot, (po.T, focka_ao, pv))
+                f += reduce(numpy.dot, (pv.T, fc, pc))
+                f = f + f.T
+                return self.eig(f, s1e)[0]
+                #fc = numpy.dot(fock[0], mo_coeff)
+                #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
+                #return mo_energy
         return ROHF()
 
     elif isinstance(mf, pyscf.scf.uhf.UHF):
@@ -560,12 +580,13 @@ def newton(mf):
             def update_mo_coeff(self, mo_coeff, u):
                 return numpy.array(map(numpy.dot, mo_coeff, u))
 
-            def get_mo_energy(self, fock, mo_coeff):
-                fca = numpy.dot(fock[0], mo_coeff[0])
-                fcb = numpy.dot(fock[1], mo_coeff[1])
-                mo_energy =(numpy.einsum('pk,pk->k', mo_coeff[0], fca),
-                            numpy.einsum('pk,pk->k', mo_coeff[1], fcb))
-                return numpy.array(mo_energy)
+            def get_mo_energy(self, fock, s1e, mo_coeff, mo_occ):
+                return numpy.asarray(self.eig(fock, s1e)[0])
+                #fca = numpy.dot(fock[0], mo_coeff[0])
+                #fcb = numpy.dot(fock[1], mo_coeff[1])
+                #mo_energy =(numpy.einsum('pk,pk->k', mo_coeff[0], fca),
+                #            numpy.einsum('pk,pk->k', mo_coeff[1], fcb))
+                #return numpy.array(mo_energy)
         return UHF()
 
     elif isinstance(mf, pyscf.scf.dhf.UHF):
@@ -594,10 +615,11 @@ def newton(mf):
             def update_mo_coeff(self, mo_coeff, u):
                 return numpy.dot(mo_coeff, u)
 
-            def get_mo_energy(self, fock, mo_coeff):
-                fc = numpy.dot(fock, mo_coeff)
-                mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
-                return mo_energy
+            def get_mo_energy(self, fock, s1e, mo_coeff, mo_occ):
+                return self.eig(fock, s1e)[0]
+                #fc = numpy.dot(fock, mo_coeff)
+                #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
+                #return mo_energy
         return RHF()
 
 
@@ -708,7 +730,7 @@ if __name__ == '__main__':
     print(e2 - -2.99663808314)
     print(e3 - -2.99663808314)
     print(e4 - -2.99663808314)
-    print(e5 - -2.99626765943)
+    print(e5 - -2.99634506072)
 #    import newton_o2
 #    mol.spin = 2
 #    mol.build()
