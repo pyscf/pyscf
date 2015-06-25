@@ -250,10 +250,9 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
                 norm_dr = numpy.linalg.norm(x0+dx)
-                log.debug('    inner iter %d(%d)  eig= %4.3g  dw= %4.3g  seig= %4.3g',
-                           imic, ihop+1, w, w-wlast, seig)
-                log.debug('      |g[o]|= %4.3g  |dxi|= %4.3g  max(|x|)= %4.3g  '
-                          '|dr|= %4.3g',
+                log.debug('    inner iter %d(%d)  eig= %4.3g  dw= %4.3g  seig= %4.3g  '
+                          '|g[o]|= %4.3g  |dxi|= %4.3g  max(|x|)= %4.3g  |dr|= %4.3g',
+                           imic, ihop+1, w, w-wlast, seig,
                            norm_gorb, norm_dxi, dxmax, norm_dr)
 
                 if norm_gorb > norm_gprev * casscf.ah_grad_trust_region:

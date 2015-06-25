@@ -431,7 +431,7 @@ class FCISolver(object):
                 'max_memory': self.max_memory,
                 'nroots': self.nroots,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if x0.size // self.nroots > 6.5e7: # 500MB
+        if self.nroots == 1 and x0.size > 6.5e7: # 500MB
             opts['lessio'] = True
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)

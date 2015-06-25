@@ -240,14 +240,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
                 civec = numpy.empty((fci.nroots,na*na))
                 civec[:,addr] = pv[:,:fci.nroots].T
                 civec = civec.reshape(fci.nroots,na,na)
-                absym = True
-                for k in range(fci.nroots):
-                    civec[k] = pyscf.lib.transpose_sum(civec[k]) * .5
-                    if abs(numpy.linalg.norm(civec[k])-1) > 1e-12:
-                        absym = False
-                        break
-                if absym:
-                    return pw[:fci.nroots], civec
+                try:
+                    return pw[:fci.nroots], [_check_(ci) for ci in civec]
+                except ValueError:
+                    pass
             elif abs(pw[0]-pw[1]) > 1e-12:
                 civec = numpy.empty((na*na))
                 civec[addr] = pv[:,0]
@@ -257,8 +253,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-                if abs(numpy.linalg.norm(civec)-1) < 1e-12:
-                    return pw[0], civec.reshape(na,na)
+                try:
+                    return pw[0], _check_(civec.reshape(na,na))
+                except ValueError:
+                    pass
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -281,9 +279,16 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, **kwargs)
     if fci.nroots > 1:
-        return e, [ci.reshape(na,na) for ci in c]
+        return e, [_check_(ci.reshape(na,na)) for ci in c]
     else:
-        return e, c.reshape(na,na)
+        return e, _check_(c.reshape(na,na))
+
+def _check_(c):
+    c = pyscf.lib.transpose_sum(c)
+    c *= .5
+    if abs(numpy.linalg.norm(c)-1) > 1e-12:
+        raise ValueError('State not singlet')
+    return c
 
 
 class FCISolver(direct_spin1.FCISolver):
@@ -311,7 +316,7 @@ class FCISolver(direct_spin1.FCISolver):
                 'max_memory': self.max_memory,
                 'nroots': self.nroots,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if x0.size // self.nroots > 6.5e7: # 500MB
+        if self.nroots == 1 and x0.size > 6.5e7: # 500MB
             opts['lessio'] = True
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)

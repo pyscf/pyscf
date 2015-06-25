@@ -74,11 +74,11 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                     ovlp[i,head+k] = ovlp[head+k,i].conj()
 
         w, v, seig = safe_eigh(heff[:space,:space], ovlp[:space,:space])
-        if space > nroots:
+        try:
             de = w[:nroots] - e
-            e = w[:nroots]
-        else:
-            e = de = w
+        except ValueError:
+            de = w[:nroots]
+        e = w[:nroots]
 
         x0 = []
         ax0 = []
