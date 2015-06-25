@@ -309,7 +309,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
         jkcount += 1
 
 
-def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
+def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
                 max_cycle=30, lindep=1e-14, verbose=logger.WARN):
 
     if isinstance(verbose, logger.Logger):
@@ -356,6 +356,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-7, xs=[], ax=[],
 
     for istep in range(min(max_cycle,x0.size)):
         x0 = precond(dx, w_t)
+        x0 *= 1/numpy.linalg.norm(x0)
         xs.append(x0)
         ax.append(h_op(x0))
         g = g_op()
@@ -641,7 +642,7 @@ class CASSCF(casci.CASCI):
         ah_level_shift : float, for AH solver.
             Level shift for the Davidson diagonalization in AH solver.  Default is 1e-4.
         ah_conv_tol : float, for AH solver.
-            converge threshold for AH solver.  Default is 1e-10.
+            converge threshold for AH solver.  Default is 1e-12.
         ah_max_cycle : float, for AH solver.
             Max number of iterations allowd in AH solver.  Default is 20.
         ah_lindep : float, for AH solver.
@@ -720,7 +721,7 @@ class CASSCF(casci.CASCI):
         self.conv_tol_grad = 1e-4
         # for augmented hessian
         self.ah_level_shift = 1e-4
-        self.ah_conv_tol = 1e-10
+        self.ah_conv_tol = 1e-12
         self.ah_max_cycle = 30
         self.ah_lindep = 1e-14
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
@@ -1064,7 +1065,7 @@ class CASSCF(casci.CASCI):
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = scipy.linalg.eigh(heff, seff)
+            e, v = pyscf.lib.safe_eigh(heff, seff)[:2]
             ci1 = 0
             for i in range(nd):
                 ci1 += xs[i] * v[i,0]

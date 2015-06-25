@@ -99,7 +99,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, orbsym=[], wfnsym=None, **kwargs):
+           lindep=1e-8, max_cycle=50, nroots=1, orbsym=[], wfnsym=None,
+           **kwargs):
     assert(len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
@@ -108,6 +109,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
     cis.lindep = lindep
     cis.max_cycle = max_cycle
     cis.wfnsym = wfnsym
+    cis.nroots = nroots
 
     unknown = []
     for k, v in kwargs.items():
@@ -124,7 +126,11 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
 
     e, c = direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
     if cis.wfnsym is not None:
-        c = addons.symmetrize_wfn(c, norb, nelec, orbsym, wfnsym)
+        if cis.nroots > 1:
+            c = [addons.symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym)
+                 for ci in c]
+        else:
+            c = addons.symmetrize_wfn(c, norb, nelec, orbsym, wfnsym)
     return e, c
 
 # dm_pq = <|p^+ q|>
@@ -188,15 +194,6 @@ class FCISolver(direct_spin1.FCISolver):
             logger.info(self, 'specified total symmetry = %s',
                         symm.irrep_id2name(self.mol.groupname, self.wfnsym))
 
-    def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
-        return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
-
-    def make_hdiag(self, h1e, eri, norb, nelec):
-        return direct_spin1.make_hdiag(h1e, eri, norb, nelec)
-
-    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
-        return direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
-
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
@@ -205,13 +202,6 @@ class FCISolver(direct_spin1.FCISolver):
         if not orbsym:
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
-
-    def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
-                                                self.level_shift)
-#    def make_precond(self, hdiag, *args):
-#        return make_diag_precond(hdiag, self.level_shift)
-#        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         if self.verbose > logger.QUIET:
@@ -227,43 +217,12 @@ class FCISolver(direct_spin1.FCISolver):
         if self.wfnsym is not None:
             # should I remove the non-symmetric contributions in each
             # call of contract_2e?
-            c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
+            if self.nroots > 1:
+                c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym)
+                     for ci in c]
+            else:
+                c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
         return e, c
-
-    def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
-        h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
-        ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
-        return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
-
-    def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
-        return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)
-
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None):
-        return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
-
-    def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
-        return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index,
-                                        reorder)
-
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
-        return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index,
-                                       reorder)
-
-    def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
-        return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
-
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
-        return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
-
-    def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
-                     reorder=True):
-        return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index,
-                                         reorder)
-
-    def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
-                    reorder=True):
-        return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index,
-                                        reorder)
 
 
 if __name__ == '__main__':
