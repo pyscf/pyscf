@@ -286,7 +286,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 def _check_(c):
     c = pyscf.lib.transpose_sum(c)
     c *= .5
-    if abs(numpy.linalg.norm(c)-1) > 1e-12:
+    if abs(numpy.linalg.norm(c)-1) > 1e-9:
         raise ValueError('State not singlet')
     return c
 

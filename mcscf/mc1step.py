@@ -190,9 +190,10 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
     if x0_guess is None:
         x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
+    ah_start_tol = max(min(norm_gorb, casscf.ah_start_tol), ah_conv_tol)
     while True:
         # increase the AH accuracy when approach convergence
-        ah_start_tol = max(min(norm_gorb**2*1e1, casscf.ah_start_tol), ah_conv_tol)
+        ah_start_tol = max(min(norm_gorb**2, casscf.ah_start_tol), ah_start_tol)
         ah_start_cycle = min(casscf.ah_start_cycle, int(1-numpy.log10(norm_gorb)))
         log.debug('Set ah_start_tol %g, ah_start_cycle %d',
                   ah_start_tol, ah_start_cycle)
@@ -227,8 +228,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                                tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
                                lindep=casscf.ah_lindep):
             if (ah_end or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
-                ((abs(w-wlast) < ah_start_tol) and
-                 (numpy.linalg.norm(residual)**2 < ah_start_tol) and
+                ((numpy.linalg.norm(residual) < ah_start_tol) and
                  (ihop >= ah_start_cycle)) or
                 (seig < casscf.ah_lindep)):
                 imic += 1
@@ -457,8 +457,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
         casdm1_old = casdm1
 
         micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
-        micro = max(micro, int(1-numpy.log10(de+1e-10)))
-        for imicro in range(micro):
+        max_micro = max(micro, int(1-numpy.log10(de+1e-10)))
+        for imicro in range(max_micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
                 norm_gorb0 = norm_gorb = numpy.linalg.norm(g_orb)
@@ -739,7 +739,7 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
-        self.ah_start_tol = 1e-1
+        self.ah_start_tol = .2
         self.ah_start_cycle = 2
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
@@ -753,7 +753,7 @@ class CASSCF(casci.CASCI):
 # ah_decay_rate gradually improve AH improve by decreasing start_tol/conv_tol
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
-        self.ah_decay_rate = .5
+        self.ah_decay_rate = .7
 
         self.chkfile = mf.chkfile
         self.ci_response_space = 3
@@ -1019,8 +1019,7 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         nocc = ncore + ncas
         if hasattr(self.fcisolver, 'approx_kernel'):
-            ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas,
-                                               ci0=ci0, options=self.__dict__)[1]
+            ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
@@ -1085,12 +1084,15 @@ class CASSCF(casci.CASCI):
         occ, ucas = self._eig(-envs['casdm1'], ncore, nocc)
         mo = envs['mo'].copy()
         mo[:,ncore:nocc] = numpy.dot(mo[:,ncore:nocc], ucas)
+        mo_occ = numpy.zeros(mo.shape[1])
+        mo_occ[:ncore] = 2
+        mo_occ[ncore:nocc] = -occ
         chkfile.dump_mcscf(self.mol, self.chkfile, mo,
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
                            ci_vector=civec,
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
-                           converged=envs['conv'], mo_occ=-occ)
+                           converged=envs['conv'], mo_occ=mo_occ)
 
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
                      cas_natorb=False, verbose=None):
