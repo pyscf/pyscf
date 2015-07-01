@@ -324,7 +324,17 @@ class localizer:
 
             gradient_norm = np.linalg.norm( gradient )
             update_norm = np.linalg.norm( flatx )
+            __cost_func_prev = -self.__costfunction()
             self.__update_unitary( flatx )
+            __cost_func_now = -self.__costfunction()
+            __counter = 0
+            while ( __counter < 6 ) and ( __cost_func_now < __cost_func_prev ):
+                logger.debug(self, "Localizer :: Taking half a step back")
+                flatx *= 0.5
+                __cost_func_prev = __cost_func_now
+                self.__update_unitary( -flatx )
+                __cost_func_now = -self.__costfunction()
+                __counter += 1
 
             logger.debug(self, "Localizer :: gradient norm = %g", gradient_norm)
             logger.debug(self, "Localizer :: update norm   = %g", update_norm)
