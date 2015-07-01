@@ -13,14 +13,14 @@ from pyscf.lib import logger
 
 def safe_eigh(h, s, lindep=1e-15):
     seig, t = scipy.linalg.eigh(s)
-    try:
-        w, v = scipy.linalg.eigh(h, s)
-    except numpy.linalg.linalg.LinAlgError:
-        idx = seig > lindep
+    if seig[0] < lindep:
+        idx = seig >= lindep
         t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
         heff = reduce(numpy.dot, (t.T, h, t))
         w, v = scipy.linalg.eigh(heff)
         v = numpy.dot(t, v)
+    else:
+        w, v = scipy.linalg.eigh(h, s)
     return w, v, seig
 
 # default max_memory 2000 MB

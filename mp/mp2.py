@@ -146,13 +146,22 @@ class MP2(object):
         nvir = nmo - nocc
         co = mo_coeff[:,:nocc]
         cv = mo_coeff[:,nocc:]
-        if self._scf._eri is not None and \
-           (nocc*nvir*nmo**2/2*8 + (nocc*nvir)**2*8 \
-            + self._scf._eri.nbytes)/1e6 < self.max_memory:
-            eri = ao2mo.incore.general(self._scf._eri, (co,cv,co,cv))
+        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+        mem_now = pyscf.lib.current_memory()[0]
+        if (self._scf._eri is not None and
+            mem_incore+mem_now < self.max_memory or
+            self.mol.incore_anyway):
+            if self._scf._eri is None:
+                from pyscf.scf import _vhf
+                eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+            else:
+                eri = self._scf._eri
+            eri = ao2mo.incore.general(eri, (co,cv,co,cv))
         else:
+            max_memory = max(2000, self.max_memory*.9-mem_now)
             erifile = tempfile.NamedTemporaryFile()
             ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
+                                  max_memory=max_memory-mem_basic,
                                   verbose=self.verbose)
             eri = erifile
         time1 = log.timer('Integral transformation', *time0)
@@ -165,6 +174,13 @@ class MP2(object):
     def make_rdm2(self, t2=None):
         if t2 is None: t2 = self.t2
         return make_rdm2(self, t2, self.verbose)
+
+def _mem_usage(nocc, nvir):
+    nmo = nocc + nvir
+    basic = ((nocc*nvir)**2 + nocc*nvir**2*2)*8 / 1e6
+    incore = nocc*nvir*nmo**2/2*8 / 1e6 + basic
+    outcore = basic
+    return incore, outcore, basic
 
 
 if __name__ == '__main__':

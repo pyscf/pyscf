@@ -503,7 +503,7 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        if self._eri is not None or self._is_mem_enough():
+        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)

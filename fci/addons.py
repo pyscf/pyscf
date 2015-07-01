@@ -223,6 +223,26 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     old_det_idxb = numpy.argsort(guide_stringsb)
     return ci.take(old_det_idxa, axis=0).take(old_det_idxb, axis=1)
 
+def overlap(string1, string2, norb, s=None):
+    '''Determinants overlap on non-orthogonal one-particle basis'''
+    if s is None:  # orthogonal basis with s_ij = delta_ij
+        return string1 == string2
+    else:
+        if isinstance(string1, str):
+            nelec = string1.count('1')
+            string1 = int(string1, 2)
+        else:
+            nelec = bin(string1).count('1')
+        if isinstance(string2, str):
+            assert(string2.count('1') == nelec)
+            string2 = int(string2, 2)
+        else:
+            assert(bin(string2).count('1') == nelec)
+        idx1 = [i for i in range(norb) if (1<<i & string1)]
+        idx2 = [i for i in range(norb) if (1<<i & string2)]
+        s1 = numpy.take(numpy.take(s, idx1, axis=0), idx2, axis=1)
+        return numpy.linalg.det(s1)
+
 
 if __name__ == '__main__':
     a4 = 10*numpy.arange(4)[:,None]
@@ -259,4 +279,8 @@ if __name__ == '__main__':
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci = numpy.ones((na,nb))
-    print symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)
+    print(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2))
+    s1 = numpy.random.seed(1)
+    s1 = numpy.random.random((6,6))
+    s1 = s1 + s1.T
+    print(overlap(int('0b10011',2), int('0b011010',2), 6, s1) - -0.273996425116)

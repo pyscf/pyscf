@@ -224,6 +224,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore'):
+        mol = casscf.mol
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         nmo = mo[0].shape[1]
@@ -232,15 +233,19 @@ class _ERIS(object):
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = pyscf.lib.current_memory()[0]
 
-        if (method == 'incore' and casscf._scf._eri is not None and
-            ((mem_incore+mem_now) < casscf.max_memory*.9)):
+        eri = casscf._scf._eri
+        if (method == 'incore' and eri is not None and
+            ((mem_incore+mem_now) < casscf.max_memory*.9) or
+            mol.incore_anyway):
+            if eri is None:
+                from pyscf.scf import _vhf
+                eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \
             self.appa, self.apPA, self.APPA, \
             self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
             self.Icvcv, self.ICVCV, self.cvCV = \
-                    trans_e1_incore(casscf._scf._eri, mo,
-                                    casscf.ncore, casscf.ncas)
+                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
         else:
             import gc
             gc.collect()
@@ -254,7 +259,7 @@ class _ERIS(object):
                 self.appa, self.apPA, self.APPA, \
                 self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
                 self.Icvcv, self.ICVCV, self.cvCV = \
-                        trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
+                        trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory, verbose=log)
             else:
                 raise RuntimeError('.max_memory not enough')

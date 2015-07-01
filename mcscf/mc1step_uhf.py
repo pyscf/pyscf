@@ -63,7 +63,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
-    def gorb_update(r0):
+    def gorb_update(u, r0):
         return g_orb + h_op1(r0) + h_opjk(r0)
 
     ############## hessian, diagonal ###########
@@ -177,8 +177,8 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
         # it may ruin the hermitian of hessian unless g == g.T. So symmetrize it
         # x_{pq} -= g_{pr} \delta_{qs} x_{rs} * .5
         # x_{rs} -= g_{rp} \delta_{sq} x_{pq} * .5
-        x2a -= numpy.dot(g[0]+g[0].T, x1a) * .5
-        x2b -= numpy.dot(g[1]+g[1].T, x1b) * .5
+        x2a -= numpy.dot(g[0].T, x1a)
+        x2b -= numpy.dot(g[1].T, x1b)
         # part2
         x2a[:ncore[0]] += numpy.dot(xa_cu, vhf_ca[0][ncore[0]:])
         x2b[:ncore[1]] += numpy.dot(xb_cu, vhf_ca[1][ncore[1]:])
@@ -650,7 +650,7 @@ class CASSCF(casci_uhf.CASCI):
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
                            converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])),
-                           mo_occ=occ)
+                           mo_occ=mo_occ)
 
 
 # to avoid calculating AO integrals
