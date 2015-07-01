@@ -137,12 +137,13 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, **kwargs):
+           lindep=1e-8, max_cycle=50, nroots=1, **kwargs):
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
+    cis.nroots = nroots
 
     unknown = []
     for k, v in kwargs.items():
@@ -232,24 +233,30 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
     if not fci.davidson_only:
-        if na*na == 1:
-            return pw, pv
-        elif len(addr) == na*na:
-            if fci.nroots > 1:
+        if len(addr) == na*na:
+            if na*na == 1:
+                return pw[0], pv[:,0]
+            elif fci.nroots > 1:
                 civec = numpy.empty((fci.nroots,na*na))
                 civec[:,addr] = pv[:,:fci.nroots].T
-                return pw[:fci.nroots], civec.reshape(fci.nroots,na,na)
+                civec = civec.reshape(fci.nroots,na,na)
+                try:
+                    return pw[:fci.nroots], [_check_(ci) for ci in civec]
+                except ValueError:
+                    pass
             elif abs(pw[0]-pw[1]) > 1e-12:
                 civec = numpy.empty((na*na))
                 civec[addr] = pv[:,0]
                 civec = civec.reshape(na,na)
-                civec = pyscf.lib.transpose_sum(civec, inplace=True) * .5
+                civec = pyscf.lib.transpose_sum(civec) * .5
                 # direct diagonalization may lead to triplet ground state
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-                if numpy.allclose(numpy.linalg.norm(civec), 1):
-                    return pw[0], civec.reshape(na,na)
+                try:
+                    return pw[0], _check_(civec.reshape(na,na))
+                except ValueError:
+                    pass
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -264,15 +271,24 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         ci0 = numpy.zeros(na*na)
         #ci0[addr] = pv[:,0]
         ci0[0] = 1
+    elif fci.nroots > 1:
+        ci0 = [x.ravel() for x in ci0]
     else:
-# symmetrize the initial guess, otherwise got strange numerical noise after
-# couple of davidson iterations
-#        ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na)).ravel()*.5
         ci0 = ci0.ravel()
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, **kwargs)
-    return e, c.reshape(na,na)
+    if fci.nroots > 1:
+        return e, [_check_(ci.reshape(na,na)) for ci in c]
+    else:
+        return e, _check_(c.reshape(na,na))
+
+def _check_(c):
+    c = pyscf.lib.transpose_sum(c)
+    c *= .5
+    if abs(numpy.linalg.norm(c)-1) > 1e-9:
+        raise ValueError('State not singlet')
+    return c
 
 
 class FCISolver(direct_spin1.FCISolver):
@@ -298,7 +314,10 @@ class FCISolver(direct_spin1.FCISolver):
                 'max_space': self.max_space,
                 'lindep': self.lindep,
                 'max_memory': self.max_memory,
+                'nroots': self.nroots,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
+        if self.nroots == 1 and x0.size > 6.5e7: # 500MB
+            opts['lessio'] = True
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)
 
@@ -310,12 +329,6 @@ class FCISolver(direct_spin1.FCISolver):
         if self.verbose > pyscf.lib.logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
         e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, **kwargs)
-# when norb is small, ci is obtained by exactly diagonalization. It can happen
-# that the ground state is triplet (ci = -ci.T), symmetrize the coefficients
-# will lead to ci = 0
-        ci = pyscf.lib.transpose_sum(ci, inplace=True) * .5
-        if numpy.linalg.norm(ci) < .9:
-            raise RuntimeError("Ground state might be triplet.  Run again with davidson_only=True")
         return e, ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

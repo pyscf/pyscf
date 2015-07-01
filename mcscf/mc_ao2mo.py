@@ -338,6 +338,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 # approx = 3: aapp, appa
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore', approx=1):
+        mol = casscf.mol
         self.ncore = casscf.ncore
         self.ncas = casscf.ncas
         nao, nmo = mo.shape
@@ -346,12 +347,16 @@ class _ERIS(object):
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = pyscf.lib.current_memory()[0]
 
-        if (method == 'incore' and casscf._scf._eri is not None and
-            ((mem_incore+mem_now) < casscf.max_memory*.9)):
+        eri = casscf._scf._eri
+        if (method == 'incore' and eri is not None and
+            (mem_incore+mem_now < casscf.max_memory*.9) or
+            mol.incore_anyway):
+            if eri is None:
+                from pyscf.scf import _vhf
+                eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
             self.Iapcv, self.Icvcv = \
-                    trans_e1_incore(casscf._scf._eri, mo,
-                                    casscf.ncore, casscf.ncas)
+                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
         else:
             import gc
             gc.collect()
@@ -362,13 +367,13 @@ class _ERIS(object):
                     log.warn('Not enough memory! You need increase CASSCF.max_memory')
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
                 self.Iapcv, self.Icvcv = \
-                        trans_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
+                        trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory-mem_outcore, verbose=log)
             else:
                 if max_memory < mem_basic:
                     log.warn('Not enough memory! You need increase CASSCF.max_memory')
                 self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa = \
-                        light_e1_outcore(casscf.mol, mo, casscf.ncore, casscf.ncas,
+                        light_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory-mem_basic,
                                          approx=approx, verbose=log)
 

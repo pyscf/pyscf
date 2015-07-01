@@ -133,7 +133,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
     eri = eri.copy()
-    h2e = pyscf.ao2mo.restore(1, eri, norb).copy()
+    h2e = pyscf.ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./nelec)
     for k in range(norb):
@@ -175,12 +175,13 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # be careful with single determinant initial guess. It may diverge the
 # preconditioner when the eigvalue of first davidson iter equals to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, **kwargs):
+           lindep=1e-8, max_cycle=50, nroots=1, **kwargs):
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
+    cis.nroots = nroots
     unknown = []
     for k, v in kwargs.items():
         setattr(cis, k, v)
@@ -302,10 +303,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
     if not fci.davidson_only:
-        if na*nb == 1:
-            return pw, pv
-        elif len(addr) == na*nb:
-            if fci.nroots > 1:
+        if len(pw) == na*nb:
+            if na*nb == 1:
+                return pw[0], pv[:,0]
+            elif fci.nroots > 1:
                 civec = numpy.empty((fci.nroots,na*nb))
                 civec[:,addr] = pv[:,:fci.nroots].T
                 return pw[:fci.nroots], civec.reshape(fci.nroots,na,nb)
@@ -324,12 +325,17 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
     if ci0 is None:
         ci0 = numpy.zeros(na*nb)
         ci0[0] = 1
+    elif fci.nroots > 1:
+        ci0 = [x.ravel() for x in ci0]
     else:
         ci0 = ci0.ravel()
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, **kwargs)
-    return e, c.reshape(na,nb)
+    if fci.nroots > 1:
+        return e, [ci.reshape(na,nb) for ci in c]
+    else:
+        return e, c.reshape(na,nb)
 
 def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     # precondition with pspace Hamiltonian, CPL, 169, 463
@@ -423,7 +429,10 @@ class FCISolver(object):
                 'max_space': self.max_space,
                 'lindep': self.lindep,
                 'max_memory': self.max_memory,
+                'nroots': self.nroots,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
+        if self.nroots == 1 and x0.size > 6.5e7: # 500MB
+            opts['lessio'] = True
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)
 

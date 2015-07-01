@@ -144,7 +144,7 @@ def atom_types(atoms, basis=None):
     return atmgroup
 
 
-def format_atom(atoms, origin=0, axes=1):
+def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     '''Convert the input :attr:`Mole.atom` to the internal data format.
     Including, changing the nuclear charge to atom symbol, rotate and shift
     molecule.  If the :attr:`~Mole.atom` is a string, it takes ";" and "\\n"
@@ -160,6 +160,8 @@ def format_atom(atoms, origin=0, axes=1):
             new axis origin.
         axes : ndarray
             (new_x, new_y, new_z), each entry is a length-3 array
+        unit : str
+            set to Bohr/bohr to indicate the coordinates are in atomic unit
 
     Returns:
         formated :attr:`~Mole.atom`
@@ -171,6 +173,10 @@ def format_atom(atoms, origin=0, axes=1):
     >>> gto.format_atom(['9,0,0,0', (1, (0, 0, 1))], origin=(1,1,1))
     [['F', [-1.0, -1.0, -1.0]], ['H', [-1, -1, 0]]]
     '''
+    if unit.startswith(('B','b','au','AU')):
+        convert = param.BOHR
+    else:
+        convert = 1
     fmt_atoms = []
     def str2atm(line):
         dat = line.split()
@@ -180,7 +186,7 @@ def format_atom(atoms, origin=0, axes=1):
             rawsymb = _rm_digit(dat[0])
             symb = dat[0].replace(rawsymb, _std_symbol(rawsymb))
         c = numpy.array([float(x) for x in dat[1:4]]) - origin
-        return [symb, numpy.dot(axes, c).tolist()]
+        return [symb, numpy.dot(axes, c*convert).tolist()]
 
     if isinstance(atoms, str):
         atoms = atoms.replace(';','\n').replace(',',' ')
@@ -201,7 +207,7 @@ def format_atom(atoms, origin=0, axes=1):
                     c = numpy.array(atom[1:4]) - origin
                 else:
                     c = numpy.array(atom[1]) - origin
-                fmt_atoms.append([symb, numpy.dot(axes, c).tolist()])
+                fmt_atoms.append([symb, numpy.dot(axes, c*convert).tolist()])
     return fmt_atoms
 
 #TODO: sort exponents
@@ -946,6 +952,8 @@ class Mole(object):
             If a string is given as the name of point group, the given point
             group symmetry will be used.  Note that the input molecular
             coordinates will not be changed in this case.
+        symmetry_subgroup : str
+            subgroup
 
         atom : list or str
             To define molecluar structure.  The internal format is
@@ -1063,6 +1071,7 @@ class Mole(object):
         self.symm_orb = None
         self.irrep_id = None
         self.irrep_name = None
+        self.incore_anyway = False
         self._basis = None
         self._built = False
         self._keys = set(self.__dict__.keys())
@@ -1876,4 +1885,47 @@ def _update_from_cmdargs_(mol):
         else:
             if mol.verbose > logger.QUIET:
                 print('output file: %s' % mol.output)
+
+
+def from_zmatrix(atomstr):
+    import pyscf.symm
+    atomstr = atomstr.replace(';','\n').replace(',',' ')
+    atoms = []
+    for line in atomstr.split('\n'):
+        if line.strip():
+            rawd = line.split()
+            if len(rawd) == 1:
+                atoms.append([rawd[0], numpy.zeros(3)])
+            elif len(rawd) == 3:
+                atoms.append([rawd[0], numpy.array((float(rawd[2]), 0, 0))])
+            elif len(rawd) == 5:
+                bonda = int(rawd[1]) - 1
+                bond  = float(rawd[2])
+                anga  = int(rawd[3]) - 1
+                ang   = float(rawd[4])/180*numpy.pi
+                v1 = atoms[anga][1] - atoms[bonda][1]
+                if not numpy.allclose(v1[:2], 0):
+                    vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
+                else: # on z
+                    vecn = numpy.array((0.,0.,1.))
+                rmat = pyscf.symm.rotation_mat(vecn, ang)
+                c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
+                atoms.append([rawd[0], atoms[bonda][1]+c])
+            else: # FIXME
+                bonda = int(rawd[1]) - 1
+                bond  = float(rawd[2])
+                anga  = int(rawd[3]) - 1
+                ang   = float(rawd[4])/180*numpy.pi
+                diha  = int(rawd[5]) - 1
+                dih   = float(rawd[6])/180*numpy.pi
+                v1 = atoms[anga][1] - atoms[bonda][1]
+                v2 = atoms[diha][1] - atoms[anga][1]
+                vecn = numpy.cross(v2, -v1)
+                rmat = pyscf.symm.rotation_mat(v1, -dih)
+                vecn = numpy.dot(rmat, vecn) / numpy.linalg.norm(vecn)
+                rmat = pyscf.symm.rotation_mat(vecn, ang)
+                c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
+                atoms.append([rawd[0], atoms[bonda][1]+c])
+    return atoms
+zmat = from_zmatrix
 

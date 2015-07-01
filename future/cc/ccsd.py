@@ -95,6 +95,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
     woooo = woooo.reshape(nocc,nocc,nocc,nocc) + numpy.asarray(eris.oooo)
     woooo = numpy.asarray(woooo.transpose(0,2,1,3), order='C')
     time1 = log.timer_debug1('woooo', *time0)
+    eris_ooov = None
 
     for p0, p1 in prange(0, nocc, blksize):
 # ==== read eris.ovvv ====
@@ -106,8 +107,8 @@ def update_amps(cc, t1, t2, eris, blksize=1):
         fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1], eris_ovvv)
         fvv += numpy.einsum('kc,kbca->ab',  -t1[p0:p1], eris_ovvv)
 
-        foo[:,p0:p1] += numpy.einsum('kc,jikc->ij', 2*t1, eris.ooov[p0:p1])
-        foo[:,p0:p1] += numpy.einsum('kc,jkic->ij',  -t1, eris.ooov[p0:p1])
+        foo[:,p0:p1] += numpy.einsum('kc,jikc->ij', 2*t1, eris_ooov)
+        foo[:,p0:p1] += numpy.einsum('kc,jkic->ij',  -t1, eris_ooov)
 
     #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
     #: tmp = numpy.einsum('ijcd,kcdb->ijbk', tau, eris.ovvv)
@@ -529,7 +530,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         nmo = self.nmo
         nocc = self.nocc
         nvir = nmo - nocc
-        unit = _memory_usage_inloop(nmo, nocc)*1e6/8
+        unit = _memory_usage_inloop(nocc, nvir)*1e6/8
         rest = (self.max_memory-lib.current_memory()[0])*1e6/8*.9 \
                 - nocc**4 - nocc**3*nvir - (nocc*nvir)**2*2
         return min(nocc, max(1, int(rest/unit/8)*8))
@@ -572,12 +573,11 @@ class _ERIS:
         nocc = cc.nocc
         nmo = cc.nmo
         nvir = nmo - nocc
-        incore_size = (nmo*(nmo+1)//2)**2
+        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+        mem_now = pyscf.lib.current_memory()[0]
         log = logger.Logger(cc.stdout, cc.verbose)
-        if ((cc._scf._eri is not None) and (method == 'incore') and
-            (max(incore_size*2,
-                 incore_size + nocc*nvir**3/2 + nvir**4/4 + nocc**2*nvir**2*2)*8/1e6 +
-             _memory_usage(nmo, nocc) + lib.current_memory()[0]) < cc.max_memory):
+        if (method == 'incore' and cc._scf._eri is not None and
+            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
             eri1 = pyscf.ao2mo.incore.full(cc._scf._eri, mo_coeff)
             #:eri1 = pyscf.ao2mo.restore(1, eri1, nmo)
             #:self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
@@ -662,18 +662,22 @@ class _ERIS:
 
 
 # assume nvir > nocc, minimal requirements on memory in loop of update_amps
-def _memory_usage_inloop(nmo, nocc):
-    nvir = nmo - nocc
+def _memory_usage_inloop(nocc, nvir):
     v = max(nvir**3*2+nvir*nocc**2*2,
-            nvir**3+nocc*nvir**2*5+nvir*nocc**2,
+            nvir**3+nocc*nvir**2*5+nvir*nocc**2*2,
             nocc*nvir**2*9)
     return v*8/1e6
 # assume nvir > nocc, minimal requirements on memory
-def _memory_usage(nmo, nocc):
-    nvir = nmo - nocc
-    v = _memory_usage_inloop(nmo, nocc)*1e6/8 + nocc**4 + nocc**3*nvir
-    v = max(v, nocc*(nocc+1)//2*nvir**2) + (nocc*nvir)**2*2
-    return v*8/1e6
+def _mem_usage(nocc, nvir):
+    basic = _memory_usage_inloop(nocc, nvir)*1e6/8 + nocc**4
+    basic = max(basic, nocc*(nocc+1)//2*nvir**2) + (nocc*nvir)**2*2
+    basic = basic * 8/1e6
+    nmo = nocc + nvir
+    incore = (max((nmo*(nmo+1)//2)**2*2*8/1e6, basic) +
+              (nocc*nvir**3/2 + nvir**4/4 + nocc**2*nvir**2*2 +
+               nocc**3*nvir*2)*8/1e6)
+    outcore = basic
+    return incore, outcore, basic
 
 def residual_as_diis_errvec(mycc):
     def fupdate(t1, t2, istep, normt, de, adiis):

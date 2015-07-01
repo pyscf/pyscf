@@ -10,132 +10,160 @@ import scipy.linalg
 import h5py
 from pyscf.lib import logger
 
-# default max_memory 2000 MB
 
-def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12, lindep=1e-16,
-             max_memory=2000, eig_pick=None, dot=numpy.dot, callback=None,
-             verbose=logger.WARN):
+def safe_eigh(h, s, lindep=1e-15):
+    seig, t = scipy.linalg.eigh(s)
+    if seig[0] < lindep:
+        idx = seig >= lindep
+        t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
+        heff = reduce(numpy.dot, (t.T, h, t))
+        w, v = scipy.linalg.eigh(heff)
+        v = numpy.dot(t, v)
+    else:
+        w, v = scipy.linalg.eigh(h, s)
+    return w, v, seig
+
+# default max_memory 2000 MB
+def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
+             lindep=1e-16, max_memory=2000, dot=numpy.dot, callback=None,
+             nroots=1, lessio=False, verbose=logger.WARN):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(sys.stdout, verbose)
-    toloose = numpy.sqrt(tol)
-    # if trial vectors are held in memory, store as many as possible
-    max_space = max(int((max_memory-1e3)*1e6/x0.nbytes/2), max_space)
 
-    xs = _TrialXs(x0.nbytes, max_space, max_memory)
-    ax = _TrialXs(x0.nbytes, max_space, max_memory)
-    if eig_pick is None:
-        eig_pick = lambda w, v: 0
-    #e0_hist = []
-    #def eig_pick(w, v):
-    #    idx = 0
-    #    if len(e0_hist) > 3:
-    #        idx = numpy.argmin([abs(e0_hist[-1]-ei) for ei in w])
-    #    e0_hist.append(w[idx])
-    #    return idx
+    toloose = numpy.sqrt(tol) * 1e-2
+    max_space = max_space + nroots * 2
+    if max_memory*1e6/x0[0].nbytes/2 > max_space+nroots*2:
+        xs = []
+        ax = []
+        _incore = True
+    else:
+        xs = _Xlist()
+        ax = _Xlist()
+        _incore = False
 
-    heff = numpy.zeros((max_cycle+1,max_cycle+1), dtype=x0.dtype)
-    ovlp = numpy.zeros((max_cycle+1,max_cycle+1), dtype=x0.dtype)
+    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
+        xt = xs = [x0]
+        axt = ax = [a(x0)]
+        max_cycle = min(max_cycle,x0.size)
+    else:
+        xt = xs = [xi for xi in x0]
+        axt = ax = [a(xi) for xi in x0]
+        max_cycle = min(max_cycle,x0[0].size)
+    head = 0
+    rnow = len(xt)
+
+    heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
+    ovlp = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     e = 0
-    for istep in range(min(max_cycle,x0.size)):
-        subspace = len(xs)
-        if subspace == 0:
-            ax0 = dx = None
-            xt = x0
+    for icyc in range(max_cycle):
+        space = len(xs)
+        for i in range(space):
+            if head <= i < head+rnow:
+                for k in range(i-head+1):
+                    heff[head+k,i] = dot(xt[k].conj(), axt[i-head])
+                    ovlp[head+k,i] = dot(xt[k].conj(), xt [i-head])
+                    heff[i,head+k] = heff[head+k,i].conj()
+                    ovlp[i,head+k] = ovlp[head+k,i].conj()
+            else:
+                for k in range(rnow):
+                    heff[head+k,i] = dot(xt[k].conj(), ax[i])
+                    ovlp[head+k,i] = dot(xt[k].conj(), xs[i])
+                    heff[i,head+k] = heff[head+k,i].conj()
+                    ovlp[i,head+k] = ovlp[head+k,i].conj()
+
+        w, v, seig = safe_eigh(heff[:space,:space], ovlp[:space,:space])
+        try:
+            de = w[:nroots] - e
+        except ValueError:
+            de = w[:nroots]
+        e = w[:nroots]
+
+        x0 = []
+        ax0 = []
+        if lessio and not _incore:
+            for k, ek in enumerate(e):
+                x0 .append(xs[space-1] * v[space-1,k])
+            for i in reversed(range(space-1)):
+                xsi = xs[i]
+                for k, ek in enumerate(e):
+                    x0 [k] += v[i,k] * xsi
+            ax0 = [a(xi) for xi in x0]
         else:
-            ax0 = None
-            xt = precond(dx, e, x0)
-            dx = None
-        axt = a(xt)
-        for i in range(subspace):
-            heff[subspace,i] = heff[i,subspace] = dot(xt.conj(), ax[i])
-            ovlp[subspace,i] = ovlp[i,subspace] = dot(xt.conj(), xs[i])
-        heff[subspace,subspace] = dot(xt.conj(), axt)
-        ovlp[subspace,subspace] = dot(xt.conj(), xt)
+            for k, ek in enumerate(e):
+                x0 .append(xs[space-1] * v[space-1,k])
+                ax0.append(ax[space-1] * v[space-1,k])
+            for i in reversed(range(space-1)):
+                xsi = xs[i]
+                axi = ax[i]
+                for k, ek in enumerate(e):
+                    x0 [k] += v[i,k] * xsi
+                    ax0[k] += v[i,k] * axi
 
-        w, v = scipy.linalg.eigh(heff[:subspace+1,:subspace+1], \
-                                 ovlp[:subspace+1,:subspace+1])
-        index = eig_pick(w, v)
-        de = w[index] - e
-        e = w[index]
+        head += rnow
+        dx = []
+        dx_norm = []
+        xt = []
+        axt = []
+        for k, ek in enumerate(e):
+            dxtmp = ax0[k] - ek * x0[k]
+            dxtmp_norm = numpy.linalg.norm(dxtmp)
+            if dxtmp_norm > toloose or abs(de[k]) > tol:
+                dx.append(dxtmp)
+                dx_norm.append(dxtmp_norm)
 
-        x0  = xt  * v[subspace,index]
-        ax0 = axt * v[subspace,index]
-        for i in reversed(range(subspace)):
-            x0  += v[i,index] * xs[i]
-            ax0 += v[i,index] * ax[i]
-
-        seig = scipy.linalg.eigh(ovlp[:subspace+1,:subspace+1])[0]
-        dx = ax0 - e * x0
-        rr = numpy.linalg.norm(dx)
-        log.debug('davidson %d %d  rr= %g  e= %.12g  seig= %g',
-                  istep, subspace, rr, e, seig[0])
-
-        if rr/numpy.sqrt(rr.size) < tol or abs(de) < tol or seig[0] < lindep:
+                #xt.append(precond(dxtmp, ek, x0[k])) # not accurate enough?
+                xt.append(precond(dxtmp, e[0], x0[k]))
+                xt[-1] *= 1/numpy.linalg.norm(xt[-1])
+                axt.append(a(xt[-1]))
+        rnow = len(xt)
+# Cannot require both dx_norm and de converged, because we want to stick on
+# the states associated with the initial guess.  Numerical instability can
+# break the symmetry restriction and move to lower state, eg BeH2 CAS(2,2)
+        if (rnow == 0 or seig[0] < lindep or
+            (max(dx_norm) < toloose or max(abs(de)) < tol)):
+#            log.debug('davidson %d %d %s', icyc, space,
+#                      (rnow == 0, seig[0] < lindep, max(dx_norm) < toloose,
+#                       max(abs(de)) < tol))
             break
-
-# refresh and restart
-# floating size of subspace, prevent the new intital guess going too bad
-        if subspace < max_space \
-           or (subspace<max_space+2 and seig[0] > toloose):
-            xs.append(xt)
-            ax.append(axt)
         else:
-# After several updates of the trial vectors, the trial vectors are highly
-# linear dependent which seems reducing the accuracy. Removing all trial
-# vectors and restarting iteration with better initial guess gives better
-# accuracy, though more iterations are required.
-            xs = _TrialXs(x0.nbytes, max_space, max_memory)
-            ax = _TrialXs(x0.nbytes, max_space, max_memory)
-            e = 0
+            log.debug('davidson %d %d  |r|= %4.3g  e= %s  seig= %4.3g',
+                      icyc, space, max(dx_norm), e, seig[0])
+
+        if head+rnow > max_space:
+            head = nroots
+            for k in range(nroots):
+                xs[k] = x0[k]
+                ax[k] = ax0[k]
+            tmp = numpy.dot(heff[nroots:space,:space],v[:,:nroots])
+            heff[nroots:space,:nroots] = tmp
+            heff[:nroots,nroots:space] = tmp.T.conj()
+            heff[:nroots,:nroots] = numpy.diag(e)
+            tmp = numpy.dot(ovlp[nroots:space,:space],v[:,:nroots])
+            ovlp[nroots:space,:nroots] = tmp
+            ovlp[:nroots,nroots:space] = tmp.T.conj()
+            ovlp[:nroots,:nroots] = numpy.eye(nroots)
+
+        for k in range(rnow):
+            if head + k >= space:
+                xs.append(xt[k])
+                ax.append(axt[k])
+            else:
+                xs[head+k] = xt[k]
+                ax[head+k] = axt[k]
 
         if callable(callback):
-            callback(istep, xs, ax)
+            callback(locals())
 
-    log.debug('final step %d', istep)
-
-    return e, x0
+    if nroots == 1:
+        return e[0], x0[0]
+    else:
+        return e, x0
 
 eigh = davidson
 dsyev = davidson
 
-
-class _TrialXs(list):
-    def __init__(self, xbytes, max_space, max_memory):
-        if xbytes*max_space*2 > max_memory*1e6:
-            _fd = tempfile.NamedTemporaryFile()
-            self.scr_h5 = h5py.File(_fd.name, 'w')
-        else:
-            self.scr_h5 = None
-    def __del__(self):
-        if self.scr_h5 is not None:
-            self.scr_h5.close()
-
-    def __getitem__(self, n):
-        if self.scr_h5 is None:
-            return list.__getitem__(self, n)
-        else:
-            return self.scr_h5[str(n)]
-
-    def append(self, x):
-        if self.scr_h5 is None:
-            list.append(self, x)
-        else:
-            n = len(self.scr_h5)
-            self.scr_h5[str(n)] = x
-
-    def __setitem__(self, n, x):
-        if self.scr_h5 is None:
-            list.__setitem__(self, n, x)
-        else:
-            self.scr_h5[str(n)] = x
-
-    def __len__(self):
-        if self.scr_h5 is None:
-            return list.__len__(self)
-        else:
-            return len(self.scr_h5)
 
 # Krylov subspace method
 # ref: J. A. Pople, R. Krishnan, H. B. Schlegel, and J. S. Binkley,
@@ -225,6 +253,38 @@ def dsolve(a, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot, \
 
     return xtrial
 
+class _Xlist(list):
+    def __init__(self):
+        self._fd = tempfile.NamedTemporaryFile()
+        self.scr_h5 = h5py.File(self._fd.name, 'w')
+        self.index = []
+    def __del__(self):
+        self.scr_h5.close()
+
+    def __getitem__(self, n):
+        key = self.index[n]
+        return self.scr_h5[key].value
+
+    def append(self, x):
+        key = str(len(self.index) + 1)
+        if key in self.index:
+            for i in range(len(self.index)+1):
+                if str(i) not in self.index:
+                    key = str(i)
+                    break
+        self.index.append(key)
+        self.scr_h5[key] = x
+
+    def __setitem__(self, n, x):
+        key = self.index[n]
+        self.scr_h5[key] = x
+
+    def __len__(self):
+        return len(self.index)
+
+    def pop(self, index):
+        self.index.pop(index)
+
 
 if __name__ == '__main__':
     numpy.random.seed(12)
@@ -258,12 +318,16 @@ if __name__ == '__main__':
         else:
             return r / (a.diagonal() - e0)
 
-    x0 = a[0]/numpy.linalg.norm(a[0])
-    #x0 = (u[:,0]+.01)/numpy.linalg.norm(u[:,0]+.01)
-    #print(dsyev(aop, x0, precond, eig_pick=lambda w,y: numpy.argmax(abs(w)<1e-4))[0])
-    #print(dsyev(aop, x0, precond)[0] - -42.8144765196)
-    e0,x0 = dsyev(aop, x0, precond, max_cycle=30, max_space=6, max_memory=.0001)
-    print(e0 - e[0])
+    x0 = [a[0]/numpy.linalg.norm(a[0]),
+          a[1]/numpy.linalg.norm(a[1]),
+          a[2]/numpy.linalg.norm(a[2]),
+          a[3]/numpy.linalg.norm(a[3])]
+    e0,x0 = dsyev(aop, x0, precond, max_cycle=30, max_space=12,
+                  max_memory=.0001, verbose=5, nroots=4)
+    print(e0[0] - e[0])
+    print(e0[1] - e[1])
+    print(e0[2] - e[2])
+    print(e0[3] - e[3])
 
 ##########
     a = a + numpy.diag(numpy.random.random(n)+1.1)* 10

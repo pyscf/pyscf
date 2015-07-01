@@ -63,7 +63,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
-    def gorb_update(r0):
+    def gorb_update(u, r0):
         return g_orb + h_op1(r0) + h_opjk(r0)
 
     ############## hessian, diagonal ###########
@@ -177,8 +177,8 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
         # it may ruin the hermitian of hessian unless g == g.T. So symmetrize it
         # x_{pq} -= g_{pr} \delta_{qs} x_{rs} * .5
         # x_{rs} -= g_{rp} \delta_{sq} x_{pq} * .5
-        x2a -= numpy.dot(g[0]+g[0].T, x1a) * .5
-        x2b -= numpy.dot(g[1]+g[1].T, x1b) * .5
+        x2a -= numpy.dot(g[0].T, x1a)
+        x2b -= numpy.dot(g[1].T, x1b)
         # part2
         x2a[:ncore[0]] += numpy.dot(xa_cu, vhf_ca[0][ncore[0]:])
         x2b[:ncore[1]] += numpy.dot(xb_cu, vhf_ca[1][ncore[1]:])
@@ -390,14 +390,14 @@ class CASSCF(casci_uhf.CASCI):
         self.conv_tol_grad = 1e-4
         # for augmented hessian
         self.ah_level_shift = 1e-4
-        self.ah_conv_tol = 1e-10
-        self.ah_max_cycle = 20
+        self.ah_conv_tol = 1e-12
+        self.ah_max_cycle = 30
         self.ah_lindep = 1e-14
-        self.ah_start_tol = 1e-1
+        self.ah_start_tol = .2
         self.ah_start_cycle = 2
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
-        self.ah_decay_rate = .5
+        self.ah_decay_rate = .7
         self.chkfile = mf.chkfile
         self.natorb = False
         self.callback = None
@@ -637,16 +637,20 @@ class CASSCF(casci_uhf.CASCI):
         mob = envs['mo'][1].copy()
         mob[:,ncore[1]:noccb] = numpy.dot(mob[:,ncore[1]:noccb], ucas)
         mo = numpy.array((moa,mob))
-        occ = numpy.array((-occa,-occb))
+        mo_occ = numpy.zeros((2,moa.shape[1]))
+        mo_occ[0,:ncore[0]] = 1
+        mo_occ[1,:ncore[1]] = 1
+        mo_occ[0,ncore[0]:nocca] = -occa
+        mo_occ[1,ncore[1]:noccb] = -occb
         pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo)
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_occ', occ)
+        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_occ', mo_occ)
         chkfile.dump_mcscf(self.mol, self.chkfile, mo,
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
                            ci_vector=(envs['fcivec'] if envs['dump_chk_ci'] else None),
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
                            converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])),
-                           mo_occ=occ)
+                           mo_occ=mo_occ)
 
 
 # to avoid calculating AO integrals

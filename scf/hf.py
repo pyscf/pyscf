@@ -807,8 +807,9 @@ class SCF(object):
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
-        if not self._is_mem_enough() and self.direct_scf:
-            if mol is None: mol = self.mol
+        if mol is None: mol = self.mol
+        if (self.direct_scf and not mol.incore_anyway and
+            not self._is_mem_enough()):
             self.opt = _vhf.VHFOpt(mol, 'cint2e_sph', 'CVHFnrs8_prescreen',
                                    'CVHFsetnr_direct_scf',
                                    'CVHFsetnr_direct_scf_dm')
@@ -1118,7 +1119,7 @@ class RHF(SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        if self._eri is not None or self._is_mem_enough():
+        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
@@ -1330,8 +1331,8 @@ class ROHF(RHF):
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
         nset = len(dm) // 2
-        if (self._eri is not None or self._is_mem_enough() or
-            not self.direct_scf):
+        if (self._eri is not None or not self.direct_scf or
+            mol.incore_anyway or self._is_mem_enough()):
             dm = numpy.array(dm, copy=False)
             dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
             vj, vk = self.get_jk(mol, dm, hermi)
