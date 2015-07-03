@@ -482,7 +482,7 @@ class CASSCF(casci_uhf.CASCI):
                 callback=None):
         return self.kernel(mo_coeff, ci0, macro, micro, callback)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
                 callback=None):
         from pyscf.mcscf import mc2step_uhf
         return self.kernel(mo_coeff, ci0, macro, micro, callback,

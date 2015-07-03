@@ -41,6 +41,14 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
+    def test_mc1step_4o4e_internal_rotation(self):
+        mc = mcscf.CASSCF(m, 4, 4)
+        mc.internal_rotation = True
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -108.913786407955, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.7015375913946591, 4)
+
     def test_mc2step_4o4e(self):
         mc = mcscf.CASSCF(m, 4, 4)
         emc = mc.mc2step()[0]

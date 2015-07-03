@@ -133,15 +133,14 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     tmp = 6 * eris.k_cp - 2 * eris.j_cp
     h_diag[:,:ncore] += tmp.T
     h_diag[:ncore,:] += tmp
-    h_diag[:ncore,:ncore] -= tmp[:,:ncore] * 2
 
     # part5 and part6 diag
     # -(qr|kp) E_s^k  p in core, sk in active
-    jc_aa = numpy.einsum('uvii->iuv', eris.aapp[:,:,:ncore,:ncore])
-    kc_aa = numpy.einsum('uiiv->iuv', eris.appa[:,:ncore,:ncore,:])
+    jc_aa = numpy.einsum('uvii->iuv', eris.aapp[:,:,:nocc,:nocc])
+    kc_aa = numpy.einsum('uiiv->iuv', eris.appa[:,:nocc,:nocc,:])
     tmp = numpy.einsum('jik,ik->ji', 6*kc_aa-2*jc_aa, casdm1)
-    h_diag[:ncore,ncore:nocc] -= tmp
-    h_diag[ncore:nocc,:ncore] -= tmp.T
+    h_diag[:nocc,ncore:nocc] -= tmp
+    h_diag[ncore:nocc,:nocc] -= tmp.T
 
     v_diag = numpy.einsum('ijij->ij', hdm2)
     h_diag[ncore:nocc,:] += v_diag
@@ -152,9 +151,6 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
 
     def h_op1(x):
         x1 = casscf.unpack_uniq_var(x)
-        x_cu = x1[:ncore,ncore:]
-        x_av = x1[ncore:nocc,nocc:]
-        x_ac = x1[ncore:nocc,:ncore]
 
         # part7
         # (-h_{sp} R_{rs} gamma_{rq} - h_{rq} R_{pq} gamma_{sp})/2 + (pr<->qs)
@@ -164,7 +160,7 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
         x2 -= numpy.dot(g.T, x1)
         # part2
         # (-2Vhf_{sp}\delta_{qr}R_pq - 2Vhf_{qr}\delta_{sp}R_rs)/2 + (pr<->qs)
-        x2[:ncore] += numpy.dot(x_cu, vhf_ca[ncore:]) * 2
+        x2[:ncore] += numpy.dot(x1[:ncore,ncore:], vhf_ca[ncore:]) * 2
         # part3
         # (-Vhf_{sp}gamma_{qr}R_{pq} - Vhf_{qr}gamma_{sp}R_{rs})/2 + (pr<->qs)
         x2[ncore:nocc] += reduce(numpy.dot, (casdm1, x1[ncore:nocc], eris.vhf_c))
@@ -176,10 +172,10 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
         return casscf.pack_uniq_var(x2)
 
     def h_opjk(x):
-        x1 = casscf.unpack_uniq_var(x)
-        x2 = numpy.zeros_like(x1)
-        # part4, part5, part6
         if ncore > 0:
+            # part4, part5, part6
+            x1 = casscf.unpack_uniq_var(x)
+            x2 = numpy.zeros_like(x1)
 # Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
 #    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
 # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
@@ -189,7 +185,9 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
             x2[ncore:nocc] += va
             x2[:ncore,ncore:] += vc
             x2 = x2 - x2.T
-        return casscf.pack_uniq_var(x2)
+            return casscf.pack_uniq_var(x2)
+        else:
+            return 0
 
     return g_orb, gorb_update, h_op1, h_opjk, h_diag
 
@@ -793,6 +791,7 @@ class CASSCF(casci.CASCI):
         self.ah_decay_rate = .7
         self.grad_update_fep = 1
         self.ci_update_dep = 2
+        self.internal_rotation = False
 
         self.chkfile = mf.chkfile
         self.ci_response_space = 3
@@ -876,7 +875,7 @@ class CASSCF(casci.CASCI):
                 callback=None):
         return self.kernel(mo_coeff, ci0, macro, micro, callback)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
                 callback=None):
         from pyscf.mcscf import mc2step
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
@@ -896,6 +895,8 @@ class CASSCF(casci.CASCI):
         mask = numpy.zeros((nmo,nmo),dtype=bool)
         mask[ncore:nocc,:ncore] = True
         mask[nocc:,:nocc] = True
+        if self.internal_rotation:
+            mask[ncore:nocc,ncore:nocc][numpy.tril_indices(ncas,-1)] = True
         if frozen:
             if isinstance(frozen, (int, numpy.integer)):
                 mask[:frozen] = mask[:,:frozen] = False
@@ -943,16 +944,6 @@ class CASSCF(casci.CASCI):
 #                    -numpy.einsum('ipqi->pq', eri[:ncore,:,:,:ncore]))
 #        eris.aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
 #        eris.appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
-## for update_jk_in_ah
-#        capp = eri[:ncore,ncore:nocc,:,:]
-#        cpap = eri[:ncore,:,ncore:nocc,:]
-#        ccvp = eri[:ncore,:ncore,ncore:,:]
-#        cpcv = eri[:ncore,:,:ncore,ncore:]
-#        cvcp = eri[:ncore,ncore:,:ncore,:]
-#        cPAp = cpap * 4 - capp.transpose(0,3,1,2) - cpap.transpose(0,3,2,1)
-#        cPCv = cpcv * 4 - ccvp.transpose(0,3,1,2) - cvcp.transpose(0,3,2,1)
-#        eris.Iapcv = cPAp.transpose(2,3,0,1)[:,:,:,ncore:]
-#        eris.Icvcv = cPCv.transpose(2,3,0,1)[:,:,:,ncore:].copy()
 #        return eris
 
         if hasattr(self._scf, '_cderi'):
@@ -974,25 +965,13 @@ class CASSCF(casci.CASCI):
         nocc = ncore + ncas
         nmo = mo.shape[1]
 
-        if hasattr(eris, 'Icvcv'):
-            nvir = nmo - ncore
-            vhf3c = numpy.dot(eris.Icvcv.reshape(-1,ncore*nvir),
-                              r[:ncore,ncore:].ravel()).reshape(ncore,-1)
-            vhf3a = numpy.einsum('uqcp,cp->uq', eris.Iapcv, r[:ncore,ncore:])
-            dm4 = numpy.dot(casdm1, r[ncore:nocc])
-            vhf4 = numpy.einsum('uqcp,uq->cp', eris.Iapcv, dm4)
-            va = numpy.dot(casdm1, vhf3a)
-            vc = 2 * vhf3c + vhf4
-        else:
-            dm3 = reduce(numpy.dot, (mo[:,:ncore], r[:ncore,ncore:],
-                                     mo[:,ncore:].T))
-            dm3 = dm3 + dm3.T
-            dm4 = reduce(numpy.dot, (mo[:,ncore:nocc], casdm1, r[ncore:nocc],
-                                     mo.T))
-            dm4 = dm4 + dm4.T
-            vj, vk = self.get_jk(self.mol, (dm3,dm3*2+dm4))
-            va = reduce(numpy.dot, (casdm1, mo[:,ncore:nocc].T, vj[0]*2-vk[0], mo))
-            vc = reduce(numpy.dot, (mo[:,:ncore].T, vj[1]*2-vk[1], mo[:,ncore:]))
+        dm3 = reduce(numpy.dot, (mo[:,:ncore], r[:ncore,ncore:], mo[:,ncore:].T))
+        dm3 = dm3 + dm3.T
+        dm4 = reduce(numpy.dot, (mo[:,ncore:nocc], casdm1, r[ncore:nocc], mo.T))
+        dm4 = dm4 + dm4.T
+        vj, vk = self.get_jk(self.mol, (dm3,dm3*2+dm4))
+        va = reduce(numpy.dot, (casdm1, mo[:,ncore:nocc].T, vj[0]*2-vk[0], mo))
+        vc = reduce(numpy.dot, (mo[:,:ncore].T, vj[1]*2-vk[1], mo[:,ncore:]))
         return va, vc
 
 # hessian_co exactly expands up to first order of H
@@ -1243,4 +1222,8 @@ if __name__ == '__main__':
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
     mc.analyze()
+    print(emc - -75.7155632535814)
+
+    mc.internal_rotation = True
+    emc = mc.mc1step(mo)[0]
     print(emc - -75.7155632535814)

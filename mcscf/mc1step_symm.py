@@ -26,7 +26,7 @@ class CASSCF(mc1step.CASSCF):
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
                            mc1step.kernel)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
                 callback=None):
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
                            mc2step.kernel)
@@ -50,9 +50,15 @@ class CASSCF(mc1step.CASSCF):
 
         #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
-        self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
-                                          self.mol.symm_orb, mo_coeff,
-                                          s=self._scf.get_ovlp())
+        try:
+            self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
+                                              self.mol.symm_orb, mo_coeff,
+                                              s=self._scf.get_ovlp())
+        except ValueError:
+            s = self._scf.get_ovlp()
+            mo_coeff = symm.symmetrize_orb(self.mol, mo_coeff, s=s)
+            self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
+                                              self.mol.symm_orb, mo_coeff, s=s)
 
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
