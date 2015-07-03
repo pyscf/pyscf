@@ -10,7 +10,7 @@ from pyscf.dft import numint
 Gaussian cube file format
 '''
 
-def cube(mol, outfile, dm, nx=80, ny=80, nz=80):
+def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     coord = [mol.atom_coord(ia) for ia in range(mol.natm)]
     box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 4
     xs = numpy.arange(nx) * (box[0]/nx)
@@ -29,8 +29,8 @@ def cube(mol, outfile, dm, nx=80, ny=80, nz=80):
     rho = rho.reshape(nx,ny,nz)
 
     with open(outfile, 'w') as f:
-        f.write('Comment line 1\n')
-        f.write('Comment line 2\n')
+        f.write('Density in real space\n')
+        f.write('Comment line\n')
         f.write('%5d' % mol.natm)
         f.write(' %14.8f %14.8f %14.8f\n' % tuple((-box*.5).tolist()))
         f.write('%5d %14.8f %14.8f %14.8f\n' % (nx, xs[1], 0, 0))
@@ -52,5 +52,5 @@ if __name__ == '__main__':
     mol = gto.M(atom='H 0 0 0; H 0 0 1')
     mf = scf.RHF(mol)
     mf.kernel()
-    cube(mol, 'h2.cube', mf.make_rdm1())
+    density(mol, 'h2.cube', mf.make_rdm1())
 
