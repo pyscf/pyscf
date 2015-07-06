@@ -492,7 +492,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
         casdm1_old = casdm1
 
         micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
-        max_micro = max(micro, int(0-numpy.log10(de+1e-10)))
+        if casscf.dynamic_micro_step:
+            max_micro = max(micro, int(0-numpy.log10(de+1e-9)))
+        else:
+            max_micro = micro
         for imicro in range(max_micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
@@ -792,6 +795,7 @@ class CASSCF(casci.CASCI):
         self.grad_update_fep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False
+        self.dynamic_micro_step = False
 
         self.chkfile = mf.chkfile
         self.ci_response_space = 3
@@ -842,6 +846,7 @@ class CASSCF(casci.CASCI):
         log.info('max_memory %d MB', self.max_memory)
         log.debug('grad_update_fep %d', self.grad_update_fep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
+        log.debug('dynamic_micro_step %s', self.dynamic_micro_step)
         try:
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
