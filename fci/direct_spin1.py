@@ -174,8 +174,8 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may diverge the
 # preconditioner when the eigvalue of first davidson iter equals to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, nroots=1, **kwargs):
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
+           lindep=1e-14, max_cycle=50, nroots=1, **kwargs):
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
@@ -378,8 +378,8 @@ class FCISolver(object):
         self.mol = mol
         self.max_cycle = 50
         self.max_space = 12
-        self.conv_tol = 1e-9
-        self.lindep = 1e-9
+        self.conv_tol = 1e-10
+        self.lindep = 1e-14
         self.max_memory = 1200 # MB
 # level shift in precond
         self.level_shift = 1e-2

@@ -136,8 +136,8 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, nroots=1, **kwargs):
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
+           lindep=1e-14, max_cycle=50, nroots=1, **kwargs):
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol

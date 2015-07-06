@@ -121,15 +121,12 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
 # Cannot require both dx_norm and de converged, because we want to stick on
 # the states associated with the initial guess.  Numerical instability can
 # break the symmetry restriction and move to lower state, eg BeH2 CAS(2,2)
-        if (rnow == 0 or seig[0] < lindep or
-            (max(dx_norm) < toloose or max(abs(de)) < tol)):
-#            log.debug('davidson %d %d %s', icyc, space,
-#                      (rnow == 0, seig[0] < lindep, max(dx_norm) < toloose,
-#                       max(abs(de)) < tol))
-            break
-        else:
+        if rnow > 0:
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  seig= %4.3g',
                       icyc, space, max(dx_norm), e, seig[0])
+        if (rnow == 0 or seig[0] < lindep or
+            (max(dx_norm) < toloose or max(abs(de)) < tol)):
+            break
 
         if head+rnow > max_space:
             head = nroots
