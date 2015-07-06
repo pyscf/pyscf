@@ -226,6 +226,23 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
     return l1new, l2new
 
 
+class _ERIS:
+    def __init__(self, cc, mo_coeff=None, method='incore'):
+        if mo_coeff is None: mo_coeff = cc._scf.mo_coeff
+        nocc = cc.nocc
+        nmo = cc.nmo
+        eri0 = pyscf.ao2mo.kernel(cc._scf._eri, mo_coeff)
+        eri0 = pyscf.ao2mo.restore(1, eri0, nmo)
+        self.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
+        self.ooov = eri0[:nocc,:nocc,:nocc,nocc:].copy()
+        self.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
+        self.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
+        self.ovov = eri0[:nocc,nocc:,:nocc,nocc:].copy()
+        self.ovvv = eri0[:nocc,nocc:,nocc:,nocc:].copy()
+        self.vvvv = eri0[nocc:,nocc:,nocc:,nocc:].copy()
+        self.fock = numpy.diag(cc._scf.mo_energy)
+
+
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
