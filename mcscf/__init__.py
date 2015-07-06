@@ -162,9 +162,8 @@ from pyscf.mcscf.addons import *
 from pyscf.mcscf.df import density_fit
 
 def CASSCF(mf, *args, **kwargs):
-    from pyscf import scf
-
     from pyscf import gto
+    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -172,23 +171,18 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
         mc = mcscf.CASSCF(mf, norb, nelec)
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
-
+    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+        raise RuntimeError('First argument needs to be RHF/ROHF object. '
+                           'UHF-CASSCF calculation should be be initialized with UCASSCF function')
     if mf.mol.symmetry:
-        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
-            mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
-        else:
-            mc = mc1step_symm.CASSCF(mf, *args, **kwargs)
+        mc = mc1step_symm.CASSCF(mf, *args, **kwargs)
     else:
-        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
-            mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
-        else:
-            mc = mc1step.CASSCF(mf, *args, **kwargs)
+        mc = mc1step.CASSCF(mf, *args, **kwargs)
     return mc
 
 def CASCI(mf, *args, **kwargs):
-    from pyscf import scf
-
     from pyscf import gto
+    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -196,16 +190,25 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
         mc = mcscf.CASCI(mf, norb, nelec)
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
-
+    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+        raise RuntimeError('First argument needs to be RHF/ROHF object. '
+                           'UHF-CASSCF calculation should be be initialized with UCASSCF function')
     if mf.mol.symmetry:
-        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
-            mc = casci_uhf.CASCI(mf, *args, **kwargs)
-        else:
-            mc = casci_symm.CASCI(mf, *args, **kwargs)
+        mc = casci_symm.CASCI(mf, *args, **kwargs)
     else:
-        if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
-            mc = casci_uhf.CASCI(mf, *args, **kwargs)
-        else:
-            mc = casci.CASCI(mf, *args, **kwargs)
+        mc = casci.CASCI(mf, *args, **kwargs)
     return mc
 
+
+def UCASCI(mf, *args, **kwargs):
+    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+        mc = casci_uhf.CASCI(mf, *args, **kwargs)
+    else:
+        raise RuntimeError('First argument needs to be UHF object')
+    return mc
+
+def UCASSCF(mf, *args, **kwargs):
+    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+        mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
+    else:
+        raise RuntimeError('First argument needs to be UHF object')

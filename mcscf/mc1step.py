@@ -846,7 +846,7 @@ class CASSCF(casci.CASCI):
         log.info('max_memory %d MB', self.max_memory)
         log.debug('grad_update_fep %d', self.grad_update_fep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
-        log.debug('dynamic_micro_step %s', self.dynamic_micro_step)
+        log.info('dynamic_micro_step %s', self.dynamic_micro_step)
         try:
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
