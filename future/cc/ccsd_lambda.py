@@ -39,7 +39,7 @@ def kernel(cc, eris, t1=None, t2=None, l1=None, l2=None,
     blksize = cc.get_block_size()
     log.debug('block size = %d, nocc = %d is divided into %d blocks',
               blksize, cc.nocc, int((cc.nocc+blksize-1)/blksize))
-    saved = make_intermediates(mcc, t1, t2, eris)
+    saved = make_intermediates(cc, t1, t2, eris)
 
     if cc.diis:
         adiis = lib.diis.DIIS(cc, cc.diis_file)
