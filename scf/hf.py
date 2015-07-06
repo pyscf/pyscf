@@ -724,7 +724,7 @@ class SCF(object):
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
         diis_start_cycle : int
-            The step to start DIIS.  Default is 0.
+            The step to start DIIS.  Default is 1.
         diis_file: 'str'
             File to store DIIS vectors and error vectors.
         level_shift_factor : float or int
@@ -779,7 +779,7 @@ class SCF(object):
         self.init_guess = 'minao'
         self.DIIS = diis.SCF_DIIS
         self.diis_space = 8
-        self.diis_start_cycle = 0
+        self.diis_start_cycle = 1
         self.diis_file = None
 # Give diis_space_rollback=True a trial if other efforts not converge
         self.diis_space_rollback = False
