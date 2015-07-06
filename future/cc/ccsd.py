@@ -396,7 +396,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.diis_space = 6
         self.diis_file = None
         self.diis_start_cycle = 1
-        self.diis_start_energy_diff = 1e-2
+# FIXME: Should we avoid DIIS starting early?
+        self.diis_start_energy_diff = 0.3
 
         self.frozen = frozen
         self.nocc = self.mol.nelectron // 2 - len(frozen)

@@ -779,7 +779,7 @@ class SCF(object):
         self.init_guess = 'minao'
         self.DIIS = diis.SCF_DIIS
         self.diis_space = 8
-        self.diis_start_cycle = 1
+        self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
         self.diis_file = None
 # Give diis_space_rollback=True a trial if other efforts not converge
         self.diis_space_rollback = False
