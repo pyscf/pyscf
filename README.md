@@ -92,8 +92,8 @@ there are few rules to follow
 Documentation
 -------------
 
-There is an online documentation  http://sunqm.net/pyscf.  And you can
-also download the PDF version from  http://sunqm.net/pyscf/PySCF-1.0.pdf
+There is an online documentation  http://www.pyscf.org.  And you can
+also download the PDF version from  http://www.pyscf.org/PySCF-1.0.pdf
 
 
 Known problems

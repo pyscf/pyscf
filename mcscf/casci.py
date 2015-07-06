@@ -111,7 +111,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     from pyscf.mcscf import mc_ao2mo
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
-    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
     ncas = mc.ncas
     nelecas = mc.nelecas
 
@@ -147,7 +147,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
-    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas

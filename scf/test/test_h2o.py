@@ -221,11 +221,11 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf.ROHF(mol)
         dm1 = mf.init_guess_by_1e(mol)
         self.assertAlmostEqual(numpy.linalg.norm(dm1),
-                               5.3700827555643791/numpy.sqrt(2), 9)
+                               5.3700828975288122/numpy.sqrt(2), 9)
 
         mf = scf.DHF(mol)
         dm1 = mf.init_guess_by_1e(mol)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 7.5925203207385055, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 7.5925205205065422, 9)
 
     def test_init_guess_chkfile(self):
         ftmp = tempfile.NamedTemporaryFile()

@@ -13,11 +13,12 @@ Gaussian cube file format
 def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     coord = [mol.atom_coord(ia) for ia in range(mol.natm)]
     box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 4
+    boxorig = numpy.min(coord,axis=0) - 2
     xs = numpy.arange(nx) * (box[0]/nx)
     ys = numpy.arange(ny) * (box[1]/ny)
     zs = numpy.arange(nz) * (box[2]/nz)
     coords = numpy.vstack(numpy.meshgrid(xs,ys,zs)).reshape(3,-1).T
-    coords = numpy.asarray(coords, order='C') - box*.5
+    coords = numpy.asarray(coords, order='C') - (-boxorig)
 
     nao = mol.nao_nr()
     ngrids = nx * ny * nz
@@ -32,7 +33,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
         f.write('Density in real space\n')
         f.write('Comment line\n')
         f.write('%5d' % mol.natm)
-        f.write(' %14.8f %14.8f %14.8f\n' % tuple((-box*.5).tolist()))
+        f.write(' %14.8f %14.8f %14.8f\n' % tuple(boxorig.tolist()))
         f.write('%5d %14.8f %14.8f %14.8f\n' % (nx, xs[1], 0, 0))
         f.write('%5d %14.8f %14.8f %14.8f\n' % (ny, 0, ys[1], 0))
         f.write('%5d %14.8f %14.8f %14.8f\n' % (nz, 0, 0, zs[1]))

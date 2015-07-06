@@ -1,4 +1,17 @@
-Version 1.0-beta (2015-5-?):
+Version 1.0 beta (2015-8-?):
+
+Version 1.0 alpha 2 (2015-7-3):
+* Optimize HF J K contraction
+* MP2 2 particle density matrix
+* Default population analysis with meta-Lowdin orthogonalized AO
+* Update FCI to handle more than 23 orbitals
+* Multiple roots for FCI solver
+* Optimize MCSCF convergence
+* FCI/MCSCF wave function symmetry
+* Z-matrix input
+* Add chkfile_util script to analyze calculation on the fly
+* CI determinants overlap
+* Fix DIIS bug
 
 Version 1.0-alpha (2015-4-7):
 * D{\infty}h and C{\infty}v
