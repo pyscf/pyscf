@@ -135,8 +135,8 @@ def incore(eri, dm, hermi=0):
         for i in range(nao):
             tridm[i*(i+1)//2+i] *= .5
     else:
-        raise RuntimeError('DM shape %s is not consistent with _eri shape %s'
-                           (dm.shape, eri.shape))
+        raise RuntimeError('Array shape not consistent: DM %s, eri %s'
+                           % (dm.shape, eri.shape))
     fdrv(eri.ctypes.data_as(ctypes.c_void_p),
          tridm.ctypes.data_as(ctypes.c_void_p),
          vj.ctypes.data_as(ctypes.c_void_p),
