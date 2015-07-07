@@ -124,7 +124,7 @@ def incore(eri, dm, hermi=0):
         #fvk = _fpointer('CVHFics4_jk_s1il')
 
         tridm = dm
-    else: # 8-fold symmetry eri
+    elif eri.ndim == 1 and npair*(npair+1)//2 == eri.size: # 8-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
         fvj = _fpointer('CVHFics8_tridm_vj')
         if hermi == 1:
@@ -134,6 +134,9 @@ def incore(eri, dm, hermi=0):
         tridm = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dm))
         for i in range(nao):
             tridm[i*(i+1)//2+i] *= .5
+    else:
+        raise RuntimeError('DM shape %s is not consistent with _eri shape %s'
+                           (dm.shape, eri.shape))
     fdrv(eri.ctypes.data_as(ctypes.c_void_p),
          tridm.ctypes.data_as(ctypes.c_void_p),
          vj.ctypes.data_as(ctypes.c_void_p),
