@@ -88,16 +88,10 @@ def make_intermediates(cc, t1, t2, eris):
          + numpy.einsum('ijkb,kb->ij', make_g2(eris.ooov), t1)
          + numpy.einsum('ibkc,jkbc->ij', make_g2(eris.ovov), tau))
     vOvVo =(eris.ovov.transpose(0,3,1,2)
-            #:+ numpy.einsum('ldjb,klcd->jcbk', make_g2(eris.ovov), t2)
-            + lib.dot(make_g2(eris.ovov).reshape(nov,-1).T,
-                      t2.transpose(0,2,1,3).reshape(nov,-1).T).reshape(nocc,nvir,nocc,nvir).transpose(0,3,1,2)
-            #:- numpy.einsum('ldjb,kldc->jcbk', eris.ovov, t2))
-            - lib.dot(eris.ovov.reshape(nov,-1).T,
-                      t2.transpose(1,2,0,3).reshape(nov,-1)).reshape(nocc,nvir,nocc,nvir).transpose(0,3,1,2))
+            + numpy.einsum('ldjb,klcd->jcbk', make_g2(eris.ovov), t2)
+            - numpy.einsum('ldjb,kldc->jcbk', eris.ovov, t2))
     vOvvO =(-eris.oovv.transpose(0,2,3,1)
-            #:+ numpy.einsum('lbjd,kldc->jcbk', eris.ovov, t2))
-            + lib.dot(eris.ovov.transpose(0,3,2,1).reshape(nov,-1).T,
-                      t2.transpose(1,2,0,3).reshape(nov,-1)).reshape(nocc,nvir,nocc,nvir).transpose(0,3,1,2))
+            + numpy.einsum('lbjd,kldc->jcbk', eris.ovov, t2))
     tmp = numpy.einsum('kcld,ld->kc', make_g2(eris.ovov), t1)
     w3 = fov.T + numpy.einsum('kc,jkbc->bj', fov, t2*2-t2.transpose(1,0,2,3))
     w3 += reduce(numpy.dot, (t1.T, fov + tmp, t1.T))
@@ -107,49 +101,30 @@ def make_intermediates(cc, t1, t2, eris):
     w3 += numpy.einsum('bc,jc->bj', w1, t1)
     w3 -= numpy.einsum('kj,kb->bj', w2, t1)
     w4 = fov + numpy.einsum('kcjb,kc->jb', make_g2(eris.ovov), t1)
-    wOvVo =(vOvVo
-            #:- numpy.einsum('jbld,lc,kd->jcbk', eris.ovov, t1, t1)
-            - numpy.einsum('jblk,lc->jcbk', numpy.einsum('jbld,kd->jblk', eris.ovov, t1), t1)
+    wOvVo =(vOvVo - numpy.einsum('jbld,lc,kd->jcbk', eris.ovov, t1, t1)
             - numpy.einsum('lkjb,lc->jcbk', eris.ooov, t1)
             + numpy.einsum('jbcd,kd->jcbk', eris.ovvv, t1))
-    wOvvO =(vOvvO
-            #:+ numpy.einsum('jdlb,lc,kd->jcbk', eris.ovov, t1, t1))
-            + numpy.einsum('jlbk,lc->jcbk', numpy.einsum('jdlb,kd->jlbk', eris.ovov, t1), t1))
+    wOvvO = vOvvO + numpy.einsum('jdlb,lc,kd->jcbk', eris.ovov, t1, t1)
     wOvvO += numpy.einsum('jklb,lc->jcbk', eris.ooov, t1)
     wOvvO -= numpy.einsum('jdcb,kd->jcbk', eris.ovvv, t1)
-    #:vkabc = numpy.einsum('jdca,kjbd->kabc', make_g2(eris.ovvv),
-    #:                     t2*2-t2.transpose(0,1,3,2))
-    vkabc = lib.dot((t2*2-t2.transpose(0,1,3,2)).transpose(0,2,1,3).reshape(nov,-1),
-                    make_g2(eris.ovvv).reshape(nov,-1)).reshape(nocc,nvir,nvir,nvir).transpose(0,3,1,2)
-    #:wovvv = numpy.einsum('jkla,jlbc->kabc', make_g2(eris.ooov), tau)
-    wovvv = lib.dot(make_g2(eris.ooov).transpose(0,2,1,3).reshape(-1,nov).T,
-                    tau.reshape(nocc**2,-1)).reshape(nocc,nvir,nvir,nvir)
+    vkabc = numpy.einsum('jdca,kjbd->kabc', make_g2(eris.ovvv),
+                         t2*2-t2.transpose(0,1,3,2))
+    wovvv = numpy.einsum('jkla,jlbc->kabc', make_g2(eris.ooov), tau)
     wovvv += numpy.einsum('jcak,jb->kabc', vOvvO*2+vOvVo, t1)
     wovvv -= numpy.einsum('jbak,jc->kabc', vOvVo*2+vOvvO, t1)
     wovvv += eris.ovvv.transpose(0,2,1,3)*2 - eris.ovvv.transpose(0,2,3,1)
     wovvv += vkabc - vkabc.transpose(0,1,3,2) * .5
-    #:wovvv -= numpy.einsum('jabd,kjdc->kabc', eris.ovvv, t2) * 1.5
-    wovvv -= lib.dot(eris.ovvv.transpose(1,2,0,3).reshape(-1,nov),
-                     t2.transpose(1,2,0,3).reshape(nov,-1)).reshape(nvir,nvir,nocc,nvir).transpose(2,0,1,3) * 1.5
-    #:vicjk = numpy.einsum('iklb,jlcb->icjk', make_g2(eris.ooov),
-    #:                     t2*2-t2.transpose(0,1,3,2))
-    vicjk = lib.dot(make_g2(eris.ooov).reshape(-1,nov),
-                    (t2*2-t2.transpose(0,1,3,2)).transpose(1,3,0,2).reshape(nov,-1))
-    vicjk = vicjk.reshape(nocc,nocc,nocc,nvir).transpose(0,3,2,1)
-    #:wovoo = numpy.einsum('idcb,jkbd->icjk', make_g2(eris.ovvv), tau)
-    wovoo = lib.dot(make_g2(eris.ovvv).transpose(0,2,3,1).reshape(nov,-1),
-                    tau.reshape(nocc**2,-1).T).reshape(nocc,nvir,nocc,nocc)
+    wovvv -= numpy.einsum('jabd,kjdc->kabc', eris.ovvv, t2) * 1.5
+    vicjk = numpy.einsum('iklb,jlcb->icjk', make_g2(eris.ooov),
+                         t2*2-t2.transpose(0,1,3,2))
+    wovoo = numpy.einsum('idcb,jkbd->icjk', make_g2(eris.ovvv), tau)
     wovoo -= numpy.einsum('icbk,jb->icjk', vOvvO*2+vOvVo, t1)
     wovoo += numpy.einsum('icbj,kb->icjk', vOvVo*2+vOvvO, t1)
     wovoo += eris.ooov.transpose(1,3,2,0)*2 - eris.ooov.transpose(1,3,0,2)
     wovoo += vicjk - vicjk.transpose(0,1,3,2)*.5
-    #:wovoo -= numpy.einsum('ljib,klbc->icjk', eris.ooov, t2) * 1.5
-    wovoo -= lib.dot(eris.ooov.transpose(2,1,0,3).reshape(-1,nov),
-                     t2.transpose(1,2,0,3).reshape(nov,-1)).reshape(nocc,nocc,nocc,nvir).transpose(0,3,1,2) * 1.5
+    wovoo -= numpy.einsum('ljib,klbc->icjk', eris.ooov, t2) * 1.5
     woooo =(eris.oooo.transpose(0,2,1,3)
-            #:+ numpy.einsum('icjd,klcd->ijkl', eris.ovov, tau)
-            + lib.dot(eris.ovov.transpose(0,2,1,3).reshape(nocc**2,-1),
-                      tau.reshape(nocc**2,-1).T).reshape((nocc,)*4)
+            + numpy.einsum('icjd,klcd->ijkl', eris.ovov, tau)
             + numpy.einsum('jlic,kc->ijkl', eris.ooov, t1)
             + numpy.einsum('ikjc,lc->ijkl', eris.ooov, t1))
 
@@ -183,24 +158,14 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
 
     mba = numpy.einsum('klca,klcb->ba', l2, t2*2-t2.transpose(0,1,3,2))
     mij = numpy.einsum('kicd,kjcd->ij', l2, t2*2-t2.transpose(0,1,3,2))
-    #:m3 = numpy.einsum('klab,ijkl->ijab', l2, saved.woooo)
-    m3 = lib.dot(saved.woooo.reshape(nocc**2,-1), l2.reshape(nocc**2,-1)).reshape(l2.shape)
+    m3 = numpy.einsum('klab,ijkl->ijab', l2, saved.woooo)
     tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-    #:tmp = numpy.einsum('ijcd,klcd->ijkl', l2, tau)
-    tmp = lib.dot(l2.reshape(nocc**2,-1),tau.reshape(nocc**2,-1).T).reshape((nocc,)*4)
-    #:m4 = numpy.einsum('kalb,ijkl->ijab', eris.ovov, tmp)
-    m4 = lib.dot(tmp.reshape(nocc**2,-1),
-                 eris.ovov.transpose(0,2,1,3).reshape(nocc**2,-1)).reshape(l2.shape)
+    tmp = numpy.einsum('ijcd,klcd->ijkl', l2, tau)
+    m4 = numpy.einsum('kalb,ijkl->ijab', eris.ovov, tmp)
     tmp = numpy.einsum('ijcd,kd->ijck', l2, t1)
-    #:m4 -= numpy.einsum('kbca,ijck->ijab', eris.ovvv, tmp)
-    m4 -= lib.dot(tmp.reshape(nocc**2,-1),
-                  eris.ovvv.transpose(2,0,3,1).reshape(nov,-1)).reshape(l2.shape)
-    #:m4 -= numpy.einsum('kadb,jidk->ijab', eris.ovvv, tmp)
-    m4 -= lib.dot(tmp.transpose(1,0,2,3).reshape(nocc**2,-1),
-                  eris.ovvv.transpose(2,0,1,3).reshape(nov,-1)).reshape(l2.shape)
-    #:m4 += numpy.einsum('ijcd,cadb->ijab', l2, eris.vvvv)
-    m4 += lib.dot(l2.reshape(nocc**2,-1),
-                  eris.vvvv.transpose(0,2,1,3).reshape(nvir**2,-1)).reshape(l2.shape)
+    m4 -= numpy.einsum('kbca,ijck->ijab', eris.ovvv, tmp)
+    m4 -= numpy.einsum('kadb,jidk->ijab', eris.ovvv, tmp)
+    m4 += numpy.einsum('ijcd,cadb->ijab', l2, eris.vvvv)
 
     l2new += numpy.einsum('ia,jb->ijab', l1, saved.w4)
     l2new +=-numpy.einsum('ka,ikjb->ijab', l1, eris.ooov)
@@ -211,13 +176,9 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
     l2new +=-numpy.einsum('icjb,ca->ijab', eris.ovov, tmp)
     tmp = numpy.einsum('kb,jb->kj', l1, t1) + mij
     l2new +=-numpy.einsum('kajb,ik->ijab', eris.ovov, tmp)
-    #:l2new += numpy.einsum('kica,jcbk->ijab', l2-l2.transpose(0,1,3,2)*.5,
-    #:                      saved.wOvVo*2+saved.wOvvO)
-    l2new += lib.dot((l2-l2.transpose(0,1,3,2)*.5).transpose(0,2,1,3).reshape(nov,-1),
-                     (saved.wOvVo*2+saved.wOvvO).transpose(0,2,3,1).reshape(nov,-1).T).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
-    #:tmp = numpy.einsum('jkca,icbk->ijab', l2, saved.wOvvO)
-    tmp = lib.dot(l2.transpose(0,3,1,2).reshape(nov,-1),
-                  saved.wOvvO.transpose(0,2,3,1).reshape(nov,-1).T).reshape(nocc,nvir,nocc,nvir).transpose(2,0,1,3)
+    l2new += numpy.einsum('kica,jcbk->ijab', l2-l2.transpose(0,1,3,2)*.5,
+                          saved.wOvVo*2+saved.wOvvO)
+    tmp = numpy.einsum('jkca,icbk->ijab', l2, saved.wOvvO)
     l2new += tmp + tmp.transpose(1,0,2,3) * .5
     l2new = l2new + l2new.transpose(1,0,3,2)
     l2new += m3 + m4
