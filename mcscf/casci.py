@@ -101,7 +101,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
 
         dm1 = dm1a + dm1b
         s = casscf._scf.get_ovlp()
-        casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
+        #casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
     return dm1a, dm1b
 
