@@ -8,6 +8,8 @@ import os, sys
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
+import pyscf.ao2mo
+import pyscf.symm
 
 try:
     from pyscf.fciqmcscf import settings
@@ -72,6 +74,7 @@ class FCIQMCCI(object):
         self.time = 10
         self.tau = -1.0
         self.seed = 7
+        self.AddtoInit = 3
         self.orbsym = []
         if mol.symmetry:
             self.groupname = mol.groupname
@@ -122,6 +125,21 @@ class FCIQMCCI(object):
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
 
+    def dipoles(self, mol, mo_coeff, fcivec, norb, nelec, link_index=None):
+
+        aodmints = mol.intor('cint1e_r_sph', comp=3)
+        modmints = numpy.empty_like(aodmints)
+        for i in range(aodmints[0]):
+            modmints[i] = reduce(numpy.dot, (mo_coeff.T, aodmints[i], mo_coeff))
+
+        dm = self.make_rdm1(fcivec, norb, nelec, link_index, **kwargs)
+
+        dipmom = []
+        for i in range(modmints.shape[0]):
+            dipmom.append( numpy.trace( numpy.dot( dm, modmints[i])) )
+
+        return dipmom
+
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
         if fciRestart is None:
             fciRestart = self.restart
@@ -144,6 +162,44 @@ class FCIQMCCI(object):
         calc_e = readEnergy(self)
 
         return calc_e, None
+
+def run_standalone(fciqmcobj, mol, mo_coeff, fciRestart = None):
+    
+    tol=1e-9
+    nmo = mo_coeff.shape[1]
+    if mol.symmetry:
+        fciqmcobj.orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol_irrep_id, mo_coeff)
+        write_head(fciqmcobj.integralFile,nmo,mol.nelectron,mol.spin,orbsym)
+    else:
+        write_head(fciqmcobj.integralFile,nmo,mol.nelectron,mol.spin)
+
+    eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
+    write_eri(fciqmcobj.integralFile, pyscf.ao2mo.restore(8,eri,nmo),nmo,tol=tol)
+
+    t = mol.intor_symmetric('cint1e_kin_sph')
+    v = mol.intor_symmetric('cint1e_nuc_sph')
+    h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
+    write_hcore(fciqmcobj.integralFile, h, nmo, tol=tol)
+    fciqmcobj.integralFile.write(' %.16g  0  0  0  0\n' % mol.energy_nuc())
+
+    nelec = mol.nelectron
+    if isinstance(nelec, (int, numpy.integer)):
+        neleca = nelec//2 + nelec%2
+        nelecb = nelec - neleca
+    else :
+        neleca, nelecb = nelec
+    writeFCIQMCConfFile(neleca, nelecb, fciRestart, self)
+    if fciqmcobj.verbose >= logger.DEBUG1:
+        inFile = fciqmcobj.configFile   #os.path.join(self.scratchDirectory,self.configFile)
+        logger.debug1(fciqmcobj, 'FCIQMC Input file')
+        logger.debug1(fciqmcobj, open(inFile, 'r').read())
+    executeFCIQMC(fciqmcobj)
+    if fciqmcobj.verbose >= logger.DEBUG1:
+        outFile = fciqmcobj.outputFileCurrent   #os.path.join(self.scratchDirectory,self.outputFile)
+        logger.debug1(fciqmcobj, open(outFile))
+    calc_e = readEnergy(fciqmcobj)
+
+    return calc_e
 
 def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     confFile = FCIQMCCI.configFile
@@ -181,7 +237,7 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     if (FCIQMCCI.tau != -1.0):
         f.write('tau 0.01\n')
     f.write('truncinitiator\n')
-    f.write('addtoinitiator 3\n')
+    f.write('addtoinitiator %i\n'%(FCIQMCCI.AddtoInit))
     f.write('allrealcoeff\n')
     f.write('realspawncutoff 0.4\n')
     f.write('semi-stochastic\n')
