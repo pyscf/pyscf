@@ -148,7 +148,7 @@ class FCIQMCCI(object):
         #nuclear contribution
         for i in range(mol.natm):
             for j in range(aodmints.shape[0]):
-                dipmom[j] =+ mol.atom_charge(i)*mol.atom_coord(i)[j]
+                dipmom[j] += mol.atom_charge(i)*mol.atom_coord(i)[j]
 
         logger.info(self,'Full dipole moment: {} {} {}'.format(dipmom[0],dipmom[1],dipmom[2]))
         return dipmom
