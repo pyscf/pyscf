@@ -127,13 +127,18 @@ class FCIQMCCI(object):
 
     def dipoles(self, mol, mo_coeff, fcivec, norb, nelec, link_index=None):
 
+        #Call the integral generator for r integrals in the AO basis. There are 3 dimensions for x, y and z components.
         aodmints = mol.intor('cint1e_r_sph', comp=3)
+        #modmints to hold MO transformed integrals
         modmints = numpy.empty_like(aodmints)
-        for i in range(aodmints[0]):
+        #For each components, transform integrals into MO basis
+        for i in range(aodmints.shape[0]):
             modmints[i] = reduce(numpy.dot, (mo_coeff.T, aodmints[i], mo_coeff))
 
-        dm = self.make_rdm1(fcivec, norb, nelec, link_index, **kwargs)
+        #Obtain 1RDM from neci
+        dm = self.make_rdm1(fcivec, norb, nelec, link_index)
 
+        #Contract with MO r integrals
         dipmom = []
         for i in range(modmints.shape[0]):
             dipmom.append( numpy.trace( numpy.dot( dm, modmints[i])) )
