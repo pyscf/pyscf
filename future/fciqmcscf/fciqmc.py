@@ -170,7 +170,9 @@ def run_standalone(fciqmcobj, mol, mo_coeff, fciRestart = None):
     with open(fciqmcobj.integralFile, 'w') as fout:
         if mol.symmetry:
             fciqmcobj.orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.irrep_id, mo_coeff)
-            pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin,fciqmcobj.orbsym)
+
+            orbsym = [IRREP_MAP[fciqmcobj.groupname][i] for i in fciqmcobj.orbsym]
+            pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin,orbsym)
         else:
             pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin)
 
