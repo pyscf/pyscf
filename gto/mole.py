@@ -1319,10 +1319,11 @@ class Mole(object):
             self.stdout.write('[INPUT] %s (%d, %d)\n' % (nuc, rad, ang))
 
         for ia,atom in enumerate(self.atom):
-            self.stdout.write('[INPUT] %d %s %s AA, '\
-                              '%s Bohr\n' \
-                              % (ia+1, _symbol(atom[0]), atom[1],
-                                 [x/param.BOHR for x in atom[1]]))
+            coorda = tuple(atom[1])
+            coordb = tuple([x/param.BOHR for x in atom[1]])
+            self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '\
+                              '%16.12f %16.12f %16.12f Bohr\n' \
+                              % ((ia+1, _symbol(atom[0])) + coorda + coordb))
         for kn in self.nucmod.keys():
             if kn in self.mass:
                 mass = self.mass[kn]
@@ -1336,7 +1337,7 @@ class Mole(object):
             self.stdout.write('[INPUT] Gaussian nuclear model for atom %s, mass = %f\n' %
                               (str(kn), mass))
 
-        self.stdout.write('[INPUT] basis\n')
+        self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
         self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
                           'expnt,             c_1 c_2 ...\n')
         for atom, basis in self._basis.items():

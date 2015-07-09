@@ -473,7 +473,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = -1
-    casdm1 = 0
     elast = e_tot
     de = 1e9
 
@@ -572,9 +571,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, sort=casscf.natorb,
-                                     verbose=log)
-
+    mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
+                                     cas_natorb=casscf.natorb, verbose=log)
     if dump_chk:
         casscf.dump_chk(locals())
 
@@ -583,7 +581,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
     return conv, e_tot, e_ci, fcivec, mo
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
-    return casci.get_fock(mc, mo_coeff, ci, eris, verbose=None)
+    return casci.get_fock(mc, mo_coeff, ci, eris, verbose)
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False, verbose=None):
     return casci.cas_natorb(mc, mo_coeff, ci, eris, sort, verbose)
@@ -968,7 +966,6 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
-        nmo = mo.shape[1]
 
         dm3 = reduce(numpy.dot, (mo[:,:ncore], r[:ncore,ncore:], mo[:,ncore:].T))
         dm3 = dm3 + dm3.T

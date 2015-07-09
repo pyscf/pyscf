@@ -200,8 +200,8 @@ class CASCI(object):
             mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, nelecas)
 
-    def kernel(self, *args, **kwargs):
-        return self.casci(*args, **kwargs)
+    def kernel(self, mo_coeff=None, ci0=None):
+        return self.casci(mo_coeff, ci0)
     def casci(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
