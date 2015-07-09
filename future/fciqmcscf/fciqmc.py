@@ -138,11 +138,19 @@ class FCIQMCCI(object):
         #Obtain 1RDM from neci
         dm = self.make_rdm1(fcivec, norb, nelec, link_index)
 
-        #Contract with MO r integrals
+        #Contract with MO r integrals for electronic contribution
         dipmom = []
         for i in range(modmints.shape[0]):
-            dipmom.append( numpy.trace( numpy.dot( dm, modmints[i])) )
+            dipmom.append( -numpy.trace( numpy.dot( dm, modmints[i])) )
+        
+        logger.info(self,'Electronic component to dipole moment: {} {} {}'.format(dipmom[0],dipmom[1],dipmom[2]))
 
+        #nuclear contribution
+        for i in range(mol.natm):
+            for j in range(aodmints.shape[0]):
+                dipmom[j] =+ mol.atom_charge(i)*mol.atom_coord(i)[j]
+
+        logger.info(self,'Full dipole moment: {} {} {}'.format(dipmom[0],dipmom[1],dipmom[2]))
         return dipmom
 
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
