@@ -229,7 +229,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     nmo = mo[0].shape[1]
     ncore = casscf.ncore
     ncas = casscf.ncas
-    nocc = (ncas + ncore[0], ncas + ncore[1])
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
@@ -241,8 +240,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = 0
-    casdm1 = (0,0)
     elast = e_tot
+    de = 1e9
     r0 = None
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -633,7 +632,6 @@ class CASSCF(casci_uhf.CASCI):
         nelecas = self.nelecas
         ncore = self.ncore
         nocc = (ncas + ncore[0], ncas + ncore[1])
-        nmo = mo[0].shape[1]
         if hasattr(self.fcisolver, 'approx_kernel'):
             ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
             return ci1, None
