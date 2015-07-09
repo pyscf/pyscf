@@ -32,6 +32,9 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
 
+# set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
+
+
 find_package(OpenMP)
 if(OPENMP_FOUND)
   set(HAVE_OPENMP 1)

@@ -571,9 +571,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, sort=casscf.natorb,
-                                     verbose=log)
-
+    mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
+                                     cas_natorb=casscf.natorb, verbose=log)
     if dump_chk:
         casscf.dump_chk(locals())
 

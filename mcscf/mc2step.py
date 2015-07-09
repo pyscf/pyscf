@@ -30,6 +30,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
+        log.debug('CASSCF canonicalization')
+        mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
+                                         cas_natorb=casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo
     elast = e_tot
     conv = False
@@ -105,8 +108,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris, sort=casscf.natorb,
-                                     verbose=log)
+    mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
+                                     cas_natorb=casscf.natorb, verbose=log)
     if dump_chk:
         casscf.dump_chk(locals())
 

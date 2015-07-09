@@ -55,8 +55,11 @@ class CASSCF(mc1step.CASSCF):
                                               self.mol.symm_orb, mo_coeff,
                                               s=self._scf.get_ovlp())
         except ValueError:
+            logger.warn(self, 'mc1step_symm symmetrizes input orbitals')
             s = self._scf.get_ovlp()
             mo_coeff = symm.symmetrize_orb(self.mol, mo_coeff, s=s)
+            diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
+            mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
             self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
                                               self.mol.symm_orb, mo_coeff, s=s)
 
@@ -65,6 +68,7 @@ class CASSCF(mc1step.CASSCF):
             ncore = self.ncore
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        logger.debug(self, 'Active space irreps %s', str(self.fcisolver.orbsym))
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 _kern(self, mo_coeff,
