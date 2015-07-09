@@ -16,6 +16,7 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
+symmetry = 'D2h'
 )
 m = scf.RHF(mol)
 m.conv_tol = 1e-9
@@ -50,6 +51,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc,-108.98028859357791, 7)
 
 if __name__ == "__main__":
-    print("Full Tests for N2")
+    print("Full Tests for FCIQMC-CASSCF N2")
     unittest.main()
 

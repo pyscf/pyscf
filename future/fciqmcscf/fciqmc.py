@@ -102,9 +102,6 @@ class FCIQMCCI(object):
         f = open(os.path.join(self.scratchDirectory, "spinfree_TwoRDM"), 'r')
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        #        norb_read = int(f.readline().split()[0])
-        #assert(norb_read == norb)
-
         for line in f.readlines():
             linesp = line.split()
 
@@ -125,10 +122,10 @@ class FCIQMCCI(object):
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
 
-    def dipoles(self, mol, mo_coeff, fcivec, norb, nelec, link_index=None):
+    def dipoles(self, mo_coeff, fcivec, norb, nelec, link_index=None):
 
         #Call the integral generator for r integrals in the AO basis. There are 3 dimensions for x, y and z components.
-        aodmints = mol.intor('cint1e_r_sph', comp=3)
+        aodmints = self.mol.intor('cint1e_r_sph', comp=3)
         #modmints to hold MO transformed integrals
         modmints = numpy.empty_like(aodmints)
         #For each components, transform integrals into MO basis
@@ -146,9 +143,11 @@ class FCIQMCCI(object):
         logger.info(self,'Electronic component to dipole moment: {} {} {}'.format(dipmom[0],dipmom[1],dipmom[2]))
 
         #nuclear contribution
-        for i in range(mol.natm):
+        for i in range(self.mol.natm):
             for j in range(aodmints.shape[0]):
-                dipmom[j] += mol.atom_charge(i)*mol.atom_coord(i)[j]
+                #print('Contribution to component {} from atom {} with charge {} and coord {}: {}'. \
+                    #format(j,i,self.mol.atom_charge(i),self.mol.atom_coord(i)[j],self.mol.atom_charge(i)*self.mol.atom_coord(i)[j]))
+                dipmom[j] += self.mol.atom_charge(i)*self.mol.atom_coord(i)[j]
 
         logger.info(self,'Full dipole moment: {} {} {}'.format(dipmom[0],dipmom[1],dipmom[2]))
         return dipmom
@@ -176,35 +175,48 @@ class FCIQMCCI(object):
 
         return calc_e, None
 
-def run_standalone(fciqmcobj, mol, mo_coeff, fciRestart = None):
+def run_standalone(fciqmcobj, mo_coeff, Restart = None):
+    '''Run a neci calculation standalone for the molecule listed in the FCIQMCCI object.
+    The basis to run this calculation in is given by the mo_coeff array'''
     
     tol=1e-9
     nmo = mo_coeff.shape[1]
+    fciqmcobj.dump_flags(verbose=5)
     with open(fciqmcobj.integralFile, 'w') as fout:
-        if mol.symmetry:
-            fciqmcobj.orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.irrep_id, mo_coeff)
-
-            orbsym = [IRREP_MAP[fciqmcobj.groupname][i] for i in fciqmcobj.orbsym]
-            pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin,orbsym)
+        if fciqmcobj.mol.symmetry:
+            if fciqmcobj.groupname == 'Dooh':
+                log.info('Lower symmetry from Dooh to D2h')
+                raise RuntimeError('''Lower symmetry from Dooh to D2h''')
+            elif fciqmcobj.groupname == 'Coov':
+                log.info('Lower symmetry from Coov to C2v')
+                raise RuntimeError('''Lower symmetry from Coov to C2v''')
+            else:
+                #We need the AO basis overlap matrix to calculate the symmetries
+                s = fciqmcobj.mol.intor_symmetric('cint1e_ovlp_sph')
+                fciqmcobj.orbsym = pyscf.symm.label_orb_symm(fciqmcobj.mol, 
+                        fciqmcobj.mol.irrep_name, fciqmcobj.mol.symm_orb, mo_coeff, s=s)
+                orbsym = [pyscf.symm.param.IRREP_ID_TABLE[fciqmcobj.groupname][i]+1 for i in fciqmcobj.orbsym]
+                #print('orbsym: ',fciqmcobj.orbsym)
+                pyscf.tools.fcidump.write_head(fout,nmo,fciqmcobj.mol.nelectron,fciqmcobj.mol.spin,orbsym)
         else:
-            pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin)
+            pyscf.tools.fcidump.write_head(fout,nmo,fciqmcobj.mol.nelectron,fciqmcobj.mol.spin)
 
-        eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
+        eri = pyscf.ao2mo.outcore.full_iofree(fciqmcobj.mol, mo_coeff, verbose=0)
         pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),nmo,tol=tol)
 
-        t = mol.intor_symmetric('cint1e_kin_sph')
-        v = mol.intor_symmetric('cint1e_nuc_sph')
+        t = fciqmcobj.mol.intor_symmetric('cint1e_kin_sph')
+        v = fciqmcobj.mol.intor_symmetric('cint1e_nuc_sph')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
         pyscf.tools.fcidump.write_hcore(fout, h, nmo, tol=tol)
-        fout.write(' %.16g  0  0  0  0\n' % mol.energy_nuc())
+        fout.write(' %.16g  0  0  0  0\n' % fciqmcobj.mol.energy_nuc())
 
-    nelec = mol.nelectron
+    nelec = fciqmcobj.mol.nelectron
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2 + nelec%2
         nelecb = nelec - neleca
     else :
         neleca, nelecb = nelec
-    writeFCIQMCConfFile(neleca, nelecb, fciRestart, fciqmcobj)
+    writeFCIQMCConfFile(neleca, nelecb, Restart, fciqmcobj)
     if fciqmcobj.verbose >= logger.DEBUG1:
         inFile = fciqmcobj.configFile   #os.path.join(self.scratchDirectory,self.configFile)
         logger.debug1(fciqmcobj, 'FCIQMC Input file')
