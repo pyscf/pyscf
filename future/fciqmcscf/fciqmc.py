@@ -167,20 +167,21 @@ def run_standalone(fciqmcobj, mol, mo_coeff, fciRestart = None):
     
     tol=1e-9
     nmo = mo_coeff.shape[1]
-    if mol.symmetry:
-        fciqmcobj.orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol_irrep_id, mo_coeff)
-        write_head(fciqmcobj.integralFile,nmo,mol.nelectron,mol.spin,orbsym)
-    else:
-        write_head(fciqmcobj.integralFile,nmo,mol.nelectron,mol.spin)
+    with open(fciqmcobj.integralFile, 'w') as fout:
+        if mol.symmetry:
+            fciqmcobj.orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.irrep_id, mo_coeff)
+            pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin,fciqmcobj.orbsym)
+        else:
+            pyscf.tools.fcidump.write_head(fout,nmo,mol.nelectron,mol.spin)
 
-    eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
-    write_eri(fciqmcobj.integralFile, pyscf.ao2mo.restore(8,eri,nmo),nmo,tol=tol)
+        eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
+        pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),nmo,tol=tol)
 
-    t = mol.intor_symmetric('cint1e_kin_sph')
-    v = mol.intor_symmetric('cint1e_nuc_sph')
-    h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
-    write_hcore(fciqmcobj.integralFile, h, nmo, tol=tol)
-    fciqmcobj.integralFile.write(' %.16g  0  0  0  0\n' % mol.energy_nuc())
+        t = mol.intor_symmetric('cint1e_kin_sph')
+        v = mol.intor_symmetric('cint1e_nuc_sph')
+        h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
+        pyscf.tools.fcidump.write_hcore(fout, h, nmo, tol=tol)
+        fout.write(' %.16g  0  0  0  0\n' % mol.energy_nuc())
 
     nelec = mol.nelectron
     if isinstance(nelec, (int, numpy.integer)):
@@ -188,7 +189,7 @@ def run_standalone(fciqmcobj, mol, mo_coeff, fciRestart = None):
         nelecb = nelec - neleca
     else :
         neleca, nelecb = nelec
-    writeFCIQMCConfFile(neleca, nelecb, fciRestart, self)
+    writeFCIQMCConfFile(neleca, nelecb, fciRestart, fciqmcobj)
     if fciqmcobj.verbose >= logger.DEBUG1:
         inFile = fciqmcobj.configFile   #os.path.join(self.scratchDirectory,self.configFile)
         logger.debug1(fciqmcobj, 'FCIQMC Input file')
