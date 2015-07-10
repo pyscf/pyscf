@@ -79,6 +79,7 @@ class FCIQMCCI(object):
         self.seed = 7
         self.AddtoInit = 3
         self.orbsym = []
+        self.nstates = 1
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
@@ -94,7 +95,7 @@ class FCIQMCCI(object):
         log.info('Number of walkers = %s', self.maxwalkers)
         log.info('Maximum number of iterations = %d', self.maxIter)
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm12(self, rdm_label, fcivec, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
 
         if isinstance(nelec, (int, numpy.integer)):
@@ -102,7 +103,8 @@ class FCIQMCCI(object):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        f = open(os.path.join(self.scratchDirectory, "spinfree_TwoRDM"), 'r')
+        rdm_filename = 'spinfree_TwoRDM.' + str(rdm_label)
+        f = open(os.path.join(self.scratchDirectory, rdm_filename), 'r')
 
         two_pdm = numpy.zeros( (norb, norb, norb, norb) )
         for line in f.readlines():
@@ -127,10 +129,10 @@ class FCIQMCCI(object):
 
         return one_pdm, two_pdm
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
+    def make_rdm1(self, rdm_label, fcivec, norb, nelec, link_index=None, **kwargs):
+        return self.make_rdm12(rdm_label, fcivec, norb, nelec, link_index, **kwargs)[0]
 
-    def dipoles(self, mo_coeff, fcivec, norb, nelec, link_index=None):
+    def dipoles(self, rdm_label, mo_coeff, fcivec, norb, nelec, link_index=None):
 
         # Call the integral generator for r integrals in the AO basis. There
         # are 3 dimensions for x, y and z components.
@@ -142,7 +144,7 @@ class FCIQMCCI(object):
             modmints[i] = reduce(numpy.dot, (mo_coeff.T, aodmints[i], mo_coeff))
 
         # Obtain 1-RDM from NECI.
-        one_pdm = self.make_rdm1(fcivec, norb, nelec, link_index)
+        one_pdm = self.make_rdm1(rdm_label, fcivec, norb, nelec, link_index)
 
         # Contract with MO r integrals for electronic contribution.
         dipmom = []
@@ -172,7 +174,7 @@ class FCIQMCCI(object):
             neleca, nelecb = nelec
 
         write_integrals_file(h1e, eri, norb, neleca, nelecb, self)
-        write_fciqmc_config_file(neleca, nelecb, fci_restart, self)
+        write_fciqmc_config_file(self, neleca, nelecb, fci_restart)
         if self.verbose >= logger.DEBUG1:
             # os.path.join(self.scratchDirectory,self.configFile)
             in_file = self.configFile
@@ -239,7 +241,7 @@ def run_standalone(qmc_obj, mo_coeff, restart = None):
     else:
         neleca, nelecb = nelec
 
-    write_fciqmc_config_file(neleca, nelecb, restart, qmc_obj)
+    write_fciqmc_config_file(qmc_obj, neleca, nelecb, restart)
 
     if qmc_obj.verbose >= logger.DEBUG1:
         # os.path.join(self.scratchDirectory,self.configFile)
@@ -259,7 +261,7 @@ def run_standalone(qmc_obj, mo_coeff, restart = None):
     return rdm_energy
 
 
-def write_fciqmc_config_file(neleca, nelecb, restart, qmc_obj):
+def write_fciqmc_config_file(qmc_obj, neleca, nelecb, restart):
     config_file = qmc_obj.configFile
 
     f = open(config_file, 'w')
@@ -269,33 +271,35 @@ def write_fciqmc_config_file(neleca, nelecb, restart, qmc_obj):
     f.write('system read noorder\n')
     f.write('symignoreenergies\n')
     f.write('freeformat\n')
-    f.write('electrons %i\n'%(neleca+nelecb))
+    f.write('electrons %d\n' % (neleca+nelecb))
     f.write('nonuniformrandexcits 4ind-weighted\n')
     f.write('hphf 0\n')
     f.write('nobrillouintheorem\n')
+    if qmc_obj.nstates > 1:
+        f.write('system-replicas %d\n' % (2*qmc_obj.nstates))
     f.write('endsys\n')
     f.write('\n')
     f.write('calc\n')
     f.write('methods\n')
     f.write('method vertex fcimc\n')
     f.write('endmethods\n')
-    f.write('time %d\n'%(qmc_obj.time))
+    f.write('time %d\n' % qmc_obj.time)
     f.write('memoryfacpart 2.0\n')
     f.write('memoryfacspawn 1.0\n')
-    f.write('totalwalkers %i\n'%(qmc_obj.maxwalkers))
-    f.write('nmcyc %i\n'%(qmc_obj.maxIter))
-    f.write('seed %i\n'%(qmc_obj.seed))
+    f.write('totalwalkers %d\n' % qmc_obj.maxwalkers)
+    f.write('nmcyc %d\n' % qmc_obj.maxIter)
+    f.write('seed %d\n' % qmc_obj.seed)
     if (restart):
         f.write('readpops')
     else:
         f.write('startsinglepart 500\n')
         f.write('diagshift 0.1\n')
-    f.write('rdmsamplingiters %i\n'%(qmc_obj.RDMSamples))
+    f.write('rdmsamplingiters %d\n' % qmc_obj.RDMSamples)
     f.write('shiftdamp 0.05\n')
     if (qmc_obj.tau != -1.0):
         f.write('tau 0.01\n')
     f.write('truncinitiator\n')
-    f.write('addtoinitiator %i\n'%(qmc_obj.AddtoInit))
+    f.write('addtoinitiator %d\n' % qmc_obj.AddtoInit)
     f.write('allrealcoeff\n')
     f.write('realspawncutoff 0.4\n')
     f.write('semi-stochastic\n')
@@ -307,6 +311,10 @@ def write_fciqmc_config_file(neleca, nelecb, restart, qmc_obj):
     f.write('proje-changeref 1.5\n')
     f.write('stepsshift 10\n')
     f.write('maxwalkerbloom 3\n')
+    if qmc_obj.nstates > 1:
+        f.write('orthogonalise-replicas\n')
+        f.write('doubles-init\n')
+        f.write('multi-ref-shift\n')
     f.write('endcalc\n')
     f.write('\n')
     f.write('integral\n')
@@ -318,7 +326,7 @@ def write_fciqmc_config_file(neleca, nelecb, restart, qmc_obj):
     f.write('binarypops\n')
     f.write('calcrdmonfly 3 200 500\n')
     f.write('write-spin-free-rdm\n') 
-    f.write('endlog\n') 
+    f.write('endlog\n')
     f.write('end\n')
 
     f.close()
