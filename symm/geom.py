@@ -277,7 +277,8 @@ def symm_identical_atoms(gpname, atoms):
     for op in ops:
         newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
-        assert(numpy.allclose(coords0, newc[idx], atol=GEOM_THRESHOLD))
+        if not numpy.allclose(coords0, newc[idx], atol=GEOM_THRESHOLD):
+            raise RuntimeError('Symmetry identical atoms not found')
         dup_atom_ids.append(idx)
 
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T

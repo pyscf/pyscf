@@ -186,6 +186,9 @@ of API conventions''')
         mc = mc1step.CASSCF(mf, *args, **kwargs)
     return mc
 
+RCASSCF = CASSCF
+
+
 def CASCI(mf, *args, **kwargs):
     from pyscf import gto
     from pyscf import scf
@@ -211,6 +214,8 @@ of API conventions''')
         mc = casci.CASCI(mf, *args, **kwargs)
     return mc
 
+RCASCI = CASCI
+
 
 def UCASCI(mf, *args, **kwargs):
     if (mf.__class__.__name__ in ('RHF','ROHF') or
@@ -222,6 +227,7 @@ def UCASCI(mf, *args, **kwargs):
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
+
 
 def UCASSCF(mf, *args, **kwargs):
     if (mf.__class__.__name__ in ('RHF','ROHF') or

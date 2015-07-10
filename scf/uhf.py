@@ -44,7 +44,12 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         mo_occ = scf_rec['mo_occ']
         if numpy.iscomplexobj(mo):
             raise RuntimeError('TODO: project DHF orbital to UHF orbital')
-        dm = make_rdm1([fproj(mo),]*2, [mo_occ*.5,]*2)
+        mo_coeff = fproj(mo)
+        mo_a = mo_coeff[:,mo_occ>0]
+        mo_b = mo_coeff[:,mo_occ==2]
+        dm_a = numpy.dot(mo_a, mo_a.T)
+        dm_b = numpy.dot(mo_b, mo_b.T)
+        dm = numpy.array((dm_a, dm_b))
     else: #UHF
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']

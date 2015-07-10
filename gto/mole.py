@@ -1233,7 +1233,11 @@ class Mole(object):
 
         if self.symmetry:
             import pyscf.symm
-            eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
+            try:
+                eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
+            except RuntimeError:
+                raise RuntimeError('''Given symmetry and molecule structure not match.
+Note when symmetry attributes is assigned, the molecule needs to be put in the proper orientation.''')
             self.symm_orb, self.irrep_id = \
                     pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,
                                                   self.atom, self._basis)
