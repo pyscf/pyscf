@@ -354,10 +354,10 @@ if __name__ == '__main__':
     mol = gto.Mole()
     mol.build(
         verbose = 5,
-        output = 'out-fciqmc',
-        atom = [['H', (0.,0.,i)] for i in range(8)],
+        output = None, #'out-fciqmc',
+        atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True,
+        symmetry = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()
@@ -379,10 +379,10 @@ if __name__ == '__main__':
     mol = gto.Mole()
     mol.build(
         verbose = 5,
-        output = 'out-casscf',
-        atom = [['H', (0.,0.,i)] for i in range(8)],
+        output = None, #'out-casscf',
+        atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True,
+        symmetry = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()
