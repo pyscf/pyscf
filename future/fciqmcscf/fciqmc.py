@@ -355,7 +355,7 @@ if __name__ == '__main__':
     mol.build(
         verbose = 5,
         output = None, #'out-fciqmc',
-        atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
+        atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
 # fciqmc cannot handle Dooh currently, so reduce the point group.
         symmetry = True, 
@@ -382,7 +382,7 @@ if __name__ == '__main__':
     mol.build(
         verbose = 5,
         output = None, #'out-casscf',
-        atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
+        atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
         symmetry = True, 
         symmetry_subgroup = 'D2h',
