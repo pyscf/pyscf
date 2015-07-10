@@ -80,6 +80,7 @@ class FCIQMCCI(object):
         self.AddtoInit = 3
         self.orbsym = []
         self.nstates = 1
+        self.state_weights = [1.0]
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
@@ -95,7 +96,7 @@ class FCIQMCCI(object):
         log.info('Number of walkers = %s', self.maxwalkers)
         log.info('Maximum number of iterations = %d', self.maxIter)
 
-    def make_rdm12(self, rdm_label, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, rdm_label=None, **kwargs):
         nelectrons = 0
 
         if isinstance(nelec, (int, numpy.integer)):
@@ -103,7 +104,11 @@ class FCIQMCCI(object):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        rdm_filename = 'spinfree_TwoRDM.' + str(rdm_label)
+        if self.nstates > 1:
+            raise RuntimeError('Multi-state not yet working')
+
+        #rdm_filename = 'spinfree_TwoRDM.' + str(rdm_label)
+        rdm_filename = 'spinfree_TwoRDM'
         f = open(os.path.join(self.scratchDirectory, rdm_filename), 'r')
 
         two_pdm = numpy.zeros( (norb, norb, norb, norb) )
@@ -129,8 +134,8 @@ class FCIQMCCI(object):
 
         return one_pdm, two_pdm
 
-    def make_rdm1(self, rdm_label, fcivec, norb, nelec, link_index=None, **kwargs):
-        return self.make_rdm12(rdm_label, fcivec, norb, nelec, link_index, **kwargs)[0]
+    def make_rdm1(self, fcivec, norb, nelec, link_index=None, rdm_label=None, **kwargs):
+        return self.make_rdm12(fcivec, norb, nelec, link_index, rdm_label, **kwargs)[0]
 
     def dipoles(self, rdm_label, mo_coeff, fcivec, norb, nelec, link_index=None):
 
@@ -144,7 +149,7 @@ class FCIQMCCI(object):
             modmints[i] = reduce(numpy.dot, (mo_coeff.T, aodmints[i], mo_coeff))
 
         # Obtain 1-RDM from NECI.
-        one_pdm = self.make_rdm1(rdm_label, fcivec, norb, nelec, link_index)
+        one_pdm = self.make_rdm1(fcivec, norb, nelec, link_index, rdm_label)
 
         # Contract with MO r integrals for electronic contribution.
         dipmom = []
@@ -410,12 +415,12 @@ if __name__ == '__main__':
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000 
-    mc.max_cycle_macro = 10 
+    mc.max_cycle_macro = 10
     mc.natorb = True    #Return natural orbitals from mc2step in casscf_mo
     emc_1, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
 
 # Write orbitals to molden output
-    with open( 'molden.out', 'w' ) as fout:
+    with open( 'output.molden', 'w' ) as fout:
         molden.header(mol, fout)
         molden.orbital_coeff(mol, fout, casscf_mo)
 
