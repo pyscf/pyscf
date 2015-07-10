@@ -357,7 +357,9 @@ if __name__ == '__main__':
         output = None, #'out-fciqmc',
         atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = 'D2h',
+# fciqmc cannot handle Dooh currently, so reduce the point group.
+        symmetry = True, 
+        symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()
@@ -382,7 +384,8 @@ if __name__ == '__main__':
         output = None, #'out-casscf',
         atom = [['H', (0.,0.,i-3.5)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = 'D2h',
+        symmetry = True, 
+        symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()
