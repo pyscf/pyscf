@@ -187,7 +187,7 @@ class FCIQMCCI(object):
 
         return calc_e, None
 
-def run_standalone(fciqmcobj, mo_coeff, Restart = None):
+def run_standalone(qmc_obj, mo_coeff, Restart = None):
     '''Run a neci calculation standalone for the molecule listed in the
     FCIQMCCI object. The basis to run this calculation in is given by the
     mo_coeff array.
@@ -195,64 +195,65 @@ def run_standalone(fciqmcobj, mo_coeff, Restart = None):
     
     tol = 1e-9
     nmo = mo_coeff.shape[1]
-    fciqmcobj.dump_flags(verbose=5)
-    with open(fciqmcobj.integralFile, 'w') as fout:
-        if fciqmcobj.mol.symmetry:
-            if fciqmcobj.groupname == 'Dooh':
-                logger.info(fciqmcobj, 'Lower symmetry from Dooh to D2h')
+    qmc_obj.dump_flags(verbose=5)
+
+    with open(qmc_obj.integralFile, 'w') as fout:
+        if qmc_obj.mol.symmetry:
+            if qmc_obj.groupname == 'Dooh':
+                logger.info(qmc_obj, 'Lower symmetry from Dooh to D2h')
                 raise RuntimeError('''Lower symmetry from Dooh to D2h''')
-            elif fciqmcobj.groupname == 'Coov':
-                logger.info(fciqmcobj, 'Lower symmetry from Coov to C2v')
+            elif qmc_obj.groupname == 'Coov':
+                logger.info(qmc_obj, 'Lower symmetry from Coov to C2v')
                 raise RuntimeError('''Lower symmetry from Coov to C2v''')
             else:
                 # We need the AO basis overlap matrix to calculate the
                 # symmetries.
-                s = fciqmcobj.mol.intor_symmetric('cint1e_ovlp_sph')
-                fciqmcobj.orbsym = pyscf.symm.label_orb_symm(fciqmcobj.mol, 
-                        fciqmcobj.mol.irrep_name, fciqmcobj.mol.symm_orb,
+                s = qmc_obj.mol.intor_symmetric('cint1e_ovlp_sph')
+                qmc_obj.orbsym = pyscf.symm.label_orb_symm(qmc_obj.mol, 
+                        qmc_obj.mol.irrep_name, qmc_obj.mol.symm_orb,
                         mo_coeff, s=s)
-                orbsym = [param.IRREP_ID_TABLE[fciqmcobj.groupname][i]+1 for
-                          i in fciqmcobj.orbsym]
-                pyscf.tools.fcidump.write_head(fout, nmo, fciqmcobj.mol.nelectron,
-                                               fciqmcobj.mol.spin, orbsym)
+                orbsym = [param.IRREP_ID_TABLE[qmc_obj.groupname][i]+1 for
+                          i in qmc_obj.orbsym]
+                pyscf.tools.fcidump.write_head(fout, nmo, qmc_obj.mol.nelectron,
+                                               qmc_obj.mol.spin, orbsym)
         else:
-            pyscf.tools.fcidump.write_head(fout, nmo, fciqmcobj.mol.nelectron,
-                                           fciqmcobj.mol.spin)
+            pyscf.tools.fcidump.write_head(fout, nmo, qmc_obj.mol.nelectron,
+                                           qmc_obj.mol.spin)
 
-        eri = pyscf.ao2mo.outcore.full_iofree(fciqmcobj.mol, mo_coeff, verbose=0)
+        eri = pyscf.ao2mo.outcore.full_iofree(qmc_obj.mol, mo_coeff, verbose=0)
         pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),
                                       nmo, tol=tol)
 
-        t = fciqmcobj.mol.intor_symmetric('cint1e_kin_sph')
-        v = fciqmcobj.mol.intor_symmetric('cint1e_nuc_sph')
+        t = qmc_obj.mol.intor_symmetric('cint1e_kin_sph')
+        v = qmc_obj.mol.intor_symmetric('cint1e_nuc_sph')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
         pyscf.tools.fcidump.write_hcore(fout, h, nmo, tol=tol)
-        fout.write(' %.16g  0  0  0  0\n' % fciqmcobj.mol.energy_nuc())
+        fout.write(' %.16g  0  0  0  0\n' % qmc_obj.mol.energy_nuc())
 
-    nelec = fciqmcobj.mol.nelectron
+    nelec = qmc_obj.mol.nelectron
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2 + nelec%2
         nelecb = nelec - neleca
     else:
         neleca, nelecb = nelec
-    write_fciqmc_config_file(neleca, nelecb, Restart, fciqmcobj)
-    if fciqmcobj.verbose >= logger.DEBUG1:
+    write_fciqmc_config_file(neleca, nelecb, Restart, qmc_obj)
+    if qmc_obj.verbose >= logger.DEBUG1:
         # os.path.join(self.scratchDirectory,self.configFile)
-        in_file = fciqmcobj.configFile
-        logger.debug1(fciqmcobj, 'FCIQMC Input file')
-        logger.debug1(fciqmcobj, open(in_file, 'r').read())
-    execute_fciqmc(fciqmcobj)
-    if fciqmcobj.verbose >= logger.DEBUG1:
+        in_file = qmc_obj.configFile
+        logger.debug1(qmc_obj, 'FCIQMC Input file')
+        logger.debug1(qmc_obj, open(in_file, 'r').read())
+    execute_fciqmc(qmc_obj)
+    if qmc_obj.verbose >= logger.DEBUG1:
         # os.path.join(self.scratchDirectory,self.outputFile)
-        out_file = fciqmcobj.outputFileCurrent
-        logger.debug1(fciqmcobj, open(out_file))
-    calc_e = read_energy(fciqmcobj)
+        out_file = qmc_obj.outputFileCurrent
+        logger.debug1(qmc_obj, open(out_file))
+    calc_e = read_energy(qmc_obj)
 
     return calc_e
 
 
-def write_fciqmc_config_file(neleca, nelecb, Restart, FCIQMCCI):
-    confFile = FCIQMCCI.configFile
+def write_fciqmc_config_file(neleca, nelecb, Restart, qmc_obj):
+    confFile = qmc_obj.configFile
 
     f = open(confFile, 'w')
 
@@ -271,23 +272,23 @@ def write_fciqmc_config_file(neleca, nelecb, Restart, FCIQMCCI):
     f.write('methods\n')
     f.write('method vertex fcimc\n')
     f.write('endmethods\n')
-    f.write('time %d\n'%(FCIQMCCI.time))
+    f.write('time %d\n'%(qmc_obj.time))
     f.write('memoryfacpart 2.0\n')
     f.write('memoryfacspawn 1.0\n')
-    f.write('totalwalkers %i\n'%(FCIQMCCI.maxwalkers))
-    f.write('nmcyc %i\n'%(FCIQMCCI.maxIter))
-    f.write('seed %i\n'%(FCIQMCCI.seed))
+    f.write('totalwalkers %i\n'%(qmc_obj.maxwalkers))
+    f.write('nmcyc %i\n'%(qmc_obj.maxIter))
+    f.write('seed %i\n'%(qmc_obj.seed))
     if (Restart):
         f.write('readpops')
     else:
         f.write('startsinglepart 500\n')
         f.write('diagshift 0.1\n')
-    f.write('rdmsamplingiters %i\n'%(FCIQMCCI.RDMSamples))
+    f.write('rdmsamplingiters %i\n'%(qmc_obj.RDMSamples))
     f.write('shiftdamp 0.05\n')
-    if (FCIQMCCI.tau != -1.0):
+    if (qmc_obj.tau != -1.0):
         f.write('tau 0.01\n')
     f.write('truncinitiator\n')
-    f.write('addtoinitiator %i\n'%(FCIQMCCI.AddtoInit))
+    f.write('addtoinitiator %i\n'%(qmc_obj.AddtoInit))
     f.write('allrealcoeff\n')
     f.write('realspawncutoff 0.4\n')
     f.write('semi-stochastic\n')
@@ -318,12 +319,12 @@ def write_fciqmc_config_file(neleca, nelecb, Restart, FCIQMCCI):
     #f.write('noreorder\n')
 
 
-def write_integrals_file(h1eff, eri_cas, ncas, neleca, nelecb, FCIQMCCI):
-    integralFile = os.path.join(FCIQMCCI.scratchDirectory,FCIQMCCI.integralFile)
+def write_integrals_file(h1eff, eri_cas, ncas, neleca, nelecb, qmc_obj):
+    integralFile = os.path.join(qmc_obj.scratchDirectory,qmc_obj.integralFile)
     # Ensure 4-fold symmetry.
     eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
-    if FCIQMCCI.mol.symmetry and FCIQMCCI.orbsym:
-        orbsym = [IRREP_MAP[FCIQMCCI.groupname][i] for i in FCIQMCCI.orbsym]
+    if qmc_obj.mol.symmetry and qmc_obj.orbsym:
+        orbsym = [IRREP_MAP[qmc_obj.groupname][i] for i in qmc_obj.orbsym]
     else:
         orbsym = []
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
@@ -331,39 +332,39 @@ def write_integrals_file(h1eff, eri_cas, ncas, neleca, nelecb, FCIQMCCI):
                                        orbsym=orbsym, tol=1e-10)
 
 
-def execute_fciqmc(FCIQMCCI):
-    inFile = os.path.join(FCIQMCCI.scratchDirectory, FCIQMCCI.configFile)
-    outfiletmp = FCIQMCCI.outputFileRoot
-    files = os.listdir(FCIQMCCI.scratchDirectory+'.')
+def execute_fciqmc(qmc_obj):
+    inFile = os.path.join(qmc_obj.scratchDirectory, qmc_obj.configFile)
+    outfiletmp = qmc_obj.outputFileRoot
+    files = os.listdir(qmc_obj.scratchDirectory+'.')
     i = 1
     while outfiletmp in files:
-        outfiletmp = FCIQMCCI.outputFileRoot + '_{}'.format(i)
+        outfiletmp = qmc_obj.outputFileRoot + '_{}'.format(i)
         i += 1
-    logger.info(FCIQMCCI,'fciqmc outputfile: %s', outfiletmp)
-    FCIQMCCI.outputFileCurrent = outfiletmp
-    outFile = os.path.join(FCIQMCCI.scratchDirectory, outfiletmp)
-    if FCIQMCCI.executable == 'external':
-        logger.info(FCIQMCCI,'External FCIQMC calculation requested from '
+    logger.info(qmc_obj,'fciqmc outputfile: %s', outfiletmp)
+    qmc_obj.outputFileCurrent = outfiletmp
+    outFile = os.path.join(qmc_obj.scratchDirectory, outfiletmp)
+    if qmc_obj.executable == 'external':
+        logger.info(qmc_obj,'External FCIQMC calculation requested from '
                              'dumped integrals.')
-        logger.info(FCIQMCCI,'Waiting for density matrices and output file '
+        logger.info(qmc_obj,'Waiting for density matrices and output file '
                              'to be returned.')
         try:
             raw_input("Press Enter to continue with calculation...")
         except:
             input("Press Enter to continue with calculation...")
     else:
-        call("%s  %s > %s" % (FCIQMCCI.executable, inFile, outFile), shell=True)
+        call("%s  %s > %s" % (qmc_obj.executable, inFile, outFile), shell=True)
 
 
-def read_energy(FCIQMCCI):
-    file1 = open(os.path.join(FCIQMCCI.scratchDirectory,
-                 FCIQMCCI.outputFileCurrent),"r")
+def read_energy(qmc_obj):
+    file1 = open(os.path.join(qmc_obj.scratchDirectory,
+                 qmc_obj.outputFileCurrent),"r")
 
     for line in file1:
         if "*TOTAL ENERGY* CALCULATED USING THE" in line:
             calc_e = float(line.split()[-1])
             break
-    logger.info(FCIQMCCI, 'total energy from fciqmc: %.15f', calc_e)
+    logger.info(qmc_obj, 'total energy from fciqmc: %.15f', calc_e)
     file1.close()
 
     return calc_e
@@ -395,7 +396,7 @@ if __name__ == '__main__':
     emc_1 = mc.mc2step()[0]
 
     mc = mcscf.CASCI(m, 4, 4)
-    mc.fcisolver = FCIQMCCI(mol)
+    mc.fcisolver =  FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000
     emc_0 = mc.casci()[0]
