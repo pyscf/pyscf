@@ -21,7 +21,7 @@ mol.build()
 m = scf.UHF(mol)
 print('UHF     = %.15g' % m.scf())
 
-mc = mcscf.CASSCF(m, 4, (4,2))
+mc = mcscf.UCASSCF(m, 4, (4,2))
 mc.stdout.write('** Triplet with UHF-CASSCF**\n')
 emc1 = mc.mc1step()[0]
 print('CASSCF = %.15g' % emc1)
@@ -35,7 +35,7 @@ m = scf.UHF(mol)
 print('\n')
 print('UHF     = %.15g' % m.scf())
 
-mc = mcscf.CASSCF(m, 4, 6)
+mc = mcscf.UCASSCF(m, 4, 6)
 mc.stdout.write('** Singlet with UHF-CASSCF **\n')
 emc1 = mc.mc1step()[0]
 
