@@ -171,14 +171,23 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
         mc = mcscf.CASSCF(mf, norb, nelec)
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
+
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
-        raise RuntimeError('First argument needs to be RHF/ROHF object. '
-                           'UHF-CASSCF calculation should be be initialized with UCASSCF function')
+        mf1 = scf.RHF(mf.mol)
+        mf1.__dict__.update(mf.__dict__)
+        mf1.mo_energy = mf.mo_energy[0]
+        mf1.mo_coeff  = mf.mo_coeff[0]
+        mf1.mo_occ    = mf.mo_occ[0]
+        mf = mf1
+
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, *args, **kwargs)
     else:
         mc = mc1step.CASSCF(mf, *args, **kwargs)
     return mc
+
+RCASSCF = CASSCF
+
 
 def CASCI(mf, *args, **kwargs):
     from pyscf import gto
@@ -190,25 +199,43 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
         mc = mcscf.CASCI(mf, norb, nelec)
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
+
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
-        raise RuntimeError('First argument needs to be RHF/ROHF object. '
-                           'UHF-CASSCF calculation should be be initialized with UCASSCF function')
+        mf1 = scf.RHF(mf.mol)
+        mf1.__dict__.update(mf.__dict__)
+        mf1.mo_energy = mf.mo_energy[0]
+        mf1.mo_coeff  = mf.mo_coeff[0]
+        mf1.mo_occ    = mf.mo_occ[0]
+        mf = mf1
+
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, *args, **kwargs)
     else:
         mc = casci.CASCI(mf, *args, **kwargs)
     return mc
 
+RCASCI = CASCI
+
 
 def UCASCI(mf, *args, **kwargs):
+    if (mf.__class__.__name__ in ('RHF','ROHF') or
+        isinstance(mf, (scf.hf.RHF, scf.hf.ROHF))):
+        raise RuntimeError('First argument needs to be UHF object.')
+
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
         mc = casci_uhf.CASCI(mf, *args, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
 
+
 def UCASSCF(mf, *args, **kwargs):
+    if (mf.__class__.__name__ in ('RHF','ROHF') or
+        isinstance(mf, (scf.hf.RHF, scf.hf.ROHF))):
+        raise RuntimeError('First argument needs to be UHF object.')
+
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
         mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
+    return mc
