@@ -349,6 +349,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import mcscf
+    from pyscf.tools import molden
 
     b = 1.4
     mol = gto.Mole()
@@ -357,8 +358,8 @@ if __name__ == '__main__':
         output = None, #'out-fciqmc',
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-# fciqmc cannot handle Dooh currently, so reduce the point group.
         symmetry = True, 
+# fciqmc cannot handle Dooh currently, so reduce the point group if full group is infinite.
         symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
@@ -367,9 +368,15 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
-    mc.fcisolver.RDMSamples = 1000
-    mc.max_cycle_macro = 10
-    emc_1 = mc.mc2step()[0]
+    mc.fcisolver.RDMSamples = 1000 
+    mc.max_cycle_macro = 10 
+    mc.natorb = True    #Return natural orbitals from mc2step in casscf_mo
+    emc_1, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
+
+# Write orbitals to molden output
+    with open( 'molden.out', 'w' ) as fout:
+        molden.header(mol, fout)
+        molden.orbital_coeff(mol, fout, casscf_mo)
 
     mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)

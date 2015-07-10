@@ -182,7 +182,11 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     #old_det_idxa = numpy.argsort(guide_stringsa)
     #old_det_idxb = numpy.argsort(guide_stringsb)
     #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
-    ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
+    try:
+        ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
+    except:
+        log.info('FCI vector not available, so not using old wavefunction as initial guess')
+        ci0 = None
 
 # restore phase, to ensure the reordered ci vector is the correct initial guess
     for i, k in enumerate(where_natorb):
