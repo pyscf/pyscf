@@ -185,10 +185,10 @@ def run_standalone(fciqmcobj, mo_coeff, Restart = None):
     with open(fciqmcobj.integralFile, 'w') as fout:
         if fciqmcobj.mol.symmetry:
             if fciqmcobj.groupname == 'Dooh':
-                log.info('Lower symmetry from Dooh to D2h')
+                logger.info(fciqmcobj, 'Lower symmetry from Dooh to D2h')
                 raise RuntimeError('''Lower symmetry from Dooh to D2h''')
             elif fciqmcobj.groupname == 'Coov':
-                log.info('Lower symmetry from Coov to C2v')
+                logger.info(fciqmcobj, 'Lower symmetry from Coov to C2v')
                 raise RuntimeError('''Lower symmetry from Coov to C2v''')
             else:
                 #We need the AO basis overlap matrix to calculate the symmetries
