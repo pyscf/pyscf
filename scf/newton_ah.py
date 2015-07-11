@@ -21,20 +21,15 @@ Newton Raphson HF solver with augmented Hessian
 def expmat(a):
     return scipy.linalg.expm(a)
 
-def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
     mol = mf.mol
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
     nocc = len(occidx)
     nvir = len(viridx)
 
-    dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    if h1e is None: h1e = mf.get_hcore()
     if fock_ao is None:
-        vhf0 = mf.get_veff(mol, dm1)
-        fock_ao = h1e + vhf0
-    else:
-        vhf0 = fock_ao - h1e
+        fock_ao = mf.get_hcore() + mf.get_veff(mol, dm1)
     fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
 
     g = fock[viridx[:,None],occidx] * 2
@@ -50,14 +45,23 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         x2+= numpy.einsum('pr,rq->pq', fvv, x) * 2
         return x2.reshape(-1)
 
+    save_for_dft = [None, None]  # (dm, veff)
     def h_opjk(x):
         x = x.reshape(-1,nocc)
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
-        #x2 = reduce(numpy.dot, (mo_coeff[:,viridx].T, mf.get_veff(mol, d1+d1.T),
-        #                        mo_coeff[:,occidx])) * 4
-        # For DFT
-        vhf1 = mf.get_veff(mol, dm0+d1+d1.T, dm_last=dm0, vhf_last=vhf0) - vhf0
-        x2 = reduce(numpy.dot, (mo_coeff[:,viridx].T, vhf1,
+        if hasattr(mf, 'xc'):
+            if save_for_dft[0] is None:
+                save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
+                save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
+            dm1 = save_for_dft[0] + d1 + d1.T
+            vhf1 = mf.get_veff(mol, dm1, dm_last=save_for_dft[0],
+                               vhf_last=save_for_dft[1])
+            dvhf = vhf1 - save_for_dft[1]
+            save_for_dft[0] = dm1
+            save_for_dft[1] = vhf1
+        else:
+            dvhf = mf.get_veff(mol, d1+d1.T)
+        x2 = reduce(numpy.dot, (mo_coeff[:,viridx].T, dvhf,
                                 mo_coeff[:,occidx])) * 4
         return x2.reshape(-1)
 
@@ -87,7 +91,7 @@ def unpack_uniq_var(dx, mo_occ):
     x1[idx] = dx
     return x1 - x1.T
 
-def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
     mol = mf.mol
     occidxa = numpy.where(mo_occ>0)[0]
     occidxb = numpy.where(mo_occ==2)[0]
@@ -95,13 +99,8 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     viridxb = numpy.where(mo_occ<2)[0]
     mask = uniq_var_indices(mo_occ)
 
-    dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    if h1e is None: h1e = mf.get_hcore()
     if fock_ao is None:
-        vhf0 = mf.get_veff(mol, dm1)
-        fock_ao = h1e + vhf0
-    else:
-        vhf0 = fock_ao - h1e
+        fock_ao = mf.get_hcore() + mf.get_veff(mol, dm1)
     focka = reduce(numpy.dot, (mo_coeff.T, fock_ao[0], mo_coeff))
     fockb = reduce(numpy.dot, (mo_coeff.T, fock_ao[1], mo_coeff))
 
@@ -152,6 +151,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         x2 *= .5
         return x2[mask]
 
+    save_for_dft = [None, None]  # (dm, veff)
     def h_opjk(x):
         x1 = numpy.zeros_like(focka)
         x1[mask] = x
@@ -159,16 +159,28 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         x2 = numpy.zeros_like(x1)
         d1a = reduce(numpy.dot, (mo_coeff[:,viridxa], x1[viridxa[:,None],occidxa], mo_coeff[:,occidxa].T))
         d1b = reduce(numpy.dot, (mo_coeff[:,viridxb], x1[viridxb[:,None],occidxb], mo_coeff[:,occidxb].T))
-        dm1 = numpy.array((dm0[0]+d1a+d1a.T,dm0[1]+d1b+d1b.T))
-        vhf1 = mf.get_veff(mol, dm1, dm_last=dm0, vhf_last=vhf0) - vhf0
-        x2[viridxa[:,None],occidxa] += reduce(numpy.dot, (mo_coeff[:,viridxa].T, vhf1[0], mo_coeff[:,occidxa]))
-        x2[viridxb[:,None],occidxb] += reduce(numpy.dot, (mo_coeff[:,viridxb].T, vhf1[1], mo_coeff[:,occidxb]))
+        if hasattr(mf, 'xc'):
+            from pyscf.dft import uks
+            if save_for_dft[0] is None:
+                save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
+                save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
+            dm1 = numpy.array((save_for_dft[0][0]+d1a+d1a.T,
+                               save_for_dft[0][1]+d1b+d1b.T))
+            vhf1 = uks.get_veff_(mf, mol, dm1, dm_last=save_for_dft[0],
+                                 vhf_last=save_for_dft[1])
+            dvhf = (vhf1[0]-save_for_dft[1][0], vhf1[1]-save_for_dft[1][1])
+            save_for_dft[0] = dm1
+            save_for_dft[1] = vhf1
+        else:
+            dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
+        x2[viridxa[:,None],occidxa] += reduce(numpy.dot, (mo_coeff[:,viridxa].T, dvhf[0], mo_coeff[:,occidxa]))
+        x2[viridxb[:,None],occidxb] += reduce(numpy.dot, (mo_coeff[:,viridxb].T, dvhf[1], mo_coeff[:,occidxb]))
         return x2[mask]
 
     return g, h_op1, h_opjk, h_diag
 
 
-def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
     mol = mf.mol
     occidxa = numpy.where(mo_occ[0]>0)[0]
     occidxb = numpy.where(mo_occ[1]>0)[0]
@@ -179,13 +191,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     nvira = len(viridxa)
     nvirb = len(viridxb)
 
-    dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    if h1e is None: h1e = mf.get_hcore()
     if fock_ao is None:
-        vhf0 = mf.get_veff(mol, dm1)
-        fock_ao = h1e + vhf0
-    else:
-        vhf0 = fock_ao - h1e
+        fock_ao = mf.get_hcore() + mf.get_veff(mol, dm1)
     focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
 
@@ -207,6 +214,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         x2b += numpy.einsum('rp,rq->pq', fockb[viridxb[:,None],viridxb], x1b)
         return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
+    save_for_dft = [None, None]  # (dm, veff)
     def h_opjk(x):
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
@@ -214,11 +222,22 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                                  mo_coeff[0][:,occidxa].T))
         d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
                                  mo_coeff[1][:,occidxb].T))
-        dm1 = numpy.array((dm0[0]+d1a+d1a.T,dm0[1]+d1b+d1b.T))
-        vhf1 = mf.get_veff(mol, dm1, dm_last=dm0, vhf_last=vhf0) - vhf0
-        x2a = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, vhf1[0],
+        if hasattr(mf, 'xc'):
+            if save_for_dft[0] is None:
+                save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
+                save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
+            dm1 = numpy.array((save_for_dft[0][0]+d1a+d1a.T,
+                               save_for_dft[0][1]+d1b+d1b.T))
+            vhf1 = mf.get_veff(mol, dm1, dm_last=save_for_dft[0],
+                               vhf_last=save_for_dft[1])
+            dvhf = (vhf1[0]-save_for_dft[1][0], vhf1[1]-save_for_dft[1][1])
+            save_for_dft[0] = dm1
+            save_for_dft[1] = vhf1
+        else:
+            dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
+        x2a = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, dvhf[0],
                                  mo_coeff[0][:,occidxa]))
-        x2b = reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, vhf1[1],
+        x2b = reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, dvhf[1],
                                  mo_coeff[1][:,occidxb]))
         return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
@@ -237,7 +256,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
         log = logger.Logger(mf.stdout, mf.verbose)
 
     t2m = (time.clock(), time.time())
-    g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao, h1e)
+    g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
     norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%4.3g', norm_gorb)
     t3m = log.timer('gen h_op', *t2m)
@@ -245,30 +264,40 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
     def precond(x, e):
         hdiagd = h_diag-(e-mf.ah_level_shift)
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
-        return x/hdiagd
+        x = x/hdiagd
+## Because of DFT, donot norm to 1 which leads 1st DM too large.
+#        norm_x = numpy.linalg.norm(x)
+#        if norm_x < 1e-2:
+#            x *= 1e-2/norm_x
+        return x
 
-    if norm_gorb < 0.01:
-        max_cycle = mf.max_cycle_inner-int(numpy.log10(norm_gorb+1e-12))
-    else:
-        max_cycle = mf.max_cycle_inner
-
+    xsinit = []
+    axinit = []
     xcollect = []
     jkcollect = []
-    x0 = 0
     x0_guess = g_orb
-    ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
     while True:
+        if norm_gorb < .1:
+            max_cycle = mf.max_cycle_inner-int(numpy.log10(norm_gorb+1e-9))
+        else:
+            max_cycle = mf.max_cycle_inner
+        ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
+        # increase the AH accuracy when approach convergence
+        ah_start_tol = (numpy.log(norm_gorb+mf.conv_tol_grad) -
+                        numpy.log(mf.conv_tol_grad) + .2) * 1.5 * norm_gorb
+        ah_start_tol = max(min(ah_start_tol, mf.ah_start_tol), ah_conv_tol)
+        #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
+        ah_start_cycle = mf.ah_start_cycle
+        log.debug('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
+                  ah_start_tol, ah_start_cycle, max_cycle)
         g_orb0 = g_orb
         norm_gprev = norm_gorb
-        # increase the AH accuracy when approach convergence
-        ah_start_tol = max(min(norm_gorb**2*1e1, mf.ah_start_tol), ah_conv_tol)
-        log.debug1('... Set ah_start_tol %g, ah_conv_tol %g',
-                   ah_start_tol, ah_conv_tol)
         imic = 0
-        wlast = 0
-        dx = 0
+        dr = 0
         u = 1
         jkcount = 0
+        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        vhf0 = fock_ao - h1e
 
         g_op = lambda: g_orb
         def h_op(x):
@@ -280,8 +309,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
 # Divide the hessian into two parts, approx the JK part
 # Then clean up the saved JKs to ensure the approximation only get from the
 # nearest call
-        xsinit = xcollect
-        axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
+        if mf.ah_guess_space and len(xcollect) > 0:
+            xsinit = xcollect
+            axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
         xcollect = []
         jkcollect = []
 
@@ -290,10 +320,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                                        xs=xsinit, ax=axinit, verbose=log,
                                        tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
                                        lindep=mf.ah_lindep):
-            if (ah_end or ihop+1 == mf.ah_max_cycle or # make sure to use the last step
-                ((abs(w-wlast) < ah_start_tol) and
-                 (numpy.linalg.norm(residual)**2 < ah_start_tol) and
-                 (ihop >= mf.ah_start_cycle)) or
+            norm_residual = numpy.linalg.norm(residual)
+            if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
+                ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
                 (seig < mf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
@@ -301,71 +330,78 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                     scale = mf.max_orb_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
-                    dx = dx + dxi
-                    g_orb1 = g_orb + hdxi * scale
-                    #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
-                    #jkcount += 1
+                    hdxi *= scale
                 else:
-                    dx = dx + dxi
-                    g_orb1 = g_orb + hdxi  # hdxi not good enough?
-                    #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
-                    #jkcount += 1
 # Gradually decrease start_tol/conv_tol, so the next step is more accurate
                     ah_start_tol *= mf.ah_decay_rate
+                    #ah_start_tol *= imic/(1/mf.ah_decay_rate-1+imic)
+                    log.debug('Set ah_start_tol %g', ah_start_tol)
+                dr = dr + dxi
+                g_orb1 = g_orb + hdxi
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
-                log.debug('    inner iter %d(%d)  |g[o]|= %4.3g  |dx|= %4.3g  '
-                          'max(|x|)= %4.3g  eig= %4.3g  dw= %4.3g  seig= %4.3g',
-                           imic, ihop+1, norm_gorb, norm_dxi, dxmax, w, w-wlast, seig)
+                norm_dr = numpy.linalg.norm(dr)
+                log.debug('    imic %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
+                          'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  |v|= %4.3g  seig= %4.3g',
+                          imic, ihop, norm_gorb, norm_dxi,
+                          dxmax, norm_dr, w, norm_residual, seig)
 
                 if norm_gorb > norm_gprev * mf.ah_grad_trust_region:
 # Do we need force the gradients decaying?
 # If in the concave region, how to avoid steping backward (along the negative hessian)?
-                    dx -= dxi
                     log.debug('    norm_gorb > nrom_gorb_prev')
-                    if numpy.linalg.norm(dx) > 1e-14:
+                    dr -= dxi
+                    norm_gorb = norm_gprev
+                    if numpy.linalg.norm(dr) > 1e-14:
                         break
                 else:
+                    u = mf.update_rotate_matrix(dxi, mo_occ, u)
                     norm_gprev = norm_gorb
                     g_orb = g_orb1
-                    u = mf.update_rotate_matrix(dxi, mo_occ, u)
 
-                if (imic >= max_cycle or norm_gorb < mf.conv_tol_grad*.5):
+                if (imic >= max_cycle or norm_gorb < mf.conv_tol_grad):
                     break
+
+                if (norm_dr > mf.ah_grad_adjust_threshold and
+                    (imic % mf.ah_grad_adjust_interval == 0)):
+                    mo1 = mf.update_mo_coeff(mo_coeff, u)
+                    dm = mf.make_rdm1(mo1, mo_occ)
+# use mf._scf.get_veff to avoid density-fit mf polluting get_veff
+                    fock_ao = h1e + mf._scf.get_veff(mf.mol, dm, dm_last=dm0,
+                                                     vhf_last=vhf0)
+                    g_orb = mf.gen_g_hop(mo1, mo_occ, fock_ao)[0]
+                    jkcount += 1
+                    norm_gprev = norm_gorb = numpy.linalg.norm(g_orb)
+                    log.debug('Adjust g_orb to %4.3g', norm_gorb)
 
             if seig < mf.ah_lindep*1e2 and xcollect:
                 xcollect.pop(-1)
                 jkcollect.pop(-1)
                 log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
                            seig, len(xcollect))
-            wlast = w
 
-        if numpy.linalg.norm(dx) > 0:
-            x0 = x0 + dx
-            norm_gorb = numpy.linalg.norm(g_orb)
-        else:
-            dxi *= .1
-            x0 = x0 + dxi
-            u = mf.update_rotate_matrix(dxi, mo_occ, u)
+        if numpy.linalg.norm(dr) < 1e-14:
+            dr = dxi * .1
+            u = mf.update_rotate_matrix(dr, mo_occ, u)
             g_orb = g_orb + hdxi * .1
             #g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
             #jkcount += 1
             norm_gorb = numpy.linalg.norm(g_orb)
-            log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dx|= %4.3g',
-                      norm_gorb, numpy.linalg.norm(dxi))
+            log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dr|= %4.3g',
+                      norm_gorb, norm_dr*.1)
 
-        jkcount += ihop + 2
+        jkcount += ihop + 1
         log.debug('    tot inner=%d  %d JK  |g[o]|= %4.3g  |u-1|= %4.3g',
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(u.shape[1])))
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         mo_coeff, mo_occ, fock_ao = (yield u, g_orb0, jkcount)
 
-        g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao, h1e)
+        g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
         norm_gorb = numpy.linalg.norm(g_orb)
         log.debug('    |g|= %4.3g', norm_gorb)
-        x0_guess = x0
+        x0_guess = dxi
 
 
 def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
@@ -389,6 +425,7 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, log)
     u, g_orb, jkcount = rotaiter.next()
     jktot = jkcount
+    cput1 = log.timer('initializing second order scf', *cput0)
 
     for imacro in range(max_cycle):
         dm_last = dm
@@ -398,13 +435,14 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
-        mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
+        mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)[0]
         mf.get_occ(mo_energy, mo_coeff)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
         log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
                  imacro, hf_energy, hf_energy-last_hf_e, norm_gorb,
                  jkcount)
+        cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
         if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < tol and
             norm_gorb < toloose):
@@ -424,8 +462,9 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
 
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, hf_energy, norm_gorb, jktot)
-    mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
-    mf.get_occ(mo_energy, mo_coeff)
+    mo_energy, mo_coeff = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    log.timer('Second order SCF', *cput0)
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
 
 
@@ -437,31 +476,30 @@ def newton(mf):
     class Base(mf.__class__):
         def __init__(self):
             self._scf = mf
-            self.max_cycle_inner = 6
+            self.max_cycle_inner = 8
             self.max_orb_stepsize = .05
-            self.conv_tol_grad = numpy.sqrt(mf.conv_tol)*10
+            self.conv_tol_grad = 1e-4
 
-            self.ah_start_tol = 1e-2
+            self.ah_start_tol = 5.
+            self.ah_start_cycle = 1
             self.ah_level_shift = 0
-            self.ah_conv_tol = 1e-10
+            self.ah_conv_tol = 1e-12
             self.ah_lindep = 1e-14
-            self.ah_start_cycle = 2
             self.ah_max_cycle = 30
             self.ah_guess_space = 0
             self.ah_grad_trust_region = 1.5
-            self.ah_decay_rate = .5
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
 #               max_orb_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
 #               ah_guess_space = 0
+            self.ah_grad_adjust_interval = 4
+            self.ah_grad_adjust_threshold = .05
+            self.ah_decay_rate = .8
 
+            self._keys = set(self.__dict__.keys())
             self.__dict__.update(mf.__dict__)
-            self._keys = self._keys.union(['max_cycle', 'max_cycle_inner',
-                    'max_orb_stepsize', 'conv_tol_grad', 'ah_start_tol',
-                    'ah_conv_tol', 'ah_lindep', 'ah_start_cycle',
-                    'ah_max_cycle', 'ah_guess_space', 'ah_grad_trust_region'])
 
         def dump_flags(self):
             logger.info(self, '\n')
@@ -484,7 +522,9 @@ def newton(mf):
             logger.info(self, 'ah_max_cycle = %d',     self.ah_max_cycle)
             logger.info(self, 'ah_guess_space = %d',   self.ah_guess_space)
             logger.info(self, 'ah_grad_trust_region = %g', self.ah_grad_trust_region)
-            logger.info(self, 'augmented hessian decay rate = %d', self.ah_decay_rate)
+            logger.info(self, 'ah_grad_adjust_interval = %d', self.ah_grad_adjust_interval)
+            logger.info(self, 'ah_grad_adjust_threshold = %d', self.ah_grad_adjust_threshold)
+            logger.info(self, 'augmented hessian decay rate = %g', self.ah_decay_rate)
 
         def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                       diis_start_cycle=None, level_shift_factor=None,
@@ -510,7 +550,7 @@ def newton(mf):
                     self._orbsym = pyscf.symm.label_orb_symm(self.mol,
                             self.mol.irrep_id, self.mol.symm_orb, mo_coeff,
                             s=self.get_ovlp())
-                return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
+                return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
                 dr = unpack_uniq_var(dx, mo_occ)
@@ -520,6 +560,13 @@ def newton(mf):
 
             def update_mo_coeff(self, mo_coeff, u):
                 return numpy.dot(mo_coeff, u)
+
+            def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                          diis_start_cycle=None, level_shift_factor=None,
+                          damp_factor=None):
+                fock = h1e + vhf
+                self._focka_ao = fock[0]
+                return fock
 
             def get_mo_energy(self, fock, s1e, mo_coeff, mo_occ):
                 dm = self.make_rdm1(mo_coeff, mo_occ)
@@ -537,7 +584,7 @@ def newton(mf):
                 f += reduce(numpy.dot, (po.T, focka_ao, pv))
                 f += reduce(numpy.dot, (pv.T, fc, pc))
                 f = f + f.T
-                return self.eig(f, s1e)[0]
+                return self.eig(f, s1e)
                 #fc = numpy.dot(fock[0], mo_coeff)
                 #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
                 #return mo_energy
@@ -554,7 +601,7 @@ def newton(mf):
                                    pyscf.symm.label_orb_symm(self.mol,
                                             self.mol.irrep_id, self.mol.symm_orb,
                                             mo_coeff[1], s=ovlp_ao))
-                return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
+                return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
                 nmo = len(mo_occ[0])
@@ -581,7 +628,7 @@ def newton(mf):
                 return numpy.array(map(numpy.dot, mo_coeff, u))
 
             def get_mo_energy(self, fock, s1e, mo_coeff, mo_occ):
-                return numpy.asarray(self.eig(fock, s1e)[0])
+                return self.eig(fock, s1e)
                 #fca = numpy.dot(fock[0], mo_coeff[0])
                 #fcb = numpy.dot(fock[1], mo_coeff[1])
                 #mo_energy =(numpy.einsum('pk,pk->k', mo_coeff[0], fca),
@@ -599,7 +646,7 @@ def newton(mf):
                     self._orbsym = pyscf.symm.label_orb_symm(self.mol,
                             self.mol.irrep_id, self.mol.symm_orb, mo_coeff,
                             s=self.get_ovlp())
-                return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
+                return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
                 nmo = len(mo_occ)
@@ -616,46 +663,11 @@ def newton(mf):
                 return numpy.dot(mo_coeff, u)
 
             def get_mo_energy(self, fock, s1e, mo_coeff, mo_occ):
-                return self.eig(fock, s1e)[0]
+                return self.eig(fock, s1e)
                 #fc = numpy.dot(fock, mo_coeff)
                 #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
                 #return mo_energy
         return RHF()
-
-
-def aux_fock_(newton_mf, start_tol=1e-3):
-    log = logger.Logger(newton_mf.stdout, newton_mf.verbose)
-    newton_mf._last_hf_e = 0
-    def get_fock(h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                 diis_start_cycle=None, level_shift_factor=None,
-                 damp_factor=None):
-        mol = newton_mf.mol
-        fock = newton_mf._scf.get_fock_(h1e, s1e, vhf, dm, cycle, adiis)
-        hf_energy = newton_mf.energy_tot(dm, h1e, vhf)
-        if abs(hf_energy-newton_mf._last_hf_e) > start_tol:
-            newton_mf._last_hf_e = hf_energy
-            return fock
-        else:
-            newton_mf._last_hf_e = hf_energy
-
-        mo_energy, mo_coeff = newton_mf._scf.eig(fock, s1e)
-        mo_occ = newton_mf._scf.get_occ(mo_energy, mo_coeff)
-        dm_new = newton_mf._scf.make_rdm1(mo_coeff, mo_occ)
-        vhf = newton_mf._scf.get_veff(mol, dm_new, dm_last=dm, vhf_last=vhf)
-        fock = h1e + vhf
-        if hasattr(newton_mf, '_ahcc'):
-            u, g_orb, jkcount = newton_mf._ahcc.send((mo_coeff, mo_occ, fock))
-        else:
-            newton_mf._ahcc = rotate_orb_cc(newton_mf, mo_coeff, mo_occ, fock,
-                                            h1e, log)
-            u, g_orb, jkcount = newton_mf._ahcc.next()
-        mo_coeff = newton_mf.update_mo_coeff(mo_coeff, u)
-        dm = newton_mf._scf.make_rdm1(mo_coeff, mo_occ)
-        vhf = newton_mf._scf.get_veff(mol, dm, dm_last=dm_new, vhf_last=vhf)
-        return h1e + vhf
-
-    return get_fock
-
 
 
 if __name__ == '__main__':
@@ -687,6 +699,7 @@ if __name__ == '__main__':
     m.scf()
     e0 = kernel(newton(m), m.mo_coeff, m.mo_occ, verbose=5)[1]
 
+#####################################
     mol.basis = '6-31g'
     mol.spin = 2
     mol.build(0, 0)
@@ -703,17 +716,13 @@ if __name__ == '__main__':
     e2 = kernel(newton(m), m.mo_coeff, m.mo_occ, max_cycle=50, verbose=5)[1]
 
     m = scf.UHF(mol)
-    m.get_fock = aux_fock_(newton(m))
-    e3 = m.scf()
-
-    m = scf.UHF(mol)
     m.max_cycle = 1
     #m.verbose = 5
     m.scf()
     nrmf = scf.density_fit(newton(m))
     nrmf.max_cycle = 50
     nrmf.conv_tol = 1e-8
-    nrmf.conv_tol_grad = 1e-4
+    nrmf.conv_tol_grad = 1e-5
     #nrmf.verbose = 5
     e4 = nrmf.kernel()
 
@@ -721,36 +730,13 @@ if __name__ == '__main__':
     m.max_cycle = 1
     #m.verbose = 5
     m.scf()
-    nrmf = newton(m)
+    nrmf = scf.density_fit(newton(m))
     nrmf.max_cycle = 50
+    nrmf.conv_tol_grad = 1e-5
     e5 = nrmf.kernel()
 
     print(e0 - -2.93707955256)
     print(e1 - -2.99456398848)
     print(e2 - -2.99663808314)
-    print(e3 - -2.99663808314)
-    print(e4 - -2.99663808314)
+    print(e4 - -2.99663808186)
     print(e5 - -2.99634506072)
-#    import newton_o2
-#    mol.spin = 2
-#    mol.build()
-#    mf = scf.RHF(mol)
-#    mf.scf()
-#    nmo = mol.nao_nr()
-#    nocc = mol.nelectron // 2
-#    nvir = nmo - nocc
-#    numpy.random.seed(12)
-#    u = numpy.linalg.svd(numpy.random.random((nmo,nmo)))[0]
-#    mo_coeff = numpy.dot(mf.mo_coeff, u)
-#
-#    g0, h_op0, h_diag0 = newton_o2.gen_g_hop(mf, mo_coeff, mf.mo_occ)
-#    x = pack_uniq_var(numpy.random.random((nmo,nmo)), mf.mo_occ)
-#    xref = h_op0(x)
-#
-#    mf1 = newton(mf)
-#    g1, h_op1, h_op2, h_diag = gen_g_hop_rohf(mf1, mo_coeff, mf.mo_occ)
-#    x1 = h_op1(x) + h_op2(x)
-#    print(abs(x1-xref).sum())
-#    print(abs(g0-g1).sum())
-#
-#    print(abs(h_diag - h_diag0).sum())

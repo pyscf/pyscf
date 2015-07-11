@@ -27,12 +27,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.98394849812, 9)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.98394849812, 9)
 
     def test_nr_rohf(self):
@@ -52,12 +54,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.5783963795897, 9)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.5783963795897, 9)
 
 
@@ -78,12 +82,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
 
@@ -103,12 +109,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.98394849812, 9)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.98394849812, 9)
 
     def test_nr_rohf_symm(self):
@@ -130,6 +138,7 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.578396379589819, 9)
 
 
@@ -151,12 +160,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
 
@@ -178,12 +189,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 7)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 7)
 
     def test_nr_roks(self):
@@ -207,12 +220,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 7)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 7)
 
 
@@ -237,12 +252,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 7)
 
         mf.max_cycle = 2
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 50
+        nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 7)
 
 
