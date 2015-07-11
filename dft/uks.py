@@ -37,17 +37,17 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
 
     if abs(hyb) < 1e-10:
         vj = ks.get_j(mol, dm, hermi)
-    elif (ks._eri is not None or ks._is_mem_enough() or
-        not ks.direct_scf):
+    elif (ks._eri is not None or ks._is_mem_enough() or not ks.direct_scf):
         vj, vk = ks.get_jk(mol, dm, hermi)
     else:
-        if isinstance(vhf_last, numpy.ndarray):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+        if isinstance(vhf_last, numpy.ndarray) and hasattr(ks, '_dm_last'):
+            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi=hermi)
             vj += ks._vj_last
             vk += ks._vk_last
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
+        ks._dm_last = dm
         ks._vj_last, ks._vk_last = vj, vk
 
     if abs(hyb) > 1e-10:
