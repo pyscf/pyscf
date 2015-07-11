@@ -396,7 +396,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.diis_space = 6
         self.diis_file = None
         self.diis_start_cycle = 1
-        self.diis_start_energy_diff = 1e-2
+# FIXME: Should we avoid DIIS starting early?
+        self.diis_start_energy_diff = 0.3
 
         self.frozen = frozen
         self.nocc = self.mol.nelectron // 2 - len(frozen)
@@ -460,10 +461,33 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None):
         from pyscf.cc import ccsd_lambda
-        return ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                  tol=self.conv_tol_normt,
-                                  max_memory=self.max_memory-lib.current_memory()[0],
-                                  verbose=self.verbose)
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        eris = ccsd_lambda._ERIS(self, mo_coeff)
+        conv, self.l1, self.l2 = \
+                ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                   tol=self.conv_tol_normt,
+                                   max_memory=self.max_memory-lib.current_memory()[0],
+                                   verbose=self.verbose)
+        return conv, self.l1, self.l2
+
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
+        '''1-particle density matrix in MO space'''
+        from pyscf.cc import ccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
+
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+        '''2-particle density matrix in MO space'''
+        from pyscf.cc import ccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
         #nocc = self.nocc

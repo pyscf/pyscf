@@ -70,8 +70,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
 
-def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-8,
-           lindep=1e-8, max_cycle=50, nroots=1, orbsym=[], wfnsym=None,
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
+           lindep=1e-14, max_cycle=50, nroots=1, orbsym=[], wfnsym=None,
            **kwargs):
     cis = FCISolver(None)
     cis.level_shift = level_shift

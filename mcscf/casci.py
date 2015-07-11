@@ -101,7 +101,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
 
         dm1 = dm1a + dm1b
         s = casscf._scf.get_ovlp()
-        casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
+        #casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
     return dm1a, dm1b
 
@@ -111,7 +111,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     from pyscf.mcscf import mc_ao2mo
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
-    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
     ncas = mc.ncas
     nelecas = mc.nelecas
 
@@ -147,7 +147,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
-    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, approx=2)
+    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas
@@ -395,8 +395,8 @@ class CASCI(object):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, ncore)
 
-    def kernel(self, *args, **kwargs):
-        return self.casci(*args, **kwargs)
+    def kernel(self, mo_coeff=None, ci0=None):
+        return self.casci(mo_coeff, ci0)
     def casci(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff

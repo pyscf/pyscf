@@ -246,6 +246,8 @@ class _ERIS(object):
             self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
             self.Icvcv, self.ICVCV, self.cvCV = \
                     trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
+            self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
+                          numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
         else:
             import gc
             gc.collect()
@@ -261,6 +263,8 @@ class _ERIS(object):
                 self.Icvcv, self.ICVCV, self.cvCV = \
                         trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory, verbose=log)
+                self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
+                              numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
             else:
                 raise RuntimeError('.max_memory not enough')
                 assert(max_memory > mem_basic)

@@ -118,12 +118,15 @@ def project_init_guess(casscf, init_mo):
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
         logger.debug(casscf, 'Core indices %s', str(idx[-ncore:][::-1]))
+        # take HF core
         mocore = mfmo[:,idx[-ncore:][::-1]]
 
+        # take projected CAS space
         mocas = init_mo[:,ncore:nocc] \
             - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
         mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)))
 
+        # remove core and active space from rest
         mou = init_mo[:,nocc:] \
             - reduce(numpy.dot, (mocc, mocc.T, s, init_mo[:,nocc:]))
         mo = lo.orth.vec_lowdin(numpy.hstack((mocc, mou)), s)

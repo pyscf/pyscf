@@ -4,7 +4,7 @@
 
 from functools import reduce
 import numpy
-import pyscf.lib.logger
+from pyscf.lib import logger
 from pyscf.symm import basis
 from pyscf.symm import param
 
@@ -53,12 +53,22 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
         norm[i] = numpy.einsum('ij,ij->i', moso, moso)
     iridx = numpy.argmax(norm, axis=0)
     orbsym = [irrep_name[i] for i in iridx]
-    pyscf.lib.logger.debug(mol, 'irreps of each MO %s', str(orbsym))
+    logger.debug(mol, 'irreps of each MO %s', str(orbsym))
     if check:
         norm[iridx,numpy.arange(nmo)] = 0
-        orbidx = numpy.where(norm > THRESHOLD)[1]
-        if orbidx.size > 0:
-            raise ValueError('orbitals %s not symmetrized' % orbidx)
+        orbidx = numpy.where(norm > THRESHOLD)
+        if orbidx[1].size > 0:
+            idx = numpy.where(norm > THRESHOLD*1e2)
+            if idx[1].size > 0:
+                logger.error(mol, 'orbitals %s not symmetrized', idx[1])
+                logger.debug(mol, 'norm = %s', norm[idx])
+                raise ValueError('orbitals %s not symmetrized' % idx[1])
+            else:
+                logger.warn(mol, 'orbitals %s not strictly symmetrized.',
+                            orbidx[1])
+                logger.warn(mol, 'They can be symmetrized with '
+                            'pyscf.symm.symmetrize_orb function.')
+                logger.debug(mol, 'norm = %s', norm[orbidx])
     return orbsym
 
 def symmetrize_orb(mol, mo, orbsym=None, s=None):

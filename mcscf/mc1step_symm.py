@@ -26,7 +26,7 @@ class CASSCF(mc1step.CASSCF):
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
                            mc1step.kernel)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
                 callback=None):
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
                            mc2step.kernel)
@@ -50,15 +50,25 @@ class CASSCF(mc1step.CASSCF):
 
         #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
-        self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
-                                          self.mol.symm_orb, mo_coeff,
-                                          s=self._scf.get_ovlp())
+        try:
+            self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
+                                              self.mol.symm_orb, mo_coeff,
+                                              s=self._scf.get_ovlp())
+        except ValueError:
+            logger.warn(self, 'mc1step_symm symmetrizes input orbitals')
+            s = self._scf.get_ovlp()
+            mo_coeff = symm.symmetrize_orb(self.mol, mo_coeff, s=s)
+            diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
+            mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
+            self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
+                                              self.mol.symm_orb, mo_coeff, s=s)
 
         if not hasattr(self.fcisolver, 'orbsym') or \
            not self.fcisolver.orbsym:
             ncore = self.ncore
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        logger.debug(self, 'Active space irreps %s', str(self.fcisolver.orbsym))
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 _kern(self, mo_coeff,

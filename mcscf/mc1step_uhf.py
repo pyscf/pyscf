@@ -35,8 +35,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     dm1[1,ncore[1]:nocc[1],ncore[1]:nocc[1]] = casdm1s[1]
 
     # part2, part3
-    vhf_c = (numpy.einsum('ipq->pq', eris.jkcpp) + eris.jC_pp,
-             numpy.einsum('ipq->pq', eris.jkcPP) + eris.jc_PP)
+    vhf_c = eris.vhf_c
     vhf_ca = (vhf_c[0] + numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1s[0]) \
                        - numpy.einsum('upqv,uv->pq', eris.appa, casdm1s[0]) \
                        + numpy.einsum('uvpq,uv->pq', eris.AApp, casdm1s[1]),
@@ -217,61 +216,6 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     return g_orb, gorb_update, h_op1, h_opjk, h_diag
 
 
-# dc = h_{co} * dr
-def hessian_co(casscf, mo, rmat, fcivec, e_ci, eris):
-    ncas = casscf.ncas
-    nelecas = casscf.nelecas
-    ncore = casscf.ncore
-    nocc = (ncas + ncore[0], ncas + ncore[1])
-
-    hcore = casscf.get_hcore()
-    h1effa = reduce(numpy.dot, (rmat[0][:,:nocc[0]].T, mo[0].T, hcore[0], mo[0][:,:nocc[0]]))
-    h1effb = reduce(numpy.dot, (rmat[1][:,:nocc[1]].T, mo[1].T, hcore[1], mo[1][:,:nocc[1]]))
-    h1effa = h1effa + h1effa.T
-    h1effb = h1effb + h1effb.T
-
-    aapc = eris.aapp[:,:,:,:ncore[0]]
-    aaPC = eris.aaPP[:,:,:,:ncore[1]]
-    AApc = eris.AApp[:,:,:,:ncore[0]]
-    AAPC = eris.AAPP[:,:,:,:ncore[1]]
-    apca = eris.appa[:,:,:ncore[0],:]
-    APCA = eris.APPA[:,:,:ncore[1],:]
-    jka = numpy.einsum('iup->up', eris.jkcpp[:,:nocc[0]]) + eris.jC_pp[:nocc[0]]
-    v1a = numpy.einsum('up,pv->uv', jka[ncore[0]:], rmat[0][:,ncore[0]:nocc[0]]) \
-        + numpy.einsum('uvpi,pi->uv', aapc-apca.transpose(0,3,1,2), rmat[0][:,:ncore[0]]) \
-        + numpy.einsum('uvpi,pi->uv', aaPC, rmat[1][:,:ncore[1]])
-    jkb = numpy.einsum('iup->up', eris.jkcPP[:,:nocc[1]]) + eris.jc_PP[:nocc[1]]
-    v1b = numpy.einsum('up,pv->uv', jkb[ncore[1]:], rmat[1][:,ncore[1]:nocc[1]]) \
-        + numpy.einsum('uvpi,pi->uv', AApc, rmat[0][:,:ncore[0]]) \
-        + numpy.einsum('uvpi,pi->uv', AAPC-APCA.transpose(0,3,1,2), rmat[1][:,:ncore[1]])
-    h1cas = (h1effa[ncore[0]:,ncore[0]:] + (v1a + v1a.T),
-             h1effb[ncore[1]:,ncore[1]:] + (v1b + v1b.T))
-
-    aaap = eris.aapp[:,:,ncore[0]:nocc[0],:]
-    aaAP = eris.aaPP[:,:,ncore[1]:nocc[1],:]
-    AAap = eris.AApp[:,:,ncore[1]:nocc[1],:]
-    AAAP = eris.AAPP[:,:,ncore[1]:nocc[1],:]
-    aaaa = numpy.einsum('tuvp,pw->tuvw', aaap, rmat[0][:,ncore[0]:nocc[0]])
-    aaaa = aaaa + aaaa.transpose(0,1,3,2)
-    aaaa = aaaa + aaaa.transpose(2,3,0,1)
-    AAAA = numpy.einsum('tuvp,pw->tuvw', AAAP, rmat[1][:,ncore[1]:nocc[1]])
-    AAAA = AAAA + AAAA.transpose(0,1,3,2)
-    AAAA = AAAA + AAAA.transpose(2,3,0,1)
-    tmp = (numpy.einsum('vwtp,pu->tuvw', AAap, rmat[0][:,ncore[0]:nocc[0]]),
-           numpy.einsum('tuvp,pw->tuvw', aaAP, rmat[1][:,ncore[1]:nocc[1]]))
-    aaAA = tmp[0] + tmp[0].transpose(1,0,2,3) \
-         + tmp[1] + tmp[1].transpose(0,1,3,2)
-    h2eff = casscf.fcisolver.absorb_h1e(h1cas, (aaaa,aaAA,AAAA), ncas, nelecas, .5)
-    hc = casscf.fcisolver.contract_2e(h2eff, fcivec, ncas, nelecas).ravel()
-
-    # pure core response
-    ecore = h1effa[:ncore[0]].trace() + h1effb[:ncore[1]].trace() \
-          + numpy.einsum('jp,pj->', jka[:ncore[0]], rmat[0][:,:ncore[0]])*2 \
-          + numpy.einsum('jp,pj->', jkb[:ncore[1]], rmat[1][:,:ncore[1]])*2
-    hc += ecore * fcivec.ravel()
-    return hc
-
-
 def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
            ci0=None, callback=None, verbose=None,
            dump_chk=True, dump_chk_ci=False):
@@ -285,7 +229,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     nmo = mo[0].shape[1]
     ncore = casscf.ncore
     ncas = casscf.ncas
-    nocc = (ncas + ncore[0], ncas + ncore[1])
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
@@ -297,8 +240,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = 0
-    casdm1 = (0,0)
     elast = e_tot
+    de = 1e9
     r0 = None
 
     t2m = t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -308,7 +251,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         casdm1_old = casdm1
 
         micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
-        for imicro in range(micro):
+        if casscf.dynamic_micro_step:
+            max_micro = max(micro, int(0-numpy.log10(de+1e-9)))
+        else:
+            max_micro = micro
+        for imicro in range(max_micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
                 norm_gorb0 = norm_gorb = numpy.linalg.norm(g_orb)
@@ -317,7 +264,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
                 norm_gorb = numpy.linalg.norm(g_orb)
             casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
 
-            norm_gci = numpy.linalg.norm(gci)
+            if isinstance(gci, numpy.ndarray):
+                norm_gci = numpy.linalg.norm(gci)
+            else:
+                norm_gci = -1
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_old[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
@@ -334,7 +284,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
                 (norm_gorb < toloose and norm_ddm < toloose)):
                 break
 
-            casdm1_old = casdm1
         micro_iter.close()
 
         totmicro += imicro + 1
@@ -382,7 +331,6 @@ class CASSCF(casci_uhf.CASCI):
         casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
         self.max_orb_stepsize = .03
-        self.max_ci_stepsize = .01
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
         self.max_cycle_micro_inner = 3
@@ -402,6 +350,7 @@ class CASSCF(casci_uhf.CASCI):
         self.natorb = False
         self.callback = None
         self.ci_response_space = 3
+        self.dynamic_micro_step = False
 
         self.fcisolver.max_cycle = 50
 
@@ -435,7 +384,6 @@ class CASSCF(casci_uhf.CASCI):
                  self.conv_tol, self.conv_tol_grad)
         log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('max. orb step = %g', self.max_orb_stepsize)
-        log.info('max. ci step = %g', self.max_ci_stepsize)
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
@@ -444,11 +392,13 @@ class CASSCF(casci_uhf.CASCI):
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
         log.info('augmented hessian guess space = %d', self.ah_guess_space)
+        log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
         #log.info('ci_response_space = %d', self.ci_response_space)
         #log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)
         #log.info('natorb = %s', self.natorb)
         log.info('max_memory %d MB', self.max_memory)
+        log.info('dynamic_micro_step %s', self.dynamic_micro_step)
         try:
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
@@ -482,7 +432,7 @@ class CASSCF(casci_uhf.CASCI):
                 callback=None):
         return self.kernel(mo_coeff, ci0, macro, micro, callback)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
+    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
                 callback=None):
         from pyscf.mcscf import mc2step_uhf
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
@@ -611,20 +561,111 @@ class CASSCF(casci_uhf.CASCI):
         return va, vc
 
     def update_casdm(self, mo, u, fcivec, e_ci, eris):
+        ncas = self.ncas
+        nelecas = self.nelecas
+        ncore = self.ncore
+        nocc = (ncas + ncore[0], ncas + ncore[1])
         nmo = mo[0].shape[1]
         rmat = u - numpy.eye(nmo)
-        g = hessian_co(self, mo, rmat, fcivec, e_ci, eris)
+        mocas = (mo[0][:,ncore[0]:nocc[0]], mo[1][:,ncore[1]:nocc[1]])
 
-        dc = -g.ravel()
-        dcmax = numpy.max(abs(dc))
-        max_step = min(numpy.linalg.norm(rmat)/rmat.shape[0], self.max_ci_stepsize)
-        if dcmax > max_step:
-            ci1 = fcivec.ravel() + dc * (max_step/dcmax)
-        else:
-            ci1 = fcivec.ravel() + dc
-        ci1 *= 1/numpy.linalg.norm(ci1)
-        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, self.ncas, self.nelecas)
+        hcore = self.get_hcore()
+        h1effa = reduce(numpy.dot, (rmat[0][:,:nocc[0]].T, mo[0].T,
+                                    hcore[0], mo[0][:,:nocc[0]]))
+        h1effb = reduce(numpy.dot, (rmat[1][:,:nocc[1]].T, mo[1].T,
+                                    hcore[1], mo[1][:,:nocc[1]]))
+        h1effa = h1effa + h1effa.T
+        h1effb = h1effb + h1effb.T
+
+        aapc = eris.aapp[:,:,:,:ncore[0]]
+        aaPC = eris.aaPP[:,:,:,:ncore[1]]
+        AApc = eris.AApp[:,:,:,:ncore[0]]
+        AAPC = eris.AAPP[:,:,:,:ncore[1]]
+        apca = eris.appa[:,:,:ncore[0],:]
+        APCA = eris.APPA[:,:,:ncore[1],:]
+        jka = numpy.einsum('iup->up', eris.jkcpp[:,:nocc[0]]) + eris.jC_pp[:nocc[0]]
+        v1a =(numpy.einsum('up,pv->uv', jka[ncore[0]:], rmat[0][:,ncore[0]:nocc[0]])
+            + numpy.einsum('uvpi,pi->uv', aapc-apca.transpose(0,3,1,2), rmat[0][:,:ncore[0]])
+            + numpy.einsum('uvpi,pi->uv', aaPC, rmat[1][:,:ncore[1]]))
+        jkb = numpy.einsum('iup->up', eris.jkcPP[:,:nocc[1]]) + eris.jc_PP[:nocc[1]]
+        v1b =(numpy.einsum('up,pv->uv', jkb[ncore[1]:], rmat[1][:,ncore[1]:nocc[1]])
+            + numpy.einsum('uvpi,pi->uv', AApc, rmat[0][:,:ncore[0]])
+            + numpy.einsum('uvpi,pi->uv', AAPC-APCA.transpose(0,3,1,2), rmat[1][:,:ncore[1]]))
+        h1casa =(h1effa[ncore[0]:,ncore[0]:] + (v1a + v1a.T)
+               + reduce(numpy.dot, (mocas[0].T, hcore[0], mocas[0]))
+               + eris.vhf_c[0][ncore[0]:nocc[0],ncore[0]:nocc[0]])
+        h1casb =(h1effb[ncore[1]:,ncore[1]:] + (v1b + v1b.T)
+               + reduce(numpy.dot, (mocas[1].T, hcore[1], mocas[1]))
+               + eris.vhf_c[1][ncore[1]:nocc[1],ncore[1]:nocc[1]])
+        h1cas = (h1casa, h1casb)
+
+        aaap = eris.aapp[:,:,ncore[0]:nocc[0],:]
+        aaAP = eris.aaPP[:,:,ncore[1]:nocc[1],:]
+        AAap = eris.AApp[:,:,ncore[1]:nocc[1],:]
+        AAAP = eris.AAPP[:,:,ncore[1]:nocc[1],:]
+        aaaa = numpy.einsum('tuvp,pw->tuvw', aaap, rmat[0][:,ncore[0]:nocc[0]])
+        aaaa = aaaa + aaaa.transpose(0,1,3,2)
+        aaaa = aaaa + aaaa.transpose(2,3,0,1)
+        aaaa += aaap[:,:,:,ncore[0]:nocc[0]]
+        AAAA = numpy.einsum('tuvp,pw->tuvw', AAAP, rmat[1][:,ncore[1]:nocc[1]])
+        AAAA = AAAA + AAAA.transpose(0,1,3,2)
+        AAAA = AAAA + AAAA.transpose(2,3,0,1)
+        AAAA += AAAP[:,:,:,ncore[1]:nocc[1]]
+        tmp = (numpy.einsum('vwtp,pu->tuvw', AAap, rmat[0][:,ncore[0]:nocc[0]]),
+               numpy.einsum('tuvp,pw->tuvw', aaAP, rmat[1][:,ncore[1]:nocc[1]]))
+        aaAA =(tmp[0] + tmp[0].transpose(1,0,2,3)
+             + tmp[1] + tmp[1].transpose(0,1,3,2))
+        aaAA += aaAP[:,:,:,ncore[1]:nocc[1]]
+
+        # pure core response
+        ecore =(h1effa[:ncore[0]].trace() + h1effb[:ncore[1]].trace()
+              + numpy.einsum('jp,pj->', jka[:ncore[0]], rmat[0][:,:ncore[0]])*2
+              + numpy.einsum('jp,pj->', jkb[:ncore[1]], rmat[1][:,:ncore[1]])*2)
+
+        ci1, g = self.solve_approx_ci(h1cas, (aaaa,aaAA,AAAA), fcivec, ecore, e_ci)
+        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, ncas, nelecas)
         return casdm1, casdm2, g
+
+    def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci):
+        ''' Solve CI eigenvalue/response problem approximately
+        '''
+        ncas = self.ncas
+        nelecas = self.nelecas
+        ncore = self.ncore
+        nocc = (ncas + ncore[0], ncas + ncore[1])
+        if hasattr(self.fcisolver, 'approx_kernel'):
+            ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
+            return ci1, None
+
+        h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
+        hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
+
+        g = hc - (e_ci-ecore) * ci0.ravel()
+        if self.ci_response_space > 6:
+            logger.debug(self, 'CI step by full response')
+            # full response
+            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0)
+        else:
+            nd = min(max(self.ci_response_space, 2), ci0.size)
+            logger.debug(self, 'CI step by %dD subspace response', nd)
+            xs = [ci0.ravel()]
+            ax = [hc]
+            heff = numpy.empty((nd,nd))
+            seff = numpy.empty((nd,nd))
+            heff[0,0] = numpy.dot(xs[0], ax[0])
+            seff[0,0] = 1
+            for i in range(1, nd):
+                xs.append(ax[i-1] - xs[i-1] * e_ci)
+                ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
+                                                     nelecas).ravel())
+                for j in range(i+1):
+                    heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
+                    seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
+            e, v = pyscf.lib.safe_eigh(heff, seff)[:2]
+            ci1 = 0
+            for i in range(nd):
+                ci1 += xs[i] * v[i,0]
+        return ci1, g
 
     def dump_chk(self, envs):
         ncore = self.ncore
@@ -729,4 +770,5 @@ if __name__ == '__main__':
     emc = mc.mc1step(mo)[0]
     print(ehf, emc, emc-ehf)
     #-75.631870606190233, -75.573930418500652, 0.057940187689581535
-    print(emc - -75.573930418500652, emc - -75.648547447838951)
+    print(emc - -75.574137883405612, emc - -75.573930418500652, emc - -75.648547447838951)
+

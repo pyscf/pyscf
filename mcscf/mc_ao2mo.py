@@ -35,60 +35,15 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo), compact=False)
 
     load_buf = lambda bufid: eri1[bufid*nmo:bufid*nmo+nmo]
-    aapp, appa, Iapcv = _trans_aapp_(mo, ncore, ncas, load_buf)
-    vhf_c, j_cp, k_cp, Icvcv = _trans_cvcv_(mo, ncore, ncas, load_buf)
-    return vhf_c, j_cp, k_cp, aapp, appa, Iapcv, Icvcv
+    aapp, appa = _trans_aapp_(mo, ncore, ncas, load_buf)
+    vhf_c, j_cp, k_cp = _trans_cvcv_(mo, ncore, ncas, load_buf)
+    return vhf_c, j_cp, k_cp, aapp, appa
 
 
+# level = 1: aapp, appa and vhf, jcp, kcp
+# level = 2 or 3: aapp, appa
 def trans_e1_outcore(mol, mo, ncore, ncas,
-                     max_memory=None, ioblk_size=256, tmpdir=None,
-                     verbose=logger.WARN):
-    time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
-    nao, nmo = mo.shape
-    nao_pair = nao*(nao+1)//2
-    nocc = ncore + ncas
-
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo), swapfile.name,
-                                max_memory=max_memory, ioblk_size=ioblk_size,
-                                verbose=log, compact=False)
-
-    fswap = h5py.File(swapfile.name, 'r')
-    klaoblks = len(fswap['0'])
-    def load_buf(bfn_id):
-        if log.verbose >= logger.DEBUG1:
-            time1[:] = log.timer('between load_buf', *tuple(time1))
-        buf = numpy.empty((nmo,nao_pair))
-        col0 = 0
-        for ic in range(klaoblks):
-            dat = fswap['0/%d'%ic]
-            col1 = col0 + dat.shape[1]
-            buf[:nmo,col0:col1] = dat[bfn_id*nmo:(bfn_id+1)*nmo]
-            col0 = col1
-        if log.verbose >= logger.DEBUG1:
-            time1[:] = log.timer('load_buf', *tuple(time1))
-        return buf
-    time0 = log.timer('halfe1', *time0)
-    time1 = [time.clock(), time.time()]
-    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    aapp, appa, Iapcv = _trans_aapp_(mo, ncore, ncas, load_buf, ao_loc)
-    time0 = log.timer('trans_aapp', *time0)
-    vhf_c, j_cp, k_cp, Icvcv = _trans_cvcv_(mo, ncore, ncas, load_buf, ao_loc)
-    time0 = log.timer('trans_cvcv', *time0)
-    fswap.close()
-    return vhf_c, j_cp, k_cp, aapp, appa, Iapcv, Icvcv
-
-
-# approx = 0: all, includes Icvcv etc
-# approx = 1: aapp, appa and vhf, jcp, kcp
-# approx = 2: aapp, appa, vhf
-# approx = 3: aapp, appa
-def light_e1_outcore(mol, mo, ncore, ncas,
-                     max_memory=None, approx=1, verbose=logger.WARN):
+                     max_memory=None, level=1, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -104,14 +59,10 @@ def light_e1_outcore(mol, mo, ncore, ncas,
     mo = numpy.asarray(mo, order='F')
     nao, nmo = mo.shape
     pashape = (0, nmo, ncore, ncas)
-    if approx == 1:
+    if level == 1:
         jc = numpy.empty((nao,nao,ncore))
         kc = numpy.zeros((nao,nao,ncore))
-    else:
-        dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
-        jc = numpy.zeros((nao,nao))
-        kc = numpy.zeros((nao,nao))
-    max_memory -= (jc.nbytes+kc.nbytes) / 1e6
+        max_memory -= (jc.nbytes+kc.nbytes) / 1e6
 
     mem_words = int(max(1000,max_memory)*1e6/8)
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
@@ -120,13 +71,18 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     log.debug('mem cache %.8g MB', mem_words*8/1e6)
-    ti0 = log.timer('Initializing light_e1_outcore', *time0)
+    ti0 = log.timer('Initializing trans_e1_outcore', *time0)
     nstep = len(shranges)
     paapp = 0
     maxbuflen = max([x[2] for x in shranges])
     bufs1 = numpy.empty((maxbuflen, nao_pair))
     bufs2 = numpy.empty((maxbuflen, pashape[1]*pashape[3]))
     bufs3 = numpy.empty((maxbuflen, nao*ncore))
+
+    # fmmm, ftrans, fdrv for level 1
+    fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
+    ftrans = _fpointer('AO2MOtranse1_nr_s4')
+    fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *(sh_range[:3]))
@@ -137,14 +93,11 @@ def light_e1_outcore(mol, mo, ncore, ncas,
             ti1 = log.timer('AO integrals buffer', *ti0)
         bufpa = bufs2[:sh_range[2]]
 # jc_pp, kc_pp
-        if approx == 1: # aapp, appa and vhf, jcp, kcp
+        if level == 1: # aapp, appa and vhf, jcp, kcp
             _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('buffer-pa', *ti1)
             buf1 = bufs3[:sh_range[2]]
-            fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
-            ftrans = _fpointer('AO2MOtranse1_nr_s4')
-            fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
             fdrv(ftrans, fmmm,
                  buf1.ctypes.data_as(ctypes.c_void_p),
                  buf.ctypes.data_as(ctypes.c_void_p),
@@ -181,21 +134,6 @@ def light_e1_outcore(mol, mo, ncore, ncas,
                 p0 += dij
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('jc and kc buffer', *ti1)
-        elif approx == 2: # aapp, appa, vhf
-            fdrv = libmcscf.MCSCFnrs4_aapp_jk
-            fdrv(buf.ctypes.data_as(ctypes.c_void_p),
-                 bufpa.ctypes.data_as(ctypes.c_void_p),
-                 mo.ctypes.data_as(ctypes.c_void_p),
-                 dm_core.ctypes.data_as(ctypes.c_void_p),
-                 jc.ctypes.data_as(ctypes.c_void_p),
-                 kc.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(sh_range[0]), ctypes.c_int(sh_range[1]-sh_range[0]),
-                 ctypes.c_int(pashape[0]), ctypes.c_int(pashape[1]),
-                 ctypes.c_int(pashape[2]), ctypes.c_int(pashape[3]),
-                 ao_loc.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(mol.nbas))
-            if log.verbose >= logger.DEBUG1:
-                ti1 = log.timer('bufpa + core vj and vk', *ti1)
         else: # aapp, appa
             _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
 
@@ -248,19 +186,14 @@ def light_e1_outcore(mol, mo, ncore, ncas,
     appa = appa.reshape(ncas,nmo,nmo,ncas)
     appa_buf = None
 
-    if approx == 1:
+    if level == 1:
         vhf_c = numpy.einsum('ijc->ij', jc)*2 - numpy.einsum('ijc->ij', kc)
         vhf_c = reduce(numpy.dot, (mo.T, vhf_c, mo))
         j_cp = numpy.dot(mo.T, jc.reshape(nao,-1)).reshape(nao,nao,ncore)
         j_cp = numpy.einsum('pj,jpi->ij', mo, j_cp)
         k_cp = numpy.dot(mo.T, kc.reshape(nao,-1)).reshape(nao,nao,ncore)
         k_cp = numpy.einsum('pj,jpi->ij', mo, k_cp)
-    elif approx == 2:
-        jc = pyscf.lib.hermi_triu(jc, hermi=1, inplace=True)
-        kc = pyscf.lib.hermi_triu(kc, hermi=1, inplace=True)
-        vhf_c = reduce(numpy.dot, (mo.T, jc-kc*.5, mo))
-        j_cp = k_cp = None
-    elif approx == 3:
+    else:
         vhf_c = j_cp = k_cp = None
 
     time0 = log.timer('mc_ao2mo', *time0)
@@ -270,80 +203,56 @@ def light_e1_outcore(mol, mo, ncore, ncas,
 def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo.shape[1]
     nocc = ncore + ncas
-    c_nmo = ctypes.c_int(nmo)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
-    klshape = (0, nmo, 0, nmo)
-
-    japcv = numpy.empty((ncas,nmo,ncore,nmo-ncore))
+    klppshape = (0, nmo, 0, nmo)
+    klpashape = (0, nmo, ncore, ncas)
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     appa = numpy.empty((ncas,nmo,nmo,ncas))
-    ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = _ao2mo.nr_e2_(fload(ncore+i), mo, klshape,
-                            aosym='s4', mosym='s2', ao_loc=ao_loc)
-        for j in range(nmo):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        aapp[i] = ppp[ncore:nocc]
-        appa[i] = ppp[:,:,ncore:nocc]
-        #japcv = apcv * 4 - acpv.transpose(0,2,1,3) - avcp.transpose(0,3,2,1)
-        japcv[i] = ppp[:,:ncore,ncore:] * 4 \
-                 - ppp[:ncore,:,ncore:].transpose(1,0,2) \
-                 - ppp[ncore:,:ncore,:].transpose(2,1,0)
-    return aapp, appa, japcv
+        apbuf = fload(ncore+i)
+        _ao2mo.nr_e2_(apbuf[ncore:nocc], mo, klppshape,
+                      aosym='s4', mosym='s1', ao_loc=ao_loc, vout=aapp[i])
+
+        _ao2mo.nr_e2_(apbuf, mo, klpashape,
+                      aosym='s4', mosym='s1', ao_loc=ao_loc, vout=appa[i])
+    return aapp, appa
 
 def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo.shape[1]
     c_nmo = ctypes.c_int(nmo)
     funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
+    klppshape = (0, nmo, 0, nmo)
 
-    jcvcv = numpy.zeros((ncore,nmo-ncore,ncore,nmo-ncore))
-    vcp = numpy.empty((nmo-ncore,ncore,nmo))
-    cpp = numpy.empty((ncore,nmo,nmo))
+    pp = numpy.empty((nmo,nmo))
     vj = numpy.zeros((nmo,nmo))
     vk = numpy.zeros((nmo,nmo))
     j_cp = numpy.zeros((ncore,nmo))
     k_cp = numpy.zeros((ncore,nmo))
     for i in range(ncore):
         buf = fload(i)
-        klshape = (0, ncore, 0, nmo)
-        _ao2mo.nr_e2_(buf[ncore:nmo], mo, klshape,
-                      aosym='s4', mosym='s1', vout=vcp, ao_loc=ao_loc)
-        vk[ncore:] += vcp[:,i]
-        k_cp[i,ncore:] = vcp[:,i,ncore:].diagonal()
+        _ao2mo.nr_e2_(buf[i:i+1], mo, klppshape,
+                      aosym='s4', mosym='s1', vout=pp, ao_loc=ao_loc)
+        vj += pp
+        j_cp[i] = pp.diagonal()
 
-        klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2_(buf[:ncore], mo, klshape,
-                      aosym='s4', mosym='s2', vout=buf[:ncore], ao_loc=ao_loc)
-        for j in range(ncore):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
-        vj += cpp[i]
-        j_cp[i] = cpp[i].diagonal()
-        vk[:ncore] += cpp[:,i]
-        k_cp[i,:ncore] = cpp[:,i,:ncore].diagonal()
-
-        #jcvcv = cvcv * 4 - cvcv.transpose(0,3,2,1) - ccvv.transpose(0,2,1,3)
-        jcvcv[i] = vcp[:,:,ncore:] * 4 \
-                 - vcp[:,:,ncore:].transpose(2,1,0) \
-                 - cpp[:,ncore:,ncore:].transpose(1,0,2)
-    return vj*2-vk, j_cp, k_cp, jcvcv
+        klshape = (i, 1, 0, nmo)
+        _ao2mo.nr_e2_(buf, mo, klshape,
+                      aosym='s4', mosym='s1', vout=pp, ao_loc=ao_loc)
+        vk += pp
+        k_cp[i] = pp.diagonal()
+    return vj*2-vk, j_cp, k_cp
 
 
 
-# approx = 0: all, includes Icvcv etc
-# approx = 1: aapp, appa and vhf, jcp, kcp
-# approx = 2: aapp, appa, vhf
-# approx = 3: aapp, appa
+# level = 1: aapp, appa and vhf, jcp, kcp
+# level = 2: aapp, appa, vhf
+# level = 3: aapp, appa
 class _ERIS(object):
-    def __init__(self, casscf, mo, method='incore', approx=1):
+    def __init__(self, casscf, mo, method='incore', level=1):
         mol = casscf.mol
-        self.ncore = casscf.ncore
-        self.ncas = casscf.ncas
         nao, nmo = mo.shape
-        ncore = self.ncore
-        ncas = self.ncas
+        ncore = casscf.ncore
+        ncas = casscf.ncas
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = pyscf.lib.current_memory()[0]
 
@@ -354,33 +263,28 @@ class _ERIS(object):
             if eri is None:
                 from pyscf.scf import _vhf
                 eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
-            self.Iapcv, self.Icvcv = \
+            self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa = \
                     trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
         else:
             import gc
             gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
             max_memory = max(2000, casscf.max_memory*.9-mem_now)
-            if (mem_outcore+mem_now) < casscf.max_memory*.9:
-                if max_memory < mem_outcore:
-                    log.warn('Not enough memory! You need increase CASSCF.max_memory')
-                self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa, \
-                self.Iapcv, self.Icvcv = \
-                        trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
-                                         max_memory=max_memory-mem_outcore, verbose=log)
-            else:
-                if max_memory < mem_basic:
-                    log.warn('Not enough memory! You need increase CASSCF.max_memory')
-                self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa = \
-                        light_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
-                                         max_memory=max_memory-mem_basic,
-                                         approx=approx, verbose=log)
+            if max_memory < mem_basic:
+                log.warn('Not enough memory! You need increase CASSCF.max_memory')
+            self.vhf_c, self.j_cp, self.k_cp, self.aapp, self.appa = \
+                    trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
+                                     max_memory=max_memory-mem_basic,
+                                     level=level, verbose=log)
+            if level == 2:
+                dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
+                vj, vk = casscf._scf.get_jk(mol, dm_core)
+                self.vhf_c = reduce(numpy.dot, (mo.T, vj-vk*.5, mo))
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
-    basic = (ncas**2*nmo**2*2 + nmo**3*2) * 8/1e6
-    outcore = basic + (ncore**2*nvir**2 + ncas*nmo*ncore*nvir + ncore*nmo**2*3) * 8/1e6
+    basic = ncas**2*nmo**2*2 * 8/1e6
+    outcore = basic + ncore*nmo**2*3 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
     if outcore > 10000:
         sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
@@ -413,15 +317,13 @@ if __name__ == '__main__':
 
     eris0 = _ERIS(mc, mo, 'incore')
     eris1 = _ERIS(mc, mo, 'outcore')
-    eris2 = _ERIS(mc, mo, 'outcore', approx=1)
-    eris3 = _ERIS(mc, mo, 'outcore', approx=2)
+    eris2 = _ERIS(mc, mo, 'outcore', level=1)
+    eris3 = _ERIS(mc, mo, 'outcore', level=2)
     print('vhf_c', numpy.allclose(eris0.vhf_c, eris1.vhf_c))
     print('j_cp ', numpy.allclose(eris0.j_cp , eris1.j_cp ))
     print('k_cp ', numpy.allclose(eris0.k_cp , eris1.k_cp ))
     print('aapp ', numpy.allclose(eris0.aapp , eris1.aapp ))
     print('appa ', numpy.allclose(eris0.appa , eris1.appa ))
-    print('Iapcv', numpy.allclose(eris0.Iapcv, eris1.Iapcv))
-    print('Icvcv', numpy.allclose(eris0.Icvcv, eris1.Icvcv))
 
     print('vhf_c', numpy.allclose(eris0.vhf_c, eris2.vhf_c))
     print('j_cp ', numpy.allclose(eris0.j_cp , eris2.j_cp ))
@@ -447,24 +349,9 @@ if __name__ == '__main__':
     j_cp = numpy.einsum('ijj->ij', jc_pp)
     k_cp = numpy.einsum('ijj->ij', kc_pp)
 
-    capv = eri[:ncore,ncore:nocc,:,ncore:]
-    cvap = eri[:ncore,ncore:,ncore:nocc,:]
-    cpav = eri[:ncore,:,ncore:nocc,ncore:]
-    ccvv = eri[:ncore,:ncore,ncore:,ncore:]
-    cvcv = eri[:ncore,ncore:,:ncore,ncore:]
-
-    cVAp = cvap * 4 \
-         - capv.transpose(0,3,1,2) \
-         - cpav.transpose(0,3,2,1)
-    cVCv = cvcv * 4 \
-         - ccvv.transpose(0,3,1,2) \
-         - cvcv.transpose(0,3,2,1)
-
     print('vhf_c', numpy.allclose(vhf_c, eris1.vhf_c))
     print('j_cp ', numpy.allclose(j_cp, eris1.j_cp))
     print('k_cp ', numpy.allclose(k_cp, eris1.k_cp))
     print('aapp ', numpy.allclose(aapp , eris0.aapp ))
     print('appa ', numpy.allclose(appa , eris0.appa ))
-    print('Iapcv', numpy.allclose(cVAp.transpose(2,3,0,1), eris1.Iapcv ))
-    print('Icvcv', numpy.allclose(cVCv.transpose(2,3,0,1), eris1.Icvcv ))
 

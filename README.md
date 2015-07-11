@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry
 
-version 1.0-alpha
+Version 1.0 alpha 2
 
-2015-4-7
+2015-7-3
 
 Pyscf is a python module for quantum chemistry program.  The module
 aims to provide a simple, light-weight and efficient platform for
@@ -81,22 +81,19 @@ Adding new features
 For developrs who has interests to add new features in this program,
 there are few rules to follow
 
-* New features first being placed in pyscf/future.
 * Code at least should work under python-2.7, gcc-4.8.
-* Not enforced, it's preferred
+* Not enforced
   - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
   - Following C89 standard for C code;
   - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
   - Avoid using other program language, to keep package light-weight
-* Loose-coupling principle
-  - Reinventing-wheel is encouraged if it reduces the coupling to the rest of the package.
 
 
 Documentation
 -------------
 
-There is an online documentation  http://sunqm.net/pyscf.  And you can
-also download the PDF version from  http://sunqm.net/pyscf/PySCF-1.0.pdf
+There is an online documentation  http://www.pyscf.org.  And you can
+also download the PDF version from  http://www.pyscf.org/PySCF-1.0.pdf
 
 
 Known problems

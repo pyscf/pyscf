@@ -19,6 +19,8 @@ def load(chkfile, key):
 
 def dump_chkfile_key(chkfile, key, value):
     dump(chkfile, key, value)
+def save(chkfile, key, value):
+    dump(chkfile, key, value)
 def dump(chkfile, key, value):
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:
