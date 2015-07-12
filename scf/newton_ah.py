@@ -312,8 +312,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
         if mf.ah_guess_space and len(xcollect) > 0:
             xsinit = xcollect
             axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
-        xcollect = []
-        jkcollect = []
+            xcollect = []
+            jkcollect = []
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in mc1step.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -360,11 +360,10 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                     norm_gprev = norm_gorb
                     g_orb = g_orb1
 
-                if (imic >= max_cycle or norm_gorb < mf.conv_tol_grad):
+                if (imic >= max_cycle or norm_gorb < mf.conv_tol_grad*.8):
                     break
 
-                if (norm_dr > mf.ah_grad_adjust_threshold and
-                    (imic % mf.ah_grad_adjust_interval == 0)):
+                if (imic % mf.ah_grad_adjust_interval == 0):
                     mo1 = mf.update_mo_coeff(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
@@ -494,8 +493,8 @@ def newton(mf):
 #               max_orb_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
 #               ah_guess_space = 0
-            self.ah_grad_adjust_interval = 4
-            self.ah_grad_adjust_threshold = .05
+            self.ah_grad_adjust_interval = 5
+            self.ah_grad_adjust_threshold = .1
             self.ah_decay_rate = .8
 
             self._keys = set(self.__dict__.keys())
