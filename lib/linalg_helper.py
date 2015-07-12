@@ -279,7 +279,7 @@ class _Xlist(list):
 
     def __setitem__(self, n, x):
         key = self.index[n]
-        self.scr_h5[key] = x
+        self.scr_h5[key][:] = x
 
     def __len__(self):
         return len(self.index)
