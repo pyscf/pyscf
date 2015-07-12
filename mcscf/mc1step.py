@@ -263,6 +263,8 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
             norm_gorb > casscf.conv_tol_grad*5e1):
             xsinit = [x for x in xcollect]
             axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
+            xcollect = []
+            jkcollect = []
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, x0_guess,
@@ -310,7 +312,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                     g_orb = g_orb1
                     u = casscf.update_rotate_matrix(dxi, u)
 
-                if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad):
+                if (imic >= max_cycle or norm_gorb < casscf.conv_tol_grad*.8):
                     break
 
 # It's better to exclude the pseudo-linear-dependent trial vectors before the
@@ -633,37 +635,36 @@ class CASSCF(casci.CASCI):
             Converge threshold for CI gradients and orbital rotation gradients.
             Default is 1e-4
         max_orb_stepsize : float
-            The step size for orbital rotation.  Small step size is prefered.
-            Default is 0.05.
-        max_ci_stepsize : float
-            The max size for approximate CI updates.  The approximate updates are
-            used in 1-step algorithm, to estimate the change of CI wavefunction wrt
-            the orbital rotation.  Small step size is prefered.  Default is 0.01.
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            (see notes in max_cycle_micro_inner attribute)
+            Default is 0.03.
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
         max_cycle_micro : int
             Max number of micro iterations in each macro iteration.  Depending on
             systems, increasing this value might reduce the total macro
-            iterations.  Generally, 2 - 3 steps should be enough.  Default is 2.
+            iterations.  Generally, 2 - 5 steps should be enough.  Default is 3.
         max_cycle_micro_inner : int
-            Max number of steps for the orbital rotations allowed for the augmented
-            hessian solver.  It can affect the actual size of orbital rotation.
-            Even with a small max_orb_stepsize, a few max_cycle_micro_inner can
-            accumulate the rotation and leads to a significant change of the CAS
-            space.  Depending on systems, increasing this value migh reduce the
-            total number of macro iterations.  The value between 2 - 8 is preferred.
-            Default is 2.
+            For the augmented hessian solver, max number of orbital rotation
+            steps (controled by max_orb_stepsize).  Value between 2 - 8 is preferred.
+            Default is 4.
+            Note the 1-step CASSCF algorithm prefers many small steps.  Though might
+            increasing the total number of iterations, the small steps can effectively
+            prevent oscillating in the total energy.  If the (macro iteration) total
+            energy does not monotonically decrease, you can try to reduce max_orb_stepsize
+            and increase max_cycle_micro_inner.  For simple system, large max_orb_stepsize
+            small max_cycle_micro_inner may give the fast convergence, but it's not recommended.
         ah_level_shift : float, for AH solver.
             Level shift for the Davidson diagonalization in AH solver.  Default is 1e-4.
         ah_conv_tol : float, for AH solver.
             converge threshold for AH solver.  Default is 1e-12.
         ah_max_cycle : float, for AH solver.
-            Max number of iterations allowd in AH solver.  Default is 20.
+            Max number of iterations allowd in AH solver.  Default is 30.
         ah_lindep : float, for AH solver.
             Linear dependence threshold for AH solver.  Default is 1e-14.
         ah_start_tol : flat, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 1e-2.
+            This value is to control the start point. Default is 0.2.
         ah_start_cycle : int, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
             This value is to control the start point. Default is 2.
@@ -724,13 +725,13 @@ class CASSCF(casci.CASCI):
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
-        self.max_orb_stepsize = .04
+        self.max_orb_stepsize = .03
 # small max_ci_stepsize is good to converge, since steepest descent is used
 #ABORT        self.max_ci_stepsize = .01
 #TODO:self.inner_rotation = False # active-active rotation
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
-        self.max_cycle_micro_inner = 3
+        self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
@@ -768,7 +769,7 @@ class CASSCF(casci.CASCI):
 # ah_decay_rate gradually improve AH improve by decreasing start_tol/conv_tol
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
-        self.ah_decay_rate = .75
+        self.ah_decay_rate = .8
         self.grad_update_fep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False

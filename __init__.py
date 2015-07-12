@@ -97,8 +97,9 @@ Most useful functions are implemented at module level, and can be accessed in
 both class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
 ``SCF(mol).get_jk(mol, dm)`` have the same functionality.  As a result, most
 functions and class are **pure**, i.e. no status are saved, and the argument
-are not changed inplace.  Exception to this rule is suffixed with underscore
-in the function name.
+are not changed inplace.  Exceptions (destructive functions and methods) are
+suffixed with underscore in the function name,  eg  ``scf.hf.get_fock_``
+function may change the status of the argument ``adiis``
 
 '''
 
