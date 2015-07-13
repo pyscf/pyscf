@@ -29,20 +29,34 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc,-108.91378640707609, 7)
     
-    def test_mc2step_6o6e(self):
+    def test_mc2step_6o6e_fci(self):
         mc = mcscf.CASSCF(m, 6, 6)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc,-108.98028859357791, 7)
 
-    def test_mc2step_4o4e(self):
-        mc = mcscf.CASSCF(m, 4, 4)
+    def test_mc2step_4o4e_fciqmc_wdipmom(self):
+        #nelec is the number of electrons in the active space
+        nelec = 4
+        norb = 4
+        mc = mcscf.CASSCF(m, norb, nelec)
         mc.max_cycle_macro = 10
         mc.fcisolver = fciqmcscf.FCIQMCCI(mol)
         mc.fcisolver.RDMSamples = 5000
-        emc = mc.mc2step()[0]
+
+        emc, e_ci, fcivec, casscf_mo = mc.mc2step()
         self.assertAlmostEqual(emc,-108.91378666934476, 7)
 
-    def test_mc2step_6o6e(self):
+        # Calculate dipole moment in casscf_mo basis
+        # However, we do need to pass in the number of inactive core orbitals
+        ncore = (m.nelectron - nelec) / 2
+        one_pdm = fciqmc.read_neci_one_pdm(mc.fcisolver,'spinfree_TwoRDM.1',norb,
+                nelec)
+        dipmom = fciqmc.calc_dipole(mol,casscf_mo,one_pdm,ncore = ncore)
+        self.assertAlmostEqual(dipmom[0],xxx,5)
+        self.assertAlmostEqual(dipmom[1],xxx,5)
+        self.assertAlmostEqual(dipmom[2],xxx,5)
+
+    def test_mc2step_6o6e_fciqmc(self):
         mc = mcscf.CASSCF(m, 6, 6)
         mc.max_cycle_macro = 10
         mc.fcisolver = fciqmcscf.FCIQMCCI(mol)

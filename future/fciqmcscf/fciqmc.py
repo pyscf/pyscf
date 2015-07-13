@@ -80,6 +80,10 @@ class FCIQMCCI(object):
         self.AddtoInit = 3
         self.orbsym = []
         self.state_weights = [1.0]
+        # This is the number of orbitals to freeze in the neci calculation.
+        # Note that if you do this for a CASSCF calculation, it will freeze in the active space.
+        self.nfreezecore = 0
+        self.nfreezevirt = 0
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
@@ -102,13 +106,17 @@ class FCIQMCCI(object):
             nelectrons = nelec[0]+nelec[1]
 
         nstates = len(self.state_weights)
+
+        #Normalize the state_weights vector to conserve number of electrons
+        norm = sum(self.state_weights)
+
         two_pdm = numpy.zeros( (norb, norb, norb, norb) )
 
         for irdm in range(nstates):
             if self.state_weights[irdm] != 0.0:
                 dm_filename = 'spinfree_TwoRDM.' + str(irdm+1)
-                temp_dm = read_neci_two_pdm(dm_filename, norb, self.scratchDirectory)
-                two_pdm += self.state_weights[irdm]*temp_dm
+                temp_dm = read_neci_two_pdm(self, dm_filename, norb, self.scratchDirectory)
+                two_pdm += (self.state_weights[irdm]/norm)*temp_dm
 
         one_pdm = one_from_two_pdm(two_pdm, nelectrons)
 
@@ -272,7 +280,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('endcalc\n')
     f.write('\n')
     f.write('integral\n')
-    f.write('freeze 0,0\n')
+    f.write('freeze {},{}\n'.format(fciqmcci.nfreezecore, fciqmcci.nfreezevirt))
     f.write('endint\n')
     f.write('\n')
     f.write('logging\n')
@@ -340,27 +348,56 @@ def read_energy(fciqmcci):
 
     return rdm_energy
 
+def read_neci_one_pdm(fciqmcci, filename, norb, nelec, directory='.'):
+    '''Obtain the spin-free 1RDM from neci by reading in the spin free 2RDM. 
+    If core orbitals have been indicated as frozen in neci, this core contribution 
+    will be explicitly added back in to the RDM. Therefore, the norb parameter 
+    should be the total number of orbitals passed to neci (inc. frozen), while 
+    nelec is the total number of electrons (inc. frozen), but not inactive if running
+    through CASSCF.
+    '''
+    two_pdm = read_neci_two_pdm(fciqmcci, filename, norb, directory)
+    return one_from_two_pdm(two_pdm, nelec)
 
-def read_neci_two_pdm(filename, norb, directory='.'):
+
+def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
+    '''Read in a spin-free 2RDM from neci. Note that the RDMs in neci are stored
+    in chemical notation, so that RDM_ijkl = < a^+_i a^+_k a_l a_j >. In pyscf,
+    the 2RDM_ijkl = < a^+_i a^+_j a_l a_k >. If core orbitals have been
+    indicated as frozen in neci, this core contribution will be explicitly
+    added back in to the RDM. Therefore, the norb parameter should be the
+    unfrozen number of orbitals passed to neci, but not inactive if running
+    through CASSCF.
+    '''
+
     f = open(os.path.join(directory, filename), 'r')
 
+    # It is necessary to zero the array in case we have frozen virtual orbitals.
     two_pdm = numpy.zeros( (norb, norb, norb, norb) )
     for line in f.readlines():
         linesp = line.split()
 
         if(int(linesp[0]) != -1):
-            ind1 = int(linesp[0])-1
-            ind2 = int(linesp[2])-1
-            ind3 = int(linesp[1])-1
-            ind4 = int(linesp[3])-1
-            assert(int(ind1) < norb)
-            assert(int(ind2) < norb)
-            assert(int(ind3) < norb)
-            assert(int(ind4) < norb)
+            # Arrays from neci are '1' indexed
+            ind1 = int(linesp[0]) - 1 + fciqmcci.nfreezecore
+            ind2 = int(linesp[2]) - 1 + fciqmcci.nfreezecore
+            ind3 = int(linesp[1]) - 1 + fciqmcci.nfreezecore
+            ind4 = int(linesp[3]) - 1 + fciqmcci.nfreezecore
+            assert(int(ind1) < norb - fciqmcci.nfreezevirt)
+            assert(int(ind2) < norb - fciqmcci.nfreezevirt)
+            assert(int(ind3) < norb - fciqmcci.nfreezevirt)
+            assert(int(ind4) < norb - fciqmcci.nfreezevirt)
 
             two_pdm[ind1, ind2 , ind3, ind4] = float(linesp[4])
 
     f.close()
+
+    # Add on frozen core contribution, assuming that the core orbitals are
+    # doubly occupied
+    for i in range(fciqmcci.nfreezecore):
+        for j in range(fciqmcci.nfreezecore):
+            two_pdm(i,j,i,j) = 1.0
+            two_pdm(i,j,j,i) = -1.0
 
     return two_pdm
 
@@ -371,7 +408,34 @@ def one_from_two_pdm(two_pdm, nelec):
     return one_pdm
 
 
-def calc_dipole(mol, mo_coeff, one_pdm):
+def calc_dipole(mol, mo_coeff, one_pdm, ncore=0):
+    '''Calculate the dipole moment, given the molecule, the mo coefficent
+    array, the 1RDM. Optionally, also specify that the first ncore orbitals
+    are doubly occupied. This will be required if you are taking an RDM from
+    a CASSCF calculation, where the core contribution from inactive orbitals 
+    has not been included explicitly. Note that if core orbitals are just 
+    frozen with fciqmcci.nfreezecore, then this is already included.
+    '''
+
+    assert(one_pdm.shape[0] == one_pdm.shape[1])
+    norb = mo_coeff.shape[1]
+    nsizerdm = one_pdm.shape[0]
+
+    logger.info('Calculating dipole moments of molecule')
+    logger.info('Dimension of passed in density matrix: {} x {}'.   \
+            format(nsizerdm,nsizerdm))
+    logger.info('Number of orbitals: {}'.format(norb))
+    logger.info('Number of doubly occupied orbitals not in density matrix: {}'. \
+            format(ncore))
+    
+    # Add core first
+    one_pdm_ = numpy.zeros( (norb, norb) )
+    for i in range(ncore):
+        one_pdm_(i,i) = 1.0
+
+    # Add the rest of the density matrix
+    one_pdm_[ncore:ncore+nsizerdm,ncore:ncore+nsizerdm] = one_pdm[:,:]
+
     # Call the integral generator for r integrals in the AO basis. There
     # are 3 dimensions for x, y and z components.
     aodmints = mol.intor('cint1e_r_sph', comp=3)
@@ -384,7 +448,7 @@ def calc_dipole(mol, mo_coeff, one_pdm):
     # Contract with MO r integrals for electronic contribution.
     elec_dipmom = []
     for i in range(modmints.shape[0]):
-        elec_dipmom.append( -numpy.trace( numpy.dot( one_pdm, modmints[i])) )
+        elec_dipmom.append( -numpy.trace( numpy.dot( one_pdm_, modmints[i])) )
 
     # Nuclear contribution.
     nuc_dipmom = [0.0, 0.0, 0.0]
