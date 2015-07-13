@@ -3,6 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Newton Raphson SCF solver with augmented Hessian
+'''
+
 import sys
 import time
 import copy
@@ -14,9 +18,6 @@ import pyscf.gto
 import pyscf.symm
 import pyscf.lib.logger as logger
 
-'''
-Newton Raphson HF solver with augmented Hessian
-'''
 
 def expmat(a):
     return scipy.linalg.expm(a)
@@ -29,6 +30,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
     nvir = len(viridx)
 
     if fock_ao is None:
+        dm1 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_hcore() + mf.get_veff(mol, dm1)
     fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
 
@@ -40,7 +42,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
     h_diag = (fvv.diagonal().reshape(-1,1)-foo.diagonal()) * 2
 
     def h_op1(x):
-        x = x.reshape(-1,nocc)
+        x = x.reshape(nvir,nocc)
         x2 =-numpy.einsum('sq,ps->pq', foo, x) * 2
         x2+= numpy.einsum('pr,rq->pq', fvv, x) * 2
         return x2.reshape(-1)
@@ -50,7 +52,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
         x_code = vxc.parse_xc_name(mf.xc)[0]
         hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
     def h_opjk(x):
-        x = x.reshape(-1,nocc)
+        x = x.reshape(nvir,nocc)
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         if hasattr(mf, 'xc'):
             vj, vk = mf.get_jk(mol, d1+d1.T)
@@ -67,38 +69,16 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
     return g.reshape(-1), h_op1, h_opjk, h_diag.reshape(-1)
 
 
-def uniq_var_indices(mo_occ):
-    occaidx = mo_occ>0
-    occbidx = mo_occ==2
-    virbidx = numpy.logical_not(occbidx)
-    openidx = numpy.where(mo_occ==1)[0]
-
-    mask = virbidx[:,None]&occaidx
-    if len(openidx) > 0:
-        mask[openidx[:,None],openidx] = False
-    return mask
-
-def pack_uniq_var(x1, mo_occ):
-    idx = uniq_var_indices(mo_occ)
-    return x1[idx]
-
-def unpack_uniq_var(dx, mo_occ):
-    nmo = len(mo_occ)
-    idx = uniq_var_indices(mo_occ)
-
-    x1 = numpy.zeros((nmo,nmo))
-    x1[idx] = dx
-    return x1 - x1.T
-
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
     mol = mf.mol
     occidxa = numpy.where(mo_occ>0)[0]
     occidxb = numpy.where(mo_occ==2)[0]
     viridxa = numpy.where(mo_occ==0)[0]
     viridxb = numpy.where(mo_occ<2)[0]
-    mask = uniq_var_indices(mo_occ)
+    mask = pyscf.scf.hf.uniq_var_indices(mo_occ)
 
     if fock_ao is None:
+        dm1 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_hcore() + mf.get_veff(mol, dm1)
     focka = reduce(numpy.dot, (mo_coeff.T, fock_ao[0], mo_coeff))
     fockb = reduce(numpy.dot, (mo_coeff.T, fock_ao[1], mo_coeff))
@@ -188,6 +168,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
     nvirb = len(viridxb)
 
     if fock_ao is None:
+        dm1 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_hcore() + mf.get_veff(mol, dm1)
     focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
@@ -363,7 +344,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     fock_ao = h1e + mf._scf.get_veff(mf.mol, dm, dm_last=dm0,
                                                      vhf_last=vhf0)
-                    g_orb = mf.gen_g_hop(mo1, mo_occ, fock_ao)[0]
+                    g_orb = mf.get_grad(mo1, mo_occ, fock_ao)
                     jkcount += 1
                     norm_gprev = norm_gorb = numpy.linalg.norm(g_orb)
                     log.debug('Adjust g_orb to %4.3g', norm_gorb)
@@ -536,7 +517,7 @@ def newton(mf):
             return self.hf_energy
 
 
-    if isinstance(mf, pyscf.scf.hf.ROHF):
+    if isinstance(mf, pyscf.scf.rohf.ROHF):
         class ROHF(Base):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 if self.mol.symmetry:
@@ -546,7 +527,7 @@ def newton(mf):
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
-                dr = unpack_uniq_var(dx, mo_occ)
+                dr = pyscf.scf.hf.unpack_uniq_var(dx, mo_occ)
                 if hasattr(self, '_orbsym'):
                     dr = mc1step_symm._symmetrize(dr, self._orbsym, None)
                 return numpy.dot(u0, expmat(dr))
