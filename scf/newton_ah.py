@@ -270,12 +270,16 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
 # To include high order terms, we can generate mo_coeff every time u matrix
 # changed and insert the mo_coeff to g_op, h_op.
 # Seems the high order terms do not help optimization?
-def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
+def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
+                  conv_tol_grad=None, verbose=None):
     from pyscf.mcscf import mc1step
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(mf.stdout, mf.verbose)
+
+    if conv_tol_grad is None:
+        conv_tol_grad = numpy.sqrt(mf.conv_tol)
 
     t2m = (time.clock(), time.time())
     g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
@@ -305,8 +309,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
             max_cycle = mf.max_cycle_inner
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
-        ah_start_tol = (numpy.log(norm_gorb+mf.conv_tol_grad) -
-                        numpy.log(mf.conv_tol_grad) + .2) * 1.5 * norm_gorb
+        ah_start_tol = (numpy.log(norm_gorb+conv_tol_grad) -
+                        numpy.log(conv_tol_grad) + .2) * 1.5 * norm_gorb
         ah_start_tol = max(min(ah_start_tol, mf.ah_start_tol), ah_conv_tol)
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
@@ -382,7 +386,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
                     norm_gprev = norm_gorb
                     g_orb = g_orb1
 
-                if (imic >= max_cycle or norm_gorb < mf.conv_tol_grad*.8):
+                if (imic >= max_cycle or norm_gorb < conv_tol_grad*.8):
                     break
 
                 if (imic % mf.ah_grad_adjust_interval == 0):
@@ -425,7 +429,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e, verbose=None):
         x0_guess = dxi
 
 
-def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
+def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
+           max_cycle=50, dump_chk=True,
            callback=None, verbose=logger.NOTE):
     cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
@@ -433,7 +438,9 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
     else:
         log = logger.Logger(mf.stdout, verbose)
     mol = mf.mol
-    toloose = mf.conv_tol_grad
+    if conv_tol_grad is None:
+        conv_tol_grad = numpy.sqrt(conv_tol)
+        logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
     scf_conv = False
     hf_energy = mf.hf_energy
 
@@ -443,7 +450,7 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
     fock = mf.get_fock(h1e, s1e, vhf, dm, 0, None)
-    rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, log)
+    rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
     u, g_orb, jkcount = rotaiter.next()
     jktot = jkcount
     cput1 = log.timer('initializing second order scf', *cput0)
@@ -465,8 +472,8 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
                  jkcount)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
-        if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < tol and
-            norm_gorb < toloose):
+        if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_tol and
+            norm_gorb < conv_tol_grad):
             scf_conv = True
 
         if dump_chk:
@@ -499,7 +506,6 @@ def newton(mf):
             self._scf = mf
             self.max_cycle_inner = 8
             self.max_orb_stepsize = .05
-            self.conv_tol_grad = .5e-4
 
             self.ah_start_tol = 5.
             self.ah_start_cycle = 1
@@ -518,9 +524,10 @@ def newton(mf):
             self.ah_grad_adjust_interval = 5
             self.ah_grad_adjust_threshold = .1
             self.ah_decay_rate = .8
+            self_keys = set(self.__dict__.keys())
 
-            self._keys = set(self.__dict__.keys())
             self.__dict__.update(mf.__dict__)
+            self._keys = self_keys.union(mf._keys)
 
         def dump_flags(self):
             logger.info(self, '\n')
@@ -534,7 +541,7 @@ def newton(mf):
                 logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
             logger.info(self, 'max_cycle_inner = %d',  self.max_cycle_inner)
             logger.info(self, 'max_orb_stepsize = %g', self.max_orb_stepsize)
-            logger.info(self, 'conv_tol_grad = %g',    self.conv_tol_grad)
+            logger.info(self, 'conv_tol_grad = %s',    self.conv_tol_grad)
             logger.info(self, 'ah_start_tol = %g',     self.ah_start_tol)
             logger.info(self, 'ah_level_shift = %g',   self.ah_level_shift)
             logger.info(self, 'ah_conv_tol = %g',      self.ah_conv_tol)
@@ -555,10 +562,12 @@ def newton(mf):
         def kernel(self, mo_coeff=None, mo_occ=None):
             if mo_coeff is None: mo_coeff = self.mo_coeff
             if mo_occ is None: mo_occ = self.mo_occ
+            self.build()
             self.dump_flags()
             self.converged, self.hf_energy, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \
-                    kernel(self, mo_coeff, mo_occ, tol=self.conv_tol,
+                    kernel(self, mo_coeff, mo_occ, conv_tol=self.conv_tol,
+                           conv_tol_grad=self.conv_tol_grad,
                            max_cycle=self.max_cycle,
                            callback=self.callback, verbose=self.verbose)
             return self.hf_energy
