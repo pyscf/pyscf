@@ -5,7 +5,7 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
-from pyscf import fciqmcscf
+from pyscf.fciqmcscf.fciqmc import *
 
 b = 1.4
 mol = gto.Mole()
@@ -26,37 +26,47 @@ m.scf()
 
 class KnowValues(unittest.TestCase):
     def test_dipoles_hfbasis(self):
-        fciqmc_calc = fciqmcscf.FCIQMCCI(mol)
-        fciqmc_calc.tau = 0.01
-        fciqmc_calc.RDMSamples = 2000
+        fciqmcci = FCIQMCCI(mol)
+        fciqmcci.tau = 0.01
+        fciqmcci.RDMSamples = 2000
 
         norb = m.mo_coeff.shape[1]
-        e = fciqmcscf.fciqmc.run_standalone(fciqmc_calc, m.mo_coeff)
-        dips = fciqmc_calc.dipoles(m.mo_coeff, fcivec=None, norb=norb, nelec=mol.nelectron)
+        energy = run_standalone(fciqmcci, m.mo_coeff)
+        two_pdm = read_neci_two_pdm('spinfree_TwoRDM.1', norb)
+        one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
+        dips, elec, nuc = calc_dipole(mol, m.mo_coeff, one_pdm)
 
-        self.assertAlmostEqual(e,-7.787146064428100, 5)
-        self.assertAlmostEqual(dips[0],0.0,7)
-        self.assertAlmostEqual(dips[1],0.0,7)
-        self.assertAlmostEqual(dips[2],1.85781390006,4)
+        self.assertAlmostEqual(energy, -7.787146064428100, 5)
+        self.assertAlmostEqual(dips[0], 0.0, 7)
+        self.assertAlmostEqual(dips[1], 0.0, 7)
+        self.assertAlmostEqual(dips[2], 1.85781390006, 4)
 
     def test_dipoles_casscfbasis(self):
 
-        mc = mcscf.CASSCF(m,6,4)    #There are only 6 orbitals, 4 electrons, so this is the full space, giving the exact NO basis
-        mc.natorb = True            #Ensures that casscf_mo returns the natural orbital basis in the active space
-        emc,e_ci,fcivec,casscf_mo = mc.mc2step(m.mo_coeff)
+        # There are only 6 orbitals and 4 electrons, so this is the full
+        # space, giving the exact NO basis.
+        mc = mcscf.CASSCF(m,6,4)
+        # Ensures that casscf_mo returns the natural orbital basis in the
+        # active space.
+        mc.natorb = True
+        emc, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
 
-        fciqmc_calc = fciqmcscf.FCIQMCCI(mol)
-        fciqmc_calc.tau = 0.01
-        fciqmc_calc.RDMSamples = 2000
+        fciqmcci = FCIQMCCI(mol)
+        fciqmcci.tau = 0.01
+        fciqmcci.RDMSamples = 2000
         norb = mc.mo_coeff.shape[1]
-        e = fciqmcscf.fciqmc.run_standalone(fciqmc_calc, casscf_mo)   #Run from CASSCF natural orbitals
-        dips = fciqmc_calc.dipoles(casscf_mo, fcivec=None, norb=norb, nelec=mol.nelectron)
+        # Run from CASSCF natural orbitals
+        energy = run_standalone(fciqmcci, casscf_mo)
+        two_pdm = read_neci_two_pdm('spinfree_TwoRDM.1', norb)
+        one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
+        dips, elec, nuc = calc_dipole(mol, mc.mo_coeff, one_pdm)
 
-        self.assertAlmostEqual(e,-7.787146064428100, 5)
-        self.assertAlmostEqual(dips[0],0.0,7)
-        self.assertAlmostEqual(dips[1],0.0,7)
-        self.assertAlmostEqual(dips[2],1.85781390006,4)
+        self.assertAlmostEqual(energy, -7.787146064428100, 5)
+        self.assertAlmostEqual(dips[0], 0.0, 7)
+        self.assertAlmostEqual(dips[1], 0.0, 7)
+        self.assertAlmostEqual(dips[2], 1.85781390006, 4)
 
 if __name__ == "__main__":
-    print('Tests for dipole moments from standalone FCIQMC calculation in HF and natural orbital basis')
+    print('Tests for dipole moments from standalone FCIQMC calculation in HF '
+          'and natural orbital basis sets.')
     unittest.main()

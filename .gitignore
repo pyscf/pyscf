@@ -72,7 +72,8 @@ fciqmc_stats*
 FCIMCStats*
 RDMEstimates
 TwoRDM*
-spinfree_TwoRDM
+spinfree_TwoRDM*
 FCIDUMP
 POPSFILE*
 INITIATORStats
+NodeFile*
