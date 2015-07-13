@@ -47,14 +47,14 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc,-108.91378666934476, 7)
 
         # Calculate dipole moment in casscf_mo basis
-        # However, we do need to pass in the number of inactive core orbitals
-        ncore = (m.nelectron - nelec) / 2
-        one_pdm = fciqmc.read_neci_one_pdm(mc.fcisolver,'spinfree_TwoRDM.1',norb,
-                nelec)
-        dipmom = fciqmc.calc_dipole(mol,casscf_mo,one_pdm,ncore = ncore)
-        self.assertAlmostEqual(dipmom[0],xxx,5)
-        self.assertAlmostEqual(dipmom[1],xxx,5)
-        self.assertAlmostEqual(dipmom[2],xxx,5)
+        # First find the 1RDM in the full space
+        one_pdm = fciqmc.find_full_casscf_12rdm(mc.fcisolver, casscf_mo, 
+                'spinfree_TwoRDM.1', norb, nelec)[0]
+        dipmom = fciqmc.calc_dipole(mol,casscf_mo,one_pdm)
+        print('Dipole moments: ',dipmom)
+        #self.assertAlmostEqual(dipmom[0],xxx,5)
+        #self.assertAlmostEqual(dipmom[1],xxx,5)
+        #self.assertAlmostEqual(dipmom[2],xxx,5)
 
     def test_mc2step_6o6e_fciqmc(self):
         mc = mcscf.CASSCF(m, 6, 6)

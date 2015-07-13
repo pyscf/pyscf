@@ -407,8 +407,53 @@ def one_from_two_pdm(two_pdm, nelec):
     one_pdm /= (nelec-1)
     return one_pdm
 
+def find_full_casscf_12rdm(fciqmcci, mo_coeff, filename, norbcas, neleccas, directory='.'):
+    '''Return the 1 and 2 full RDMs after a CASSCF calculation, by adding
+    on the contributions from the inactive spaces. Requires the cas space to
+    be given, as we as a set of mo coefficients in the complete space.
+    '''
 
-def calc_dipole(mol, mo_coeff, one_pdm, ncore=0):
+    two_pdm = read_neci_two_pdm(fciqmcci, filename, norbcas, directory)
+    one_pdm = one_from_two_pdm(two_pdm, neleccas)
+
+    return add_inactive_space_to_rdm(fciqmcci.mol, mo_coeff, one_pdm, two_pdm)
+
+def add_inactive_space_to_rdm(mol, mo_coeff, one_pdm, two_pdm):
+    '''If a CASSCF calculation has been done, the final RDMs from neci will
+    not contain the doubly occupied inactive orbitals. This function will add
+    them and return the full density matrices.
+    '''
+
+    # Find number of inactive electrons by taking the number of electrons
+    # as the trace of the 1RDM, and subtracting from the total number of electrons
+    ninact = (mol.nelectron - int(round(trace(one_pdm)))) / 2
+    norb = mo_coeff.shape[1]
+    nsizerdm = one_pdm.shape[0]
+
+    one_pdm_ = numpy.zeros( (norb, norb) )
+    # Add core first
+    for i in range(ninact):
+        one_pdm_(i,i) = 1.0
+
+    # Add the rest of the density matrix
+    one_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = one_pdm[:,:]
+
+    two_pdm_ = numpy.zeros( (norb, norb) )
+    
+    # Add on frozen core contribution, assuming that the inactive orbitals are
+    # doubly occupied
+    for i in range(ninact):
+        for j in range(ninact):
+            two_pdm_(i,j,i,j) = 1.0
+            two_pdm_(i,j,j,i) = -1.0
+
+    two_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm, \
+             ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = \
+             two_pdm[:,:]
+
+    return one_pdm_, two_pdm_
+
+def calc_dipole(mol, mo_coeff, one_pdm):
     '''Calculate the dipole moment, given the molecule, the mo coefficent
     array, the 1RDM. Optionally, also specify that the first ncore orbitals
     are doubly occupied. This will be required if you are taking an RDM from
@@ -420,22 +465,15 @@ def calc_dipole(mol, mo_coeff, one_pdm, ncore=0):
     assert(one_pdm.shape[0] == one_pdm.shape[1])
     norb = mo_coeff.shape[1]
     nsizerdm = one_pdm.shape[0]
+    if nsizerdm != norb:
+        raise RuntimeError('''Size of 1RDM is not the same size as number of orbitals.
+            Have you correctly included the external space if running from CASSCF??'''
 
     logger.info('Calculating dipole moments of molecule')
     logger.info('Dimension of passed in density matrix: {} x {}'.   \
             format(nsizerdm,nsizerdm))
     logger.info('Number of orbitals: {}'.format(norb))
-    logger.info('Number of doubly occupied orbitals not in density matrix: {}'. \
-            format(ncore))
     
-    # Add core first
-    one_pdm_ = numpy.zeros( (norb, norb) )
-    for i in range(ncore):
-        one_pdm_(i,i) = 1.0
-
-    # Add the rest of the density matrix
-    one_pdm_[ncore:ncore+nsizerdm,ncore:ncore+nsizerdm] = one_pdm[:,:]
-
     # Call the integral generator for r integrals in the AO basis. There
     # are 3 dimensions for x, y and z components.
     aodmints = mol.intor('cint1e_r_sph', comp=3)
