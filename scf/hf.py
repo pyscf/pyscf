@@ -23,7 +23,7 @@ from pyscf.scf import _vhf
 
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=1e-5,
-           dump_chk=True, dm0=None, callback=None):
+           dump_chk=True, dm0=None, callback=None, **kwargs):
     '''kernel: the SCF driver.
 
     Args:
