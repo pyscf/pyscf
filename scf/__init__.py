@@ -29,6 +29,8 @@ to control the SCF method.
         Default is 'minao'
     DIIS : class listed in :mod:`scf.diis`
         Default is :class:`diis.SCF_DIIS`. Set it to None/False to turn off DIIS.
+    diis : bool
+        whether to do DIIS.  Default is True.
     diis_space : int
         DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
     diis_start_cycle : int
@@ -86,6 +88,7 @@ Saved results
 
 from pyscf.scf import hf
 from pyscf.scf import hf as rhf
+from pyscf.scf import rohf
 from pyscf.scf import hf_symm
 from pyscf.scf import hf_symm as rhf_symm
 from pyscf.scf import uhf
@@ -112,7 +115,7 @@ def RHF(mol, *args):
             return rhf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
-            return rhf.ROHF(mol, *args)
+            return rohf.ROHF(mol, *args)
         else:
             return rhf.RHF(mol, *args)
     else:
@@ -130,7 +133,7 @@ def ROHF(mol, *args):
         else:
             return rhf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
-        return rhf.ROHF(mol, *args)
+        return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
 

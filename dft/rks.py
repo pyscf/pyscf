@@ -36,7 +36,7 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = vxc.hybrid_coeff(x_code, spin=1)
+    hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
 
     if abs(hyb) < 1e-10:
         vj = ks.get_j(mol, dm, hermi)
@@ -98,10 +98,10 @@ class RKS(pyscf.scf.hf.RHF):
         return energy_elec(self, dm, h1e)
 
 
-class ROKS(pyscf.scf.hf.ROHF):
+class ROKS(pyscf.scf.rohf.ROHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
-        pyscf.scf.hf.ROHF.__init__(self, mol)
+        pyscf.scf.rohf.ROHF.__init__(self, mol)
         self._ecoul = 0
         self._exc = 0
         self.xc = 'LDA,VWN'
@@ -110,7 +110,7 @@ class ROKS(pyscf.scf.hf.ROHF):
         self._keys = self._keys.union(['xc', 'grids'])
 
     def dump_flags(self):
-        pyscf.scf.hf.ROHF.dump_flags(self)
+        pyscf.scf.rohf.ROHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 

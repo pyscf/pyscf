@@ -4,8 +4,6 @@
 import time
 from functools import reduce
 import numpy
-import pyscf.gto
-import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import chkfile
@@ -46,7 +44,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
             raise RuntimeError('TODO: project DHF orbital to UHF orbital')
         mo_coeff = fproj(mo)
         mo_a = mo_coeff[:,mo_occ>0]
-        mo_b = mo_coeff[:,mo_occ==2]
+        mo_b = mo_coeff[:,mo_occ>1]
         dm_a = numpy.dot(mo_a, mo_a.T)
         dm_b = numpy.dot(mo_b, mo_b.T)
         dm = numpy.array((dm_a, dm_b))
@@ -161,6 +159,19 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     f = (hf.level_shift(s1e, dm[0], f[0], level_shift_factor),
          hf.level_shift(s1e, dm[1], f[1], level_shift_factor))
     return numpy.array(f)
+
+def get_grad(mo_coeff, mo_occ, fock_ao):
+    '''UHF Gradients'''
+    occidxa = numpy.where(mo_occ[0]>0)[0]
+    occidxb = numpy.where(mo_occ[1]>0)[0]
+    viridxa = numpy.where(mo_occ[0]==0)[0]
+    viridxb = numpy.where(mo_occ[1]==0)[0]
+
+    focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
+    fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+    g = numpy.hstack((focka[viridxa[:,None],occidxa].reshape(-1),
+                      fockb[viridxb[:,None],occidxb].reshape(-1)))
+    return g
 
 def energy_elec(mf, dm, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
@@ -355,7 +366,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
 def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG,
                                 pre_orth_method='ANO', s=None):
-    return mulliken_meta(mol, dm_ao, verbose, pre_orth_method)
+    return mulliken_meta(mol, dm_ao, verbose, pre_orth_method, s)
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
@@ -432,6 +443,12 @@ class UHF(hf.SCF):
             damp_factor = self.damp_factor
         return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
+
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        if fock is None:
+            dm1 = self.make_rdm1(mo_coeff, mo_occ)
+            fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
+        return get_grad(mo_coeff, mo_occ, fock)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -549,8 +566,8 @@ class UHF(hf.SCF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, dm0=dm0,
-                            callback=self.callback)
+                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
+                            dm0=dm0, callback=self.callback)
 #        if self.nelectron_alpha * 2 < self.mol.nelectron:
 #            self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
 #            self.mo_occ = (self.mo_occ[1], self.mo_occ[0])

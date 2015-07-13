@@ -106,10 +106,12 @@ class KnowValues(unittest.TestCase):
 
     def test_r_uhf(self):
         uhf = dhf.UHF(mol)
+        uhf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(uhf.scf(), -76.038520472820863, 9)
 
     def test_r_rhf(self):
         uhf = dhf.RHF(mol)
+        uhf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(uhf.scf(), -76.038520472820863, 9)
 
     def test_level_shift_uhf(self):
@@ -167,11 +169,6 @@ class KnowValues(unittest.TestCase):
         dm1 = mf.get_init_guess(key='minao')
         self.assertTrue(numpy.allclose(dm0, dm1))
 
-        mf = scf.uhf.UHF(mol)
-        dm0 = scf.uhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
-        dm1 = mf.get_init_guess(key='minao')
-        self.assertTrue(numpy.allclose(dm0, dm1))
-
         mf = scf.DHF(mol)
         dm0 = scf.dhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
         dm1 = mf.get_init_guess(key='minao')
@@ -183,15 +180,10 @@ class KnowValues(unittest.TestCase):
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile()
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
-        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0644296295351143, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.064429619915702, 8)
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.rhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
-        dm1 = mf.init_guess_by_atom(mol)
-        self.assertTrue(numpy.allclose(dm0, dm1))
-
-        mf = scf.uhf.UHF(mol)
-        dm0 = scf.uhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
         dm1 = mf.init_guess_by_atom(mol)
         self.assertTrue(numpy.allclose(dm0, dm1))
 
@@ -213,12 +205,7 @@ class KnowValues(unittest.TestCase):
         dm1 = mf.init_guess_by_1e(mol)
         self.assertTrue(numpy.allclose(dm0, dm1))
 
-        mf = scf.uhf.UHF(mol)
-        dm0 = scf.uhf.init_guess_by_chkfile(mol, ftmp.name, project=False)
-        dm1 = mf.init_guess_by_1e(mol)
-        self.assertTrue(numpy.allclose(dm0, dm1))
-
-        mf = scf.hf.ROHF(mol)
+        mf = scf.rohf.ROHF(mol)
         dm1 = mf.init_guess_by_1e(mol)
         self.assertAlmostEqual(numpy.linalg.norm(dm1),
                                5.3700828975288122/numpy.sqrt(2), 9)
@@ -250,13 +237,13 @@ class KnowValues(unittest.TestCase):
 
         save(scf.hf.RHF)
         check(scf.hf.RHF, 5.2644790347333048)
-        check(scf.hf.ROHF, 3.7225488248743273)
+        check(scf.rohf.ROHF, 3.7225488248743273)
         check(scf.uhf.UHF, 3.7225488248743273)
         check(scf.dhf.UHF, 3.7225488248743273)
 
         save(scf.uhf.UHF)
         check(scf.hf.RHF, 5.2644790347333048)
-        check(scf.hf.ROHF, 3.7225488248743273)
+        check(scf.rohf.ROHF, 3.7225488248743273)
         check(scf.uhf.UHF, 3.7225488248743273)
         check(scf.dhf.UHF, 3.7225488248743273)
 
