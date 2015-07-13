@@ -45,20 +45,19 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
         x2+= numpy.einsum('pr,rq->pq', fvv, x) * 2
         return x2.reshape(-1)
 
-    save_for_dft = [None, None]  # (dm, veff)
+    if hasattr(mf, 'xc'):
+        from pyscf.dft import vxc
+        x_code = vxc.parse_xc_name(mf.xc)[0]
+        hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
     def h_opjk(x):
         x = x.reshape(-1,nocc)
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         if hasattr(mf, 'xc'):
-            if save_for_dft[0] is None:
-                save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
-                save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
-            dm1 = save_for_dft[0] + d1 + d1.T
-            vhf1 = mf.get_veff(mol, dm1, dm_last=save_for_dft[0],
-                               vhf_last=save_for_dft[1])
-            dvhf = vhf1 - save_for_dft[1]
-            save_for_dft[0] = dm1
-            save_for_dft[1] = vhf1
+            vj, vk = mf.get_jk(mol, d1+d1.T)
+            if abs(hyb) < 1e-10:
+                dvhf = vj
+            else:
+                dvhf = vj - vk * hyb * .5
         else:
             dvhf = mf.get_veff(mol, d1+d1.T)
         x2 = reduce(numpy.dot, (mo_coeff[:,viridx].T, dvhf,
@@ -151,7 +150,10 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
         x2 *= .5
         return x2[mask]
 
-    save_for_dft = [None, None]  # (dm, veff)
+    if hasattr(mf, 'xc'):
+        from pyscf.dft import vxc
+        x_code = vxc.parse_xc_name(mf.xc)[0]
+        hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
     def h_opjk(x):
         x1 = numpy.zeros_like(focka)
         x1[mask] = x
@@ -160,17 +162,11 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
         d1a = reduce(numpy.dot, (mo_coeff[:,viridxa], x1[viridxa[:,None],occidxa], mo_coeff[:,occidxa].T))
         d1b = reduce(numpy.dot, (mo_coeff[:,viridxb], x1[viridxb[:,None],occidxb], mo_coeff[:,occidxb].T))
         if hasattr(mf, 'xc'):
-            from pyscf.dft import uks
-            if save_for_dft[0] is None:
-                save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
-                save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
-            dm1 = numpy.array((save_for_dft[0][0]+d1a+d1a.T,
-                               save_for_dft[0][1]+d1b+d1b.T))
-            vhf1 = uks.get_veff_(mf, mol, dm1, dm_last=save_for_dft[0],
-                                 vhf_last=save_for_dft[1])
-            dvhf = (vhf1[0]-save_for_dft[1][0], vhf1[1]-save_for_dft[1][1])
-            save_for_dft[0] = dm1
-            save_for_dft[1] = vhf1
+            vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
+            if abs(hyb) < 1e-10:
+                dvhf = vj[0] + vj[1]
+            else:
+                dvhf = (vj[0] + vj[1]) - vk * hyb
         else:
             dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
         x2[viridxa[:,None],occidxa] += reduce(numpy.dot, (mo_coeff[:,viridxa].T, dvhf[0], mo_coeff[:,occidxa]))
@@ -214,7 +210,10 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
         x2b += numpy.einsum('rp,rq->pq', fockb[viridxb[:,None],viridxb], x1b)
         return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
-    save_for_dft = [None, None]  # (dm, veff)
+    if hasattr(mf, 'xc'):
+        from pyscf.dft import vxc
+        x_code = vxc.parse_xc_name(mf.xc)[0]
+        hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
     def h_opjk(x):
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
@@ -223,16 +222,11 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
         d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
                                  mo_coeff[1][:,occidxb].T))
         if hasattr(mf, 'xc'):
-            if save_for_dft[0] is None:
-                save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
-                save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
-            dm1 = numpy.array((save_for_dft[0][0]+d1a+d1a.T,
-                               save_for_dft[0][1]+d1b+d1b.T))
-            vhf1 = mf.get_veff(mol, dm1, dm_last=save_for_dft[0],
-                               vhf_last=save_for_dft[1])
-            dvhf = (vhf1[0]-save_for_dft[1][0], vhf1[1]-save_for_dft[1][1])
-            save_for_dft[0] = dm1
-            save_for_dft[1] = vhf1
+            vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
+            if abs(hyb) < 1e-10:
+                dvhf = vj[0] + vj[1]
+            else:
+                dvhf = (vj[0] + vj[1]) - vk * hyb
         else:
             dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
         x2a = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, dvhf[0],
@@ -436,7 +430,7 @@ def kernel(mf, mo_coeff, mo_occ, tol=1e-10, max_cycle=50, dump_chk=True,
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
         mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)[0]
         mf.get_occ(mo_energy, mo_coeff)
-        hf_energy = mf.energy_tot(dm, h1e, vhf)
+        hf_energy = mf._scf.energy_tot(dm, h1e, vhf)
 
         log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
                  imacro, hf_energy, hf_energy-last_hf_e, norm_gorb,
@@ -477,7 +471,7 @@ def newton(mf):
             self._scf = mf
             self.max_cycle_inner = 8
             self.max_orb_stepsize = .05
-            self.conv_tol_grad = 1e-4
+            self.conv_tol_grad = .5e-4
 
             self.ah_start_tol = 5.
             self.ah_start_cycle = 1
