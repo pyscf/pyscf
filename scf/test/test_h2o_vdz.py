@@ -36,7 +36,7 @@ class KnowValues(unittest.TestCase):
             charge = 1,
             spin = 1,
         )
-        mf = scf.hf.ROHF(mol)
+        mf = scf.rohf.ROHF(mol)
         mf.conv_tol = 1e-11
         self.assertAlmostEqual(mf.scf(), -75.627354109594179, 9)
 
@@ -99,10 +99,12 @@ class KnowValues(unittest.TestCase):
 
     def test_r_uhf(self):
         uhf = dhf.UHF(mol)
+        uhf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(uhf.scf(), -76.081567943830265, 9)
 
     def test_r_rhf(self):
         uhf = dhf.RHF(mol)
+        uhf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(uhf.scf(), -76.081567943842543, 9)
 
     def test_level_shift_uhf(self):

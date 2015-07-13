@@ -11,6 +11,7 @@ import pyscf.lib
 from pyscf.lib import logger
 from pyscf import symm
 from pyscf.scf import hf
+from pyscf.scf import rohf
 
 
 
@@ -237,8 +238,8 @@ class RHF(hf.RHF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, dm0=dm0,
-                            callback=self.callback)
+                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
+                            dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
@@ -296,7 +297,7 @@ class HF1e(hf.SCF):
         return self.hf_energy
 
 
-class ROHF(hf.ROHF):
+class ROHF(rohf.ROHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed ROHF:
         irrep_nelec : dict
@@ -320,7 +321,7 @@ class ROHF(hf.ROHF):
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
     def __init__(self, mol):
-        hf.ROHF.__init__(self, mol)
+        rohf.ROHF.__init__(self, mol)
         self.irrep_nelec = {}
 # use _irrep_doccs and _irrep_soccs help self.eig to compute orbital energy,
 # do not overwrite them
@@ -333,7 +334,7 @@ class ROHF(hf.ROHF):
         self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
-        hf.ROHF.dump_flags(self)
+        rohf.ROHF.dump_flags(self)
         logger.info(self, '%s with symmetry adapted basis',
                     self.__class__.__name__)
 #TODO: improve the sainity check
@@ -554,8 +555,8 @@ class ROHF(hf.ROHF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, dm0=dm0,
-                            callback=self.callback)
+                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
+                            dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)

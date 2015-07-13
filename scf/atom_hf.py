@@ -90,6 +90,9 @@ class AtomSphericAverageRHF(hf.RHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         return self._occ
 
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        return 0
+
     def scf(self, *args, **kwargs):
         self.build()
         return hf.kernel(self, *args, dump_chk=False, **kwargs)

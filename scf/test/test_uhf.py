@@ -46,13 +46,13 @@ class KnowValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
         self.assertAlmostEqual(numpy.linalg.norm(pop), 12.375953469399407, 9)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 12.177668274788502, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 12.177665513480799, 9)
 
     def test_analyze(self):
         numpy.random.seed(5)
         nao = mol.nao_nr()
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.8318530439334699, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.8318530352895759, 9)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)

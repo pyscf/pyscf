@@ -29,6 +29,7 @@ class KnowValues(unittest.TestCase):
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(mol)
+        uhf.conv_tol_grad = 1e-5
         uhf.scf()
         g = grad.dhf.UHF(uhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 7.9216825870803245, 7)

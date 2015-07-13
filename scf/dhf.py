@@ -21,7 +21,8 @@ from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
 
-def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None, callback=None):
+def kernel(mf, conv_tol=1e-9, conv_tol_grad=1e-4,
+           dump_chk=True, dm0=None, callback=None):
     '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
     SCF is carried out in three steps.  First the 2-electron part is
     approximated by large component integrals (LL|LL); Next, (SS|LL) the
@@ -35,14 +36,16 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None, callback=None):
 
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 4e-3, dump_chk, dm0=dm, callback=callback)
+                = hf.kernel(mf, 1e-1, 3e-1,
+                            dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
     if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' \
                          or mf._coulomb_now.upper() == 'LLSS'):
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 4e-4, dump_chk, dm0=dm, callback=callback)
+                = hf.kernel(mf, 1e-2, numpy.sqrt(conv_tol_grad),
+                            dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
 
@@ -54,7 +57,8 @@ def kernel(mf, conv_tol=1e-9, dump_chk=True, dm0=None, callback=None):
     if mf.with_gaunt:
         mf.get_veff = mf.get_vhf_with_gaunt
 
-    return hf.kernel(mf, conv_tol, dump_chk, dm0=dm, callback=callback)
+    return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
+                     callback=callback)
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None):
@@ -208,6 +212,17 @@ def analyze(mf, verbose=logger.DEBUG):
 #TODO    dm = mf.make_rdm1(mo_coeff, mo_occ)
 #TODO    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
 
+def get_grad(mo_coeff, mo_occ, fock_ao):
+    '''DHF Gradients'''
+    occidx = numpy.where(mo_occ> 0)[0]
+    viridx = numpy.where(mo_occ==0)[0]
+    nocc = len(occidx)
+    nvir = len(viridx)
+
+    fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
+    g = fock[viridx[:,None],occidx]
+    return g
+
 
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
@@ -230,6 +245,7 @@ class UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8
+        self.conv_tol_grad = 1e-4
         self.with_ssss = True
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
@@ -248,6 +264,12 @@ class UHF(hf.SCF):
         if mol is None:
             mol = self.mol
         return get_ovlp(mol)
+
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        if fock is None:
+            dm1 = self.make_rdm1(mo_coeff, mo_occ)
+            fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
+        return get_grad(mo_coeff, mo_occ, fock)
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -374,7 +396,8 @@ class UHF(hf.SCF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = kernel(self, self.conv_tol, dm0=dm0, callback=self.callback)
+                = kernel(self, self.conv_tol, self.conv_tol_grad,
+                         dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)
