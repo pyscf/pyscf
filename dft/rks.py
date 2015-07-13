@@ -36,7 +36,7 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = vxc.hybrid_coeff(x_code, spin=1)
+    hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
 
     if abs(hyb) < 1e-10:
         vj = ks.get_j(mol, dm, hermi)
