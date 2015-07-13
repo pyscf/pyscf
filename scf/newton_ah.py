@@ -19,6 +19,8 @@ import pyscf.symm
 import pyscf.lib.logger as logger
 
 
+APPROX_XC_HESSIAN = True
+
 def expmat(a):
     return scipy.linalg.expm(a)
 
@@ -48,18 +50,32 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
         return x2.reshape(-1)
 
     if hasattr(mf, 'xc'):
-        from pyscf.dft import vxc
-        x_code = vxc.parse_xc_name(mf.xc)[0]
-        hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        if APPROX_XC_HESSIAN:
+            from pyscf.dft import vxc
+            x_code = vxc.parse_xc_name(mf.xc)[0]
+            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        else:
+            save_for_dft = [None, None]  # (dm, veff)
     def h_opjk(x):
         x = x.reshape(nvir,nocc)
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         if hasattr(mf, 'xc'):
-            vj, vk = mf.get_jk(mol, d1+d1.T)
-            if abs(hyb) < 1e-10:
-                dvhf = vj
+            if APPROX_XC_HESSIAN:
+                vj, vk = mf.get_jk(mol, d1+d1.T)
+                if abs(hyb) < 1e-10:
+                    dvhf = vj
+                else:
+                    dvhf = vj - vk * hyb * .5
             else:
-                dvhf = vj - vk * hyb * .5
+                if save_for_dft[0] is None:
+                    save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
+                    save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
+                dm1 = save_for_dft[0] + d1 + d1.T
+                vhf1 = mf.get_veff(mol, dm1, dm_last=save_for_dft[0],
+                                   vhf_last=save_for_dft[1])
+                dvhf = vhf1 - save_for_dft[1]
+                save_for_dft[0] = dm1
+                save_for_dft[1] = vhf1
         else:
             dvhf = mf.get_veff(mol, d1+d1.T)
         x2 = reduce(numpy.dot, (mo_coeff[:,viridx].T, dvhf,
@@ -131,9 +147,12 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
         return x2[mask]
 
     if hasattr(mf, 'xc'):
-        from pyscf.dft import vxc
-        x_code = vxc.parse_xc_name(mf.xc)[0]
-        hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        if APPROX_XC_HESSIAN:
+            from pyscf.dft import vxc
+            x_code = vxc.parse_xc_name(mf.xc)[0]
+            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        else:
+            save_for_dft = [None, None]  # (dm, veff)
     def h_opjk(x):
         x1 = numpy.zeros_like(focka)
         x1[mask] = x
@@ -142,11 +161,24 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
         d1a = reduce(numpy.dot, (mo_coeff[:,viridxa], x1[viridxa[:,None],occidxa], mo_coeff[:,occidxa].T))
         d1b = reduce(numpy.dot, (mo_coeff[:,viridxb], x1[viridxb[:,None],occidxb], mo_coeff[:,occidxb].T))
         if hasattr(mf, 'xc'):
-            vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
-            if abs(hyb) < 1e-10:
-                dvhf = vj[0] + vj[1]
+            if APPROX_XC_HESSIAN:
+                vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
+                if abs(hyb) < 1e-10:
+                    dvhf = vj[0] + vj[1]
+                else:
+                    dvhf = (vj[0] + vj[1]) - vk * hyb
             else:
-                dvhf = (vj[0] + vj[1]) - vk * hyb
+                from pyscf.dft import uks
+                if save_for_dft[0] is None:
+                    save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
+                    save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
+                dm1 = numpy.array((save_for_dft[0][0]+d1a+d1a.T,
+                                   save_for_dft[0][1]+d1b+d1b.T))
+                vhf1 = uks.get_veff_(mf, mol, dm1, dm_last=save_for_dft[0],
+                                     vhf_last=save_for_dft[1])
+                dvhf = (vhf1[0]-save_for_dft[1][0], vhf1[1]-save_for_dft[1][1])
+                save_for_dft[0] = dm1
+                save_for_dft[1] = vhf1
         else:
             dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
         x2[viridxa[:,None],occidxa] += reduce(numpy.dot, (mo_coeff[:,viridxa].T, dvhf[0], mo_coeff[:,occidxa]))
@@ -192,9 +224,12 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
         return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
     if hasattr(mf, 'xc'):
-        from pyscf.dft import vxc
-        x_code = vxc.parse_xc_name(mf.xc)[0]
-        hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        if APPROX_XC_HESSIAN:
+            from pyscf.dft import vxc
+            x_code = vxc.parse_xc_name(mf.xc)[0]
+            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        else:
+            save_for_dft = [None, None]  # (dm, veff)
     def h_opjk(x):
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
@@ -203,11 +238,23 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
         d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
                                  mo_coeff[1][:,occidxb].T))
         if hasattr(mf, 'xc'):
-            vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
-            if abs(hyb) < 1e-10:
-                dvhf = vj[0] + vj[1]
+            if APPROX_XC_HESSIAN:
+                vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
+                if abs(hyb) < 1e-10:
+                    dvhf = vj[0] + vj[1]
+                else:
+                    dvhf = (vj[0] + vj[1]) - vk * hyb
             else:
-                dvhf = (vj[0] + vj[1]) - vk * hyb
+                if save_for_dft[0] is None:
+                    save_for_dft[0] = mf.make_rdm1(mo_coeff, mo_occ)
+                    save_for_dft[1] = mf.get_veff(mol, save_for_dft[0])
+                dm1 = numpy.array((save_for_dft[0][0]+d1a+d1a.T,
+                                   save_for_dft[0][1]+d1b+d1b.T))
+                vhf1 = mf.get_veff(mol, dm1, dm_last=save_for_dft[0],
+                                   vhf_last=save_for_dft[1])
+                dvhf = (vhf1[0]-save_for_dft[1][0], vhf1[1]-save_for_dft[1][1])
+                save_for_dft[0] = dm1
+                save_for_dft[1] = vhf1
         else:
             dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
         x2a = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, dvhf[0],
