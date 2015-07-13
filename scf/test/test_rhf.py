@@ -18,6 +18,7 @@ H     0    0.757    0.587''',
 )
 
 mf = scf.RHF(mol)
+mf.conv_tol = 1e-10
 mf.scf()
 
 
@@ -77,7 +78,7 @@ class KnowValues(unittest.TestCase):
         pmol.charge = 1
         pmol.spin = 1
         pmol.build(False, False)
-        mf = scf.hf.ROHF(pmol)
+        mf = scf.rohf.ROHF(pmol)
         self.assertAlmostEqual(mf.scf(), -75.627354109594179, 9)
 
     def test_damping(self):

@@ -586,7 +586,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
     fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
     g = fock[viridx[:,None],occidx] * 2
-    return g
+    return g.reshape(-1)
 
 
 def analyze(mf, verbose=logger.DEBUG):
@@ -752,7 +752,7 @@ class SCF(object):
         conv_tol : float
             converge threshold.  Default is 1e-10
         conv_tol_grad : float
-            gradients converge threshold.  Default is .5e-4
+            gradients converge threshold.  Default is sqrt(conv_tol)
         max_cycle : int
             max number of iterations.  Default is 50
         init_guess : str
@@ -815,8 +815,8 @@ class SCF(object):
 # filename to self.chkfile
         self._chkfile = tempfile.NamedTemporaryFile()
         self.chkfile = self._chkfile.name
-        self.conv_tol = 1e-10
-        self.conv_tol_grad = .5e-4
+        self.conv_tol = 1e-9
+        self.conv_tol_grad = None
         self.max_cycle = 50
         self.init_guess = 'minao'
         self.DIIS = diis.SCF_DIIS
@@ -869,7 +869,7 @@ class SCF(object):
         logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
         logger.info(self, 'DIIS space = %d', self.diis_space)
         logger.info(self, 'SCF tol = %g', self.conv_tol)
-        logger.info(self, 'SCF gradient tol = %g', self.conv_tol_grad)
+        logger.info(self, 'SCF gradient tol = %s', self.conv_tol_grad)
         logger.info(self, 'max. SCF cycles = %d', self.max_cycle)
         logger.info(self, 'direct_scf = %s', self.direct_scf)
         if self.direct_scf:

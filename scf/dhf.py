@@ -21,7 +21,7 @@ from pyscf.scf import chkfile
 from pyscf.scf import _vhf
 
 
-def kernel(mf, conv_tol=1e-9, conv_tol_grad=1e-4,
+def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None):
     '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
     SCF is carried out in three steps.  First the 2-electron part is
@@ -29,6 +29,9 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=1e-4,
     interaction between large and small components are added; Finally,
     converge the SCF with the small component contributions (SS|SS)
     '''
+    if conv_tol_grad is None:
+        conv_tol_grad = numpy.sqrt(conv_tol)
+        logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
     if dm0 is None:
         dm = mf.get_init_guess()
     else:
@@ -36,7 +39,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=1e-4,
 
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 1e-1, 3e-1,
+                = hf.kernel(mf, 1e-2, 1e-1,
                             dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
@@ -44,7 +47,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=1e-4,
     if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' \
                          or mf._coulomb_now.upper() == 'LLSS'):
         scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 1e-2, numpy.sqrt(conv_tol_grad),
+                = hf.kernel(mf, 1e-3, 1e-1,
                             dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
@@ -221,7 +224,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
     fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
     g = fock[viridx[:,None],occidx]
-    return g
+    return g.reshape(-1)
 
 
 class UHF(hf.SCF):
@@ -245,7 +248,6 @@ class UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8
-        self.conv_tol_grad = 1e-4
         self.with_ssss = True
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
