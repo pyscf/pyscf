@@ -150,10 +150,23 @@ class FCIQMCCI(object):
 
         return rdm_energy, None
 
-def run_standalone(fciqmcci, mo_coeff, restart = None):
-    '''Run a neci calculation standalone for the molecule listed in the
+def run_standalone(fciqmcci, mo_coeff, restart=None):
+    '''Run a standalone NECI calculation for the molecule listed in the
     FCIQMCCI object. The basis to run this calculation in is given by the
     mo_coeff array.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            FCIQMC calculation containing parameters of NECI calculation to
+            run.
+        mo_coeff : ndarray
+            Orbital coefficients. Each column is one orbital.
+        restart : bool
+            Is this a restarted NECI calculation?
+
+    Returns:
+        rdm_energy : float
+            Final RDM energy obtained from the NECI output file.
     '''
     
     tol = 1e-9
@@ -223,6 +236,19 @@ def run_standalone(fciqmcci, mo_coeff, restart = None):
 
 
 def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
+    '''Write an input file for a NECI calculation.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            Contains all the parameters used to create the input file.
+        neleca : int
+            The number of alpha electrons.
+        nelecb : int
+            The number of beta electrons.
+        restart : bool
+            Is this a restarted NECI calculation?
+    '''
+
     config_file = fciqmcci.configFile
     nstates = len(fciqmcci.state_weights)
 
@@ -296,23 +322,49 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     #f.write('noreorder\n')
 
 
-def write_integrals_file(h1eff, eri_cas, ncas, neleca, nelecb, fciqmcci):
+def write_integrals_file(h1e, eri, norb, neleca, nelecb, fciqmcci):
+    '''Write an integral dump file, based on the integrals provided.
+
+    Args:
+        h1e : 2D ndarray
+            Core Hamiltonian.
+        eri : 2D ndarray
+            Two-electron integrals.
+        norb : int
+            Number of orbitals.
+        neleca : int
+            Number of alpha electrons.
+        nelecb : int
+            Number of beta electrons
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            FCIQMC calculation, used to access the integral dump file name and
+            some symmetry properties.
+    '''
+
     integralFile = os.path.join(fciqmcci.scratchDirectory,fciqmcci.integralFile)
     # Ensure 4-fold symmetry.
-    eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
+    eri = pyscf.ao2mo.restore(4, eri, norb)
     if fciqmcci.mol.symmetry and fciqmcci.orbsym:
         orbsym = [IRREP_MAP[fciqmcci.groupname][i] for i in fciqmcci.orbsym]
     else:
         orbsym = []
-    pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
+    pyscf.tools.fcidump.from_integrals(integralFile, h1e, eri, norb,
                                        neleca+nelecb, ms=abs(neleca-nelecb),
                                        orbsym=orbsym, tol=1e-10)
 
 
 def execute_fciqmc(fciqmcci):
+    '''Call the external FCIQMC program.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            Specifies the FCIQMC calculation.
+    '''
+
     in_file = os.path.join(fciqmcci.scratchDirectory, fciqmcci.configFile)
     outfiletmp = fciqmcci.outputFileRoot
     files = os.listdir(fciqmcci.scratchDirectory + '.')
+    # Search for an unused output file.
     i = 1
     while outfiletmp in files:
         outfiletmp = fciqmcci.outputFileRoot + '_{}'.format(i)
@@ -335,6 +387,18 @@ def execute_fciqmc(fciqmcci):
 
 
 def read_energy(fciqmcci):
+    '''Read and return the final RDM energy from a NECI output file.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            Specifies the FCIQMC calculation. Used to locate the FCIQMC output
+            file.
+
+    Returns:
+        rdm_energy : float
+            The final RDM energy printed to the output file.
+    '''
+
     out_file = open(os.path.join(fciqmcci.scratchDirectory,
                  fciqmcci.outputFileCurrent), "r")
 
@@ -361,13 +425,28 @@ def read_neci_one_pdm(fciqmcci, filename, norb, nelec, directory='.'):
 
 
 def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
-    '''Read in a spin-free 2RDM from neci. Note that the RDMs in neci are stored
-    in chemical notation, so that RDM_ijkl = < a^+_i a^+_k a_l a_j >. In pyscf,
+    '''Read a spin-free 2-rdm output from a NECI calculation, and return it in
+    a form supported by pyscf. Note that the RDMs in neci are stored in 
+    chemical notation, so that RDM_ijkl = < a^+_i a^+_k a_l a_j >. In pyscf,
     the 2RDM_ijkl = < a^+_i a^+_j a_l a_k >. If core orbitals have been
     indicated as frozen in neci, this core contribution will be explicitly
     added back in to the RDM. Therefore, the norb parameter should be the
     unfrozen number of orbitals passed to neci, but not inactive if running
     through CASSCF.
+
+
+    Args:
+        filename : str
+            Name of the file to read the 2-rdm from.
+        norb : int
+            The number of orbitals inc. frozen in neci, and therefore the 
+            number of values each 2-rdm index can take.
+        directory : str
+            The directory in which to search for the 2-rdm file.
+
+    Returns:
+        two_pdm : ndarray
+            The read-in 2-rdm.
     '''
 
     f = open(os.path.join(directory, filename), 'r')
@@ -403,6 +482,19 @@ def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
 
 
 def one_from_two_pdm(two_pdm, nelec):
+    '''Return a 1-rdm, given a 2-rdm to contract.
+
+    Args:
+        two_pdm : ndarray
+            A (spin-free) 2-particle reduced density matrix.
+        nelec: int
+            The number of electrons contributing to the RDMs.
+
+    Returns:
+        one_pdm : ndarray
+            The (spin-free) 1-particle reduced density matrix.
+    '''
+
     one_pdm = numpy.einsum('ikjj->ik', two_pdm)
     one_pdm /= (nelec-1)
     return one_pdm
@@ -454,12 +546,24 @@ def add_inactive_space_to_rdm(mol, mo_coeff, one_pdm, two_pdm):
     return one_pdm_, two_pdm_
 
 def calc_dipole(mol, mo_coeff, one_pdm):
-    '''Calculate the dipole moment, given the molecule, the mo coefficent
-    array, the 1RDM. Optionally, also specify that the first ncore orbitals
-    are doubly occupied. This will be required if you are taking an RDM from
-    a CASSCF calculation, where the core contribution from inactive orbitals 
-    has not been included explicitly. Note that if core orbitals are just 
-    frozen with fciqmcci.nfreezecore, then this is already included.
+    '''Calculate and return the dipole moment for a given molecule, set of
+    molecular orbital coefficients and a 1-rdm.
+
+    Args:
+        mol : an instance of :class:`Mole`
+            Specifies the molecule.
+        mo_coeff : ndarray
+            Orbital coefficients. Each column is one orbital.
+        one_pdm : ndarray
+            1-rdm.
+
+    Returns:
+        tot_dipmom : float
+            The total dipole moment of the system.
+        elec_dipmom : float
+            The electronic component of the dipole moment.
+        nuc_dipmom : float
+            The nuclear component of the dipole moment.
     '''
 
     assert(one_pdm.shape[0] == one_pdm.shape[1])
