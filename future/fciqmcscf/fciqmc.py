@@ -475,8 +475,8 @@ def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
     # doubly occupied
     for i in range(fciqmcci.nfreezecore):
         for j in range(fciqmcci.nfreezecore):
-            two_pdm(i,j,i,j) = 1.0
-            two_pdm(i,j,j,i) = -1.0
+            two_pdm[i,j,i,j] = 1.0
+            two_pdm[i,j,j,i] = -1.0
 
     return two_pdm
 
@@ -525,7 +525,7 @@ def add_inactive_space_to_rdm(mol, mo_coeff, one_pdm, two_pdm):
     one_pdm_ = numpy.zeros( (norb, norb) )
     # Add core first
     for i in range(ninact):
-        one_pdm_(i,i) = 1.0
+        one_pdm_[i,i] = 1.0
 
     # Add the rest of the density matrix
     one_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = one_pdm[:,:]
@@ -536,8 +536,8 @@ def add_inactive_space_to_rdm(mol, mo_coeff, one_pdm, two_pdm):
     # doubly occupied
     for i in range(ninact):
         for j in range(ninact):
-            two_pdm_(i,j,i,j) = 1.0
-            two_pdm_(i,j,j,i) = -1.0
+            two_pdm_[i,j,i,j] = 1.0
+            two_pdm_[i,j,j,i] = -1.0
 
     two_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm, \
              ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = \
@@ -571,13 +571,8 @@ def calc_dipole(mol, mo_coeff, one_pdm):
     nsizerdm = one_pdm.shape[0]
     if nsizerdm != norb:
         raise RuntimeError('''Size of 1RDM is not the same size as number of orbitals.
-            Have you correctly included the external space if running from CASSCF??'''
+            Have you correctly included the external space if running from CASSCF??''')
 
-    logger.info('Calculating dipole moments of molecule')
-    logger.info('Dimension of passed in density matrix: {} x {}'.   \
-            format(nsizerdm,nsizerdm))
-    logger.info('Number of orbitals: {}'.format(norb))
-    
     # Call the integral generator for r integrals in the AO basis. There
     # are 3 dimensions for x, y and z components.
     aodmints = mol.intor('cint1e_r_sph', comp=3)
