@@ -71,6 +71,10 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=1e-5,
 You see this error message because of the API updates in pyscf v0.11.
 Keyword argument "init_dm" is replaced by "dm0"''')
     cput0 = (time.clock(), time.time())
+    if conv_tol_grad is None:
+        conv_tol_grad = numpy.sqrt(conv_tol)
+        logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
+
     mol = mf.mol
     if dm0 is None:
         dm = mf.get_init_guess(key=mf.init_guess, mol=mol)
