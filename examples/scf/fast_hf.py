@@ -48,19 +48,14 @@ H 9.239940 8.492427 3.423290
 ''',
             basis = 'ccpvdz',
             charge = 3,
-            spin = 1,
+            spin = 3,
             verbose = 5,
             output = 'cu3.out')
 
-mol.spin = 3
 mf = scf.density_fit(scf.RHF(mol))
-mf.level_shift_factor = .5
 mf.diis_start_cycle = 0
-mf.max_cycle = 10
+mf.conv_tol = .01
 mf.kernel()
-mol.spin = 1
-mf.max_cycle = 10
-mf.kernel(mf.make_rdm1())
 mo0 = mf.mo_coeff
 mo0occ = mf.mo_occ
 
