@@ -102,7 +102,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     if dump_chk:
         # dump mol after reading initialized DM
-        chkfile.save_mol(mf.chkfile, 'mol', format(mol.pack()))
+        chkfile.save_mol(mol, mf.chkfile)
 
     scf_conv = False
     cycle = 0
