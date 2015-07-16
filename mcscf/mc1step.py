@@ -383,7 +383,8 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         nvec = nx + 1
         wlast = w_t
         xtrial, w_t, v_t, index, seig = \
-                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
+                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
+                              lindep, log)
         s0 = seig[0]
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
@@ -401,8 +402,8 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         ax.append(h_op(x0))
 
 
-def _regular_step(heff, ovlp, xs, log):
-    w, v, seig = pyscf.lib.safe_eigh(heff, ovlp)
+def _regular_step(heff, ovlp, xs, lindep, log):
+    w, v, seig = pyscf.lib.safe_eigh(heff, ovlp, lindep)
     log.debug3('AH eigs %s', str(w))
 
     for index, x in enumerate(abs(v[0])):
