@@ -32,9 +32,17 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol) * 1e-2
+    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
+        xt = [x0]
+        axt = [a(x0)]
+        max_cycle = min(max_cycle,x0.size)
+    else:
+        xt = [xi for xi in x0]
+        axt = [a(xi) for xi in x0]
+        max_cycle = min(max_cycle,x0[0].size)
+
     max_space = max_space + nroots * 2
-    if max_memory*1e6/x0[0].nbytes/2 > max_space+nroots*2:
+    if max_memory*1e6/xt[0].nbytes/2 > max_space+nroots*2:
         xs = []
         ax = []
         _incore = True
@@ -43,16 +51,13 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         ax = _Xlist()
         _incore = False
 
-    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
-        xt = xs = [x0]
-        axt = ax = [a(x0)]
-        max_cycle = min(max_cycle,x0.size)
-    else:
-        xt = xs = [xi for xi in x0]
-        axt = ax = [a(xi) for xi in x0]
-        max_cycle = min(max_cycle,x0[0].size)
+    toloose = numpy.sqrt(tol) * 1e-2
     head = 0
     rnow = len(xt)
+
+    for i in range(rnow):
+        xs.append(xt[i])
+        ax.append(axt[i])
 
     heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     ovlp = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
@@ -271,10 +276,12 @@ class _Xlist(list):
                     break
         self.index.append(key)
         self.scr_h5[key] = x
+        self.scr_h5.flush()
 
     def __setitem__(self, n, x):
         key = self.index[n]
-        self.scr_h5[key] = x
+        self.scr_h5[key][:] = x
+        self.scr_h5.flush()
 
     def __len__(self):
         return len(self.index)

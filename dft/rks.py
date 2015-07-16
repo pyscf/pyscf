@@ -14,7 +14,6 @@ import pyscf.scf
 from pyscf.dft import vxc
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
-from pyscf.dft import uks
 
 
 def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
@@ -37,21 +36,21 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = vxc.hybrid_coeff(x_code, spin=1)
+    hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
 
     if abs(hyb) < 1e-10:
         vj = ks.get_j(mol, dm, hermi)
-    elif (ks._eri is not None or ks._is_mem_enough() or
-        not ks.direct_scf):
+    elif (ks._eri is not None or ks._is_mem_enough() or not ks.direct_scf):
         vj, vk = ks.get_jk(mol, dm, hermi)
     else:
-        if isinstance(vhf_last, numpy.ndarray):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+        if isinstance(vhf_last, numpy.ndarray) and hasattr(ks, '_dm_last'):
+            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi=hermi)
             vj += ks._vj_last
             vk += ks._vk_last
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
+        ks._dm_last = dm
         ks._vj_last, ks._vk_last = vj, vk
 
     if abs(hyb) > 1e-10:
@@ -99,10 +98,10 @@ class RKS(pyscf.scf.hf.RHF):
         return energy_elec(self, dm, h1e)
 
 
-class ROKS(pyscf.scf.hf.ROHF):
+class ROKS(pyscf.scf.rohf.ROHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
-        pyscf.scf.hf.ROHF.__init__(self, mol)
+        pyscf.scf.rohf.ROHF.__init__(self, mol)
         self._ecoul = 0
         self._exc = 0
         self.xc = 'LDA,VWN'
@@ -111,17 +110,19 @@ class ROKS(pyscf.scf.hf.ROHF):
         self._keys = self._keys.union(['xc', 'grids'])
 
     def dump_flags(self):
-        pyscf.scf.hf.ROHF.dump_flags(self)
+        pyscf.scf.rohf.ROHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Coulomb + XC functional'''
+        from pyscf.dft import uks
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         return uks.get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
+        from pyscf.dft import uks
         if h1e is None: h1e = ks.get_hcore()
         return uks.energy_elec(self, dm, h1e)
 
@@ -130,7 +131,7 @@ if __name__ == '__main__':
     from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 7
-    mol.output = 'out_rks'
+    mol.output = '/dev/null'#'out_rks'
 
     mol.atom.extend([['He', (0.,0.,0.)], ])
     mol.basis = { 'He': 'cc-pvdz'}

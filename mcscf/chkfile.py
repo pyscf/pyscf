@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#
 # Contributor(s):
 # - Wirawan Purwanto <wirawan0@gmail.com>
+# - Qiming Sun <osirpt.sun@gmail.com>
+#
 #
 
 import numpy

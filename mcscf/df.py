@@ -48,7 +48,7 @@ def density_fit(casscf, auxbasis='weigend'):
         def ao2mo(self, mo):
             ncore = self.ncore
             #self._cderi = None # FIXME? leave as much memory as possible for mc_ao2mo
-            eris = mc_ao2mo._ERIS(self, mo, 'incore', 2)
+            eris = mc_ao2mo._ERIS(self, mo, 'incore', level=2)
             # using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
             t0 = (time.clock(), time.time())
             log = pyscf.lib.logger.Logger(self.stdout, self.verbose)

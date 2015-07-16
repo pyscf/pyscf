@@ -208,14 +208,21 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
     def precond(x, e):
         hdiagd = h_diag-(e-casscf.ah_level_shift)
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
-        return x/hdiagd
+        x = x/hdiagd
+        norm_x = numpy.linalg.norm(x)
+        x *= 1/norm_x
+        #if norm_x < 1e-2:
+        #    x *= 1e-2/norm_x
+        return x
 
 # Dynamically increase the number of micro cycles when approach convergence?
     if norm_gorb < 0.01:
-        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb+1e-12))
+        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb+1e-9))
     else:
         max_cycle = casscf.max_cycle_micro_inner
 
+    xsinit = []
+    axinit = []
     xcollect = []
     jkcollect = []
     x0 = 0
@@ -225,17 +232,19 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
     if x0_guess is None:
         x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
-    ah_start_tol = max(min(norm_gorb, casscf.ah_start_tol), ah_conv_tol)
+    ah_start_tol = (numpy.log(norm_gorb+casscf.conv_tol_grad) -
+                    numpy.log(casscf.conv_tol_grad) + .2) * 1.5 * norm_gorb
+    ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
     while True:
         # increase the AH accuracy when approach convergence
-        ah_start_tol = max(min(norm_gorb**2, casscf.ah_start_tol), ah_start_tol)
-        ah_start_cycle = min(casscf.ah_start_cycle, int(1-numpy.log10(norm_gorb)))
-        log.debug('Set ah_start_tol %g, ah_start_cycle %d',
-                  ah_start_tol, ah_start_cycle)
+        ah_start_tol = max(norm_gorb**2, ah_start_tol)
+        #ah_start_cycle = max(casscf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
+        ah_start_cycle = casscf.ah_start_cycle
+        log.debug('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
+                  ah_start_tol, ah_start_cycle, max_cycle)
         g_orb0 = g_orb
         norm_gprev = norm_gorb
         imic = 0
-        wlast = 0
         dx = 0
 
         g_op = lambda: g_orb
@@ -250,21 +259,21 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
 # is that JK is associated with the core DM1 and active space DM1.  The core
 # DM is not changed because eris are not changed, only the active space DM1
 # are slightly changed due to the update_casdm function
-        if norm_gorb > casscf.conv_tol_grad*5e1:
+        if (casscf.ah_guess_space and len(xcollect) > 0 and
+            norm_gorb > casscf.conv_tol_grad*5e1):
             xsinit = [x for x in xcollect]
             axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
-        else:
-            xsinit = []
-            axinit = []
+            xcollect = []
+            jkcollect = []
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, x0_guess,
                                xs=xsinit, ax=axinit, verbose=log,
                                tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
                                lindep=casscf.ah_lindep):
-            if (ah_end or ihop+1 == casscf.ah_max_cycle or # make sure to use the last step
-                ((numpy.linalg.norm(residual) < ah_start_tol) and
-                 (ihop >= ah_start_cycle)) or
+            norm_residual = numpy.linalg.norm(residual)
+            if (ah_end or ihop == casscf.ah_max_cycle or # make sure to use the last step
+                ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
                 (seig < casscf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
@@ -272,23 +281,24 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                     scale = casscf.max_orb_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
-                    dx = dx + dxi
-                    g_orb1 = g_orb + hdxi *scale
+                    hdxi *= scale
                 else:
-                    dx = dx + dxi
-                    g_orb1 = g_orb + hdxi
-                    #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
-                    #jkcount += 1
-## Gradually decrease start_tol/conv_tol, so the next step is more accurate
+# Gradually decrease start_tol/conv_tol, so the next step is more accurate
                     ah_start_tol *= casscf.ah_decay_rate
+                    #ah_start_tol *= imic/(1/casscf.ah_decay_rate-1+imic)
+                    log.debug('Set ah_start_tol %g', ah_start_tol)
+                dx = dx + dxi
+                g_orb1 = g_orb + hdxi
+                #g_orb1 = g_orb + h_op1(dxi) + h_opjk(dxi)
+                #jkcount += 1
 
                 norm_gorb = numpy.linalg.norm(g_orb1)
                 norm_dxi = numpy.linalg.norm(dxi)
                 norm_dr = numpy.linalg.norm(x0+dx)
-                log.debug('    inner iter %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
-                          'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  dw= %4.3g  seig= %4.3g',
-                          imic, ihop+1, norm_gorb, norm_dxi,
-                          dxmax, norm_dr, w, w-wlast, seig)
+                log.debug('    imic %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
+                          'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  |v|= %4.3g  seig= %4.3g',
+                          imic, ihop, norm_gorb, norm_dxi,
+                          dxmax, norm_dr, w, norm_residual, seig)
 
                 if norm_gorb > norm_gprev * casscf.ah_grad_trust_region:
 # Do we need force the gradients decaying?
@@ -313,7 +323,6 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                 jkcollect.pop(-1)
                 log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
                            seig, len(xcollect))
-            wlast = w
 
         if numpy.linalg.norm(dx) > 0:
             x0 = x0 + dx
@@ -330,7 +339,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
             log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dx|= %4.3g',
                       norm_gorb, numpy.linalg.norm(dxi))
 
-        jkcount += ihop + 2
+        jkcount += ihop
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         casdm1, casdm2 = (yield u, g_orb0, jkcount)
 
@@ -339,7 +348,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
         g_orb = gorb_update(u, x0)
         norm_gorb = numpy.linalg.norm(g_orb)
         log.debug('    |g|=%4.3g', norm_gorb)
-        x0_guess = x0
+        x0_guess = dx
         jkcount += 1
 
 
@@ -351,7 +360,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol) * .1
+    toloose = numpy.sqrt(tol)
     # the first trial vector is (1,0,0,...), which is not included in xs
     xs = [x for x in xs]
     ax = [x for x in ax]
@@ -364,35 +373,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1))
     ovlp = numpy.eye(max_cycle+nx+1)
     w_t = 0
-    g = g_op()
-    for i,xi in enumerate(xs):
-        for j in range(i+1):
-            ovlp[i+1,j+1] = ovlp[j+1,i+1] = numpy.dot(xi, xs[j])
-    nvec = len(xs) + 1
-    s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-
-    if nvec > 2 and s0 < lindep:
-        xs = [x0]
-        ax = [h_op(x0)]
-        heff[0,1] = heff[1,0] = numpy.dot(x0, g)
-        heff[1,1] = heff[1,1] = numpy.dot(x0, ax[0])
-        nvec = 2
-    else:
-        for i,xi in enumerate(xs):
-            heff[i+1,0] = heff[0,i+1] = numpy.dot(xi, g)
-            for j in range(i+1):
-                heff[i+1,j+1] = heff[j+1,i+1] = numpy.dot(xi, ax[j])
-    xtrial, w_t, v_t, index = \
-            _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
-    hx = _dgemv(v_t[1:], ax)
-    # note g*v_t[0], as the first trial vector is (1,0,0,...)
-    dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
-
     for istep in range(min(max_cycle,x0.size)):
-        x0 = precond(dx, w_t)
-        x0 *= 1/numpy.linalg.norm(x0)
-        xs.append(x0)
-        ax.append(h_op(x0))
         g = g_op()
         nx = len(xs)
         for i in range(nx):
@@ -400,38 +381,35 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
             heff[nx,i+1] = heff[i+1,nx] = numpy.dot(xs[nx-1], ax[i])
             ovlp[nx,i+1] = ovlp[i+1,nx] = numpy.dot(xs[nx-1], xs[i])
         nvec = nx + 1
-        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-        if s0 < lindep:
-            yield True, istep, w_t, xtrial, hx, dx, s0
-            break
         wlast = w_t
-        xtrial, w_t, v_t, index = \
+        xtrial, w_t, v_t, index, seig = \
                 _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
+        s0 = seig[0]
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
-        norm_dx = numpy.linalg.norm(dx)/numpy.sqrt(dx.size)
-        log.debug1('... AH step %d  index= %d  bar|dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
+        norm_dx = numpy.linalg.norm(dx)
+        log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
         if abs(w_t-wlast) < tol and norm_dx < toloose:
-            yield True, istep, w_t, xtrial, hx, dx, s0
+            yield True, istep+1, w_t, xtrial, hx, dx, s0
             break
         else:
-            yield False, istep, w_t, xtrial, hx, dx, s0
+            yield False, istep+1, w_t, xtrial, hx, dx, s0
+        x0 = precond(dx, w_t)
+        xs.append(x0)
+        ax.append(h_op(x0))
 
 
 def _regular_step(heff, ovlp, xs, log):
-    w, v = scipy.linalg.eigh(heff, ovlp)
+    w, v, seig = pyscf.lib.safe_eigh(heff, ovlp)
     log.debug3('AH eigs %s', str(w))
 
     for index, x in enumerate(abs(v[0])):
         if x > .1:
             break
 
-    if w[1] < 0:
-        log.debug2('Negative hessian eigenvalue found %s',
-                   str(scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])[0][:5]))
-    if index > 0 and w[0] < -1e-5:
+    if index > 0 and w[index] < -1e-5:
         log.debug1('AH might follow negative hessians %s', str(w[:index]))
 
     if abs(v[0,index]) < 1e-4:
@@ -439,7 +417,7 @@ def _regular_step(heff, ovlp, xs, log):
     else:
         w_t = w[index]
         xtrial = _dgemv(v[1:,index]/v[0,index], xs)
-        return xtrial, w_t, v[:,index], index
+        return xtrial, w_t, v[:,index], index, seig
 
 def _dgemv(v, m):
     vm = v[0] * m[0]
@@ -467,6 +445,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
+        log.debug('CASSCF canonicalization')
+        mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
+                                         cas_natorb=casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo
     conv = False
     toloose = casscf.conv_tol_grad
@@ -654,40 +635,39 @@ class CASSCF(casci.CASCI):
             Converge threshold for CI gradients and orbital rotation gradients.
             Default is 1e-4
         max_orb_stepsize : float
-            The step size for orbital rotation.  Small step size is prefered.
-            Default is 0.05.
-        max_ci_stepsize : float
-            The max size for approximate CI updates.  The approximate updates are
-            used in 1-step algorithm, to estimate the change of CI wavefunction wrt
-            the orbital rotation.  Small step size is prefered.  Default is 0.01.
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            (see notes in max_cycle_micro_inner attribute)
+            Default is 0.03.
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
         max_cycle_micro : int
             Max number of micro iterations in each macro iteration.  Depending on
             systems, increasing this value might reduce the total macro
-            iterations.  Generally, 2 - 3 steps should be enough.  Default is 2.
+            iterations.  Generally, 2 - 5 steps should be enough.  Default is 3.
         max_cycle_micro_inner : int
-            Max number of steps for the orbital rotations allowed for the augmented
-            hessian solver.  It can affect the actual size of orbital rotation.
-            Even with a small max_orb_stepsize, a few max_cycle_micro_inner can
-            accumulate the rotation and leads to a significant change of the CAS
-            space.  Depending on systems, increasing this value migh reduce the
-            total number of macro iterations.  The value between 2 - 8 is preferred.
-            Default is 2.
+            For the augmented hessian solver, max number of orbital rotation
+            steps (controled by max_orb_stepsize).  Value between 2 - 8 is preferred.
+            Default is 4.
+            Note the 1-step CASSCF algorithm prefers many small steps.  Though might
+            increasing the total number of iterations, the small steps can effectively
+            prevent oscillating in the total energy.  If the (macro iteration) total
+            energy does not monotonically decrease, you can try to reduce max_orb_stepsize
+            and increase max_cycle_micro_inner.  For simple system, large max_orb_stepsize
+            small max_cycle_micro_inner may give the fast convergence, but it's not recommended.
         ah_level_shift : float, for AH solver.
             Level shift for the Davidson diagonalization in AH solver.  Default is 1e-4.
         ah_conv_tol : float, for AH solver.
             converge threshold for AH solver.  Default is 1e-12.
         ah_max_cycle : float, for AH solver.
-            Max number of iterations allowd in AH solver.  Default is 20.
+            Max number of iterations allowd in AH solver.  Default is 30.
         ah_lindep : float, for AH solver.
             Linear dependence threshold for AH solver.  Default is 1e-14.
         ah_start_tol : flat, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 1e-2.
+            This value is to control the start point. Default is 0.2.
         ah_start_cycle : int, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 1.
+            This value is to control the start point. Default is 2.
 
             ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
             can affect the accuracy and performance of CASSCF solver.  Lower
@@ -745,13 +725,13 @@ class CASSCF(casci.CASCI):
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
-        self.max_orb_stepsize = .04
+        self.max_orb_stepsize = .03
 # small max_ci_stepsize is good to converge, since steepest descent is used
 #ABORT        self.max_ci_stepsize = .01
 #TODO:self.inner_rotation = False # active-active rotation
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
-        self.max_cycle_micro_inner = 3
+        self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
@@ -776,7 +756,7 @@ class CASSCF(casci.CASCI):
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
         self.ah_start_tol = .2
-        self.ah_start_cycle = 1
+        self.ah_start_cycle = 2
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
@@ -789,7 +769,7 @@ class CASSCF(casci.CASCI):
 # ah_decay_rate gradually improve AH improve by decreasing start_tol/conv_tol
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
-        self.ah_decay_rate = .7
+        self.ah_decay_rate = .8
         self.grad_update_fep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False
@@ -836,7 +816,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
         log.info('augmented hessian guess space = %d', self.ah_guess_space)
-        log.info('augmented hessian decay rate = %d', self.ah_decay_rate)
+        log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
         log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)

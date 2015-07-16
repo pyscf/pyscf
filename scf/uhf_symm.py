@@ -325,8 +325,8 @@ class UHF(uhf.UHF):
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, dm0=dm0,
-                            callback=self.callback)
+                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
+                            dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self.dump_energy(self.hf_energy, self.converged)

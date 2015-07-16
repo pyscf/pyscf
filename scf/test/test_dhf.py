@@ -18,6 +18,7 @@ mol = gto.M(
 )
 
 mf = scf.dhf.UHF(mol)
+mf.conv_tol_grad = 1e-5
 mf.scf()
 
 
@@ -48,12 +49,13 @@ class KnowValues(unittest.TestCase):
 
     def test_rhf(self):
         mf = scf.dhf.RHF(mol)
+        mf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(mf.scf(), -76.081567943868265, 9)
 
     def test_get_veff(self):
         dm = mf.make_rdm1()
         v = mf.get_veff(mol, dm)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 56.050212950364084, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 56.050204183850624, 9)
 
 
 if __name__ == "__main__":
