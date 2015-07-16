@@ -16,7 +16,8 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
-symmetry = 'D2h'
+symmetry = True, 
+symmetry_subgroup = 'D2h'
 )
 m = scf.RHF(mol)
 m.conv_tol = 1e-9

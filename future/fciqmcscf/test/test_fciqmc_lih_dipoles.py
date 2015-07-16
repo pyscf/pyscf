@@ -17,7 +17,8 @@ output = None,
 atom = [['Li',(  0.000000,  0.000000, 1.005436697)],
         ['H',(  0.000000,  0.000000,  0.0)]],
 basis = {'H': 'sto-3g', 'Li': 'sto-3g'},
-symmetry = 'C2v'
+symmetry = True,
+symmetry_subgroup = 'C2v',
 )
 
 m = scf.RHF(mol)
