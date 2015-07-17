@@ -304,13 +304,13 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
     x0_guess = g_orb
     while True:
         if norm_gorb < .1:
-            max_cycle = mf.max_cycle_inner-int(numpy.log10(norm_gorb+1e-9))
+            max_cycle = mf.max_cycle_inner-int(numpy.log(norm_gorb+1e-9))
         else:
             max_cycle = mf.max_cycle_inner
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
         ah_start_tol = (numpy.log(norm_gorb+conv_tol_grad) -
-                        numpy.log(conv_tol_grad) + .2) * 1.5 * norm_gorb
+                        numpy.log(min(norm_gorb,conv_tol_grad))) * 1.5 * norm_gorb
         ah_start_tol = max(min(ah_start_tol, mf.ah_start_tol), ah_conv_tol)
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
@@ -322,6 +322,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         dr = 0
         u = 1
         jkcount = 0
+        ikf = 0
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         vhf0 = fock_ao - h1e
 
@@ -385,11 +386,14 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     u = mf.update_rotate_matrix(dxi, mo_occ, u)
                     norm_gprev = norm_gorb
                     g_orb = g_orb1
+                    ikf += 1
 
                 if (imic >= max_cycle or norm_gorb < conv_tol_grad*.8):
                     break
 
-                if (imic % mf.ah_grad_adjust_interval == 0):
+                if (ikf >= (mf.keyframe_interval
+                            -numpy.log(norm_dr)*mf.keyframe_interval_rate)):
+                    ikf = 0
                     mo1 = mf.update_mo_coeff(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
@@ -398,7 +402,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     g_orb = mf.get_grad(mo1, mo_occ, fock_ao)
                     jkcount += 1
                     norm_gprev = norm_gorb = numpy.linalg.norm(g_orb)
-                    log.debug('Adjust g_orb to %4.3g', norm_gorb)
+                    log.debug('Adjust g_orb to |g|= %4.3g', norm_gorb)
 
             if seig < mf.ah_lindep*1e2 and xcollect:
                 xcollect.pop(-1)
@@ -504,7 +508,7 @@ def newton(mf):
     class Base(mf.__class__):
         def __init__(self):
             self._scf = mf
-            self.max_cycle_inner = 8
+            self.max_cycle_inner = 10
             self.max_orb_stepsize = .05
 
             self.ah_start_tol = 5.
