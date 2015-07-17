@@ -62,7 +62,7 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     g[:,ncore:nocc] += numpy.einsum('vuuq->qv',hdm2[:,:,ncore:nocc])
 
     def gorb_update(u, dr):
-        if casscf.grad_update_fep == 0: # FEP0/first order R-expansion
+        if casscf.grad_update_dep == 0: # FEP0/first order R-expansion
             #dr = casscf.pack_uniq_var(u)
             return g_orb + h_op1(dr) + h_opjk(dr)
         else: # DEP1/first order T-expansion
@@ -233,7 +233,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
         x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
     ah_start_tol = (numpy.log(norm_gorb+casscf.conv_tol_grad) -
-                    numpy.log(casscf.conv_tol_grad) + .2) * 1.5 * norm_gorb
+                    numpy.log(min(norm_gorb,casscf.conv_tol_grad))) * 1.5 * norm_gorb
     ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
     while True:
         # increase the AH accuracy when approach convergence
@@ -324,7 +324,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                 log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
                            seig, len(xcollect))
 
-        if numpy.linalg.norm(dx) > 0:
+        if numpy.linalg.norm(dx) > 1e-14:
             x0 = x0 + dx
         else:
 # Occasionally, all trial rotation goes to the case "norm_gorb > norm_gprev".
@@ -736,7 +736,7 @@ class CASSCF(casci.CASCI):
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
-        self.ah_level_shift = 1e-4
+        self.ah_level_shift = 1e-5
         self.ah_conv_tol = 1e-12
         self.ah_max_cycle = 30
         self.ah_lindep = 1e-14
@@ -771,7 +771,7 @@ class CASSCF(casci.CASCI):
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
         self.ah_decay_rate = .8
-        self.grad_update_fep = 1
+        self.grad_update_dep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False
         self.dynamic_micro_step = False
@@ -823,7 +823,7 @@ class CASSCF(casci.CASCI):
         log.info('chkfile = %s', self.chkfile)
         log.info('natorb = %s', self.natorb)
         log.info('max_memory %d MB', self.max_memory)
-        log.debug('grad_update_fep %d', self.grad_update_fep)
+        log.debug('grad_update_dep %d', self.grad_update_dep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
         log.info('dynamic_micro_step %s', self.dynamic_micro_step)
         try:
