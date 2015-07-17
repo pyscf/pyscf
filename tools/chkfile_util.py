@@ -8,11 +8,12 @@ from pyscf.scf import chkfile
 from pyscf.scf import hf
 
 def mulliken(filename, key='scf'):
-    mol, mf = chkfile.load_scf(filename)
     if key.lower() == 'mcscf':
+        mol = chkfile.load_mol(filename)
         mo_coeff = chkfile.load(filename, 'mcscf/mo_coeff')
         mo_occ = chkfile.load(filename, 'mcscf/mo_occ')
     else:
+        mol, mf = chkfile.load_scf(filename)
         mo_coeff = mf['mo_coeff']
         mo_occ = mf['mo_occ']
     dm = numpy.dot(mo_coeff*mo_occ, mo_coeff.T)
@@ -20,10 +21,11 @@ def mulliken(filename, key='scf'):
 
 def dump_mo(filename, key='scf'):
     from pyscf.tools import dump_mat
-    mol, mf = chkfile.load_scf(filename)
     if key.lower() == 'mcscf':
+        mol = chkfile.load_mol(filename)
         mo_coeff = chkfile.load(filename, 'mcscf/mo_coeff')
     else:
+        mol, mf = chkfile.load_scf(filename)
         mo_coeff = mf['mo_coeff']
     dump_mat.dump_mo(mol, mo_coeff)
 
@@ -32,6 +34,9 @@ def molden(filename, key='scf'):
     molden.from_chkfile(filename+'.molden', filename, key+'/mo_coeff')
 
 if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        print('%s [pop|mo|molden] [scf|mcscf]' % sys.argv[0])
+        exit()
     filename = sys.argv[1]
     fndic = {'pop': mulliken,
              'mo': dump_mo,

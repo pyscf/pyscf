@@ -9,3 +9,4 @@ from pyscf.lib import logger
 from pyscf.lib.misc import *
 from pyscf.lib.numpy_helper import *
 from pyscf.lib.linalg_helper import *
+from pyscf.lib import chkfile
