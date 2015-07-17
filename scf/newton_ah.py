@@ -525,38 +525,39 @@ def newton(mf):
 #               max_orb_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
 #               ah_guess_space = 0
-            self.ah_grad_adjust_interval = 5
-            self.ah_grad_adjust_threshold = .1
             self.ah_decay_rate = .8
+            self.keyframe_interval = 3
+            self.keyframe_interval_rate = .7
             self_keys = set(self.__dict__.keys())
 
             self.__dict__.update(mf.__dict__)
             self._keys = self_keys.union(mf._keys)
 
         def dump_flags(self):
-            logger.info(self, '\n')
-            logger.info(self, '******** SCF Newton Raphson flags ********')
-            logger.info(self, 'SCF tol = %g', self.conv_tol)
-            logger.info(self, 'max. SCF cycles = %d', self.max_cycle)
-            logger.info(self, 'direct_scf = %s', self.direct_scf)
+            log = logger.Logger(self.stdout, self.verbose)
+            log.info('\n')
+            log.info('******** SCF Newton Raphson flags ********')
+            log.info('SCF tol = %g', self.conv_tol)
+            log.info('max. SCF cycles = %d', self.max_cycle)
+            log.info('direct_scf = %s', self.direct_scf)
             if self.direct_scf:
-                logger.info(self, 'direct_scf_tol = %g', self.direct_scf_tol)
+                log.info('direct_scf_tol = %g', self.direct_scf_tol)
             if self.chkfile:
-                logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
-            logger.info(self, 'max_cycle_inner = %d',  self.max_cycle_inner)
-            logger.info(self, 'max_orb_stepsize = %g', self.max_orb_stepsize)
-            logger.info(self, 'conv_tol_grad = %s',    self.conv_tol_grad)
-            logger.info(self, 'ah_start_tol = %g',     self.ah_start_tol)
-            logger.info(self, 'ah_level_shift = %g',   self.ah_level_shift)
-            logger.info(self, 'ah_conv_tol = %g',      self.ah_conv_tol)
-            logger.info(self, 'ah_lindep = %g',        self.ah_lindep)
-            logger.info(self, 'ah_start_cycle = %d',   self.ah_start_cycle)
-            logger.info(self, 'ah_max_cycle = %d',     self.ah_max_cycle)
-            logger.info(self, 'ah_guess_space = %d',   self.ah_guess_space)
-            logger.info(self, 'ah_grad_trust_region = %g', self.ah_grad_trust_region)
-            logger.info(self, 'ah_grad_adjust_interval = %d', self.ah_grad_adjust_interval)
-            logger.info(self, 'ah_grad_adjust_threshold = %d', self.ah_grad_adjust_threshold)
-            logger.info(self, 'augmented hessian decay rate = %g', self.ah_decay_rate)
+                log.info('chkfile to save SCF result = %s', self.chkfile)
+            log.info('max_cycle_inner = %d',  self.max_cycle_inner)
+            log.info('max_orb_stepsize = %g', self.max_orb_stepsize)
+            log.info('conv_tol_grad = %s',    self.conv_tol_grad)
+            log.info('ah_start_tol = %g',     self.ah_start_tol)
+            log.info('ah_level_shift = %g',   self.ah_level_shift)
+            log.info('ah_conv_tol = %g',      self.ah_conv_tol)
+            log.info('ah_lindep = %g',        self.ah_lindep)
+            log.info('ah_start_cycle = %d',   self.ah_start_cycle)
+            log.info('ah_max_cycle = %d',     self.ah_max_cycle)
+            log.info('ah_guess_space = %d',   self.ah_guess_space)
+            log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
+            log.info('keyframe_interval = %d', self.keyframe_interval)
+            log.info('keyframe_interval_rate = %d', self.keyframe_interval_rate)
+            log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
 
         def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                       diis_start_cycle=None, level_shift_factor=None,
