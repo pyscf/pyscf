@@ -43,12 +43,6 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     h_diag = (fvv.diagonal().reshape(-1,1)-foo.diagonal()) * 2
 
-    def h_op1(x):
-        x = x.reshape(nvir,nocc)
-        x2 =-numpy.einsum('sq,ps->pq', foo, x) * 2
-        x2+= numpy.einsum('pr,rq->pq', fvv, x) * 2
-        return x2.reshape(-1)
-
     if hasattr(mf, 'xc'):
         if APPROX_XC_HESSIAN:
             from pyscf.dft import vxc
@@ -56,8 +50,12 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
             hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
         else:
             save_for_dft = [None, None]  # (dm, veff)
-    def h_opjk(x):
+
+    def h_op(x):
         x = x.reshape(nvir,nocc)
+        x2 =-numpy.einsum('sq,ps->pq', foo, x) * 2
+        x2+= numpy.einsum('pr,rq->pq', fvv, x) * 2
+
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         if hasattr(mf, 'xc'):
             if APPROX_XC_HESSIAN:
@@ -78,11 +76,11 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
                 save_for_dft[1] = vhf1
         else:
             dvhf = mf.get_veff(mol, d1+d1.T)
-        x2 = reduce(numpy.dot, (mo_coeff[:,viridx].T, dvhf,
-                                mo_coeff[:,occidx])) * 4
+        x2 += reduce(numpy.dot, (mo_coeff[:,viridx].T, dvhf,
+                                 mo_coeff[:,occidx])) * 4
         return x2.reshape(-1)
 
-    return g.reshape(-1), h_op1, h_opjk, h_diag.reshape(-1)
+    return g.reshape(-1), h_op, h_diag.reshape(-1)
 
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
@@ -111,7 +109,14 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
     h_diag[viridxb[:,None],occidxb] += fockb[viridxb,viridxb].reshape(-1,1)
     h_diag = h_diag[mask]
 
-    def h_op1(x):
+    if hasattr(mf, 'xc'):
+        if APPROX_XC_HESSIAN:
+            from pyscf.dft import vxc
+            x_code = vxc.parse_xc_name(mf.xc)[0]
+            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        else:
+            save_for_dft = [None, None]  # (dm, veff)
+    def h_op(x):
         x1 = numpy.zeros_like(focka)
         x1[mask] = x
         x1 = x1 - x1.T
@@ -144,20 +149,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
                 (numpy.einsum('sp,rp->rs', fockb[occidxb], x1[viridxb])
                 +numpy.einsum('rq,sq->rs', fockb[viridxb], x1[occidxb]) * 2)
         x2 *= .5
-        return x2[mask]
 
-    if hasattr(mf, 'xc'):
-        if APPROX_XC_HESSIAN:
-            from pyscf.dft import vxc
-            x_code = vxc.parse_xc_name(mf.xc)[0]
-            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
-        else:
-            save_for_dft = [None, None]  # (dm, veff)
-    def h_opjk(x):
-        x1 = numpy.zeros_like(focka)
-        x1[mask] = x
-        x1 = x1 - x1.T
-        x2 = numpy.zeros_like(x1)
         d1a = reduce(numpy.dot, (mo_coeff[:,viridxa], x1[viridxa[:,None],occidxa], mo_coeff[:,occidxa].T))
         d1b = reduce(numpy.dot, (mo_coeff[:,viridxb], x1[viridxb[:,None],occidxb], mo_coeff[:,occidxb].T))
         if hasattr(mf, 'xc'):
@@ -185,7 +177,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
         x2[viridxb[:,None],occidxb] += reduce(numpy.dot, (mo_coeff[:,viridxb].T, dvhf[1], mo_coeff[:,occidxb]))
         return x2[mask]
 
-    return g, h_op1, h_opjk, h_diag
+    return g, h_op, h_diag
 
 
 def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
@@ -212,7 +204,14 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
     h_diagb =(fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb])
     h_diag = numpy.hstack((h_diaga.reshape(-1), h_diagb.reshape(-1)))
 
-    def h_op1(x):
+    if hasattr(mf, 'xc'):
+        if APPROX_XC_HESSIAN:
+            from pyscf.dft import vxc
+            x_code = vxc.parse_xc_name(mf.xc)[0]
+            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        else:
+            save_for_dft = [None, None]  # (dm, veff)
+    def h_op(x):
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
         x2a = numpy.zeros((nvira,nocca))
@@ -221,18 +220,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
         x2a += numpy.einsum('rp,rq->pq', focka[viridxa[:,None],viridxa], x1a)
         x2b -= numpy.einsum('sq,ps->pq', fockb[occidxb[:,None],occidxb], x1b)
         x2b += numpy.einsum('rp,rq->pq', fockb[viridxb[:,None],viridxb], x1b)
-        return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
-    if hasattr(mf, 'xc'):
-        if APPROX_XC_HESSIAN:
-            from pyscf.dft import vxc
-            x_code = vxc.parse_xc_name(mf.xc)[0]
-            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
-        else:
-            save_for_dft = [None, None]  # (dm, veff)
-    def h_opjk(x):
-        x1a = x[:nvira*nocca].reshape(nvira,nocca)
-        x1b = x[nvira*nocca:].reshape(nvirb,noccb)
         d1a = reduce(numpy.dot, (mo_coeff[0][:,viridxa], x1a,
                                  mo_coeff[0][:,occidxa].T))
         d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
@@ -257,13 +245,13 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
                 save_for_dft[1] = vhf1
         else:
             dvhf = mf.get_veff(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
-        x2a = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, dvhf[0],
-                                 mo_coeff[0][:,occidxa]))
-        x2b = reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, dvhf[1],
-                                 mo_coeff[1][:,occidxb]))
+        x2a += reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, dvhf[0],
+                                  mo_coeff[0][:,occidxa]))
+        x2b += reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, dvhf[1],
+                                  mo_coeff[1][:,occidxb]))
         return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
-    return g, h_op1, h_opjk, h_diag
+    return g, h_op, h_diag
 
 
 # TODO: check whether high order terms in (g_orb, h_op) affects optimization
@@ -282,9 +270,13 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         conv_tol_grad = numpy.sqrt(mf.conv_tol)
 
     t2m = (time.clock(), time.time())
-    g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
-    norm_gorb = numpy.linalg.norm(g_orb)
-    log.debug('    |g|=%4.3g', norm_gorb)
+    if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+        nmo = mo_coeff.shape[1]
+    else:
+        nmo = mo_coeff[0].shape[1]
+    g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
+    norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
+    log.debug('    |g|= %4.3g (keyframe)', norm_gorb)
     t3m = log.timer('gen h_op', *t2m)
 
     def precond(x, e):
@@ -297,10 +289,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 #            x *= 1e-2/norm_x
         return x
 
-    xsinit = []
-    axinit = []
-    xcollect = []
-    jkcollect = []
+    g_op = lambda: g_orb
     x0_guess = g_orb
     while True:
         if norm_gorb < .1:
@@ -317,36 +306,17 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         log.debug('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
                   ah_start_tol, ah_start_cycle, max_cycle)
         g_orb0 = g_orb
-        norm_gprev = norm_gorb
         imic = 0
         dr = 0
-        u = 1
         jkcount = 0
         ikf = 0
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         vhf0 = fock_ao - h1e
 
-        g_op = lambda: g_orb
-        def h_op(x):
-            jk = h_opjk(x)
-            if len(xcollect) < mf.ah_guess_space:
-                xcollect.append(x)
-                jkcollect.append(jk)
-            return h_op1(x) + jk
-# Divide the hessian into two parts, approx the JK part
-# Then clean up the saved JKs to ensure the approximation only get from the
-# nearest call
-        if mf.ah_guess_space and len(xcollect) > 0:
-            xsinit = xcollect
-            axinit = [h_op1(x)+jkcollect[i] for i,x in enumerate(xcollect)]
-            xcollect = []
-            jkcollect = []
-
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in mc1step.davidson_cc(h_op, g_op, precond, x0_guess,
-                                       xs=xsinit, ax=axinit, verbose=log,
                                        tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
-                                       lindep=mf.ah_lindep):
+                                       lindep=mf.ah_lindep, verbose=log):
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
                 ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
@@ -359,41 +329,30 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     dxi *= scale
                     hdxi *= scale
                 else:
-# Gradually decrease start_tol/conv_tol, so the next step is more accurate
-                    ah_start_tol *= mf.ah_decay_rate
-                    #ah_start_tol *= imic/(1/mf.ah_decay_rate-1+imic)
+                    ah_start_tol = max(norm_residual,
+                                       ah_start_tol * mf.ah_decay_rate)
                     log.debug('Set ah_start_tol %g', ah_start_tol)
-                dr = dr + dxi
-                g_orb1 = g_orb + hdxi
 
-                norm_gorb = numpy.linalg.norm(g_orb1)
+                g_orb = g_orb + hdxi
+                dr = dr + dxi
+                norm_gorb = numpy.linalg.norm(g_orb)
                 norm_dxi = numpy.linalg.norm(dxi)
                 norm_dr = numpy.linalg.norm(dr)
                 log.debug('    imic %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
-                          'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  |v|= %4.3g  seig= %4.3g',
+                          'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  seig= %4.3g',
                           imic, ihop, norm_gorb, norm_dxi,
-                          dxmax, norm_dr, w, norm_residual, seig)
-
-                if norm_gorb > norm_gprev * mf.ah_grad_trust_region:
-# Do we need force the gradients decaying?
-# If in the concave region, how to avoid steping backward (along the negative hessian)?
-                    log.debug('    norm_gorb > nrom_gorb_prev')
-                    dr -= dxi
-                    norm_gorb = norm_gprev
-                    if numpy.linalg.norm(dr) > 1e-14:
-                        break
-                else:
-                    u = mf.update_rotate_matrix(dxi, mo_occ, u)
-                    norm_gprev = norm_gorb
-                    g_orb = g_orb1
-                    ikf += 1
+                          dxmax, norm_dr, w, seig)
 
                 if (imic >= max_cycle or norm_gorb < conv_tol_grad*.8):
                     break
 
+                ikf += 1
                 if (ikf >= (mf.keyframe_interval
-                            -numpy.log(norm_dr)*mf.keyframe_interval_rate)):
+                            -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
+                    norm_gorb > norm_gkf*mf.ah_grad_trust_region or
+                    norm_gorb < norm_gkf/mf.ah_grad_trust_region):
                     ikf = 0
+                    u = mf.update_rotate_matrix(dr, mo_occ)
                     mo1 = mf.update_mo_coeff(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
@@ -401,34 +360,19 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                                                      vhf_last=vhf0)
                     g_orb = mf.get_grad(mo1, mo_occ, fock_ao)
                     jkcount += 1
-                    norm_gprev = norm_gorb = numpy.linalg.norm(g_orb)
-                    log.debug('Adjust g_orb to |g|= %4.3g', norm_gorb)
+                    norm_gkf = numpy.linalg.norm(g_orb)
+                    log.debug('Adjust keyframe g_orb to |g|= %4.3g', norm_gkf)
 
-            if seig < mf.ah_lindep*1e2 and xcollect:
-                xcollect.pop(-1)
-                jkcollect.pop(-1)
-                log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
-                           seig, len(xcollect))
-
-        if numpy.linalg.norm(dr) < 1e-14:
-            dr = dxi * .1
-            u = mf.update_rotate_matrix(dr, mo_occ, u)
-            g_orb = g_orb + hdxi * .1
-            #g_orb = g_orb + h_op1(dxi) + h_opjk(dxi)
-            #jkcount += 1
-            norm_gorb = numpy.linalg.norm(g_orb)
-            log.debug('orbital rotation step not found, try to guess |g[o]|= %4.3g  |dr|= %4.3g',
-                      norm_gorb, norm_dr*.1)
-
+        u = mf.update_rotate_matrix(dr, mo_occ)
         jkcount += ihop + 1
         log.debug('    tot inner=%d  %d JK  |g[o]|= %4.3g  |u-1|= %4.3g',
                   imic, jkcount, norm_gorb,
-                  numpy.linalg.norm(u-numpy.eye(u.shape[1])))
+                  numpy.linalg.norm(u-numpy.eye(nmo)))
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         mo_coeff, mo_occ, fock_ao = (yield u, g_orb0, jkcount)
 
-        g_orb, h_op1, h_opjk, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
-        norm_gorb = numpy.linalg.norm(g_orb)
+        g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
+        norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
         log.debug('    |g|= %4.3g', norm_gorb)
         x0_guess = dxi
 
@@ -517,16 +461,14 @@ def newton(mf):
             self.ah_conv_tol = 1e-12
             self.ah_lindep = 1e-14
             self.ah_max_cycle = 30
-            self.ah_guess_space = 0
-            self.ah_grad_trust_region = 1.5
+            self.ah_grad_trust_region = 4
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
 #               max_orb_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-#               ah_guess_space = 0
             self.ah_decay_rate = .8
-            self.keyframe_interval = 3
+            self.keyframe_interval = 5
             self.keyframe_interval_rate = .7
             self_keys = set(self.__dict__.keys())
 
@@ -538,6 +480,7 @@ def newton(mf):
             log.info('\n')
             log.info('******** SCF Newton Raphson flags ********')
             log.info('SCF tol = %g', self.conv_tol)
+            log.info('conv_tol_grad = %s',    self.conv_tol_grad)
             log.info('max. SCF cycles = %d', self.max_cycle)
             log.info('direct_scf = %s', self.direct_scf)
             if self.direct_scf:
@@ -546,14 +489,12 @@ def newton(mf):
                 log.info('chkfile to save SCF result = %s', self.chkfile)
             log.info('max_cycle_inner = %d',  self.max_cycle_inner)
             log.info('max_orb_stepsize = %g', self.max_orb_stepsize)
-            log.info('conv_tol_grad = %s',    self.conv_tol_grad)
             log.info('ah_start_tol = %g',     self.ah_start_tol)
             log.info('ah_level_shift = %g',   self.ah_level_shift)
             log.info('ah_conv_tol = %g',      self.ah_conv_tol)
             log.info('ah_lindep = %g',        self.ah_lindep)
             log.info('ah_start_cycle = %d',   self.ah_start_cycle)
             log.info('ah_max_cycle = %d',     self.ah_max_cycle)
-            log.info('ah_guess_space = %d',   self.ah_guess_space)
             log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
             log.info('keyframe_interval = %d', self.keyframe_interval)
             log.info('keyframe_interval_rate = %d', self.keyframe_interval_rate)
