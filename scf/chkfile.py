@@ -10,13 +10,7 @@ from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 from pyscf.lib.chkfile import load_mol, save_mol
 
 def load_scf(chkfile):
-    with h5py.File(chkfile) as fh5:
-        scf_rec = {
-            'hf_energy': fh5['scf/hf_energy'].value,
-            'mo_energy': fh5['scf/mo_energy'].value,
-            'mo_occ'   : fh5['scf/mo_occ'   ].value,
-            'mo_coeff' : fh5['scf/mo_coeff' ].value, }
-    return load_mol(chkfile), scf_rec
+    return load_mol(chkfile), load(chkfile, 'scf')
 
 def dump_scf(mol, chkfile, hf_energy, mo_energy, mo_coeff, mo_occ):
     '''save temporary results'''
