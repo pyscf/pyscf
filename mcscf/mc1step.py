@@ -330,6 +330,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
 # Occasionally, all trial rotation goes to the case "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
             dxi *= .1
+            dx = dxi
             x0 = x0 + dxi
             u = casscf.update_rotate_matrix(dxi, u)
             g_orb = g_orb + hdxi * .1
@@ -388,10 +389,11 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         s0 = seig[0]
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
-        dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
+        dx = hx + g*v_t[0] - w_t * v_t[0]*xtrial
         norm_dx = numpy.linalg.norm(dx)
         log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
+        hx *= 1/v_t[0] # == h_op(xtrial)
         if abs(w_t-wlast) < tol and norm_dx < toloose:
             yield True, istep+1, w_t, xtrial, hx, dx, s0
             break
