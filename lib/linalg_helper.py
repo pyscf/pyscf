@@ -134,17 +134,17 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             break
 
         if head+rnow > max_space:
-            head = nroots
+            if _incore:
+                xs = []
+                ax = []
+            else:
+                xs = _Xlist()
+                ax = _Xlist()
+            space = head = nroots
             for k in range(nroots):
-                xs[k] = x0[k]
-                ax[k] = ax0[k]
-            tmp = numpy.dot(heff[nroots:space,:space],v[:,:nroots])
-            heff[nroots:space,:nroots] = tmp
-            heff[:nroots,nroots:space] = tmp.T.conj()
+                xs.append(x0[k])
+                ax.append(ax0[k])
             heff[:nroots,:nroots] = numpy.diag(e)
-            tmp = numpy.dot(ovlp[nroots:space,:space],v[:,:nroots])
-            ovlp[nroots:space,:nroots] = tmp
-            ovlp[:nroots,nroots:space] = tmp.T.conj()
             ovlp[:nroots,:nroots] = numpy.eye(nroots)
 
         for k in range(rnow):

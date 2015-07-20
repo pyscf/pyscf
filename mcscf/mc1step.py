@@ -62,7 +62,7 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     g[:,ncore:nocc] += numpy.einsum('vuuq->qv',hdm2[:,:,ncore:nocc])
 
     def gorb_update(u, dr):
-        if casscf.grad_update_fep == 0: # FEP0/first order R-expansion
+        if casscf.grad_update_dep == 0: # FEP0/first order R-expansion
             #dr = casscf.pack_uniq_var(u)
             return g_orb + h_op1(dr) + h_opjk(dr)
         else: # DEP1/first order T-expansion
@@ -233,7 +233,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
         x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
     ah_start_tol = (numpy.log(norm_gorb+casscf.conv_tol_grad) -
-                    numpy.log(casscf.conv_tol_grad) + .2) * 1.5 * norm_gorb
+                    numpy.log(min(norm_gorb,casscf.conv_tol_grad))) * 1.5 * norm_gorb
     ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
     while True:
         # increase the AH accuracy when approach convergence
@@ -324,12 +324,13 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                 log.debug1('... pop xcollect, seig = %g, len(xcollect) = %d',
                            seig, len(xcollect))
 
-        if numpy.linalg.norm(dx) > 0:
+        if numpy.linalg.norm(dx) > 1e-14:
             x0 = x0 + dx
         else:
 # Occasionally, all trial rotation goes to the case "norm_gorb > norm_gprev".
 # It leads to the orbital rotation being stuck at x0=0
             dxi *= .1
+            dx = dxi
             x0 = x0 + dxi
             u = casscf.update_rotate_matrix(dxi, u)
             g_orb = g_orb + hdxi * .1
@@ -383,14 +384,16 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         nvec = nx + 1
         wlast = w_t
         xtrial, w_t, v_t, index, seig = \
-                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs, log)
+                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
+                              lindep, log)
         s0 = seig[0]
         hx = _dgemv(v_t[1:], ax)
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
-        dx = hx + g*v_t[0] - xtrial * (w_t*v_t[0])
+        dx = hx + g*v_t[0] - w_t * v_t[0]*xtrial
         norm_dx = numpy.linalg.norm(dx)
         log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
                    istep+1, index, norm_dx, w_t, v_t[0], s0)
+        hx *= 1/v_t[0] # == h_op(xtrial)
         if abs(w_t-wlast) < tol and norm_dx < toloose:
             yield True, istep+1, w_t, xtrial, hx, dx, s0
             break
@@ -401,8 +404,8 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         ax.append(h_op(x0))
 
 
-def _regular_step(heff, ovlp, xs, log):
-    w, v, seig = pyscf.lib.safe_eigh(heff, ovlp)
+def _regular_step(heff, ovlp, xs, lindep, log):
+    w, v, seig = pyscf.lib.safe_eigh(heff, ovlp, lindep)
     log.debug3('AH eigs %s', str(w))
 
     for index, x in enumerate(abs(v[0])):
@@ -735,7 +738,7 @@ class CASSCF(casci.CASCI):
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
-        self.ah_level_shift = 1e-4
+        self.ah_level_shift = 1e-5
         self.ah_conv_tol = 1e-12
         self.ah_max_cycle = 30
         self.ah_lindep = 1e-14
@@ -770,7 +773,7 @@ class CASSCF(casci.CASCI):
         self.ah_grad_trust_region = 1.5
         self.ah_guess_space = 0
         self.ah_decay_rate = .8
-        self.grad_update_fep = 1
+        self.grad_update_dep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False
         self.dynamic_micro_step = False
@@ -822,7 +825,7 @@ class CASSCF(casci.CASCI):
         log.info('chkfile = %s', self.chkfile)
         log.info('natorb = %s', self.natorb)
         log.info('max_memory %d MB', self.max_memory)
-        log.debug('grad_update_fep %d', self.grad_update_fep)
+        log.debug('grad_update_dep %d', self.grad_update_dep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
         log.info('dynamic_micro_step %s', self.dynamic_micro_step)
         try:
