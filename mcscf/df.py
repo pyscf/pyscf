@@ -41,7 +41,7 @@ def density_fit(casscf, auxbasis='weigend'):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
             self.auxbasis = auxbasis
-            self.grad_update_fep = 0
+            #self.grad_update_dep = 0
             self._cderi = None
             self._keys = self._keys.union(['auxbasis'])
 
