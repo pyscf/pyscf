@@ -165,6 +165,24 @@ def newton(mf):
     '''augmented hessian for Newton Raphson'''
     return newton_ah.newton(mf)
 
+def fast_scf(mf):
+    mf0 = density_fit(mf)
+    mf0.conv_tol = .1
+    mf0.kernel()
+    mf1 = density_fit(newton(mf))
+    mf1._cderi = mf0._cderi
+    mf1._naoaux = mf0._naoaux
+    mf1.kernel(mf0.mo_coeff, mf0.mo_occ)
+    #return mf.kernel(mf1.make_rdm1())
+    mf.mo_occ = mf1.mo_occ
+    mf.mo_energy = mf1.mo_energy
+    mf.mo_coeff = mf1.mo_coeff
+    mf.hf_energy = mf1.hf_energy
+    mf.converged = mf1.converged
+    return mf
+fast_newton = fast_scf
+
+
 def RKS(mol, *args):
     from pyscf import dft
     return dft.RKS(mol)
