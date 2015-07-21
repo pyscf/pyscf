@@ -328,16 +328,18 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
+                    g_orb = g_orb + hdxi
+                    norm_gorb = numpy.linalg.norm(g_orb)
                 else:
-                    ah_start_tol = max(norm_residual,
+                    g_orb = g_orb + hdxi
+                    norm_gorb = numpy.linalg.norm(g_orb)
+                    ah_start_tol = max(norm_gorb,
                                        ah_start_tol * mf.ah_decay_rate)
                     log.debug('Set ah_start_tol %g', ah_start_tol)
 
-                g_orb = g_orb + hdxi
                 dr = dr + dxi
-                norm_gorb = numpy.linalg.norm(g_orb)
-                norm_dxi = numpy.linalg.norm(dxi)
                 norm_dr = numpy.linalg.norm(dr)
+                norm_dxi = numpy.linalg.norm(dxi)
                 log.debug('    imic %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
                           'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  seig= %4.3g',
                           imic, ihop, norm_gorb, norm_dxi,
@@ -347,18 +349,19 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     break
 
                 ikf += 1
-                if (ikf >= (mf.keyframe_interval
-                            -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
-                    norm_gorb > norm_gkf*mf.ah_grad_trust_region or
-                    norm_gorb < norm_gkf/mf.ah_grad_trust_region):
+                if (ikf > 2 and # avoid frequent keyframe
+                    (ikf >= (mf.keyframe_interval
+                             -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
+                     norm_gorb > norm_gkf*mf.ah_grad_trust_region or
+                     norm_gorb < norm_gkf/mf.ah_grad_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ)
                     mo1 = mf.update_mo_coeff(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
-                    fock_ao = h1e + mf._scf.get_veff(mf.mol, dm, dm_last=dm0,
-                                                     vhf_last=vhf0)
-                    g_orb = mf.get_grad(mo1, mo_occ, fock_ao)
+                    vhf0 = mf._scf.get_veff(mf.mol, dm, dm_last=dm0, vhf_last=vhf0)
+                    g_orb = mf.get_grad(mo1, mo_occ, h1e+vhf0)
+                    dm0 = dm
                     jkcount += 1
                     norm_gkf = numpy.linalg.norm(g_orb)
                     log.debug('Adjust keyframe g_orb to |g|= %4.3g', norm_gkf)
@@ -371,6 +374,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         mo_coeff, mo_occ, fock_ao = (yield u, g_orb0, jkcount)
 
+        g_orb = h_op = hdiagd = None
         g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
         norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
         log.debug('    |g|= %4.3g', norm_gorb)
@@ -436,6 +440,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         u, g_orb, jkcount = rotaiter.send((mo_coeff, mo_occ, fock))
         jktot += jkcount
 
+    rotaiter.close()
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, hf_energy, norm_gorb, jktot)
     mo_energy, mo_coeff = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
@@ -482,9 +487,9 @@ def newton(mf):
             log.info('SCF tol = %g', self.conv_tol)
             log.info('conv_tol_grad = %s',    self.conv_tol_grad)
             log.info('max. SCF cycles = %d', self.max_cycle)
-            log.info('direct_scf = %s', self.direct_scf)
-            if self.direct_scf:
-                log.info('direct_scf_tol = %g', self.direct_scf_tol)
+            log.info('direct_scf = %s', self._scf.direct_scf)
+            if self._scf.direct_scf:
+                log.info('direct_scf_tol = %g', self._scf.direct_scf_tol)
             if self.chkfile:
                 log.info('chkfile to save SCF result = %s', self.chkfile)
             log.info('max_cycle_inner = %d',  self.max_cycle_inner)
@@ -499,6 +504,8 @@ def newton(mf):
             log.info('keyframe_interval = %d', self.keyframe_interval)
             log.info('keyframe_interval_rate = %d', self.keyframe_interval_rate)
             log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
+            log.info('max_memory %d MB (current use %d MB)',
+                     self.max_memory, pyscf.lib.current_memory()[0])
 
         def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                       diis_start_cycle=None, level_shift_factor=None,
