@@ -521,7 +521,7 @@ class UHF(hf.SCF):
         if chk is None: chk = self.chkfile
         return init_guess_by_chkfile(self.mol, chk, project=project)
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
@@ -530,6 +530,8 @@ class UHF(hf.SCF):
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
         else:
+            if self.direct_scf:
+                self.opt = self.init_direct_scf(mol)
             vj, vk = hf.get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -549,8 +551,8 @@ class UHF(hf.SCF):
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5,dm*.5))
         nset = len(dm) // 2
-        if (self._eri is not None or self._is_mem_enough() or
-            not self.direct_scf):
+        if (self._eri is not None or not self.direct_scf or
+            mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = _makevhf(vj, vk, nset)
         else:

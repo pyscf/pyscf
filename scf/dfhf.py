@@ -47,6 +47,7 @@ def density_fit(mf, auxbasis='weigend'):
             self.__dict__.update(mf.__dict__)
             self.auxbasis = auxbasis
             self._cderi = None
+            self._naoaux = None
             self.direct_scf = False
             self._keys = self._keys.union(['auxbasis'])
 
