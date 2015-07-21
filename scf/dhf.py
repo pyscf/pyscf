@@ -252,9 +252,7 @@ class UHF(hf.SCF):
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
 
-        self.opt_llll = None
-        self.opt_ssll = None
-        self.opt_ssss = None
+        self.opt = (None, None, None) # (opt_llll, opt_ssll, opt_ssss)
         self._keys = set(self.__dict__.keys())
 
     def get_hcore(self, mol=None):
@@ -291,27 +289,7 @@ class UHF(hf.SCF):
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         if self.direct_scf:
-            if mol is None: mol = self.mol
-            def set_vkscreen(opt, name):
-                opt._this.contents.r_vkscreen = \
-                    ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
-            self.opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
-                                        'CVHFrkbllll_direct_scf',
-                                        'CVHFrkbllll_direct_scf_dm')
-            self.opt_llll.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(self.opt_llll, 'CVHFrkbllll_vkscreen')
-            self.opt_ssss = _vhf.VHFOpt(mol, 'cint2e_spsp1spsp2',
-                                        'CVHFrkbllll_prescreen',
-                                        'CVHFrkbssss_direct_scf',
-                                        'CVHFrkbssss_direct_scf_dm')
-            self.opt_ssss.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(self.opt_ssss, 'CVHFrkbllll_vkscreen')
-            self.opt_ssll = _vhf.VHFOpt(mol, 'cint2e_spsp1',
-                                        'CVHFrkbssll_prescreen',
-                                        'CVHFrkbssll_direct_scf',
-                                        'CVHFrkbssll_direct_scf_dm')
-            self.opt_ssll.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(self.opt_ssll, 'CVHFrkbssll_vkscreen')
+            self.opt = self.init_direct_scf(self.mol)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -355,14 +333,41 @@ class UHF(hf.SCF):
 #TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
 #TODO        return -vj, -vk
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def init_direct_scf(self, mol=None):
+        if mol is None: mol = self.mol
+        def set_vkscreen(opt, name):
+            opt._this.contents.r_vkscreen = \
+                ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
+        opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
+                               'CVHFrkbllll_direct_scf',
+                               'CVHFrkbllll_direct_scf_dm')
+        opt_llll.direct_scf_tol = self.direct_scf_tol
+        set_vkscreen(opt_llll, 'CVHFrkbllll_vkscreen')
+        opt_ssss = _vhf.VHFOpt(mol, 'cint2e_spsp1spsp2',
+                               'CVHFrkbllll_prescreen',
+                               'CVHFrkbssss_direct_scf',
+                               'CVHFrkbssss_direct_scf_dm')
+        opt_ssss.direct_scf_tol = self.direct_scf_tol
+        set_vkscreen(opt_ssss, 'CVHFrkbllll_vkscreen')
+        opt_ssll = _vhf.VHFOpt(mol, 'cint2e_spsp1',
+                               'CVHFrkbssll_prescreen',
+                               'CVHFrkbssll_direct_scf',
+                               'CVHFrkbssll_direct_scf_dm')
+        opt_ssll.direct_scf_tol = self.direct_scf_tol
+        set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
+        return opt_llll, opt_ssll, opt_ssss
+
+    def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         verbose_bak, mol.verbose = mol.verbose, self.verbose
         stdout_bak,  mol.stdout  = mol.stdout , self.stdout
+        if self.direct_scf and self.opt[0] is None:
+            self.opt = self.init_direct_scf(mol)
+        opt_llll, opt_ssll, opt_ssss = self.opt
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
-                                self.opt_llll, self.opt_ssll, self.opt_ssss)
+                                opt_llll, opt_ssll, opt_ssss)
         mol.verbose = verbose_bak
         mol.stdout  = stdout_bak
         logger.timer(self, 'vj and vk', *t0)

@@ -844,7 +844,6 @@ class SCF(object):
         self.callback = None
 
         self.opt = None
-
         self._eri = None
         self._keys = set(self.__dict__.keys())
 
@@ -857,10 +856,8 @@ class SCF(object):
         if mol is None: mol = self.mol
         if (self.direct_scf and not mol.incore_anyway and
             not self._is_mem_enough()):
-            self.opt = _vhf.VHFOpt(mol, 'cint2e_sph', 'CVHFnrs8_prescreen',
-                                   'CVHFsetnr_direct_scf',
-                                   'CVHFsetnr_direct_scf_dm')
-            self.opt.direct_scf_tol = self.direct_scf_tol
+# Should I lazy initialize direct SCF?
+            self.opt = self.init_direct_scf(mol)
 
     def dump_flags(self):
         logger.info(self, '\n')
@@ -1058,13 +1055,25 @@ class SCF(object):
         #    self.analyze(self.verbose)
         return self.hf_energy
 
+    def init_direct_scf(self, mol=None):
+        if mol is None: mol = self.mol
+        opt = _vhf.VHFOpt(mol, 'cint2e_sph', 'CVHFnrs8_prescreen',
+                          'CVHFsetnr_direct_scf',
+                          'CVHFsetnr_direct_scf_dm')
+        opt.direct_scf_tol = self.direct_scf_tol
+        return opt
+
     def get_jk(self, mol=None, dm=None, hermi=1):
+        return self.get_jk_(mol, dm, hermi)
+    def get_jk_(self, mol=None, dm=None, hermi=1):
         '''Compute J, K matrices for the given density matrix.
         See :func:`scf.hf.get_jk`
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
+        if self.direct_scf and self.opt is None:
+            self.opt = self.init_direct_scf(mol)
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -1159,7 +1168,7 @@ class RHF(SCF):
 # Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk_(self, mol=None, dm=None, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff`
 
@@ -1173,6 +1182,8 @@ class RHF(SCF):
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
+            if self.direct_scf:
+                self.opt = self.init_direct_scf(mol)
             vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -1183,7 +1194,8 @@ class RHF(SCF):
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or self._is_mem_enough():
+        if (self._eri is not None or not self.direct_scf or
+            mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
             return vj - vk * .5
         else:
