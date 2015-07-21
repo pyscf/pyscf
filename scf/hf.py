@@ -22,7 +22,7 @@ from pyscf.scf import _vhf
 
 
 
-def kernel(mf, conv_tol=1e-10, conv_tol_grad=1e-5,
+def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, **kwargs):
     '''kernel: the SCF driver.
 
@@ -880,6 +880,8 @@ class SCF(object):
             logger.info(self, 'direct_scf_tol = %g', self.direct_scf_tol)
         if self.chkfile:
             logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
+        logger.info(self, 'max_memory %d MB (current use %d MB)',
+                    self.max_memory, pyscf.lib.current_memory()[0])
 
 
     def eig(self, h, s):

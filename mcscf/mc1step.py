@@ -74,14 +74,16 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
             mo_core = mo[:,:ncore]
             mo_cas = mo[:,ncore:nocc]
             dm_core = numpy.dot(mo_core, mo1[:,:ncore].T) * 2
-            dm_core = numpy.dot(mo_core, mo_core.T) * 2 + dm_core + dm_core.T
+            dm_core = dm_core + dm_core.T
             dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo1[:,ncore:nocc].T))
-            dm_cas = dm_cas + dm_cas.T + reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
+            dm_cas = dm_cas + dm_cas.T
             vj, vk = casscf._scf.get_jk(casscf.mol, (dm_core,dm_cas))
             vhfc = numpy.dot(eris.vhf_c, dt)
-            vhfc = vhfc + vhfc.T + reduce(numpy.dot, (mo.T, vj[0]-vk[0]*.5, mo))
-            vhfa = numpy.dot(vhf_ca-eris.vhf_c, dt)
-            vhfa = vhfa + vhfa.T + reduce(numpy.dot, (mo.T, vj[1]-vk[1]*.5, mo))
+            vhfc = (vhfc + vhfc.T + eris.vhf_c
+                    + reduce(numpy.dot, (mo.T, vj[0]-vk[0]*.5, mo)))
+            vhfa = numpy.dot(vhf_a, dt)
+            vhfa = (vhfa + vhfa.T + vhf_a
+                    + reduce(numpy.dot, (mo.T, vj[1]-vk[1]*.5, mo)))
             g[:,:ncore] += vhfc[:,:ncore]+vhfa[:,:ncore]
             g[:,:ncore] *= 2
             g[:,ncore:nocc] = numpy.dot(g[:,ncore:nocc]+vhfc[:,ncore:nocc], casdm1)
@@ -344,6 +346,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         casdm1, casdm2 = (yield u, g_orb0, jkcount)
 
+        g_orb = gorb_update = h_op1 = h_opjk = h_diag = None
         g_orb, gorb_update, h_op1, h_opjk, h_diag = \
                 casscf.gen_g_hop(mo, casdm1, casdm2, eris)
         g_orb = gorb_update(u, x0)
@@ -516,6 +519,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                 break
 
         micro_iter.close()
+        micro_iter = None
 
         totmicro += imicro + 1
         totinner += njk
@@ -824,7 +828,8 @@ class CASSCF(casci.CASCI):
         log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)
         log.info('natorb = %s', self.natorb)
-        log.info('max_memory %d MB', self.max_memory)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, pyscf.lib.current_memory()[0])
         log.debug('grad_update_dep %d', self.grad_update_dep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
         log.info('dynamic_micro_step %s', self.dynamic_micro_step)
