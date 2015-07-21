@@ -63,27 +63,26 @@ class FCIQMCCI(object):
         self.stdout = mol.stdout
 
         self.executable = settings.FCIQMCEXE
-        # Shouldn't need scratch dir settings.BLOCKSCRATCHDIR
         self.scratchDirectory = ''
 
         self.integralFile = "FCIDUMP"
         self.configFile = "neci.inp"
         self.outputFileRoot = "neci.out"
         self.outputFileCurrent = self.outputFileRoot
-        self.maxwalkers = 10000
-        self.maxIter = -1
-        self.RDMSamples = 5000
-        self.restart = False
-        self.time = 10
-        self.tau = -1.0
-        self.seed = 7
-        self.AddtoInit = 3
-        self.orbsym = []
-        self.state_weights = [1.0]
+        self.maxwalkers = 10000     # Number of walkers in each replica
+        self.maxIter = -1           # Continue indefinitely (other criterion will stop the calculation)
+        self.RDMSamples = 5000      # Stop the calculation after 5000 iterations of accumulating the RDMs
+        self.restart = False        # This is not a restarted calculation
+        self.time = 10              # Stop calculation after 10 minutes
+        self.tau = -1.0             # Optimize the timestep automagically
+        self.seed = 7               # Random number seed
+        self.AddtoInit = 3          # Initiator threshold. Recommended 2-3
+        self.orbsym = []        
+        self.state_weights = [1.0]  # Weights for state-averaged calculation
         # This is the number of spinorbitals to freeze in the neci calculation.
         # Note that if you do this for a CASSCF calculation, it will freeze in the active space.
-        self.nfreezecore = 0
-        self.nfreezevirt = 0
+        self.nfreezecore = 0        # Number of frozen core electrons
+        self.nfreezevirt = 0        # Number of removed virtual spin orbitals
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
