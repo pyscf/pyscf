@@ -179,15 +179,7 @@ class UHF(hf.SCF):
             mole.check_sanity(self, self._keys, self.stdout)
 
         if self.direct_scf:
-            if mol is None: mol = self.mol
-            def set_vkscreen(opt, name):
-                opt._this.contents.r_vkscreen = \
-                    ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
-            self.opt = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
-                                   'CVHFrkbllll_direct_scf',
-                                   'CVHFrkbllll_direct_scf_dm')
-            self.opt.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(self.opt, 'CVHFrkbllll_vkscreen')
+            self.opt = self.init_direct_scf(self.mol)
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -236,10 +228,24 @@ class UHF(hf.SCF):
         if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def init_direct_scf(self, mol=None):
+        if mol is None: mol = self.mol
+        def set_vkscreen(opt, name):
+            opt._this.contents.r_vkscreen = \
+                ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
+        opt = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
+                          'CVHFrkbllll_direct_scf',
+                          'CVHFrkbllll_direct_scf_dm')
+        opt.direct_scf_tol = self.direct_scf_tol
+        set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
+        return opt
+
+    def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
+        if self.direct_scf and self.opt is None:
+            self.opt = self.init_direct_scf(mol)
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
