@@ -289,6 +289,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 #            x *= 1e-2/norm_x
         return x
 
+    kf_compensate = 0
+    kf_trust_region = 0.25
     g_op = lambda: g_orb
     x0_guess = g_orb
     while True:
@@ -323,61 +325,85 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                 (seig < mf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
-                if dxmax > mf.max_orb_stepsize:
-                    scale = mf.max_orb_stepsize / dxmax
+                if dxmax > mf.max_stepsize:
+                    scale = mf.max_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
-                    g_orb = g_orb + hdxi
-                    norm_gorb = numpy.linalg.norm(g_orb)
                 else:
-                    g_orb = g_orb + hdxi
-                    norm_gorb = numpy.linalg.norm(g_orb)
-                    ah_start_tol = max(norm_gorb,
-                                       ah_start_tol * mf.ah_decay_rate)
-                    log.debug('Set ah_start_tol %g', ah_start_tol)
+                    scale = None
 
                 dr = dr + dxi
+                g_orb = g_orb + hdxi
                 norm_dr = numpy.linalg.norm(dr)
+                norm_gorb = numpy.linalg.norm(g_orb)
                 norm_dxi = numpy.linalg.norm(dxi)
-                log.debug('    imic %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
+                log.debug('    imic %d(%d)  |g|= %4.3g  |dxi|= %4.3g  '
                           'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  seig= %4.3g',
                           imic, ihop, norm_gorb, norm_dxi,
                           dxmax, norm_dr, w, seig)
 
-                if (imic >= max_cycle or norm_gorb < conv_tol_grad*.8):
+                ikf += 1
+                if ikf > 1 and norm_gorb > norm_gkf*mf.ah_grad_trust_region:
+                    g_orb = g_orb - hdxi
+                    dr = dr - dxi
+                    norm_gorb = numpy.linalg.norm(g_orb)
+                    log.debug('|g| >> keyframe, Restore previouse step')
                     break
 
-                ikf += 1
-                if (ikf > 2 and # avoid frequent keyframe
-                    (ikf >= (mf.keyframe_interval
-                             -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
-                     norm_gorb > norm_gkf*mf.ah_grad_trust_region or
-                     norm_gorb < norm_gkf/mf.ah_grad_trust_region)):
+                elif (imic >= max_cycle or norm_gorb < conv_tol_grad*.8):
+                    break
+
+                elif (ikf > 2 and # avoid frequent keyframe
+                      (ikf > (mf.keyframe_interval - kf_compensate
+                               -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
+                       norm_gorb < norm_gkf*kf_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ)
                     mo1 = mf.update_mo_coeff(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     vhf0 = mf._scf.get_veff(mf.mol, dm, dm_last=dm0, vhf_last=vhf0)
-                    g_orb = mf.get_grad(mo1, mo_occ, h1e+vhf0)
+                    g_kf = mf.get_grad(mo1, mo_occ, h1e+vhf0)
+                    norm_gkf = numpy.linalg.norm(g_kf)
+                    norm_dg = numpy.linalg.norm(g_kf-g_orb)
+                    log.debug('Adjust keyframe g_orb to |g|= %4.3g  '
+                              '|g-correction|= %4.3g', norm_gkf, norm_dg)
+# kf_compensate:  If the keyframe and the esitimated g_orb are too different,
+# insert more keyframes for the following optimization
+                    kf_compensate = norm_dg / norm_gkf
+                    kf_trust_region = max(min(kf_compensate, 0.25), .05)
+                    log.debug1('... kf_compensate = %g  kf_trust_region = %g',
+                               kf_compensate, kf_trust_region)
+                    g_orb, g_kf = g_kf, None
+                    norm_gorb = norm_gkf
                     dm0 = dm
                     jkcount += 1
-                    norm_gkf = numpy.linalg.norm(g_orb)
-                    log.debug('Adjust keyframe g_orb to |g|= %4.3g', norm_gkf)
+
+                if scale is None:
+                    ah_start_tol = max(norm_gorb,
+                                       ah_start_tol * mf.ah_decay_rate)
+                    log.debug('Set ah_start_tol %g', ah_start_tol)
 
         u = mf.update_rotate_matrix(dr, mo_occ)
         jkcount += ihop + 1
-        log.debug('    tot inner=%d  %d JK  |g[o]|= %4.3g  |u-1|= %4.3g',
+        log.debug('    tot inner=%d  %d JK  |g|= %4.3g  |u-1|= %4.3g',
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(nmo)))
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         mo_coeff, mo_occ, fock_ao = (yield u, g_orb0, jkcount)
 
-        g_orb = h_op = hdiagd = None
-        g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
-        norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
-        log.debug('    |g|= %4.3g', norm_gorb)
+        g_kf, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
+        norm_gkf = numpy.linalg.norm(g_kf)
+        norm_dg = numpy.linalg.norm(g_kf-g_orb)
+        log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
+                  norm_gkf, norm_dg)
+        kf_compensate = norm_dg / norm_gkf
+        kf_trust_region = max(min(kf_compensate, 0.25), .05)
+        log.debug1('... kf_compensate = %g  kf_trust_region = %g',
+                   kf_compensate, kf_trust_region)
+        g_orb, g_kf = g_kf, None
+        norm_gorb = norm_gkf
         x0_guess = dxi
 
 
@@ -417,6 +443,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
         mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)[0]
         mf.get_occ(mo_energy, mo_coeff)
+# call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         hf_energy = mf._scf.energy_tot(dm, h1e, vhf)
 
         log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
@@ -441,10 +468,10 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         jktot += jkcount
 
     rotaiter.close()
-    log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
-             imacro+1, hf_energy, norm_gorb, jktot)
     mo_energy, mo_coeff = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
+             imacro+1, hf_energy, norm_gorb, jktot)
     log.timer('Second order SCF', *cput0)
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
 
@@ -458,7 +485,7 @@ def newton(mf):
         def __init__(self):
             self._scf = mf
             self.max_cycle_inner = 10
-            self.max_orb_stepsize = .05
+            self.max_stepsize = .05
 
             self.ah_start_tol = 5.
             self.ah_start_cycle = 1
@@ -466,11 +493,11 @@ def newton(mf):
             self.ah_conv_tol = 1e-12
             self.ah_lindep = 1e-14
             self.ah_max_cycle = 30
-            self.ah_grad_trust_region = 4
+            self.ah_grad_trust_region = 2.5
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
-#               max_orb_stepsize = 1.5
+#               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
             self.ah_decay_rate = .8
             self.keyframe_interval = 5
@@ -493,7 +520,7 @@ def newton(mf):
             if self.chkfile:
                 log.info('chkfile to save SCF result = %s', self.chkfile)
             log.info('max_cycle_inner = %d',  self.max_cycle_inner)
-            log.info('max_orb_stepsize = %g', self.max_orb_stepsize)
+            log.info('max_stepsize = %g', self.max_stepsize)
             log.info('ah_start_tol = %g',     self.ah_start_tol)
             log.info('ah_level_shift = %g',   self.ah_level_shift)
             log.info('ah_conv_tol = %g',      self.ah_conv_tol)
@@ -502,7 +529,7 @@ def newton(mf):
             log.info('ah_max_cycle = %d',     self.ah_max_cycle)
             log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
             log.info('keyframe_interval = %d', self.keyframe_interval)
-            log.info('keyframe_interval_rate = %d', self.keyframe_interval_rate)
+            log.info('keyframe_interval_rate = %g', self.keyframe_interval_rate)
             log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
             log.info('max_memory %d MB (current use %d MB)',
                      self.max_memory, pyscf.lib.current_memory()[0])
