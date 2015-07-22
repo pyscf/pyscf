@@ -330,7 +330,7 @@ class CASSCF(casci_uhf.CASCI):
     def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
         casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
-        self.max_orb_stepsize = .03
+        self.max_stepsize = .03
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
         self.max_cycle_micro_inner = 3
@@ -383,7 +383,7 @@ class CASSCF(casci_uhf.CASCI):
         log.info('conv_tol = %g, (%g for gradients)',
                  self.conv_tol, self.conv_tol_grad)
         log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
-        log.info('max. orb step = %g', self.max_orb_stepsize)
+        log.info('max. orb step = %g', self.max_stepsize)
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
@@ -403,6 +403,8 @@ class CASSCF(casci_uhf.CASCI):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        if hasattr(self, 'max_orb_stepsize'):
+            raise AttributeError('"max_orb_stepsize" was replaced by "max_stepsize"')
 
     def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                callback=None, _kern=kernel):

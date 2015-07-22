@@ -65,3 +65,15 @@ lib/deps
 lib/config.h
 
 settings.py
+
+# NECI (FCIQMC) output files
+neci.*
+fciqmc_stats*
+FCIMCStats*
+RDMEstimates
+TwoRDM*
+spinfree_TwoRDM*
+FCIDUMP
+POPSFILE*
+INITIATORStats
+NodeFile*

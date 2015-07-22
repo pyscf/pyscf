@@ -8,10 +8,22 @@ import os, sys
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
+import pyscf.ao2mo
+import pyscf.symm
+import pyscf.symm.param as param
+from subprocess import call
 
 try:
     from pyscf.fciqmcscf import settings
 except ImportError:
+    msg = '''settings.py not found.  Please create %s
+''' % os.path.join(os.path.dirname(__file__), 'settings.py')
+    sys.stderr.write(msg)
+
+try:
+    import settings
+except ImportError:
+    import os, sys
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
@@ -44,14 +56,6 @@ IRREP_MAP = {'D2h': (1,         # Ag
                      2),        # Au
              'C1' : (1,)}
 
-try:
-    import settings
-except ImportError:
-    import os, sys
-    msg = '''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py')
-    sys.stderr.write(msg)
-
 class FCIQMCCI(object):
     def __init__(self, mol):
         self.mol = mol
@@ -59,20 +63,26 @@ class FCIQMCCI(object):
         self.stdout = mol.stdout
 
         self.executable = settings.FCIQMCEXE
-        self.scratchDirectory = ''  #Shouldn't need scratch dir settings.BLOCKSCRATCHDIR
+        self.scratchDirectory = ''
 
         self.integralFile = "FCIDUMP"
         self.configFile = "neci.inp"
         self.outputFileRoot = "neci.out"
         self.outputFileCurrent = self.outputFileRoot
-        self.maxwalkers = 10000
-        self.maxIter = -1
-        self.RDMSamples = 5000
-        self.restart = False
-        self.time = 10
-        self.tau = -1.0
-        self.seed = 7
-        self.orbsym = []
+        self.maxwalkers = 10000     # Number of walkers in each replica
+        self.maxIter = -1           # Continue indefinitely (other criterion will stop the calculation)
+        self.RDMSamples = 5000      # Stop the calculation after 5000 iterations of accumulating the RDMs
+        self.restart = False        # This is not a restarted calculation
+        self.time = 10              # Stop calculation after 10 minutes
+        self.tau = -1.0             # Optimize the timestep automagically
+        self.seed = 7               # Random number seed
+        self.AddtoInit = 3          # Initiator threshold. Recommended 2-3
+        self.orbsym = []        
+        self.state_weights = [1.0]  # Weights for state-averaged calculation
+        # This is the number of spinorbitals to freeze in the neci calculation.
+        # Note that if you do this for a CASSCF calculation, it will freeze in the active space.
+        self.nfreezecore = 0        # Number of frozen core electrons
+        self.nfreezevirt = 0        # Number of removed virtual spin orbitals
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
@@ -89,114 +99,242 @@ class FCIQMCCI(object):
         log.info('Maximum number of iterations = %d', self.maxIter)
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
             nelectrons = nelec
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        import os
-        f = open(os.path.join(self.scratchDirectory, "spinfree_TwoRDM"), 'r')
+        nstates = len(self.state_weights)
 
-        twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        #        norb_read = int(f.readline().split()[0])
-        #assert(norb_read == norb)
+        #Normalize the state_weights vector to conserve number of electrons
+        norm = sum(self.state_weights)
 
-        for line in f.readlines():
-            linesp = line.split()
+        two_pdm = numpy.zeros( (norb, norb, norb, norb) )
 
-            if(int(linesp[0]) != -1):
+        for irdm in range(nstates):
+            if self.state_weights[irdm] != 0.0:
+                dm_filename = 'spinfree_TwoRDM.' + str(irdm+1)
+                temp_dm = read_neci_two_pdm(self, dm_filename, norb, self.scratchDirectory)
+                two_pdm += (self.state_weights[irdm]/norm)*temp_dm
 
-                assert(int(linesp[0]) <= norb)
-                assert(int(linesp[1]) <= norb)
-                assert(int(linesp[2]) <= norb)
-                assert(int(linesp[3]) <= norb)
+        one_pdm = one_from_two_pdm(two_pdm, nelectrons)
 
-                twopdm[int(linesp[0])-1,int(linesp[2])-1,int(linesp[1])-1,int(linesp[3])-1] = float(linesp[4])
-
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
-        onepdm /= (nelectrons-1)
-
-        return onepdm, twopdm
+        return one_pdm, two_pdm
 
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
 
-    def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
-        if fciRestart is None:
-            fciRestart = self.restart
+    def kernel(self, h1e, eri, norb, nelec, fci_restart=None, **kwargs):
+        if fci_restart is None:
+            fci_restart = self.restart
         if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2 + nelec%2
             nelecb = nelec - neleca
-        else :
+        else:
             neleca, nelecb = nelec
 
-        writeIntegralFile(h1e, eri, norb, neleca, nelecb, self)
-        writeFCIQMCConfFile(neleca, nelecb, fciRestart, self)
+        write_integrals_file(h1e, eri, norb, neleca, nelecb, self)
+        write_fciqmc_config_file(self, neleca, nelecb, fci_restart)
         if self.verbose >= logger.DEBUG1:
-            inFile = self.configFile   #os.path.join(self.scratchDirectory,self.configFile)
+            # os.path.join(self.scratchDirectory,self.configFile)
+            in_file = self.configFile
             logger.debug1(self, 'FCIQMC Input file')
-            logger.debug1(self, open(inFile, 'r').read())
-        executeFCIQMC(self)
+            logger.debug1(self, open(in_file, 'r').read())
+        execute_fciqmc(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = self.outputFileCurrent   #os.path.join(self.scratchDirectory,self.outputFile)
-            logger.debug1(self, open(outFile))
-        calc_e = readEnergy(self)
+            # os.path.join(self.scratchDirectory,self.outputFile)
+            out_file = self.outputFileCurrent
+            logger.debug1(self, open(out_file))
+        rdm_energy = read_energy(self)
 
-        return calc_e, None
+        return rdm_energy, None
 
-def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
-    confFile = FCIQMCCI.configFile
+def calc_energy_from_rdms(mol, mo_coeff, one_rdm, two_rdm):
+    '''From the full density matrices, calculate the energy.
 
-    f = open(confFile, 'w')
+    Args:
+        mol : An instance of :class:`Mole`
+            The molecule to calculate
+        mo_coeff: ndarray
+            The MO orbitals in which the RDMs are calculated
+        one_rdm: ndarray
+            The 1RDM
+        two_rdm: ndarray
+            The 2RDM as RDM_ijkl = < a^+_is a^+_kt a_lt a_js >.
+    '''
+
+    nmo = mo_coeff.shape[1]
+    eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, aosym='s1', verbose=0)
+    eri = eri.reshape(nmo,nmo,nmo,nmo)
+    t = mol.intor_symmetric('cint1e_kin_sph')
+    v = mol.intor_symmetric('cint1e_nuc_sph')
+    h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
+
+    two_e = numpy.einsum('ijkl,ijkl->', eri, two_rdm) * 0.5
+    one_e = numpy.einsum('ij,ij->', h, one_rdm)
+
+    return two_e + one_e + mol.energy_nuc()
+
+def run_standalone(fciqmcci, mo_coeff, restart=None):
+    '''Run a standalone NECI calculation for the molecule listed in the
+    FCIQMCCI object. The basis to run this calculation in is given by the
+    mo_coeff array.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            FCIQMC calculation containing parameters of NECI calculation to
+            run.
+        mo_coeff : ndarray
+            Orbital coefficients. Each column is one orbital.
+        restart : bool
+            Is this a restarted NECI calculation?
+
+    Returns:
+        rdm_energy : float
+            Final RDM energy obtained from the NECI output file.
+    '''
+    
+    tol = 1e-9
+    nmo = mo_coeff.shape[1]
+    nelec = fciqmcci.mol.nelectron
+    fciqmcci.dump_flags(verbose=5)
+
+    with open(fciqmcci.integralFile, 'w') as fout:
+        if fciqmcci.mol.symmetry:
+            if fciqmcci.groupname == 'Dooh':
+                logger.info(fciqmcci, 'Lower symmetry from Dooh to D2h')
+                raise RuntimeError('''Lower symmetry from Dooh to D2h''')
+            elif fciqmcci.groupname == 'Coov':
+                logger.info(fciqmcci, 'Lower symmetry from Coov to C2v')
+                raise RuntimeError('''Lower symmetry from Coov to C2v''')
+            else:
+                # We need the AO basis overlap matrix to calculate the
+                # symmetries.
+                s = fciqmcci.mol.intor_symmetric('cint1e_ovlp_sph')
+                fciqmcci.orbsym = pyscf.symm.label_orb_symm(fciqmcci.mol, 
+                        fciqmcci.mol.irrep_name, fciqmcci.mol.symm_orb,
+                        mo_coeff, s=s)
+                orbsym = [param.IRREP_ID_TABLE[fciqmcci.groupname][i]+1 for
+                          i in fciqmcci.orbsym]
+                pyscf.tools.fcidump.write_head(fout, nmo, nelec,
+                                               fciqmcci.mol.spin, orbsym)
+        else:
+            pyscf.tools.fcidump.write_head(fout, nmo, nelec, fciqmcci.mol.spin)
+
+        eri = pyscf.ao2mo.outcore.full_iofree(fciqmcci.mol, mo_coeff, verbose=0)
+        pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),
+                                      nmo, tol=tol)
+
+        # Lookup and return the relevant 1-electron integrals, and print out
+        # the FCIDUMP file.
+        t = fciqmcci.mol.intor_symmetric('cint1e_kin_sph')
+        v = fciqmcci.mol.intor_symmetric('cint1e_nuc_sph')
+        h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
+        pyscf.tools.fcidump.write_hcore(fout, h, nmo, tol=tol)
+        fout.write(' %.16g  0  0  0  0\n' % fciqmcci.mol.energy_nuc())
+
+    # The number of alpha and beta electrons.
+    if isinstance(nelec, (int, numpy.integer)):
+        neleca = nelec//2 + nelec%2
+        nelecb = nelec - neleca
+    else:
+        neleca, nelecb = nelec
+
+    write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart)
+
+    if fciqmcci.verbose >= logger.DEBUG1:
+        # os.path.join(self.scratchDirectory,self.configFile)
+        in_file = fciqmcci.configFile
+        logger.debug1(fciqmcci, 'FCIQMC Input file')
+        logger.debug1(fciqmcci, open(in_file, 'r').read())
+
+    execute_fciqmc(fciqmcci)
+
+    if fciqmcci.verbose >= logger.DEBUG1:
+        # os.path.join(self.scratchDirectory,self.outputFile)
+        out_file = fciqmcci.outputFileCurrent
+        logger.debug1(fciqmcci, open(out_file))
+
+    rdm_energy = read_energy(fciqmcci)
+
+    return rdm_energy
+
+
+def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
+    '''Write an input file for a NECI calculation.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            Contains all the parameters used to create the input file.
+        neleca : int
+            The number of alpha electrons.
+        nelecb : int
+            The number of beta electrons.
+        restart : bool
+            Is this a restarted NECI calculation?
+    '''
+
+    config_file = fciqmcci.configFile
+    nstates = len(fciqmcci.state_weights)
+
+    f = open(config_file, 'w')
 
     f.write('title\n')
     f.write('\n')
     f.write('system read noorder\n')
     f.write('symignoreenergies\n')
     f.write('freeformat\n')
-    f.write('electrons %i\n'%(neleca+nelecb))
+    f.write('electrons %d\n' % (neleca+nelecb))
+    f.write('spin-restrict 0\n')
+    f.write('sym 0 0 0 0\n')    # fci-core requires these two options
     f.write('nonuniformrandexcits 4ind-weighted\n')
     f.write('hphf 0\n')
     f.write('nobrillouintheorem\n')
+    if nstates > 1:
+        f.write('system-replicas %d\n' % (2*nstates))
     f.write('endsys\n')
     f.write('\n')
     f.write('calc\n')
     f.write('methods\n')
     f.write('method vertex fcimc\n')
     f.write('endmethods\n')
-    f.write('time %d\n'%(FCIQMCCI.time))
+    f.write('time %d\n' % fciqmcci.time)
     f.write('memoryfacpart 2.0\n')
     f.write('memoryfacspawn 1.0\n')
-    f.write('totalwalkers %i\n'%(FCIQMCCI.maxwalkers))
-    f.write('nmcyc %i\n'%(FCIQMCCI.maxIter))
-    f.write('seed %i\n'%(FCIQMCCI.seed))
-    if (Restart):
+    f.write('totalwalkers %d\n' % fciqmcci.maxwalkers)
+    f.write('nmcyc %d\n' % fciqmcci.maxIter)
+    f.write('seed %d\n' % fciqmcci.seed)
+    if (restart):
         f.write('readpops')
-    else :
+    else:
         f.write('startsinglepart 500\n')
         f.write('diagshift 0.1\n')
-    f.write('rdmsamplingiters %i\n'%(FCIQMCCI.RDMSamples))
+    f.write('rdmsamplingiters %d\n' % fciqmcci.RDMSamples)
     f.write('shiftdamp 0.05\n')
-    if (FCIQMCCI.tau != -1.0):
+    if (fciqmcci.tau != -1.0):
         f.write('tau 0.01\n')
     f.write('truncinitiator\n')
-    f.write('addtoinitiator 3\n')
+    f.write('addtoinitiator %d\n' % fciqmcci.AddtoInit)
     f.write('allrealcoeff\n')
     f.write('realspawncutoff 0.4\n')
     f.write('semi-stochastic\n')
     #f.write('cas-core 6 6\n')
-    f.write('mp1-core 1000\n')
+    f.write('mp1-core 2000\n')
     #f.write('fci-core\n')
-#    f.write('trial-wavefunction 5\n')
+    #f.write('trial-wavefunction 5\n')
     f.write('jump-shift\n')
     f.write('proje-changeref 1.5\n')
     f.write('stepsshift 10\n')
     f.write('maxwalkerbloom 3\n')
+    if nstates > 1:
+        f.write('orthogonalise-replicas\n')
+        f.write('doubles-init\n')
+        #f.write('fci-init\n')
+        f.write('multi-ref-shift\n')
     f.write('endcalc\n')
     f.write('\n')
     f.write('integral\n')
-    f.write('freeze 0,0\n')
+    f.write('freeze {},{}\n'.format(fciqmcci.nfreezecore, fciqmcci.nfreezevirt))
     f.write('endint\n')
     f.write('\n')
     f.write('logging\n')
@@ -204,76 +342,347 @@ def writeFCIQMCConfFile(neleca, nelecb, Restart, FCIQMCCI):
     f.write('binarypops\n')
     f.write('calcrdmonfly 3 200 500\n')
     f.write('write-spin-free-rdm\n') 
-    f.write('endlog\n') 
+    f.write('printonerdm\n')
+    f.write('endlog\n')
     f.write('end\n')
 
     f.close()
     #no reorder
     #f.write('noreorder\n')
 
-def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, FCIQMCCI):
-    integralFile = os.path.join(FCIQMCCI.scratchDirectory,FCIQMCCI.integralFile)
-# ensure 4-fold symmetry
-    eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
-    if FCIQMCCI.mol.symmetry and FCIQMCCI.orbsym:
-        orbsym = [IRREP_MAP[FCIQMCCI.groupname][i] for i in FCIQMCCI.orbsym]
+
+def write_integrals_file(h1e, eri, norb, neleca, nelecb, fciqmcci):
+    '''Write an integral dump file, based on the integrals provided.
+
+    Args:
+        h1e : 2D ndarray
+            Core Hamiltonian.
+        eri : 2D ndarray
+            Two-electron integrals.
+        norb : int
+            Number of orbitals.
+        neleca : int
+            Number of alpha electrons.
+        nelecb : int
+            Number of beta electrons
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            FCIQMC calculation, used to access the integral dump file name and
+            some symmetry properties.
+    '''
+
+    integralFile = os.path.join(fciqmcci.scratchDirectory,fciqmcci.integralFile)
+    # Ensure 4-fold symmetry.
+    eri = pyscf.ao2mo.restore(4, eri, norb)
+    if fciqmcci.mol.symmetry and fciqmcci.orbsym:
+        orbsym = [IRREP_MAP[fciqmcci.groupname][i] for i in fciqmcci.orbsym]
     else:
         orbsym = []
-    pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
+    pyscf.tools.fcidump.from_integrals(integralFile, h1e, eri, norb,
                                        neleca+nelecb, ms=abs(neleca-nelecb),
-                                       orbsym=orbsym,tol=1e-10)
+                                       orbsym=orbsym, tol=1e-10)
 
 
+def execute_fciqmc(fciqmcci):
+    '''Call the external FCIQMC program.
 
-def executeFCIQMC(FCIQMCCI):
-    inFile = os.path.join(FCIQMCCI.scratchDirectory,FCIQMCCI.configFile)
-    from subprocess import call
-    outfiletmp = FCIQMCCI.outputFileRoot
-    files = os.listdir(FCIQMCCI.scratchDirectory+'.')
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            Specifies the FCIQMC calculation.
+    '''
+
+    in_file = os.path.join(fciqmcci.scratchDirectory, fciqmcci.configFile)
+    outfiletmp = fciqmcci.outputFileRoot
+    files = os.listdir(fciqmcci.scratchDirectory + '.')
+    # Search for an unused output file.
     i = 1
-#    print('files: ',files)
     while outfiletmp in files:
-        outfiletmp = FCIQMCCI.outputFileRoot + '_{}'.format(i)
+        outfiletmp = fciqmcci.outputFileRoot + '_{}'.format(i)
         i += 1
-    logger.info(FCIQMCCI,'fciqmc outputfile: %s',outfiletmp)
-    FCIQMCCI.outputFileCurrent = outfiletmp
-    outFile = os.path.join(FCIQMCCI.scratchDirectory,outfiletmp)
-    if FCIQMCCI.executable == 'external':
-        logger.info(FCIQMCCI,'External FCIQMC calculation requested from dumped integrals.')
-        logger.info(FCIQMCCI,'Waiting for density matrices and output file to be returned.')
+    logger.info(fciqmcci, 'FCIQMC output file: %s', outfiletmp)
+    fciqmcci.outputFileCurrent = outfiletmp
+    out_file = os.path.join(fciqmcci.scratchDirectory, outfiletmp)
+
+    if fciqmcci.executable == 'external':
+        logger.info(fciqmcci, 'External FCIQMC calculation requested from '
+                              'dumped integrals.')
+        logger.info(fciqmcci, 'Waiting for density matrices and output file '
+                              'to be returned.')
         try:
             raw_input("Press Enter to continue with calculation...")
         except:
             input("Press Enter to continue with calculation...")
     else:
-        call("%s  %s > %s"%(FCIQMCCI.executable, inFile, outFile), shell=True)
+        call("%s  %s > %s" % (fciqmcci.executable, in_file, out_file), shell=True)
 
-def readEnergy(FCIQMCCI):
-    file1 = open(os.path.join(FCIQMCCI.scratchDirectory, FCIQMCCI.outputFileCurrent),"r")
-    for line in file1:
+
+def read_energy(fciqmcci):
+    '''Read and return the final RDM energy from a NECI output file.
+
+    Args:
+        fciqmcci : an instance of :class:`FCIQMCCI`
+            Specifies the FCIQMC calculation. Used to locate the FCIQMC output
+            file.
+
+    Returns:
+        rdm_energy : float
+            The final RDM energy printed to the output file.
+    '''
+
+    out_file = open(os.path.join(fciqmcci.scratchDirectory,
+                 fciqmcci.outputFileCurrent), "r")
+
+    for line in out_file:
+        # Lookup the RDM energy from the output.
         if "*TOTAL ENERGY* CALCULATED USING THE" in line:
-            calc_e = float(line.split()[-1])
+            rdm_energy = float(line.split()[-1])
             break
-    logger.info(FCIQMCCI, 'total energy from fciqmc: %.15f', calc_e)
-    file1.close()
+    logger.info(fciqmcci, 'Total energy from FCIQMC: %.15f', rdm_energy)
+    out_file.close()
 
-    return calc_e
+    return rdm_energy
+
+def read_neci_one_pdm(fciqmcci, filename, norb, nelec, directory='.'):
+    '''Obtain the spin-free 1RDM from neci by reading in the spin free 2RDM. 
+    If core orbitals have been indicated as frozen in neci, this core contribution 
+    will be explicitly added back in to the RDM. Therefore, the norb parameter 
+    should be the total number of orbitals passed to neci (inc. frozen), while 
+    nelec is the total number of electrons (inc. frozen), but not inactive if running
+    through CASSCF.
+    '''
+    two_pdm = read_neci_two_pdm(fciqmcci, filename, norb, directory)
+    one_pdm = one_from_two_pdm(two_pdm, nelec)
+    return one_pdm 
 
 
+def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
+    '''Read a spin-free 2-rdm output from a NECI calculation, and return it in
+    a form supported by pyscf. Note that the RDMs in neci are written in 
+    as RDM_ijkl = < a^+_is a^+_jt a_lt a_ks >. In pyscf, the correlated _after 
+    reordering_ is 2RDM_ijkl = < a^+_is a^+_kt a_lt a_js >, where s and t are spin 
+    indices to be summed over. Therefore, the middle two indices need to be swapped. 
+    If core orbitals have been indicated as frozen in neci, this core contribution 
+    will be explicitly added back in to the RDM. Therefore, the norb parameter 
+    should be the unfrozen number of orbitals passed to neci, but not inactive 
+    if running through CASSCF.
+
+
+    Args:
+        filename : str
+            Name of the file to read the 2-rdm from.
+        norb : int
+            The number of orbitals inc. frozen in neci, and therefore the 
+            number of values each 2-rdm index can take.
+        directory : str
+            The directory in which to search for the 2-rdm file.
+
+    Returns:
+        two_pdm : ndarray
+            The read-in 2-rdm.
+    '''
+
+    f = open(os.path.join(directory, filename), 'r')
+
+    nfrzorb = fciqmcci.nfreezecore/2
+
+    norb_active = norb - nfrzorb
+    two_pdm_active = numpy.zeros( (norb_active, norb_active, norb_active, norb_active) )
+    for line in f.readlines():
+        linesp = line.split()
+
+        if(int(linesp[0]) != -1):
+            # Arrays from neci are '1' indexed
+            # We reorder from D[i,j,k,l] = < i^+ j^+ l k >
+            # to              D[i,j,k,l] = < i^+ k^+ l j > to match pyscf
+            # Therefore, all we need to do is to swap the middle two indices.
+            ind1 = int(linesp[0]) - 1
+            ind2 = int(linesp[2]) - 1
+            ind3 = int(linesp[1]) - 1
+            ind4 = int(linesp[3]) - 1
+            assert(int(ind1) < norb_active)
+            assert(int(ind2) < norb_active)
+            assert(int(ind3) < norb_active)
+            assert(int(ind4) < norb_active)
+            assert(ind1 >= 0)
+            assert(ind2 >= 0)
+            assert(ind3 >= 0)
+            assert(ind4 >= 0)
+
+            two_pdm_active[ind1, ind2, ind3, ind4] = float(linesp[4])
+
+    f.close()
+
+    # In order to add any frozen core, we first need to find the spin-free 1RDM in the 
+    # active space.
+    one_pdm_active = one_from_two_pdm(two_pdm_active,fciqmcci.mol.nelectron-fciqmcci.nfreezecore)
+
+    # Copy the 2RDM part of the active space
+    two_pdm = numpy.zeros( (norb, norb, norb, norb) )
+    actstart = nfrzorb
+    actend = norb - fciqmcci.nfreezevirt/2
+    two_pdm[actstart:actend, actstart:actend, actstart:actend, actstart:actend] = two_pdm_active
+
+    # Interaction between frozen and active space
+    for p in range(nfrzorb):
+        # p loops over frozen spatial orbitals
+        for r in range(actstart,actend):
+            for s in range(actstart,actend):
+                two_pdm[p,p,r,s] += 2.0*one_pdm_active[r-nfrzorb,s-nfrzorb]
+                two_pdm[r,s,p,p] += 2.0*one_pdm_active[r-nfrzorb,s-nfrzorb]
+                two_pdm[p,r,s,p] -= one_pdm_active[r-nfrzorb,s-nfrzorb]
+                two_pdm[r,p,p,s] -= one_pdm_active[r-nfrzorb,s-nfrzorb]
+
+    # Add on frozen core contribution, assuming that the core orbitals are
+    # doubly occupied
+    for i in range(nfrzorb):
+        for j in range(nfrzorb):
+            two_pdm[i,i,j,j] += 4.0
+            two_pdm[i,j,j,i] += -2.0
+
+    return two_pdm
+
+def one_from_two_pdm(two_pdm, nelec):
+    '''Return a 1-rdm, given a 2-rdm to contract.
+
+    Args:
+        two_pdm : ndarray
+            A (spin-free) 2-particle reduced density matrix.
+        nelec: int
+            The number of electrons contributing to the RDMs.
+
+    Returns:
+        one_pdm : ndarray
+            The (spin-free) 1-particle reduced density matrix.
+    '''
+
+    # Last two indices refer to middle two second quantized operators in the 2RDM
+    one_pdm = numpy.einsum('ikjj->ik', two_pdm)
+    one_pdm /= (nelec-1)
+    return one_pdm
+
+def find_full_casscf_12rdm(fciqmcci, mo_coeff, filename, norbcas, neleccas, directory='.'):
+    '''Return the 1 and 2 full RDMs after a CASSCF calculation, by adding
+    on the contributions from the inactive spaces. Requires the cas space to
+    be given, as we as a set of mo coefficients in the complete space.
+    '''
+
+    two_pdm = read_neci_two_pdm(fciqmcci, filename, norbcas, directory)
+    one_pdm = one_from_two_pdm(two_pdm, neleccas)
+
+    return add_inactive_space_to_rdm(fciqmcci.mol, mo_coeff, one_pdm, two_pdm)
+
+def add_inactive_space_to_rdm(mol, mo_coeff, one_pdm, two_pdm):
+    '''If a CASSCF calculation has been done, the final RDMs from neci will
+    not contain the doubly occupied inactive orbitals. This function will add
+    them and return the full density matrices.
+    '''
+
+    # Find number of inactive electrons by taking the number of electrons
+    # as the trace of the 1RDM, and subtracting from the total number of electrons
+    ninact = (mol.nelectron - int(round(numpy.trace(one_pdm)))) / 2
+    norb = mo_coeff.shape[1]
+    nsizerdm = one_pdm.shape[0]
+
+    one_pdm_ = numpy.zeros( (norb, norb) )
+    # Add core first
+    for i in range(ninact):
+        one_pdm_[i,i] = 2.0
+
+    # Add the rest of the density matrix
+    one_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = one_pdm[:,:]
+
+    two_pdm_ = numpy.zeros( (norb, norb, norb, norb) )
+    
+    # Add on frozen core contribution, assuming that the inactive orbitals are
+    # doubly occupied
+    for i in range(ninact):
+        for j in range(ninact):
+            two_pdm_[i,i,j,j] += 4.0
+            two_pdm_[i,j,j,i] += -2.0
+
+    # Inactve-Active elements
+    for p in range(ninact):
+        for r in range(ninact,ninact+nsizerdm):
+            for s in range(ninact,ninact+nsizerdm):
+                two_pdm_[p,p,r,s] += 2.0*one_pdm_[r,s]
+                two_pdm_[r,s,p,p] += 2.0*one_pdm_[r,s]
+                two_pdm_[p,r,s,p] -= one_pdm_[r,s]
+                two_pdm_[r,p,p,s] -= one_pdm_[r,s]
+
+    # Add active space
+    two_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm, \
+             ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = \
+             two_pdm[:,:]
+
+    return one_pdm_, two_pdm_
+
+def calc_dipole(mol, mo_coeff, one_pdm):
+    '''Calculate and return the dipole moment for a given molecule, set of
+    molecular orbital coefficients and a 1-rdm.
+
+    Args:
+        mol : an instance of :class:`Mole`
+            Specifies the molecule.
+        mo_coeff : ndarray
+            Orbital coefficients. Each column is one orbital.
+        one_pdm : ndarray
+            1-rdm.
+
+    Returns:
+        tot_dipmom : list of float
+            The total dipole moment of the system in each dimension.
+        elec_dipmom : list of float
+            The electronic component of the dipole moment in each dimension.
+        nuc_dipmom : list of float
+            The nuclear component of the dipole moment in each dimension.
+    '''
+
+    assert(one_pdm.shape[0] == one_pdm.shape[1])
+    norb = mo_coeff.shape[1]
+    nsizerdm = one_pdm.shape[0]
+    if nsizerdm != norb:
+        raise RuntimeError('''Size of 1RDM is not the same size as number of orbitals.
+            Have you correctly included the external space if running from CASSCF??''')
+
+    # Call the integral generator for r integrals in the AO basis. There
+    # are 3 dimensions for x, y and z components.
+    aodmints = mol.intor('cint1e_r_sph', comp=3)
+    # modmints will hold the MO transformed integrals.
+    modmints = numpy.empty_like(aodmints)
+    # For each component, transform integrals into the MO basis.
+    for i in range(aodmints.shape[0]):
+        modmints[i] = reduce(numpy.dot, (mo_coeff.T, aodmints[i], mo_coeff))
+
+    # Contract with MO r integrals for electronic contribution.
+    elec_dipmom = []
+    for i in range(modmints.shape[0]):
+        elec_dipmom.append( -numpy.trace( numpy.dot( one_pdm, modmints[i])) )
+
+    # Nuclear contribution.
+    nuc_dipmom = [0.0, 0.0, 0.0]
+    for i in range(mol.natm):
+        for j in range(aodmints.shape[0]):
+            nuc_dipmom[j] += mol.atom_charge(i)*mol.atom_coord(i)[j]
+
+    tot_dipmom = [a+b for (a,b) in zip(elec_dipmom, nuc_dipmom)]
+
+    return tot_dipmom, elec_dipmom, nuc_dipmom
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import mcscf
+    from pyscf.tools import molden
 
     b = 1.4
     mol = gto.Mole()
     mol.build(
         verbose = 5,
-        output = 'out-fciqmc',
+        output = None, #'out-fciqmc',
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True,
+        symmetry = True, 
+# fciqmc cannot handle Dooh currently, so reduce the point group if full group is infinite.
+        symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()
@@ -281,12 +690,24 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
-    mc.fcisolver.RDMSamples = 1000
+    mc.fcisolver.RDMSamples = 1000 
     mc.max_cycle_macro = 10
-    emc_1 = mc.mc2step()[0]
+    mc.natorb = True    #Return natural orbitals from mc2step in casscf_mo
+    emc_1, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
+
+# Write orbitals to molden output
+    with open( 'output.molden', 'w' ) as fout:
+        molden.header(mol, fout)
+        molden.orbital_coeff(mol, fout, casscf_mo)
+
+# Now, calculate the full RDMs, for the full energy
+    one_pdm, two_pdm = find_full_casscf_12rdm(mc.fcisolver, casscf_mo,
+            'spinfree_TwoRDM.1', 4, 4)
+    e = calc_energy_from_rdms(mol, casscf_mo, one_pdm, two_pdm)
+    print('Energy from rdms and CASSCF should be the same: ',e,emc_1)
 
     mc = mcscf.CASCI(m, 4, 4)
-    mc.fcisolver = FCIQMCCI(mol)
+    mc.fcisolver =  FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
     mc.fcisolver.RDMSamples = 1000
     emc_0 = mc.casci()[0]
@@ -295,10 +716,11 @@ if __name__ == '__main__':
     mol = gto.Mole()
     mol.build(
         verbose = 5,
-        output = 'out-casscf',
+        output = None, #'out-casscf',
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True,
+        symmetry = True, 
+        symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()

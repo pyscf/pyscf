@@ -47,8 +47,9 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
     dm1[ncore:nocc,ncore:nocc] = casdm1
 
     # part2, part3
-    vhf_ca = eris.vhf_c + numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1) \
-                        - numpy.einsum('upqv,uv->pq', eris.appa, casdm1) * .5
+    vhf_a =(numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1)
+          - numpy.einsum('upqv,uv->pq', eris.appa, casdm1) * .5)
+    vhf_ca = eris.vhf_c + vhf_a
 
     ################# gradient #################
     #hdm2 = numpy.einsum('tuvw,vwpq->tupq', casdm2, eris.aapp)
@@ -74,14 +75,16 @@ def gen_g_hop(casscf, mo, casdm1, casdm2, eris):
             mo_core = mo[:,:ncore]
             mo_cas = mo[:,ncore:nocc]
             dm_core = numpy.dot(mo_core, mo1[:,:ncore].T) * 2
-            dm_core = numpy.dot(mo_core, mo_core.T) * 2 + dm_core + dm_core.T
+            dm_core = dm_core + dm_core.T
             dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo1[:,ncore:nocc].T))
-            dm_cas = dm_cas + dm_cas.T + reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
+            dm_cas = dm_cas + dm_cas.T
             vj, vk = casscf._scf.get_jk(casscf.mol, (dm_core,dm_cas))
             vhfc = numpy.dot(eris.vhf_c, dt)
-            vhfc = vhfc + vhfc.T + reduce(numpy.dot, (mo.T, vj[0]-vk[0]*.5, mo))
-            vhfa = numpy.dot(vhf_ca-eris.vhf_c, dt)
-            vhfa = vhfa + vhfa.T + reduce(numpy.dot, (mo.T, vj[1]-vk[1]*.5, mo))
+            vhfc = (vhfc + vhfc.T + eris.vhf_c
+                    + reduce(numpy.dot, (mo.T, vj[0]-vk[0]*.5, mo)))
+            vhfa = numpy.dot(vhf_a, dt)
+            vhfa = (vhfa + vhfa.T + vhf_a
+                    + reduce(numpy.dot, (mo.T, vj[1]-vk[1]*.5, mo)))
             g[:,:ncore] += vhfc[:,:ncore]+vhfa[:,:ncore]
             g[:,:ncore] *= 2
             g[:,ncore:nocc] = numpy.dot(g[:,ncore:nocc]+vhfc[:,ncore:nocc], casdm1)
@@ -277,8 +280,8 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
                 (seig < casscf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
-                if dxmax > casscf.max_orb_stepsize:
-                    scale = casscf.max_orb_stepsize / dxmax
+                if dxmax > casscf.max_stepsize:
+                    scale = casscf.max_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
@@ -344,6 +347,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None, verbose=None)
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         casdm1, casdm2 = (yield u, g_orb0, jkcount)
 
+        g_orb = gorb_update = h_op1 = h_opjk = h_diag = None
         g_orb, gorb_update, h_op1, h_opjk, h_diag = \
                 casscf.gen_g_hop(mo, casdm1, casdm2, eris)
         g_orb = gorb_update(u, x0)
@@ -516,6 +520,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=50, micro=3,
                 break
 
         micro_iter.close()
+        micro_iter = None
 
         totmicro += imicro + 1
         totinner += njk
@@ -637,7 +642,7 @@ class CASSCF(casci.CASCI):
         conv_tol_grad : float
             Converge threshold for CI gradients and orbital rotation gradients.
             Default is 1e-4
-        max_orb_stepsize : float
+        max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
             (see notes in max_cycle_micro_inner attribute)
             Default is 0.03.
@@ -649,13 +654,13 @@ class CASSCF(casci.CASCI):
             iterations.  Generally, 2 - 5 steps should be enough.  Default is 3.
         max_cycle_micro_inner : int
             For the augmented hessian solver, max number of orbital rotation
-            steps (controled by max_orb_stepsize).  Value between 2 - 8 is preferred.
+            steps (controled by max_stepsize).  Value between 2 - 8 is preferred.
             Default is 4.
             Note the 1-step CASSCF algorithm prefers many small steps.  Though might
             increasing the total number of iterations, the small steps can effectively
             prevent oscillating in the total energy.  If the (macro iteration) total
-            energy does not monotonically decrease, you can try to reduce max_orb_stepsize
-            and increase max_cycle_micro_inner.  For simple system, large max_orb_stepsize
+            energy does not monotonically decrease, you can try to reduce max_stepsize
+            and increase max_cycle_micro_inner.  For simple system, large max_stepsize
             small max_cycle_micro_inner may give the fast convergence, but it's not recommended.
         ah_level_shift : float, for AH solver.
             Level shift for the Davidson diagonalization in AH solver.  Default is 1e-4.
@@ -728,7 +733,7 @@ class CASSCF(casci.CASCI):
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
-        self.max_orb_stepsize = .03
+        self.max_stepsize = .03
 # small max_ci_stepsize is good to converge, since steepest descent is used
 #ABORT        self.max_ci_stepsize = .01
 #TODO:self.inner_rotation = False # active-active rotation
@@ -763,7 +768,7 @@ class CASSCF(casci.CASCI):
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
-#               max_orb_stepsize = 1.5
+#               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
 #               ah_guess_space = 0
 # IN EXPERIMENT: ah_grad_trust_region, ah_guess_space, need more tests.
@@ -809,7 +814,7 @@ class CASSCF(casci.CASCI):
         log.info('conv_tol = %g, (%g for gradients)',
                  self.conv_tol, self.conv_tol_grad)
         log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
-        log.info('max. orb step = %g', self.max_orb_stepsize)
+        log.info('max. orb step = %g', self.max_stepsize)
         #log.info('max. ci step = %g', self.max_ci_stepsize)
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
@@ -824,7 +829,8 @@ class CASSCF(casci.CASCI):
         log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)
         log.info('natorb = %s', self.natorb)
-        log.info('max_memory %d MB', self.max_memory)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, pyscf.lib.current_memory()[0])
         log.debug('grad_update_dep %d', self.grad_update_dep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
         log.info('dynamic_micro_step %s', self.dynamic_micro_step)
@@ -832,6 +838,8 @@ class CASSCF(casci.CASCI):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        if hasattr(self, 'max_orb_stepsize'):
+            raise AttributeError('"max_orb_stepsize" was replaced by "max_stepsize"')
 
     def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                callback=None, _kern=kernel):

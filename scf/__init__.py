@@ -180,6 +180,7 @@ def fast_scf(mf):
     mf.hf_energy = mf1.hf_energy
     mf.converged = mf1.converged
     return mf
+fast_newton = fast_scf
 
 
 def RKS(mol, *args):
