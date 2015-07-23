@@ -275,6 +275,11 @@ class CASCI(object):
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
         return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
+    def sort_mo(self, caslst, mo_coeff=None, base=1):
+        from pyscf.mcscf import addons
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo(self, mo_coeff, caslst, base)
+
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                    ncore=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff

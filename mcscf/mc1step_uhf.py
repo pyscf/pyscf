@@ -63,7 +63,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(1)
 
     def gorb_update(u, r0):
-        return g_orb + h_op1(r0) + h_opjk(r0)
+        return g_orb + h_op(r0)
 
     ############## hessian, diagonal ###########
     # part1
@@ -158,7 +158,7 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     g_orb = casscf.pack_uniq_var((g[0]-g[0].T, g[1]-g[1].T))
     h_diag = casscf.pack_uniq_var(h_diag)
 
-    def h_op1(x):
+    def h_op(x):
         x1a, x1b = casscf.unpack_uniq_var(x)
         xa_cu = x1a[:ncore[0],ncore[0]:]
         xa_av = x1a[ncore[0]:nocc[0],nocc[0]:]
@@ -194,29 +194,21 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
         x2b[ncore[1]:nocc[1]] += numpy.einsum('vrup,vr->up', hdm2apAP, x1a[ncore[0]:nocc[0]])
         x2b[ncore[1]:nocc[1]] += numpy.einsum('upvr,vr->up', hdm2APAP, x1b[ncore[1]:nocc[1]])
 
-        x2a = x2a - x2a.T
-        x2b = x2b - x2b.T
-        return casscf.pack_uniq_var((x2a,x2b))
-
-    def h_opjk(x):
         # part4, part5, part6
-        x1a, x1b = casscf.unpack_uniq_var(x)
-        x2a = numpy.zeros_like(x1a)
-        x2b = numpy.zeros_like(x1b)
         if ncore[0] > 0 or ncore[1] > 0:
             va, vc = casscf.update_jk_in_ah(mo, (x1a,x1b), casdm1s, eris)
-            x2a[ncore[0]:nocc[0]] = va[0]
-            x2b[ncore[1]:nocc[1]] = va[1]
-            x2a[:ncore[0],ncore[0]:] = vc[0]
-            x2b[:ncore[1],ncore[1]:] = vc[1]
+            x2a[ncore[0]:nocc[0]] += va[0]
+            x2b[ncore[1]:nocc[1]] += va[1]
+            x2a[:ncore[0],ncore[0]:] += vc[0]
+            x2b[:ncore[1],ncore[1]:] += vc[1]
 
         x2a = x2a - x2a.T
         x2b = x2b - x2b.T
         return casscf.pack_uniq_var((x2a,x2b))
-    return g_orb, gorb_update, h_op1, h_opjk, h_diag
+    return g_orb, gorb_update, h_op, h_diag
 
 
-def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
+def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
            ci0=None, callback=None, verbose=None,
            dump_chk=True, dump_chk_ci=False):
     if verbose is None:
@@ -235,8 +227,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         return True, e_tot, e_ci, fcivec, mo
+
+    if conv_tol_grad is None:
+        conv_tol_grad = numpy.sqrt(tol)
+        logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv = False
-    toloose = casscf.conv_tol_grad
     totmicro = totinner = 0
     imicro = 0
     norm_gorb = norm_gci = 0
@@ -250,7 +245,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         t3m = log.timer('CAS DM', *t2m)
         casdm1_old = casdm1
 
-        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
+        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0,
+                                          conv_tol_grad, log)
         if casscf.dynamic_micro_step:
             max_micro = max(micro, int(0-numpy.log10(de+1e-9)))
         else:
@@ -280,8 +276,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
-            if (norm_t < toloose or norm_gci < toloose or
-                (norm_gorb < toloose and norm_ddm < toloose)):
+            if (norm_t < conv_tol_grad or
+                (norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad)):
                 break
 
         micro_iter.close()
@@ -307,7 +303,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=3,
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol
-            and (norm_gorb0 < toloose and norm_ddm < toloose)):
+            and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_grad)):
             conv = True
 
         if dump_chk:
@@ -333,7 +329,7 @@ class CASSCF(casci_uhf.CASCI):
         self.max_stepsize = .03
         self.max_cycle_macro = 50
         self.max_cycle_micro = 3
-        self.max_cycle_micro_inner = 3
+        self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = 1e-4
         # for augmented hessian
@@ -351,6 +347,9 @@ class CASSCF(casci_uhf.CASCI):
         self.callback = None
         self.ci_response_space = 3
         self.dynamic_micro_step = False
+        self.keyframe_interval = 4999
+        self.keyframe_interval_rate = 1
+        self.keyframe_trust_region = 0.25e-9
 
         self.fcisolver.max_cycle = 50
 
@@ -477,7 +476,7 @@ class CASSCF(casci_uhf.CASCI):
         mat[1] = mat[1] - mat[1].T
         return mat
 
-    def update_rotate_matrix(self, dx, u0):
+    def update_rotate_matrix(self, dx, u0=1):
         if isinstance(u0, int) and u0 == 1:
             u0 = (1,1)
         dr = self.unpack_uniq_var(dx)
@@ -488,8 +487,10 @@ class CASSCF(casci_uhf.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess, verbose):
-        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess, verbose)
+    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess,
+                      conv_tol_grad, verbose):
+        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess,
+                                     conv_tol_grad, verbose)
 
     def ao2mo(self, mo):
 #        nmo = mo[0].shape[1]
@@ -767,10 +768,17 @@ if __name__ == '__main__':
     ehf = m.scf()
     mc = CASSCF(m, 4, (2,1))
     mc.verbose = 4
-    #mo = m.mo_coeff
-    mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7), 1)
+    emc = mc.mc1step()[0]
+    print(ehf, emc, emc-ehf)
+    print(emc - -75.5644202701263, emc - -75.573930418500652,
+          emc - -75.574137883405612, emc - -75.648547447838951)
+
+
+    mc = CASSCF(m, 4, (2,1))
+    mc.verbose = 4
+    mo = mc.sort_mo((3,4,6,7))
     emc = mc.mc1step(mo)[0]
     print(ehf, emc, emc-ehf)
-    #-75.631870606190233, -75.573930418500652, 0.057940187689581535
-    print(emc - -75.574137883405612, emc - -75.573930418500652, emc - -75.648547447838951)
+    print(emc - -75.5644202701263, emc - -75.573930418500652,
+          emc - -75.574137883405612, emc - -75.648547447838951)
 

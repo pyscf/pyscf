@@ -72,7 +72,8 @@ class CASSCF(mc1step.CASSCF):
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 _kern(self, mo_coeff,
-                      tol=self.conv_tol, macro=macro, micro=micro,
+                      tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
+                      macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
