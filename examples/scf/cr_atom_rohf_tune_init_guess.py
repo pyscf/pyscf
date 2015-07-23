@@ -8,7 +8,7 @@ mol = gto.Mole()
 mol.build(
     verbose = 5,
     output = None,
-    symmetry = True,
+    symmetry = 'D2h',
     atom = [['Cr',(0, 0, 0)], ],
     basis = {'Cr': 'cc-pvdz', },
     charge = 6,
