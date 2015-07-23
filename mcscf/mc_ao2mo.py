@@ -83,20 +83,17 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     faapp_buf = h5py.File(_tmpfile1.name)
     feri = h5py.File(erifile, 'w')
 
-    papa_buf = numpy.zeros((nao,ncas,nmo*ncas))
-    max_memory -= papa_buf.nbytes / 1e6
-
     mo_c = numpy.asarray(mo, order='C')
     mo = numpy.asarray(mo, order='F')
-    nao, nmo = mo.shape
     pashape = (0, nmo, ncore, ncas)
+    papa_buf = numpy.zeros((nao,ncas,nmo*ncas))
     if level == 1:
         j_pc = numpy.zeros((nmo,ncore))
         k_pc = numpy.zeros((nmo,ncore))
     else:
         j_pc = k_pc = None
 
-    mem_words = int(max(1000,max_memory)*1e6/8)
+    mem_words = int(max(2000,max_memory-papa_buf.nbytes/1e6)*1e6/8)
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
     shranges = outcore.guess_shell_ranges(mol, aobuflen, aobuflen, 's4')
     ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph',
@@ -214,20 +211,34 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
             ti1 = log.timer('ppaa and papa buffer', *ti1)
 
         ti0 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
-    buf = buf1 = bufs1 = bufs2 = bufs3 = None
+    buf = buf1 = bufs1 = bufs2 = bufs3 = bufpa = None
+    time1 = log.timer('mc_ao2mo pass 1', *time0)
 
-    papa_buf = pyscf.lib.dot(mo.T, papa_buf.reshape(nao,-1))
-    feri['papa'] = papa_buf.reshape(nmo,ncas,nmo,ncas)
-    papa_buf = None
+    log.debug1('Half transformation done. Current memory %d',
+               pyscf.lib.current_memory()[0])
 
-    tmp = numpy.empty((ncas*ncas,nao_pair))
+    nblk = int(max(1, min(nmo, (max_memory*1e6/8-papa_buf.size) / (ncas**2*nmo))))
+    log.debug1('nblk for papa = %d', nblk)
+    dset = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
+    for i0, i1 in prange(0, nmo, nblk):
+        tmp = pyscf.lib.dot(mo[:,i0:i1].T, papa_buf.reshape(nao,-1))
+        dset[i0:i1] = tmp.reshape(i1-i0,ncas,nmo,ncas)
+    papa_buf = tmp = None
+    time1 = log.timer('papa pass 2', *time1)
+
+    tmp = numpy.empty((ncas**2,nao_pair))
     p0 = 0
-    for istep,sh_range in enumerate(shranges):
+    for istep, sh_range in enumerate(shranges):
         tmp[:,p0:p0+sh_range[2]] = faapp_buf[str(istep)]
         p0 += sh_range[2]
-    tmp = _ao2mo.nr_e2_(tmp, mo, (0,nmo,0,nmo), 's4', 's1', ao_loc=ao_loc)
-    feri['ppaa'] = pyscf.lib.transpose(tmp).reshape(nmo,nmo,ncas,ncas)
-    tmp = None
+    nblk = int(max(1, min(nmo, (max_memory*1e6/8-tmp.size) / (ncas**2*nmo))))
+    log.debug1('nblk for ppaa = %d', nblk)
+    dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
+    for i0, i1 in prange(0, nmo, nblk):
+        tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1-i0,0,nmo), 's4', 's1', ao_loc=ao_loc)
+        dset[i0:i1] = tmp1.T.reshape(i1-i0,nmo,ncas,ncas)
+    tmp = tmp1 = None
+    time1 = log.timer('ppaa pass 2', *time1)
 
     faapp_buf.close()
     feri.close()
@@ -261,7 +272,7 @@ class _ERIS(object):
             gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
             self._tmpfile = tempfile.NamedTemporaryFile()
-            max_memory = max(2000, casscf.max_memory*.9-mem_now)
+            max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
                 log.warn('Not enough memory! You need increase CASSCF.max_memory')
             self.j_pc, self.k_pc = \
@@ -288,6 +299,9 @@ def _mem_usage(ncore, ncas, nmo):
         sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
 if __name__ == '__main__':
     from pyscf import scf
