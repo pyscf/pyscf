@@ -86,13 +86,15 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     papa_buf = numpy.zeros((nao,ncas,nmo*ncas))
     max_memory -= papa_buf.nbytes / 1e6
 
+    mo_c = numpy.asarray(mo, order='C')
     mo = numpy.asarray(mo, order='F')
     nao, nmo = mo.shape
     pashape = (0, nmo, ncore, ncas)
     if level == 1:
-        jc = numpy.empty((nao,nao,ncore))
-        kc = numpy.zeros((nao,nao,ncore))
-        max_memory -= (jc.nbytes+kc.nbytes) / 1e6
+        j_pc = numpy.zeros((nmo,ncore))
+        k_pc = numpy.zeros((nmo,ncore))
+    else:
+        j_pc = k_pc = None
 
     mem_words = int(max(1000,max_memory)*1e6/8)
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
@@ -152,18 +154,31 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                     buf[idx] = buf1[p0:p0+dij]
                     buf[idx[1],idx[0]] = buf1[p0:p0+dij]
                     buf = buf.reshape(di,di,nao,ncore)
-                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
-                    kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf, mo[i0:i1,:ncore])
+                    mo1 = mo_c[i0:i1]
+                    tmp = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
+                    tmp = pyscf.lib.dot(mo1.T, tmp.reshape(di,-1))
+                    j_pc += numpy.einsum('vp,pvc->pc', mo1, tmp.reshape(nmo,di,ncore))
+                    tmp = numpy.einsum('uvpc,uc->vcp', buf, mo1[:,:ncore])
+                    tmp = pyscf.lib.dot(tmp.reshape(-1,nmo), mo).reshape(di,ncore,nmo)
+                    k_pc += numpy.einsum('vp,vcp->pc', mo1, tmp)
                 else:
                     dij = di * dj
                     buf = buf1[p0:p0+dij].reshape(di,dj,nao,ncore)
-                    jc[i0:i1,j0:j1] = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
-                    jc[j0:j1,i0:i1] = jc[i0:i1,j0:j1].transpose(1,0,2)
-                    kc[j0:j1] += numpy.einsum('uvpc,uc->vpc', buf, mo[i0:i1,:ncore])
-                    kc[i0:i1] += numpy.einsum('uvpc,vc->upc', buf, mo[j0:j1,:ncore])
+                    mo1 = mo_c[i0:i1]
+                    mo2 = mo_c[j0:j1]
+                    tmp = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
+                    tmp = pyscf.lib.dot(mo1.T, tmp.reshape(di,-1))
+                    j_pc += numpy.einsum('vp,pvc->pc',
+                                         mo2, tmp.reshape(nmo,dj,ncore)) * 2
+                    tmp = numpy.einsum('uvpc,uc->vcp', buf, mo1[:,:ncore])
+                    tmp = pyscf.lib.dot(tmp.reshape(-1,nmo), mo).reshape(dj,ncore,nmo)
+                    k_pc += numpy.einsum('vp,vcp->pc', mo2, tmp)
+                    tmp = numpy.einsum('uvpc,vc->ucp', buf, mo2[:,:ncore])
+                    tmp = pyscf.lib.dot(tmp.reshape(-1,nmo), mo).reshape(di,ncore,nmo)
+                    k_pc += numpy.einsum('up,ucp->pc', mo1, tmp)
                 p0 += dij
             if log.verbose >= logger.DEBUG1:
-                ti1 = log.timer('jc and kc buffer', *ti1)
+                ti1 = log.timer('j_cp and k_cp', *ti1)
         else: # ppaa, papa
             _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
 
@@ -213,14 +228,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     tmp = _ao2mo.nr_e2_(tmp, mo, (0,nmo,0,nmo), 's4', 's1', ao_loc=ao_loc)
     feri['ppaa'] = pyscf.lib.transpose(tmp).reshape(nmo,nmo,ncas,ncas)
     tmp = None
-
-    if level == 1:
-        j_pc = pyscf.lib.dot(mo.T, jc.reshape(nao,-1)).reshape(nmo,nao,ncore)
-        j_pc = numpy.einsum('pj,jpi->ji', mo, j_pc)
-        k_pc = pyscf.lib.dot(mo.T, kc.reshape(nao,-1)).reshape(nmo,nao,ncore)
-        k_pc = numpy.einsum('pj,jpi->ji', mo, k_pc)
-    else:
-        j_pc = k_pc = None
 
     faapp_buf.close()
     feri.close()
