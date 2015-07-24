@@ -218,8 +218,9 @@ RCASCI = CASCI
 
 
 def UCASCI(mf, *args, **kwargs):
+    from pyscf import scf
     if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.hf.ROHF))):
+        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
@@ -230,8 +231,9 @@ def UCASCI(mf, *args, **kwargs):
 
 
 def UCASSCF(mf, *args, **kwargs):
+    from pyscf import scf
     if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.hf.ROHF))):
+        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):

@@ -23,7 +23,7 @@ mcr.mc1step()[0]
 
 mfu = scf.UHF(mol)
 mfu.scf()
-mcu = mcscf.CASSCF(mfu, 4, 4)
+mcu = mcscf.UCASSCF(mfu, 4, 4)
 mcu.conv_tol_grad = 1e-6
 mcu.mc1step()[0]
 
@@ -32,13 +32,15 @@ class KnowValues(unittest.TestCase):
     def test_spin_square(self):
         ss = mcscf.addons.spin_square(mcr)[0]
         self.assertAlmostEqual(ss, 0, 7)
+
+    def test_ucasscf_spin_square(self):
         ss = mcscf.addons.spin_square(mcu)[0]
         self.assertAlmostEqual(ss, 0, 7)
 
     def test_rcas_natorb(self):
         mo1, ci1, mocc1 = mcscf.addons.cas_natorb(mcr)
-        self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 9.9260608594977491, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 2.59144951056707, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 9.9260608594977491, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 2.59144951056707, 6)
 
 #TODO:    def test_ucas_natorb(self):
 #TODO:        mo2, ci2, mocc2 = mcscf.addons.cas_natorb(mcu)
@@ -63,9 +65,9 @@ class KnowValues(unittest.TestCase):
 
     def test_make_rdm1s(self):
         dm1 = mcscf.addons.make_rdm1s(mcr)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7015404376335805, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7015404376335805, 5)
         dm1 = mcscf.addons.make_rdm1s(mcu)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7015404376335805, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7015404376335805, 5)
 
     def test_sort_mo(self):
         mo1 = numpy.arange(mfr.mo_energy.size).reshape(1,-1)

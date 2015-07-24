@@ -112,12 +112,16 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
+    nmo = mo_coeff.shape[1]
     ncas = mc.ncas
     nelecas = mc.nelecas
 
     casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
-    vj = numpy.einsum('ij,ijpq->pq', casdm1, eris.aapp)
-    vk = numpy.einsum('ij,ipqj->pq', casdm1, eris.appa)
+    vj = numpy.empty((nmo,nmo))
+    vk = numpy.empty((nmo,nmo))
+    for i in range(nmo):
+        vj[i] = numpy.einsum('ij,qij->q', casdm1, eris.ppaa[i])
+        vk[i] = numpy.einsum('ij,iqj->q', casdm1, eris.papa[i])
     h1 = reduce(numpy.dot, (mo_coeff.T, mc.get_hcore(), mo_coeff))
     fock = h1 + eris.vhf_c + vj - vk * .5
     return fock
@@ -184,7 +188,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
     try:
         ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
-    except:
+    except AttributeError:
         log.info('FCI vector not available, so not using old wavefunction as initial guess')
         ci0 = None
 
@@ -212,7 +216,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                                mo_coeff[:,ncore:nocc]))
           + eris.vhf_c[ncore:nocc,ncore:nocc])
     h1eff = reduce(numpy.dot, (ucas.T, h1eff, ucas))
-    aaaa = eris.aapp[:,:,ncore:nocc,ncore:nocc].copy()
+    aaaa = numpy.asarray(eris.ppaa[ncore:nocc,ncore:nocc,:,:], order='C')
     aaaa = ao2mo.incore.full(ao2mo.restore(8, aaaa, ncas), ucas)
     e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0)
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
