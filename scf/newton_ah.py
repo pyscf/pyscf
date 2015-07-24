@@ -344,7 +344,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                           dxmax, norm_dr, w, seig)
 
                 ikf += 1
-                if ikf > 1 and norm_gorb > norm_gkf*mf.ah_grad_trust_region:
+                if imic > 3 and norm_gorb > norm_gkf*mf.ah_grad_trust_region:
                     g_orb = g_orb - hdxi
                     dr = dr - dxi
                     norm_gorb = numpy.linalg.norm(g_orb)
@@ -356,7 +356,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 
                 elif (ikf > 2 and # avoid frequent keyframe
                       (ikf > (mf.keyframe_interval - kf_compensate
-                               -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
+                              -numpy.log(norm_dr)*mf.keyframe_interval_rate) or
                        norm_gorb < norm_gkf*kf_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ)
@@ -364,21 +364,28 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     vhf0 = mf._scf.get_veff(mf.mol, dm, dm_last=dm0, vhf_last=vhf0)
+                    dm0 = dm
                     g_kf = mf.get_grad(mo1, mo_occ, h1e+vhf0)
                     norm_gkf = numpy.linalg.norm(g_kf)
                     norm_dg = numpy.linalg.norm(g_kf-g_orb)
+                    jkcount += 1
                     log.debug('Adjust keyframe g_orb to |g|= %4.3g  '
                               '|g-correction|= %4.3g', norm_gkf, norm_dg)
 # kf_compensate:  If the keyframe and the esitimated g_orb are too different,
 # insert more keyframes for the following optimization
-                    kf_compensate = norm_dg / norm_gkf
-                    kf_trust_region = max(min(kf_compensate, 0.25), .05)
-                    log.debug1('... kf_compensate = %g  kf_trust_region = %g',
-                               kf_compensate, kf_trust_region)
-                    g_orb, g_kf = g_kf, None
-                    norm_gorb = norm_gkf
-                    dm0 = dm
-                    jkcount += 1
+                    kf_compensate = norm_dg / norm_gorb
+                    if kf_compensate > mf.ah_grad_trust_region:
+                        g_orb = g_orb - hdxi
+                        dr = dr - dxi
+                        norm_gorb = numpy.linalg.norm(g_orb)
+                        log.debug('Out of trust region. Restore previouse step')
+                        break
+                    else:
+                        kf_trust_region = max(min(kf_compensate, 0.25), .05)
+                        log.debug1('... kf_compensate = %g  kf_trust_region = %g',
+                                   kf_compensate, kf_trust_region)
+                        g_orb, g_kf = g_kf, None
+                        norm_gorb = norm_gkf
 
                 if scale is None:
                     ah_start_tol = max(norm_gorb,
@@ -390,6 +397,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         log.debug('    tot inner=%d  %d JK  |g|= %4.3g  |u-1|= %4.3g',
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(nmo)))
+        h_op = h_diag = None
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         mo_coeff, mo_occ, fock_ao = (yield u, g_orb0, jkcount)
 
@@ -398,7 +406,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         norm_dg = numpy.linalg.norm(g_kf-g_orb)
         log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
                   norm_gkf, norm_dg)
-        kf_compensate = norm_dg / norm_gkf
+        kf_compensate = norm_dg / norm_gorb
         kf_trust_region = max(min(kf_compensate, 0.25), .05)
         log.debug1('... kf_compensate = %g  kf_trust_region = %g',
                    kf_compensate, kf_trust_region)
@@ -418,7 +426,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     mol = mf.mol
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
-        logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
+        logger.info(mf, 'Set conv_tol_grad to %g', conv_tol_grad)
     scf_conv = False
     hf_energy = mf.hf_energy
 
@@ -473,6 +481,11 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, hf_energy, norm_gorb, jktot)
     log.timer('Second order SCF', *cput0)
+    if scf_conv:
+        log.note('converged SCF energy = %.15g', hf_energy)
+    else:
+        log.note('SCF not converge.')
+        log.note('SCF energy = %.15g after %d cycles', hf_energy, max_cycle)
     return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
 
 
@@ -493,7 +506,7 @@ def newton(mf):
             self.ah_conv_tol = 1e-12
             self.ah_lindep = 1e-14
             self.ah_max_cycle = 30
-            self.ah_grad_trust_region = 2.5
+            self.ah_grad_trust_region = 3.
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
@@ -501,7 +514,7 @@ def newton(mf):
 #               ah_grad_trust_region = 1e6
             self.ah_decay_rate = .8
             self.keyframe_interval = 5
-            self.keyframe_interval_rate = .7
+            self.keyframe_interval_rate = 1.
             self_keys = set(self.__dict__.keys())
 
             self.__dict__.update(mf.__dict__)
