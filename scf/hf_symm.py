@@ -341,7 +341,6 @@ class ROHF(rohf.ROHF):
         float_irname = []
         fix_na = 0
         fix_nb = 0
-        nelectron_alpha = (self.mol.nelectron+self.mol.spin) // 2
         for ir in range(self.mol.symm_orb.__len__()):
             irname = self.mol.irrep_name[ir]
             if irname in self.irrep_nelec:
@@ -354,8 +353,9 @@ class ROHF(rohf.ROHF):
             logger.info(self, 'fix %d electrons in irreps: %s',
                         fix_na+fix_nb, str(self.irrep_nelec.items()))
             if ((fix_na+fix_nb > self.mol.nelectron) or
-                (fix_na>nelectron_alpha) or
-                (fix_nb+nelectron_alpha>self.mol.nelectron)):
+                (fix_na>self.nelec[0]) or (fix_nb>self.nelec[1]) or
+                (fix_na+self.nelec[1]>self.mol.nelectron) or
+                (fix_nb+self.nelec[0]>self.mol.nelectron)):
                 logger.error(self, 'electron number error in irrep_nelec %s',
                              self.irrep_nelec.items())
                 raise ValueError('irrep_nelec')

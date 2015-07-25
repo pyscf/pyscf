@@ -11,6 +11,8 @@ import os
 BLOCKEXE = '/path/to/Block/block.spin_adapted'
 #BLOCKSCRATCHDIR = os.environ['TMPDIR']
 BLOCKSCRATCHDIR = './scratch'
+MPIPREFIX = 'mpirun'  # change to srun for SLURM job system
+
 
 # Use ChemPS2 as the FCI solver for CASSCF
 # building PyChemPS2, a python module will be generated in

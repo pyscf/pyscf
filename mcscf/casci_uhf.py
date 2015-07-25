@@ -55,12 +55,14 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
              reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
     return h1eff, energy_core
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=None):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''UHF-CASCI solver
     '''
-    if verbose is None: verbose = casci.verbose
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(casci.stdout, verbose)
     if mo_coeff is None: mo_coeff = casci.mo_coeff
-    log = pyscf.lib.logger.Logger(casci.stdout, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start uhf-based CASCI')
 
