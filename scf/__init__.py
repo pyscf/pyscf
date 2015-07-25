@@ -47,9 +47,8 @@ to control the SCF method.
         callback function can access all local variables in the current
         envrionment.
 
-    nelectron_alpha : int, for UHF class only
-        number of alpha electrons.  By default it is determined by the orbital
-        energy spectrum.  It only affects UHF class.
+    nelec : (int,int), for UHF/ROHF class
+        freeze the number of (alpha,beta) electrons.
 
     irrep_nelec : dict, for symmetry- RHF/ROHF/UHF class only
         to indicate the number of electrons for each irreps.

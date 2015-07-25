@@ -149,15 +149,21 @@ class ROHF(hf.RHF):
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
+        n_a = (mol.nelectron + mol.spin) // 2
+        self.nelec = (n_a, mol.nelectron - n_a)
         self._focka_ao = None
-        self._keys = self._keys.union(['nelectron_alpha'])
+        self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        nb = self.mol.nelectron-self.nelectron_alpha
+        if hasattr(self, 'nelectron_alpha'):
+            logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
+            #raise RuntimeError('API updates')
+            self.nelec = (self.nelectron_alpha,
+                          self.mol.nelectron-self.nelectron_alpha)
+            delattr(self, 'nelectron_alpha')
         logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
-                    nb, self.nelectron_alpha-nb)
+                    self.nelec[1], self.nelec[0]-self.nelec[1])
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
@@ -192,7 +198,7 @@ class ROHF(hf.RHF):
                 (fock_eff, fock_alpha, fock_beta), which is provided by :func:`ROHF.get_fock_`
         '''
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
-        ncore = self.mol.nelectron-self.nelectron_alpha
+        ncore = self.nelec[1]
         mo_energy, mo_coeff = hf.SCF.eig(self, h, s)
         mopen = mo_coeff[:,ncore:]
         ea = numpy.einsum('ik,ik->k', mopen, self._focka_ao.dot(mopen))
@@ -216,8 +222,8 @@ class ROHF(hf.RHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
-        ncore = self.mol.nelectron-self.nelectron_alpha
-        nopen = self.nelectron_alpha - ncore
+        ncore = self.nelec[1]
+        nopen = self.nelec[0] - ncore
         nocc = ncore + nopen
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = 1
