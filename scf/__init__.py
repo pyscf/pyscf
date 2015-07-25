@@ -165,7 +165,7 @@ def newton(mf):
     '''augmented hessian for Newton Raphson'''
     return newton_ah.newton(mf)
 
-def fast_scf(mf):
+def fast_newton(mf):
     mf0 = density_fit(mf)
     mf0.conv_tol = .1
     mf0.kernel()
@@ -180,7 +180,12 @@ def fast_scf(mf):
     mf.hf_energy = mf1.hf_energy
     mf.converged = mf1.converged
     return mf
-fast_newton = fast_scf
+
+def fast_scf(mf):
+    from pyscf.lib import logger
+    logger.warn(mf, 'NOTE the  fast_scf  function will be removed in the recent updates. '
+                'Use function fast_newton instead')
+    return fast_newton(mf)
 
 
 def RKS(mol, *args):
