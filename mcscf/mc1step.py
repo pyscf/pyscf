@@ -386,9 +386,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
            dump_chk=True, dump_chk_ci=False):
     '''CASSCF solver
     '''
-    if verbose is None:
-        verbose = casscf.verbose
-    log = logger.Logger(casscf.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(casscf.stdout, casscf.verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 1-step CASSCF')
 
