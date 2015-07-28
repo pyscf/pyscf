@@ -63,18 +63,18 @@ The Following attributes are used for CASSCF
     conv_tol_grad : float
         Converge threshold for CI gradients and orbital rotation gradients.
         Default is 1e-4
-    max_orb_stepsize : float
+    max_stepsize : float
         The step size for orbital rotation.  Small step size is prefered.
         Default is 0.03.  
         (NOTE although the default step size is small enough for many systems,
         it happens that the orbital optimizor crosses the barriar of local
         minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
         C2H4 in the test files.  In these cases, one need to fine the
-        optimization by reducing max_orb_stepsize, max_ci_stepsize and
+        optimization by reducing max_stepsize, max_ci_stepsize and
         max_cycle_micro, max_cycle_micro_inner and ah_start_tol.)
 
         >>> mc = mcscf.CASSCF(mf, 6, 6)
-        >>> mc.max_orb_stepsize = .01
+        >>> mc.max_stepsize = .01
         >>> mc.max_cycle_micro = 1
         >>> mc.max_cycle_macro = 100
         >>> mc.max_cycle_micro_inner = 1
@@ -93,7 +93,7 @@ The Following attributes are used for CASSCF
     max_cycle_micro_inner : int
         Max number of steps for the orbital rotations allowed for the augmented
         hessian solver.  It can affect the actual size of orbital rotation.
-        Even with a small max_orb_stepsize, a few max_cycle_micro_inner can
+        Even with a small max_stepsize, a few max_cycle_micro_inner can
         accumulate the rotation and leads to a significant change of the CAS
         space.  Depending on systems, increasing this value migh reduce the
         total number of macro iterations.  The value between 2 - 8 is preferred.
@@ -218,8 +218,9 @@ RCASCI = CASCI
 
 
 def UCASCI(mf, *args, **kwargs):
+    from pyscf import scf
     if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.hf.ROHF))):
+        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
@@ -230,8 +231,9 @@ def UCASCI(mf, *args, **kwargs):
 
 
 def UCASSCF(mf, *args, **kwargs):
+    from pyscf import scf
     if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.hf.ROHF))):
+        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
     if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):

@@ -49,17 +49,18 @@ def density_fit(casscf, auxbasis='weigend'):
             ncore = self.ncore
             #self._cderi = None # FIXME? leave as much memory as possible for mc_ao2mo
             eris = mc_ao2mo._ERIS(self, mo, 'incore', level=2)
-            # using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
+
             t0 = (time.clock(), time.time())
             log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
+            # using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
             self.get_jk(self.mol, [])
             if log.verbose >= pyscf.lib.logger.DEBUG1:
                 t1 = log.timer('Generate density fitting integrals', *t0)
 
             mo = numpy.asarray(mo, order='F')
             nao, nmo = mo.shape
-            eris.j_cp = numpy.zeros((ncore,nmo))
-            eris.k_cp = numpy.zeros((ncore,nmo))
+            eris.j_pc = numpy.zeros((nmo,ncore))
+            k_cp = numpy.zeros((ncore,nmo))
             fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
@@ -80,11 +81,14 @@ def density_fit(casscf, auxbasis='weigend'):
                     if log.verbose >= pyscf.lib.logger.DEBUG1:
                         t1 = log.timer('transform [%d:%d]'%(b0,b1), *t1)
                     bufd = numpy.einsum('kii->ki', buf).copy()
-                    #:eris.j_cp += numpy.einsum('ki,kj->ij', bufd[:,:ncore], bufd)
-                    pyscf.lib.dot(bufd[:,:ncore].T.copy(), bufd, 1, eris.j_cp, 1)
-                    eris.k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
+                    #:eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
+                    pyscf.lib.dot(bufd.T, numpy.asarray(bufd[:,:ncore],order='C'),
+                                  1, eris.j_pc, 1)
+                    k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
                     if log.verbose >= pyscf.lib.logger.DEBUG1:
-                        t1 = log.timer('j_cp and k_cp', *t1)
+                        t1 = log.timer('j_pc and k_pc', *t1)
+            eris.k_pc = k_cp.T.copy()
+            log.timer('ao2mo density fit part', *t0)
             return eris
 
 # We don't modify self._scf because it changes self.h1eff function.

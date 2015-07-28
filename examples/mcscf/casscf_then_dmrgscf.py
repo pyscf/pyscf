@@ -25,7 +25,7 @@ mo = mc.mo_coeff
 
 mol.stdout.write('\n*********** Call DMRGSCF **********\n')
 mc = mcscf.CASSCF(m, 8, 8)
-mc.max_orb_stepsize = .05
+mc.max_stepsize = .05
 mc.max_cycle_macro = 20
 mc.max_cycle_micro = 3
 mc.conv_tol = 1e-8

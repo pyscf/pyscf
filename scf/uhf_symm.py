@@ -191,8 +191,9 @@ class UHF(uhf.UHF):
             logger.info(self, 'fix %d electrons in irreps: %s',
                         fix_na+fix_nb, str(self.irrep_nelec.items()))
             if ((fix_na+fix_nb > self.mol.nelectron) or
-                (fix_na>self.nelectron_alpha) or
-                (fix_nb+self.nelectron_alpha>self.mol.nelectron)):
+                (fix_na>self.nelec[0]) or (fix_nb>self.nelec[1]) or
+                (fix_na+self.nelec[1]>self.mol.nelectron) or
+                (fix_nb+self.nelec[0]>self.mol.nelectron)):
                 logger.error(self, 'electron number error in irrep_nelec %s',
                              self.irrep_nelec.items())
                 raise ValueError('irrep_nelec')
@@ -262,8 +263,8 @@ class UHF(uhf.UHF):
                 idx_eb_left.append(range(p0,p0+nso))
             p0 += nso
 
-        neleca_float = self.nelectron_alpha - neleca_fix
-        nelecb_float = mol.nelectron - self.nelectron_alpha - nelecb_fix
+        neleca_float = self.nelec[0] - neleca_fix
+        nelecb_float = self.nelec[1] - nelecb_fix
         assert(neleca_float >= 0)
         assert(nelecb_float >= 0)
         if len(idx_ea_left) > 0:

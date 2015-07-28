@@ -400,8 +400,8 @@ def map_rhf_to_uhf(rhf):
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for UHF:
-        nelectron_alpha : int
-            If given, fix the number of alpha electrons to the given value
+        nelec : (int, int)
+            If given, freeze the number of (alpha,beta) electrons to the given value
 
     Examples:
 
@@ -418,14 +418,19 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
-        self.nelectron_alpha = (mol.nelectron + mol.spin) // 2
-        self._keys = self._keys.union(['nelectron_alpha'])
+        n_a = (mol.nelectron + mol.spin) // 2
+        self.nelec = (n_a, mol.nelectron - n_a)
+        self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
+        if hasattr(self, 'nelectron_alpha'):
+            logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
+            #raise RuntimeError('API updates')
+            self.nelec = (self.nelectron_alpha,
+                          self.mol.nelectron-self.nelectron_alpha)
+            delattr(self, 'nelectron_alpha')
         hf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d',
-                    self.nelectron_alpha,
-                    self.mol.nelectron-self.nelectron_alpha)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
 
     def eig(self, fock, s):
         e_a, c_a = hf.SCF.eig(self, fock[0], s)
@@ -452,8 +457,7 @@ class UHF(hf.SCF):
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
-        n_a = self.nelectron_alpha
-        n_b = self.mol.nelectron - n_a
+        n_a, n_b = self.nelec
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[0][:n_a] = 1
         mo_occ[1][:n_b] = 1
@@ -570,7 +574,7 @@ class UHF(hf.SCF):
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
                             dm0=dm0, callback=self.callback)
-#        if self.nelectron_alpha * 2 < self.mol.nelectron:
+#        if self.nelec[0] * 2 < self.mol.nelectron:
 #            self.mo_coeff = (self.mo_coeff[1], self.mo_coeff[0])
 #            self.mo_occ = (self.mo_occ[1], self.mo_occ[0])
 #            self.mo_energy = (self.mo_energy[1], self.mo_energy[0])

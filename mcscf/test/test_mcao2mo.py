@@ -28,15 +28,13 @@ class KnowValues(unittest.TestCase):
 
         eris0 = mcscf.mc_ao2mo._ERIS(mc, mo, 'incore')
         eris1 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore')
-        eris2 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', approx=1)
-        eris3 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', approx=2)
+        eris2 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', level=1)
+        eris3 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', level=2)
         self.assertTrue(numpy.allclose(eris0.vhf_c, eris1.vhf_c))
         self.assertTrue(numpy.allclose(eris0.j_cp , eris1.j_cp ))
         self.assertTrue(numpy.allclose(eris0.k_cp , eris1.k_cp ))
         self.assertTrue(numpy.allclose(eris0.aapp , eris1.aapp ))
         self.assertTrue(numpy.allclose(eris0.appa , eris1.appa ))
-        self.assertTrue(numpy.allclose(eris0.Iapcv, eris1.Iapcv))
-        self.assertTrue(numpy.allclose(eris0.Icvcv, eris1.Icvcv))
 
         self.assertTrue(numpy.allclose(eris0.vhf_c, eris2.vhf_c))
         self.assertTrue(numpy.allclose(eris0.j_cp , eris2.j_cp ))
@@ -61,26 +59,12 @@ class KnowValues(unittest.TestCase):
         k_cp = numpy.einsum('ijj->ij', kc_pp)
         aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
         appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
-        capv = eri[:ncore,ncore:nocc,:,ncore:]
-        cvap = eri[:ncore,ncore:,ncore:nocc,:]
-        cpav = eri[:ncore,:,ncore:nocc,ncore:]
-        ccvv = eri[:ncore,:ncore,ncore:,ncore:]
-        cvcv = eri[:ncore,ncore:,:ncore,ncore:]
-
-        cVAp = cvap * 4 \
-             - capv.transpose(0,3,1,2) \
-             - cpav.transpose(0,3,2,1)
-        cVCv = cvcv * 4 \
-             - ccvv.transpose(0,3,1,2) \
-             - cvcv.transpose(0,3,2,1)
 
         self.assertTrue(numpy.allclose(vhf_c, eris0.vhf_c))
         self.assertTrue(numpy.allclose(j_cp , eris0.j_cp ))
         self.assertTrue(numpy.allclose(k_cp , eris0.k_cp ))
         self.assertTrue(numpy.allclose(aapp , eris0.aapp ))
         self.assertTrue(numpy.allclose(appa , eris0.appa ))
-        self.assertTrue(numpy.allclose(cVAp.transpose(2,3,0,1), eris1.Iapcv))
-        self.assertTrue(numpy.allclose(cVCv.transpose(2,3,0,1), eris1.Icvcv))
 
     def test_uhf(self):
         mol.atom = [

@@ -9,7 +9,7 @@ import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
 
 
-def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
+def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
            ci0=None, callback=None, verbose=None,
            dump_chk=True, dump_chk_ci=False):
     if verbose is None:
@@ -34,9 +34,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
                                          cas_natorb=casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo
-    elast = e_tot
+
+    if conv_tol_grad is None:
+        conv_tol_grad = numpy.sqrt(tol)
+        logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv = False
-    toloose = casscf.conv_tol_grad
+    elast = e_tot
     totmicro = totinner = 0
     casdm1 = 0
     r0 = None
@@ -51,7 +54,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0, log)
+            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0,
+                                        conv_tol_grad, log)
             u, g_orb, njk = rota.next()
             rota.close()
             ninner += njk
@@ -72,7 +76,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < toloose or norm_gorb < toloose:
+            if norm_t < conv_tol_grad or norm_gorb < conv_tol_grad:
                 break
 
         r0 = casscf.pack_uniq_var(u)
@@ -89,7 +93,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, macro=30, micro=4,
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(elast - e_tot) < tol and
-            norm_gorb < toloose and norm_ddm < toloose):
+            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad):
             conv = True
         else:
             elast = e_tot
