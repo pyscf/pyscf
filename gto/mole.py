@@ -191,12 +191,15 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     if isinstance(atoms, str):
         atoms = atoms.replace(';','\n').replace(',',' ')
         for line in atoms.split('\n'):
-            if line.strip():
+            line1 = line.strip()
+            if line1 and not line1.startswith('#'):
                 fmt_atoms.append(str2atm(line))
     else:
         for atom in atoms:
             if isinstance(atom, str):
-                fmt_atoms.append(str2atm(atom.replace(',',' ')))
+                line1 = atom.strip()
+                if line1 and not line1.startswith('#'):
+                    fmt_atoms.append(str2atm(atom.replace(',',' ')))
             else:
                 if isinstance(atom[0], int):
                     symb = param.ELEMENTS[atom[0]][0]

@@ -140,6 +140,12 @@ def follow_state_(mf, occorb=None):
 
 
 def project_mo_nr2nr(mol1, mo1, mol2):
+    ''' Project orbital coefficients
+
+    |psi1> = |AO1> C1
+    |psi2> = P |psi1> = |AO2>S^{-1}<AO2| AO1> C1 = |AO2> C2
+    C2 = S^{-1}<AO2|AO1> C1
+    '''
     s22 = mol2.intor_symmetric('cint1e_ovlp_sph')
     s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
     return numpy.linalg.solve(s22, numpy.dot(s21, mo1))
