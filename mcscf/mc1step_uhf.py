@@ -561,6 +561,14 @@ class CASSCF(casci_uhf.CASCI):
         return va, vc
 
     def update_casdm(self, mo, u, fcivec, e_ci, eris):
+
+        ecore, h1cas, h2cas = self.approx_cas_integral(self, mo, u, eris)
+
+        ci1, g = self.solve_approx_ci(h1cas, h2cas, fcivec, ecore, e_ci)
+        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, ncas, nelecas)
+        return casdm1, casdm2, g
+
+    def approx_cas_integral(self, mo, u, eris):
         ncas = self.ncas
         nelecas = self.nelecas
         ncore = self.ncore
@@ -622,9 +630,7 @@ class CASSCF(casci_uhf.CASCI):
               + numpy.einsum('jp,pj->', jka[:ncore[0]], rmat[0][:,:ncore[0]])*2
               + numpy.einsum('jp,pj->', jkb[:ncore[1]], rmat[1][:,:ncore[1]])*2)
 
-        ci1, g = self.solve_approx_ci(h1cas, (aaaa,aaAA,AAAA), fcivec, ecore, e_ci)
-        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, ncas, nelecas)
-        return casdm1, casdm2, g
+        return ecore, h1cas, (aaaa, aaAA, AAAA)
 
     def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci):
         ''' Solve CI eigenvalue/response problem approximately
