@@ -20,7 +20,7 @@ from pyscf.mcscf import chkfile
 # the convergence are very unstable and slow
 
 # gradients, hessian operator and hessian diagonal
-def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
+def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = (ncas + ncore[0], ncas + ncore[1])
@@ -62,7 +62,8 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
-    def gorb_update(u, r0):
+    def gorb_update(u):
+        r0 = casscf.pack_uniq_var(u)
         return g_orb + h_op(r0)
 
     ############## hessian, diagonal ###########
@@ -205,7 +206,11 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
         x2a = x2a - x2a.T
         x2b = x2b - x2b.T
         return casscf.pack_uniq_var((x2a,x2b))
-    return g_orb, gorb_update, h_op, h_diag
+
+    if isinstance(u, int):
+        return g_orb, gorb_update, h_op, h_diag
+    else:
+        return gorb_update(u), gorb_update, h_op, h_diag
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
@@ -258,25 +263,30 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             else:
                 u, g_orb, njk = micro_iter.send((casdm1,casdm2))
                 norm_gorb = numpy.linalg.norm(g_orb)
-            casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
+            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
+            if imicro + 1 == max_cycle_micro:
+                log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ',
+                          imicro+1, de, norm_t, norm_gorb)
+                break
 
+            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             if isinstance(gci, numpy.ndarray):
                 norm_gci = numpy.linalg.norm(gci)
             else:
                 norm_gci = -1
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
-            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
+            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
-                      imicro+1, norm_t, norm_gorb, norm_gci, norm_ddm)
+                      imicro+1, de, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
-            if (norm_t < conv_tol_grad or
+            if (norm_t < 1e-4 or abs(de) < tol * .5 or
                 (norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad*.8)):
                 break
 
@@ -334,7 +344,7 @@ class CASSCF(casci_uhf.CASCI):
         self.frozen = frozen
         self.max_stepsize = .03
         self.max_cycle_macro = 50
-        self.max_cycle_micro = 3
+        self.max_cycle_micro = 4
         self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = None
@@ -345,15 +355,15 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_lindep = 1e-14
         self.ah_start_tol = .2
         self.ah_start_cycle = 2
-        self.ah_grad_trust_region = 1.5
-        self.ah_decay_rate = .8
+        self.ah_grad_trust_region = 2.
+        self.ah_decay_rate = .7
         self.internal_rotation = False
         self.dynamic_micro_step = False
-        self.keyframe_interval = 4999
+        self.keyframe_interval = 5
         self.keyframe_interval_rate = 1
         self.keyframe_trust_region = 0.25e-9
         self.chkfile = mf.chkfile
-        self.ci_response_space = 3
+        self.ci_response_space = 4
         self.natorb = False
         self.callback = None
 
@@ -405,6 +415,9 @@ class CASSCF(casci_uhf.CASCI):
                  self.max_memory, pyscf.lib.current_memory()[0])
         log.info('internal_rotation = %s', self.internal_rotation)
         log.info('dynamic_micro_step %s', self.dynamic_micro_step)
+        log.info('keyframe_interval = %d', self.keyframe_interval)
+        log.info('keyframe_interval_rate = %g', self.keyframe_interval_rate)
+        log.info('keyframe_trust_region = %g', self.keyframe_trust_region)
         try:
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
@@ -640,7 +653,7 @@ class CASSCF(casci_uhf.CASCI):
 
         ci1, g = self.solve_approx_ci(h1cas, (aaaa,aaAA,AAAA), fcivec, ecore, e_ci)
         casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, ncas, nelecas)
-        return casdm1, casdm2, g
+        return casdm1, casdm2, g, ci1
 
     def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci):
         ''' Solve CI eigenvalue/response problem approximately
