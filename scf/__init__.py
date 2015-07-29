@@ -47,9 +47,8 @@ to control the SCF method.
         callback function can access all local variables in the current
         envrionment.
 
-    nelectron_alpha : int, for UHF class only
-        number of alpha electrons.  By default it is determined by the orbital
-        energy spectrum.  It only affects UHF class.
+    nelec : (int,int), for UHF/ROHF class
+        freeze the number of (alpha,beta) electrons.
 
     irrep_nelec : dict, for symmetry- RHF/ROHF/UHF class only
         to indicate the number of electrons for each irreps.
@@ -165,7 +164,7 @@ def newton(mf):
     '''augmented hessian for Newton Raphson'''
     return newton_ah.newton(mf)
 
-def fast_scf(mf):
+def fast_newton(mf):
     mf0 = density_fit(mf)
     mf0.conv_tol = .1
     mf0.kernel()
@@ -180,7 +179,12 @@ def fast_scf(mf):
     mf.hf_energy = mf1.hf_energy
     mf.converged = mf1.converged
     return mf
-fast_newton = fast_scf
+
+def fast_scf(mf):
+    from pyscf.lib import logger
+    logger.warn(mf, 'NOTE the  fast_scf  function will be removed in the recent updates. '
+                'Use function fast_newton instead')
+    return fast_newton(mf)
 
 
 def RKS(mol, *args):

@@ -72,7 +72,8 @@ class CASSCF(mc1step.CASSCF):
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 _kern(self, mo_coeff,
-                      tol=self.conv_tol, macro=macro, micro=micro,
+                      tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
+                      macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
@@ -81,19 +82,14 @@ class CASSCF(mc1step.CASSCF):
     def gen_g_hop(self, mo, casdm1, casdm2, eris):
         casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
                              self.mol.groupname)
-        g_orb, gorb_op, h_op1, h_opjk, h_diag = \
+        g_orb, gorb_op, h_op, h_diag = \
                 mc1step.gen_g_hop(self, mo, casdm1, casdm2, eris)
         g_orb = _symmetrize(self.unpack_uniq_var(g_orb), self.orbsym,
                             self.mol.groupname)
         h_diag = _symmetrize(self.unpack_uniq_var(h_diag), self.orbsym,
                              self.mol.groupname)
-        def sym_h_op1(x):
-            hx = h_op1(x)
-            hx = _symmetrize(self.unpack_uniq_var(hx), self.orbsym,
-                             self.mol.groupname)
-            return self.pack_uniq_var(hx)
-        def sym_h_opjk(x):
-            hx = h_opjk(x)
+        def sym_h_op(x):
+            hx = h_op(x)
             hx = _symmetrize(self.unpack_uniq_var(hx), self.orbsym,
                              self.mol.groupname)
             return self.pack_uniq_var(hx)
@@ -102,7 +98,7 @@ class CASSCF(mc1step.CASSCF):
             g = _symmetrize(self.unpack_uniq_var(g), self.orbsym,
                             self.mol.groupname)
             return self.pack_uniq_var(g)
-        return self.pack_uniq_var(g_orb), gorb_op, sym_h_op1, sym_h_opjk, \
+        return self.pack_uniq_var(g_orb), gorb_op, sym_h_op, \
                self.pack_uniq_var(h_diag)
 
     def update_rotate_matrix(self, dx, u0=1):

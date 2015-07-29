@@ -290,8 +290,8 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v = eris['aapp'][:,:,nocc:,ncore:nocc].transpose(2,0,3,1)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v = eris['ppaa'][nocc:,ncore:nocc].transpose(0,2,1,3)
         h1e_v = eris['h1eff'][nocc:,ncore:nocc] - numpy.einsum('mbbn->mn',h2e_v)
 
 
@@ -333,8 +333,8 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v = eris['aapp'][:,:,ncore:nocc,:ncore].transpose(2,0,3,1)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v = eris['ppaa'][ncore:nocc,:ncore].transpose(0,2,1,3)
         h1e_v = eris['h1eff'][ncore:nocc,:ncore]
 
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
@@ -404,8 +404,8 @@ def Sijr(mc,orbe, dms, eris, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v = eris['apcv'][:,:ncore].transpose(3,0,2,1)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v = eris['pacv'][:ncore].transpose(3,1,2,0)
     if 'h1' in dms:
         hdm1 = dms['h1']
     else:
@@ -435,8 +435,8 @@ def Srsi(mc,orbe, dms, eris, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v = eris['apcv'][:,nocc:].transpose(3,1,2,0)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v = eris['pacv'][nocc:].transpose(3,0,2,1)
 
     k27 = make_k27(h1e,h2e,dm1,dm2)
     norm = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,dm1)\
@@ -463,8 +463,8 @@ def Srs(mc,orbe, dms, eris=None, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v = eris['appa'][:,nocc:,nocc:].transpose(1,2,0,3)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v = eris['papa'][nocc:,:,nocc:].transpose(0,2,1,3)
 
 # a7 is very sensitive to the accuracy of HF orbital and CI wfn
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
@@ -490,8 +490,8 @@ def Sij(mc,orbe, dms, eris, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v = eris['appa'][:,:ncore,:ncore].transpose(0,3,1,2)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v = eris['papa'][:ncore,:,:ncore].transpose(1,3,0,2)
 
     if 'h1' in dms:
         hdm1 = dms['h1']
@@ -532,9 +532,9 @@ def Sir(mc,orbe, dms, eris, verbose=None):
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
-        h2e = eris['aapp'][:,:,ncore:nocc,ncore:nocc].transpose(0,2,1,3)
-        h2e_v1 = eris['aapp'][:,:,nocc:,:ncore].transpose(2,0,3,1)
-        h2e_v2 = eris['appa'][:,nocc:,:ncore].transpose(1,3,0,2)
+        h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
+        h2e_v1 = eris['ppaa'][nocc:,:ncore].transpose(0,2,1,3)
+        h2e_v2 = eris['papa'][nocc:,:,:ncore].transpose(0,3,1,2)
         h1e_v = eris['h1eff'][nocc:,:ncore]
 
     norm = numpy.einsum('rpiq,raib,qpab->ir',h2e_v1,h2e_v1,dm2)*2.0\
@@ -598,7 +598,7 @@ def sc_nevpt(mc, verbose=None):
     if not hasattr(mc.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
         link_indexa = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[0])
         link_indexb = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[1])
-        aaaa = eris['aapp'][:,:,mc.ncore:nocc,mc.ncore:nocc].copy()
+        aaaa = eris['ppaa'][mc.ncore:nocc,mc.ncore:nocc].copy()
         f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, mc.ci, mc.ncas,
                              mc.nelecas, (link_indexa,link_indexb))
         f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, mc.ci, mc.ncas,
@@ -701,11 +701,11 @@ def _ERIS(mc, mo, method='incore'):
         (mcscf.mc_ao2mo._mem_usage(ncore, ncas, nmo)[0] +
          nmo**4*2/1e6 > mc.max_memory*.9) or
         (mc._scf._eri is None)):
-        aapp, appa, apcv, cvcv = \
+        ppaa, papa, pacv, cvcv = \
                 trans_e1_outcore(mc, mo, max_memory=mc.max_memory,
                                  verbose=mc.verbose)
     else:
-        aapp, appa, apcv, cvcv = trans_e1_incore(mc, mo)
+        ppaa, papa, pacv, cvcv = trans_e1_incore(mc, mo)
 
     dmcore = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
     vj, vk = mc._scf.get_jk(mc.mol, dmcore)
@@ -713,9 +713,9 @@ def _ERIS(mc, mo, method='incore'):
 
     eris = {}
     eris['vhf_c'] = vhfcore
-    eris['aapp'] = aapp
-    eris['appa'] = appa
-    eris['apcv'] = apcv
+    eris['ppaa'] = ppaa
+    eris['papa'] = papa
+    eris['pacv'] = pacv
     eris['cvcv'] = cvcv
     eris['h1eff'] = reduce(numpy.dot, (mo.T, mc.get_hcore(), mo)) + vhfcore
     return eris
@@ -731,8 +731,8 @@ def trans_e1_incore(mc, mo):
     eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo[:,ncore:]),
                                       compact=False)
     load_buf = lambda r0,r1: eri1[r0*nav:r1*nav]
-    aapp, appa, apcv, cvcv = _trans(mo, ncore, ncas, load_buf)
-    return aapp, appa, apcv, cvcv
+    ppaa, papa, pacv, cvcv = _trans(mo, ncore, ncas, load_buf)
+    return ppaa, papa, pacv, cvcv
 
 def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
@@ -774,10 +774,10 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     cvcvfile = tempfile.NamedTemporaryFile()
     with h5py.File(cvcvfile.name) as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
-        aapp, appa, apcv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
+        ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
     time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
     fswap.close()
-    return aapp, appa, apcv, cvcvfile
+    return ppaa, papa, pacv, cvcvfile
 
 def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
     nao, nmo = mo.shape
@@ -787,9 +787,9 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
 
     if cvcv is None:
         cvcv = numpy.zeros((ncore*nvir,ncore*nvir))
-    apcv = numpy.empty((ncas,nmo,ncore*nvir))
+    pacv = numpy.empty((nmo,ncas,ncore*nvir))
     aapp = numpy.empty((ncas,ncas,nmo*nmo))
-    appa = numpy.empty((ncas,nmo,nmo*ncas))
+    papa = numpy.empty((nmo,ncas,nmo*ncas))
     vcv = numpy.empty((nav,ncore*nvir))
     apa = numpy.empty((ncas,nmo*ncas))
     vpa = numpy.empty((nav,nmo*ncas))
@@ -800,30 +800,31 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
         _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', vout=vcv, ao_loc=ao_loc)
         cvcv[i*nvir:(i+1)*nvir] = vcv[ncas:]
-        apcv[:,i] = vcv[:ncas]
+        pacv[i] = vcv[:ncas]
 
         klshape = (0, nmo, ncore, ncas)
         _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', vout=apa, ao_loc=ao_loc)
-        appa[:,i] = apa
+        papa[i] = apa
     for i in range(ncas):
         buf = fload(ncore+i, ncore+i+1)
         klshape = (0, ncore, nocc, nvir)
         _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', vout=vcv, ao_loc=ao_loc)
-        apcv[i,ncore:] = vcv
+        pacv[ncore:,i] = vcv
 
         klshape = (0, nmo, ncore, ncas)
         _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', vout=vpa, ao_loc=ao_loc)
-        appa[i,ncore:] = vpa
+        papa[ncore:,i] = vpa
 
         klshape = (0, nmo, 0, nmo)
         _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', vout=app, ao_loc=ao_loc)
         aapp[i] = app
-    return (aapp.reshape(ncas,ncas,nmo,nmo), appa.reshape(ncas,nmo,nmo,ncas),
-            apcv.reshape(ncas,nmo,ncore,nvir), cvcv)
+    ppaa = pyscf.lib.transpose(aapp.reshape(ncas**2,-1))
+    return (ppaa.reshape(nmo,nmo,ncas,ncas), papa.reshape(nmo,ncas,nmo,ncas),
+            pacv.reshape(nmo,ncas,ncore,nvir), cvcv)
 
 
 
@@ -846,8 +847,8 @@ if __name__ == '__main__':
     m.conv_tol = 1e-20
     ehf = m.scf()
     mc = mcscf.CASCI(m, 6, 8)
+    mc.fcisolver.conv_tol = 1e-14
     ci_e = mc.kernel()[0]
-    #mc.fcisolver.conv_tol = 1e-14
     mc.verbose = 4
     print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
@@ -881,6 +882,7 @@ if __name__ == '__main__':
     m.conv_tol = 1e-20
     ehf = m.scf()
     mc = mcscf.CASCI(m,8,10)
+    mc.fcisolver.conv_tol = 1e-14
     mc.kernel()
     mc.verbose = 4
-    print(sc_nevpt(mc), -0.094164432224406597)
+    print(sc_nevpt(mc), -0.094164462034941498)

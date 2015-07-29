@@ -69,12 +69,11 @@ def float_occ(mf):
         ee = numpy.sort(numpy.hstack(mo_energy))
         n_a = int((mo_energy[0]<(ee[mol.nelectron-1]+1e-3)).sum())
         n_b = mol.nelectron - n_a
-        if n_a != mf.nelectron_alpha:
+        if n_a != mf.nelec[0]:
             logger.info(mf, 'change num. alpha/beta electrons '
                         ' %d / %d -> %d / %d',
-                        mf.nelectron_alpha,
-                        mol.nelectron-mf.nelectron_alpha, n_a, n_b)
-            mf.nelectron_alpha = n_a
+                        mf.nelec[0], mf.nelec[1], n_a, n_b)
+            mf.nelec = (n_a, n_b)
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     return get_occ
 def float_occ_(mf):
@@ -141,6 +140,12 @@ def follow_state_(mf, occorb=None):
 
 
 def project_mo_nr2nr(mol1, mo1, mol2):
+    ''' Project orbital coefficients
+
+    |psi1> = |AO1> C1
+    |psi2> = P |psi1> = |AO2>S^{-1}<AO2| AO1> C1 = |AO2> C2
+    C2 = S^{-1}<AO2|AO1> C1
+    '''
     s22 = mol2.intor_symmetric('cint1e_ovlp_sph')
     s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
     return numpy.linalg.solve(s22, numpy.dot(s21, mo1))
