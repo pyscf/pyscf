@@ -578,10 +578,10 @@ class CASSCF(casci_uhf.CASCI):
 
     def update_casdm(self, mo, u, fcivec, e_ci, eris):
 
-        ecore, h1cas, h2cas = self.approx_cas_integral(self, mo, u, eris)
+        ecore, h1cas, h2cas = self.approx_cas_integral(mo, u, eris)
 
         ci1, g = self.solve_approx_ci(h1cas, h2cas, fcivec, ecore, e_ci)
-        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, ncas, nelecas)
+        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, self.ncas, self.nelecas)
         return casdm1, casdm2, g
 
     def approx_cas_integral(self, mo, u, eris):
