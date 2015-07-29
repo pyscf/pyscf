@@ -297,6 +297,51 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         return ss, s*2+1
 
 
+def state_average_e_(casscf, weights=(0.5,0.5)):
+    ''' State average over the energy.  The energy funcitonal is
+    E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
+
+    Note we may need change the FCI solver to
+
+    mc.fcisolver = pyscf.fci.solver(mol, False)
+
+    before calling state_average_(mc), to mix the singlet and triplet states
+    '''
+    assert(abs(sum(weights)-1) < 1e-10)
+    fcibase = casscf.fcisolver
+    fcibase.nroots = len(weights)
+    class FakeCISolver(casscf.fcisolver.__class__):
+        def __init__(self):
+            self.__dict__.update(fcibase.__dict__)
+        def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
+            e, c = fcibase.kernel(h1, h2, ncas, nelecas, ci0,
+                                  nroots=self.nroots, **kwargs)
+            return numpy.einsum('i,i->', e, weights), c
+        def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
+            e, c = fcibase.kernel(h1, h2, norb, nelec, ci0,
+                                  max_cycle=casscf.ci_response_space,
+                                  nroots=self.nroots, **kwargs)
+            return numpy.einsum('i,i->', e, weights), c
+        def make_rdm1(self, ci0, norb, nelec):
+            dm1 = 0
+            for i, wi in enumerate(weights):
+                dm1 += wi*fcibase.make_rdm1(ci0[i], norb, nelec)
+            return dm1
+        def make_rdm12(self, ci0, norb, nelec):
+            rdm1 = 0
+            rdm2 = 0
+            for i, wi in enumerate(weights):
+                dm1, dm2 = fcibase.make_rdm12(ci0[i], norb, nelec)
+                rdm1 += wi * dm1
+                rdm2 += wi * dm2
+            return rdm1, rdm2
+    casscf.fcisolver = FakeCISolver()
+    return casscf
+
+def state_average_(casscf, weights=(0.5,0.5)):
+    return state_average_e_(casscf, weights)
+
+
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
@@ -328,3 +373,35 @@ if __name__ == '__main__':
     numpy.set_printoptions(2)
     print(reduce(numpy.dot, (mo1[:,:6].T, mol.intor('cint1e_ovlp_sph'),
                              mo[:,:6])))
+
+# state average
+    mol.atom = [
+        ['O', ( 0., 0.    , 0.   )],
+        ['H', ( 0., -0.757, 0.587)],
+        ['H', ( 0., 0.757 , 0.587)],]
+    mol.basis = '6-31g'
+    mol.build()
+
+    m = scf.RHF(mol)
+    ehf = m.scf()
+
+
+    mc = mcscf.CASSCF(m, 4, 4)
+    mc.verbose = 4
+    mc.fcisolver = pyscf.fci.solver(mol, False) # to mix the singlet and triplet
+    mc = state_average_(mc, (.64,.36))
+    emc, e_ci, fcivec, mo = mc.mc1step()
+    mc = mcscf.CASCI(m, 4, 4)
+    emc = mc.casci(mo)[0]
+    print(ehf, emc, emc-ehf)
+    print(emc - -76.003352190262532)
+
+
+    mc = mcscf.CASSCF(m, 4, 4)
+    mc.verbose = 4
+    mc = state_average_(mc, (.64,.36))
+    emc, e_ci, fcivec, mo = mc.mc1step()
+    mc = mcscf.CASCI(m, 4, 4)
+    emc = mc.casci(mo)[0]
+    print(ehf, emc, emc-ehf)
+    print(emc - -75.982520334896776)

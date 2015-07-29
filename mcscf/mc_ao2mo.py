@@ -105,7 +105,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     paapp = 0
     maxbuflen = max([x[2] for x in shranges])
     bufs1 = numpy.empty((maxbuflen, nao_pair))
-    bufs2 = numpy.empty((maxbuflen, pashape[1]*pashape[3]))
+    bufs2 = numpy.empty((maxbuflen, nmo*ncas))
     bufs3 = numpy.empty((maxbuflen, nao*ncore))
 
     # fmmm, ftrans, fdrv for level 1
