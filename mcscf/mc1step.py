@@ -234,7 +234,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
 
 # Dynamically increase the number of micro cycles when approach convergence?
     if norm_gorb < 0.01:
-        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log(norm_gorb+1e-9))
+        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb+1e-9))
     else:
         max_cycle = casscf.max_cycle_micro_inner
 
@@ -246,12 +246,11 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
     if x0_guess is None:
         x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
-    ah_start_tol = (numpy.log(norm_gorb+conv_tol_grad) -
-                    numpy.log(min(norm_gorb,conv_tol_grad))) * 1.5 * norm_gorb
-    ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
     while True:
         # increase the AH accuracy when approach convergence
-        ah_start_tol = max(norm_gorb**2, ah_start_tol)
+        ah_start_tol = (numpy.log(norm_gorb+conv_tol_grad) -
+                        numpy.log(min(norm_gorb,conv_tol_grad))) * 1.5 * norm_gorb
+        ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
         #ah_start_cycle = max(casscf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = casscf.ah_start_cycle
         log.debug('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
@@ -774,7 +773,7 @@ class CASSCF(casci.CASCI):
         self.ci_update_dep = 2
         self.internal_rotation = False
         self.dynamic_micro_step = False
-        self.keyframe_interval = 5
+        self.keyframe_interval = 4
         self.keyframe_interval_rate = 1.
         self.keyframe_trust_region = 0.25
         self.chkfile = mf.chkfile
