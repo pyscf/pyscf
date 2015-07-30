@@ -388,7 +388,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                         norm_gorb = norm_gkf
 
                 if scale is None:
-                    ah_start_tol = max(norm_gorb,
+                    ah_start_tol = max(norm_gorb * 1.2,
                                        ah_start_tol * mf.ah_decay_rate)
                     log.debug('Set ah_start_tol %g', ah_start_tol)
 
@@ -436,6 +436,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
     fock = mf.get_fock(h1e, s1e, vhf, dm, 0, None)
+    mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)[0]
+# in case the initial guess mo_occ is incorrect
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
     u, g_orb, jkcount = rotaiter.next()
     jktot = jkcount
@@ -450,7 +453,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
         mo_energy = mf.get_mo_energy(fock, s1e, mo_coeff, mo_occ)[0]
-        mf.get_occ(mo_energy, mo_coeff)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
 # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         hf_energy = mf._scf.energy_tot(dm, h1e, vhf)
 
