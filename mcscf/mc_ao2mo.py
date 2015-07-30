@@ -245,6 +245,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
 
     faapp_buf.close()
     feri.close()
+    _tmpfile1 = None
     time0 = log.timer('mc_ao2mo', *time0)
     return j_pc, k_pc
 
@@ -293,6 +294,8 @@ class _ERIS(object):
     def __del__(self):
         if hasattr(self, 'feri'):
             self.feri.close()
+            self.feri = None
+            self._tmpfile = None
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore

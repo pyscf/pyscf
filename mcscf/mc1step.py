@@ -325,7 +325,8 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
 
                 if scale is None:
 # Gradually decrease start_tol/conv_tol, so the next step is more accurate
-                    ah_start_tol = max(norm_gorb, ah_start_tol*casscf.ah_decay_rate)
+                    ah_start_tol = max(norm_gorb * 1.2,
+                                       ah_start_tol*casscf.ah_decay_rate)
                     log.debug('Set ah_start_tol %g', ah_start_tol)
 
         u = casscf.update_rotate_matrix(dr)
