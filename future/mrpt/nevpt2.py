@@ -562,7 +562,7 @@ def Sir(mc,orbe, dms, eris, verbose=None):
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
-def sc_nevpt(mc, verbose=None):
+def sc_nevpt(mc, useMPS=False, verbose=None):
     '''Strongly contracted NEVPT2'''
 
     if isinstance(verbose, logger.Logger):
@@ -574,10 +574,14 @@ def sc_nevpt(mc, verbose=None):
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
     logger.debug(mc, 'mc.fcisolver = %s', type(mc.fcisolver))
+
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         logger.info(mc, 'DMRG-NEVPT')
         dm1, dm2, dm3 = mc.fcisolver.make_rdm123(None,mc.ncas,mc.nelecas,None)
     else:
+        if useMPS:
+            logger.error(mc,"MPS nevpt only used for DMRG calculation")
+            exit()
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
                                            mc.ci, mc.ci, mc.ncas, mc.nelecas)
     dm4 = None
@@ -612,12 +616,23 @@ def sc_nevpt(mc, verbose=None):
     orbe = mc.get_fock(eris=fake_eris).diagonal()
     fake_eris = None
 
-    norm_Sr   , e_Sr    = Sr(mc,orbe, dms, eris)
-    logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
-    time1 = log.timer("space Sr (-1)'", *time1)
-    norm_Si   , e_Si    = Si(mc,orbe, dms, eris)
-    logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
-    time1 = log.timer("space Si (+1)'", *time1)
+    if useMPS:
+        fh5 = h5py.File('Perturbation','r')
+        e_Si     =   fh5['Vi/energy'].value    
+        norm_Si  =   fh5['Vi/norm'].value       
+        e_Sr     =   fh5['Vr/energy'].value     
+        norm_Sr  =   fh5['Vr/norm'].value       
+        fh5.close()
+        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
+        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
+
+    else:
+        norm_Sr   , e_Sr    = Sr(mc,orbe, dms, eris)
+        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
+        time1 = log.timer("space Sr (-1)'", *time1)
+        norm_Si   , e_Si    = Si(mc,orbe, dms, eris)
+        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
+        time1 = log.timer("space Si (+1)'", *time1)
     norm_Sijrs, e_Sijrs = Sijrs(mc,orbe, eris)
     logger.note(mc, "Sijrs (0)  , Norm = %.14f  E = %.14f", norm_Sijrs,e_Sijrs)
     time1 = log.timer('space Sijrs (0)', *time1)
