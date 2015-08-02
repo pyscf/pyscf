@@ -452,6 +452,10 @@ class FCISolver(object):
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
+    def spin_square(self, fcivec, norb, nelec):
+        from pyscf.fci import spin_op
+        return spin_op.spin_square0(fcivec, norb, nelec)
+
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
 

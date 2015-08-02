@@ -1,4 +1,9 @@
-Version 1.0 beta (2015-8-?):
+Version 1.0 rc (2015-9-?):
+
+Version 1.0 beta (2015-8-2):
+* FCI spin eigen function
+* Add state-average CASSCF
+* CCSD lambda equation and density matrix
 
 Version 1.0 alpha 2 (2015-7-3):
 * Optimize HF J K contraction

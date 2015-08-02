@@ -159,6 +159,11 @@ class KnowValues(unittest.TestCase):
                                          [  0., 30., 31., 32.],
                                          [  0., 40., 41., 42.],
                                          [  0., 50., 51., 52.]]))
+    def test_spin_squre(self):
+        ss = fci.spin_op.spin_square(ci0, norb, nelec)
+        self.assertAlmostEqual(ss[0], 0, 9)
+        ss = fci.spin_op.spin_square0(ci0, norb, nelec)
+        self.assertAlmostEqual(ss[0], 0, 9)
 
 
 if __name__ == "__main__":

@@ -3,9 +3,9 @@ pyscf
 
 Python module for quantum chemistry
 
-Version 1.0 alpha 2
+Version 1.0 beta
 
-2015-7-3
+2015-8-2
 
 Pyscf is a python module for quantum chemistry program.  The module
 aims to provide a simple, light-weight and efficient platform for
@@ -117,9 +117,7 @@ Known problems
 
 * tests fail
 
-  mcscf/test/test_bz.py        test_mc1step_9o8e
-  mcscf/test/test_c2h4.py      test_mc1step_4o4e_smallstep
-  mcscf/test/test_c2h4.py      test_mc2step_4o4e_smallstep
+  mcscf/test/test_bz_df.py     test_mc2step_9o8e
   mcscf/test/test_addons.py    test_spin_square
   cc/test/test_h2o.py          test_h2o_without_scf
 

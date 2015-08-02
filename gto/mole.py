@@ -749,7 +749,7 @@ def spheric_labels(mol, fmt=True):
     if isinstance(fmt, str):
         return [(fmt % x) for x in label]
     elif fmt:
-        return ['%d%3s %s%-4s' % x for x in label]
+        return ['%d %s %s%-4s' % x for x in label]
     else:
         return label
 

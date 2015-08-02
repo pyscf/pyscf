@@ -76,7 +76,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
 def gen_linkstr_index(orb_list, nocc, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs)
+    strs = numpy.array(strs, dtype=numpy.int64)
     norb = len(orb_list)
     nvir = norb - nocc
     na = num_strings(norb, nocc)
@@ -104,10 +104,10 @@ def reform_linkstr_index(link_index):
 def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs)
+    strs = numpy.array(strs, dtype=numpy.int64)
     norb = len(orb_list)
     nvir = norb - nocc
-    na = num_strings(norb, nocc)
+    na = strs.shape[0]
     link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
@@ -119,7 +119,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
 # a mapping between N electron string to N+1 electron string.
 # creation of an electron for the given string -> the address of the
 # resultant string
-def gen_cre_str_index(orb_list, nelec):
+def gen_cre_str_index_o0(orb_list, nelec):
     cre_strs = gen_strings4orblist(orb_list, nelec+1)
     credic = dict(zip(cre_strs,range(cre_strs.__len__())))
     def parity(str0, cre_bit):
@@ -134,11 +134,25 @@ def gen_cre_str_index(orb_list, nelec):
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
     return numpy.array(t, dtype=numpy.int32)
+def gen_cre_str_index_o1(orb_list, nelec):
+    norb = len(orb_list)
+    assert(nelec < norb)
+    strs = gen_strings4orblist(orb_list, nelec)
+    strs = numpy.array(strs, dtype=numpy.int64)
+    na = strs.shape[0]
+    link_index = numpy.empty((len(strs),norb-nelec,4), dtype=numpy.int32)
+    libfci.FCIcre_str_index(link_index.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(norb), ctypes.c_int(na),
+                            ctypes.c_int(nelec),
+                            strs.ctypes.data_as(ctypes.c_void_p))
+    return link_index
+def gen_cre_str_index(orb_list, nelec):
+    return gen_cre_str_index_o1(orb_list, nelec)
 
 # a mapping between N electron string to N-1 electron string.
 # annihilation of an electron for the given string -> the address of the
 # resultant string
-def gen_des_str_index(orb_list, nelec):
+def gen_des_str_index_o0(orb_list, nelec):
     des_strs = gen_strings4orblist(orb_list, nelec-1)
     desdic = dict(zip(des_strs,range(des_strs.__len__())))
     def parity(str0, des_bit):
@@ -153,6 +167,20 @@ def gen_des_str_index(orb_list, nelec):
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
     return numpy.array(t, dtype=numpy.int32)
+def gen_des_str_index_o1(orb_list, nelec):
+    assert(nelec > 0)
+    strs = gen_strings4orblist(orb_list, nelec)
+    strs = numpy.array(strs, dtype=numpy.int64)
+    norb = len(orb_list)
+    na = strs.shape[0]
+    link_index = numpy.empty((len(strs),nelec,4), dtype=numpy.int32)
+    libfci.FCIdes_str_index(link_index.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(norb), ctypes.c_int(na),
+                            ctypes.c_int(nelec),
+                            strs.ctypes.data_as(ctypes.c_void_p))
+    return link_index
+def gen_des_str_index(orb_list, nelec):
+    return gen_des_str_index_o1(orb_list, nelec)
 
 
 
@@ -169,15 +197,15 @@ def parity(string0, string1):
     else:
         return (-1) ** (count_bit1(string0&(-ss)))
 
-#def addr2str_o0(norb, nelec, addr):
-#    assert(num_strings(norb, nelec) > addr)
-#    if addr == 0 or nelec == norb or nelec == 0:
-#        return (1<<nelec) - 1   # ..0011..11
-#    else:
-#        for i in reversed(range(norb)):
-#            addrcum = num_strings(i, nelec)
-#            if addrcum <= addr:
-#                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
+def addr2str_o0(norb, nelec, addr):
+    assert(num_strings(norb, nelec) > addr)
+    if addr == 0 or nelec == norb or nelec == 0:
+        return (1<<nelec) - 1   # ..0011..11
+    else:
+        for i in reversed(range(norb)):
+            addrcum = num_strings(i, nelec)
+            if addrcum <= addr:
+                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
 def addr2str_o1(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
     if addr == 0 or nelec == norb or nelec == 0:
@@ -245,3 +273,10 @@ if __name__ == '__main__':
     print(str2addr(6, 3, addr2str(6, 3, 7)) - 7)
     print(str2addr(6, 3, addr2str(6, 3, 8)) - 8)
     print(str2addr(7, 4, addr2str(7, 4, 9)) - 9)
+
+    tab1 = gen_cre_str_index_o0(range(8), 4)
+    tab2 = gen_cre_str_index_o1(range(8), 4)
+    print(abs(tab1 - tab2).sum())
+    tab1 = gen_des_str_index_o0(range(8), 4)
+    tab2 = gen_des_str_index_o1(range(8), 4)
+    print(abs(tab1 - tab2).sum())

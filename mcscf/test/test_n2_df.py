@@ -89,14 +89,14 @@ class KnowValues(unittest.TestCase):
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -108.8896744464714, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
-                               2.7015375913946591, 4)
+                               2.6910276344981119, 4)
 
     def test_casci_symm_4o4e(self):
         mc = mcscf.CASCI(msym, 4, 4)
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -108.8896744464714, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
-                               2.7015375913946591, 4)
+                               2.6910276344981119, 4)
 
 #    def test_casci_uhf(self):
 #        mf = scf.UHF(mol)

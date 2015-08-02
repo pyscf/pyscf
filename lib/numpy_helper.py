@@ -90,6 +90,21 @@ def solve_lineq_by_SVD(a, b):
         x = numpy.zeros_like(b)
     return x
 
+def takebak_2d(out, a, idx, idy):
+    if numpy.iscomplexobj(a):
+        out[idx[:,None],idy] += a
+    else:
+        idx = numpy.asarray(idx, dtype=numpy.int32)
+        idy = numpy.asarray(idy, dtype=numpy.int32)
+        _np_helper.NPdtakebak_2d(out.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(out.shape[0]),
+                                 ctypes.c_int(out.shape[1]),
+                                 a.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(a.shape[0]),
+                                 ctypes.c_int(a.shape[1]),
+                                 idx.ctypes.data_as(ctypes.c_void_p),
+                                 idy.ctypes.data_as(ctypes.c_void_p))
+    return out
 
 def transpose(a, inplace=False):
     arow, acol = a.shape
