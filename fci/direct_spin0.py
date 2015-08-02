@@ -287,7 +287,7 @@ def _check_(c):
     c = pyscf.lib.transpose_sum(c)
     c *= .5
     if abs(numpy.linalg.norm(c)-1) > 1e-9:
-        raise ValueError('State not singlet')
+        raise ValueError('State not singlet %g' % abs(numpy.linalg.norm(c)-1))
     return c
 
 

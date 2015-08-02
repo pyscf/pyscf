@@ -508,7 +508,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
-            if (norm_t < 1e-4 or abs(de) < tol*.5 or
+            if (norm_t < 1e-4 or abs(de) < tol*.2 or
                 (norm_gorb < conv_tol_grad and
                  (norm_ddm < conv_tol_grad*.8 or norm_ddm_micro < 1e-5))):
                 break
@@ -760,7 +760,7 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
-        self.ah_start_tol = .2
+        self.ah_start_tol = 1.5
         self.ah_start_cycle = 2
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
@@ -769,7 +769,7 @@ class CASSCF(casci.CASCI):
 #               ah_grad_trust_region = 1e6
 # ah_grad_trust_region allow gradients increase for AH optimization
         self.ah_grad_trust_region = 2.
-        self.ah_decay_rate = .7
+        self.ah_decay_rate = .8
         self.grad_update_dep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False

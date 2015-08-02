@@ -99,8 +99,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             log.info(' string alpha, string beta, CI coefficients')
             for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
                 log.info('  %9s    %9s    %.12f', ia, ib, c)
-            ss = fci.spin_op.spin_square(ci, casscf.ncas, casscf.nelecas)
-            log.info('CI S^2 = %.7f, 2S+1 = %.7f' % ss) #mcscf.spin_square(casscf))
 
         dm1 = dm1a + dm1b
         s = casscf._scf.get_ovlp()
@@ -263,7 +261,12 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
+    if log.verbose >= logger.NOTE:
+        ss = casci.fcisolver.spin_square(fcivec, ncas, nelecas)
+        log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                 e_tot, e_cas, ss[0])
+    else:
+        log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 

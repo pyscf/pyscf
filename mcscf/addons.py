@@ -282,9 +282,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     ncas     = casscf.ncas
     nelecas  = casscf.nelecas
     if isinstance(ncore, (int, numpy.integer)):
-        nocc = ncore + ncas
-        mocas = mo_coeff[:,ncore:nocc]
-        return pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        return pyscf.fci.spin_op.spin_square0(ci, ncas, nelecas)
     else:
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
@@ -335,6 +333,12 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
+        def spin_square(self, ci0, norb, nelec):
+            ss = 0
+            for i, wi in enumerate(weights):
+                ss += wi*fcibase.spin_square(ci0[i], norb, nelec)[0]
+            multip = numpy.sqrt(ss+.25)*2
+            return ss, multip
     casscf.fcisolver = FakeCISolver()
     return casscf
 

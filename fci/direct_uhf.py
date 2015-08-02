@@ -278,6 +278,9 @@ class FCISolver(direct_spin1.FCISolver):
 #        return make_diag_precond(hdiag, self.level_shift)
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
 
+    def spin_square(self, fcivec, norb, nelec):
+        from pyscf.fci import spin_op
+        return spin_op.spin_square(fcivec, norb, nelec)
 
 if __name__ == '__main__':
     from functools import reduce

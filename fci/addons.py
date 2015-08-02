@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy
+import pyscf.lib
 from pyscf.fci import cistring
 from pyscf import symm
 
@@ -242,6 +243,28 @@ def overlap(string1, string2, norb, s=None):
         idx2 = [i for i in range(norb) if (1<<i & string2)]
         s1 = numpy.take(numpy.take(s, idx1, axis=0), idx2, axis=1)
         return numpy.linalg.det(s1)
+
+def fix_spin_(fciobj, shift=.1):
+    '''If FCI solver cannot stick on spin eigenfunction, modify the solver by
+    a shift on spin square operator
+    (H + shift*S^2) |Psi> = E |Psi>
+    '''
+    from pyscf.fci import spin_op
+    from pyscf.fci import direct_spin0
+    fciobj.davidson_only = True
+    def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        ci1 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        if isinstance(nelec, (int, numpy.integer)):
+            sz = (nelec % 2) * .5
+        else:
+            sz = (nelec[0]-nelec[1]) * .5
+        ci1 += shift * spin_op.contract_ss(fcivec, norb, nelec)
+        ci1 -= sz*(sz+1)*shift * fcivec.reshape(ci1.shape)
+        if isinstance(fciobj, direct_spin0.FCISolver):
+            ci1 = pyscf.lib.transpose_sum(ci1, inplace=True) * .5
+        return ci1
+    fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
+    return fciobj
 
 
 if __name__ == '__main__':
