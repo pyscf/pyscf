@@ -9,6 +9,8 @@ import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
 from pyscf import mcscf
+from pyscf.dmrgscf.dmrg_sym import IRREP_MAP
+from pyscf.dmrgscf.nevpt_mpi import write_chk
 
 '''
 DMRG solver for CASSCF.
@@ -24,34 +26,6 @@ except ImportError:
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
 
-
-IRREP_MAP = {'D2h': (1,         # Ag
-                     4,         # B1g
-                     6,         # B2g
-                     7,         # B3g
-                     8,         # Au
-                     5,         # B1u
-                     3,         # B2u
-                     2),        # B3u
-             'C2v': (1,         # A1
-                     4,         # A2
-                     2,         # B1
-                     3),        # B2
-             'C2h': (1,         # Ag
-                     4,         # Bg
-                     2,         # Au
-                     3),        # Bu
-             'D2' : (1,         # A
-                     4,         # B1
-                     3,         # B2
-                     2),        # B3
-             'Cs' : (1,         # A'
-                     2),        # A"
-             'C2' : (1,         # A
-                     2),        # B
-             'Ci' : (1,         # Ag
-                     2),        # Au
-             'C1' : (1,)}
 
 
 class DMRGCI(object):
@@ -83,6 +57,7 @@ class DMRGCI(object):
         self.restart = False
         self.force_restart = False
         self.nonspinAdapted = False
+        self.mps_nevpt = False
         self.scheduleSweeps = []
         self.scheduleMaxMs  = []
         self.scheduleTols   = []
@@ -313,8 +288,37 @@ class DMRGCI(object):
             logger.debug1(self, 'Block Input conf')
             logger.debug1(self, open(inFile, 'r').read())
         if self.onlywriteIntegral :
-            logger.info(self,'Finish write integral')
-            exit()
+            logger.info(self,'Only write integral')
+            try:
+                calc_e = readEnergy(self)
+            except IOError:
+                calc_e = 0.0
+            return calc_e, None
+            
+        executeBLOCK(self)
+        if self.verbose >= logger.DEBUG1:
+            outFile = self.outputFile
+            #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+            logger.debug1(self, open(outFile).read())
+        calc_e = readEnergy(self)
+
+        return calc_e, None
+
+    def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
+        fciRestart = True 
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2 + nelec%2
+            nelecb = nelec - neleca
+        else :
+            neleca, nelecb = nelec
+
+        writeIntegralFile(h1e, eri, norb, neleca, nelecb, self)
+        writeDMRGConfFile(neleca, nelecb, fciRestart, self, True)
+        if self.verbose >= logger.DEBUG1:
+            inFile = self.configFile
+            #inFile = os.path.join(self.scratchDirectory,self.configFile)
+            logger.debug1(self, 'Block Input conf')
+            logger.debug1(self, open(inFile, 'r').read())
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
             outFile = self.outputFile
@@ -345,7 +349,7 @@ def make_schedule(sweeps, Ms, tols, noises):
     else:
         return 'schedule default'
 
-def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
+def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
     confFile = DMRGCI.configFile
     #confFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
 
@@ -383,7 +387,11 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
     f.write('orbitals %s\n' % DMRGCI.integralFile)
     #f.write('orbitals %s\n' % os.path.join(DMRGCI.scratchDirectory,
     #                                       DMRGCI.integralFile))
-    f.write('maxiter %i\n'%DMRGCI.maxIter)
+    if approx == True :
+        f.write('maxiter 4\n')
+    else :
+        f.write('maxiter %i\n'%DMRGCI.maxIter)
+
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
     f.write('outputlevel 2\n')
     f.write('hf_occ integral\n')
@@ -391,7 +399,8 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI):
         f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):
         f.write('nonspinAdapted\n')
-    f.write('prefix  %s\n'%DMRGCI.scratchDirectory)
+    if(DMRGCI.scratchDirectory):
+        f.write('prefix  %s\n'%DMRGCI.scratchDirectory)
     for line in DMRGCI.extraline:
         f.write('%s\n'%line)
     f.close()
@@ -470,6 +479,70 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     mc.fcisolver = DMRGCI(mf.mol)
     mc.callback = mc.fcisolver.restart_scheduler_()
     return mc
+
+
+def DMRG_MPS_NEVPT(mc, maxm = 500, tol =1e-6, parallel= True):
+    
+    if (isinstance(mc, basestring)):
+        fh5 = h5py.File(mc,'r')
+
+        mol = eval(fh5['mol'].value)
+        ncas = fh5['mc/ncas'].value
+        ncore = fh5['mc/ncore'].value
+        nvirt = fh5['mc/nvirt'].value
+        nelecas = fh5['mc/nelecas'].value
+        fh5.close()
+        mc_chk = mc
+    else :
+        mol = mc.mol
+        ncas = mc.ncas
+        ncore = mc.ncore
+        nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
+        nelecas = mc.nelecas
+        mc_chk = 'mc_chkfile'
+        write_chk(mc,mc_chk)
+        
+
+
+
+    ci = DMRGCI(mol, maxm, tol)
+    ci.twopdm = False
+    scratch = ci.scratchDirectory
+    ci.scratchDirectory = ''
+    if (not parallel):
+        ci.extraline.append('restart_mps_nevpt %d %d %d'%(ncas,ncore, nvirt))
+
+
+    ci.extraline.append('fullrestart')
+    
+    writeDMRGConfFile(nelecas[0], nelecas[1], False, ci)
+    ci.scratchDirectory = scratch
+
+    if ci.verbose >= logger.DEBUG1:
+        inFile = ci.configFile
+        #inFile = os.path.join(self.scratchDirectory,self.configFile)
+        logger.debug1(ci, 'Block Input conf')
+        logger.debug1(ci, open(inFile, 'r').read())
+
+    from subprocess import check_call
+    check_call('%s /home/shengg/opt/pyscf_new/pyscf/future/dmrgscf/nevpt_mpi.py %s %s %s %s %s'%(ci.mpiprefix, mc_chk, ci.executable, ci.configFile,ci.outputFile, ci.scratchDirectory), shell=True)
+
+    #if (parallel):
+    #    from subprocess import check_call
+    #    check_call('/home/shengg/opt/pyscf/future/dmrgscf/nevpt_mpi.py mc_chk %s %s %s'%(ci.executable, ci.configFile,ci.outputFile), shell=True)
+    #    #check_call('%s /home/shengg/opt/pyscf/future/dmrgscf/nevpt_mpi.py mc_chk %s %s %s'%(ci.mpiprefix, ci.executable, ci.configFile,ci.outputFile))
+    #else:
+    #    nevpt_integral(mc)
+    #    executeBLOCK(ci)
+
+
+
+    if ci.verbose >= logger.DEBUG1:
+        outFile = ci.outputFile
+        logger.debug1(ci, open(outFile).read())
+    #calc_e = readEnergy(self)
+
+    #return calc_e, None
 
 
 if __name__ == '__main__':
