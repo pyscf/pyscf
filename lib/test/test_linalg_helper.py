@@ -14,17 +14,16 @@ class KnowValues(unittest.TestCase):
     def test_davidson(self):
         mol = gto.Mole()
         mol.verbose = 0
-        mol.atom = [['H', (0,0,i)] for i in range(7)]
+        mol.atom = [['H', (0,0,i)] for i in range(8)]
         mol.basis = {'H': 'sto-3g'}
-        mol.spin = 1
         mol.build()
         mf = scf.RHF(mol)
         mf.scf()
         myfci = fci.FCI(mol, mf.mo_coeff)
         myfci.max_memory = .001
-        myfci.max_cycle = 400
+        myfci.max_cycle = 100
         e = myfci.kernel()[0]
-        self.assertAlmostEqual(e, -7.0560297718867258, 9)
+        self.assertAlmostEqual(e, -11.579978414933732, 9)
 
 if __name__ == "__main__":
     print("Full Tests for linalg_helper")

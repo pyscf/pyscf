@@ -248,7 +248,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         pdm2 = (double *)malloc(sizeof(double) * nnorb*nnorb);
         memset(pdm1, 0, sizeof(double) * nnorb);
         memset(pdm2, 0, sizeof(double) * nnorb*nnorb);
-#pragma omp for schedule(dynamic, 2) nowait
+#pragma omp for schedule(guided, 2) nowait
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += bufbase) {
                         blen = MIN(bufbase, nb-ib);

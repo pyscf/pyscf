@@ -18,21 +18,22 @@ mol.atom = '''
 mol.basis = 'cc-pvdz'
 mol.build()
 mf = scf.RHF(mol)
+mf.conv_tol = 1e-14
 mf.scf()
 
 class KnowValues(unittest.TestCase):
     def test_pre_nao(self):
         c = nao.prenao(mol, mf.make_rdm1())
-        self.assertAlmostEqual(numpy.linalg.norm(c), 7.2617698799320358, 9)
-        self.assertAlmostEqual(abs(c).sum(), 40.032576928168687, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(c), 5.7742626195362039, 9)
+        self.assertAlmostEqual(abs(c).sum(), 33.214804163888289, 6)
 
     def test_nao(self):
         c = nao.nao(mol, mf)
         s = mf.get_ovlp()
         self.assertTrue(numpy.allclose(reduce(numpy.dot, (c.T, s, c)),
                                        numpy.eye(s.shape[0])))
-        self.assertAlmostEqual(numpy.linalg.norm(c), 10.967144073462256, 9)
-        self.assertAlmostEqual(abs(c).sum(), 110.03099712555559, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(c), 8.982385484322208, 9)
+        self.assertAlmostEqual(abs(c).sum(), 90.443872916389637, 6)
 
 
 if __name__ == "__main__":

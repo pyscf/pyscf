@@ -36,6 +36,7 @@ mf.kernel()
 norb = 6
 nelec = 8
 mc = mcscf.CASCI(mf, norb, nelec)
+mc.fcisolver.conv_tol = 1e-15
 mc.kernel()
 mo_cas = mf.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 h1e = mc.h1e_for_cas()[0]
@@ -51,42 +52,42 @@ dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
 class KnowValues(unittest.TestCase):
     def test_Sr(self):
         norm, e = nevpt2.Sr(mc,orbe,dms, eris)
-        self.assertAlmostEqual(e, -0.02024615448982894, 9)
-        self.assertAlmostEqual(norm, 0.039479583324952064, 9)
+        self.assertAlmostEqual(e, -0.020246153598033282, 7)
+        self.assertAlmostEqual(norm, 0.039479583324952064, 7)
 
     def test_Si(self):
         norm, e = nevpt2.Si(mc,orbe,dms, eris)
-        self.assertAlmostEqual(e, -0.0021282083432783445, 9)
-        self.assertAlmostEqual(norm, 0.0037402318601481785, 9)
+        self.assertAlmostEqual(e, -0.0021282093222748039, 7)
+        self.assertAlmostEqual(norm, 0.0037402334190064367, 7)
 
     def test_Sijrs(self):
         norm, e = nevpt2.Sijrs(mc,orbe, eris)
-        self.assertAlmostEqual(e, -0.0071505006221038612, 9)
-        self.assertAlmostEqual(norm, 0.023107593129840662, 9)
+        self.assertAlmostEqual(e, -0.0071505006221038612, 7)
+        self.assertAlmostEqual(norm, 0.023107592349719219, 7)
 
     def test_Sijr(self):
         norm, e = nevpt2.Sijr(mc,orbe,dms, eris)
-        self.assertAlmostEqual(e, -0.0050346131472232781, 9)
-        self.assertAlmostEqual(norm, 0.012664063064240805, 9)
+        self.assertAlmostEqual(e, -0.0050346144730854568, 7)
+        self.assertAlmostEqual(norm, 0.012664066951786257, 7)
 
     def test_Srsi(self):
         norm, e = nevpt2.Srsi(mc,orbe,dms, eris)
-        self.assertAlmostEqual(e, -0.013695648258441447, 9)
-        self.assertAlmostEqual(norm, 0.040695897271711433, 9)
+        self.assertAlmostEqual(e, -0.013695646542511425, 7)
+        self.assertAlmostEqual(norm, 0.040695892654346914, 7)
 
     def test_Srs(self):
         norm, e = nevpt2.Srs(mc,orbe,dms, eris)
-        self.assertAlmostEqual(e, -0.017531232809731869, 9)
-        self.assertAlmostEqual(norm, 0.056323603233950678, 9)
+        self.assertAlmostEqual(e, -0.017531233961444431, 7)
+        self.assertAlmostEqual(norm, 0.056323606234166601, 7)
 
     def test_Sir(self):
         norm, e = nevpt2.Sir(mc,orbe,dms, eris)
-        self.assertAlmostEqual(e, -0.033866605721793064, 9)
-        self.assertAlmostEqual(norm, 0.074269055796470834, 9)
+        self.assertAlmostEqual(e, -0.033866603317217352, 7)
+        self.assertAlmostEqual(norm, 0.074269050656629421, 7)
 
     def test_energy(self):
         e = nevpt2.sc_nevpt(mc)
-        self.assertAlmostEqual(e, -0.10315310550843806, 9)
+        self.assertAlmostEqual(e, -0.1031531038976489, 7)
 
     def test_energy1(self):
         mol = gto.M(
@@ -102,7 +103,7 @@ class KnowValues(unittest.TestCase):
         mc.fcisolver.conv_tol = 1e-16
         mc.kernel()
         e = nevpt2.sc_nevpt(mc)
-        self.assertAlmostEqual(e, -0.16978532268234559, 7)
+        self.assertAlmostEqual(e, -0.16978532268234559, 6)
 
 
 if __name__ == "__main__":

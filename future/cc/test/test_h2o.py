@@ -50,8 +50,8 @@ class KnowValues(unittest.TestCase):
     def test_ccsd_frozen(self):
         mcc = cc.ccsd.CC(mf, frozen=range(1))
         mcc.kernel()
-        self.assertAlmostEqual(mcc.ecc, -0.2112488542258705, 8)
-        self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996478165484417, 6)
+        self.assertAlmostEqual(mcc.ecc, -0.2112488542258705, 7)
+        self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996478165484417, 5)
 
     def test_h2o_non_hf_orbital(self):
         nmo = mf.mo_energy.size
@@ -86,7 +86,7 @@ class KnowValues(unittest.TestCase):
         mycc.max_cycle = 1000
         mycc.conv_tol = 1e-12
         self.assertAlmostEqual(mf.energy_tot(dm1)+mycc.kernel(mo_coeff=mo1)[0],
-                               ehf-0.21334323320620596, 8)
+                               ehf-0.21334323320620596, 7)
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

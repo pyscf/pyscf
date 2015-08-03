@@ -55,7 +55,7 @@ class KnowValues(unittest.TestCase):
     def test_get_veff(self):
         dm = mf.make_rdm1()
         v = mf.get_veff(mol, dm)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 56.050204183850624, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 56.050212738602092, 9)
 
 
 if __name__ == "__main__":

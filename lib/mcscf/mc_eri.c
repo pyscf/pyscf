@@ -13,8 +13,7 @@
 #include "ao2mo/nr_ao2mo.h"
 
 /*
- * transform ket
- * s2 to label AO symmetry
+ * transform ket, s2 to label AO symmetry
  * copy from RIhalfmmm_nr_s2_ket
  */
 int MCSCFhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
