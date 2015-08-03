@@ -14,6 +14,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib.parameters
 from pyscf.lo import orth
+from pyscf.lib import logger
 
 AOSHELL = (
     # core       core+valence
@@ -218,8 +219,9 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         c -= reduce(numpy.dot, (c1, c1.T, s, c))
         s1 = reduce(numpy.dot, (c.T, s, c))
         cnao[:,rydbg_lst] = numpy.dot(c, orth.lowdin(s1))
-#FIXME: orthogonality accuracy cannot reach 1e-10?
-#    assert(numpy.allclose(reduce(numpy.dot, (cnao.T, s, cnao)), numpy.eye(nbf)))
+    snorm = numpy.linalg.norm(reduce(numpy.dot, (cnao.T, s, cnao)) - numpy.eye(nbf))
+    if snorm > 1e-9:
+        logger.warn(mol, 'Weak orthogonality for localized orbitals %s', snorm)
     return cnao
 
 def _core_val_ryd_list(mol):

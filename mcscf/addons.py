@@ -117,9 +117,9 @@ def project_init_guess(casscf, init_mo):
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
-        logger.debug(casscf, 'Core indices %s', str(idx[-ncore:][::-1]))
+        logger.debug(casscf, 'Core indices %s', str(numpy.sort(idx[-ncore:])))
         # take HF core
-        mocore = mfmo[:,idx[-ncore:][::-1]]
+        mocore = mfmo[:,numpy.sort(idx[-ncore:])]
 
         # take projected CAS space
         mocas = init_mo[:,ncore:nocc] \
