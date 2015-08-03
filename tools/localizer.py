@@ -23,6 +23,11 @@ from pyscf import ao2mo
 import numpy as np
 import scipy
 
+import ctypes
+import _ctypes
+from pyscf.lib import load_library
+liblocalizer = load_library('liblocalizer')
+
 class localizer:
 
     def __init__( self, mol, orbital_coeff, thetype ):
@@ -92,9 +97,9 @@ class localizer:
             x_curr = np.dot( np.dot( self.u.T, self.x_orig ), self.u )
             y_curr = np.dot( np.dot( self.u.T, self.y_orig ), self.u )
             z_curr = np.dot( np.dot( self.u.T, self.z_orig ), self.u )
-            self.x_symm = x_curr + x_curr.T
-            self.y_symm = y_curr + y_curr.T
-            self.z_symm = z_curr + z_curr.T
+            self.x_symm = np.array( x_curr + x_curr.T, dtype=ctypes.c_double )
+            self.y_symm = np.array( y_curr + y_curr.T, dtype=ctypes.c_double )
+            self.z_symm = np.array( z_curr + z_curr.T, dtype=ctypes.c_double )
         if ( self.__which == 'edmiston' ):
             self.eri_rot = ao2mo.incore.full( self.eri_orig, self.u, compact=False ).reshape(self.Norbs, self.Norbs, self.Norbs, self.Norbs)
 
@@ -167,95 +172,26 @@ class localizer:
     
     def __hessian_matvec( self, vecin ):
     
-        vecout = np.zeros( [ self.numVars ], dtype=float )
+        vector_out = np.zeros( [ self.numVars ], dtype=ctypes.c_double )
+        vector_inp = np.array( vecin, copy=True, dtype=ctypes.c_double )
         
         if ( self.__which == 'boys' ):
         
-            increment_row = 0
-            for p in range( self.Norbs ):
-                for q in range( p+1, self.Norbs ):
-                    assert( increment_row == q + p * self.Norbs - ((p+1)*(p+2))/2 )
-                    
-                    value = 0.0
-                    
-                    # Part 1: p == r
-                    for s in range( p+1, self.Norbs ):
-                        colindex = increment_row + s - q # s + p * self.Norbs - ((p+1)*(p+2))/2
-                        prefactor = 2 * ( self.x_symm[p,q] * self.x_symm[p,s] + self.y_symm[p,q] * self.y_symm[p,s] + self.z_symm[p,q] * self.z_symm[p,s] ) \
-                                  + ( self.x_symm[q,s] * ( self.x_symm[p,p] - 0.5 * self.x_symm[q,q] - 0.5 * self.x_symm[s,s] ) \
-                                    + self.y_symm[q,s] * ( self.y_symm[p,p] - 0.5 * self.y_symm[q,q] - 0.5 * self.y_symm[s,s] ) \
-                                    + self.z_symm[q,s] * ( self.z_symm[p,p] - 0.5 * self.z_symm[q,q] - 0.5 * self.z_symm[s,s] ) )
-                        value += vecin[ colindex ] * prefactor
-            
-                    # Part 2: q == s
-                    for r in range( 0, q ):
-                        colindex = q + r * self.Norbs - ((r+1)*(r+2))/2
-                        prefactor = 2 * ( self.x_symm[p,q] * self.x_symm[r,q] + self.y_symm[p,q] * self.y_symm[r,q] + self.z_symm[p,q] * self.z_symm[r,q] ) \
-                                  + ( self.x_symm[p,r] * ( self.x_symm[q,q] - 0.5 * self.x_symm[p,p] - 0.5 * self.x_symm[r,r] ) \
-                                    + self.y_symm[p,r] * ( self.y_symm[q,q] - 0.5 * self.y_symm[p,p] - 0.5 * self.y_symm[r,r] ) \
-                                    + self.z_symm[p,r] * ( self.z_symm[q,q] - 0.5 * self.z_symm[p,p] - 0.5 * self.z_symm[r,r] ) )
-                        value += vecin[ colindex ] * prefactor
-                        
-                    # Part 3: q == r
-                    for s in range( q+1, self.Norbs ):
-                        colindex = s + q * self.Norbs - ((q+1)*(q+2))/2
-                        prefactor = 2 * ( self.x_symm[p,q] * self.x_symm[q,s] + self.y_symm[p,q] * self.y_symm[q,s] + self.z_symm[p,q] * self.z_symm[q,s] ) \
-                                  + ( self.x_symm[p,s] * ( self.x_symm[q,q] - 0.5 * self.x_symm[p,p] - 0.5 * self.x_symm[s,s] ) \
-                                    + self.y_symm[p,s] * ( self.y_symm[q,q] - 0.5 * self.y_symm[p,p] - 0.5 * self.y_symm[s,s] ) \
-                                    + self.z_symm[p,s] * ( self.z_symm[q,q] - 0.5 * self.z_symm[p,p] - 0.5 * self.z_symm[s,s] ) )
-                        value -= vecin[ colindex ] * prefactor
-                    
-                    # Part 4: p == s
-                    for r in range( 0, p ):
-                        colindex = p + r * self.Norbs - ((r+1)*(r+2))/2
-                        prefactor = 2 * ( self.x_symm[p,q] * self.x_symm[r,p] + self.y_symm[p,q] * self.y_symm[r,p] + self.z_symm[p,q] * self.z_symm[r,p] ) \
-                                  + ( self.x_symm[q,r] * ( self.x_symm[p,p] - 0.5 * self.x_symm[q,q] - 0.5 * self.x_symm[r,r] ) \
-                                    + self.y_symm[q,r] * ( self.y_symm[p,p] - 0.5 * self.y_symm[q,q] - 0.5 * self.y_symm[r,r] ) \
-                                    + self.z_symm[q,r] * ( self.z_symm[p,p] - 0.5 * self.z_symm[q,q] - 0.5 * self.z_symm[r,r] ) )
-                        value -= vecin[ colindex ] * prefactor
-                    
-                    vecout[ increment_row ] = value
-                    increment_row += 1
-            vecout *= -self.Norbs
-            
+            liblocalizer.hessian_boys( ctypes.c_int( self.Norbs ),
+                                       self.x_symm.ctypes.data_as( ctypes.c_void_p ),
+                                       self.y_symm.ctypes.data_as( ctypes.c_void_p ),
+                                       self.z_symm.ctypes.data_as( ctypes.c_void_p ),
+                                        vector_inp.ctypes.data_as( ctypes.c_void_p ),
+                                        vector_out.ctypes.data_as( ctypes.c_void_p ) )
+        
         if ( self.__which == 'edmiston' ):
         
-            increment_row = 0
-            for p in range( self.Norbs ):
-                for q in range( p+1, self.Norbs ):
-                    assert( increment_row == q + p * self.Norbs - ((p+1)*(p+2))/2 )
-                    
-                    value = 0.0
-                    
-                    # Part 1: p == r
-                    for s in range( p+1, self.Norbs ):
-                        colindex = increment_row + s - q # s + p * self.Norbs - ((p+1)*(p+2))/2
-                        prefactor = 2*(4*self.eri_rot[p,q,p,s] + 2*self.eri_rot[p,p,q,s] - self.eri_rot[q,q,q,s] - self.eri_rot[s,s,s,q])
-                        value += prefactor * vecin[ colindex ]
-                        
-                    # Part 2: q == s
-                    for r in range( 0, q ):
-                        colindex = q + r * self.Norbs - ((r+1)*(r+2))/2
-                        prefactor = 2*(4*self.eri_rot[q,p,q,r] + 2*self.eri_rot[q,q,p,r] - self.eri_rot[p,p,p,r] - self.eri_rot[r,r,r,p])
-                        value += prefactor * vecin[ colindex ]
-                        
-                    # Part 3: q == r
-                    for s in range( q+1, self.Norbs ):
-                        colindex = s + q * self.Norbs - ((q+1)*(q+2))/2
-                        prefactor = 2*(4*self.eri_rot[q,p,q,s] + 2*self.eri_rot[q,q,p,s] - self.eri_rot[p,p,p,s] - self.eri_rot[s,s,s,p])
-                        value -= prefactor * vecin[ colindex ]
-                        
-                    # Part 4: p == s
-                    for r in range( 0, p ):
-                        colindex = p + r * self.Norbs - ((r+1)*(r+2))/2
-                        prefactor = 2*(4*self.eri_rot[p,q,p,r] + 2*self.eri_rot[p,p,q,r] - self.eri_rot[q,q,q,r] - self.eri_rot[r,r,r,q])
-                        value -= prefactor * vecin[ colindex ]
-                    
-                    vecout[ increment_row ] = value
-                    increment_row += 1
-            vecout *= -1
-            
-        return vecout
+            liblocalizer.hessian_edmiston( ctypes.c_int( self.Norbs ),
+                                           self.eri_rot.ctypes.data_as( ctypes.c_void_p ),
+                                             vector_inp.ctypes.data_as( ctypes.c_void_p ),
+                                             vector_out.ctypes.data_as( ctypes.c_void_p ) )
+        
+        return vector_out
     
     
     def __debug_hessian_matvec( self ):
