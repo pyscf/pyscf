@@ -167,27 +167,23 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     g_orb = casscf.pack_uniq_var(g-g.T)
     h_diag = casscf.pack_uniq_var(h_diag)
 
-    h1emo1 = reduce(numpy.dot, (u.T, h1e_mo, u))
-    vhfca1 = reduce(numpy.dot, (u[:,ncore:].T, vhf_ca, u))
-    vhf_c1 = reduce(numpy.dot, (u.T, eris.vhf_c, u))
     def h_op(x):
         x1 = casscf.unpack_uniq_var(x)
 
         # part7
         # (-h_{sp} R_{rs} gamma_{rq} - h_{rq} R_{pq} gamma_{sp})/2 + (pr<->qs)
-        x2 = reduce(pyscf.lib.dot, (h1emo1, x1, dm1))
+        x2 = reduce(pyscf.lib.dot, (h1e_mo, x1, dm1))
         # part8
         # (g_{ps}\delta_{qr}R_rs + g_{qr}\delta_{ps}) * R_pq)/2 + (pr<->qs)
         x2 -= numpy.dot(g.T, x1)
         # part2
         # (-2Vhf_{sp}\delta_{qr}R_pq - 2Vhf_{qr}\delta_{sp}R_rs)/2 + (pr<->qs)
-        x2[:ncore] += reduce(numpy.dot, (x1[:ncore,ncore:], vhfca1)) * 2
+        x2[:ncore] += reduce(numpy.dot, (x1[:ncore,ncore:], vhf_ca[ncore:])) * 2
         # part3
         # (-Vhf_{sp}gamma_{qr}R_{pq} - Vhf_{qr}gamma_{sp}R_{rs})/2 + (pr<->qs)
-        x2[ncore:nocc] += reduce(numpy.dot, (casdm1, x1[ncore:nocc], vhf_c1))
+        x2[ncore:nocc] += reduce(numpy.dot, (casdm1, x1[ncore:nocc], eris.vhf_c))
         # part1
-        x2[:,ncore:nocc] += numpy.dot(u.T, numpy.einsum('purv,rv->pu', hdm2,
-                                                        numpy.dot(u, x1[:,ncore:nocc])))
+        x2[:,ncore:nocc] += numpy.einsum('purv,rv->pu', hdm2, x1[:,ncore:nocc])
 
         if ncore > 0:
             # part4, part5, part6
@@ -196,7 +192,7 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
 # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
 # x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
 # x2[:ncore] += H' * x1[:ncore]
-            va, vc = casscf.update_jk_in_ah(numpy.dot(mo,u), x1, casdm1, eris)
+            va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
             x2[ncore:nocc] += va
             x2[:ncore,ncore:] += vc
 

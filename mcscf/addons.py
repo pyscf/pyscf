@@ -5,6 +5,7 @@ import numpy
 import pyscf.lib
 from pyscf.lib import logger
 import pyscf.fci
+from pyscf import scf
 
 
 def sort_mo(casscf, mo_coeff, caslst, base=1):
@@ -67,7 +68,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
                              mo_coeff[1][:,idx[ncore[1]:]]))
         return (mo_a, mo_b)
 
-def project_init_guess(casscf, init_mo):
+def project_init_guess(casscf, init_mo, prev_mol=None):
     '''Project the given initial guess to the current CASSCF problem.  The
     projected initial guess has two parts.  The core orbitals are directly
     taken from the Hartree-Fock orbitals, and the active orbitals are
@@ -80,6 +81,12 @@ def project_init_guess(casscf, init_mo):
             Initial guess orbitals which are not orth-normal for the current
             molecule.  When the casscf is UHF-CASSCF, the init_mo needs to be
             a list of two ndarrays, for alpha and beta orbitals
+
+    Kwargs:
+        prev_mol : an instance of :class:`Mole`
+            If given, the inital guess orbitals are expanded on the geometry
+            specified by prev_mol.  Otherwise, the orbitals are expanded on
+            current geometry specified by casscf.mol
 
     Returns:
         New orthogonal initial guess orbitals with the core taken from
@@ -117,14 +124,14 @@ def project_init_guess(casscf, init_mo):
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
-        logger.debug(casscf, 'Core indices %s', str(idx[-ncore:][::-1]))
+        logger.debug(casscf, 'Core indices %s', str(numpy.sort(idx[-ncore:])))
         # take HF core
-        mocore = mfmo[:,idx[-ncore:][::-1]]
+        mocore = mfmo[:,numpy.sort(idx[-ncore:])]
 
         # take projected CAS space
         mocas = init_mo[:,ncore:nocc] \
-            - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
-        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)))
+              - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
+        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
 
         # remove core and active space from rest
         mou = init_mo[:,nocc:] \
@@ -132,11 +139,11 @@ def project_init_guess(casscf, init_mo):
         mo = lo.orth.vec_lowdin(numpy.hstack((mocc, mou)), s)
 
         if casscf.verbose >= logger.DEBUG:
-            s = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
-            idx = numpy.argwhere(abs(s) > 0.4)
+            s1 = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
+            idx = numpy.argwhere(abs(s1) > 0.4)
             for i,j in idx:
                 logger.debug(casscf, 'Init guess <mo-CAS|mo-hf>  %d  %d  %12.8f',
-                             ncore+i+1, j+1, s[i,j])
+                             ncore+i+1, j+1, s1[i,j])
         return mo
 
     ncore = casscf.ncore
@@ -144,9 +151,14 @@ def project_init_guess(casscf, init_mo):
     s = casscf._scf.get_ovlp()
     if isinstance(ncore, (int, numpy.integer)):
         assert(mfmo.shape[0] == init_mo.shape[0])
+        if prev_mol is not None:
+            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF
         assert(mfmo[0].shape[0] == init_mo[0].shape[0])
+        if prev_mol is not None:
+            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
+                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
