@@ -561,13 +561,13 @@ class KnowValues(unittest.TestCase):
     def test_contract_ss(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
         nelec = (6,4)
-        fci.addons.force_spin_(fci.direct_spin1)
+        fci.addons.fix_spin_(fci.direct_spin1)
         e, ci0 = fci.direct_spin1.kernel(h1, h2, norb, nelec)
         self.assertAlmostEqual(e, -25.4437866823, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 2, 9)
 
         nelec = (5,5)
-        fci.addons.force_spin_(fci.direct_spin0)
+        fci.addons.fix_spin_(fci.direct_spin0)
         e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec)
         self.assertAlmostEqual(e, -25.4095560762, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 9)

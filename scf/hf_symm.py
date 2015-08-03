@@ -687,6 +687,6 @@ if __name__ == '__main__':
     )
 
     method = RHF(mol)
-    #method.irrep_nelec['B2u'] = 2
+    method.irrep_nelec['A1u'] = 2
     energy = method.scf()
     print(energy)

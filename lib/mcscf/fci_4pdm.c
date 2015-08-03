@@ -72,7 +72,7 @@ static void rdm4_0b_t2(double *ci0, double *t2,
         shared(t1, t2, bcount, strb_id, norb, nlinkb, clink_indexb), \
         private(i, j, k, l, a, str1, sign, pt1, pt2, tab)
 {
-#pragma omp for schedule(dynamic, 1) nowait
+#pragma omp for schedule(static, 1) nowait
         for (k = 0; k < bcount; k++) {
                 memset(t2+k*n4, 0, sizeof(double)*n4);
                 tab = clink_indexb + (strb_id+k) * nlinkb;
@@ -337,7 +337,7 @@ void FCI4pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
-#pragma omp for schedule(dynamic, 1) nowait
+#pragma omp for schedule(static, 1) nowait
         for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 for (n = 0; n < bcount; n++) {
                         for (k = 0; k < norb; k++) {

@@ -25,6 +25,7 @@ mol.basis = {'H': '6-31g'}
 mol.build()
 
 m = scf.RHF(mol)
+m.conv_tol = 1e-15
 ehf = m.scf()
 
 norb = m.mo_coeff.shape[1]
@@ -109,7 +110,7 @@ class KnowValues(unittest.TestCase):
         cis = fci.direct_spin0.FCISolver(mol)
         cis.davidson_only = True
         e, c = cis.kernel(h1e, eri, 2, 2)
-        self.assertAlmostEqual(e, -0.8075552416051176, 10)
+        self.assertAlmostEqual(e, -0.80755526695538049, 10)
 
 
 if __name__ == "__main__":

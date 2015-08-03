@@ -26,6 +26,7 @@ mol.spin = 1
 mol.build()
 
 m = scf.UHF(mol)
+m.conv_tol = 1e-15
 ehf = m.scf()
 
 mo_a, mo_b = m.mo_coeff
@@ -63,7 +64,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(ci1, ci1ref))
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 201.864085369883, 9)
         ci3 = fci.direct_uhf.contract_2e(g2ei, ci2, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(ci3), 120.77680636000734, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci3), 120.77680636183321, 9)
 
     def test_kernel(self):
         eref, cref = fci.direct_spin1.kernel(h1er, g2er, norb, nelecr)

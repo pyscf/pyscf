@@ -15,7 +15,7 @@ mol = gto.M(
 )
 
 myhf = scf.RHF(mol)
-#myhf.irrep_nelec = {'Ag': 4, 'B1u': 4, 'B2u': 2, 'B3u': 2,}
+myhf.irrep_nelec = {'A1g': 4, 'A1u': 4, 'E1ux': 2, 'E1uy': 2,}
 hf_energy = myhf.scf()
 print('SCF E=%.15g' % hf_energy)
 
