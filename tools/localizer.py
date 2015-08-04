@@ -300,7 +300,7 @@ class localizer:
             
             __ini_guess = np.zeros( [ self.numVars + 1 ], dtype=float )
             __ini_guess[ self.numVars ] = 1.0
-            __ini_guess[ :-1 ] = self.gradient
+            __ini_guess[ :-1 ] = - self.gradient # Minus the gradient of course !!
             eigenval, eigenvec = scipy.sparse.linalg.eigsh( __augmented, k=1, which='SA', v0=__ini_guess, ncv=min(1024,self.numVars+1), maxiter=(self.numVars+1) )
             flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
 
