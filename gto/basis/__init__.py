@@ -79,6 +79,7 @@ def load(basis_name, symb):
         'sto3g'      : 'sto-3g.dat'     ,
         'sto6g'      : 'sto-6g.dat'     ,
         'minao'      : 'minao'          ,
+        'dz'         : 'dz.dat'         ,
         'dzpdunning' : 'dzp_dunning'    ,
         'dzp'        : 'dzp.dat'        ,
         'tzp'        : 'tzp.dat'        ,
