@@ -187,9 +187,12 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     #old_det_idxa = numpy.argsort(guide_stringsa)
     #old_det_idxb = numpy.argsort(guide_stringsb)
     #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
-    try:
+    if isinstance(ci, numpy.ndarray):
         ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
-    except AttributeError:
+    elif: isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
+        # for state-average eigenfunctions
+        ci0 = [fci.addons.reorder(x, nelecas, where_natorb) for x in ci]
+    else:
         log.info('FCI vector not available, so not using old wavefunction as initial guess')
         ci0 = None
 
@@ -261,7 +264,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    if log.verbose >= logger.NOTE:
+    if log.verbose >= logger.NOTE and hasattr(casci.fcisolver, 'spin_square'):
         ss = casci.fcisolver.spin_square(fcivec, ncas, nelecas)
         log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                  e_tot, e_cas, ss[0])
