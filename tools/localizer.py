@@ -23,6 +23,11 @@ from pyscf import ao2mo
 import numpy as np
 import scipy
 
+import ctypes
+import _ctypes
+from pyscf.lib import load_library
+liblocalizer = load_library('liblocalizer')
+
 class localizer:
 
     def __init__( self, mol, orbital_coeff, thetype ):
@@ -44,6 +49,9 @@ class localizer:
         self.verbose  = mol.verbose
         self.stdout   = mol.stdout
         
+        self.gradient = None
+        self.grd_norm = 1.0
+        
         self.__which = thetype
         
         if ( self.__which == 'boys' ):
@@ -59,6 +67,7 @@ class localizer:
             self.eri_orig = ao2mo.incore.full( _vhf.int2e_sph( mol._atm, mol._bas, mol._env ), self.coeff )
             self.eri_rot  = None
 
+
     def dump_molden( self, filename, orbital_coeff ):
         r'''Create a molden file to inspect a set of orbitals
 
@@ -70,6 +79,7 @@ class localizer:
         with open( filename, 'w' ) as thefile:
             molden.header( self.themol, thefile )
             molden.orbital_coeff( self.themol, thefile, orbital_coeff )
+
 
     def __update_unitary( self, flatx ):
 
@@ -87,11 +97,12 @@ class localizer:
             x_curr = np.dot( np.dot( self.u.T, self.x_orig ), self.u )
             y_curr = np.dot( np.dot( self.u.T, self.y_orig ), self.u )
             z_curr = np.dot( np.dot( self.u.T, self.z_orig ), self.u )
-            self.x_symm = x_curr + x_curr.T
-            self.y_symm = y_curr + y_curr.T
-            self.z_symm = z_curr + z_curr.T
+            self.x_symm = np.array( x_curr + x_curr.T, dtype=ctypes.c_double )
+            self.y_symm = np.array( y_curr + y_curr.T, dtype=ctypes.c_double )
+            self.z_symm = np.array( z_curr + z_curr.T, dtype=ctypes.c_double )
         if ( self.__which == 'edmiston' ):
             self.eri_rot = ao2mo.incore.full( self.eri_orig, self.u, compact=False ).reshape(self.Norbs, self.Norbs, self.Norbs, self.Norbs)
+
 
     def __costfunction( self ):
 
@@ -112,31 +123,32 @@ class localizer:
             value *= -1
         return value
 
-    def __gradient( self ):
 
-        grad = np.zeros( [ self.numVars ], dtype=float )
+    def __set_gradient( self ):
+
+        self.gradient = np.zeros( [ self.numVars ], dtype=float )
         if ( self.__which == 'boys' ):
             increment = 0
             for p in range( self.Norbs ):
                 for q in range( p+1, self.Norbs ):
-                    grad[ increment ] = self.x_symm[p,q] * ( self.x_symm[q,q] - self.x_symm[p,p] ) \
-                                      + self.y_symm[p,q] * ( self.y_symm[q,q] - self.y_symm[p,p] ) \
-                                      + self.z_symm[p,q] * ( self.z_symm[q,q] - self.z_symm[p,p] )
+                    self.gradient[ increment ] = self.x_symm[p,q] * ( self.x_symm[q,q] - self.x_symm[p,p] ) \
+                                               + self.y_symm[p,q] * ( self.y_symm[q,q] - self.y_symm[p,p] ) \
+                                               + self.z_symm[p,q] * ( self.z_symm[q,q] - self.z_symm[p,p] )
                     increment += 1
-            grad *= -self.Norbs
+            self.gradient *= -self.Norbs
         if ( self.__which == 'edmiston' ):
             increment = 0
             for p in range( self.Norbs ):
                 for q in range( p+1, self.Norbs ):
-                    grad[ increment ] = 4*(self.eri_rot[q,q,q,p] - self.eri_rot[p,p,p,q])
+                    self.gradient[ increment ] = 4*(self.eri_rot[q,q,q,p] - self.eri_rot[p,p,p,q])
                     increment += 1
-            grad *= -1
-        return grad
+            self.gradient *= -1
+        self.grd_norm = np.linalg.norm( self.gradient )
+
 
     def __debug_gradient( self ):
 
-        gradient_analytic = self.__gradient()
-
+        self.__set_gradient()
         original_umatrix = np.array( self.u, copy=True )
 
         stepsize = 1e-8
@@ -154,90 +166,56 @@ class localizer:
         flatx = np.zeros( [ self.numVars ], dtype=float )
         self.__update_unitary( flatx )
 
-        logger.debug(self, "2-norm( gradient difference ) = %g", np.linalg.norm( gradient_analytic - gradient_numerical ))
-        logger.debug(self, "2-norm( gradient )            = %g", np.linalg.norm( gradient_analytic ))
-
-    def __hessian( self ):
-
-        hess = np.zeros( [ self.numVars, self.numVars ], dtype=float )
+        logger.debug(self, "2-norm( gradient difference ) = %g", np.linalg.norm( self.gradient - gradient_numerical ))
+        logger.debug(self, "2-norm( gradient )            = %g", np.linalg.norm( self.gradient ))
+    
+    
+    def __hessian_matvec( self, vecin ):
+    
+        vector_out = np.zeros( [ self.numVars ], dtype=ctypes.c_double )
+        vector_inp = np.array( vecin, copy=True, dtype=ctypes.c_double )
+        
         if ( self.__which == 'boys' ):
-            increment_col = 0
-            for r in range( self.Norbs ):
-                for s in range( r+1, self.Norbs ):
-                    increment_row = 0
-                    for p in range( self.Norbs ):
-                        for q in range( p+1, self.Norbs ):
-                            if ( increment_row <= increment_col ):
-                                prefactor = 0
-                                value = 0.0
-                                if ( p == r ):
-                                    prefactor += 1
-                                    value += ( self.x_symm[q,s] * ( self.x_symm[p,p] - 0.5 * self.x_symm[q,q] - 0.5 * self.x_symm[s,s] ) \
-                                             + self.y_symm[q,s] * ( self.y_symm[p,p] - 0.5 * self.y_symm[q,q] - 0.5 * self.y_symm[s,s] ) \
-                                             + self.z_symm[q,s] * ( self.z_symm[p,p] - 0.5 * self.z_symm[q,q] - 0.5 * self.z_symm[s,s] ) )
-                                if ( q == s ):
-                                    prefactor += 1
-                                    value += ( self.x_symm[p,r] * ( self.x_symm[q,q] - 0.5 * self.x_symm[p,p] - 0.5 * self.x_symm[r,r] ) \
-                                             + self.y_symm[p,r] * ( self.y_symm[q,q] - 0.5 * self.y_symm[p,p] - 0.5 * self.y_symm[r,r] ) \
-                                             + self.z_symm[p,r] * ( self.z_symm[q,q] - 0.5 * self.z_symm[p,p] - 0.5 * self.z_symm[r,r] ) )
-                                if ( q == r ):
-                                    prefactor -= 1
-                                    value -= ( self.x_symm[p,s] * ( self.x_symm[q,q] - 0.5 * self.x_symm[p,p] - 0.5 * self.x_symm[s,s] ) \
-                                             + self.y_symm[p,s] * ( self.y_symm[q,q] - 0.5 * self.y_symm[p,p] - 0.5 * self.y_symm[s,s] ) \
-                                             + self.z_symm[p,s] * ( self.z_symm[q,q] - 0.5 * self.z_symm[p,p] - 0.5 * self.z_symm[s,s] ) )
-                                if ( p == s ):
-                                    prefactor -= 1
-                                    value -= ( self.x_symm[q,r] * ( self.x_symm[p,p] - 0.5 * self.x_symm[r,r] - 0.5 * self.x_symm[q,q] ) \
-                                             + self.y_symm[q,r] * ( self.y_symm[p,p] - 0.5 * self.y_symm[r,r] - 0.5 * self.y_symm[q,q] ) \
-                                             + self.z_symm[q,r] * ( self.z_symm[p,p] - 0.5 * self.z_symm[r,r] - 0.5 * self.z_symm[q,q] ) )
-                                if ( prefactor != 0 ):
-                                    value += 2 * prefactor * ( self.x_symm[p,q] * self.x_symm[r,s] + self.y_symm[p,q] * self.y_symm[r,s] + self.z_symm[p,q] * self.z_symm[r,s] )
-                                hess[ increment_row, increment_col ] = value
-                                hess[ increment_col, increment_row ] = value
-                            increment_row += 1
-                    increment_col += 1
-            hess *= -self.Norbs
+        
+            liblocalizer.hessian_boys( ctypes.c_int( self.Norbs ),
+                                       self.x_symm.ctypes.data_as( ctypes.c_void_p ),
+                                       self.y_symm.ctypes.data_as( ctypes.c_void_p ),
+                                       self.z_symm.ctypes.data_as( ctypes.c_void_p ),
+                                        vector_inp.ctypes.data_as( ctypes.c_void_p ),
+                                        vector_out.ctypes.data_as( ctypes.c_void_p ) )
+        
         if ( self.__which == 'edmiston' ):
-            increment_col = 0
-            for r in range( self.Norbs ):
-                for s in range( r+1, self.Norbs ):
-                    increment_row = 0
-                    for p in range( self.Norbs ):
-                        for q in range( p+1, self.Norbs ):
-                            if ( increment_row <= increment_col ):
-                                prefactor = 0
-                                value = 0.0
-                                if ( p == r ):
-                                    value += 8*self.eri_rot[p,q,p,s] + 4*self.eri_rot[p,p,q,s] - 2*self.eri_rot[q,q,q,s] - 2*self.eri_rot[s,s,s,q]
-                                if ( q == s ):
-                                    value += 8*self.eri_rot[q,p,q,r] + 4*self.eri_rot[q,q,p,r] - 2*self.eri_rot[p,p,p,r] - 2*self.eri_rot[r,r,r,p]
-                                if ( p == s ):
-                                    value -= 8*self.eri_rot[p,q,p,r] + 4*self.eri_rot[p,p,q,r] - 2*self.eri_rot[q,q,q,r] - 2*self.eri_rot[r,r,r,q]
-                                if ( q == r ):
-                                    value -= 8*self.eri_rot[q,p,q,s] + 4*self.eri_rot[q,q,p,s] - 2*self.eri_rot[p,p,p,s] - 2*self.eri_rot[s,s,s,p]
-                                hess[ increment_row, increment_col ] = value
-                                hess[ increment_col, increment_row ] = value
-                            increment_row += 1
-                    increment_col += 1
-            hess *= -1
-        return hess
+        
+            liblocalizer.hessian_edmiston( ctypes.c_int( self.Norbs ),
+                                           self.eri_rot.ctypes.data_as( ctypes.c_void_p ),
+                                             vector_inp.ctypes.data_as( ctypes.c_void_p ),
+                                             vector_out.ctypes.data_as( ctypes.c_void_p ) )
+        
+        return vector_out
+    
+    
+    def __debug_hessian_matvec( self ):
 
-    def __debug_hessian( self ):
-
-        hessian_analytic = self.__hessian()
+        hessian_analytic = np.zeros( [ self.numVars, self.numVars ], dtype=float )
+        
+        for cnt in range( self.numVars ):
+            vector = np.zeros( [ self.numVars ], dtype=float )
+            vector[ cnt ] = 1.0
+            hessian_analytic[ :, cnt ] = self.__hessian_matvec( vector )
 
         original_umatrix = np.array( self.u, copy=True )
 
         stepsize = 1e-8
-        gradient_ref = self.__gradient()
+        self.__set_gradient()
+        gradient_ref = np.array( self.gradient, copy=True )
         hessian_numerical = np.zeros( [ self.numVars, self.numVars ], dtype=float )
         for counter in range( self.numVars ):
             self.u = np.array( original_umatrix, copy=True )
             flatx = np.zeros( [ self.numVars ], dtype=float )
             flatx[counter] = stepsize
             self.__update_unitary( flatx )
-            gradient_step = self.__gradient()
-            hessian_numerical[ :, counter ] = ( gradient_step - gradient_ref ) / stepsize
+            self.__set_gradient()
+            hessian_numerical[ :, counter ] = ( self.gradient - gradient_ref ) / stepsize
 
         self.u = np.array( original_umatrix, copy=True )
         flatx = np.zeros( [ self.numVars ], dtype=float )
@@ -247,7 +225,21 @@ class localizer:
 
         logger.debug(self, "2-norm( hessian difference ) = %.g", np.linalg.norm( hessian_analytic - hessian_numerical ))
         logger.debug(self, "2-norm( hessian )            = %.g", np.linalg.norm( hessian_analytic ))
+    
+    
+    def __augmented_hessian_matvec( self, vector_in ):
+    
+        '''
+            [ H    g ] [ v ]
+            [ g^T  0 ] [ s ]
+        '''
         
+        result = np.zeros( [ self.numVars + 1 ], dtype=float )
+        result[ self.numVars ] = np.sum(np.multiply( self.gradient, vector_in[ :-1 ] ))
+        result[ :-1 ] = self.__hessian_matvec( vector_in[ :-1 ] ) + vector_in[ self.numVars ] * self.gradient
+        return result
+    
+    
     def __reorder_orbitals( self ):
     
         # Find the coordinates of each localized orbital (expectation value).
@@ -278,7 +270,8 @@ class localizer:
         # Reorder
         idx = __atomid.argsort()
         self.u = self.u[:,idx]
-
+    
+    
     def optimize( self ):
         r'''Augmented Hessian Newton-Raphson optimization of the localization cost function, using an exact gradient and hessian
 
@@ -291,38 +284,26 @@ class localizer:
         self.__update_unitary( flatx )
 
         #self.__debug_gradient()
-        #self.__debug_hessian()
+        #self.__debug_hessian_matvec()
 
-        gradient_norm = 1.0
+        self.grd_norm = 1.0
         threshold = 1e-6
         iteration = 0
         logger.debug(self, "Localizer :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
         logger.debug(self, "Localizer :: Linear size of the augmented Hessian = %d", self.numVars+1)
 
-        while ( gradient_norm > threshold ):
+        while ( self.grd_norm > threshold ):
 
             iteration += 1
-            augmented = np.zeros( [ self.numVars+1, self.numVars+1 ], dtype=float )
-            gradient = self.__gradient()
-            augmented[:-1,:-1] = self.__hessian()
-            augmented[:-1,self.numVars] = gradient
-            augmented[self.numVars,:-1] = gradient
+            self.__set_gradient() # Sets self.gradient and self.grd_norm
+            __augmented = scipy.sparse.linalg.LinearOperator( ( self.numVars+1, self.numVars+1 ), matvec=self.__augmented_hessian_matvec, dtype=float )
             
-            if ( self.numVars+1 > 1024 ):
-                ini_guess = np.zeros( [self.numVars+1], dtype=float )
-                ini_guess[ self.numVars ] = 1.0
-                for elem in range( self.numVars ):
-                    ini_guess[ elem ] = - gradient[ elem ] / max( augmented[ elem, elem ], 1e-6 )
-                eigenval, eigenvec = scipy.sparse.linalg.eigsh( augmented, k=1, which='SA', v0=ini_guess, ncv=1024, maxiter=(self.numVars+1) )
-                flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
-            else:
-                eigenvals, eigenvecs = np.linalg.eigh( augmented )
-                idx = eigenvals.argsort()
-                eigenvals = eigenvals[idx]
-                eigenvecs = eigenvecs[:,idx]
-                flatx = eigenvecs[:-1,0] / eigenvecs[self.numVars,0]
+            __ini_guess = np.zeros( [ self.numVars + 1 ], dtype=float )
+            __ini_guess[ self.numVars ] = 1.0
+            __ini_guess[ :-1 ] = - self.gradient # Minus the gradient of course !!
+            eigenval, eigenvec = scipy.sparse.linalg.eigsh( __augmented, k=1, which='SA', v0=__ini_guess, ncv=min(1024,self.numVars+1), maxiter=(self.numVars+1) )
+            flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
 
-            gradient_norm = np.linalg.norm( gradient )
             update_norm = np.linalg.norm( flatx )
             __cost_func_prev = -self.__costfunction()
             self.__update_unitary( flatx )
@@ -336,7 +317,7 @@ class localizer:
                 __cost_func_now = -self.__costfunction()
                 __counter += 1
 
-            logger.debug(self, "Localizer :: gradient norm = %g", gradient_norm)
+            logger.debug(self, "Localizer :: gradient norm = %g", self.grd_norm)
             logger.debug(self, "Localizer :: update norm   = %g", update_norm)
             logger.debug(self, "Localizer :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
 
