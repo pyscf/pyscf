@@ -208,24 +208,36 @@ def contract_ss(fcivec, norb, nelec):
     fcivec = fcivec.reshape(na,nb)
     ci1 = numpy.zeros((na,nb))
 
-    ades_index = cistring.gen_des_str_index(range(norb), neleca)
-    bcre_index = cistring.gen_cre_str_index(range(norb), nelecb)
-    bdes_index = cistring.gen_des_str_index(range(norb), nelecb)
-    acre_index = cistring.gen_cre_str_index(range(norb), neleca)
-    ades = numpy.zeros((na,norb,2), dtype=numpy.int32)
-    bcre = numpy.zeros((nb,norb,2), dtype=numpy.int32)
-    bdes = numpy.zeros((nb,norb,2), dtype=numpy.int32)
-    acre = numpy.zeros((na,norb,2), dtype=numpy.int32)
-    for k, tab in enumerate(ades_index):
-        ades[k,tab[:,0]] = tab[:,2:]
-    for k, tab in enumerate(bcre_index):
-        bcre[k,tab[:,0]] = tab[:,2:]
-    for k, tab in enumerate(bdes_index):
-        bdes[k,tab[:,0]] = tab[:,2:]
-    for k, tab in enumerate(acre_index):
-        acre[k,tab[:,0]] = tab[:,2:]
+    def gen_map(fstr_index, nelec):
+        a_index = fstr_index(range(norb), nelec)
+        amap = numpy.zeros((a_index.shape[0],norb,2), dtype=numpy.int32)
+        for k, tab in enumerate(a_index):
+            amap[k,tab[:,0]] = tab[:,2:]
+
+    if neleca > 0:
+        ades = gen_map(cistring.gen_des_str_index, neleca)
+    else:
+        ades = None
+
+    if nelecb > 0:
+        bdes = gen_map(cistring.gen_des_str_index, nelecb)
+    else:
+        bdes = None
+
+    if neleca < norb:
+        acre = gen_map(cistring.gen_cre_str_index, neleca)
+    else:
+        acre = None
+
+    if nelecb < norb:
+        bcre = gen_map(cistring.gen_cre_str_index, nelecb)
+    else:
+        bcre = None
 
     def trans(ci1, aindex, bindex, nea, neb):
+        if aindex is None or bindex is None:
+            return None
+
         t1 = numpy.zeros((cistring.num_strings(norb,nea),
                           cistring.num_strings(norb,neb)))
         for i in range(norb):
@@ -250,12 +262,13 @@ def contract_ss(fcivec, norb, nelec):
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: ci1[maska.reshape(-1,1), maskb] += citmp
             pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
-        return ci1
 
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-
     trans(ci1, acre, bdes, neleca+1, nelecb-1) # S-*S+
     ci1 = ci1 * .5 + (neleca-nelecb)**2*.25*fcivec
     return ci1
+
+
 if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
