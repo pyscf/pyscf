@@ -18,13 +18,16 @@ MAPSPDF = {'S': 0,
 def parse_str(string):
     '''Parse the basis text which is in NWChem format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
+    Lines started with # are ignored.
     '''
-    bastxt = [x for x in string.split('\n') \
+    bastxt = [x.strip() for x in string.split('\n')
               if x.strip() and 'END' not in x and '#BASIS SET' not in x]
 
     basis_add = []
     for dat in bastxt:
-        if dat.strip()[0].isalpha():
+        if dat.startswith('#'):
+            continue
+        elif dat[0].isalpha():
             key = dat.split()[1].upper()
             if key == 'SP':
                 basis_add.append([0])
@@ -46,7 +49,10 @@ def parse_str(string):
 def parse(basisfile, symb):
     basis_add = []
     for dat in search_seg(basisfile, symb):
-        if symb in dat:
+        rdat = dat.strip()
+        if rdat.startswith('#'):
+            continue
+        elif symb in dat:
             key = dat.split()[1].upper()
             if key == 'SP':
                 basis_add.append([0])
@@ -72,6 +78,7 @@ def search_seg(basisfile, symb):
     for dat in fdata[1:]:
         if symb+' ' in dat:
             # remove blank lines
-            return [x for x in dat.split('\n')[1:] if x.strip() and 'END' not in x]
+            return [x.strip() for x in dat.split('\n')[1:]
+                    if x.strip() and 'END' not in x]
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
