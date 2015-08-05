@@ -189,7 +189,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
     if isinstance(ci, numpy.ndarray):
         ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
-    elif: isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
+    elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
         # for state-average eigenfunctions
         ci0 = [fci.addons.reorder(x, nelecas, where_natorb) for x in ci]
     else:
