@@ -346,9 +346,8 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
                 rdm2 += wi * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss = 0
-            for i, wi in enumerate(weights):
-                ss += wi*fcibase.spin_square(ci0[i], norb, nelec)[0]
+            ss = fcibase.spin_square(ci0, norb, nelec)[0]
+            ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
     casscf.fcisolver = FakeCISolver()

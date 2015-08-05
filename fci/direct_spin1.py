@@ -454,7 +454,11 @@ class FCISolver(object):
 
     def spin_square(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
-        return spin_op.spin_square0(fcivec, norb, nelec)
+        if self.nroots == 1:
+            return spin_op.spin_square0(fcivec, norb, nelec)
+        else:
+            ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
+            return [x[0] for x in ss], [x[1] for x in ss]
 
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
