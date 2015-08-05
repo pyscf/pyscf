@@ -266,10 +266,20 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
     if log.verbose >= logger.NOTE and hasattr(casci.fcisolver, 'spin_square'):
         ss = casci.fcisolver.spin_square(fcivec, ncas, nelecas)
-        log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                 e_tot, e_cas, ss[0])
+        if isinstance(e_cas, (float, numpy.number)):
+            log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                     e_tot, e_cas, ss[0])
+        else:
+            for i, e in enumerate(e_cas):
+                log.note('CASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                         i, e_tot[i], e, ss[0][i])
     else:
-        log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
+        if isinstance(e_cas, (float, numpy.number)):
+            log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
+        else:
+            for i, e in enumerate(e_cas):
+                log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
+                         i, e_tot[i], e)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -555,5 +565,6 @@ if __name__ == '__main__':
     mc = CASCI(m, 9, (5,3))
     #mc.fcisolver = fci.direct_spin1
     mc.fcisolver = fci.solver(mol, False)
+    mc.fcisolver.nroots = 3
     emc = mc.casci()[0]
-    print(emc - -227.7674519720)
+    print(emc[0] - -227.7674519720)
