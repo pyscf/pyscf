@@ -266,6 +266,9 @@ def contract_ss(fcivec, norb, nelec):
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-
     trans(ci1, acre, bdes, neleca+1, nelecb-1) # S-*S+
     ci1 = ci1 * .5 + (neleca-nelecb)**2*.25*fcivec
+    return ci1
+
+
 if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
