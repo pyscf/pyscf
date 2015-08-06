@@ -189,9 +189,12 @@ class ROHF(hf.RHF):
         return init_guess_by_chkfile(self.mol, chk, project=project)
 
     def eig(self, h, s):
-        '''Solve the generalized eigenvalue problem for Roothan effective Fock matrix
-        Note Roothaan effective Fock do not provide correct orbital energies.
-        We use spectrum of alpha fock and beta fock to sort the orbitals.
+        '''Solve the generalized eigenvalue problem for Roothan effective Fock
+        matrix.  Note Roothaan effective Fock do not provide correct orbital
+        energies.  We use spectrum of alpha fock and beta fock to sort the
+        orbitals.  The energies of doubly occupied orbitals are the eigenvalue
+        of Roothaan Fock matrix.  But the energies of singly occupied orbitals
+        and virtual orbitals are the expection value of alpha-Fock matrix.
 
         Args:
             h : a list of 3 ndarrays
