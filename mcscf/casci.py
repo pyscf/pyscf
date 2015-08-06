@@ -64,7 +64,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     nocc = ncore + ncas
     label = casscf.mol.spheric_labels(True)
 
-    if hasattr(casscf.fcisolver, make_rdm1s):
+    if hasattr(casscf.fcisolver, 'make_rdm1s'):
         casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
         mocore = mo_coeff[:,:ncore]
