@@ -62,24 +62,33 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncore + ncas
+    label = casscf.mol.spheric_labels(True)
 
-    casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
-    mocore = mo_coeff[:,:ncore]
-    mocas = mo_coeff[:,ncore:nocc]
-    dm1b = numpy.dot(mocore, mocore.T)
-    dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
-    dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
-
-    if log.verbose >= logger.INFO:
-        label = casscf.mol.spheric_labels(True)
-        if log.verbose >= logger.DEBUG:
+    if hasattr(casscf.fcisolver, make_rdm1s):
+        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
+        casdm1 = casdm1a + casdm1b
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:nocc]
+        dm1b = numpy.dot(mocore, mocore.T)
+        dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+        dm1 = dm1a + dm1b
+        if log.verbose >= logger.DEBUG1:
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1a, label)
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label)
+    else:
+        casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
+        mocore = mo_coeff[:,:ncore]
+        dm1a =(numpy.dot(mocore, mocore.T) * 2
+             + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
+        dm1b = None
+        dm1 = dm1a
 
+    if log.verbose >= logger.INFO:
         # note the last two args of ._eig for mc1step_symm
-        occ, ucas = casscf._eig(-(casdm1a+casdm1b), ncore, nocc)
+        occ, ucas = casscf._eig(-casdm1, ncore, nocc)
         log.info('Natural occ %s', str(-occ))
         for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
             if ucas[k,i] < 0:
@@ -100,7 +109,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
                 log.info('  %9s    %9s    %.12f', ia, ib, c)
 
-        dm1 = dm1a + dm1b
         s = casscf._scf.get_ovlp()
         #casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
