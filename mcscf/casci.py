@@ -81,6 +81,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     else:
         casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
         mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:nocc]
         dm1a =(numpy.dot(mocore, mocore.T) * 2
              + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
         dm1b = None
