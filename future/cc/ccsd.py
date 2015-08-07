@@ -116,8 +116,9 @@ def update_amps(cc, t1, t2, eris, blksize=1):
         #: eris_vvov = eris_ovvv.transpose(1,2,0,3).copy()
         eris_vvov = eris_ovvv.transpose(1,2,0,3).reshape(nvir*nvir,-1)
         tmp = numpy.empty((nocc,nocc,p1-p0,nvir))
+        taubuf = numpy.empty((blksize,nocc,nvir,nvir))
         for j0, j1 in prange(0, nocc, blksize):
-            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1)
+            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
             #: tmp[j0:j1] += numpy.einsum('ijcd,cdkb->ijkb', tau, eris_vvov)
             lib.dot(tau.reshape(-1,nvir*nvir), eris_vvov, 1,
                     tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
@@ -133,6 +134,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
         #: wovvo = -numpy.einsum('jbik,ka->ijba', eris.ovoo[p0:p1], t1)
         tmp = numpy.asarray(eris.ovoo[p0:p1].transpose(2,0,1,3), order='C')
         wovvo = lib.dot(tmp.reshape(-1,nocc), t1, -1)
+        tmp = None
         wovvo = wovvo.reshape(nocc,p1-p0,nvir,nvir)
         #: wovvo += numpy.einsum('iabc,jc->jiab', eris_ovvv, t1)
         lib.dot(t1, eris_ovvv.reshape(-1,nvir).T, 1, wovvo.reshape(nocc,-1), 1)
@@ -188,7 +190,7 @@ def update_amps(cc, t1, t2, eris, blksize=1):
         eris_OVvo = eris_oOVv.transpose(1,2,3,0).reshape(nov,-1)
         eris_OvVo = eris_oOVv.transpose(1,3,2,0).reshape(nov,-1)
         for j0, j1 in prange(0, nocc, blksize):
-            t2iajb = numpy.asarray(t2[j0:j1].transpose(0,2,1,3), order='C')
+            t2iajb = t2[j0:j1].transpose(0,2,1,3).copy()
             #: wovvo[j0:j1] -= .5 * numpy.einsum('icka,jkbc->jbai', eris_oOVv, t2)
             lib.dot(t2iajb.reshape(-1,nov), eris_OvVo,
                     -.5, wovvo[j0:j1].reshape((j1-j0)*nvir,-1), 1)
@@ -255,8 +257,9 @@ def update_amps(cc, t1, t2, eris, blksize=1):
         eris_oOvV = eris_oOVv.transpose(0,1,3,2).reshape(-1,nvir**2)
         #==== mem usage blksize*(nocc*nvir**2*4)
 
+        taubuf = numpy.empty((blksize,nocc,nvir,nvir))
         for j0, j1 in prange(0, nocc, blksize):
-            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1)
+            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
             #: woooo[p0:p1,:,j0:j1] += numpy.einsum('ijab,klab->ijkl', eris_oOvV, tau)
             lib.numpy_helper._dgemm('N', 'T', (p1-p0)*nocc, (j1-j0)*nocc, nvir*nvir,
                                     eris_oOvV.reshape(-1,nvir*nvir),
@@ -272,12 +275,12 @@ def update_amps(cc, t1, t2, eris, blksize=1):
             #==== mem usage blksize*(nocc*nvir**2*6)
         time2 = log.timer_debug1('woVoV [%d:%d]'%(p0, p1), *time2)
 
-        tau = make_tau(t2[p0:p1], t1[p0:p1], t1, 1)
+        tau = make_tau(t2[p0:p1], t1[p0:p1], t1, 1, out=taubuf[:p1-p0])
         #: t2new += .5 * numpy.einsum('klij,klab->ijab', woooo[p0:p1], tau)
         lib.dot(woooo[p0:p1].reshape(-1,nocc*nocc).T,
                 tau.reshape(-1,nvir*nvir), .5,
                 t2new.reshape(nocc*nocc,-1), 1)
-        eris_oovv = eris_oOVv = eris_oVOv = eris_oOvV = tau = None
+        eris_oovv = eris_oOVv = eris_oVOv = eris_oOvV = taubuf = tau = None
         #==== mem usage blksize*(nocc*nvir**2*1)
 
         t2iajb = numpy.asarray(t2[p0:p1].transpose(0,2,1,3), order='C')
@@ -356,11 +359,13 @@ def update_amps(cc, t1, t2, eris, blksize=1):
 
 def energy(cc, t1, t2, eris, blksize=1):
     nocc = cc.nocc
+    nvir = cc.nmo - nocc
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
+    tau = numpy.empty((1,nocc,nvir,nvir))
     for p0 in range(nocc):
         p1 = p0 + 1
-        tau = make_tau(t2[p0:p1], t1[p0:p1], t1, 1)
+        make_tau(t2[p0:p1], t1[p0:p1], t1, 1, out=tau)
         theta = tau*2 - tau.transpose(0,1,3,2)
         e += numpy.einsum('ijab,ijab', theta,
                           eris.ovov[p0:p1].transpose(0,2,1,3))
@@ -526,8 +531,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
         p0 = 0
+        outbuf = numpy.empty((nvir,nvir,nvir))
         for a in range(nvir):
-            buf = unpack_tril(eris.vvvv[p0:p0+a+1])
+            buf = unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
             #: t2new_tril[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
             lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
                                     tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
@@ -624,8 +630,9 @@ class _ERIS:
             self.ovvv = numpy.empty((nocc,nvir,nvir_pair))
             self.vvvv = numpy.empty((nvir_pair,nvir_pair))
             ij = 0
+            outbuf = numpy.empty((nmo,nmo,nmo))
             for i in range(nocc):
-                buf = unpack_tril(eri1[ij:ij+i+1])
+                buf = unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 for j in range(i+1):
                     self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
                     self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
@@ -633,7 +640,7 @@ class _ERIS:
                     ij += 1
             ij1 = 0
             for i in range(nocc,nmo):
-                buf = unpack_tril(eri1[ij:ij+i+1])
+                buf = unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
                 self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
                 for j in range(nocc):
@@ -668,8 +675,9 @@ class _ERIS:
                                 tmpfile3.name, verbose=log)
             time1 = log.timer_debug1('transforming oppp', *time1)
             with pyscf.ao2mo.load(tmpfile3.name) as eri1:
+                outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
-                    buf = unpack_tril(numpy.asarray(eri1[i*nmo:(i+1)*nmo]))
+                    buf = unpack_tril(numpy.asarray(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
                     self.oooo[i] = buf[:nocc,:nocc,:nocc]
                     self.ooov[i] = buf[:nocc,:nocc,nocc:]
                     self.ovoo[i] = buf[nocc:,:nocc,:nocc]
@@ -759,27 +767,36 @@ def _fp(nocc, nvir):
             nocc**3*nvir**3*2 * 3 + nocc**3*nvir**2*2 * 4)      # Wiabj
 
 
-def unpack_tril(tril):
+def unpack_tril(tril, out=None):
     assert(tril.flags.c_contiguous)
     count = tril.shape[0]
     nd = int(numpy.sqrt(tril.shape[1]*2))
-    mat = numpy.empty((count,nd,nd))
+    if out is None:
+        mat = numpy.empty((count,nd,nd))
+    else:
+        mat = out
     libcc.CCunpack_tril(ctypes.c_int(count), ctypes.c_int(nd),
                         tril.ctypes.data_as(ctypes.c_void_p),
                         mat.ctypes.data_as(ctypes.c_void_p))
     return mat
 
-def make_tau(t2, t1a, t1b, fac=1):
+def make_tau(t2, t1a, t1b, fac=1, out=None):
     nocc = t1a.shape[0]
-    tau = numpy.empty(t2.shape)
+    if out is None:
+        tau = numpy.empty(t2.shape)
+    else:
+        tau = out
     for i in range(nocc):
         tau[i] = t2[i]
         tau[i] += numpy.einsum('a,jb->jab', t1a[i]*fac, t1b)
     return tau
 
-def make_theta(t2):
+def make_theta(t2, out=None):
     nocc = t2.shape[0]
-    theta = numpy.empty(t2.shape)
+    if out is None:
+        theta = numpy.empty(t2.shape)
+    else:
+        theta = out
     for i in range(nocc):
         theta[i] = t2[i].transpose(0,2,1) * 2
         theta[i] -= t2[i]

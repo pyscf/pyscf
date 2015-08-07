@@ -62,24 +62,33 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncore + ncas
+    label = casscf.mol.spheric_labels(True)
 
-    casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
-    mocore = mo_coeff[:,:ncore]
-    mocas = mo_coeff[:,ncore:nocc]
-    dm1b = numpy.dot(mocore, mocore.T)
-    dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
-    dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
-
-    if log.verbose >= logger.INFO:
-        label = casscf.mol.spheric_labels(True)
-        if log.verbose >= logger.DEBUG:
+    if hasattr(casscf.fcisolver, 'make_rdm1s'):
+        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
+        casdm1 = casdm1a + casdm1b
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:nocc]
+        dm1b = numpy.dot(mocore, mocore.T)
+        dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
+        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+        dm1 = dm1a + dm1b
+        if log.verbose >= logger.DEBUG1:
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1a, label)
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label)
+    else:
+        casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
+        mocore = mo_coeff[:,:ncore]
+        dm1a =(numpy.dot(mocore, mocore.T) * 2
+             + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
+        dm1b = None
+        dm1 = dm1a
 
+    if log.verbose >= logger.INFO:
         # note the last two args of ._eig for mc1step_symm
-        occ, ucas = casscf._eig(-(casdm1a+casdm1b), ncore, nocc)
+        occ, ucas = casscf._eig(-casdm1, ncore, nocc)
         log.info('Natural occ %s', str(-occ))
         for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
             if ucas[k,i] < 0:
@@ -100,7 +109,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
                 log.info('  %9s    %9s    %.12f', ia, ib, c)
 
-        dm1 = dm1a + dm1b
         s = casscf._scf.get_ovlp()
         #casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
@@ -266,10 +274,20 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
     if log.verbose >= logger.NOTE and hasattr(casci.fcisolver, 'spin_square'):
         ss = casci.fcisolver.spin_square(fcivec, ncas, nelecas)
-        log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                 e_tot, e_cas, ss[0])
+        if isinstance(e_cas, (float, numpy.number)):
+            log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                     e_tot, e_cas, ss[0])
+        else:
+            for i, e in enumerate(e_cas):
+                log.note('CASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                         i, e_tot[i], e, ss[0][i])
     else:
-        log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
+        if isinstance(e_cas, (float, numpy.number)):
+            log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
+        else:
+            for i, e in enumerate(e_cas):
+                log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
+                         i, e_tot[i], e)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -555,5 +573,6 @@ if __name__ == '__main__':
     mc = CASCI(m, 9, (5,3))
     #mc.fcisolver = fci.direct_spin1
     mc.fcisolver = fci.solver(mol, False)
+    mc.fcisolver.nroots = 3
     emc = mc.casci()[0]
-    print(emc - -227.7674519720)
+    print(emc[0] - -227.7674519720)

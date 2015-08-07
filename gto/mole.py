@@ -1303,15 +1303,15 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('System: %s\n' % str(os.uname()))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
-            dn = os.path.abspath(os.path.join(__file__, '..', '..', '.git',
-                                              'refs', 'heads'))
+            pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
+            dn = os.path.join(pyscfdir, '.git', 'refs', 'heads')
+            self.stdout.write('PySCF path  %s\n' % pyscfdir)
             # or command(git log -1 --pretty=%H)
             version_msg = []
-            for branch in 'dev', 'master':
+            for branch in 'master', 'dev':
                 with open(os.path.join(dn, branch), 'r') as fin:
-                    d = fin.readline()
-                version_msg.append(' '.join((branch, d[:-1])))
-            self.stdout.write('GIT version: %s\n\n' % '; '.join(version_msg))
+                    self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
+            self.stdout.write('\n')
         except IOError:
             pass
 

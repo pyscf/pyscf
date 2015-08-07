@@ -206,13 +206,13 @@ def contract_ss(fcivec, norb, nelec):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     fcivec = fcivec.reshape(na,nb)
-    ci1 = numpy.zeros((na,nb))
 
     def gen_map(fstr_index, nelec):
         a_index = fstr_index(range(norb), nelec)
         amap = numpy.zeros((a_index.shape[0],norb,2), dtype=numpy.int32)
         for k, tab in enumerate(a_index):
             amap[k,tab[:,0]] = tab[:,2:]
+        return amap
 
     if neleca > 0:
         ades = gen_map(cistring.gen_des_str_index, neleca)
@@ -263,6 +263,7 @@ def contract_ss(fcivec, norb, nelec):
             #: ci1[maska.reshape(-1,1), maskb] += citmp
             pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
 
+    ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-
     trans(ci1, acre, bdes, neleca+1, nelecb-1) # S-*S+
     ci1 = ci1 * .5 + (neleca-nelecb)**2*.25*fcivec
