@@ -164,14 +164,21 @@ def newton(mf):
     '''augmented hessian for Newton Raphson'''
     return newton_ah.newton(mf)
 
-def fast_newton(mf):
-    mf0 = density_fit(mf)
-    mf0.conv_tol = .1
-    mf0.kernel()
-    mf1 = density_fit(newton(mf))
-    mf1._cderi = mf0._cderi
-    mf1._naoaux = mf0._naoaux
-    mf1.kernel(mf0.mo_coeff, mf0.mo_occ)
+def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
+    if dm0 is not None:
+        mf1 = density_fit(newton(mf))
+        mf1.kernel(*mf1.from_dm(dm0))
+    elif mo_coeff is None or mo_occ is None:
+        mf0 = density_fit(mf)
+        mf0.conv_tol = .1
+        mf0.kernel()
+        mf1 = density_fit(newton(mf))
+        mf1._cderi = mf0._cderi
+        mf1._naoaux = mf0._naoaux
+        mf1.kernel(mf0.mo_coeff, mf0.mo_occ)
+    else:
+        mf1 = density_fit(newton(mf))
+        mf1.kernel(mo_coeff, mo_occ)
     #return mf.kernel(mf1.make_rdm1())
     mf.mo_occ = mf1.mo_occ
     mf.mo_energy = mf1.mo_energy
@@ -183,7 +190,7 @@ def fast_newton(mf):
 def fast_scf(mf):
     from pyscf.lib import logger
     logger.warn(mf, 'NOTE the  fast_scf  function will be removed in the recent updates. '
-                'Use function fast_newton instead')
+                'Use the fast_newton instead')
     return fast_newton(mf)
 
 

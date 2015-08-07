@@ -1042,7 +1042,7 @@ class SCF(object):
         '''
         cput0 = (time.clock(), time.time())
 
-        self.build()
+        self.build(self.mol)
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -1050,10 +1050,16 @@ class SCF(object):
                        dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
-        self.dump_energy(self.hf_energy, self.converged)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(self.verbose)
+        self._finalize_()
         return self.hf_energy
+
+    def _finalize_(self):
+        if self.converged:
+            logger.note(self, 'converged SCF energy = %.15g', self.hf_energy)
+        else:
+            logger.note(self, 'SCF not converge.')
+            logger.note(self, 'SCF energy = %.15g after %d cycles',
+                        self.hf_energy, self.max_cycle)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
@@ -1103,17 +1109,6 @@ class SCF(object):
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
-
-    def dump_energy(self, hf_energy=None, converged=None):
-        if hf_energy is None: hf_energy = self.hf_energy
-        if converged is None: converged = self.converged
-        if converged:
-            logger.note(self, 'converged SCF energy = %.15g',
-                        hf_energy)
-        else:
-            logger.note(self, 'SCF not converge.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles',
-                        hf_energy, self.max_cycle)
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)

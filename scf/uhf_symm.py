@@ -319,18 +319,8 @@ class UHF(uhf.UHF):
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
         return mo_occ
 
-    def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
-        mol = self.mol
-        self.build(mol)
-        self.dump_flags()
-        self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
-                            dm0=dm0, callback=self.callback)
-
-        logger.timer(self, 'SCF', *cput0)
-        self.dump_energy(self.hf_energy, self.converged)
+    def _finalize_(self):
+        uhf.UHF._finalize_(self)
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[0])
@@ -354,10 +344,6 @@ class UHF(uhf.UHF):
         self.mo_occ[0][nocc_a:] = 0
         self.mo_occ[1][:nocc_b] = 1
         self.mo_occ[1][nocc_b:] = 0
-
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(self.verbose)
-        return self.hf_energy
 
     def analyze(self, mo_verbose=logger.DEBUG):
         return analyze(self, mo_verbose)
