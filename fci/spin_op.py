@@ -212,6 +212,7 @@ def contract_ss(fcivec, norb, nelec):
         amap = numpy.zeros((a_index.shape[0],norb,2), dtype=numpy.int32)
         for k, tab in enumerate(a_index):
             amap[k,tab[:,0]] = tab[:,2:]
+        return amap
 
     if neleca > 0:
         ades = gen_map(cistring.gen_des_str_index, neleca)

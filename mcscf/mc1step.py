@@ -450,7 +450,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
-        conv_tol_grad = numpy.sqrt(tol)
+        conv_tol_grad = numpy.sqrt(tol*.1)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     max_cycle_micro = micro
     conv = False

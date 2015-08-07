@@ -234,7 +234,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
-        conv_tol_grad = numpy.sqrt(tol)
+        conv_tol_grad = numpy.sqrt(tol*.1)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     max_cycle_micro = micro
     conv = False
@@ -286,7 +286,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
-            if (norm_t < 1e-4 or abs(de) < tol * .5 or
+            if (norm_t < 1e-4 or abs(de) < tol * .2 or
                 (norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad*.8)):
                 break
 
