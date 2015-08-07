@@ -30,6 +30,8 @@ CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
 
+TIMER_LEVEL  = param.TIMER_LEVEL
+
 sys.verbose = NOTE
 
 class Logger(object):
@@ -138,14 +140,17 @@ def stdout(rec, msg, *args):
     sys.stdout.write('>>> %s\n' % msg)
 
 def timer(rec, msg, cpu0, wall0=None):
-    cpu1 = time.clock()
+    cpu1, wall1 = time.clock(), time.time()
     if wall0:
-        wall1 = time.time()
-        debug(rec, ' '.join(('    CPU time for', msg, '%9.2f sec, wall time %9.2f sec')),
-              cpu1-cpu0, wall1-wall0)
+        if rec.verbose >= TIMER_LEVEL:
+            flush(rec, ' '.join(('    CPU time for', msg,
+                                 '%9.2f sec, wall time %9.2f sec')),
+                  cpu1-cpu0, wall1-wall0)
         return cpu1, wall1
     else:
-        debug(rec, ' '.join(('    CPU time for', msg, '%9.2f sec')), cpu1-cpu0)
+        if rec.verbose >= TIMER_LEVEL:
+            flush(rec, ' '.join(('    CPU time for', msg, '%9.2f sec')),
+                  cpu1-cpu0)
         return cpu1
 
 def timer_debug1(rec, msg, cpu0, wall0=None):

@@ -380,7 +380,7 @@ class FCISolver(object):
         self.max_space = 20
         self.conv_tol = 1e-10
         self.lindep = 1e-14
-        self.max_memory = 2400 # MB
+        self.max_memory = pyscf.lib.parameters.MEMORY_MAX
 # level shift in precond
         self.level_shift = 1e-2
         # force the diagonlization use davidson iteration.  When the CI space

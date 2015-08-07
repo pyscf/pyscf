@@ -210,13 +210,13 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
     else:
         log = logger.Logger(casscf.stdout, casscf.verbose)
 
-    t2m = (time.clock(), time.time())
+    t3m = (time.clock(), time.time())
     u = 1
     g_orb, gorb_update, h_op, h_diag = \
             casscf.gen_g_hop(mo, u, casdm1, casdm2, eris)
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%4.3g', norm_gorb)
-    t3m = log.timer('gen h_op', *t2m)
+    t3m = log.timer('gen h_op', *t3m)
 
     def precond(x, e):
         hdiagd = h_diag-(e-casscf.ah_level_shift)
@@ -229,11 +229,11 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
         return x
 
 # Dynamically increase the number of micro cycles when approach convergence?
-    if norm_gorb < 0.01:
-        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb+1e-9))
-    else:
-        max_cycle = casscf.max_cycle_micro_inner
-
+#    if norm_gorb < 0.01:
+#        max_cycle = casscf.max_cycle_micro_inner-int(numpy.log10(norm_gorb+1e-9))
+#    else:
+#        max_cycle = casscf.max_cycle_micro_inner
+    max_cycle = casscf.max_cycle_micro_inner
     dr = 0
     jkcount = 0
     norm_dr = 0
@@ -332,6 +332,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
 
         casdm1, casdm2 = (yield u, g_orb0.copy(), jkcount)
 
+        t3m = (time.clock(), time.time())
         g_kf, gorb_update, h_op, h_diag = \
                 casscf.gen_g_hop(mo, u, casdm1, casdm2, eris)
         norm_gkf = numpy.linalg.norm(g_kf)
@@ -339,6 +340,7 @@ def rotate_orb_cc(casscf, mo, casdm1, casdm2, eris, x0_guess=None,
         kf_compensate = norm_dg / norm_gorb
         log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
                   norm_gkf, norm_dg)
+        t3m = log.timer('gen h_op', *t3m)
         g_orb, g_kf = g_kf, None
         norm_gorb = norm_gkf
         x0_guess = dxi
@@ -534,7 +536,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                  imacro, njk, imicro+1, e_tot, e_tot-elast)
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
-        t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
+        t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol
             and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_grad)):
