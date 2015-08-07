@@ -45,6 +45,9 @@ class DMRGCI(object):
         self.maxIter = 20
         self.twodot_to_onedot = 15
         self.dmrg_switch_tol = 1e-3
+        self.nroots = 1
+        self.nevpt_state_num = 0
+        self.weights = []
         if tol == None:
             self.tol = 1e-8
         else:
@@ -134,7 +137,7 @@ class DMRGCI(object):
         log.info('fullrestart = %s', str(self.restart or self.force_restart))
         log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
 
-    def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
             nelectrons = nelec
@@ -142,7 +145,7 @@ class DMRGCI(object):
             nelectrons = nelec[0]+nelec[1]
 
         import os
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.0.0.txt"), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.%d.%d.txt" %(state, state)), 'r')
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -157,7 +160,7 @@ class DMRGCI(object):
 
         return onepdm
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
             nelectrons = nelec
@@ -165,7 +168,7 @@ class DMRGCI(object):
             nelectrons = nelec[0]+nelec[1]
 
         import os
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.0.0.txt"), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.%d.%d.txt" %(state, state)), 'r')
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -179,7 +182,7 @@ class DMRGCI(object):
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
-    def make_rdm123(self, fcivec, norb, nelec, link_index=None, **kwargs):
+    def make_rdm123(self, state, norb, nelec,  link_index=None, **kwargs):
         import os
         if self.has_threepdm == False:
             self.twopdm = False
@@ -200,7 +203,7 @@ class DMRGCI(object):
                 outFile = self.outputFile
                 #outFile = os.path.join(self.scratchDirectory,self.outputFile)
                 logger.debug1(self, open(outFile).read())
-            self.hasthreepdm = True
+            self.has_threepdm = True
             self.extraline.pop()
 
         nelectrons = 0
@@ -209,7 +212,7 @@ class DMRGCI(object):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.0.0.txt"), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.txt" %(state, state)), 'r')
 
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -259,7 +262,7 @@ class DMRGCI(object):
             self.has_nevpt = True
             self.extraline.pop()
 
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "%s_matrix.%d.%d.txt" %(type, state, state)), 'r')
+        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "%s_matrix.%d.%d.txt" %(type,state, state)), 'r')
 
         a16 = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         norb_read = int(f.readline().split()[0])
@@ -272,6 +275,10 @@ class DMRGCI(object):
         return a16
 
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
+        if self.nroots==1:
+            roots = 0
+        else:
+            roots = range(self.nroots)
         if fciRestart is None:
             fciRestart = self.restart or self.force_restart
         if isinstance(nelec, (int, numpy.integer)):
@@ -292,8 +299,11 @@ class DMRGCI(object):
             try:
                 calc_e = readEnergy(self)
             except IOError:
-                calc_e = 0.0
-            return calc_e, None
+                if self.nroots ==1:
+                    calc_e = 0.0
+                else :
+                    calc_e = [0.0] * self.nroots
+            return calc_e, roots
             
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
@@ -302,7 +312,7 @@ class DMRGCI(object):
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
-        return calc_e, None
+        return calc_e, roots
 
     def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
         fciRestart = True 
@@ -325,6 +335,7 @@ class DMRGCI(object):
             #outFile = os.path.join(self.scratchDirectory,self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
+
 
         return calc_e, None
 
@@ -401,6 +412,14 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         f.write('nonspinAdapted\n')
     if(DMRGCI.scratchDirectory):
         f.write('prefix  %s\n'%DMRGCI.scratchDirectory)
+    if (DMRGCI.nroots !=1):
+        f.write('nroots %d\n'%DMRGCI.nroots)
+        if (DMRGCI.weights==[]):
+            DMRGCI.weights= [1.0/DMRGCI.nroots]* DMRGCI.nroots
+        f.write('weights ')
+        for weight in DMRGCI.weights:
+            f.write('%f '%weight)
+        f.write('\n')
     for line in DMRGCI.extraline:
         f.write('%s\n'%line)
     f.close()
@@ -467,10 +486,14 @@ def executeBLOCK(DMRGCI):
 def readEnergy(DMRGCI):
     import struct, os
     file1 = open(os.path.join('%s/%s/'%(DMRGCI.scratchDirectory,"node0"), "dmrg.e"),"rb")
-    calc_e = struct.unpack('d', file1.read(8))[0]
+    format = ['d']*DMRGCI.nroots
+    format = ''.join(format)
+    calc_e = struct.unpack(format, file1.read())
     file1.close()
-
-    return calc_e
+    if DMRGCI.nroots ==1:
+        return calc_e[0]
+    else:
+        return list(calc_e)
 
 
 def DMRGSCF(mf, norb, nelec, *args, **kwargs):
@@ -481,7 +504,7 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     return mc
 
 
-def DMRG_MPS_NEVPT(mc, maxm = 500, tol =1e-6, parallel= True):
+def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None,maxm = 500, tol =1e-6, parallel= True):
     
     if (isinstance(mc, basestring)):
         fh5 = h5py.File(mc,'r')
@@ -500,7 +523,7 @@ def DMRG_MPS_NEVPT(mc, maxm = 500, tol =1e-6, parallel= True):
         nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
         nelecas = mc.nelecas
         mc_chk = 'mc_chkfile'
-        write_chk(mc,mc_chk)
+        write_chk(mc,root,mc_chk)
         
 
 
@@ -509,11 +532,12 @@ def DMRG_MPS_NEVPT(mc, maxm = 500, tol =1e-6, parallel= True):
     ci.twopdm = False
     scratch = ci.scratchDirectory
     ci.scratchDirectory = ''
-    if (not parallel):
-        ci.extraline.append('restart_mps_nevpt %d %d %d'%(ncas,ncore, nvirt))
+    #if (not parallel):
+    #    ci.extraline.append('restart_mps_nevpt %d %d %d'%(ncas,ncore, nvirt))
 
 
     ci.extraline.append('fullrestart')
+    ci.extraline.append('nevpt_state_num %d'%root)
     
     writeDMRGConfFile(nelecas[0], nelecas[1], False, ci)
     ci.scratchDirectory = scratch
@@ -525,7 +549,7 @@ def DMRG_MPS_NEVPT(mc, maxm = 500, tol =1e-6, parallel= True):
         logger.debug1(ci, open(inFile, 'r').read())
 
     from subprocess import check_call
-    check_call('%s /home/shengg/opt/pyscf_new/pyscf/future/dmrgscf/nevpt_mpi.py %s %s %s %s %s'%(ci.mpiprefix, mc_chk, ci.executable, ci.configFile,ci.outputFile, ci.scratchDirectory), shell=True)
+    check_call('%s /home/shengg/opt/pyscf_dev/pyscf/future/dmrgscf/nevpt_mpi.py %s %s %s %s %s'%(ci.mpiprefix, mc_chk, ci.executable, ci.configFile,ci.outputFile, ci.scratchDirectory), shell=True)
 
     #if (parallel):
     #    from subprocess import check_call
@@ -537,9 +561,9 @@ def DMRG_MPS_NEVPT(mc, maxm = 500, tol =1e-6, parallel= True):
 
 
 
-    if ci.verbose >= logger.DEBUG1:
-        outFile = ci.outputFile
-        logger.debug1(ci, open(outFile).read())
+ #   if ci.verbose >= logger.DEBUG1:
+ #       outFile = ci.outputFile
+ #       logger.debug1(ci, open(outFile).read())
     #calc_e = readEnergy(self)
 
     #return calc_e, None

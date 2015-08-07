@@ -39,7 +39,7 @@ def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
                 print >>f, '{0:.12e}'.format(h1e[i,j]), i+shift0, j+shift1, 0, 0
 
 
-def write_chk(mc,chkfile):
+def write_chk(mc,root,chkfile):
 
     fh5 = h5py.File(chkfile,'w')
 
@@ -50,9 +50,10 @@ def write_chk(mc,chkfile):
     nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
     fh5['mc/nvirt']   =       nvirt    
     fh5['mc/nelecas'] =       mc.nelecas 
+    fh5['mc/root']    =       root
 
 
-    orbe = mc.get_fock().diagonal()
+    orbe = mc.get_fock(ci=root).diagonal()
     fh5['mc/orbe']    =       orbe     
     #fh5['mc/orbsym']  =       mc.orbsym
     if hasattr(mc, 'orbsym'):
@@ -71,7 +72,7 @@ def write_chk(mc,chkfile):
     fh5['h1e_Sr']     =       h1e_Sr   
 
 
-    dm1 = mcscf.make_rdm1(mc)
+    dm1 = mc.make_rdm1(ci=root)
     total_vhf = mc.get_veff(mc.mol,dm1)
     fock = reduce(numpy.dot, (mc.mo_coeff.T,mc.get_hcore()+total_vhf , mc.mo_coeff))
     fh5['fock']       =       fock     
@@ -106,6 +107,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     ncas      =     fh5['mc/ncas'].value
     nvirt     =     fh5['mc/nvirt'].value
     orbe      =     fh5['mc/orbe'].value
+    root      =     fh5['mc/root'].value
     orbsym    =     list(fh5['mc/orbsym'].value)
     nelecas   =     fh5['mc/nelecas'].value
     h1e_Si    =     fh5['h1e_Si'].value
@@ -256,11 +258,11 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     os.chdir('./%d'%rank)
 
     check_call('%s %s > %s'%(blockfile,dmrginp,dmrgout), shell=True)
-    f = open('Va_0','r')
+    f = open('Va_%d'%root,'r')
     Vr_energy = float(f.readline())
     Vr_norm = float(f.readline())
     f.close()
-    f = open('Vi_0','r')
+    f = open('Vi_%d'%root,'r')
     Vi_energy = float(f.readline())
     Vi_norm = float(f.readline())
     f.close()
@@ -275,7 +277,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     os.chdir('..')
     if rank == 0:
 
-        fh5 = h5py.File('Perturbation','w')
+        fh5 = h5py.File('Perturbation_%d'%root,'w')
         fh5['Vi/energy']      =    sum(Vi_total_e)
         fh5['Vi/norm']        =    sum(Vi_total_norm)
         fh5['Vr/energy']      =    sum(Vr_total_e)
