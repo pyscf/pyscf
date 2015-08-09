@@ -9,6 +9,7 @@ import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
 from pyscf import mcscf
+from pyscf.dmrgscf import dmrg_sym
 from pyscf.dmrgscf.dmrg_sym import IRREP_MAP
 from pyscf.dmrgscf.nevpt_mpi import write_chk
 
@@ -48,6 +49,8 @@ class DMRGCI(object):
         self.nroots = 1
         self.nevpt_state_num = 0
         self.weights = []
+        self.wfnsym = 1
+
         if tol == None:
             self.tol = 1e-8
         else:
@@ -136,6 +139,7 @@ class DMRGCI(object):
         log.info('maxM = %d', self.maxM)
         log.info('fullrestart = %s', str(self.restart or self.force_restart))
         log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
+        log.info('wfnsym = %s', self.wfnsym)
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -336,8 +340,11 @@ class DMRGCI(object):
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
-
-        return calc_e, None
+        if self.nroots==1:
+            roots = 0
+        else:
+            roots = range(self.nroots)
+        return calc_e, roots
 
     def restart_scheduler_(self):
         def callback(envs):
@@ -367,6 +374,11 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
     f = open(confFile, 'w')
     f.write('nelec %i\n'%(neleca+nelecb))
     f.write('spin %i\n' %(neleca-nelecb))
+    if isinstance(DMRGCI.wfnsym, str):
+        wfnsym = dmrg_sym.irrep_name2id(DMRGCI.mol.groupname, DMRGCI.wfnsym)
+    else:
+        wfnsym = DMRGCI.wfnsym
+    f.write('irrep %i\n' % wfnsym)
 
     if (not Restart):
         #f.write('schedule\n')
