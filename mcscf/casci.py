@@ -268,8 +268,10 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
+    max_memory = max(400, casci.max_memory-pyscf.lib.current_memory()[0])
     e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
-                                           ci0=ci0, verbose=log)
+                                           ci0=ci0, verbose=log,
+                                           max_memory=max_memory)
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()

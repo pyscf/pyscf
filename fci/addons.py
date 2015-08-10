@@ -48,6 +48,8 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     nb = cistring.num_strings(norb, nelecb)
     ci1 = numpy.zeros((na,nb))
 
+########################
+# pass 1: The fixed occs
     orbleft = numpy.ones(norb, dtype=bool)
     stra = numpy.zeros(norb, dtype=bool)
     strb = numpy.zeros(norb, dtype=bool)
@@ -73,29 +75,88 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     assert(nelecb_left >= 0)
     assert(spin >= 0)
 
-# assume "nelecb_left" doubly occupied orbitals
-    if spin == 0:
-        assert(wfnsym == 0)
-        socclst = []
-    else:
-        socclst = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])]
-        if len(socclst) != spin:
-            raise RuntimeError('No occ pattern found for wfnsym %s' % wfnsym)
-    docclst = numpy.zeros(norb, dtype=bool)
-    docclst[orbleft] = True
-    docclst[socclst] = False
-    docclst = numpy.where(docclst)[0][:nelecb_left]
+########################
+# pass 2: search pattern
+    def gen_str_iter(orb_list, nelec):
+        if nelec == 1:
+            for i in orb_list:
+                yield [i]
+        elif nelec >= len(orb_list):
+            yield orb_list
+        else:
+            restorb = orb_list[1:]
+            #yield from gen_str_iter(restorb, nelec)
+            for x in gen_str_iter(restorb, nelec):
+                yield x
+            for x in gen_str_iter(restorb, nelec-1):
+                yield [orb_list[0]] + x
 
+# search for alpha and beta pattern which match to the required symmetry
+    def query(target, nelec_atmost, spin, orbsym):
+        norb = len(orbsym)
+        for excite_level in range(1, nelec_atmost+1):
+            for beta_only in gen_str_iter(range(norb), excite_level):
+                alpha_allow = [i for i in range(norb) if i not in beta_only]
+                alpha_orbsym = orbsym[alpha_allow]
+                alpha_target = target
+                for i in beta_only:
+                    alpha_target ^= orbsym[i]
+                alpha_only = symm.route(alpha_target, spin+excite_level, alpha_orbsym)
+                if alpha_only:
+                    alpha_only = [alpha_allow[i] for i in alpha_only]
+                    return alpha_only, beta_only
+        raise RuntimeError('No occ pattern found for %s' % target)
+
+    if spin == 0:
+        aonly = bonly = []
+        if wfnsym != 0:
+            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
+    else:
+        # 1. assume "nelecb_left" doubly occupied orbitals
+        # search for alpha pattern which match to the required symmetry
+        aonly, bonly = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])], []
+        # dcompose doubly occupied orbitals, search for alpha and beta pattern
+        if len(aonly) != spin:
+            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
+
+    ndocc = neleca_left - len(aonly) # == nelecb_left - len(bonly)
+    docc_allow = numpy.ones(len(orbleft), dtype=bool)
+    docc_allow[aonly] = False
+    docc_allow[bonly] = False
+    docclst = orbleft[numpy.where(docc_allow)[0]][:ndocc]
     stra[docclst] = True
     strb[docclst] = True
-    stra[socclst] = True
-    stra = ''.join([str(int(i)) for i in stra])[::-1]
-    strb = ''.join([str(int(i)) for i in strb])[::-1]
-    #print stra, strb
-    addra = cistring.str2addr(norb, neleca, int(stra,2))
-    addrb = cistring.str2addr(norb, nelecb, int(strb,2))
-    ci1[addra,addrb] = 1
+
+    def find_addr_(stra, aonly, nelec):
+        stra[orbleft[aonly]] = True
+        return cistring.str2addr(norb, nelec, ('%i'*norb)%tuple(stra)[::-1])
+    if bonly:
+        if spin > 0:
+            aonly, socc_only = aonly[:-spin], aonly[-spin:]
+            stra[orbleft[socc_only]] = True
+        stra1 = stra.copy()
+        strb1 = strb.copy()
+
+        addra = find_addr_(stra, aonly, neleca)
+        addrb = find_addr_(strb, bonly, nelecb)
+        addra1 = find_addr_(stra1, bonly, neleca)
+        addrb1 = find_addr_(strb1, aonly, nelecb)
+        ci1[addra,addrb] = ci1[addra1,addrb1] = numpy.sqrt(.5)
+    else:
+        addra = find_addr_(stra, aonly, neleca)
+        addrb = find_addr_(strb, bonly, nelecb)
+        ci1[addra,addrb] = 1
+
+#    target = 0
+#    for i,k in enumerate(stra):
+#        if k:
+#            target ^= orbsym[i]
+#    for i,k in enumerate(strb):
+#        if k:
+#            target ^= orbsym[i]
+#    print target
     return ci1
+
 
 def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -294,15 +355,25 @@ if __name__ == '__main__':
     print(cre_b(a6+b6, 4, 4, 2))
     print(cre_b(a6+b6, 4, 4, 3))
 
-    symm_initguess(6, (4,3), [0,1,0,0,3,0], wfnsym=1, irrep_nelec=None)
-    symm_initguess(6, (4,3), [0,1,0,0,3,0], wfnsym=0, irrep_nelec={0:[3,2],3:2})
+    print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=1,
+                                     irrep_nelec=None)!=0), [0], [2])
+    print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=0,
+                                irrep_nelec={0:[3,2],3:2})!=0), [2,3], [5,4])
+    print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=2,
+                                     irrep_nelec={1:[0,1],3:[1,0]})!=0), [5], [0])
+    print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3,
+                                     irrep_nelec={5:[0,1],3:[1,0]})!=0), [4,7], [2,0])
 
+    def finger(ci1):
+        numpy.random.seed(1)
+        fact = numpy.random.random(ci1.shape).ravel()
+        return numpy.dot(ci1.ravel(), fact.ravel())
     norb = 6
     nelec = neleca, nelecb = 4,3
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci = numpy.ones((na,nb))
-    print(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2))
+    print(finger(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)), 18.801458376605162)
     s1 = numpy.random.seed(1)
     s1 = numpy.random.random((6,6))
     s1 = s1 + s1.T

@@ -1,3 +1,4 @@
+import pyscf.symm
 IRREP_MAP = {'D2h': (1,         # Ag
                      4,         # B1g
                      6,         # B2g
@@ -26,3 +27,12 @@ IRREP_MAP = {'D2h': (1,         # Ag
                      2),        # Au
              'C1' : (1,)}
 
+def irrep_name2id(gpname, symb):
+    irrep_id = pyscf.symm.irrep_name2id(gpname, symb) % 10
+    if gpname.lower() == 'dooh':
+        gpname = 'D2h'
+    elif gpname.lower() == 'cooh':
+        gpname = 'C2v'
+    else:
+        gpname = pyscf.symm.std_symb(gpname)
+    return IRREP_MAP[gpname][irrep_id]
