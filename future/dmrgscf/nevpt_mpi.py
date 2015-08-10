@@ -70,14 +70,7 @@ def write_chk(mc,root,chkfile):
     h1e_Si =  reduce(numpy.dot, (mo_cas.T, mc.get_hcore()+core_vhf , mo_core))
     fh5['h1e_Si']     =       h1e_Si   
     fh5['h1e_Sr']     =       h1e_Sr   
-
-
-    dm1 = mc.make_rdm1(ci=root)
-    total_vhf = mc.get_veff(mc.mol,dm1)
-    fock = reduce(numpy.dot, (mc.mo_coeff.T,mc.get_hcore()+total_vhf , mc.mo_coeff))
-    fh5['fock']       =       fock     
     h1e = mc.h1e_for_cas()
-    #fh5.create_dataset('h1e',data=h1e)
     fh5['h1e']       =       h1e[0]
     fh5.close()
 
@@ -112,7 +105,6 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     nelecas   =     fh5['mc/nelecas'].value
     h1e_Si    =     fh5['h1e_Si'].value
     h1e_Sr    =     fh5['h1e_Sr'].value
-    fock      =     fh5['fock'].value
     h1e       =     fh5['h1e'].value
     fh5.close()
 
