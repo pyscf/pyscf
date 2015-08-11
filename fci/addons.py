@@ -105,7 +105,8 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
                 if alpha_only:
                     alpha_only = [alpha_allow[i] for i in alpha_only]
                     return alpha_only, beta_only
-        raise RuntimeError('No occ pattern found for %s' % target)
+        raise RuntimeError('No pattern found for wfn irrep %s over orbsym %s'
+                           % (target, orbsym))
 
     if spin == 0:
         aonly = bonly = []
