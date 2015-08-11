@@ -236,10 +236,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol*.1)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
+    conv_tol_ddm = conv_tol_grad * 3
     max_cycle_micro = micro
     conv = False
     totmicro = totinner = 0
-    imicro = 0
     norm_gorb = norm_gci = 0
     elast = e_tot
     de = 1e9
@@ -251,23 +251,20 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
     for imacro in range(macro):
-
-        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0,
-                                          conv_tol_grad, log)
         if casscf.dynamic_micro_step:
             max_cycle_micro = max(micro, int(micro-2-numpy.log(norm_ddm)))
-        for imicro in range(max_cycle_micro):
-            if imicro == 0:
-                u, g_orb, njk = micro_iter.next()
-                norm_gorb0 = norm_gorb = numpy.linalg.norm(g_orb)
-            else:
-                u, g_orb, njk = micro_iter.send((casdm1,casdm2))
-                norm_gorb = numpy.linalg.norm(g_orb)
+        imicro = 0
+        for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                                  eris, r0, conv_tol_grad, log):
+            imicro += 1
+            norm_gorb = numpy.linalg.norm(g_orb)
+            if imicro == 1:
+                norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
-            if imicro + 1 == max_cycle_micro:
+            if imicro == max_cycle_micro:
                 log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ',
-                          imicro+1, de, norm_t, norm_gorb)
+                          imicro, de, norm_t, norm_gorb)
                 break
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
@@ -280,21 +277,19 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             t3m = log.timer('update CAS DM', *t3m)
             log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
-                      imicro+1, de, norm_t, norm_gorb, norm_gci, norm_ddm)
+                      imicro, de, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
-            t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
+            t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < 1e-4 or abs(de) < tol * .2 or
-                (norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad*.8)):
+                (norm_gorb < conv_tol_grad*.8 and norm_ddm < conv_tol_ddm)):
                 break
 
-        micro_iter.close()
-        micro_iter = None
         log.debug1('current memory %d MB', pyscf.lib.current_memory()[0])
 
-        totmicro += imicro + 1
+        totmicro += imicro
         totinner += njk
 
         r0 = casscf.pack_uniq_var(u)
@@ -313,13 +308,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
         log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, njk, imicro+1, e_tot, e_tot-elast)
+                 imacro, njk, imicro, e_tot, e_tot-elast)
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol
-            and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_grad)):
+            and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_ddm)):
             conv = True
 
         if dump_chk:
@@ -355,8 +350,8 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_lindep = 1e-14
         self.ah_start_tol = .2
         self.ah_start_cycle = 2
-        self.ah_grad_trust_region = 2.
-        self.ah_decay_rate = .7
+        self.ah_grad_trust_region = 2.5
+        self.ah_decay_rate = .8
         self.internal_rotation = False
         self.dynamic_micro_step = False
         self.keyframe_interval = 5
@@ -513,9 +508,9 @@ class CASSCF(casci_uhf.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess,
+    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, x0_guess,
                       conv_tol_grad, verbose):
-        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess,
+        return mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, x0_guess,
                                      conv_tol_grad, verbose)
 
     def ao2mo(self, mo):

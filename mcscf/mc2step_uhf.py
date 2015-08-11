@@ -32,6 +32,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol*.1)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
+    conv_tol_ddm = conv_tol_grad * 3
     conv = False
     elast = e_tot
     totmicro = totinner = 0
@@ -49,8 +50,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0,
-                                        conv_tol_grad, log)
+            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                        eris, r0, conv_tol_grad, log)
             u, g_orb, njk = rota.next()
             rota.close()
             ninner += njk
@@ -89,7 +90,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(elast - e_tot) < tol and
-            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad):
+            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm):
             conv = True
         else:
             elast = e_tot

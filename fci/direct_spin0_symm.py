@@ -91,8 +91,10 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown), __name__))
 
-    #wfnsym = direct_spin1_symm._id_wfnsym(cis, norb, nelec, cis.wfnsym)
-    wfnsym = 0
+    wfnsym = direct_spin1_symm._id_wfnsym(cis, norb, nelec, cis.wfnsym)
+    if cis.wfnsym is not None and ci0 is None:
+        ci0 = addons.symm_initguess(norb, nelec, orbsym, wfnsym)
+
     e, c = direct_spin0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0)
     if cis.wfnsym is not None:
         if cis.nroots > 1:
