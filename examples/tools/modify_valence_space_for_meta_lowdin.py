@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import numpy
-from pyscf import gto
-from pyscf import lo
+from pyscf import gto, future
+from pyscf.future import lo
+from pyscf.future.lo import nao
 from pyscf.tools import ring, molden
 
 # Meta-lowdin orthogonalization takes the minimal AOs as the occupied sets.
