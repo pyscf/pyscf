@@ -540,28 +540,30 @@ def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None,maxm = 500, tol =1e-6, parallel= T
 
 
 
-    ci = DMRGCI(mol, maxm, tol)
-    ci.twopdm = False
-    scratch = ci.scratchDirectory
-    ci.scratchDirectory = ''
+    if fcisolver ==None:
+        fcisolver = DMRGCI(mol, maxm, tol)
+    fcisolver.twopdm = False
+    fcisolver.nroots = mc.fcisolver.nroots
+    scratch = fcisolver.scratchDirectory
+    fcisolver.scratchDirectory = ''
     #if (not parallel):
     #    ci.extraline.append('restart_mps_nevpt %d %d %d'%(ncas,ncore, nvirt))
 
 
-    ci.extraline.append('fullrestart')
-    ci.extraline.append('nevpt_state_num %d'%root)
+    fcisolver.extraline.append('fullrestart')
+    fcisolver.extraline.append('nevpt_state_num %d'%root)
     
-    writeDMRGConfFile(nelecas[0], nelecas[1], False, ci)
-    ci.scratchDirectory = scratch
+    writeDMRGConfFile(nelecas[0], nelecas[1], False, fcisolver)
+    fcisolver.scratchDirectory = scratch
 
-    if ci.verbose >= logger.DEBUG1:
-        inFile = ci.configFile
+    if fcisolver.verbose >= logger.DEBUG1:
+        inFile = fcisolver.configFile
         #inFile = os.path.join(self.scratchDirectory,self.configFile)
-        logger.debug1(ci, 'Block Input conf')
-        logger.debug1(ci, open(inFile, 'r').read())
+        logger.debug1(fcisolver, 'Block Input conf')
+        logger.debug1(fcisolver, open(inFile, 'r').read())
 
     from subprocess import check_call
-    check_call('%s /home/shengg/opt/pyscf_dev/pyscf/future/dmrgscf/nevpt_mpi.py %s %s %s %s %s'%(ci.mpiprefix, mc_chk, ci.executable, ci.configFile,ci.outputFile, ci.scratchDirectory), shell=True)
+    check_call('%s /home/shengg/opt/pyscf_dev/pyscf/future/dmrgscf/nevpt_mpi.py %s %s %s %s %s'%(fcisolver.mpiprefix, mc_chk, fcisolver.executable, fcisolver.configFile,fcisolver.outputFile, fcisolver.scratchDirectory), shell=True)
 
     #if (parallel):
     #    from subprocess import check_call
