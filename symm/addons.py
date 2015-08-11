@@ -60,8 +60,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
         if orbidx[1].size > 0:
             idx = numpy.where(norm > THRESHOLD*1e2)
             if idx[1].size > 0:
-                logger.error(mol, 'orbitals %s not symmetrized', idx[1])
-                logger.debug(mol, 'norm = %s', norm[idx])
+                logger.error(mol, 'orbitals %s not symmetrized, norm = %s',
+                             idx[1], norm[idx])
                 raise ValueError('orbitals %s not symmetrized' % idx[1])
             else:
                 logger.warn(mol, 'orbitals %s not strictly symmetrized.',

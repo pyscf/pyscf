@@ -6,6 +6,7 @@
 import time
 from functools import reduce
 import numpy
+import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
 from pyscf import scf

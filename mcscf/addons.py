@@ -326,6 +326,8 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
         def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
             e, c = fcibase.kernel(h1, h2, ncas, nelecas, ci0,
                                   nroots=self.nroots, **kwargs)
+            for i, ei in enumerate(e):
+                logger.debug(casscf, 'Energy for state %d = %.15g', i, ei)
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase.kernel(h1, h2, norb, nelec, ci0,
