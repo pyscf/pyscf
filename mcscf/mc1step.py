@@ -62,8 +62,6 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
             jkcaa[i] = numpy.einsum('ik,ik->i', 6*kbuf[:,i]-2*jbuf[i], casdm1)
         vhf_a[i] =(numpy.einsum('quv,uv->q', jbuf, casdm1)
                  - numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
-        jbuf = eris.ppaa[i]
-        kbuf = eris.papa[i]
         jtmp = pyscf.lib.dot(jbuf.reshape(nmo,-1), casdm2.reshape(ncas*ncas,-1))
         jtmp = jtmp.reshape(nmo,ncas,ncas)
         ktmp = pyscf.lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2tmp)
@@ -109,41 +107,38 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         return g
 
     def gdep4(u):
+        mo1 = numpy.dot(mo, u)
         g = numpy.zeros_like(h1e_mo)
         g[:,:nocc] = reduce(numpy.dot, (u.T, h1e_mo, u[:,:nocc]))
-        mo1 = numpy.dot(mo, u)
-        mo1_cas = mo1[:,ncore:nocc]
-        dm_cas0 = reduce(numpy.dot, (mo[:,ncore:nocc], casdm1, mo[:,ncore:nocc].T))
-        dm_cas  = reduce(numpy.dot, (mo1_cas, casdm1, mo1_cas.T))
-        vj, vk = casscf._scf.get_jk(casscf.mol, dm_cas-dm_cas0)
-        vhfa =(reduce(numpy.dot, (mo1.T, vj-vk*.5, mo1[:,:nocc]))
-             + reduce(numpy.dot, (u.T, vhf_a, u[:,:nocc])))
-        g[:,:ncore] += casscf._vhf_c[:,:ncore] + vhfa[:,:ncore]
+        dm_core1 = reduce(numpy.dot, (mo1[:,:ncore], mo1[:,:ncore].T)) * 2
+        dm_cas1 = reduce(numpy.dot, (mo1[:,ncore:nocc], casdm1, mo1[:,ncore:nocc].T))
+        vj, vk = casscf._scf.get_jk(casscf.mol, (dm_core1-dm_core, dm_cas1-dm_cas))
+        vhfc1 =(reduce(numpy.dot, (mo1.T, vj[0]-vk[0]*.5, mo1[:,:nocc]))
+              + reduce(numpy.dot, (u.T, eris.vhf_c, u[:,:nocc])))
+        vhfa1 =(reduce(numpy.dot, (mo1.T, vj[1]-vk[1]*.5, mo1[:,:nocc]))
+              + reduce(numpy.dot, (u.T, vhf_a, u[:,:nocc])))
+        g[:,:ncore] += vhfc1[:,:ncore] + vhfa1[:,:ncore]
         g[:,:ncore] *= 2
-        g[:,ncore:nocc] = numpy.dot(g[:,ncore:nocc]+casscf._vhf_c[:,ncore:nocc], casdm1)
+        g[:,ncore:nocc] = numpy.dot(g[:,ncore:nocc]+vhfc1[:,ncore:nocc], casdm1)
 
-        g[:,ncore:nocc] += numpy.einsum('puvw,tuvw->pt', casscf._paaa, casdm2)
+        if hasattr(eris, '_paaa'):
+            g[:,ncore:nocc] += numpy.einsum('puvw,tuvw->pt', eris._paaa, casdm2)
+        else:
+            raise RuntimeError('dep4 not consistent with ah keyframe')
         return g
-
-    def gdep(u):
-        if casscf.ci_update_dep == 4 or casscf.grad_update_dep == 4:
-            return gdep4(u)
-        else:# casscf.grad_update_dep == 1: # DEP1/first order T-expansion
-            return gdep1(u)
 
     def gorb_update(u):
         if casscf.grad_update_dep == 0: # FEP0/first order R-expansion
             dr = casscf.pack_uniq_var(u)
             return gbasic() + h_op(dr)
-        else:
-            g = gdep(u)
+        if casscf.ci_update_dep == 4 or casscf.grad_update_dep == 4:
+            g = gdep4(u)
+            return casscf.pack_uniq_var(g-g.T)
+        else:# casscf.grad_update_dep == 1: # DEP1/first order T-expansion
+            g = gdep1(u)
             return casscf.pack_uniq_var(g-g.T)
 
-    if isinstance(u, numpy.ndarray):
-        g = gdep(u)
-    else:
-        u = numpy.eye(mo.shape[1])
-        g = gbasic()
+    g = gbasic()
 
     ############## hessian, diagonal ###########
 
@@ -167,6 +162,8 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     tmp = numpy.einsum('ii,jj->ij', eris.vhf_c, casdm1)
     h_diag[:,ncore:nocc] += tmp
     h_diag[ncore:nocc,:] += tmp.T
+    tmp = -eris.vhf_c[ncore:nocc,ncore:nocc] * casdm1
+    h_diag[ncore:nocc,ncore:nocc] += tmp + tmp.T
 
     # part4
     # -2(pr|sq) + 4(pq|sr) + 4(pq|rs) - 2(ps|rq)
@@ -360,9 +357,10 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         t3m = (time.clock(), time.time())
         g_kf1, gorb_update, h_op, h_diag = \
                 casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-        if (numpy.linalg.norm(g_kf1-g_kf0) > norm_gkf0*casscf.ah_grad_trust_region):
-            log.debug('    Rejct keyframe |g|= %4.3g  |g0| = %4.3f',
-                      numpy.linalg.norm(g_kf1), norm_gkf0)
+        g_kf1 = gorb_update(u)
+        if (numpy.linalg.norm(g_kf1-g_kf) > norm_gkf*casscf.ah_grad_trust_region):
+            log.debug('    Rejct keyframe |g|= %4.3g  |g_last| = %4.3f',
+                      numpy.linalg.norm(g_kf1), norm_gkf)
             break
         norm_gkf = numpy.linalg.norm(g_kf1)
         norm_dg = numpy.linalg.norm(g_kf1-g_orb)
@@ -1014,18 +1012,17 @@ class CASSCF(casci.CASCI):
             dm_core0 = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
             dm_core  = numpy.dot(mo1[:,:ncore], mo1[:,:ncore].T) * 2
             vj, vk = self._scf.get_jk(self.mol, dm_core-dm_core0)
-            self._vhf_c =(reduce(numpy.dot, (mo1.T, vj-vk*.5, mo1[:,:nocc]))
+            vhf_c =(reduce(numpy.dot, (mo1.T, vj-vk*.5, mo1[:,:nocc]))
                         + reduce(numpy.dot, (u.T, eris.vhf_c, u[:,:nocc])))
-            h1 =(reduce(numpy.dot, (ua.T, h1e_mo, ua))
-               + self._vhf_c[ncore:nocc,ncore:nocc])
+            h1 =(reduce(numpy.dot, (ua.T, h1e_mo, ua)) + vhf_c[ncore:nocc,ncore:nocc])
             mo1_cas = mo1[:,ncore:nocc]
             if self._scf._eri is None:
                 paaa = ao2mo.general(self.mol, (mo1,)+(mo1_cas,)*3, compact=False)
-                self._paaa = paaa.reshape(nmo,ncas,ncas,ncas)
+                eris._paaa = paaa.reshape(nmo,ncas,ncas,ncas)
             else:
                 paaa = ao2mo.general(self._scf._eri, (mo1,)+(mo1_cas,)*3, compact=False)
-                self._paaa = paaa.reshape(nmo,ncas,ncas,ncas)
-            h2 = self._paaa[ncore:nocc]
+                eris._paaa = paaa.reshape(nmo,ncas,ncas,ncas)
+            h2 = eris._paaa[ncore:nocc]
             vj = vk = paaa = None
         elif self.ci_update_dep == 2: # (0) + (1) + part-of-(2)
             ## missing terms:
