@@ -110,9 +110,11 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         mo1 = numpy.dot(mo, u)
         g = numpy.zeros_like(h1e_mo)
         g[:,:nocc] = reduce(numpy.dot, (u.T, h1e_mo, u[:,:nocc]))
+        dm_core0 = reduce(numpy.dot, (mo[:,:ncore], mo[:,:ncore].T)) * 2
         dm_core1 = reduce(numpy.dot, (mo1[:,:ncore], mo1[:,:ncore].T)) * 2
-        dm_cas1 = reduce(numpy.dot, (mo1[:,ncore:nocc], casdm1, mo1[:,ncore:nocc].T))
-        vj, vk = casscf._scf.get_jk(casscf.mol, (dm_core1-dm_core, dm_cas1-dm_cas))
+        dm_cas0  = reduce(numpy.dot, (mo[:,ncore:nocc], casdm1, mo[:,ncore:nocc].T))
+        dm_cas1  = reduce(numpy.dot, (mo1[:,ncore:nocc], casdm1, mo1[:,ncore:nocc].T))
+        vj, vk = casscf._scf.get_jk(casscf.mol, (dm_core1-dm_core0, dm_cas1-dm_cas0))
         vhfc1 =(reduce(numpy.dot, (mo1.T, vj[0]-vk[0]*.5, mo1[:,:nocc]))
               + reduce(numpy.dot, (u.T, eris.vhf_c, u[:,:nocc])))
         vhfa1 =(reduce(numpy.dot, (mo1.T, vj[1]-vk[1]*.5, mo1[:,:nocc]))
@@ -168,9 +170,8 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     # part4
     # -2(pr|sq) + 4(pq|sr) + 4(pq|rs) - 2(ps|rq)
     tmp = 6 * eris.k_pc - 2 * eris.j_pc
-    h_diag[:,:ncore] += tmp
-    h_diag[:ncore,:] += tmp.T
-#    h_diag[:ncore,:ncore] -= tmp[:,:ncore] * 2
+    h_diag[ncore:,:ncore] += tmp[ncore:]
+    h_diag[:ncore,ncore:] += tmp[ncore:].T
 
     # part5 and part6 diag
     # -(qr|kp) E_s^k  p in core, sk in active
@@ -961,7 +962,7 @@ class CASSCF(casci.CASCI):
 
         if hasattr(self._scf, '_cderi'):
             raise RuntimeError('TODO: density fitting')
-        return mc_ao2mo._ERIS(self, mo, 'incore')
+        return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
 
     def get_h2eff(self, mo_coeff=None):
         return self.get_h2cas(mo_coeff)
