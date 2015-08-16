@@ -466,6 +466,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         log = logger.Logger(casscf.stdout, verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 1-step CASSCF')
+    if callback is None:
+        callback = casscf.callback
 
     mo = mo_coeff
     nmo = mo.shape[1]
