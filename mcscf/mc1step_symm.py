@@ -98,7 +98,7 @@ class CASSCF(mc1step.CASSCF):
             g = _symmetrize(self.unpack_uniq_var(g), self.orbsym,
                             self.mol.groupname)
             return self.pack_uniq_var(g)
-        return self.pack_uniq_var(g_orb), gorb_op, sym_h_op, \
+        return self.pack_uniq_var(g_orb), sym_gorb_op, sym_h_op, \
                self.pack_uniq_var(h_diag)
 
     def update_rotate_matrix(self, dx, u0=1):
