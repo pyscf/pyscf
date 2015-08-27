@@ -165,8 +165,13 @@ class FCISolver(direct_spin0.FCISolver):
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
-        logger.debug(self, 'total symmetry = %s',
-                     symm.irrep_id2name(self.mol.groupname, wfnsym))
+        if 'verbose' in kwargs and isinstance(kwargs['verbose'], logger.Logger):
+            log = kwargs['verbose']
+            log.debug('total symmetry = %s',
+                      symm.irrep_id2name(self.mol.groupname, wfnsym))
+        else:
+            logger.debug(self, 'total symmetry = %s',
+                         symm.irrep_id2name(self.mol.groupname, wfnsym))
         if self.wfnsym is not None and ci0 is None:
             ci0 = addons.symm_initguess(norb, nelec, self.orbsym, wfnsym)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,

@@ -44,6 +44,7 @@ class DMRGCI(object):
         self.outputFile = "dmrg.out"
         self.twopdm = True
         self.maxIter = 20
+        self.approx_maxIter = 4
         self.twodot_to_onedot = 15
         self.dmrg_switch_tol = 1e-3
         self.nroots = 1
@@ -395,7 +396,11 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         f.write('twodot_to_onedot %i\n'%DMRGCI.twodot_to_onedot)
     else :
         f.write('schedule\n')
-        f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol/10.0, 0e-6))
+        #if approx == True :
+        #    f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol*10.0, 0e-6))
+        #else :
+        #    f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol, 0e-6))
+        f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol/10, 0e-6))
         f.write('end\n')
         f.write('fullrestart\n')
         f.write('onedot \n')
@@ -411,11 +416,11 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
     #f.write('orbitals %s\n' % os.path.join(DMRGCI.scratchDirectory,
     #                                       DMRGCI.integralFile))
     if approx == True :
-        f.write('maxiter 4\n')
+        f.write('maxiter %i\n'%DMRGCI.approx_maxIter)
     else :
         f.write('maxiter %i\n'%DMRGCI.maxIter)
-
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
+
     f.write('outputlevel 2\n')
     f.write('hf_occ integral\n')
     if(DMRGCI.twopdm):
@@ -562,8 +567,11 @@ def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None,maxm = 500, tol =1e-6, parallel= T
         logger.debug1(fcisolver, 'Block Input conf')
         logger.debug1(fcisolver, open(inFile, 'r').read())
 
+
     from subprocess import check_call
-    check_call('%s /home/shengg/opt/pyscf_dev/pyscf/future/dmrgscf/nevpt_mpi.py %s %s %s %s %s'%(fcisolver.mpiprefix, mc_chk, fcisolver.executable, fcisolver.configFile,fcisolver.outputFile, fcisolver.scratchDirectory), shell=True)
+    import os
+    full_path = os.path.realpath(__file__)
+    check_call('%s %s/nevpt_mpi.py %s %s %s %s %s'%(fcisolver.mpiprefix, os.path.dirname(full_path), mc_chk, fcisolver.executable, fcisolver.configFile,fcisolver.outputFile, fcisolver.scratchDirectory), shell=True)
 
     #if (parallel):
     #    from subprocess import check_call
