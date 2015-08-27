@@ -168,6 +168,48 @@ class localizer:
 
         logger.debug(self, "2-norm( gradient difference ) = %g", np.linalg.norm( self.gradient - gradient_numerical ))
         logger.debug(self, "2-norm( gradient )            = %g", np.linalg.norm( self.gradient ))
+        
+    def __diag_hessian( self ):
+    
+        diagonal = np.zeros( [ self.numVars ], dtype=float )
+        if ( self.__which == 'boys' ):
+            increment = 0
+            for p in range( self.Norbs ):
+                for q in range( p+1, self.Norbs ):
+                    diagonal[ increment ] = 4 * self.x_symm[p,q] * self.x_symm[p,q] \
+                                          + 4 * self.y_symm[p,q] * self.y_symm[p,q] \
+                                          + 4 * self.z_symm[p,q] * self.z_symm[p,q] \
+                                          - ( self.x_symm[p,p] - self.x_symm[q,q] ) * ( self.x_symm[p,p] - self.x_symm[q,q] ) \
+                                          - ( self.y_symm[p,p] - self.y_symm[q,q] ) * ( self.y_symm[p,p] - self.y_symm[q,q] ) \
+                                          - ( self.z_symm[p,p] - self.z_symm[q,q] ) * ( self.z_symm[p,p] - self.z_symm[q,q] )
+                    increment += 1
+            diagonal *= -self.Norbs
+        if ( self.__which == 'edmiston' ):
+            increment = 0
+            for p in range( self.Norbs ):
+                for q in range( p+1, self.Norbs ):
+                    diagonal[ increment ] = 16 * self.eri_rot[p,q,p,q] \
+                                          +  8 * self.eri_rot[p,p,q,q] \
+                                          -  4 * self.eri_rot[q,q,q,q] \
+                                          -  4 * self.eri_rot[p,p,p,p]
+                    increment += 1
+            diagonal *= -1
+        return diagonal
+        
+    
+    def __debug_diag_hessian( self ):
+
+        result1 = self.__diag_hessian()
+        result2 = np.zeros( [ self.numVars ], dtype=float )
+        
+        for elem in range( self.numVars ):
+            work = np.zeros( [ self.numVars ], dtype=float )
+            work[ elem ] = 1.0
+            matvec = self.__hessian_matvec( work )
+            result2[ elem ] = matvec[ elem ]
+            
+        logger.debug(self, "2-norm( diag(hessian) difference ) = %g", np.linalg.norm( result1 - result2 ))
+        logger.debug(self, "2-norm( diag(hessian) )            = %g", np.linalg.norm( result1 ))
     
     
     def __hessian_matvec( self, vecin ):
@@ -192,7 +234,7 @@ class localizer:
                                              vector_out.ctypes.data_as( ctypes.c_void_p ) )
         
         return vector_out
-    
+        
     
     def __debug_hessian_matvec( self ):
 
@@ -285,6 +327,7 @@ class localizer:
 
         #self.__debug_gradient()
         #self.__debug_hessian_matvec()
+        #self.__debug_diag_hessian()
 
         self.grd_norm = 1.0
         threshold = 1e-6
@@ -300,7 +343,11 @@ class localizer:
             
             __ini_guess = np.zeros( [ self.numVars + 1 ], dtype=float )
             __ini_guess[ self.numVars ] = 1.0
-            __ini_guess[ :-1 ] = - self.gradient # Minus the gradient of course !!
+            diag_hessian = self.__diag_hessian()
+            for elem in range( self.numVars ):
+                if ( abs( diag_hessian[ elem ] ) < 1e-8 ):
+                    diag_hessian[ elem ] = 1e-8
+            __ini_guess[ :-1 ] = - self.gradient / diag_hessian # Minus the gradient divided by the diagonal elements of the hessian
             eigenval, eigenvec = scipy.sparse.linalg.eigsh( __augmented, k=1, which='SA', v0=__ini_guess, ncv=min(1024,self.numVars+1), maxiter=(self.numVars+1) )
             flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
 
