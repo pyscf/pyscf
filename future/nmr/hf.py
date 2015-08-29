@@ -18,6 +18,7 @@ from pyscf.lib import logger
 import pyscf.lib.parameters as param
 import pyscf.scf
 from pyscf.scf import _vhf
+from pyscf.grad import cphf
 
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
@@ -132,50 +133,6 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
     e_ji = e_i.reshape(-1,1) - e_i
     mo_e10 = hs[:,mo_occ>0,:] + mo10[:,mo_occ>0,:] * e_ji
     return mo10, mo_e10
-
-
-# raw_mo_e1 and raw_mo1 are calculated from uncoupled calculation
-# raw_mo_e1 is h1_ai / (e_i-e_a)
-def solve_cphf(fvind, mo_energy, mo_occ, h1, s1,
-               max_cycle=20, tol=1e-9, verbose=logger.WARN):
-    t0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
-
-    raw_mo1, raw_mo_e1 = solve_mo1(mo_energy, mo_occ, h1, s1)
-
-    e_a = mo_energy[mo_occ==0]
-    e_i = mo_energy[mo_occ>0]
-    e_ai = 1 / (e_a.reshape(-1,1) - e_i)
-
-# brute force solver
-#    mo1 = numpy.copy(raw_mo1)
-#    for i in range(5):
-#        v_mo = fvind(mo1)
-#        # only update the v-o block
-#        mo1[:,mo_occ==0,:] = raw_mo1[:,mo_occ==0,:]-v_mo[:,mo_occ==0,:] * e_ai
-#    return 0, mo1
-
-    def vind_vo(mo1):
-# only update vir-occ block of induced potential, occ-occ block can be
-# absorbed in mo_e1
-        v_mo = fvind(mo1.reshape(raw_mo1.shape))
-        v_mo[:,mo_occ==0,:] *= e_ai
-        v_mo[:,mo_occ>0,:] = 0
-        return v_mo.ravel()
-
-    t0 = (time.clock(), time.time())
-    mo1 = pyscf.lib.krylov(vind_vo, raw_mo1.ravel(),
-                           tol=tol, max_cycle=max_cycle, verbose=log)
-    mo1 = mo1.reshape(raw_mo1.shape)
-    log.timer('krylov solver in CPHF', *t0)
-
-    v_mo = fvind(mo1.reshape(raw_mo1.shape))
-    mo_e1 = raw_mo_e1 - v_mo[:,mo_occ>0,:]
-    mo1[:,mo_occ==0,:] = raw_mo1[:,mo_occ==0,:] - v_mo[:,mo_occ==0,:] * e_ai
-    return mo1, mo_e1
 
 
 class NMR(object):
@@ -297,7 +254,7 @@ class NMR(object):
 
         cput1 = log.timer('first order Fock matrix', *cput1)
         if self.cphf:
-            mo10, mo_e10 = solve_cphf(self._vind, mo_energy, mo_occ, h1, s1,
+            mo10, mo_e10 = cphf.solve(self._vind, mo_energy, mo_occ, h1, s1,
                                       self.max_cycle_cphf, self.conv_tol,
                                       verbose=log)
         else:
