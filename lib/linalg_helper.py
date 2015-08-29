@@ -163,26 +163,57 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     else:
         return e, x0
 
-eigh = davidson
-dsyev = davidson
+def eigh(a, *args, **kwargs):
+    if isinstance(a, numpy.ndarray) and a.ndim == 2:
+        e, v = scipy.linalg.eigh(a)
+        if nroots == 1:
+            return e[0], v[:,0]
+        else:
+            return e[:nroots], v[:,:nroots].T
+    else:
+        return davidson(a, *args, **kwargs)
+dsyev = eigh
 
 
-# Krylov subspace method
-# ref: J. A. Pople, R. Krishnan, H. B. Schlegel, and J. S. Binkley,
-#      Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
-# solve (1+aop) x = b
-def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
-           lindep=1e-16, callback=None, verbose=logger.WARN):
+def krylov(a, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
+           lindep=1e-16, callback=None, hermi=False, verbose=logger.WARN):
+    '''
+    Krylov subspace method to solve   (1+a) x = b
+    ref: J. A. Pople, R. Krishnan, H. B. Schlegel, and J. S. Binkley, Int. J. Quantum. Chem. Symp. 13, 225 (1979).
+
+    Args:
+        a : function
+            operator a(x) = A*x
+        b : 1D ndarray
+
+    Kwargs:
+        x0 : 1D ndarray, same type as b
+            initial guess
+        tol : float
+            convergence tolerance
+        max_cycle : int
+
+        hermi : bool
+            symmetry of matrix A
+
+    Returns:
+        1D array, same type as b
+    '''
+    if isinstance(a, numpy.ndarray) and a.ndim == 2:
+        return numpy.linalg.solve(a, b)
+
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    if x0 is not None:
-        b = b - (x0 + aop(x0))
+    if x0 is None:
+        xs = [b]
+        ax = [a(xs[0])]
+    else:
+        xs = [b-(x0 + a(x0))]
+        ax = [a(xs[0])]
 
-    xs = [b]
-    ax = [aop(xs[0])]
     innerprod = [dot(xs[0].conj(), xs[0])]
 
     h = numpy.empty((max_cycle,max_cycle), dtype=b.dtype)
@@ -198,7 +229,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
         if innerprod[-1] < lindep:
             break
         xs.append(x1)
-        ax.append(aop(x1))
+        ax.append(a(x1))
 
         if callable(callback):
             callback(cycle, xs, ax)
@@ -208,9 +239,14 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
     nd = cycle + 1
 # h = numpy.dot(xs[:nd], ax[:nd].T) + numpy.diag(innerprod[:nd])
 # to reduce IO, move upper triangle (and diagonal) part to (*)
-    for i in range(nd):
-        for j in range(i):
-            h[i,j] = dot(xs[i].conj(), ax[j])
+    if hermi:
+        for i in range(nd):
+            for j in range(i):
+                h[i,j] = h[j,i].conj()
+    else:
+        for i in range(nd):
+            for j in range(i):
+                h[i,j] = dot(xs[i].conj(), ax[j])
     g = numpy.zeros(nd, dtype=b.dtype)
     g[0] = innerprod[0]
     c = numpy.linalg.solve(h[:nd,:nd], g)
@@ -222,8 +258,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
         x += x0
     return x
 
+
 # Davidson-like linear eq solver.  It does not work well.
-def dsolve(a, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot, \
+def dsolve(a, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot,
            lindep=1e-16, verbose=0):
 
     toloose = numpy.sqrt(tol)
@@ -254,6 +291,7 @@ def dsolve(a, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot, \
         print(istep)
 
     return xtrial
+
 
 class _Xlist(list):
     def __init__(self):

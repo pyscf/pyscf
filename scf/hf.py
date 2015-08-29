@@ -165,7 +165,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
             HF potential
 
     Returns:
-        Hartree-Fock electronic energy and the 2-electron part contribution
+        Hartree-Fock electronic energy and the Coulomb energy
 
     Examples:
 

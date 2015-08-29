@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
+import numpy
 from pyscf import gto
 
 mol = gto.Mole()
@@ -86,6 +87,49 @@ class KnowValues(unittest.TestCase):
     def test_intor_r_comp(self):
         s = mol.intor('cint1e_ipkin', comp=3)
         self.assertAlmostEqual(finger(s), 4409.86758420756, 11)
+
+    def test_intor_nr2e(self):
+        mol1 = gto.M(atom=[["O" , (0. , 0.     , 0.)],
+                           [1   , (0. , -0.757 , 0.587)],
+                           [1   , (0. , 0.757  , 0.587)]],
+                     basis = '631g')
+        nao = mol1.nao_nr()
+        eri0 = numpy.empty((3,nao,nao,nao,nao))
+        ip = 0
+        for i in range(mol1.nbas):
+            jp = 0
+            for j in range(mol1.nbas):
+                kp = 0
+                for k in range(mol1.nbas):
+                    lp = 0
+                    for l in range(mol1.nbas):
+                        buf = mol1.intor_by_shell('cint2e_ip1_sph', (i,j,k,l), 3)
+                        di,dj,dk,dl = buf.shape[1:]
+                        eri0[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
+                        lp += dl
+                    kp += dk
+                jp += dj
+            ip += di
+
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3).reshape(3,13,13,13,13)
+        self.assertTrue(numpy.allclose(eri0, eri1))
+
+        idx = numpy.tril_indices(13)
+        naopair = nao * (nao+1) // 2
+        ref = eri0[:,idx[0],idx[1]].reshape(3,naopair,-1)
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2ij')
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+        idx = numpy.tril_indices(13)
+        ref = eri0[:,:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2kl')
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+        idx = numpy.tril_indices(13)
+        ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s4')
+        self.assertTrue(numpy.allclose(ref, eri1))
+
 
 
 if __name__ == "__main__":

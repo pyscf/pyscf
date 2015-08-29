@@ -34,12 +34,6 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         t2 = cc.init_amps(eris)[2]
 
     nocc, nvir = t1.shape
-    unit = _memory_usage_inloop(nocc, nvir)*1e6/8
-    max_memory = max_memory - lib.current_memory()[0]
-    blksize = (max_memory*.95e6/8-nocc**4-(nocc*nvir)**2)/unit
-    blksize = max(BLKMIN, int(blksize))
-    log.debug('block size = %d, nocc = %d is divided into %d blocks',
-              blksize, nocc, int((nocc+blksize-1)//blksize))
     cput0 = log.timer('CCSD initialization', *cput0)
     eold = 0
     eccsd = 0
@@ -51,13 +45,13 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
     conv = False
     for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris, blksize)
+        t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, energy(cc, t1, t2, eris, blksize)
+        eold, eccsd = eccsd, energy(cc, t1, t2, eris)
         log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
         cput0 = log.timer('CCSD iter', *cput0)
@@ -67,7 +61,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     return conv, eccsd, t1, t2
 
 
-def update_amps(cc, t1, t2, eris, blksize=BLKMIN):
+def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nocc, nvir = t1.shape
@@ -97,6 +91,12 @@ def update_amps(cc, t1, t2, eris, blksize=BLKMIN):
     woooo = _cp(woooo.transpose(0,2,1,3))
     eris_ooov = None
     time1 = log.timer_debug1('woooo', *time0)
+
+    unit = _memory_usage_inloop(nocc, nvir)*1e6/8
+    max_memory = max_memory - lib.current_memory()[0]
+    blksize = max(BLKMIN, int(max_memory*.95e6/8/unit))
+    log.debug1('block size = %d, nocc = %d is divided into %d blocks',
+               blksize, nocc, int((nocc+blksize-1)//blksize))
 
     for p0, p1 in prange(0, nocc, blksize):
 # ==== read eris.ovvv ====
@@ -317,7 +317,7 @@ def update_amps(cc, t1, t2, eris, blksize=BLKMIN):
             ij += 1
     t2new = None
     time1 = log.timer_debug1('t2 tril', *time1)
-    cc.add_wvvVV_(t1, t2, eris, t2new_tril, blksize)
+    cc.add_wvvVV_(t1, t2, eris, t2new_tril, max_memory)
     time1 = log.timer_debug1('vvvv', *time1)
 
     mo_e = fock.diagonal()
@@ -353,7 +353,7 @@ def update_amps(cc, t1, t2, eris, blksize=BLKMIN):
 
     return t1new, t2new
 
-def energy(cc, t1, t2, eris, blksize=BLKMIN):
+def energy(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
@@ -478,8 +478,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def kernel(self, t1=None, t2=None, mo_coeff=None):
         return self.ccsd(t1, t2, mo_coeff)
     def ccsd(self, t1=None, t2=None, mo_coeff=None):
-        eris = self.ao2mo(mo_coeff)
+        log = logger.Logger(self.stdout, self.verbose)
         cput0 = (time.clock(), time.time())
+        eris = self.ao2mo(mo_coeff)
+        log.timer('CCSD integral transformation', *cput0)
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
@@ -553,7 +555,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #return eris
         return _ERIS(self, mo_coeff)
 
-    def add_wvvVV_(self, t1, t2, eris, t2new_tril, blksize=BLKMIN):
+    def add_wvvVV_(self, t1, t2, eris, t2new_tril, max_memory=2000):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -585,13 +587,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             p0 += a+1
             time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
         return t2new_tril
-    def add_wvvVV(self, t1, t2, eris, blksize=BLKMIN):
+    def add_wvvVV(self, t1, t2, eris, max_memory=2000):
         nocc, nvir = t1.shape
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-        return self.add_wvvVV_(t1, t2, eris, t2new_tril, blksize)
+        return self.add_wvvVV_(t1, t2, eris, t2new_tril, max_memory)
 
-    def update_amps(self, t1, t2, eris, blksize=BLKMIN):
-        return update_amps(self, t1, t2, eris, blksize)
+    def update_amps(self, t1, t2, eris, max_memory=2000):
+        return update_amps(self, t1, t2, eris, max_memory)
 
     def diis(self, t1, t2, istep, normt, de, adiis):
         return self.diis_(t1, t2, istep, normt, de, adiis)
@@ -624,7 +626,7 @@ class _ERIS:
             self.fock = numpy.diag(cc.mo_energy[moidx])
         else:  # If mo_coeff is not canonical orbital
             self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
-            dm = self._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
@@ -694,16 +696,17 @@ class _ERIS:
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
-            pyscf.ao2mo.full(cc.mol, orbv, _tmpfile2.name, verbose=log)
-            self.feri2 = h5py.File(_tmpfile2.name, 'r')
+            self.feri2 = h5py.File(_tmpfile2.name, 'w')
+            pyscf.ao2mo.full(cc.mol, orbv, self.feri2, verbose=log)
             self.vvvv = self.feri2['eri_mo']
             time1 = log.timer_debug1('transforming vvvv', *time0)
 
             tmpfile3 = tempfile.NamedTemporaryFile()
-            pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
-                                tmpfile3.name, verbose=log)
-            time1 = log.timer_debug1('transforming oppp', *time1)
-            with pyscf.ao2mo.load(tmpfile3.name) as eri1:
+            with h5py.File(tmpfile3.name, 'w') as feri:
+                pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
+                                    feri, verbose=log)
+                time1 = log.timer_debug1('transforming oppp', *time1)
+                eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
                     buf = unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
@@ -715,9 +718,13 @@ class _ERIS:
                     for j in range(nvir):
                         self.ovvv[i,j] = lib.pack_tril(buf[nocc+j,nocc:,nocc:])
                     time1 = log.timer_debug1('sorting %d'%i, *time1)
+                for key in feri.keys():
+                    del(feri[key])
 
     def __del__(self):
         if hasattr(self, 'feri1'):
+            for key in self.feri1.keys(): del(self.feri1[key])
+            for key in self.feri2.keys(): del(self.feri2[key])
             self.feri1.close()
             self.feri2.close()
 
@@ -822,16 +829,17 @@ def make_tau(t2, t1a, t1b, fac=1, out=None):
         tau[i] += numpy.einsum('a,jb->jab', t1a[i]*fac, t1b)
     return tau
 
+# t2*2 - t2.transpose(0,1,3,2)
 def make_theta(t2, out=None):
-    nocc = t2.shape[0]
     if out is None:
-        theta = numpy.empty(t2.shape)
-    else:
-        theta = out
-    for i in range(nocc):
-        theta[i] = t2[i].transpose(0,2,1) * 2
-        theta[i] -= t2[i]
-    return theta
+        out = numpy.empty(t2.shape)
+    shape = numpy.asarray(t2.shape, dtype=numpy.int32)
+    libcc.CCmake_g0132(out.ctypes.data_as(ctypes.c_void_p),
+                       t2.ctypes.data_as(ctypes.c_void_p),
+                       t2.ctypes.data_as(ctypes.c_void_p),
+                       shape.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_double(-1), ctypes.c_double(2))
+    return out
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

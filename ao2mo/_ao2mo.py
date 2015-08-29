@@ -17,9 +17,9 @@ class AO2MOpt(object):
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = _fpointer(intor)
 
-        c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-        c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-        c_env = numpy.array(mol._env)
+        c_atm = numpy.asarray(mol._atm, dtype=numpy.int32)
+        c_bas = numpy.asarray(mol._bas, dtype=numpy.int32)
+        c_env = numpy.asarray(mol._env)
         natm = ctypes.c_int(c_atm.shape[0])
         nbas = ctypes.c_int(c_bas.shape[0])
         self._cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
@@ -48,17 +48,26 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
                aosym='s1', comp=1, ao2mopt=None, vout=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
 
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32)
+    c_bas = numpy.asarray(bas, dtype=numpy.int32)
+    c_env = numpy.asarray(env)
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
     klsh0, klsh1, nkl = sh_range
 
-    if vout is None:
+    if '_cart' in intor:
+        libao2mo.CINTtot_cgto_cart.restype = ctypes.c_int
+        nao = libao2mo.CINTtot_cgto_cart(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
+        cgto_in_shell = _fpointer('CINTcgto_cart')
+    elif '_sph' in intor:
         libao2mo.CINTtot_cgto_spheric.restype = ctypes.c_int
         nao = libao2mo.CINTtot_cgto_spheric(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
+        cgto_in_shell = _fpointer('CINTcgto_spheric')
+    else:
+        raise NotImplementedError('cint2e spinor AO integrals')
+
+    if vout is None:
         if aosym in ('s4', 's2ij'):
             nao_pair = nao * (nao+1) // 2
         else:
@@ -78,7 +87,7 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
     fill = _fpointer('AO2MOfill_nr_' + aosym)
-    fdrv(cintor, fill,
+    fdrv(cintor, cgto_in_shell, fill,
          vout.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
          ctypes.c_int(nkl), ctypes.c_int(comp),
@@ -203,9 +212,9 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     i0, icount, j0, jcount = shape
     ij_count = icount * jcount
 
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32)
+    c_bas = numpy.asarray(bas, dtype=numpy.int32)
+    c_env = numpy.asarray(env)
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 

@@ -1674,7 +1674,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def time_reversal_map(self):
         return time_reversal_map(self)
 
-    def intor(self, intor, comp=1, hermi=0):
+    def intor(self, intor, comp=1, hermi=0, aosym='s1', vout=None):
         '''One-electron integral generator.
 
         Args:
@@ -1712,7 +1712,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 comp=comp, hermi=hermi)
+                                 comp=comp, hermi=hermi,
+                                 aosym=aosym, vout=vout)
 
     def intor_symmetric(self, intor, comp=1):
         '''One-electron integral generator. The integrals are assumed to be hermitian
@@ -1738,7 +1739,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return self.intor(intor, comp, 1)
+        return self.intor(intor, comp, 1, aosym='s4')
 
     def intor_asymmetric(self, intor, comp=1):
         '''One-electron integral generator. The integrals are assumed to be anti-hermitian
@@ -1766,7 +1767,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self.intor(intor, comp, 2)
 
-    def intor_cross(self, intor, bras, kets, comp=1):
+    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', vout=None):
         r'''Cross 1-electron integrals like
 
         .. math::
@@ -1801,7 +1802,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.          0.37820346]]
         '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 bras, kets, comp, 0)
+                                 bras, kets, comp=comp, hermi=0,
+                                 aosym=aosym, vout=vout)
 
     def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,

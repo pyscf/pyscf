@@ -11,14 +11,12 @@ import h5py
 import pyscf.lib as lib
 from pyscf.lib import logger
 import pyscf.ao2mo
-from pyscf.cc import ccsd
-
-libcc = lib.load_library('libcc')
+import pyscf.cc.ccsd_slow as ccsd
 
 # t2,l2 as ijab
 
 # default max_memory = 2000 MB
-def kernel(cc, eris, t1=None, t2=None, l1=None, l2=None,
+def kernel(cc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8,
            max_memory=2000, verbose=logger.INFO):
     cput0 = (time.clock(), time.time())
@@ -27,19 +25,17 @@ def kernel(cc, eris, t1=None, t2=None, l1=None, l2=None,
     else:
         log = logger.Logger(cc.stdout, verbose)
 
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
-
+    if eris is None: eris = ccsd._ERIS(cc)
     if t1 is None: t1 = cc.t1
     if t2 is None: t2 = cc.t2
     if l1 is None: l1 = t1
     if l2 is None: l2 = t2
 
+    nocc, nvir = t1.shape
     blksize = cc.get_block_size()
     log.debug('block size = %d, nocc = %d is divided into %d blocks',
-              blksize, cc.nocc, int((cc.nocc+blksize-1)/blksize))
-    saved = make_intermediates(cc, t1, t2, eris)
+              blksize, nocc, int((nocc+blksize-1)/blksize))
+    saved = make_intermediates(mcc, t1, t2, eris)
 
     if cc.diis:
         adiis = lib.diis.DIIS(cc, cc.diis_file)
@@ -56,7 +52,7 @@ def kernel(cc, eris, t1=None, t2=None, l1=None, l2=None,
         l1new = l2new = None
         if cc.diis:
             l1, l2 = cc.diis(l1, l2, istep, normt, 0, adiis)
-        log.info('istep = %d, norm(lambda1,lambda2) = %.6g', istep, normt)
+        log.info('istep = %d  norm(lambda1,lambda2) = %.6g', istep, normt)
         cput0 = log.timer('CCSD iter', *cput0)
         if normt < tol:
             conv = True
@@ -66,10 +62,8 @@ def kernel(cc, eris, t1=None, t2=None, l1=None, l2=None,
 
 # l2, t2 as ijab
 def make_intermediates(cc, t1, t2, eris):
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
-    nov = nocc*nvir
+    nocc, nvir = t1.shape
+    nov = nocc * nvir
     foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
     fvv = eris.fock[nocc:,nocc:]
@@ -146,10 +140,8 @@ def make_intermediates(cc, t1, t2, eris):
 def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
-    nov = nocc*nvir
+    nocc, nvir = t1.shape
+    nov = nocc * nvir
     foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
     fvv = eris.fock[:nocc,:nocc]
@@ -226,23 +218,6 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
     return l1new, l2new
 
 
-class _ERIS:
-    def __init__(self, cc, mo_coeff=None, method='incore'):
-        if mo_coeff is None: mo_coeff = cc._scf.mo_coeff
-        nocc = cc.nocc
-        nmo = cc.nmo
-        eri0 = pyscf.ao2mo.kernel(cc._scf._eri, mo_coeff)
-        eri0 = pyscf.ao2mo.restore(1, eri0, nmo)
-        self.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
-        self.ooov = eri0[:nocc,:nocc,:nocc,nocc:].copy()
-        self.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
-        self.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
-        self.ovov = eri0[:nocc,nocc:,:nocc,nocc:].copy()
-        self.ovvv = eri0[:nocc,nocc:,nocc:,nocc:].copy()
-        self.vvvv = eri0[nocc:,nocc:,nocc:,nocc:].copy()
-        self.fock = numpy.diag(cc._scf.mo_energy)
-
-
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
@@ -255,8 +230,8 @@ if __name__ == '__main__':
     mcc = ccsd.CCSD(mf)
 
     numpy.random.seed(12)
-    mcc.nocc = nocc = 5
-    mcc.nmo = nmo = 12
+    nocc = 5
+    nmo = 12
     nvir = nmo - nocc
     eri0 = numpy.random.random((nmo,nmo,nmo,nmo))
     eri0 = ao2mo.restore(1, ao2mo.restore(8, eri0, nmo), nmo)

@@ -10,43 +10,54 @@ import numpy
 import h5py
 import pyscf.lib as lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_lambda
 
 # dE = (goo * foo + gvv * fvv + doooo*eri_oooo + ...) * 2
-def gamma1_intermediates(cc, t1, t2, l1, l2, blksize=ccsd.BLKMIN):
+def gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
     nocc, nvir = t1.shape
     goo = -numpy.einsum('ja,ia->ij', l1, t1)
     gvv = numpy.einsum('ia,ib->ab', l1, t1)
     #:goo -= numpy.einsum('jkab,ikab->ij', l2, theta)
     #:gvv += numpy.einsum('jica,jicb->ab', l2, theta)
+    max_memory = max_memory - lib.current_memory()[0]
+    unit = nocc*nvir**2
+    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     for p0, p1 in ccsd.prange(0, nocc, blksize):
         theta = ccsd_lambda.make_theta(t2[p0:p1])
         goo[p0:p1] -= lib.dot(theta.reshape(p1-p0,-1), l2.reshape(nocc,-1).T)
         gvv += lib.dot(l2[p0:p1].reshape(-1,nvir).T, theta.reshape(-1,nvir))
     return goo, gvv
 
-# gamma2 intermediates in Physist's notation
-def gamma2_intermediates(cc, t1, t2, l1, l2, blksize=ccsd.BLKMIN):
+# gamma2 intermediates in Chemist's notation
+def gamma2_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
     tmpfile = tempfile.NamedTemporaryFile()
-    gamma2_outcore(cc, t1, t2, l1, l2, tmpfile.name, blksize)
-    with h5py.File(tmpfile.name, 'r') as f:
-        return (f['doovv'].value, f['dvvvv'].value, f['doooo'].value,
-                f['dovov'].value, f['dovvo'].value, f['dvovv'].value,
-                f['dooov'].value)
+    with h5py.File(tmpfile.name, 'w') as f:
+        gamma2_outcore(mycc, t1, t2, l1, l2, f, max_memory)
+        nocc, nvir = f['dovov'].shape[:2]
+        nov = nocc * nvir
+        dovvv = numpy.empty((nocc,nvir,nvir,nvir))
+        ao2mo.outcore._load_from_h5g(f['dovvv'], 0, nov, dovvv.reshape(nov,-1))
+        dvvvv = numpy.empty((nvir,nvir,nvir,nvir))
+        ao2mo.outcore._load_from_h5g(f['dvvvv'], 0, nvir, dvvvv)
+        d2 = (f['dovov'].value, dvvvv, f['doooo'].value, f['doovv'].value,
+              f['dovvo'].value, f['dvvov'].value, dovvv, f['dooov'].value)
+        for key in f.keys():
+            del(f[key])
+        return d2
 
-def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
+def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
+    log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
-    fsave = h5py.File(filename, 'w')
-    fsave.create_dataset('doovv', (nocc,nocc,nvir,nvir), 'f8')
-    fsave.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), 'f8')
-    fsave.create_dataset('doooo', (nocc,nocc,nocc,nocc), 'f8')
-    fsave.create_dataset('dovov', (nocc,nvir,nocc,nvir), 'f8')
-    fsave.create_dataset('dovvo', (nocc,nvir,nvir,nocc), 'f8')
-    fsave.create_dataset('dvovv', (nvir,nocc,nvir,nvir), 'f8')
-    fsave.create_dataset('dooov', (nocc,nocc,nocc,nvir), 'f8')
+    h5fobj.create_dataset('dovov', (nocc,nvir,nocc,nvir), 'f8')
+    #h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), 'f8')
+    h5fobj.create_dataset('doooo', (nocc,nocc,nocc,nocc), 'f8')
+    h5fobj.create_dataset('doovv', (nocc,nocc,nvir,nvir), 'f8')
+    h5fobj.create_dataset('dovvo', (nocc,nvir,nvir,nocc), 'f8')
+    h5fobj.create_dataset('dvvov', (nvir,nvir,nocc,nvir), 'f8')
+    h5fobj.create_dataset('dooov', (nocc,nocc,nocc,nvir), 'f8')
 
     _tmpfile = tempfile.NamedTemporaryFile()
     fswap = h5py.File(_tmpfile.name)
@@ -55,6 +66,13 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
 
     moo = numpy.empty((nocc,nocc))
     mvv = numpy.zeros((nvir,nvir))
+
+    max_memory1 = max_memory - lib.current_memory()[0]
+    unit = nocc*nvir**2 * 5
+    blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
+    log.debug1('rdm intermediates pass 1: block size = %d, nocc = %d in %d blocks',
+               blksize, nocc, int((nocc+blksize-1)/blksize))
+    time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(ccsd.prange(0, nocc, blksize)):
         #:pOvOv = numpy.einsum('ikca,jkcb->ijba', l2, t2[p0:p1])
         #:pOVov = -numpy.einsum('ikca,jkbc->ijba', l2, t2[p0:p1])
@@ -80,18 +98,24 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
         mvv +=(numpy.einsum('llbd->bd', pOvOv[p0:p1]) * 2
              + numpy.einsum('llbd->bd', pOVov[p0:p1]))
         pOvOv = pOVov = None
+        time1 = log.timer_debug1('rdm intermediates pass1 [%d:%d]'%(p0, p1), *time1)
     mia =(numpy.einsum('kc,ikac->ia', l1, t2) * 2
         - numpy.einsum('kc,ikca->ia', l1, t2))
     mab = numpy.einsum('kc,kb->cb', l1, t1)
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
     gooov = numpy.zeros((nocc,nocc,nocc,nvir))
+    max_memory1 = max_memory - lib.current_memory()[0]
+    unit = nocc**3 + nocc**2*nvir + nocc*nvir**2*6
+    blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
+    log.debug1('rdm intermediates pass 2: block size = %d, nocc = %d in %d blocks',
+               blksize, nocc, int((nocc+blksize-1)/blksize))
     for p0, p1 in ccsd.prange(0, nocc, blksize):
         tau = t2[p0:p1] + numpy.einsum('ia,jb->ijab', t1[p0:p1], t1)
         #:goooo = numpy.einsum('ijab,klab->klij', l2, tau)*.5
         goooo = lib.dot(tau.reshape(-1,nvir**2), l2.reshape(-1,nvir**2).T, .5)
         goooo = goooo.reshape(-1,nocc,nocc,nocc)
-        fsave['doooo'][p0:p1] = ccsd_lambda.make_theta(goooo)
+        h5fobj['doooo'][p0:p1] = ccsd_lambda.make_theta(goooo).transpose(0,2,1,3)
 
         #:gooov[p0:p1] -= numpy.einsum('ib,jkba->jkia', l1, tau)
         #:gooov[p0:p1] -= numpy.einsum('jkba,ib->jkia', l2[p0:p1], t1)
@@ -113,6 +137,7 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
         lib.dot(t2[p0:p1].reshape(-1,nvir), mab, -1, goovv.reshape(-1,nvir), 1)
         lib.dot(tau.reshape(-1,nvir), mvv.T, -.5, goovv.reshape(-1,nvir), 1)
         tau = None
+#==== mem usage nocc**3 + nocc*nvir**2
 
         pOvOv = ccsd._cp(mOvOv[p0:p1])
         pOVov = ccsd._cp(mOVov[p0:p1])
@@ -124,22 +149,26 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
         gooov[:,p0:p1] -= tmp.transpose(0,1,3,2)
         gOvVo = numpy.einsum('ia,jb->jabi', l1, t1[p0:p1])
         gOvVo += pOVov.transpose(0,3,1,2)
-        #:tmp = numpy.einsum('ikac,jc->ikaj', l2, t1[p0:p1])
-        #:gOvVo -= numpy.einsum('ikaj,kb->jabi', tmp, t1)
-        #:gOvvO = numpy.einsum('kiaj,kb->jabi', tmp, t1)
-        tmp = lib.dot(l2.reshape(-1,nvir), t1[p0:p1].T).reshape(nocc,nocc,nvir,-1)
-        gOvVo -= lib.dot(ccsd._cp(tmp.transpose(3,2,0,1).reshape(-1,nocc)),
+        #:tmp = numpy.einsum('ikac,jc->jaik', l2, t1[p0:p1])
+        #:gOvVo -= numpy.einsum('jaik,kb->jabi', tmp, t1)
+        #:gOvvO = numpy.einsum('jaki,kb->jabi', tmp, t1) + pOvOv.transpose(0,3,1,2)
+        tmp = lib.dot(t1[p0:p1], l2.reshape(-1,nvir).T).reshape(-1,nocc,nocc,nvir).transpose(0,3,1,2)
+        gOvVo -= lib.dot(ccsd._cp(tmp.reshape(-1,nocc)),
                          t1).reshape(-1,nvir,nocc,nvir).transpose(0,1,3,2)
-        gOvvO = lib.dot(t1.T, tmp.reshape(nocc,-1)).reshape(nvir,nocc,nvir,-1)
-        gOvvO = gOvvO.transpose(3,2,0,1) + pOvOv.transpose(0,3,1,2)
-        fsave['dovvo'][p0:p1] = gOvVo*2 + gOvvO
+        gOvvO = lib.dot(ccsd._cp(tmp.transpose(0,1,3,2).reshape(-1,nocc)),
+                        t1).reshape(-1,nvir,nocc,nvir).transpose(0,1,3,2)
+        tmp = None
+        gOvvO = gOvvO + pOvOv.transpose(0,3,1,2)
+#==== mem usage nocc**3 + nocc*nvir**6
+        h5fobj['dovvo'][p0:p1] = (gOvVo*2 + gOvvO).transpose(0,2,1,3)
         gOvvO *= -2
         gOvvO -= gOvVo
-        fsave['dovov'][p0:p1] = gOvvO.transpose(0,1,3,2)
-        tmp = gOvvO = gOvVo = None
+        h5fobj['doovv'][p0:p1] = gOvvO.transpose(0,3,1,2)
+        gOvvO = gOvVo = None
 
         for j0, j1 in ccsd.prange(0, nocc, blksize):
-            tau2 = t2[j0:j1] + numpy.einsum('ia,jb->ijab', t1[j0:j1], t1)
+            tau2 = numpy.einsum('ia,jb->ijab', t1[j0:j1], t1)
+            tau2 += t2[j0:j1]
             #:goovv += numpy.einsum('ijkl,klab->ijab', goooo[:,:,j0:j1], tau2)
             lib.dot(goooo[:,:,j0:j1].copy().reshape((p1-p0)*nocc,-1),
                     tau2.reshape(-1,nvir**2), 1, goovv.reshape(-1,nvir**2), 1)
@@ -152,6 +181,7 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
             goovv += lib.dot(pOVov[:,:,j0:j1].copy().reshape((p1-p0)*nvir,-1),
                              tau2, -.5).reshape(-1,nvir,nocc,nvir).transpose(0,2,1,3)
             tau2 = None
+#==== mem usage nocc**3 + nocc*nvir**2*5
         #:goovv += numpy.einsum('iald,jlbd->ijab', pOVov*2+pOvOv, t2) * .5
         pOVov *= 2
         pOVov += pOvOv
@@ -160,13 +190,24 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
                           ccsd._cp(t2[j].transpose(0,2,1).reshape(-1,nvir)), .5)
             goovv[:,j] += tmp.reshape(-1,nvir,nvir)
             tmp = None
-        fsave['doovv'][p0:p1] = ccsd_lambda.make_theta(goovv)
+        h5fobj['dovov'][p0:p1] = ccsd_lambda.make_theta(goovv).transpose(0,2,1,3)
         goooo = goovv = pOvOv = pOVov = None
+        time1 = log.timer_debug1('rdm intermediates pass2 [%d:%d]'%(p0, p1), *time1)
 
-    fsave['dooov'][:] = gooov*2 - gooov.transpose(1,0,2,3)
+    h5fobj['dooov'][:] = gooov.transpose(0,2,1,3)*2 - gooov.transpose(1,2,0,3)
     gooov = None
 
-    for p0, p1 in ccsd.prange(0, nvir, blksize):
+    max_memory1 = max_memory - lib.current_memory()[0]
+    unit = max(nocc**2*nvir*2+nocc*nvir**2*2, nvir**3*2+nocc*nvir**2)
+    blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
+    iobuflen = int(256e6/8/blksize)
+    log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
+               blksize, nocc, int((nvir+blksize-1)/blksize))
+    h5fobj.create_group('dovvv')
+    h5gobj = h5fobj.create_group('dvvvv')
+    for istep, (p0, p1) in enumerate(ccsd.prange(0, nvir, blksize)):
+        h5gobj.create_dataset('%d'%istep, (nvir,p1-p0,nvir,nvir), 'f8')
+    for istep, (p0, p1) in enumerate(ccsd.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1] * .5
         #:gvvvv = numpy.einsum('ijab,ijcd->abcd', l2tmp, t2)
         #:jabc = numpy.einsum('ijab,ic->jabc', l2tmp, t1)
@@ -176,7 +217,12 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
         lib.dot(jabc.reshape(nocc,-1).T, t1, 1, gvvvv.reshape(-1,nvir), 1)
         gvvvv = gvvvv.reshape(-1,nvir,nvir,nvir)
         l2tmp = jabc = None
-        fsave['dvvvv'][p0:p1] = ccsd_lambda.make_theta(gvvvv)
+        # tmp == tmp.transpose(2,3,0,1)
+        tmp = ccsd_lambda.make_theta(gvvvv).transpose(0,2,1,3)
+        for k, (j0, j1) in enumerate(ccsd.prange(0, nvir, blksize)):
+            h5fobj['dvvvv/%d'%k][p0:p1] = tmp[:,j0:j1]
+        tmp = None
+#==== mem usage nvir**3*2 + nocc*nvir**2
 
         #:gvovv = numpy.einsum('ja,jibc->aibc', l1[:,p0:p1], t2)
         #:gvovv += numpy.einsum('jibc,ja->aibc', l2, t1[:,p0:p1])
@@ -190,24 +236,36 @@ def gamma2_outcore(cc, t1, t2, l1, l2, filename, blksize=ccsd.BLKMIN):
         for j in range(p1-p0):
             lib.dot(t1, gvvvv[j].reshape(nvir,-1), -2,
                     gvovv[j].reshape(nocc,-1), 1)
+#==== mem usage nvir**3 + nocc*nvir**2
+        gvvvv = None
 
         pvOvO = numpy.empty((p1-p0,nocc,nvir,nocc))
         pvOVo = numpy.empty((p1-p0,nocc,nvir,nocc))
-        for istep, (j0, j1) in enumerate(ccsd.prange(0, nocc, blksize)):
-            pvOvO[:,j0:j1] = fswap['mvOvO/%d'%istep][p0:p1]
-            pvOVo[:,j0:j1] = fswap['mvOVo/%d'%istep][p0:p1]
-        gvovv -= numpy.einsum('aibk,kc->aibc', pvOvO, t1)
-        gvovv += numpy.einsum('aick,kb->aibc', pvOVo, t1)
-        fsave['dvovv'][p0:p1] = ccsd_lambda.make_theta(gvovv)
-        gvvvv = gvovv = pvOvO = pvOVo = None
+        ao2mo.outcore._load_from_h5g(fswap['mvOvO'], p0, p1, pvOvO)
+        ao2mo.outcore._load_from_h5g(fswap['mvOVo'], p0, p1, pvOVo)
+        #:gvovv -= numpy.einsum('aibk,kc->aibc', pvOvO, t1)
+        #:gvovv += numpy.einsum('aick,kb->aibc', pvOVo, t1)
+        gvovv -= lib.dot(pvOvO.reshape(-1,nocc), t1).reshape(-1,nocc,nvir,nvir)
+        gvovv += lib.dot(pvOVo.reshape(-1,nocc),
+                         t1).reshape(-1,nocc,nvir,nvir).transpose(0,1,3,2)
+        gvvov = ccsd_lambda.make_theta(gvovv).transpose(0,2,1,3)
+        h5fobj['dvvov'][p0:p1] = gvvov
+        ao2mo.outcore._transpose_to_h5g(h5fobj, 'dovvv/%d'%istep,
+                                        gvvov.reshape(-1,nov), iobuflen)
+#==== mem usage nocc**2*nvir*2 + nocc*nvir**2*2
+        gvovv = pvOvO = pvOVo = None
+        time1 = log.timer_debug1('rdm intermediates pass3 [%d:%d]'%(p0, p1), *time1)
 
+    del(fswap['mOvOv'])
+    del(fswap['mOVov'])
+    del(fswap['mvOvO'])
+    del(fswap['mvOVo'])
     fswap.close()
     _tmpfile = None
-    fsave.close()
 
-def make_rdm1(cc, t1, t2, l1, l2, d1=None):
+def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     if d1 is None:
-        doo, dvv = gamma1_intermediates(cc, t1, t2, l1, l2)
+        doo, dvv = gamma1_intermediates(mycc, t1, t2, l1, l2)
     else:
         doo, dvv = d1
     nocc, nvir = t1.shape
@@ -220,50 +278,48 @@ def make_rdm1(cc, t1, t2, l1, l2, d1=None):
     return dm1
 
 # rdm2 in Chemist's notation
-def make_rdm2(cc, t1, t2, l1, l2, d1=None, d2=None):
+def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     if d1 is None:
-        doo, dvv = gamma1_intermediates(cc, t1, t2, l1, l2)
+        doo, dvv = gamma1_intermediates(mycc, t1, t2, l1, l2)
     else:
         doo, dvv = d1
     if d2 is None:
-        doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = \
-                gamma2_intermediates(cc, t1, t2, l1, l2)
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
+                gamma2_intermediates(mycc, t1, t2, l1, l2)
     else:
-        doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = d2
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
     dm2 = numpy.empty((nmo,nmo,nmo,nmo))
 
     dm2[:nocc,nocc:,:nocc,nocc:] = \
-            (doovv.transpose(0,2,1,3)+doovv.transpose(1,3,0,2))
+            (dovov                   +dovov.transpose(2,3,0,1))
     dm2[nocc:,:nocc,nocc:,:nocc] = \
-            (doovv.transpose(2,0,3,1)+doovv.transpose(3,1,2,0))
+            (dovov.transpose(1,0,3,2)+dovov.transpose(3,2,1,0))
 
     dm2[:nocc,:nocc,nocc:,nocc:] = \
-            (dovov.transpose(0,2,3,1)+dovov.transpose(2,0,1,3))
+            (doovv.transpose(0,1,3,2)+doovv.transpose(1,0,2,3))
     dm2[nocc:,nocc:,:nocc,:nocc] = \
-            (dovov.transpose(3,1,0,2)+dovov.transpose(1,3,2,0))
+            (doovv.transpose(3,2,0,1)+doovv.transpose(2,3,1,0))
     dm2[:nocc,nocc:,nocc:,:nocc] = \
-            (dovvo.transpose(0,2,1,3)+dovvo.transpose(3,1,2,0))
+            (dovvo                   +dovvo.transpose(3,2,1,0))
     dm2[nocc:,:nocc,:nocc,nocc:] = \
-            (dovvo.transpose(1,3,0,2)+dovvo.transpose(2,0,3,1))
+            (dovvo.transpose(2,3,0,1)+dovvo.transpose(1,0,3,2))
 
-    dm2[nocc:,nocc:,nocc:,nocc:] = \
-            (dvvvv.transpose(0,2,1,3)+dvvvv.transpose(2,0,3,1)) * 2
+    dm2[nocc:,nocc:,nocc:,nocc:] =(dvvvv+dvvvv.transpose(1,0,3,2)) * 2
 
-    dm2[:nocc,:nocc,:nocc,:nocc] = \
-            (doooo.transpose(0,2,1,3)+doooo.transpose(2,0,3,1)) * 2
+    dm2[:nocc,:nocc,:nocc,:nocc] =(doooo+doooo.transpose(1,0,3,2)) * 2
 
-    dm2[nocc:,nocc:,:nocc,nocc:] = dvovv.transpose(0,2,1,3)
-    dm2[:nocc,nocc:,nocc:,nocc:] = dvovv.transpose(1,3,0,2)
-    dm2[nocc:,nocc:,nocc:,:nocc] = dvovv.transpose(2,0,3,1)
-    dm2[nocc:,:nocc,nocc:,nocc:] = dvovv.transpose(3,1,2,0)
+    dm2[nocc:,nocc:,:nocc,nocc:] = dvvov
+    dm2[:nocc,nocc:,nocc:,nocc:] = dovvv
+    dm2[nocc:,nocc:,nocc:,:nocc] = dvvov.transpose(1,0,3,2)
+    dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2)
 
-    dm2[:nocc,:nocc,:nocc,nocc:] = dooov.transpose(0,2,1,3)
-    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(1,3,0,2)
-    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(2,0,3,1)
-    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,1,2,0)
+    dm2[:nocc,:nocc,:nocc,nocc:] = dooov
+    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
+    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
+    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
 
     doo = doo + doo.T
     dvv = dvv + dvv.T
@@ -328,26 +384,26 @@ if __name__ == '__main__':
     print((numpy.einsum('ij,ij', goo, fock0[:nocc,:nocc]))*2+20166.3298610348)
     print((numpy.einsum('ab,ab', gvv, fock0[nocc:,nocc:]))*2-58078.9640192468)
 
-    doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = \
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             gamma2_intermediates(mcc, t1, t2, l1, l2)
 
-    print('doooo',numpy.einsum('klij,kilj', doooo, eris.oooo)*2-15939.9007625418)
-    print('dvvvv',numpy.einsum('abcd,acbd', dvvvv, eris.vvvv)*2-37581.823919588 )
-    print('dooov',numpy.einsum('jika,jkia', dooov, eris.ooov)*2-128470.009687716)
-    print('dvovv',numpy.einsum('aibc,icab', dvovv, eris.ovvv)*2+166794.225195056)
-    print('doovv',numpy.einsum('ijab,iajb', doovv, eris.ovov)*2+719279.812916893)
-    print('dovvo',numpy.einsum('jabi,jbia', dovvo, eris.ovov)*2
-                 +numpy.einsum('jaib,jiba', dovov, eris.oovv)*2+53634.0012286654)
+    print('doooo',numpy.einsum('kilj,kilj', doooo, eris.oooo)*2-15939.9007625418)
+    print('dvvvv',numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2-37581.823919588 )
+    print('dooov',numpy.einsum('jkia,jkia', dooov, eris.ooov)*2-128470.009687716)
+    print('dvvov',numpy.einsum('abic,icab', dvvov, eris.ovvv)*2+166794.225195056)
+    print('dovov',numpy.einsum('iajb,iajb', dovov, eris.ovov)*2+719279.812916893)
+    print('dovvo',numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
+                 +numpy.einsum('jiab,jiba', doovv, eris.oovv)*2+53634.0012286654)
 
     dm1 = make_rdm1(mcc, t1, t2, l1, l2)
     dm2 = make_rdm2(mcc, t1, t2, l1, l2)
-    e2 =(numpy.einsum('klij,kilj', doooo, eris.oooo)*2
-        +numpy.einsum('abcd,acbd', dvvvv, eris.vvvv)*2
-        +numpy.einsum('jika,jkia', dooov, eris.ooov)*2
-        +numpy.einsum('aibc,icab', dvovv, eris.ovvv)*2
-        +numpy.einsum('ijab,iajb', doovv, eris.ovov)*2
-        +numpy.einsum('jabi,jbia', dovvo, eris.ovov)*2
-        +numpy.einsum('jaib,jiba', dovov, eris.oovv)*2
+    e2 =(numpy.einsum('kilj,kilj', doooo, eris.oooo)*2
+        +numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2
+        +numpy.einsum('jkia,jkia', dooov, eris.ooov)*2
+        +numpy.einsum('abic,icab', dvvov, eris.ovvv)*2
+        +numpy.einsum('iajb,iajb', dovov, eris.ovov)*2
+        +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
+        +numpy.einsum('jiab,jiba', doovv, eris.oovv)*2
         +numpy.einsum('ij,ij', goo, fock0[:nocc,:nocc])*2
         +numpy.einsum('ab,ab', gvv, fock0[nocc:,nocc:])*2
         +fock0[:nocc].trace()*2

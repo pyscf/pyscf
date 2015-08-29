@@ -11,6 +11,8 @@
 
 #include "np_helper/np_helper.h"
 #include "nr_ao2mo.h"
+#define OUTPUTIJ        1
+#define INPUT_IJ        2
 
 
 void AO2MOtranse1_incore_s4(int (*fmmm)(),
@@ -18,8 +20,8 @@ void AO2MOtranse1_incore_s4(int (*fmmm)(),
                             struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        size_t npair = nao * (nao+1) / 2;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t npair = (*fmmm)(NULL, NULL, envs, INPUT_IJ);
+        size_t ij_pair = (*fmmm)(NULL, NULL, envs, OUTPUTIJ);
         double *buf = malloc(sizeof(double) * nao*nao);
         double *buf1 = eri_ao + npair * (row_id+envs->klsh_start);
 
@@ -33,8 +35,8 @@ void AO2MOtranse1_incore_s8(int (*fmmm)(),
                             struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        int npair = nao * (nao+1) / 2;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t npair = (*fmmm)(NULL, NULL, envs, INPUT_IJ);
+        size_t ij_pair = (*fmmm)(NULL, NULL, envs, OUTPUTIJ);
         double *buf = malloc(sizeof(double) * nao*nao*2);
         double *buf1 = buf + nao*nao;
 

@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
 import numpy
+import h5py
 from pyscf.ao2mo import incore
 from pyscf.ao2mo import outcore
 from pyscf.ao2mo import r_outcore
@@ -17,7 +18,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
             mod = r_outcore
         else:
             mod = outcore
-        if len(args) > 0 and isinstance(args[0], str): # args[0] is erifile
+        if len(args) > 0 and isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
             fn = getattr(mod, 'full')
         else:
             fn = getattr(mod, 'full_iofree')
@@ -31,7 +32,7 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
             mod = r_outcore
         else:
             mod = outcore
-        if len(args) > 0 and isinstance(args[0], str): # args[0] is erifile
+        if len(args) > 0 and isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
             fn = getattr(mod, 'general')
         else:
             fn = getattr(mod, 'general_iofree')

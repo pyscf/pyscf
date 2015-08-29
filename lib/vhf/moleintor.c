@@ -11,11 +11,11 @@
 #define ANTIHERMI    2
 
 static void cart_or_sph(int (*intor)(), int (*num_cgto)(),
-                        double *mat, int nset, int hermi,
+                        double *mat, int ncomp, int hermi,
                         int *bralst, int nbra, int *ketlst, int nket,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int ish, jsh, jsh1, i, j, i0, j0, iset;
+        int ish, jsh, jsh1, i, j, i0, j0, icomp;
         int di, dj, iloc, jloc;
         int shls[2];
         double *pmat, *pbuf;
@@ -27,7 +27,7 @@ static void cart_or_sph(int (*intor)(), int (*num_cgto)(),
         for (ish = 0; ish < nket; ish++) {
                 naoj += (*num_cgto)(ketlst[ish], bas);
         }
-        double *buf = malloc(sizeof(double)*naoi*naoj*nset);
+        double *buf = malloc(sizeof(double)*naoi*naoj*ncomp);
 
         for (iloc = 0, ish = 0; ish < nbra; ish++, iloc+=di) {
                 if (hermi == PLAIN) {
@@ -41,9 +41,9 @@ static void cart_or_sph(int (*intor)(), int (*num_cgto)(),
                         shls[0] = bralst[ish];
                         shls[1] = ketlst[jsh];
                         (*intor)(buf, shls, atm, natm, bas, nbas, env);
-                        for (iset = 0; iset < nset; iset++) {
-                                pmat = mat + iset*naoi*naoj;
-                                pbuf = buf + iset*di*dj;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                pmat = mat + icomp*naoi*naoj;
+                                pbuf = buf + icomp*di*dj;
                                 for (i0=iloc, i=0; i < di; i++, i0++) {
                                 for (j0=jloc, j=0; j < dj; j++, j0++) {
                                         pmat[i0*naoj+j0] = pbuf[j*di+i];
@@ -55,27 +55,27 @@ static void cart_or_sph(int (*intor)(), int (*num_cgto)(),
         free(buf);
 }
 
-void GTO1eintor_sph(int (*intor)(), double *mat, int nset, int hermi,
+void GTO1eintor_sph(int (*intor)(), double *mat, int ncomp, int hermi,
                     int *bralst, int nbra, int *ketlst, int nket,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
-        cart_or_sph(intor, CINTcgto_spheric, mat, nset, hermi,
+        cart_or_sph(intor, CINTcgto_spheric, mat, ncomp, hermi,
                     bralst, nbra, ketlst, nket, atm, natm, bas, nbas, env);
 }
 
-void GTO1eintor_cart(int (*intor)(), double *mat, int nset, int hermi,
+void GTO1eintor_cart(int (*intor)(), double *mat, int ncomp, int hermi,
                      int *bralst, int nbra, int *ketlst, int nket,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
-        cart_or_sph(intor, CINTcgto_cart, mat, nset, hermi,
+        cart_or_sph(intor, CINTcgto_cart, mat, ncomp, hermi,
                     bralst, nbra, ketlst, nket, atm, natm, bas, nbas, env);
 }
 
-void GTO1eintor_spinor(int (*intor)(), double complex *mat, int nset, int hermi,
+void GTO1eintor_spinor(int (*intor)(), double complex *mat, int ncomp, int hermi,
                        int *bralst, int nbra, int *ketlst, int nket,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int ish, jsh, jsh1, i, j, i0, j0, iset;
+        int ish, jsh, jsh1, i, j, i0, j0, icomp;
         int di, dj, iloc, jloc;
         int shls[2];
         double complex *pmat, *pbuf;
@@ -87,7 +87,7 @@ void GTO1eintor_spinor(int (*intor)(), double complex *mat, int nset, int hermi,
         for (ish = 0; ish < nket; ish++) {
                 naoj += CINTcgto_spinor(ketlst[ish], bas);
         }
-        double complex *buf = malloc(sizeof(double complex)*naoi*naoj*nset);
+        double complex *buf = malloc(sizeof(double complex)*naoi*naoj*ncomp);
 
         for (iloc = 0, ish = 0; ish < nbra; ish++, iloc+=di) {
                 if (hermi == PLAIN) {
@@ -101,9 +101,9 @@ void GTO1eintor_spinor(int (*intor)(), double complex *mat, int nset, int hermi,
                         shls[0] = bralst[ish];
                         shls[1] = ketlst[jsh];
                         (*intor)(buf, shls, atm, natm, bas, nbas, env);
-                        for (iset = 0; iset < nset; iset++) {
-                                pmat = mat + iset*naoi*naoj;
-                                pbuf = buf + iset*di*dj;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                pmat = mat + icomp*naoi*naoj;
+                                pbuf = buf + icomp*di*dj;
                                 for (i0=iloc, i=0; i < di; i++, i0++) {
                                 for (j0=jloc, j=0; j < dj; j++, j0++) {
                                         pmat[i0*naoj+j0] = pbuf[j*di+i];
