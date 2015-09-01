@@ -30,13 +30,14 @@ liblocalizer = load_library('liblocalizer')
 
 class localizer:
 
-    def __init__( self, mol, orbital_coeff, thetype ):
+    def __init__( self, mol, orbital_coeff, thetype, use_full_hessian=True ):
         r'''Initializer for the localization procedure
 
         Args:
             mol : A molecule which has been built
             orbital_coeff: Set of orthonormal orbitals, expressed in terms of the AO, which should be localized
             thetype: Which cost function to optimize: 'boys' or 'edmiston'
+            use_full_hessian: Whether to do augmented Hessian Newton-Raphson (True) or just -gradient/diag(hessian) (False)
         '''
 
         assert( ( thetype == 'boys' ) or ( thetype == 'edmiston' ) )
@@ -47,6 +48,7 @@ class localizer:
         self.numVars  = ( self.Norbs * ( self.Norbs - 1 ) ) / 2
         self.u        = np.eye( self.Norbs, dtype=float )
         self.verbose  = mol.verbose
+        self.use_hess = use_full_hessian
         self.stdout   = mol.stdout
         
         self.gradient = None
@@ -103,6 +105,26 @@ class localizer:
         if ( self.__which == 'edmiston' ):
             self.eri_rot = ao2mo.incore.full( self.eri_orig, self.u, compact=False ).reshape(self.Norbs, self.Norbs, self.Norbs, self.Norbs)
 
+
+    def __reorthogonalize( self ):
+    
+        B = self.u + self.u.T
+        eigs, vecs = np.linalg.eigh( B )
+        C = np.dot(vecs.T, np.dot(self.u, vecs))
+        D = np.zeros( C.shape, dtype=float )
+        for row in range( C.shape[0] / 2 ):
+            cosine = 0.5 * ( C[ 2*row, 2*row ] + C[ 2*row+1, 2*row+1 ] )
+            sine   = 0.5 * ( C[ 2*row, 2*row+1 ] - C[ 2*row+1, 2*row ] )
+            theta  = np.arctan2( sine, cosine )
+            D[ 2*row, 2*row+1 ] = theta
+            D[ 2*row+1, 2*row ] = -theta
+        F = np.dot(vecs, np.dot(D, vecs.T))
+        newU = scipy.linalg.expm( F )
+        new_old_diff = np.linalg.norm( newU - self.u )
+        logger.debug(self, "Localizer :: __reorthogonalize : 2-norm( exp(log(U)) - U ) = %g", new_old_diff)
+        assert( np.linalg.norm( new_old_diff ) < 1e-5 )
+        self.u = np.array( newU, copy=True )
+        
 
     def __costfunction( self ):
 
@@ -265,8 +287,8 @@ class localizer:
 
         hessian_numerical = 0.5 * ( hessian_numerical + hessian_numerical.T )
 
-        logger.debug(self, "2-norm( hessian difference ) = %.g", np.linalg.norm( hessian_analytic - hessian_numerical ))
-        logger.debug(self, "2-norm( hessian )            = %.g", np.linalg.norm( hessian_analytic ))
+        logger.debug(self, "2-norm( hessian difference ) = %g", np.linalg.norm( hessian_analytic - hessian_numerical ))
+        logger.debug(self, "2-norm( hessian )            = %g", np.linalg.norm( hessian_analytic ))
     
     
     def __augmented_hessian_matvec( self, vector_in ):
@@ -332,41 +354,53 @@ class localizer:
         self.grd_norm = 1.0
         threshold = 1e-6
         iteration = 0
-        logger.debug(self, "Localizer :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
+        max_cf_encountered = 0.0
+        logger.debug(self, "Localizer :: At iteration %d the cost function = %1.13f", iteration, -self.__costfunction())
         logger.debug(self, "Localizer :: Linear size of the augmented Hessian = %d", self.numVars+1)
 
         while ( self.grd_norm > threshold ):
 
             iteration += 1
             self.__set_gradient() # Sets self.gradient and self.grd_norm
-            __augmented = scipy.sparse.linalg.LinearOperator( ( self.numVars+1, self.numVars+1 ), matvec=self.__augmented_hessian_matvec, dtype=float )
             
-            __ini_guess = np.zeros( [ self.numVars + 1 ], dtype=float )
-            __ini_guess[ self.numVars ] = 1.0
+            ini_guess = np.zeros( [ self.numVars + 1 ], dtype=float )
+            ini_guess[ self.numVars ] = 1.0
             diag_hessian = self.__diag_hessian()
             for elem in range( self.numVars ):
                 if ( abs( diag_hessian[ elem ] ) < 1e-8 ):
                     diag_hessian[ elem ] = 1e-8
-            __ini_guess[ :-1 ] = - self.gradient / diag_hessian # Minus the gradient divided by the diagonal elements of the hessian
-            eigenval, eigenvec = scipy.sparse.linalg.eigsh( __augmented, k=1, which='SA', v0=__ini_guess, ncv=min(1024,self.numVars+1), maxiter=(self.numVars+1) )
+            ini_guess[ :-1 ] = - self.gradient / diag_hessian # Minus the gradient divided by the diagonal elements of the hessian
+            if ( ( self.use_hess == True ) or ( np.linalg.norm( ini_guess[ :-1 ] ) < 0.1 ) ):
+                __augmented = scipy.sparse.linalg.LinearOperator( ( self.numVars+1, self.numVars+1 ), matvec=self.__augmented_hessian_matvec, dtype=float )
+                eigenval, eigenvec = scipy.sparse.linalg.eigsh( __augmented, k=1, which='SA', v0=ini_guess, ncv=min(1024,self.numVars+1), maxiter=min(1024,self.numVars+1) )
+            else:
+                eigenvec = np.array( ini_guess, copy=True )
             flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
 
             update_norm = np.linalg.norm( flatx )
-            __cost_func_prev = -self.__costfunction()
+            cost_func_prev = -self.__costfunction()
             self.__update_unitary( flatx )
-            __cost_func_now = -self.__costfunction()
-            __counter = 0
-            while ( __counter < 6 ) and ( __cost_func_now < __cost_func_prev ):
+            cost_func_now = -self.__costfunction()
+            counter = 0
+            while ( counter < 4 ) and ( cost_func_now < cost_func_prev ):
                 logger.debug(self, "Localizer :: Taking half a step back")
                 flatx *= 0.5
-                __cost_func_prev = __cost_func_now
                 self.__update_unitary( -flatx )
-                __cost_func_now = -self.__costfunction()
-                __counter += 1
+                cost_func_now = -self.__costfunction()
+                counter += 1
+                
+            if ( cost_func_now > max_cf_encountered ):
+                max_cf_encountered = cost_func_now
 
             logger.debug(self, "Localizer :: gradient norm = %g", self.grd_norm)
             logger.debug(self, "Localizer :: update norm   = %g", update_norm)
-            logger.debug(self, "Localizer :: At iteration %d the cost function = %g", iteration, -self.__costfunction())
+            logger.debug(self, "Localizer :: At iteration %d the cost function = %1.13f", iteration, cost_func_now)
+            logger.debug(self, "             Diff. with prev. CF encountered  = %g", cost_func_now - cost_func_prev )
+            logger.debug(self, "             Diff. with max.  CF encountered  = %g", cost_func_now - max_cf_encountered )
+            
+            if ( iteration % 10 == 0 ):
+                self.__reorthogonalize()
+                cost_func_now = -self.__costfunction()
 
         logger.note(self, "Localization procedure converged in %d iterations.", iteration)
         
