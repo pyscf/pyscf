@@ -74,20 +74,27 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
                blksize, nocc, int((nocc+blksize-1)/blksize))
     time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(ccsd.prange(0, nocc, blksize)):
-        #:pOvOv = numpy.einsum('ikca,jkcb->ijba', l2, t2[p0:p1])
-        #:pOVov = -numpy.einsum('ikca,jkbc->ijba', l2, t2[p0:p1])
-        #:pOVov += numpy.einsum('ikac,jkbc->ijba', l2, theta)
-        pOvOv = numpy.empty((nocc,(p1-p0)*nvir,nvir))
-        pOVov = numpy.empty((nocc,(p1-p0)*nvir,nvir))
-        t2a = ccsd._cp(t2[p0:p1].transpose(0,3,1,2).reshape(-1,nov))
-        t2b = ccsd._cp(t2[p0:p1].transpose(0,2,1,3).reshape(-1,nov))
-        theta = ccsd._cp(ccsd_lambda.make_theta(t2[p0:p1]).transpose(0,2,1,3).reshape(-1,nov))
-        for j in range(nocc):
-            pOvOv[j] = lib.dot(t2a, l2[j].reshape(nov,-1))
-            pOVov[j] = lib.dot(t2b, l2[j].reshape(nov,-1), -1)
-            lib.dot(theta, ccsd._cp(l2[j].transpose(0,2,1).reshape(nov,-1)), 1, pOVov[j], 1)
-        pOvOv = pOvOv.reshape(nocc,p1-p0,nvir,nvir)
-        pOVov = pOVov.reshape(nocc,p1-p0,nvir,nvir)
+        #:theta = ccsd_lambda.make_theta(t2[p0:p1])
+        #:pOvOv = numpy.einsum('ikca,jkcb->jbia', l2, t2[p0:p1])
+        #:pOVov = -numpy.einsum('ikca,jkbc->jbia', l2, t2[p0:p1])
+        #:pOVov += numpy.einsum('ikac,jkbc->jbia', l2, theta)
+        pOvOv = numpy.empty((nocc,p1-p0,nvir,nvir))
+        pOVov = numpy.empty((nocc,p1-p0,nvir,nvir))
+        t2a = numpy.empty((p1-p0,nvir,nocc,nvir))
+        t2b = numpy.empty((p1-p0,nvir,nocc,nvir))
+        theta = ccsd_lambda.make_theta(t2[p0:p1])
+        tmp = numpy.empty_like(t2a)
+        for i in range(p1-p0):
+            t2a[i] = t2[p0+i].transpose(2,0,1)
+            t2b[i] = t2[p0+i].transpose(1,0,2)
+            tmp[i] = theta[i].transpose(1,0,2)
+        t2a = t2a.reshape(-1,nov)
+        t2b = t2b.reshape(-1,nov)
+        theta, tmp = tmp.reshape(-1,nov), None
+        for i in range(nocc):
+            pOvOv[i] = lib.dot(t2a, l2[i].reshape(nov,-1)).reshape(-1,nvir,nvir)
+            pOVov[i] = lib.dot(t2b, l2[i].reshape(nov,-1), -1).reshape(-1,nvir,nvir)
+            pOVov[i] += lib.dot(theta, ccsd._cp(l2[i].transpose(0,2,1).reshape(nov,-1))).reshape(-1,nvir,nvir)
         theta = t2a = t2b = None
         mOvOv[p0:p1] = pOvOv.transpose(1,2,0,3)
         mOVov[p0:p1] = pOVov.transpose(1,2,0,3)
@@ -104,14 +111,14 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
     mab = numpy.einsum('kc,kb->cb', l1, t1)
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
-    gooov = numpy.zeros((nocc,nocc,nocc,nvir))
+    gooov = numpy.einsum('ji,ka->jkia', moo*-.5, t1)
     max_memory1 = max_memory - lib.current_memory()[0]
     unit = nocc**3 + nocc**2*nvir + nocc*nvir**2*6
     blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
     log.debug1('rdm intermediates pass 2: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     for p0, p1 in ccsd.prange(0, nocc, blksize):
-        tau = t2[p0:p1] + numpy.einsum('ia,jb->ijab', t1[p0:p1], t1)
+        tau = ccsd.make_tau(t2[p0:p1], t1[p0:p1], t1)
         #:goooo = numpy.einsum('ijab,klab->klij', l2, tau)*.5
         goooo = lib.dot(tau.reshape(-1,nvir**2), l2.reshape(-1,nvir**2).T, .5)
         goooo = goooo.reshape(-1,nocc,nocc,nocc)
@@ -120,18 +127,19 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
         #:gooov[p0:p1] -= numpy.einsum('ib,jkba->jkia', l1, tau)
         #:gooov[p0:p1] -= numpy.einsum('jkba,ib->jkia', l2[p0:p1], t1)
         #:gooov[p0:p1] += numpy.einsum('jkil,la->jkia', goooo, t1*2)
-        gooov[p0:p1] -= lib.dot(ccsd._cp(tau.transpose(0,1,3,2).reshape(-1,nvir)),
-                                l1.T).reshape(-1,nocc,nvir,nocc).transpose(0,1,3,2)
-        gooov[p0:p1] -= lib.dot(ccsd._cp(l2[p0:p1].transpose(0,1,3,2).reshape(-1,nvir)),
-                                t1.T).reshape(-1,nocc,nvir,nocc).transpose(0,1,3,2)
+        for i in range(p0,p1):
+            gooov[i] -= lib.dot(ccsd._cp(tau[i-p0].transpose(0,2,1).reshape(-1,nvir)),
+                                l1.T).reshape(nocc,nvir,nocc).transpose(0,2,1)
+            gooov[i] -= lib.dot(ccsd._cp(l2[i].transpose(0,2,1).reshape(-1,nvir)),
+                                t1.T).reshape(nocc,nvir,nocc).transpose(0,2,1)
         lib.dot(goooo.reshape(-1,nocc), t1, 2, gooov[p0:p1].reshape(-1,nvir), 1)
-        gooov[p0:p1] += numpy.einsum('ji,ka->jkia', moo[p0:p1]*-.5, t1)
 
-        goovv = .5 * l2[p0:p1] + .5 * tau
-        goovv += numpy.einsum('ia,jb->ijab', mia[p0:p1], t1)
         #:goovv -= numpy.einsum('jk,ikab->ijab', mij, tau)
-        for j in range(p1-p0):
-            lib.dot(mij, tau[j].reshape(nocc,-1), -1, goovv[j].reshape(nocc,-1), 1)
+        goovv = numpy.einsum('ia,jb->ijab', mia[p0:p1], t1)
+        for i in range(p1-p0):
+            lib.dot(mij, tau[i].reshape(nocc,-1), -1, goovv[i].reshape(nocc,-1), 1)
+            goovv[i] += .5 * l2[p0+i]
+            goovv[i] += .5 * tau[i]
         #:goovv -= numpy.einsum('cb,ijac->ijab', mab, t2[p0:p1])
         #:goovv -= numpy.einsum('bd,ijad->ijab', mvv*.5, tau)
         lib.dot(t2[p0:p1].reshape(-1,nvir), mab, -1, goovv.reshape(-1,nvir), 1)
@@ -143,22 +151,25 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
         pOVov = ccsd._cp(mOVov[p0:p1])
         #:gooov[p0:p1,:] += numpy.einsum('jaic,kc->jkia', pOvOv, t1)
         #:gooov[:,p0:p1] -= numpy.einsum('kaic,jc->jkia', pOVov, t1)
-        tmp = lib.dot(t1, pOvOv.reshape(-1,nvir).T).reshape(nocc,-1,nvir,nocc)
-        gooov[p0:p1,:] += tmp.transpose(1,0,3,2)
+        tmp = lib.dot(pOvOv.reshape(-1,nvir), t1.T).reshape(p1-p0,-1,nocc,nocc)
+        gooov[p0:p1,:] += tmp.transpose(0,3,2,1)
         lib.dot(t1, pOVov.reshape(-1,nvir).T, 1, tmp.reshape(nocc,-1), 0)
-        gooov[:,p0:p1] -= tmp.transpose(0,1,3,2)
+        gooov[:,p0:p1] -= tmp.reshape(nocc,p1-p0,nvir,nocc).transpose(0,1,3,2)
+        #:tmp = numpy.einsum('ikac,jc->jika', l2, t1[p0:p1])
+        #:gOvVo -= numpy.einsum('jika,kb->jabi', tmp, t1)
+        #:gOvvO = numpy.einsum('jkia,kb->jabi', tmp, t1) + pOvOv.transpose(0,3,1,2)
+        tmp = tmp.reshape(-1,nocc,nocc,nvir)
+        lib.dot(t1[p0:p1], l2.reshape(-1,nvir).T, 1, tmp.reshape(p1-p0,-1))
         gOvVo = numpy.einsum('ia,jb->jabi', l1, t1[p0:p1])
-        gOvVo += pOVov.transpose(0,3,1,2)
-        #:tmp = numpy.einsum('ikac,jc->jaik', l2, t1[p0:p1])
-        #:gOvVo -= numpy.einsum('jaik,kb->jabi', tmp, t1)
-        #:gOvvO = numpy.einsum('jaki,kb->jabi', tmp, t1) + pOvOv.transpose(0,3,1,2)
-        tmp = lib.dot(t1[p0:p1], l2.reshape(-1,nvir).T).reshape(-1,nocc,nocc,nvir).transpose(0,3,1,2)
-        gOvVo -= lib.dot(ccsd._cp(tmp.reshape(-1,nocc)),
-                         t1).reshape(-1,nvir,nocc,nvir).transpose(0,1,3,2)
-        gOvvO = lib.dot(ccsd._cp(tmp.transpose(0,1,3,2).reshape(-1,nocc)),
-                        t1).reshape(-1,nvir,nocc,nvir).transpose(0,1,3,2)
+        gOvvO = numpy.empty((p1-p0,nvir,nvir,nocc))
+        for i in range(p1-p0):
+            gOvVo[i] -= lib.dot(ccsd._cp(tmp[i].transpose(0,2,1).reshape(-1,nocc)),
+                                t1).reshape(nocc,nvir,-1).transpose(1,2,0)
+            gOvVo[i] += pOVov[i].transpose(2,0,1)
+            gOvvO[i] = lib.dot(tmp[i].reshape(nocc,-1).T,
+                               t1).reshape(nocc,nvir,-1).transpose(1,2,0)
+            gOvvO[i] += pOvOv[i].transpose(2,0,1)
         tmp = None
-        gOvvO = gOvvO + pOvOv.transpose(0,3,1,2)
 #==== mem usage nocc**3 + nocc*nvir**6
         h5fobj['dovvo'][p0:p1] = (gOvVo*2 + gOvvO).transpose(0,2,1,3)
         gOvvO *= -2
@@ -167,21 +178,20 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
         gOvvO = gOvVo = None
 
         for j0, j1 in ccsd.prange(0, nocc, blksize):
-            tau2 = numpy.einsum('ia,jb->ijab', t1[j0:j1], t1)
-            tau2 += t2[j0:j1]
+            tau2 = ccsd.make_tau(t2[j0:j1], t1[j0:j1], t1)
             #:goovv += numpy.einsum('ijkl,klab->ijab', goooo[:,:,j0:j1], tau2)
             lib.dot(goooo[:,:,j0:j1].copy().reshape((p1-p0)*nocc,-1),
                     tau2.reshape(-1,nvir**2), 1, goovv.reshape(-1,nvir**2), 1)
             tau2 += numpy.einsum('ia,jb->ijab', t1[j0:j1], t1)
             tau2 = ccsd._cp(tau2.transpose(0,3,1,2).reshape(-1,nov))
-            #:goovv += numpy.einsum('ibld,ljad->ijab', pOvOv[:,:,j0:j1], tau2) * .5
-            #:goovv -= numpy.einsum('iald,ljbd->ijab', pOVov[:,:,j0:j1], tau2) * .5
-            goovv += lib.dot(pOvOv[:,:,j0:j1].copy().reshape((p1-p0)*nvir,-1),
-                             tau2, .5).reshape(-1,nvir,nocc,nvir).transpose(0,2,3,1)
-            goovv += lib.dot(pOVov[:,:,j0:j1].copy().reshape((p1-p0)*nvir,-1),
-                             tau2, -.5).reshape(-1,nvir,nocc,nvir).transpose(0,2,1,3)
+            #:goovv[:,j0:j1] += numpy.einsum('ibld,jlda->ijab', pOvOv, tau2) * .5
+            #:goovv[:,j0:j1] -= numpy.einsum('iald,jldb->ijab', pOVov, tau2) * .5
+            goovv[:,j0:j1] += lib.dot(pOvOv.reshape(-1,nov), tau2.T,
+                                      .5).reshape(p1-p0,nvir,-1,nvir).transpose(0,2,3,1)
+            goovv[:,j0:j1] += lib.dot(pOVov.reshape(-1,nov), tau2.T,
+                                      -.5).reshape(p1-p0,nvir,-1,nvir).transpose(0,2,1,3)
             tau2 = None
-#==== mem usage nocc**3 + nocc*nvir**2*5
+#==== mem usage nocc**3 + nocc*nvir**2*7
         #:goovv += numpy.einsum('iald,jlbd->ijab', pOVov*2+pOvOv, t2) * .5
         pOVov *= 2
         pOVov += pOvOv

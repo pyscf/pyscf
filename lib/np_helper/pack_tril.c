@@ -157,18 +157,33 @@ void NPzpack_tril(int n, double complex *tril, double complex *mat)
         }
 }
 
+/* out += in[idx[:,None],idy] */
+void NPdtake_2d(double *out, double *in, int *idx, int *idy,
+                int odim, int idim, int nx, int ny)
+{
+        size_t i, j;
+        double *pin;
+        for (i = 0; i < nx; i++) {
+                pin = in + (size_t)idim * idx[i];
+                for (j = 0; j < ny; j++) {
+                        out[j] += pin[idy[j]];
+                }
+                out += odim;
+        }
+}
+
 /* out[idx[:,None],idy] += in */
-void NPdtakebak_2d(double *out, int odim1, int odim2,
-                   double *in, int idim1, int idim2, int *idx, int *idy)
+void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
+                   int odim, int idim, int nx, int ny)
 {
         size_t i, j;
         double *pout;
-        for (i = 0; i < idim1; i++) {
-                pout = out + odim2 * (size_t)idx[i];
-                for (j = 0; j < idim2; j++) {
+        for (i = 0; i < nx; i++) {
+                pout = out + (size_t)odim * idx[i];
+                for (j = 0; j < ny; j++) {
                         pout[idy[j]] += in[j];
                 }
-                in += idim2;
+                in += idim;
         }
 }
 

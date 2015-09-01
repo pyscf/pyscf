@@ -26,54 +26,52 @@ def IX_intermediates(cc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     else:
         doo, dvv = d1
     if d2 is None:
-# Note gamma2 are in Physist's notation
-        doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = \
-                ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
-    else:
-        doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = d2
+# Note gamma2 are in Chemist's notation
+        d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
 # Note Ioo is not hermitian
-    Ioo  =(numpy.einsum('jkab,iakb->ij', doovv, eris.ovov)
-         + numpy.einsum('kjba,iakb->ij', doovv, eris.ovov))
-    Ioo +=(numpy.einsum('jbak,iakb->ij', dovvo, eris.ovov)
-         + numpy.einsum('kabj,iakb->ij', dovvo, eris.ovov)
-         + numpy.einsum('jakb,ikab->ij', dovov, eris.oovv)
-         + numpy.einsum('kbja,ikab->ij', dovov, eris.oovv))
-    Ioo +=(numpy.einsum('jlmk,imlk->ij', doooo, eris.oooo) * 2
-         + numpy.einsum('mkjl,imlk->ij', doooo, eris.oooo) * 2)
-    Ioo +=(numpy.einsum('jkla,ilka->ij', dooov, eris.ooov)
-         + numpy.einsum('kjla,klia->ij', dooov, eris.ooov))
-    Ioo += numpy.einsum('ajbc,icab->ij', dvovv, eris.ovvv)
-    Ioo += numpy.einsum('lkja,lika->ij', dooov, eris.ooov)
+    Ioo  =(numpy.einsum('jakb,iakb->ij', dovov, eris.ovov)
+         + numpy.einsum('kbja,iakb->ij', dovov, eris.ovov))
+    Ioo +=(numpy.einsum('jabk,iakb->ij', dovvo, eris.ovov)
+         + numpy.einsum('kbaj,iakb->ij', dovvo, eris.ovov)
+         + numpy.einsum('jkab,ikab->ij', doovv, eris.oovv)
+         + numpy.einsum('kjba,ikab->ij', doovv, eris.oovv))
+    Ioo +=(numpy.einsum('jmlk,imlk->ij', doooo, eris.oooo) * 2
+         + numpy.einsum('mjkl,imlk->ij', doooo, eris.oooo) * 2)
+    Ioo +=(numpy.einsum('jlka,ilka->ij', dooov, eris.ooov)
+         + numpy.einsum('klja,klia->ij', dooov, eris.ooov))
+    Ioo += numpy.einsum('abjc,icab->ij', dvvov, eris.ovvv)
+    Ioo += numpy.einsum('ljka,lika->ij', dooov, eris.ooov)
     Ioo *= -1
 
 # Note Ivv is not hermitian
-    Ivv  =(numpy.einsum('ijbc,iajc->ab', doovv, eris.ovov)
-         + numpy.einsum('jicb,iajc->ab', doovv, eris.ovov))
-    Ivv +=(numpy.einsum('jbci,iajc->ab', dovvo, eris.ovov)
-         + numpy.einsum('icbj,iajc->ab', dovvo, eris.ovov)
-         + numpy.einsum('jbic,jiac->ab', dovov, eris.oovv)
-         + numpy.einsum('icjb,jiac->ab', dovov, eris.oovv))
-    Ivv +=(numpy.einsum('becd,aced->ab', dvvvv, eris.vvvv) * 2
-         + numpy.einsum('cdbe,aced->ab', dvvvv, eris.vvvv) * 2)
-    Ivv +=(numpy.einsum('dibc,icda->ab', dvovv, eris.ovvv)
-         + numpy.einsum('dicb,iadc->ab', dvovv, eris.ovvv))
-    Ivv += numpy.einsum('bicd,idac->ab', dvovv, eris.ovvv)
-    Ivv += numpy.einsum('jkib,jika->ab', dooov, eris.ooov)
+    Ivv  =(numpy.einsum('ibjc,iajc->ab', dovov, eris.ovov)
+         + numpy.einsum('jcib,iajc->ab', dovov, eris.ovov))
+    Ivv +=(numpy.einsum('jcbi,iajc->ab', dovvo, eris.ovov)
+         + numpy.einsum('ibcj,iajc->ab', dovvo, eris.ovov)
+         + numpy.einsum('jibc,jiac->ab', doovv, eris.oovv)
+         + numpy.einsum('ijcb,jiac->ab', doovv, eris.oovv))
+    Ivv +=(numpy.einsum('bced,aced->ab', dvvvv, eris.vvvv) * 2
+         + numpy.einsum('cbde,aced->ab', dvvvv, eris.vvvv) * 2)
+    Ivv +=(numpy.einsum('dbic,icda->ab', dvvov, eris.ovvv)
+         + numpy.einsum('dcib,iadc->ab', dvvov, eris.ovvv))
+    Ivv += numpy.einsum('bcid,idac->ab', dvvov, eris.ovvv)
+    Ivv += numpy.einsum('jikb,jika->ab', dooov, eris.ooov)
     Ivv *= -1
 
-    Ivo  =(numpy.einsum('kjab,kijb->ai', doovv, eris.ooov)
-         + numpy.einsum('kjba,jikb->ai', doovv, eris.ooov))
-    Ivo +=(numpy.einsum('abcd,icbd->ai', dvvvv, eris.ovvv) * 2
-         + numpy.einsum('cdab,icbd->ai', dvvvv, eris.ovvv) * 2)
-    Ivo +=(numpy.einsum('jabk,jbik->ai', dovvo, eris.ovoo)
-         + numpy.einsum('kbaj,jbik->ai', dovvo, eris.ovoo)
-         + numpy.einsum('jakb,jkib->ai', dovov, eris.ooov)
-         + numpy.einsum('kbja,jkib->ai', dovov, eris.ooov))
-    Ivo +=(numpy.einsum('djac,idjc->ai', dvovv, eris.ovov)
-         + numpy.einsum('djca,jidc->ai', dvovv, eris.oovv))
-    Ivo += numpy.einsum('ajbc,ibjc->ai', dvovv, eris.ovov)
-    Ivo += numpy.einsum('jkla,jlki->ai', dooov, eris.oooo)
+    Ivo  =(numpy.einsum('kajb,kijb->ai', dovov, eris.ooov)
+         + numpy.einsum('kbja,jikb->ai', dovov, eris.ooov))
+    Ivo +=(numpy.einsum('acbd,icbd->ai', dvvvv, eris.ovvv) * 2
+         + numpy.einsum('cadb,icbd->ai', dvvvv, eris.ovvv) * 2)
+    Ivo +=(numpy.einsum('jbak,jbik->ai', dovvo, eris.ovoo)
+         + numpy.einsum('kabj,jbik->ai', dovvo, eris.ovoo)
+         + numpy.einsum('jkab,jkib->ai', doovv, eris.ooov)
+         + numpy.einsum('kjba,jkib->ai', doovv, eris.ooov))
+    Ivo +=(numpy.einsum('dajc,idjc->ai', dvvov, eris.ovov)
+         + numpy.einsum('dcja,jidc->ai', dvvov, eris.oovv))
+    Ivo += numpy.einsum('abjc,ibjc->ai', dvvov, eris.ovov)
+    Ivo += numpy.einsum('jlka,jlki->ai', dooov, eris.oooo)
     Ivo *= -1
 
     Xvo  =(numpy.einsum('kj,kjia->ai', doo, eris.ooov) * 2
@@ -84,18 +82,18 @@ def IX_intermediates(cc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
          + numpy.einsum('cb,iacb->ai', dvv, eris.ovvv) * 2
          - numpy.einsum('cb,icab->ai', dvv, eris.ovvv)
          - numpy.einsum('cb,ibca->ai', dvv, eris.ovvv))
-    Xvo +=(numpy.einsum('ijcb,jbac->ai', doovv, eris.ovvv)
-         + numpy.einsum('jicb,jcab->ai', doovv, eris.ovvv))
-    Xvo +=(numpy.einsum('ilkj,ljka->ai', doooo, eris.ooov) * 2
-         + numpy.einsum('kjil,ljka->ai', doooo, eris.ooov) * 2)
-    Xvo +=(numpy.einsum('icbj,jcab->ai', dovvo, eris.ovvv)
-         + numpy.einsum('jbci,jcab->ai', dovvo, eris.ovvv)
-         + numpy.einsum('icjb,jacb->ai', dovov, eris.ovvv)
-         + numpy.einsum('jbic,jacb->ai', dovov, eris.ovvv))
-    Xvo +=(numpy.einsum('ikjb,jakb->ai', dooov, eris.ovov)
-         + numpy.einsum('kijb,kjab->ai', dooov, eris.oovv))
-    Xvo += numpy.einsum('dibc,dbac->ai', dvovv, eris.vvvv)
-    Xvo += numpy.einsum('jkib,jakb->ai', dooov, eris.ovov)
+    Xvo +=(numpy.einsum('icjb,jbac->ai', dovov, eris.ovvv)
+         + numpy.einsum('jcib,jcab->ai', dovov, eris.ovvv))
+    Xvo +=(numpy.einsum('iklj,ljka->ai', doooo, eris.ooov) * 2
+         + numpy.einsum('kijl,ljka->ai', doooo, eris.ooov) * 2)
+    Xvo +=(numpy.einsum('ibcj,jcab->ai', dovvo, eris.ovvv)
+         + numpy.einsum('jcbi,jcab->ai', dovvo, eris.ovvv)
+         + numpy.einsum('ijcb,jacb->ai', doovv, eris.ovvv)
+         + numpy.einsum('jibc,jacb->ai', doovv, eris.ovvv))
+    Xvo +=(numpy.einsum('ijkb,jakb->ai', dooov, eris.ovov)
+         + numpy.einsum('kjib,kjab->ai', dooov, eris.oovv))
+    Xvo += numpy.einsum('dbic,dbac->ai', dvvov, eris.vvvv)
+    Xvo += numpy.einsum('jikb,jakb->ai', dooov, eris.ovov)
     Xvo += Ivo
     return Ioo, Ivv, Ivo, Xvo
 
@@ -146,10 +144,9 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     nocc, nvir = t1.shape
     nao, nmo = mo_coeff.shape
     doo, dvv = ccsd_rdm.gamma1_intermediates(cc, t1, t2, l1, l2)
-    doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = \
-            ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
-    Ioo, Ivv, Ivo, Xvo = IX_intermediates(cc, t1, t2, l1, l2, eris, (doo,dvv),
-                                          (doovv,dvvvv,doooo,dovov,dovvo,dvovv,dooov))
+    d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
+    Ioo, Ivv, Ivo, Xvo = IX_intermediates(cc, t1, t2, l1, l2, eris, (doo,dvv), d2)
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
     dm1mo = response_dm1(cc, t1, t2, l1, l2, eris, (Ioo, Ivv, Ivo, Xvo))
     dm1mo[:nocc,:nocc] = doo * 2
@@ -173,14 +170,13 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     zeta = reduce(numpy.dot, (mo_coeff, zeta*dm1mo, mo_coeff.T))
     eri0 = mol.intor('cint2e_ip1_sph', 3).reshape(3,nao,nao,nao,nao)
     dm2 = numpy.zeros((nmo,)*4)
-    dm2[:nocc,:nocc,nocc:,nocc:] = doovv
+    dm2[:nocc,nocc:,:nocc,nocc:] = dovov
     dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
     dm2[:nocc,:nocc,:nocc,:nocc] = doooo
     dm2[:nocc,nocc:,nocc:,:nocc] = dovvo
-    dm2[:nocc,nocc:,:nocc,nocc:] = dovov
-    dm2[nocc:,:nocc,nocc:,nocc:] = dvovv
+    dm2[:nocc,:nocc,nocc:,nocc:] = doovv
+    dm2[nocc:,nocc:,:nocc,nocc:] = dvvov
     dm2[:nocc,:nocc,:nocc,nocc:] = dooov
-    dm2 = dm2.transpose(0,2,1,3)
     for i in range(nocc):
         dm2[i,i,:,:] += dm1mo
         dm2[:,i,i,:] -= dm1mo * .5

@@ -14,44 +14,27 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
 from pyscf.cc import ccsd
-from pyscf.cc import ccsd_rdm
+from pyscf.cc import ccsd_rdm_incore as ccsd_rdm
 import pyscf.grad
 from pyscf.grad import cphf
 
 BLKSIZE = 192
 
-
-def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
-                     max_memory=2000):
+def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     if eris is None:
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(mycc)
     if d1 is None:
-        doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2,
-                                                 max_memory)
+        doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     else:
         doo, dvv = d1
     if d2 is None:
-        _d2tmpfile = tempfile.NamedTemporaryFile()
-        fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
-        ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate, max_memory)
-        dovov = fd2intermediate['dovov']
-        dvvvv = fd2intermediate['dvvvv']
-        doooo = fd2intermediate['doooo']
-        doovv = fd2intermediate['doovv']
-        dovvo = fd2intermediate['dovvo']
-        dvvov = fd2intermediate['dvvov']
-        dovvv = fd2intermediate['dovvv']
-        dooov = fd2intermediate['dooov']
-    else:
-        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
+        d2 = ccsd_rdm.gamma2_incore(mycc, t1, t2, l1, l2)
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
-    _tmpfile = tempfile.NamedTemporaryFile()
-    fswap = h5py.File(_tmpfile.name, 'w')
-    fswap.create_group('vvov')
 
 # Note Ioo, Ivv are not hermitian
     Ioo = numpy.zeros((nocc,nocc))
@@ -74,82 +57,79 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
          - numpy.einsum('kj,ijka->ai', doo, eris_ooov))
     eris_oooo = eris_ooov = d_oooo = None
 
-    max_memory1 = max_memory - lib.current_memory()[0]
-    unit = max(nvir**3*2.5, nvir**3*2+nocc*nvir**2)
-    blksize = max(ccsd.BLKMIN, int(max_memory1*1e6/8/unit))
-    iobuflen = int(256e6/8/(blksize*nvir))
-    log.debug1('IX_intermediates pass 1: block size = %d, nocc = %d in %d blocks',
-               blksize, nocc, int((nocc+blksize-1)/blksize))
-    for istep, (p0, p1) in enumerate(ccsd.prange(0, nocc, blksize)):
-        d_ooov = ccsd._cp(dooov[p0:p1])
-        eris_oooo = ccsd._cp(eris.oooo[p0:p1])
-        eris_ooov = ccsd._cp(eris.ooov[p0:p1])
-        #:Ivv += numpy.einsum('ijkb,ijka->ab', d_ooov, eris_ooov)
-        #:Ivo += numpy.einsum('jlka,jlki->ai', d_ooov, eris_oooo)
-        Ivv += lib.dot(eris_ooov.reshape(-1,nvir).T, d_ooov.reshape(-1,nvir))
-        Ivo += lib.dot(d_ooov.reshape(-1,nvir).T, eris_oooo.reshape(-1,nocc))
-        #:Ioo += numpy.einsum('klja,klia->ij', d_ooov, eris_ooov)
-        #:Xvo += numpy.einsum('kjib,kjba->ai', d_ooov, eris.oovv)
-        eris_oovv = ccsd._cp(eris.oovv[p0:p1])
-        tmp = ccsd._cp(d_ooov.transpose(0,1,3,2).reshape(-1,nocc))
-        Ioo += lib.dot(ccsd._cp(eris_ooov.transpose(0,1,3,2).reshape(-1,nocc)).T, tmp)
-        Xvo += lib.dot(eris_oovv.reshape(-1,nvir).T, tmp)
-        eris_oooo = tmp = None
+    d_ooov = ccsd._cp(dooov)
+    eris_oooo = ccsd._cp(eris.oooo)
+    eris_ooov = ccsd._cp(eris.ooov)
+    #:Ivv += numpy.einsum('ijkb,ijka->ab', d_ooov, eris_ooov)
+    #:Ivo += numpy.einsum('jlka,jlki->ai', d_ooov, eris_oooo)
+    Ivv += lib.dot(eris_ooov.reshape(-1,nvir).T, d_ooov.reshape(-1,nvir))
+    Ivo += lib.dot(d_ooov.reshape(-1,nvir).T, eris_oooo.reshape(-1,nocc))
+    #:Ioo += numpy.einsum('klja,klia->ij', d_ooov, eris_ooov)
+    #:Xvo += numpy.einsum('kjib,kjba->ai', d_ooov, eris.oovv)
+    eris_oovv = ccsd._cp(eris.oovv)
+    tmp = ccsd._cp(d_ooov.transpose(0,1,3,2).reshape(-1,nocc))
+    tmpooov = ccsd._cp(eris_ooov.transpose(0,1,3,2))
+    Ioo += lib.dot(tmpooov.reshape(-1,nocc).T, tmp)
+    Xvo += lib.dot(eris_oovv.reshape(-1,nvir).T, tmp)
+    eris_oooo = tmp = None
 
-        d_ooov = d_ooov + dooov[:,p0:p1].transpose(1,0,2,3)
-        eris_ovov = ccsd._cp(eris.ovov[p0:p1])
-        #:Ioo += numpy.einsum('jlka,ilka->ij', d_ooov, eris_ooov)
-        #:Xvo += numpy.einsum('ijkb,kbja->ai', d_ooov, eris.ovov)
-        Ioo += lib.dot(eris_ooov.reshape(nocc,-1), d_ooov.reshape(nocc,-1).T)
-        Xvo += lib.dot(eris_ovov.reshape(-1,nvir).T,
-                       ccsd._cp(d_ooov.transpose(0,2,3,1).reshape(nocc,-1)).T)
-        d_ooov = None
+    d_ooov = d_ooov + d_ooov.transpose(1,0,2,3)
+    eris_ovov = ccsd._cp(eris.ovov)
+    #:Ioo += numpy.einsum('jlka,ilka->ij', d_ooov, eris_ooov)
+    #:Xvo += numpy.einsum('ijkb,kbja->ai', d_ooov, eris.ovov)
+    Ioo += lib.dot(eris_ooov.reshape(nocc,-1), d_ooov.reshape(nocc,-1).T)
+    Xvo += lib.dot(eris_ovov.reshape(-1,nvir).T,
+                   ccsd._cp(d_ooov.transpose(0,2,3,1).reshape(nocc,-1)).T)
+    d_ooov = None
 
-        #:Ioo += numpy.einsum('kjba,kiba->ij', d_oovv, eris.oovv)
-        #:Ivv += numpy.einsum('ijcb,ijca->ab', d_oovv, eris.oovv)
-        #:Ivo += numpy.einsum('kjba,kjib->ai', d_oovv, eris.ooov)
-        d_oovv = ccsd._cp(doovv[p0:p1]) + doovv[:,p0:p1].transpose(1,0,3,2)
-        for i in range(p1-p0):
-            Ioo += lib.dot(eris_oovv[i].reshape(nocc, -1), d_oovv[i].reshape(nocc,-1).T)
-        Ivv += lib.dot(eris_oovv.reshape(-1,nvir).T, d_oovv.reshape(-1,nvir))
-        Ivo += lib.dot(d_oovv.reshape(-1,nvir).T,
-                       ccsd._cp(eris_ooov.transpose(0,1,3,2).reshape(-1,nocc)))
-        eris_ooov = None
+    #:Ioo += numpy.einsum('kjba,kiba->ij', d_oovv, eris.oovv)
+    #:Ivv += numpy.einsum('ijcb,ijca->ab', d_oovv, eris.oovv)
+    #:Ivo += numpy.einsum('kjba,kjib->ai', d_oovv, eris.ooov)
+    d_oovv = ccsd._cp(doovv) + doovv.transpose(1,0,3,2)
+    for i in range(nocc):
+        Ioo += lib.dot(eris_oovv[i].reshape(nocc, -1), d_oovv[i].reshape(nocc,-1).T)
+    Ivv += lib.dot(eris_oovv.reshape(-1,nvir).T, d_oovv.reshape(-1,nvir))
+    Ivo += lib.dot(d_oovv.reshape(-1,nvir).T, tmpooov.reshape(-1,nocc))
+    eris_ooov = tmpooov = None
 
-        d_ovvv = numpy.empty((p1-p0,nvir,nvir,nvir))
-        ao2mo.outcore._load_from_h5g(dovvv, p0*nvir, p1*nvir,
-                                     d_ovvv.reshape(-1,nvir**2))
+    blksize = 12
+    nvir_pair = nvir * (nvir+1) // 2
+    eris_ovvv = numpy.empty((nocc,nvir,nvir,nvir))
+    bufd_ovvv = numpy.empty((blksize,nvir,nvir,nvir))
+    tmp = numpy.empty((blksize,nvir,nvir,nocc))
+    d_vvov = ccsd._cp(dvvov).reshape(-1,nov)
+    for p0, p1 in ccsd.prange(0, nocc, blksize):
+        d_ovvv = bufd_ovvv[:p1-p0].reshape(-1,nvir**2)
+        off = p0 * nvir
+        for i0, i1 in ccsd.prange(0, (p1-p0)*nvir, BLKSIZE):
+            for j0, j1, in ccsd.prange(0, nvir**2, BLKSIZE):
+                d_ovvv[i0:i1,j0:j1] = d_vvov[j0:j1,off+i0:off+i1].T
+        d_ovvv = d_ovvv.reshape(-1,nvir,nvir,nvir)
+        ccsd.unpack_tril(ccsd._cp(eris.ovvv[p0:p1]).reshape(-1,nvir_pair),
+                         eris_ovvv[p0:p1].reshape(-1,nvir**2))
         #:Ivo += numpy.einsum('jadc,jidc->ai', d_ovvv, eris_oovv)
         for i in range(p1-p0):
-            Ivo += lib.dot(d_ovvv[i].reshape(nvir,-1), eris_oovv[i].reshape(nocc,-1).T)
-        eris_oovv = None
+            lib.dot(d_ovvv[i].reshape(nvir,-1),
+                    eris_oovv[p0+i].reshape(nocc,-1).T, 1, Ivo, 1)
 
-        tmp = numpy.empty((p1-p0,nvir,nvir,nocc))
         for i in range(p1-p0):
-            d_ovvv[i] = d_ovvv[i] + d_ovvv[i].transpose(0,2,1)
-            tmp[i] = eris_ovov[i].transpose(0,2,1)
-        #:Ivo += numpy.einsum('abjc,ibjc->ai', d_ovvv, eris_ovov)
-        Ivo += lib.dot(d_ovvv.reshape(-1,nvir).T, tmp.reshape(-1,nocc))
-        tmp = eris_ovov = None
-
-        eris_ovvv = ccsd._cp(eris.ovvv[p0:p1])
-        eris_ovvv = ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
-        eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
+            d_ovvv[i] += d_ovvv[i].transpose(0,2,1)
+            tmp[i] = eris_ovov[p0+i].transpose(0,2,1)
+        #:Ivo += numpy.einsum('jcab,jcib->ai', d_ovvv, eris_ovov)
+        lib.dot(d_ovvv.reshape(-1,nvir).T,
+                tmp[:p1-p0].reshape(-1,nocc), 1, Ivo, 1)
         #:Ivv += numpy.einsum('icdb,icda->ab', d_ovvv, eris_ovvv)
         #:Xvo += numpy.einsum('jibc,jabc->ai', d_oovv, eris_ovvv)
-        Ivv += lib.dot(eris_ovvv.reshape(-1,nvir).T, d_ovvv.reshape(-1,nvir))
-        for i in range(p1-p0):
+        lib.dot(eris_ovvv[p0:p1].reshape(-1,nvir).T,
+                bufd_ovvv[:p1-p0].reshape(-1,nvir), 1, Ivv, 1)
+        for i in range(p0, p1):
             lib.dot(eris_ovvv[i].reshape(nvir,-1),
                     d_oovv[i].reshape(nocc,-1).T, 1, Xvo, 1)
-        Xvo[:,p0:p1] +=(numpy.einsum('cb,iacb->ai', dvv, eris_ovvv) * 2
-                      + numpy.einsum('cb,iacb->ai', dvv, eris_ovvv) * 2
-                      - numpy.einsum('cb,icab->ai', dvv, eris_ovvv)
-                      - numpy.einsum('cb,ibca->ai', dvv, eris_ovvv))
-
-        eris_ovvv = eris_ovvv.reshape(-1,nvir*nvir)
-        ao2mo.outcore._transpose_to_h5g(fswap, 'vvov/%d'%istep, eris_ovvv, iobuflen)
-        d_ovvv = eris_ovvv = None
-    d_oovv = None
+    eris_oovv = d_oovv = d_vvov = d_ovvv = bufd_ovvv = tmp = None
+    Xvo +=(numpy.einsum('cb,iacb->ai', dvv, eris_ovvv) * 2
+         + numpy.einsum('cb,iacb->ai', dvv, eris_ovvv) * 2
+         - numpy.einsum('cb,icab->ai', dvv, eris_ovvv)
+         - numpy.einsum('cb,ibca->ai', dvv, eris_ovvv))
 
     d_ovov = numpy.empty((nocc,nvir,nocc,nvir))
     for p0, p1 in ccsd.prange(0, nocc, blksize):
@@ -162,64 +142,55 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
     #:Ivo += numpy.einsum('jbka,jbki->ai', d_ovov, eris.ovoo)
     Ivo += lib.dot(d_ovov.reshape(-1,nvir).T,
                    ccsd._cp(eris.ovoo).reshape(-1,nocc))
-    eris_ovov = ccsd._cp(eris.ovov)
     #:Ioo += numpy.einsum('jakb,iakb->ij', d_ovov, eris.ovov)
     #:Ivv += numpy.einsum('jcib,jcia->ab', d_ovov, eris.ovov)
     Ioo += lib.dot(eris_ovov.reshape(nocc,-1), d_ovov.reshape(nocc,-1).T)
     Ivv += lib.dot(eris_ovov.reshape(-1,nvir).T, d_ovov.reshape(-1,nvir))
     eris_ovov = None
 
-    max_memory1 = max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2 + nvir**3*2.5
-    blksize = max(ccsd.BLKMIN, int(max_memory1*1e6/8/unit))
-    log.debug1('IX_intermediates pass 2: block size = %d, nocc = %d in %d blocks',
-               blksize, nocc, int((nocc+blksize-1)/blksize))
+    #:d_vvvv = ccsd._cp(d_vvvv + d_vvvv.transpose(0,1,3,2))
+    blksize = 12
+    bufd_vvvv = numpy.empty((blksize,nvir,nvir,nvir))
+    bufe1vvvv = numpy.empty((blksize,nvir,nvir_pair))
+    bufe2vvvv = numpy.empty((blksize,nvir,nvir,nvir))
+    bufd_vvvo = numpy.empty((blksize,nvir,nvir,nocc))
+    bufe_vvov = numpy.empty((blksize,nvir,nov))
+    bufe_vvvo = numpy.empty((blksize,nvir,nvir,nocc))
     for p0, p1 in ccsd.prange(0, nvir, blksize):
-        d_vvvv = numpy.empty((p1-p0,nvir,nvir,nvir))
-        ao2mo.outcore._load_from_h5g(dvvvv, p0, p1, d_vvvv)
-        #:d_vvvv = ccsd._cp(d_vvvv + d_vvvv.transpose(0,1,3,2))
-        d_vvvv = _sum0132(d_vvvv)
-        d_vvov = ccsd._cp(dvvov[p0:p1])
-        eris_vvvv = _load_block_tril(eris.vvvv, p0, p1)
-        eris_vvvv = ccsd.unpack_tril(eris_vvvv.reshape((p1-p0)*nvir,-1))
-        eris_vvvv = eris_vvvv.reshape(p1-p0,nvir,nvir,nvir)
+        d_vvvv = bufd_vvvv[:p1-p0]
+        _sum0132(ccsd._cp(dvvvv[p0:p1]), d_vvvv)
+        tmp1 = bufe1vvvv[:p1-p0]
+        _load_block_tril(eris.vvvv, p0, p1, out=tmp1)
+        eris_vvvv = bufe2vvvv[:p1-p0]
+        ccsd.unpack_tril(tmp1.reshape(-1,nvir_pair), eris_vvvv.reshape(-1,nvir**2))
         #:Ivv += numpy.einsum('decb,deca->ab', d_vvvv, eris_vvvv) * 2
-        #:Xvo += numpy.einsum('dbic,dbca->ai', d_vvov, eris_vvvv)
+        #:Xvo += numpy.einsum('icdb,acdb->ai', d_ovvv, eris_vvvv)
         lib.dot(eris_vvvv.reshape(-1,nvir).T, d_vvvv.reshape(-1,nvir), 2, Ivv, 1)
-        d_vvvo = numpy.empty((p1-p0,nvir,nvir,nocc))
+        d_vvov = ccsd._cp(dvvov[p0:p1])
+        d_vvvo = bufd_vvvo[:p1-p0]
         for i in range(p1-p0):
             d_vvvo[i] = d_vvov[i].transpose(0,2,1)
         lib.dot(eris_vvvv.reshape(-1,nvir).T, d_vvvo.reshape(-1,nocc), 1, Xvo, 1)
-        eris_vvvv = None
 
-        eris_vvov = numpy.empty((p1-p0,nvir,nocc,nvir))
-        ao2mo.outcore._load_from_h5g(fswap['vvov'], p0*nvir, p1*nvir,
-                                     eris_vvov.reshape(-1,nov))
+        eris_vvov = bufe_vvov[:p1-p0].reshape(-1,nov)
+        tmp_ovvv = eris_ovvv.reshape(nov,-1)
+        off = p0 * nvir
+        for i0, i1 in ccsd.prange(0, (p1-p0)*nvir, BLKSIZE):
+            for j0, j1, in ccsd.prange(0, nov, BLKSIZE):
+                eris_vvov[i0:i1,j0:j1] = tmp_ovvv[j0:j1,off+i0:off+i1].T
         #:Ivv += numpy.einsum('dcib,dcia->ab', d_vvov, eris_vvov)
-        #:Xvo[p0:p1] += numpy.einsum('icjb,acjb->ai', d_ovov, eris_vvov)
+        #:Xvo += numpy.einsum('icjb,acjb->ai', d_ovov, eris_vvov)
         lib.dot(eris_vvov.reshape(-1,nvir).T, d_vvov.reshape(-1,nvir), 1, Ivv, 1)
         Xvo[p0:p1] += lib.dot(eris_vvov.reshape(p1-p0,-1), d_ovov.reshape(nocc,-1).T)
-        d_vvov = None
 
-        eris_vvvo = numpy.empty((p1-p0,nvir,nvir,nocc))
+        eris_vvov = eris_vvov.reshape(p1-p0,nvir,nocc,nvir)
+        eris_vvvo = bufe_vvvo[:p1-p0]
         for i in range(p1-p0):
             eris_vvvo[i] = eris_vvov[i].transpose(0,2,1)
         #:Ioo += numpy.einsum('abjc,abci->ij', d_vvov, eris_vvvo)
         #:Ivo += numpy.einsum('dbca,dbci->ai', d_vvvv, eris_vvvo) * 2
         lib.dot(d_vvvv.reshape(-1,nvir).T, eris_vvvo.reshape(-1,nocc), 2, Ivo, 1)
         lib.dot(eris_vvvo.reshape(-1,nocc).T, d_vvvo.reshape(-1,nocc), 1, Ioo, 1)
-        eris_vvov = eris_vovv = d_vvvv = None
-    d_ovov = None
-
-    del(fswap['vvov'])
-    fswap.close()
-    _tmpfile = None
-
-    if d2 is None:
-        for key in fd2intermediate.keys():
-            del(fd2intermediate[key])
-        fd2intermediate.close()
-        _d2tmpfile = None
 
     Ioo *= -1
     Ivv *= -1
@@ -228,19 +199,16 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
     return Ioo, Ivv, Ivo, Xvo
 
 
-def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
+def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
     if eris is None:
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(mycc)
     if IX is None:
-        Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris,
-                                              max_memory=2000)
+        Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris)
     else:
         Ioo, Ivv, Ivo, Xvo = IX
     nocc, nvir = t1.shape
     nmo = nocc + nvir
-    max_memory = max_memory - lib.current_memory()[0]
-    blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nocc*nvir**2)))
     def fvind(x):
         x = x.reshape(Xvo.shape)
         if eris is None:
@@ -250,13 +218,11 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
             v = reduce(numpy.dot, (mo_coeff[:,nocc:].T, mycc._scf.get_veff(mol, dm),
                                    mo_coeff[:,:nocc]))
         else:
-            v = numpy.zeros((nocc,nvir))
-            for p0, p1 in ccsd.prange(0, nocc, blksize):
-                eris_ovov = ccsd._cp(eris.ovov[p0:p1])
-                v[p0:p1] += numpy.einsum('iajb,bj->ia', eris_ovov, x) * 4
-                v[p0:p1] -= numpy.einsum('ibja,bj->ia', eris_ovov, x)
-                eris_ovov = None
-                v -= numpy.einsum('jiab,bj->ia', ccsd._cp(eris.oovv[p0:p1]), x[:,p0:p1])
+            eris_ovov = ccsd._cp(eris.ovov)
+            v  = numpy.einsum('iajb,bj->ia', eris_ovov, x) * 4
+            v -= numpy.einsum('ibja,bj->ia', eris_ovov, x)
+            eris_ovov = None
+            v -= numpy.einsum('jiab,bj->ia', ccsd._cp(eris.oovv), x)
         return v.T
     mo_energy = eris.fock.diagonal()
     mo_occ = numpy.zeros_like(mo_energy)
@@ -270,7 +236,7 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
 
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           grad_hf=None, max_memory=2000, verbose=logger.INFO):
+           grad_hf=None, verbose=logger.INFO):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
@@ -295,26 +261,15 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nao_pair = nao * (nao+1) // 2
 
     log.debug('Build ccsd rdm1 intermediates')
-    doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory)
+    doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
-    _d2tmpfile = tempfile.NamedTemporaryFile()
-    fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
-    ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate, max_memory)
-    dovov = fd2intermediate['dovov']
-    dvvvv = fd2intermediate['dvvvv']
-    doooo = fd2intermediate['doooo']
-    doovv = fd2intermediate['doovv']
-    dovvo = fd2intermediate['dovvo']
-    dvvov = fd2intermediate['dvvov']
-    dovvv = fd2intermediate['dovvv']
-    dooov = fd2intermediate['dooov']
-    d2 = (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
+    d2 = ccsd_rdm.gamma2_incore(mycc, t1, t2, l1, l2)
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     time1 = log.timer('rdm2 intermediates', *time1)
     log.debug('Build ccsd response_rdm1')
-    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, (doo,dvv),
-                                          d2, max_memory)
+    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, (doo,dvv), d2)
     time1 = log.timer('response_rdm1 intermediates', *time1)
 
     dm1mo = response_dm1(mycc, t1, t2, l1, l2, eris, (Ioo, Ivv, Ivo, Xvo))
@@ -330,13 +285,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer('response_rdm1', *time1)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
-    _dm2file = tempfile.NamedTemporaryFile()
-    fdm2 = h5py.File(_dm2file.name, 'w')
-    _rdm2_mo2ao(mycc, d2, dm1mo, mo_coeff, fdm2, max_memory)
+    dm2ao = _rdm2_mo2ao(mycc, d2, dm1mo, mo_coeff)
     time1 = log.timer('MO->AO transformation', *time1)
-    for key in fd2intermediate.keys():
-        del(fd2intermediate[key])
-    fd2intermediate.close()
 
 #TODO: pass hf_grad object to compute h1 and s1
     log.debug('h1 and JK1')
@@ -360,8 +310,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if atmlst is None:
         atmlst = range(mol.natm)
     offsetdic = grad_hf.aorange_by_atom()
-    max_memory1 = max_memory - lib.current_memory()[0]
-    blksize = max(1, int(max_memory1*1e6/8/(nao**3*2.5)))
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -381,23 +329,20 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf4sij[p0:p1]) * 2
 
 # 2e AO integrals dot 2pdm
-        ip0 = p0
-        for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
-            eri1 = gto.moleintor.getints('cint2e_ip1_sph', mol._atm, mol._bas,
-                                         mol._env, numpy.arange(b0,b1), comp=3,
-                                         aosym='s2kl').reshape(3,nf,nao,-1)
-            dm2buf = _load_block_tril(fdm2['dm2'], ip0, ip0+nf)
-            de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
+        eri1 = gto.moleintor.getints('cint2e_ip1_sph', mol._atm, mol._bas,
+                                     mol._env, numpy.arange(shl0,shl1), comp=3,
+                                     aosym='s2kl').reshape(3,p1-p0,nao,-1)
+        dm2buf = _load_block_tril(dm2ao, p0, p1)
+        de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
 
-            for i in range(3):
-                #:tmp = ccsd.unpack_tril(eri1[i].reshape(-1,nao_pair))
-                #:vj = numpy.einsum('ijkl,kl->ij', tmp, hf_dm1[ip0:ip0+nf])
-                #:vk = numpy.einsum('ijkl,jk->il', tmp, hf_dm1[ip0:ip0+nf])
-                vj, vk = hf_get_jk_incore(eri1[i], hf_dm1)
-                de[k,i] -=(numpy.einsum('ij,ij->', vj, hf_dm1[ip0:ip0+nf])
-                         - numpy.einsum('ij,ij->', vk, hf_dm1[ip0:ip0+nf])*.5) * 2
-            eri1 = dm2buf = None
-            ip0 += nf
+        for i in range(3):
+            #:tmp = ccsd.unpack_tril(eri1[i].reshape(-1,nao_pair))
+            #:vj = numpy.einsum('ijkl,kl->ij', tmp, hf_dm1)
+            #:vk = numpy.einsum('ijkl,jk->il', tmp, hf_dm1)
+            vj, vk = hf_get_jk_incore(eri1[i], hf_dm1)
+            de[k,i] -=(numpy.einsum('ij,ij->', vj, hf_dm1[p0:p1])
+                     - numpy.einsum('ij,ij->', vk, hf_dm1[p0:p1])*.5) * 2
+        eri1 = dm2buf = None
         log.debug('grad of atom %d %s = %s', ia, mol.atom_symbol(ia), de[k])
         time1 = log.timer('grad of atom %d'%ia, *time1)
 
@@ -408,10 +353,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         log.note('%d %s  %15.9f  %15.9f  %15.9f', ia, mol.atom_symbol(ia),
                  de[k,0], de[k,1], de[k,2])
     log.timer('CCSD gradients', *time0)
-    for key in fdm2.keys():
-        del(fdm2[key])
-    fdm2.close()
-    _d2tmpfile = _dm2file = None
     return de
 
 def shell_prange(mol, start, stop, blksize):
@@ -426,7 +367,7 @@ def shell_prange(mol, start, stop, blksize):
             nao = now
     yield (ib0, stop, nao)
 
-def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave, max_memory=2000):
+def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time1 = time.clock(), time.time()
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
@@ -434,131 +375,81 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave, max_memory=2000):
     nov = nocc * nvir
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
+    nvir_pair = nvir * (nvir+1) //2
     mo_coeff = numpy.asarray(mo_coeff, order='F')
-    def _trans(vin, i0, icount, j0, jcount):
+    def _trans(vin, i0, icount, j0, jcount, out=None):
         nrow = vin.shape[0]
-        vout = numpy.empty((nrow,nao_pair))
         fdrv = getattr(ccsd.libcc, 'AO2MOnr_e2_drv')
         pao_loc = ctypes.POINTER(ctypes.c_void_p)()
         ftrans = ctypes.c_void_p(_ctypes.dlsym(ccsd.libcc._handle, 'AO2MOtranse2_nr_s1'))
         fmmm = ctypes.c_void_p(_ctypes.dlsym(ccsd.libcc._handle, 'CCmmm_transpose_sum'))
         fdrv(ftrans, fmmm,
-             vout.ctypes.data_as(ctypes.c_void_p),
+             out.ctypes.data_as(ctypes.c_void_p),
              vin.ctypes.data_as(ctypes.c_void_p),
              mo_coeff.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_int(nrow), ctypes.c_int(nao),
              ctypes.c_int(i0), ctypes.c_int(icount),
              ctypes.c_int(j0), ctypes.c_int(jcount),
              pao_loc, ctypes.c_int(0))
-        return vout
+        return out
 
-    _tmpfile = tempfile.NamedTemporaryFile()
-    fswap = h5py.File(_tmpfile.name)
-    max_memory1 = max_memory - lib.current_memory()[0]
-    blksize = max(1, int(max_memory1*1e6/8/(nmo*nao_pair+nmo**3)))
-    iobuflen = int(256e6/8/(blksize*nmo))
-    log.debug1('_rdm2_mo2ao pass 1: blksize = %d, iobuflen = %d', blksize, iobuflen)
-    fswap.create_group('o')  # for h5py old version
-    for istep, (p0, p1) in enumerate(ccsd.prange(0, nocc, blksize)):
-        buf1 = numpy.zeros((p1-p0,nmo,nmo,nmo))
-        buf1[:,:nocc,:nocc,:nocc] = doooo[p0:p1]
-        buf1[:,:nocc,:nocc,nocc:] = dooov[p0:p1]
-        buf1[:,:nocc,nocc:,nocc:] = doovv[p0:p1]
-        buf1[:,nocc:,:nocc,nocc:] = dovov[p0:p1]
-        buf1[:,nocc:,nocc:,:nocc] = dovvo[p0:p1]
-        d_ovvv = numpy.empty((p1-p0,nvir,nvir,nvir))
-        ao2mo.outcore._load_from_h5g(dovvv, p0*nvir, p1*nvir,
-                                     d_ovvv.reshape(-1,nvir**2))
-        buf1[:,nocc:,nocc:,nocc:] = d_ovvv
-        for i in range(p0, p1):
-            buf1[i-p0,i,:,:] += dm1
-            buf1[i-p0,:,:,i] -= dm1 * .5
-        buf2 = _trans(buf1.reshape(-1,nmo**2), 0, nmo, 0, nmo)
-        ao2mo.outcore._transpose_to_h5g(fswap, 'o/%d'%istep, buf2, iobuflen)
-        buf1 = buf2 = None
-    time1 = log.timer_debug1('_rdm2_mo2ao pass 1', *time1)
+    pool = numpy.empty(max(nvir_pair*nvir**2, nocc*nmo**3))
+    buf1 = pool[:nocc*nmo**3].reshape((nocc,nmo,nmo,nmo))
+    buf1[:,:nocc,:nocc,:nocc] = doooo
+    buf1[:,:nocc,:nocc,nocc:] = dooov
+    buf1[:,:nocc,nocc:,:nocc] = 0
+    buf1[:,:nocc,nocc:,nocc:] = doovv
+    buf1[:,nocc:,:nocc,:nocc] = 0
+    buf1[:,nocc:,:nocc,nocc:] = dovov
+    buf1[:,nocc:,nocc:,:nocc] = dovvo
+    buf1[:,nocc:,nocc:,nocc:] = dovvv
+    for i in range(nocc):
+        buf1[i,i,:,:] += dm1
+        buf1[i,:,:,i] -= dm1 * .5
+    bufop = numpy.empty((nocc*nmo,nao_pair))
+    _trans(buf1.reshape(-1,nmo**2), 0, nmo, 0, nmo, bufop)
+    buf1 = pool[:nvir_pair*nvir**2].reshape((nvir_pair,nvir,nvir))
+    p0 = 0
+    for i in range(nvir):
+        buf1[p0:p0+i+1]  = dvvvv[i,:i+1]
+        buf1[p0:p0+i+1] += dvvvv[:i+1,i]
+        buf1[p0:p0+i+1] *= .5
+        p0 += i + 1
+    bufvv = numpy.empty((nvir_pair,nao_pair))
+    _trans(buf1, nocc, nvir, nocc, nvir, bufvv)
+    buf1 = buf0 = None
 
-    fswap.create_group('v')  # for h5py old version
-    if isinstance(dvvvv, numpy.ndarray):
-        iobuflen = int(256e6/8/(nvir**2))
-        log.debug1('_rdm2_mo2ao pass 2: blksize = %d, iobuflen = %d', nvir, iobuflen)
-        buf1 = dvvvv + dvvvv.transpose(1,0,2,3)
-        buf1 = buf1[numpy.tril_indices(nvir)].reshape(-1,nvir*nvir) * .5
-        buf1 = _trans(buf1, nocc, nvir, nocc, nvir)
-        ao2mo.outcore._transpose_to_h5g(fswap, 'v/0', buf1, iobuflen)
-    else:
-        blksize = dvvvv['0'].shape[1]
-        iobuflen = int(256e6/8/(nvir**2))
-        log.debug1('_rdm2_mo2ao pass 2: blksize = %d, iobuflen = %d', nvir, iobuflen)
-        for istep, (p0, p1) in enumerate(ccsd.prange(0, nvir, blksize)):
-            buf1 = numpy.empty((p1-p0,p1,nvir,nvir))
-            for k, (j0, j1) in enumerate(ccsd.prange(0, p1, blksize)):
-                tmp = ccsd._cp(dvvvv['%d'%k][p0:p1])
-                buf1[:,j0:j1] = tmp.reshape(p1-p0,-1,nvir,nvir)
-                tmp = None
-            buf2 = ccsd._cp(dvvvv['%d'%istep][:p1]).transpose(1,0,2,3)
-            buf3 = buf1.reshape(-1,nvir,nvir)[:p1*(p1+1)//2-p0*(p0+1)//2]
-            j0 = 0
-            for i in range(p1-p0):
-                di = p0 + i + 1
-                buf3[j0:j0+di] = buf1[i,:di] + buf2[i,:di]
-                buf3[j0:j0+di] *= .5
-                j0 = j0 + di
-            buf1 = buf2 = None
-            buf3 = _trans(buf3.reshape(-1,nvir*nvir), nocc, nvir, nocc, nvir)
-            ao2mo.outcore._transpose_to_h5g(fswap, 'v/%d'%istep, buf3, iobuflen)
-            buf3 = None
-    time1 = log.timer_debug1('_rdm2_mo2ao pass 2', *time1)
+    # trans ij of d_ijkl
+    bufaa = numpy.empty((nao_pair,nao_pair))
+    tmpbuf1 = numpy.empty((BLKSIZE,nmo,nmo))
+    tmpbuf2 = numpy.empty((BLKSIZE,nvir_pair))
+    tmpbuf3 = numpy.empty((BLKSIZE,nvir,nvir))
+    tmpbuf1[:,nocc:,:nocc] = 0
+    for i0, i1 in ccsd.prange(0, nao_pair, BLKSIZE):
+        buf1 = tmpbuf1[:i1-i0].reshape(i1-i0,-1)
+        for j0, j1 in ccsd.prange(0, nocc*nmo, BLKSIZE):
+            buf1[:,j0:j1] = bufop[j0:j1,i0:i1].T
+        buf1 = tmpbuf1[:i1-i0]
+        tmp  = tmpbuf2[:i1-i0]
+        for j0, j1 in ccsd.prange(0, nvir_pair, BLKSIZE):
+            tmp[:,j0:j1] = bufvv[j0:j1,i0:i1].T
+        tmp1 = tmpbuf3[:i1-i0]
+        ccsd.unpack_tril(tmp, out=tmp1)
+        buf1[:,nocc:,nocc:] = tmp1
+        _trans(buf1, 0, nmo, 0, nmo, bufaa[i0:i1])
+# dm2 + dm2.transpose(2,3,0,1)
+        for j0, j1, in ccsd.prange(0, i0, BLKSIZE):
+            bufaa[i0:i1,j0:j1] += bufaa[j0:j1,i0:i1].T
+            bufaa[j0:j1,i0:i1] = bufaa[i0:i1,j0:j1].T
+        bufaa[i0:i1,i0:i1] = bufaa[i0:i1,i0:i1] + bufaa[i0:i1,i0:i1].T
+    tmpbuf1 = tmpbuf2 = tmpbuf3 = bufop = bufvv = pool = None
 
-    max_memory1 = max_memory - lib.current_memory()[0]
-    blksize = max(nmo, int(max_memory*1e6/8/(nao_pair+nmo**2)))
-    iobuflen = int(256e6/8/blksize)
-    log.debug1('_rdm2_mo2ao pass 3: blksize = %d, iobuflen = %d', blksize, iobuflen)
-    fswap.create_group('pass2')  # for h5py old version
-    for istep, (p0, p1) in enumerate(ccsd.prange(0, nao_pair, blksize)):
-        buf1 = numpy.empty((p1-p0,nmo,nmo))
-        ao2mo.outcore._load_from_h5g(fswap['o'], p0, p1,
-                                     buf1[:,:nocc].reshape(p1-p0,-1))
-        buf2 = numpy.empty((p1-p0,nvir*(nvir+1)//2))
-        ao2mo.outcore._load_from_h5g(fswap['v'], p0, p1, buf2)
-        buf1[:,nocc:,nocc:] = ccsd.unpack_tril(buf2).reshape(-1,nvir,nvir)
-        buf1[:,nocc:,:nocc] = 0
-        buf2 = None
-        buf2 = _trans(buf1, 0, nmo, 0, nmo)
-        ao2mo.outcore._transpose_to_h5g(fswap, 'pass2/%d'%istep, buf2, iobuflen)
-        buf1 = buf2 = None
-    time1 = log.timer_debug1('_rdm2_mo2ao pass 3', *time1)
-    del(fswap['o'])
-    del(fswap['v'])
-
-    # dm2 + dm2.transpose(2,3,0,1)
     idx = numpy.arange(nao)
     idx = idx*(idx+1)//2 + idx
-    fsave.create_dataset('dm2', (nao_pair,nao_pair), 'f8')
-    for istep, (p0, p1) in enumerate(ccsd.prange(0, nao_pair, blksize)):
-        buf1 = numpy.empty(((p1-p0),nao_pair))
-        ao2mo.outcore._load_from_h5g(fswap['pass2'], p0, p1, buf1)
-        buf2 = ccsd._cp(fswap['pass2/%d'%istep])
-        for i0, i1 in ccsd.prange(0, p1-p0, BLKSIZE):
-            for j0, j1 in ccsd.prange(0, nao_pair, BLKSIZE):
-                buf1[i0:i1,j0:j1] += buf2[j0:j1,i0:i1].T
-        buf1[:,idx] *= .5
-        fsave['dm2'][p0:p1] = buf1
-        buf1 = buf2 = None
-    time1 = log.timer_debug1('_rdm2_mo2ao pass 4', *time1)
-    del(fswap['pass2'])
-    fswap.close()
-    _tmpfile = None
-    time1 = log.timer_debug1('_rdm2_mo2ao cleanup', *time1)
+    bufaa[:,idx] *= .5
 
-#
-# .
-# . .
-# ----+             -----------
-# ----|-+       =>  -----------
-# . . | | .
-# . . | | . .
-#
+    return bufaa
+
 def _load_block_tril(dat, row0, row1, out=None):
     shape = dat.shape
     nd = int(numpy.sqrt(shape[0]*2))
@@ -649,8 +540,8 @@ if __name__ == '__main__':
     print(numpy.einsum('ab,ab', h1[nocc:,nocc:], Ivv) - 6873038.9907923322)
     print(numpy.einsum('ai,ai', h1[nocc:,:nocc], Ivo) - 4353360.4241635408)
     print(numpy.einsum('ai,ai', h1[nocc:,:nocc], Xvo) - 203575.42337558540)
-    dm1 = response_dm1(mycc, t1, t2, l1, l2, eris)
-    print(numpy.einsum('pq,pq', h1[nocc:,:nocc], dm1[nocc:,:nocc])--486.638981725713393)
+    #dm1 = response_dm1(mycc, t1, t2, l1, l2, eris)
+    #print(numpy.einsum('pq,pq', h1[nocc:,:nocc], dm1[nocc:,:nocc])--486.638981725713393)
 
     print('-----------------------------------')
     mol = gto.M(

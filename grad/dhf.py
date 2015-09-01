@@ -32,7 +32,7 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     vhf = grad_mf.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    f1 = h1 - vhf
+    f1 = h1 + vhf
     dme0 = grad_mf.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
 
     if atmlst is None:
@@ -130,7 +130,7 @@ def get_coulomb_hf(mol, dm, level='SSSS'):
     else:
         logger.info(mol, 'Compute Gradients: (LL|LL) + (SS|LL) + (SS|SS)')
         vj, vk = _call_vhf1(mol, dm)
-    return vj - vk
+    return -(vj - vk)
 
 
 class UHF(hf.RHF):

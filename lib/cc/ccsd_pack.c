@@ -4,25 +4,54 @@
 
 #include <string.h>
 #include <assert.h>
+//#include <omp.h>
+#include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
 
 void CCunpack_tril(int count, int n, double *tril, double *mat)
 {
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat)
+{
         int ic, i, j, ij;
-        double *pmat;
-
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+        double *pmat, *ptril;
+#pragma omp for
         for (ic = 0; ic < count; ic++) {
+                ptril = tril + n2 * ic;
+                pmat = mat + nn * ic;
                 for (ij = 0, i = 0; i < n; i++) {
-                        pmat = mat + i * n;
                         for (j = 0; j <= i; j++, ij++) {
-                                pmat[j] = tril[ij];
+                                pmat[i*n+j] = ptril[ij];
+                                pmat[j*n+i] = ptril[ij];
                         }
                 }
-                NPdsymm_triu(n, mat, 1);
-                tril += n * (n+1) / 2;
-                mat += n * n;
         }
+}
+}
+
+void CCpack_tril(int count, int n, double *tril, double *mat)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat)
+{
+        int ic, i, j, ij;
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+        double *pmat, *ptril;
+#pragma omp for
+        for (ic = 0; ic < count; ic++) {
+                ptril = tril + n2 * ic;
+                pmat = mat + nn * ic;
+                for (ij = 0, i = 0; i < n; i++) {
+                        for (j = 0; j <= i; j++, ij++) {
+                                ptril[ij] = pmat[i*n+j];
+                        }
+                }
+        }
+}
 }
 
 /*

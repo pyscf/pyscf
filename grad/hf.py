@@ -30,7 +30,7 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     vhf = grad_mf.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    f1 = h1 - vhf
+    f1 = h1 + vhf
     dme0 = grad_mf.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
 
     if atmlst is None:
@@ -83,7 +83,7 @@ def get_coulomb_hf(mol, dm):
                                ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
-    return vj - vk*.5
+    return -(vj - vk*.5)
 
 def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''

@@ -19,7 +19,7 @@ BLKMIN = 4
 
 # default max_memory = 2000 MB
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
+           verbose=logger.INFO):
     cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -45,7 +45,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
     conv = False
     for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
+        t1new, t2new = cc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
@@ -61,7 +61,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     return conv, eccsd, t1, t2
 
 
-def update_amps(cc, t1, t2, eris, max_memory=2000):
+def update_amps(cc, t1, t2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nocc, nvir = t1.shape
@@ -89,221 +89,175 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     woooo = lib.transpose_sum(woooo.reshape(nocc*nocc,-1), inplace=True)
     woooo += _cp(eris.oooo).reshape(nocc**2,-1)
     woooo = _cp(woooo.reshape(nocc,nocc,nocc,nocc).transpose(0,2,1,3))
-    eris_ooov = None
     time1 = log.timer_debug1('woooo', *time0)
 
-    unit = _memory_usage_inloop(nocc, nvir)*1e6/8
-    max_memory = max_memory - lib.current_memory()[0]
-    blksize = max(BLKMIN, int(max_memory*.95e6/8/unit))
-    log.debug1('block size = %d, nocc = %d is divided into %d blocks',
-               blksize, nocc, int((nocc+blksize-1)//blksize))
+    eris_ovvv = _cp(eris.ovvv)
+    eris_ovvv = unpack_tril(eris_ovvv.reshape(nov,-1))
+    eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
 
-    for p0, p1 in prange(0, nocc, blksize):
-# ==== read eris.ovvv ====
-        eris_ovvv = _cp(eris.ovvv[p0:p1])
-        eris_ovvv = unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
-        eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
+    fvv += numpy.einsum('kc,kcba->ab', 2*t1, eris_ovvv)
+    fvv += numpy.einsum('kc,kbca->ab',  -t1, eris_ovvv)
 
-        fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1], eris_ovvv)
-        fvv += numpy.einsum('kc,kbca->ab',  -t1[p0:p1], eris_ovvv)
+    #: woVoV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov)
+    #: woVoV -= numpy.einsum('jc,icab->ijab', t1, eris_ovvv)
+    woVoV = lib.dot(_cp(eris_ooov.transpose(0,1,3,2).reshape(-1,nocc)), t1)
+    woVoV = woVoV.reshape(nocc,nocc,nvir,nvir)
 
-    #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-    #: tmp = numpy.einsum('ijcd,kdcb->ijbk', tau, eris.ovvv)
-    #: t2new += numpy.einsum('ka,ijbk->ijba', -t1, tmp)
-        #: eris_vvov = eris_ovvv.transpose(1,2,0,3).copy()
-        eris_vvov = _cp(eris_ovvv.transpose(2,1,0,3).reshape(nvir*nvir,-1))
-        tmp = numpy.empty((nocc,nocc,p1-p0,nvir))
-        taubuf = numpy.empty((blksize,nocc,nvir,nvir))
-        for j0, j1 in prange(0, nocc, blksize):
-            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
-            lib.dot(tau.reshape(-1,nvir*nvir), eris_vvov, 1,
-                    tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
-        tmp = _cp(tmp.transpose(0,1,3,2).reshape(-1,p1-p0))
-        lib.dot(tmp, t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
-        tau = tmp = eris_vvov = None
-        #==== mem usage blksize*(nvir**3*2+nvir*nocc**2*2)
+#: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+#: tmp = numpy.einsum('ijcd,kcdb->kijb', tau, eris.ovvv)
+#: t2new += numpy.einsum('ka,kijb->jiba', -t1, tmp)
+    tau = make_tau(t2, t1, t1)
+    tmp = numpy.empty((nocc,nocc,nocc,nvir))
+    for k in range(nocc):
+        tmp[k] = lib.dot(tau.reshape(-1,nvir**2),
+                         eris_ovvv[k].reshape(-1,nvir)).reshape(nocc,nocc,nvir).transpose(1,0,2)
+        lib.dot(t1, eris_ovvv[k].reshape(nvir,-1), -1, woVoV[k].reshape(nocc,-1), 1)
+    lib.dot(tmp.reshape(nocc,-1).T, t1, -1, t2new.reshape(-1,nvir), 1)
+    tmp = None
 
-    #: wOVov += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
-    #: wOVov -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
-    #: t2new += woVoV.transpose()
-        #: wOVov = -numpy.einsum('jbik,ka->ijba', eris.ovoo[p0:p1], t1)
-        tmp = _cp(eris.ovoo[p0:p1].transpose(2,0,1,3))
-        wOVov = lib.dot(tmp.reshape(-1,nocc), t1, -1)
-        tmp = None
-        wOVov = wOVov.reshape(nocc,p1-p0,nvir,nvir)
-        #: wOVov += numpy.einsum('iabc,jc->jiab', eris_ovvv, t1)
-        lib.dot(t1, eris_ovvv.reshape(-1,nvir).T, 1, wOVov.reshape(nocc,-1), 1)
-        t2new[p0:p1] += wOVov.transpose(1,0,2,3)
+#: wOVov += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
+#: wOVov -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
+#: t2new += woVoV.transpose()
+    #: wOVov = -numpy.einsum('jbik,ka->ijba', eris.ovoo, t1)
+    wOVov, tau = tau, None
+    lib.dot(_cp(_cp(eris.ooov).transpose(0,2,3,1).reshape(-1,nocc)), t1,
+            -1, wOVov.reshape(-1,nvir))
+    #: wOVov += numpy.einsum('iabc,jc->jiab', eris_ovvv, t1)
+    lib.dot(t1, eris_ovvv.reshape(-1,nvir).T, 1, wOVov.reshape(nocc,-1), 1)
+    for i in range(nocc):
+        t2new[i] += wOVov[i].transpose(0,2,1)
 
-        eris_ooov = _cp(eris.ooov[p0:p1])
-        #: woVoV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
-        #: woVoV -= numpy.einsum('jc,icab->ijab', t1, eris_ovvv)
-        woVoV = lib.dot(_cp(eris_ooov.transpose(0,1,3,2).reshape(-1,nocc)), t1)
-        woVoV = woVoV.reshape(p1-p0,nocc,nvir,nvir)
-        for i in range(eris_ovvv.shape[0]):
-            lib.dot(t1, eris_ovvv[i].reshape(nvir,-1), -1,
-                    woVoV[i].reshape(nocc,-1), 1)
+#: theta = t2.transpose(0,1,3,2) * 2 - t2
+#: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
+    theta = numpy.empty((nocc,nocc,nvir,nvir))
+    for i in range(nocc):
+        theta[i] = t2[i].transpose(0,2,1) * 2
+        theta[i] -= t2[i]
+        lib.dot(_cp(theta[i].transpose(0,2,1).reshape(nocc,-1)),
+                eris_ovvv[i].reshape(-1,nvir), 1, t1new, 1)
+    eris_ovvv = None
 
-    #: theta = t2.transpose(0,1,3,2) * 2 - t2
-    #: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
-        theta = numpy.empty((p1-p0,nocc,nvir,nvir))
-        for i in range(p1-p0):
-            theta[i] = t2[p0+i].transpose(0,2,1) * 2
-            theta[i] -= t2[p0+i]
-            lib.dot(_cp(theta[i].transpose(0,2,1).reshape(nocc,-1)),
-                    eris_ovvv[i].reshape(-1,nvir), 1, t1new, 1)
-        eris_ovvv = None
-        time2 = log.timer_debug1('ovvv [%d:%d]'%(p0, p1), *time1)
-        #==== mem usage blksize*(nvir**3+nocc*nvir**2*4)
+    eris_ovov = _cp(eris.ovov)
 
-# ==== read eris.ovov ====
-        eris_ovov = _cp(eris.ovov[p0:p1])
-        #==== mem usage blksize*(nocc*nvir**2*4)
+    for i in range(nocc):
+        t2new[i] += eris_ovov[i].transpose(1,0,2) * .5
 
-        for i in range(p1-p0):
-            t2new[p0+i] += eris_ovov[i].transpose(1,0,2) * .5
+    fov += numpy.einsum('kc,iakc->ia', t1, eris_ovov) * 2
+    fov -= numpy.einsum('kc,icka->ia', t1, eris_ovov)
 
-        fov[p0:p1] += numpy.einsum('kc,iakc->ia', t1, eris_ovov) * 2
-        fov[p0:p1] -= numpy.einsum('kc,icka->ia', t1, eris_ovov)
+#: theta = t2.transpose(1,0,2,3) * 2 - t2
+#: t1new += numpy.einsum('jb,ijab->ia', fov, theta)
+#: t1new -= numpy.einsum('ikjb,kjab->ia', eris.ooov, theta)
+    t1new += numpy.einsum('jb,jiab->ia', fov, theta)
+    #: t1new -= numpy.einsum('kijb,kjab->ia', eris.ooov, theta)
+    lib.dot(_cp(eris_ooov.transpose(1,0,2,3).reshape(nocc,-1)),
+            theta.reshape(-1,nvir), -1, t1new, 1)
+    eris_ooov = None
 
-    #: theta = t2.transpose(1,0,2,3) * 2 - t2
-    #: t1new += numpy.einsum('jb,ijba->ia', fov, theta)
-    #: t1new -= numpy.einsum('kijb,kjba->ia', eris_ooov, theta)
-        t1new += numpy.einsum('jb,jiab->ia', fov[p0:p1], theta)
-        #: t1new -= numpy.einsum('kijb,kjab->ia', eris.ooov[p0:p1], theta)
-        lib.dot(_cp(eris_ooov.transpose(1,0,2,3).reshape(nocc,-1)),
-                theta.reshape(-1,nvir), -1, t1new, 1)
-        eris_ooov = None
+#: wOVov += eris.ovov.transpose(0,1,3,2)
+#: theta = t2.transpose(1,0,2,3) * 2 - t2
+#: tau = theta - numpy.einsum('ic,kb->ikcb', t1, t1*2)
+#: wOVov += .5 * numpy.einsum('jakc,ikcb->jiba', eris.ovov, tau)
+#: wOVov -= .5 * numpy.einsum('jcka,ikcb->jiba', eris.ovov, t2)
+#: t2new += numpy.einsum('ikca,kjbc->ijba', theta, wOVov)
+    wOVov = _cp(wOVov.transpose(0,3,1,2))
+    eris_OVov = lib.transpose(eris_ovov.reshape(-1,nov)).reshape(nocc,nvir,-1,nvir)
+    eris_OvoV = _cp(eris_OVov.transpose(0,3,2,1))
+    wOVov += eris_OVov
+    t2iajb = t2.transpose(0,2,1,3).copy()
+    #: wOVov[j0:j1] -= .5 * numpy.einsum('iakc,jkbc->jbai', eris_ovov, t2)
+    lib.dot(t2iajb.reshape(-1,nov), eris_OvoV.reshape(nov,-1),
+            -.5, wOVov.reshape(nov,-1), 1)
+    tau, t2iajb = t2iajb, None
+    for i in range(nocc):
+        tau[i] = tau[i]*2 - t2[i].transpose(2,0,1)
+        tau[i] -= numpy.einsum('a,jb->bja', t1[i]*2, t1)
+    #: wOVov += .5 * numpy.einsum('iakc,jbkc->jbai', eris_ovov, tau)
+    lib.dot(tau.reshape(-1,nov), eris_OVov.reshape(nov,-1),
+            .5, wOVov.reshape(nov,-1), 1)
 
-    #: wOVov += eris.ovov.transpose(0,1,3,2)
-    #: theta = t2.transpose(1,0,2,3) * 2 - t2
-    #: tau = theta - numpy.einsum('ic,kb->ikcb', t1, t1*2)
-    #: wOVov += .5 * numpy.einsum('jakc,ikcb->jiba', eris.ovov, tau)
-    #: wOVov -= .5 * numpy.einsum('jcka,ikcb->jiba', eris.ovov, t2)
-    #: t2new += numpy.einsum('ikca,kjbc->ijba', theta, wOVov)
-        theta = _cp(theta.transpose(0,3,1,2))
-        wOVov = _cp(wOVov.transpose(0,3,1,2))
-        eris_OVov = lib.transpose(eris_ovov.reshape(-1,nov)).reshape(nocc,nvir,-1,nvir)
-        eris_OvoV = _cp(eris_OVov.transpose(0,3,2,1))
-        wOVov += eris_OVov
-        for j0, j1 in prange(0, nocc, blksize):
-            t2iajb = t2[j0:j1].transpose(0,2,1,3).copy()
-            #: wOVov[j0:j1] -= .5 * numpy.einsum('iack,jkbc->jbai', eris_ovov, t2)
-            lib.dot(t2iajb.reshape(-1,nov), eris_OvoV.reshape(nov,-1),
-                    -.5, wOVov[j0:j1].reshape((j1-j0)*nvir,-1), 1)
-            tau, t2iajb = t2iajb, None
-            for i in range(j1-j0):
-                tau[i] *= 2
-                tau[i] -= t2[j0+i].transpose(2,0,1)
-                tau[i] -= numpy.einsum('a,jb->bja', t1[j0+i]*2, t1)
-            #: wOVov[j0:j1] += .5 * numpy.einsum('iakc,jbkc->jbai', eris_ovov, tau)
-            lib.dot(tau.reshape(-1,nov), eris_OVov.reshape(nov,-1),
-                    .5, wOVov[j0:j1].reshape((j1-j0)*nvir,-1), 1)
+    #theta = t2 * 2 - t2.transpose(0,1,3,2)
+    #: t2new[j0:j1] += numpy.einsum('iack,jbck->jiba', theta, wOVov[j0:j1])
+    tmp, tau = tau, None
+    theta = _cp(theta.transpose(0,3,1,2).reshape(nov,-1))
+    lib.dot(wOVov.reshape(nov,-1), theta.T, 1, tmp.reshape(nov,-1))
+    for i in range(nocc):
+        t2new[i] += tmp[i].transpose(1,0,2)
+    tmp = wOVov = eris_OvoV = eris_OVov = None
 
-            #theta = t2[p0:p1] * 2 - t2[p0:p1].transpose(0,1,3,2)
-            #: t2new[j0:j1] += numpy.einsum('iack,jbck->jiba', theta, wOVov[j0:j1])
-            tmp, tau = tau, None
-            lib.dot(wOVov[j0:j1].reshape((j1-j0)*nvir,-1), theta.reshape(-1,nov),
-                    1, tmp.reshape(-1,nov))
-            for i in range(j1-j0):
-                t2new[j0+i] += tmp[i].transpose(1,0,2)
-            tmp = None
-            #==== mem usage blksize*(nocc*nvir**2*8)
-        theta = wOVov = eris_OvoV = eris_OVov = None
-        time2 = log.timer_debug1('wOVov [%d:%d]'%(p0, p1), *time2)
-        #==== mem usage blksize*(nocc*nvir**2*2)
+#: fvv -= numpy.einsum('ijca,ibjc->ab', theta, eris.ovov)
+#: foo += numpy.einsum('iakb,jkba->ij', eris.ovov, theta)
+    for i in range(nocc):
+        tau = numpy.einsum('a,jb->jab', t1[i]*.5, t1) + t2[i]
+        theta = tau.transpose(0,2,1)*2 - tau
+        lib.dot(_cp(eris_ovov[i].transpose(1,2,0)).reshape(nocc,-1),
+                theta.reshape(nocc,-1).T, 1, foo, 1)
+        lib.dot(theta.reshape(-1,nvir).T,
+                eris_ovov[i].reshape(nvir,-1).T, -1, fvv, 1)
+    tau = theta = None
 
-    #: fvv -= numpy.einsum('ijca,ibjc->ab', theta, eris.ovov)
-    #: foo += numpy.einsum('iakb,jkba->ij', eris.ovov, theta)
-        for i in range(p1-p0):
-            tau = numpy.einsum('a,jb->jab', t1[p0+i]*.5, t1)
-            tau += t2[p0+i]
-            theta = tau.transpose(0,2,1) * 2
-            theta -= tau
-            lib.dot(_cp(eris_ovov[i].transpose(1,2,0)).reshape(nocc,-1),
-                    theta.reshape(nocc,-1).T, 1, foo, 1)
-            lib.dot(theta.reshape(-1,nvir).T,
-                    eris_ovov[i].reshape(nvir,-1).T, -1, fvv, 1)
-        tau = theta = None
+    eris_oovv = _cp(eris.oovv)
+    #:tmp = numpy.einsum('ic,jkbc->jibk', t1, eris_oovv)
+    #:t2new += numpy.einsum('ka,jibk->jiab', -t1, tmp)
+    #:tmp = numpy.einsum('ic,jbkc->jibk', t1, eris_ovov)
+    #:t2new += numpy.einsum('ka,jibk->jiba', -t1, tmp)
+    for j in range(nocc):
+        tmp = lib.dot(t1, eris_oovv[j].reshape(-1,nvir).T)
+        tmp = _cp(tmp.reshape(nocc,nocc,nvir).transpose(0,2,1))
+        t2new[j] += lib.dot(tmp.reshape(-1,nocc), t1,
+                            -1).reshape(nocc,nvir,nvir).transpose(0,2,1)
+        lib.dot(t1, eris_ovov[j].reshape(-1,nvir).T, 1, tmp.reshape(nocc,-1))
+        lib.dot(tmp.reshape(-1,nocc), t1, -1, t2new[j].reshape(-1,nvir), 1)
+    tmp = None
 
-# ==== read eris.oovv ====
-        eris_oovv = _cp(eris.oovv[p0:p1])
-        #==== mem usage blksize*(nocc*nvir**2*3)
+#: g2 = 2 * eris.oOVv - eris.oovv
+#: t1new += numpy.einsum('jb,ijba->ia', t1, g2)
+    t1new += numpy.einsum('jb,iajb->ia', 2*t1, eris_ovov)
+    t1new += numpy.einsum('jb,ijba->ia',  -t1, eris_oovv)
 
-        #:tmp = numpy.einsum('ic,jkbc->jibk', t1, eris_oovv)
-        #:t2new[p0:p1] += numpy.einsum('ka,jibk->jiab', -t1, tmp)
-        #:tmp = numpy.einsum('ic,jbkc->jibk', t1, eris_ovov)
-        #:t2new[p0:p1] += numpy.einsum('ka,jibk->jiba', -t1, tmp)
-        for j in range(p1-p0):
-            tmp = lib.dot(t1, eris_oovv[j].reshape(-1,nvir).T)
-            tmp = _cp(tmp.reshape(nocc,nocc,nvir).transpose(0,2,1))
-            t2new[p0+j] += lib.dot(tmp.reshape(-1,nocc), t1,
-                                   -1).reshape(nocc,nvir,nvir).transpose(0,2,1)
-            lib.dot(t1, eris_ovov[j].reshape(-1,nvir).T, 1, tmp.reshape(nocc,-1))
-            lib.dot(tmp.reshape(-1,nocc), t1, -1, t2new[p0+j].reshape(-1,nvir), 1)
-        tmp = None
+#: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+#: woooo += numpy.einsum('ijba,klab->ijkl', eris.oOVv, tau)
+#: woVoV -= eris.oovv
+#: tau = .5*t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+#: woVoV += numpy.einsum('ka,ijkb->ijab', t1, eris.ooov)
+#: woVoV += numpy.einsum('jkca,ikbc->ijab', tau, eris.oOVv)
+    woVoV -= eris_oovv
+    woVoV = woVoV.transpose(1,3,0,2).copy()
+    eris_oVOv = _cp(eris_ovov.transpose(0,3,2,1))
+    eris_oOvV = _cp(eris_ovov.transpose(0,2,1,3))
 
-    #: g2 = 2 * eris.oOVv - eris.oovv
-    #: t1new += numpy.einsum('jb,ijba->ia', t1, g2)
-        t1new[p0:p1] += numpy.einsum('jb,iajb->ia', 2*t1, eris_ovov)
-        t1new[p0:p1] += numpy.einsum('jb,ijba->ia',  -t1, eris_oovv)
+    tau = make_tau(t2, t1, t1)
+    #: woooo += numpy.einsum('ijab,klab->ijkl', eris_oOvV, tau)
+    lib.dot(eris_oOvV.reshape(-1,nvir**2), tau.reshape(-1,nvir**2).T,
+            1, woooo.reshape(nocc**2,-1), 1)
+    #: t2new += .5 * numpy.einsum('klij,klab->ijab', woooo, tau)
+    lib.dot(woooo.reshape(-1,nocc*nocc).T, tau.reshape(-1,nvir*nvir),
+            .5, t2new.reshape(nocc*nocc,-1), 1)
+    for i in range(nocc):
+        tau[i] -= t2[i] * .5
+    #: woVoV[j0:j1] += numpy.einsum('jkca,ickb->jiab', tau, eris_ovov)
+    tau = _cp(tau.transpose(0,3,1,2))
+    lib.dot(tau.reshape(-1,nov), eris_oVOv.reshape(-1,nov).T,
+            1, woVoV.reshape(nov,-1), 1)
+    eris_oovv = eris_ovov = eris_oOvV = taubuf = None
 
-    #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-    #: woooo += numpy.einsum('ijba,klab->ijkl', eris.oOVv, tau)
-    #: woVoV -= eris.oovv
-    #: tau = .5*t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-    #: woVoV += numpy.einsum('ka,ijkb->ijab', t1, eris.ooov)
-    #: woVoV += numpy.einsum('jkca,ikbc->ijab', tau, eris.oOVv)
-        woVoV -= eris_oovv
-        woVoV = woVoV.transpose(1,3,0,2).copy()
-        eris_oVOv = _cp(eris_ovov.transpose(0,3,2,1))
-        eris_oOvV = _cp(eris_ovov.transpose(0,2,1,3))
-        #==== mem usage blksize*(nocc*nvir**2*4)
+    tmp, tau = tau, None
+    t2ibja, eris_oVOv = eris_oVOv, None
+    for i in range(nocc):
+        t2ibja[i] = t2[i].transpose(2,0,1)
+    #: t2new += numpy.einsum('ibkc,kcja->ijab', woVoV, t2ibja)
+    lib.dot(woVoV.reshape(nov,-1), t2ibja.reshape(-1,nov), 1, tmp.reshape(nov,-1))
+    for i in range(nocc):
+        t2new[i] += tmp[i].transpose(1,2,0)
 
-        taubuf = numpy.empty((blksize,nocc,nvir,nvir))
-        for j0, j1 in prange(0, nocc, blksize):
-            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
-            #: woooo[p0:p1,:,j0:j1] += numpy.einsum('ijab,klab->ijkl', eris_oOvV, tau)
-            lib.numpy_helper._dgemm('N', 'T', (p1-p0)*nocc, (j1-j0)*nocc, nvir*nvir,
-                                    eris_oOvV.reshape(-1,nvir*nvir),
-                                    tau.reshape(-1,nvir*nvir),
-                                    woooo[p0:p1].reshape(-1,nocc*nocc), 1, 1,
-                                    0, 0, j0*nocc)
-            for i in range(j1-j0):
-                tau[i] -= t2[j0+i] * .5
-            #: woVoV[j0:j1] += numpy.einsum('jkca,ickb->jiab', tau, eris_ovov)
-            lib.dot(_cp(tau.transpose(0,3,1,2).reshape(-1,nov)),
-                    eris_oVOv.reshape(-1,nov).T,
-                    1, woVoV[j0:j1].reshape((j1-j0)*nvir,-1), 1)
-            #==== mem usage blksize*(nocc*nvir**2*6)
-        time2 = log.timer_debug1('woVoV [%d:%d]'%(p0, p1), *time2)
-
-        tau = make_tau(t2[p0:p1], t1[p0:p1], t1, 1, out=taubuf[:p1-p0])
-        #: t2new += .5 * numpy.einsum('klij,klab->ijab', woooo[p0:p1], tau)
-        lib.dot(woooo[p0:p1].reshape(-1,nocc*nocc).T, tau.reshape(-1,nvir*nvir),
-                .5, t2new.reshape(nocc*nocc,-1), 1)
-        eris_oovv = eris_ovov = eris_oVOv = eris_oOvV = taubuf = tau = None
-        #==== mem usage blksize*(nocc*nvir**2*1)
-
-        t2iajb = _cp(t2[p0:p1].transpose(0,2,1,3))
-        t2ibja = _cp(t2[p0:p1].transpose(0,3,1,2))
-        tmp = numpy.empty((blksize,nvir,nocc,nvir))
-        for j0, j1 in prange(0, nocc, blksize):
-            #: t2new[j0:j1] += numpy.einsum('ibkc,kcja->ijab', woVoV[j0:j1], t2ibja)
-            lib.dot(woVoV[j0:j1].reshape((j1-j0)*nvir,-1),
-                    t2ibja.reshape(-1,nov), 1, tmp[:j1-j0].reshape(-1,nov))
-            for i in range(j1-j0):
-                t2new[j0+i] += tmp[i].transpose(1,2,0)
-
-            #: t2new[j0:j1] += numpy.einsum('iakc,kcjb->ijab', woVoV[j0:j1], t2iajb)
-            lib.dot(woVoV[j0:j1].reshape((j1-j0)*nvir,-1),
-                    t2iajb.reshape(-1,nov), 1, tmp[:j1-j0].reshape(-1,nov))
-            for i in range(j1-j0):
-                t2new[j0+i] += tmp[i].transpose(1,0,2)
-        t2ibja = t2iajb = woVoV = tmp = None
-        #==== mem usage blksize*(nocc*nvir**2*3)
-        time1 = log.timer_debug1('contract occ [%d:%d]'%(p0, p1), *time1)
-# ==================
+    #: t2new[j0:j1] += numpy.einsum('iakc,kcjb->ijab', woVoV[j0:j1], t2iajb)
+    t2iajb = t2ibja
+    for i in range(nocc):
+        t2iajb[i] = t2[i].transpose(1,0,2)
+    lib.dot(woVoV.reshape(nov,-1), t2iajb.reshape(-1,nov), 1, tmp.reshape(nov,-1))
+    for i in range(nocc):
+        t2new[i] += tmp[i].transpose(1,0,2)
+    t2ibja = t2iajb = woVoV = tmp = None
     time1 = log.timer_debug1('contract loop', *time0)
 
     woooo = None
@@ -324,7 +278,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             ij += 1
     t2new = None
     time1 = log.timer_debug1('t2 tril', *time1)
-    cc.add_wvvVV_(t1, t2, eris, t2new_tril, max_memory)
+    cc.add_wvvVV_(t1, t2, eris, t2new_tril)
     time1 = log.timer_debug1('vvvv', *time1)
 
     mo_e = fock.diagonal()
@@ -493,7 +447,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
                        tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory, verbose=self.verbose)
+                       verbose=self.verbose)
         if self._conv:
             logger.info(self, 'CCSD converged')
         else:
@@ -509,37 +463,36 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
                      eris=None):
-        from pyscf.cc import ccsd_lambda
+        from pyscf.cc import ccsd_lambda_incore
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if eris is None: eris = _ERIS(self, mo_coeff)
         conv, self.l1, self.l2 = \
-                ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                   max_cycle=self.max_cycle,
-                                   tol=self.conv_tol_normt,
-                                   max_memory=self.max_memory,
-                                   verbose=self.verbose)
+                ccsd_lambda_incore.kernel(self, eris, t1, t2, l1, l2,
+                                          max_cycle=self.max_cycle,
+                                          tol=self.conv_tol_normt,
+                                          verbose=self.verbose)
         return conv, self.l1, self.l2
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''1-particle density matrix in MO space'''
-        from pyscf.cc import ccsd_rdm
+        from pyscf.cc import ccsd_rdm_incore
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)[1:]
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
+        return ccsd_rdm_incore.make_rdm1(self, t1, t2, l1, l2)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space'''
-        from pyscf.cc import ccsd_rdm
+        from pyscf.cc import ccsd_rdm_incore
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)[1:]
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return ccsd_rdm_incore.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
         #nocc = self.nocc()
@@ -563,7 +516,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #return eris
         return _ERIS(self, mo_coeff)
 
-    def add_wvvVV_(self, t1, t2, eris, t2new_tril, max_memory=2000):
+    def add_wvvVV_(self, t1, t2, eris, t2new_tril):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -571,8 +524,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
         p0 = 0
         for i in range(nocc):
-            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-            tau[p0:p0+i+1] += t2[i,:i+1]
+            tau[p0:p0+i+1] = t2[i,:i+1] \
+                           + numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
             p0 += i + 1
         time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
@@ -595,13 +548,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             p0 += a+1
             time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
         return t2new_tril
-    def add_wvvVV(self, t1, t2, eris, max_memory=2000):
+    def add_wvvVV(self, t1, t2, eris):
         nocc, nvir = t1.shape
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-        return self.add_wvvVV_(t1, t2, eris, t2new_tril, max_memory)
+        return self.add_wvvVV_(t1, t2, eris, t2new_tril)
 
-    def update_amps(self, t1, t2, eris, max_memory=2000):
-        return update_amps(self, t1, t2, eris, max_memory)
+    def update_amps(self, t1, t2, eris):
+        return update_amps(self, t1, t2, eris)
 
     def diis(self, t1, t2, istep, normt, de, adiis):
         return self.diis_(t1, t2, istep, normt, de, adiis)
@@ -909,4 +862,33 @@ if __name__ == '__main__':
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
+
+
+    import ccsd_ijba_o2 as ccsd
+    numpy.random.seed(12)
+    nmo = len(rhf.mo_energy)
+    rhf._eri = pyscf.ao2mo.restore(8, numpy.random.random((nmo,)*4), nmo)
+    cc0 = ccsd.CCSD(rhf)
+    cc1 = CCSD(rhf)
+    eris0 = cc0.ao2mo()
+    eris1 = cc1.ao2mo()
+
+    emp2_0, t1_0, t2_0 = cc0.init_amps(eris0)
+    emp2_1, t1_1, t2_1 = cc1.init_amps(eris1)
+    print numpy.allclose(emp2_0, emp2_1)
+    print numpy.allclose(t2_0.transpose(0,1,3,2), t2_1)
+
+    nocc, nvir = t1_0.shape
+    t2 = numpy.random.random((nocc,nocc,nvir,nvir))
+    t1 = numpy.random.random((nocc,nvir))
+    t2 = t2 + t2.transpose(1,0,3,2)
+
+    t2new0 = cc0.add_wvvVV(t1, t2.transpose(0,1,3,2).copy(), eris0)
+    t2new1 = cc1.add_wvvVV(t1, t2, eris1)
+    print numpy.allclose(t2new0.transpose(0,2,1), t2new1)
+
+    t1new0, t2new0 = cc0.update_amps(t1, t2.transpose(0,1,3,2).copy(), eris0, blksize=2)
+    t1new1, t2new1 = cc1.update_amps(t1, t2, eris1)
+    print numpy.allclose(t1new0, t1new1)
+    print numpy.allclose(t2new0.transpose(0,1,3,2), t2new1)
 
