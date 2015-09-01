@@ -20,7 +20,6 @@ BLKMIN = 4
 # default max_memory = 2000 MB
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            verbose=logger.INFO):
-    cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -33,8 +32,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
 
+    cput1 = cput0 = (time.clock(), time.time())
     nocc, nvir = t1.shape
-    cput0 = log.timer('CCSD initialization', *cput0)
     eold = 0
     eccsd = 0
     if cc.diis:
@@ -54,10 +53,11 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         eold, eccsd = eccsd, energy(cc, t1, t2, eris)
         log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
-        cput0 = log.timer('CCSD iter', *cput0)
+        cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
             break
+    logger.timer(cc, 'CCSD', *cput0)
     return conv, eccsd, t1, t2
 
 
@@ -436,13 +436,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.emp2, t1, t2
 
 
-    def kernel(self, t1=None, t2=None, mo_coeff=None):
-        return self.ccsd(t1, t2, mo_coeff)
-    def ccsd(self, t1=None, t2=None, mo_coeff=None):
+    def kernel(self, t1=None, t2=None, mo_coeff=None, eris=None):
+        return self.ccsd(t1, t2, mo_coeff, eris)
+    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
         log = logger.Logger(self.stdout, self.verbose)
-        cput0 = (time.clock(), time.time())
-        eris = self.ao2mo(mo_coeff)
-        log.timer('CCSD integral transformation', *cput0)
+        if eris is None: eris = self.ao2mo(mo_coeff)
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
@@ -453,12 +451,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         else:
             logger.info(self, 'CCSD not converge')
         if self._scf.hf_energy == 0:
-            logger.info(self, 'E_corr = %.16g',
-                        self.ecc)
+            logger.info(self, 'E_corr = %.16g', self.ecc)
         else:
             logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
                         self.ecc+self._scf.hf_energy, self.ecc)
-        logger.timer(self, 'CCSD', *cput0)
         return self.ecc, self.t1, self.t2
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
@@ -466,7 +462,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import ccsd_lambda_incore
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = _ERIS(self, mo_coeff)
+        if eris is None: eris = self.ao2mo(mo_coeff)
         conv, self.l1, self.l2 = \
                 ccsd_lambda_incore.kernel(self, eris, t1, t2, l1, l2,
                                           max_cycle=self.max_cycle,
@@ -524,8 +520,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
         p0 = 0
         for i in range(nocc):
-            tau[p0:p0+i+1] = t2[i,:i+1] \
-                           + numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+            tau[p0:p0+i+1] += t2[i,:i+1]
             p0 += i + 1
         time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
@@ -577,6 +573,7 @@ CC = CCSD
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
+        cput0 = (time.clock(), time.time())
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:cc.frozen] = False
@@ -643,7 +640,7 @@ class _ERIS:
                     ij += 1
                     ij1 += 1
         else:
-            time0 = time.clock(), time.time()
+            cput1 = time.clock(), time.time()
             _tmpfile1 = tempfile.NamedTemporaryFile()
             _tmpfile2 = tempfile.NamedTemporaryFile()
             self.feri1 = h5py.File(_tmpfile1.name)
@@ -660,13 +657,13 @@ class _ERIS:
             self.feri2 = h5py.File(_tmpfile2.name, 'w')
             pyscf.ao2mo.full(cc.mol, orbv, self.feri2, verbose=log)
             self.vvvv = self.feri2['eri_mo']
-            time1 = log.timer_debug1('transforming vvvv', *time0)
+            cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             tmpfile3 = tempfile.NamedTemporaryFile()
             with h5py.File(tmpfile3.name, 'w') as feri:
                 pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
                                     feri, verbose=log)
-                time1 = log.timer_debug1('transforming oppp', *time1)
+                cput1 = log.timer_debug1('transforming oppp', *cput1)
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
@@ -677,9 +674,10 @@ class _ERIS:
                     self.oovv[i] = buf[:nocc,nocc:,nocc:]
                     self.ovov[i] = buf[nocc:,:nocc,nocc:]
                     self.ovvv[i] = pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
-                    time1 = log.timer_debug1('sorting %d'%i, *time1)
+                    cput1 = log.timer_debug1('sorting %d'%i, *cput1)
                 for key in feri.keys():
                     del(feri[key])
+        log.timer('CCSD integral transformation', *cput0)
 
     def __del__(self):
         if hasattr(self, 'feri1'):
@@ -862,33 +860,4 @@ if __name__ == '__main__':
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
-
-
-    import ccsd_ijba_o2 as ccsd
-    numpy.random.seed(12)
-    nmo = len(rhf.mo_energy)
-    rhf._eri = pyscf.ao2mo.restore(8, numpy.random.random((nmo,)*4), nmo)
-    cc0 = ccsd.CCSD(rhf)
-    cc1 = CCSD(rhf)
-    eris0 = cc0.ao2mo()
-    eris1 = cc1.ao2mo()
-
-    emp2_0, t1_0, t2_0 = cc0.init_amps(eris0)
-    emp2_1, t1_1, t2_1 = cc1.init_amps(eris1)
-    print numpy.allclose(emp2_0, emp2_1)
-    print numpy.allclose(t2_0.transpose(0,1,3,2), t2_1)
-
-    nocc, nvir = t1_0.shape
-    t2 = numpy.random.random((nocc,nocc,nvir,nvir))
-    t1 = numpy.random.random((nocc,nvir))
-    t2 = t2 + t2.transpose(1,0,3,2)
-
-    t2new0 = cc0.add_wvvVV(t1, t2.transpose(0,1,3,2).copy(), eris0)
-    t2new1 = cc1.add_wvvVV(t1, t2, eris1)
-    print numpy.allclose(t2new0.transpose(0,2,1), t2new1)
-
-    t1new0, t2new0 = cc0.update_amps(t1, t2.transpose(0,1,3,2).copy(), eris0, blksize=2)
-    t1new1, t2new1 = cc1.update_amps(t1, t2, eris1)
-    print numpy.allclose(t1new0, t1new1)
-    print numpy.allclose(t2new0.transpose(0,1,3,2), t2new1)
 
