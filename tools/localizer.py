@@ -17,11 +17,13 @@ from pyscf import gto, scf
 from pyscf.tools import molden
 from pyscf.lib import parameters as param
 from pyscf.lib import logger
+from pyscf.lib import linalg_helper
 from pyscf.scf import _vhf
 from pyscf import ao2mo
 
 import numpy as np
 import scipy
+import time
 
 import ctypes
 import _ctypes
@@ -53,6 +55,7 @@ class localizer:
         
         self.gradient = None
         self.grd_norm = 1.0
+        self.ahnr_cnt = 0
         
         self.__which = thetype
         
@@ -121,7 +124,7 @@ class localizer:
         F = np.dot(vecs, np.dot(D, vecs.T))
         newU = scipy.linalg.expm( F )
         new_old_diff = np.linalg.norm( newU - self.u )
-        logger.debug(self, "Localizer :: __reorthogonalize : 2-norm( exp(log(U)) - U ) = %g", new_old_diff)
+        logger.debug(self, "Localizer :: Reorthogonalize : 2-norm( exp(log(U)) - U ) = %g", new_old_diff)
         assert( np.linalg.norm( new_old_diff ) < 1e-5 )
         self.u = np.array( newU, copy=True )
         
@@ -297,10 +300,13 @@ class localizer:
             [ H    g ] [ v ]
             [ g^T  0 ] [ s ]
         '''
-        
+        start_time = time.time()
         result = np.zeros( [ self.numVars + 1 ], dtype=float )
         result[ self.numVars ] = np.sum(np.multiply( self.gradient, vector_in[ :-1 ] ))
         result[ :-1 ] = self.__hessian_matvec( vector_in[ :-1 ] ) + vector_in[ self.numVars ] * self.gradient
+        self.ahnr_cnt += 1
+        end_time = time.time()
+        logger.debug(self, "Localizer :: Augmented Hessian matvec no. %d takes %g seconds.", self.ahnr_cnt, end_time-start_time)
         return result
     
     
@@ -336,15 +342,18 @@ class localizer:
         self.u = self.u[:,idx]
     
     
-    def optimize( self ):
+    def optimize( self, threshold=1e-6 ):
         r'''Augmented Hessian Newton-Raphson optimization of the localization cost function, using an exact gradient and hessian
-
+        
+        Args:
+            threshold : The convergence threshold for the orbital rotation gradient
+            
         Returns:
             The orbital coefficients of the orthonormal localized orbitals, expressed in terms of the AO
         '''
 
         # To break up symmetrical orbitals
-        flatx = 0.0123 * np.ones( [ self.numVars ], dtype=float )
+        flatx = ( 0.0123 / self.numVars ) * np.ones( [ self.numVars ], dtype=float )
         self.__update_unitary( flatx )
 
         #self.__debug_gradient()
@@ -352,7 +361,6 @@ class localizer:
         #self.__debug_diag_hessian()
 
         self.grd_norm = 1.0
-        threshold = 1e-6
         iteration = 0
         max_cf_encountered = 0.0
         logger.debug(self, "Localizer :: At iteration %d the cost function = %1.13f", iteration, -self.__costfunction())
@@ -364,25 +372,58 @@ class localizer:
             self.__set_gradient() # Sets self.gradient and self.grd_norm
             
             ini_guess = np.zeros( [ self.numVars + 1 ], dtype=float )
+            diag_h    = np.zeros( [ self.numVars + 1 ], dtype=float )
             ini_guess[ self.numVars ] = 1.0
-            diag_hessian = self.__diag_hessian()
+            diag_h[ :-1 ] = self.__diag_hessian()
             for elem in range( self.numVars ):
-                if ( abs( diag_hessian[ elem ] ) < 1e-8 ):
-                    diag_hessian[ elem ] = 1e-8
-            ini_guess[ :-1 ] = - self.gradient / diag_hessian # Minus the gradient divided by the diagonal elements of the hessian
-            if ( ( self.use_hess == True ) or ( np.linalg.norm( ini_guess[ :-1 ] ) < 0.1 ) ):
-                __augmented = scipy.sparse.linalg.LinearOperator( ( self.numVars+1, self.numVars+1 ), matvec=self.__augmented_hessian_matvec, dtype=float )
-                eigenval, eigenvec = scipy.sparse.linalg.eigsh( __augmented, k=1, which='SA', v0=ini_guess, ncv=min(1024,self.numVars+1), maxiter=min(1024,self.numVars+1) )
+                if ( abs( diag_h[ elem ] ) < 1e-6 ):
+                    ini_guess[ elem ] = -self.gradient[ elem ] / 1e-6
+                else:
+                    ini_guess[ elem ] = -self.gradient[ elem ] / diag_h[ elem ] # Minus the gradient divided by the diagonal elements of the hessian
+            if ( self.use_hess == True ):
+            
+                def myprecon( resid, eigval, eigvec ):
+                
+                    myprecon_cutoff = 1e-10
+                    local_myprecon = np.zeros( [ self.numVars + 1 ], dtype=float )
+                    for elem in range( self.numVars + 1 ):
+                        if ( abs( diag_h[ elem ] - eigval ) < myprecon_cutoff ):
+                            local_myprecon[ elem ] = eigvec[ elem ] / myprecon_cutoff
+                        else:
+                            # local_myprecon = eigvec / ( diag(H) - eigval ) = K^{-1} u
+                            local_myprecon[ elem ] = eigvec[ elem ] / ( diag_h[ elem ] - eigval )
+                    # alpha_myprecon = - ( r, K^{-1} u ) / ( u, K^{-1} u )
+                    alpha_myprecon = - np.einsum( 'i,i->', local_myprecon, resid ) / np.einsum( 'i,i->', local_myprecon, eigvec )
+                    # local_myprecon = r - ( r, K^{-1} u ) / ( u, K^{-1} u ) * u
+                    local_myprecon = resid + alpha_myprecon * eigvec
+                    for elem in range( self.numVars + 1 ):
+                        if ( abs( diag_h[ elem ] - eigval ) < myprecon_cutoff ):
+                            local_myprecon[ elem ] = - local_myprecon[ elem ] / myprecon_cutoff
+                        else:
+                            local_myprecon[ elem ] = - local_myprecon[ elem ] / ( diag_h[ elem ] - eigval )
+                    return local_myprecon
+                
+                self.ahnr_cnt = 0
+                eigenval, eigenvec = linalg_helper.davidson( a=self.__augmented_hessian_matvec, \
+                                                             x0=ini_guess, \
+                                                             precond=myprecon, \
+                                                             #tol=1e-14, \
+                                                             #max_cycle=50, \
+                                                             max_space=20, \
+                                                             #lindep=1e-16, \
+                                                             #max_memory=2000, \
+                                                             nroots=1 )
+                                                             
             else:
                 eigenvec = np.array( ini_guess, copy=True )
-            flatx = eigenvec[:-1] / eigenvec[ self.numVars ]
+            flatx = eigenvec[ :-1 ] / eigenvec[ self.numVars ]
 
             update_norm = np.linalg.norm( flatx )
             cost_func_prev = -self.__costfunction()
             self.__update_unitary( flatx )
             cost_func_now = -self.__costfunction()
             counter = 0
-            while ( counter < 4 ) and ( cost_func_now < cost_func_prev ):
+            while ( counter < 8 ) and ( cost_func_now < cost_func_prev ):
                 logger.debug(self, "Localizer :: Taking half a step back")
                 flatx *= 0.5
                 self.__update_unitary( -flatx )
@@ -392,11 +433,11 @@ class localizer:
             if ( cost_func_now > max_cf_encountered ):
                 max_cf_encountered = cost_func_now
 
-            logger.debug(self, "Localizer :: gradient norm = %g", self.grd_norm)
-            logger.debug(self, "Localizer :: update norm   = %g", update_norm)
+            logger.debug(self, "Localizer :: Gradient norm = %g", self.grd_norm)
+            logger.debug(self, "Localizer :: Update norm   = %g", update_norm)
             logger.debug(self, "Localizer :: At iteration %d the cost function = %1.13f", iteration, cost_func_now)
-            logger.debug(self, "             Diff. with prev. CF encountered  = %g", cost_func_now - cost_func_prev )
-            logger.debug(self, "             Diff. with max.  CF encountered  = %g", cost_func_now - max_cf_encountered )
+            logger.debug(self, "             Diff. with prev. CF = %g", cost_func_now - cost_func_prev )
+            logger.debug(self, "             Diff. with max.  CF = %g", cost_func_now - max_cf_encountered )
             
             if ( iteration % 10 == 0 ):
                 self.__reorthogonalize()
