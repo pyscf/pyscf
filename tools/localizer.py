@@ -23,7 +23,7 @@ from pyscf import ao2mo
 
 import numpy as np
 import scipy
-import time
+#import time
 
 import ctypes
 import _ctypes
@@ -55,7 +55,7 @@ class localizer:
         
         self.gradient = None
         self.grd_norm = 1.0
-        self.ahnr_cnt = 0
+        #self.ahnr_cnt = 0
         
         self.__which = thetype
         
@@ -300,13 +300,13 @@ class localizer:
             [ H    g ] [ v ]
             [ g^T  0 ] [ s ]
         '''
-        start_time = time.time()
+        #start_time = time.time()
         result = np.zeros( [ self.numVars + 1 ], dtype=float )
         result[ self.numVars ] = np.sum(np.multiply( self.gradient, vector_in[ :-1 ] ))
         result[ :-1 ] = self.__hessian_matvec( vector_in[ :-1 ] ) + vector_in[ self.numVars ] * self.gradient
-        self.ahnr_cnt += 1
-        end_time = time.time()
-        logger.debug(self, "Localizer :: Augmented Hessian matvec no. %d takes %g seconds.", self.ahnr_cnt, end_time-start_time)
+        #self.ahnr_cnt += 1
+        #end_time = time.time()
+        #logger.debug(self, "Localizer :: Augmented Hessian matvec no. %d takes %g seconds.", self.ahnr_cnt, end_time-start_time)
         return result
     
     
@@ -403,7 +403,7 @@ class localizer:
                             local_myprecon[ elem ] = - local_myprecon[ elem ] / ( diag_h[ elem ] - eigval )
                     return local_myprecon
                 
-                self.ahnr_cnt = 0
+                #self.ahnr_cnt = 0
                 eigenval, eigenvec = linalg_helper.davidson( a=self.__augmented_hessian_matvec, \
                                                              x0=ini_guess, \
                                                              precond=myprecon, \
