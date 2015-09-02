@@ -150,15 +150,17 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     mfmo = casscf._scf.mo_coeff
     s = casscf._scf.get_ovlp()
     if isinstance(ncore, (int, numpy.integer)):
-        assert(mfmo.shape[0] == init_mo.shape[0])
         if prev_mol is not None:
             init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
+        else:
+            assert(mfmo.shape[0] == init_mo.shape[0])
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF
-        assert(mfmo[0].shape[0] == init_mo[0].shape[0])
         if prev_mol is not None:
             init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
                        scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
+        else:
+            assert(mfmo[0].shape[0] == init_mo[0].shape[0])
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo

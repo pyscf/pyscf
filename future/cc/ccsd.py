@@ -624,7 +624,7 @@ class _ERIS:
             self.fock = numpy.diag(cc.mo_energy[moidx])
         else:  # If mo_coeff is not canonical orbital
             self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
-            dm = self._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
