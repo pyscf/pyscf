@@ -1,9 +1,11 @@
+import math
 import numpy as np
 import scipy.linalg
-import math.cexp
-import math.pi as pi
+import pyscf.gto.mole
 
-class Cell(pyscf.Mole)
+pi=math.pi
+
+class Cell(pyscf.gto.mole.Mole):
     def __init__(self, mol, h):
         pyscf.Mole.__init__(self, mol)
         # h in HM (Eq. (3.1))
@@ -20,7 +22,7 @@ def get_gv(gs):
          [-gsz, -gsz+1, ..., gsz]]
     '''
     ngs=2*gs+1
-    gv=np.ndindex(2*gs+1))
+    gv=np.ndindex(2*gs+1)
     gv-=np.array([gsx,gsy,gsz])
     return gv.T
 
@@ -93,9 +95,23 @@ def ewald_real_space(cell, SI, ewrc, ewcut):
     ewself = 1./(math.sqrt(2*pi) * ewrc) * np.dot(chargs,charge)
     
     return ewovrl - ewself
+
+def test():
+    from pyscf import gto
+    from pyscf.dft import rks
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'#'out_rks'
+
+    mol.atom.extend([['He', (0.,0.,0.)], ])
+    mol.basis = { 'He': 'cc-pvdz'}
+    mol.build()
+
+    m = rks.RKS(mol)
+    m.xc = 'LDA,VWN_RPA'
+    m.xc = 'b3lyp'
+    print(m.scf()) # -2.90705411168
     
-
-
     
 
 
