@@ -11,8 +11,8 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
+from pyscf.cc import _ccsd
 
-libcc = lib.load_library('libcc')
 BLKMIN = 4
 
 # t2 as ijab
@@ -57,7 +57,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
             break
-    logger.timer(cc, 'CCSD', *cput0)
+    log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
 
@@ -101,7 +101,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     for p0, p1 in prange(0, nocc, blksize):
 # ==== read eris.ovvv ====
         eris_ovvv = _cp(eris.ovvv[p0:p1])
-        eris_ovvv = unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
+        eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
 
         fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1], eris_ovvv)
@@ -485,7 +485,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def kernel(self, t1=None, t2=None, mo_coeff=None, eris=None):
         return self.ccsd(t1, t2, mo_coeff, eris)
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        log = logger.Logger(self.stdout, self.verbose)
         if eris is None: eris = self.ao2mo(mo_coeff)
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
@@ -575,7 +574,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         p0 = 0
         outbuf = numpy.empty((nvir,nvir,nvir))
         for a in range(nvir):
-            buf = unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
+            buf = _ccsd.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
             #: t2new_tril[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
             lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
                                     tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
@@ -668,24 +667,23 @@ class _ERIS:
             ij = 0
             outbuf = numpy.empty((nmo,nmo,nmo))
             for i in range(nocc):
-                buf = unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 for j in range(i+1):
                     self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
                     self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
                     self.oovv[i,j] = self.oovv[j,i] = buf[j,nocc:,nocc:]
-                    ij += 1
+                ij += i + 1
             ij1 = 0
             for i in range(nocc,nmo):
-                buf = unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
                 self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
                 for j in range(nocc):
-                    self.ovvv[j,i-nocc] = lib.pack_tril(buf[j,nocc:,nocc:])
-                    ij += 1
+                    self.ovvv[j,i-nocc] = lib.pack_tril(_cp(buf[j,nocc:,nocc:]))
                 for j in range(nocc, i+1):
-                    self.vvvv[ij1] = lib.pack_tril(buf[j,nocc:,nocc:])
-                    ij += 1
+                    self.vvvv[ij1] = lib.pack_tril(_cp(buf[j,nocc:,nocc:]))
                     ij1 += 1
+                ij += i + 1
         else:
             cput1 = time.clock(), time.time()
             _tmpfile1 = tempfile.NamedTemporaryFile()
@@ -714,13 +712,13 @@ class _ERIS:
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
-                    buf = unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
+                    buf = _ccsd.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
                     self.oooo[i] = buf[:nocc,:nocc,:nocc]
                     self.ooov[i] = buf[:nocc,:nocc,nocc:]
                     self.ovoo[i] = buf[nocc:,:nocc,:nocc]
                     self.oovv[i] = buf[:nocc,nocc:,nocc:]
                     self.ovov[i] = buf[nocc:,:nocc,nocc:]
-                    self.ovvv[i] = pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
+                    self.ovvv[i] = _ccsd.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
                     cput1 = log.timer_debug1('sorting %d'%i, *cput1)
                 for key in feri.keys():
                     del(feri[key])
@@ -790,10 +788,6 @@ def residual_as_diis_errvec(mycc):
     return fupdate
 
 
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
-
 def _fp(nocc, nvir):
     '''Total float points'''
     return (nocc**3*nvir**2*2 + nocc**2*nvir**3*2 +     # Ftilde
@@ -810,53 +804,17 @@ def _fp(nocc, nvir):
             nocc**3*nvir**3*2 * 3 + nocc**3*nvir**2*2 * 4)      # Wiabj
 
 
-def pack_tril(mat, out=None):
-    assert(mat.flags.c_contiguous)
-    count, nd = mat.shape[:2]
-    if out is None:
-        out = numpy.empty((count,nd*(nd+1)//2))
-    libcc.CCpack_tril(ctypes.c_int(count), ctypes.c_int(nd),
-                      out.ctypes.data_as(ctypes.c_void_p),
-                      mat.ctypes.data_as(ctypes.c_void_p))
-    return out
-
-
-def unpack_tril(tril, out=None):
-    assert(tril.flags.c_contiguous)
-    count = tril.shape[0]
-    nd = int(numpy.sqrt(tril.shape[1]*2))
-    if out is None:
-        mat = numpy.empty((count,nd,nd))
-    else:
-        mat = out
-    libcc.CCunpack_tril(ctypes.c_int(count), ctypes.c_int(nd),
-                        tril.ctypes.data_as(ctypes.c_void_p),
-                        mat.ctypes.data_as(ctypes.c_void_p))
-    return mat
-
 # t2 + numpy.einsum('ia,jb->ijab', t1a, t1b)
 def make_tau(t2, t1a, t1b, fac=1, out=None):
-    nocc = t1a.shape[0]
-    if out is None:
-        tau = numpy.empty(t2.shape)
-    else:
-        tau = out
-    for i in range(nocc):
-        tau[i] = numpy.einsum('a,jb->jab', t1a[i]*fac, t1b)
-        tau[i] += t2[i]
-    return tau
+    return _ccsd.make_tau(t2, t1a, t1b, fac, out)
 
 # t2.transpose(0,1,3,2)*2 - t2
 def make_theta(t2, out=None):
-    if out is None:
-        out = numpy.empty(t2.shape)
-    shape = numpy.asarray(t2.shape, dtype=numpy.int32)
-    libcc.CCmake_g0132(out.ctypes.data_as(ctypes.c_void_p),
-                       t2.ctypes.data_as(ctypes.c_void_p),
-                       t2.ctypes.data_as(ctypes.c_void_p),
-                       shape.ctypes.data_as(ctypes.c_void_p),
-                       ctypes.c_double(-1), ctypes.c_double(2))
-    return out
+    return _ccsd.make_0132(t2, t2, -1, 2, out)
+
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

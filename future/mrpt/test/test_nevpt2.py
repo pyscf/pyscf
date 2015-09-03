@@ -51,12 +51,12 @@ dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
 
 class KnowValues(unittest.TestCase):
     def test_Sr(self):
-        norm, e = nevpt2.Sr(mc,orbe,dms, eris)
+        norm, e = nevpt2.Sr(mc, mc.ci, orbe,dms, eris)
         self.assertAlmostEqual(e, -0.020246153598033282, 7)
         self.assertAlmostEqual(norm, 0.039479583324952064, 7)
 
     def test_Si(self):
-        norm, e = nevpt2.Si(mc,orbe,dms, eris)
+        norm, e = nevpt2.Si(mc, mc.ci, orbe,dms, eris)
         self.assertAlmostEqual(e, -0.0021282093222748039, 7)
         self.assertAlmostEqual(norm, 0.0037402334190064367, 7)
 

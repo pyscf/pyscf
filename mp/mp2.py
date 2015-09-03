@@ -226,5 +226,5 @@ if __name__ == '__main__':
     h1e = reduce(numpy.dot, (mf.mo_coeff, mf.get_hcore(), mf.mo_coeff))
     eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
     rdm2 = pt.make_rdm2()
-    print numpy.dot(rdm1.flatten(), h1e.flatten())
-    print .5 * numpy.dot(eri.flatten(), rdm2.flatten())
+    print(numpy.dot(rdm1.flatten(), h1e.flatten()))
+    print(.5 * numpy.dot(eri.flatten(), rdm2.flatten()))

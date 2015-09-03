@@ -5,6 +5,7 @@
 
 import sys
 import tempfile
+from functools import reduce
 import numpy
 import scipy.linalg
 import h5py

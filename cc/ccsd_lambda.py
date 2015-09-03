@@ -12,6 +12,7 @@ import pyscf.lib as lib
 from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf.cc import ccsd
+from pyscf.cc import _ccsd
 
 # t2,l2 as ijab
 
@@ -99,9 +100,9 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
     blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     log.debug1('ccsd lambda make_intermediates: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)//blksize))
-    for istep, (p0, p1) in enumerate(ccsd.prange(0, nocc, blksize)):
-        eris_ovvv = ccsd._cp(eris.ovvv[p0:p1])
-        eris_ovvv = ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
+    for istep, (p0, p1) in enumerate(prange(0, nocc, blksize)):
+        eris_ovvv = _cp(eris.ovvv[p0:p1])
+        eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
         w1 += numpy.einsum('jcba,jc->ba', eris_ovvv, t1[p0:p1]*2)
         w1 -= numpy.einsum('jabc,jc->ba', eris_ovvv, t1[p0:p1])
@@ -110,13 +111,13 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
             theta = t2[p0+i] * 2
             theta -= t2[p0+i].transpose(0,2,1)
             w3 += lib.dot(eris_ovvv[i].reshape(-1,nvir).T,
-                          ccsd._cp(theta.reshape(nocc,-1)).T)
+                          _cp(theta.reshape(nocc,-1)).T)
         theta = None
         #:wOVov = numpy.einsum('jbcd,kd->jbkc', eris_ovvv, t1)
         #:wOvOv = numpy.einsum('jdcb,kd->jbkc', eris_ovvv, -t1)
         wOVov = lib.dot(eris_ovvv.reshape(-1,nvir),
                         t1.T).reshape(-1,nvir,nvir,nocc).transpose(0,1,3,2).copy()
-        g2ovvv = ccsd._cp(eris_ovvv.transpose(0,2,3,1))
+        g2ovvv = _cp(eris_ovvv.transpose(0,2,3,1))
         wOvOv = lib.dot(g2ovvv.reshape(-1,nvir),
                         -t1.T).reshape(-1,nvir,nvir,nocc).transpose(0,1,3,2).copy()
         for i in range(p1-p0):
@@ -124,9 +125,9 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
             g2ovvv[i] -= eris_ovvv[i].transpose(1,0,2)
         wooov = numpy.empty((p1-p0,nocc,nocc,nvir))
         woooo = numpy.empty((p1-p0,nocc,nocc,nocc))
-        eris_ovov = ccsd._cp(ccsd._cp(eris.ovov[p0:p1]).transpose(0,2,1,3))
-        for j0, j1 in ccsd.prange(0, nocc, blksize):
-            tau = ccsd.make_tau(t2[j0:j1], t1[j0:j1], t1)
+        eris_ovov = _cp(_cp(eris.ovov[p0:p1]).transpose(0,2,1,3))
+        for j0, j1 in prange(0, nocc, blksize):
+            tau = _ccsd.make_tau(t2[j0:j1], t1[j0:j1], t1)
             #:wooov[:,j0:j1] = numpy.einsum('icbd,jkbd->ijkc', g2ovvv, tau)
             #:woooo[:,:,j0:j1] = numpy.einsum('icjd,klcd->ijkl', eris_ovov, tau)
             tmp = lib.dot(g2ovvv.reshape(-1,nvir**2), tau.reshape(-1,nvir**2).T)
@@ -136,7 +137,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         eris_ovov = eris_ovvv = g2ovvv = tau = tmp = None
 #==== mem usage nocc*nvir**2*2 + nocc**2*nvir + nocc**3 + nvir**3*2 + nocc*nvir**2*2
 
-        eris_ooov = ccsd._cp(eris.ooov[p0:p1])
+        eris_ooov = _cp(eris.ooov[p0:p1])
         w2[p0:p1] += numpy.einsum('ijkb,kb->ij', eris_ooov, t1) * 2
         w2 -= numpy.einsum('kjib,kb->ij', eris_ooov, t1[p0:p1])
         #:w3 -= numpy.einsum('kjlc,klbc->bj', eris_ooov, theta)
@@ -150,19 +151,19 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         woooo += lib.dot(eris_ooov.reshape(-1,nvir),
                          t1.T).reshape((-1,nocc,nocc,nocc)).transpose(0,2,1,3)
         for i in range(p1-p0):
-            lib.dot(ccsd._cp(eris_ooov[i].transpose(2,0,1)).reshape(-1,nocc),
+            lib.dot(_cp(eris_ooov[i].transpose(2,0,1)).reshape(-1,nocc),
                     t1, 1, wOvOv[i].reshape(-1,nvir), 1)
             wooov[i] += eris_ooov[i].transpose(1,0,2)*2
             wooov[i] -= eris_ooov[i]
 
-        eris_ovoo = ccsd._cp(eris.ovoo[p0:p1])
+        eris_ovoo = _cp(eris.ovoo[p0:p1])
         #:woooo += numpy.einsum('icjl,kc->ijkl', eris_ovoo, t1)
         #:wOVov += numpy.einsum('jbkl,lc->jbkc', eris_ovoo, -t1)
         for i in range(p1-p0):
             woooo[i] += lib.dot(t1, eris_ovoo[i].reshape(nvir,-1)).reshape((nocc,)*3).transpose(1,0,2)
         lib.dot(eris_ovoo.reshape(-1,nocc), t1, -1, wOVov.reshape(-1,nvir), 1)
         #:wooov -= numpy.einsum('iblj,klbc->ijkc', eris_ovoo*1.5, t2)
-        tmp_ovoo = ccsd._cp(-eris_ovoo.transpose(0,2,3,1)).reshape(-1,nov)
+        tmp_ovoo = _cp(-eris_ovoo.transpose(0,2,3,1)).reshape(-1,nov)
         for j in range(nocc):
             wooov[:,:,j] += lib.dot(tmp_ovoo, t2[j].reshape(-1,nvir),
                                     1.5).reshape(-1,nocc,nvir)
@@ -171,33 +172,33 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         g2ooov += eris_ooov * 2
         thetabuf = numpy.empty((blksize,nvir,nocc,nvir))
         vikjc = numpy.empty((p1-p0,nocc,blksize,nvir))
-        for j0, j1 in ccsd.prange(0, nocc, blksize):
+        for j0, j1 in prange(0, nocc, blksize):
             theta = thetabuf[:j1-j0]
             for i in range(j1-j0):
                 theta[i] = t2[j0+i].transpose(1,0,2)*2 - t2[j0+i].transpose(2,0,1)
             #:vikjc = numpy.einsum('iklb,jlcb->ikjc', g2ooov, theta)
             if j1 == j0 + blksize:
-                lib.dot(g2ooov.reshape(-1,nov), ccsd._cp(theta.reshape(-1,nov)).T,
+                lib.dot(g2ooov.reshape(-1,nov), _cp(theta.reshape(-1,nov)).T,
                         1, vikjc.reshape((p1-p0)*nocc,-1), 0)
             else:
                 vikjc = lib.dot(g2ooov.reshape(-1,nov),
-                                ccsd._cp(theta.reshape(-1,nov)).T)
+                                _cp(theta.reshape(-1,nov)).T)
                 vikjc = vikjc.reshape(p1-p0,nocc,j1-j0,nvir)
             wooov[:,j0:j1,:] += vikjc.transpose(0,2,1,3)
             wooov[:,:,j0:j1] -= vikjc*.5
         eris_ooov = eris_ovoo = g2ooov = vikjc = theta = thetabuf = None
 #==== mem usage nocc*nvir**2*3 + nocc**2*nvir + nocc**3 + nocc*nvir**2 + nocc**2*nvir*3
 
-        eris_ovov = ccsd._cp(eris.ovov[p0:p1])
+        eris_ovov = _cp(eris.ovov[p0:p1])
         g2ovov = eris_ovov*2
         g2ovov -= eris_ovov.transpose(0,3,2,1)
         tmpw4 = numpy.einsum('kcld,ld->kc', g2ovov, t1)
         #:w1 -= numpy.einsum('kcja,kjcb->ba', g2ovov, t2[p0:p1])
         w1 -= lib.dot(t2[p0:p1].reshape(-1,nvir).T,
-                      ccsd._cp(g2ovov.transpose(0,2,1,3).reshape(-1,nvir)))
+                      _cp(g2ovov.transpose(0,2,1,3).reshape(-1,nvir)))
         w1 -= numpy.einsum('ja,jb->ba', tmpw4, t1[p0:p1])
         #:w2[p0:p1] += numpy.einsum('ibkc,jkbc->ij', g2ovov, t2)
-        w2[p0:p1] += lib.dot(ccsd._cp(g2ovov.transpose(0,2,1,3)).reshape(p1-p0,-1),
+        w2[p0:p1] += lib.dot(_cp(g2ovov.transpose(0,2,1,3)).reshape(p1-p0,-1),
                              t2.reshape(nocc,-1).T)
         w2[p0:p1] += numpy.einsum('ib,jb->ij', tmpw4, t1)
         w3 += reduce(numpy.dot, (t1[p0:p1].T, tmpw4, t1.T))
@@ -206,7 +207,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         #:vOVov += numpy.einsum('jbld,klcd->kcjb', g2ovov, t2)
         #:vOVov -= numpy.einsum('jbld,kldc->kcjb', eris_ovov, t2)
         for j in range(nocc):
-            lib.dot(ccsd._cp(t2[j].transpose(1,0,2)).reshape(-1,nov),
+            lib.dot(_cp(t2[j].transpose(1,0,2)).reshape(-1,nov),
                     g2ovov.reshape(-1,nov).T, 1, vOVov[j].reshape(nvir,-1))
             lib.dot(t2[j].reshape(nov,-1).T, eris_ovov.reshape(-1,nov).T,
                     -1, vOVov[j].reshape(nvir,-1), 1)
@@ -221,7 +222,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         #:wOvOv += numpy.einsum('jlbk,lc->jbkc', tmp, t1)
         tmp = numpy.empty((nocc,nvir,nocc))
         for j in range(p1-p0):
-            lib.dot(ccsd._cp(eris_ovov[j].transpose(1,0,2)).reshape(-1,nvir),
+            lib.dot(_cp(eris_ovov[j].transpose(1,0,2)).reshape(-1,nvir),
                     t1.T, 1, tmp.reshape(-1,nocc))
             lib.dot(tmp.reshape(nocc,-1).T, t1, -1, wOVov[j].reshape(-1,nvir), 1)
             lib.dot(eris_ovov[j].reshape(nvir,-1).T, t1.T, 1,
@@ -230,14 +231,14 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         tmp = None
 
         #:vOvOv = numpy.einsum('jdlb,kldc->kcjb', eris_ovov, t2)
-        ovovtmp = ccsd._cp(eris_ovov.transpose(0,3,2,1)).reshape(-1,nov)
+        ovovtmp = _cp(eris_ovov.transpose(0,3,2,1)).reshape(-1,nov)
         vOvOv = numpy.empty((nocc,nvir,p1-p0,nvir))
         for j in range(nocc):
             lib.dot(t2[j].reshape(-1,nvir).T, ovovtmp.T, 1,
                     vOvOv[j].reshape(nvir,-1))
         ovovtmp = eris_ovov = None
         vOvOv = lib.transpose(vOvOv.reshape(nov,-1)).reshape(p1-p0,nvir,nocc,nvir)
-        vOvOv -= ccsd._cp(eris.oovv[p0:p1]).transpose(0,3,1,2)
+        vOvOv -= _cp(eris.oovv[p0:p1]).transpose(0,3,1,2)
         wOVov += vOVov
         wOvOv += vOvOv
         saved.wOVov[p0:p1] = wOVov
@@ -263,7 +264,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
         ov2 = None
 #==== mem usage nocc*nvir**2*5 + nocc**2*nvir + nocc**3
 
-        woooo += ccsd._cp(eris.oooo[p0:p1]).transpose(0,2,1,3)
+        woooo += _cp(eris.oooo[p0:p1]).transpose(0,2,1,3)
         saved.woooo[p0:p1] = woooo
         saved.wooov[p0:p1] = wooov
         wooo = wooov = None
@@ -272,42 +273,42 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
     w3 += numpy.einsum('bc,jc->bj', w1, t1)
     w3 -= numpy.einsum('kj,kb->bj', w2, t1)
 
-    for p0, p1 in ccsd.prange(0, nocc, blksize):
-        eris_ooov = ccsd._cp(eris.ooov[p0:p1])
+    for p0, p1 in prange(0, nocc, blksize):
+        eris_ooov = _cp(eris.ooov[p0:p1])
         g2ooov = eris_ooov * 2
         g2ooov -= eris_ooov.transpose(0,2,1,3)
         #:tmp = numpy.einsum('kjla,jb->kabl', g2ooov, t1)
         #:wovvv = numpy.einsum('kabl,lc->kabc', tmp, t1)
         #:wovvv += numpy.einsum('kjla,jlbc->kabc', g2ooov, t2)
-        tmp = lib.dot(ccsd._cp(g2ooov.transpose(1,0,2,3).reshape(nocc,-1)).T,
+        tmp = lib.dot(_cp(g2ooov.transpose(1,0,2,3).reshape(nocc,-1)).T,
                       t1).reshape(-1,nocc,nvir,nvir).transpose(0,2,3,1)
-        wovvv = lib.dot(ccsd._cp(tmp.reshape(-1,nocc)), t1).reshape(-1,nvir,nvir,nvir)
-        wovvv += lib.dot(ccsd._cp(g2ooov.transpose(0,3,1,2).reshape(-1,nocc**2)),
+        wovvv = lib.dot(_cp(tmp.reshape(-1,nocc)), t1).reshape(-1,nvir,nvir,nvir)
+        wovvv += lib.dot(_cp(g2ooov.transpose(0,3,1,2).reshape(-1,nocc**2)),
                          t2.reshape(nocc**2,-1)).reshape(-1,nvir,nvir,nvir)
         tmp = g2ooov = None
         ov1 = numpy.empty((p1-p0,nvir,nocc,nvir))
         ov2 = numpy.empty((p1-p0,nvir,nocc,nvir))
-        for istep, (j0, j1) in enumerate(ccsd.prange(0, nocc, blksize)):
+        for istep, (j0, j1) in enumerate(prange(0, nocc, blksize)):
             ov1[:,:,j0:j1] = fswap['2vOvOv/%d'%istep][p0:p1]
             ov2[:,:,j0:j1] = fswap['2vovOV/%d'%istep][p0:p1]
         #:wovvv += numpy.einsum('kcja,jb->kabc', ov1, t1)
         #:wovvv -= numpy.einsum('kbja,jc->kabc', ov2, t1)
-        wovvv += lib.dot(ccsd._cp(ov1.transpose(0,1,3,2).reshape(-1,nocc)),
+        wovvv += lib.dot(_cp(ov1.transpose(0,1,3,2).reshape(-1,nocc)),
                          t1).reshape(-1,nvir,nvir,nvir).transpose(0,2,3,1)
-        wovvv -= lib.dot(ccsd._cp(ov2.transpose(0,1,3,2).reshape(-1,nocc)),
+        wovvv -= lib.dot(_cp(ov2.transpose(0,1,3,2).reshape(-1,nocc)),
                          t1).reshape(-1,nvir,nvir,nvir).transpose(0,2,1,3)
 #==== mem usage nvir**3 + nocc*nvir**2*2
         eris_ooov = ov1 = ov2 = None
 
-        for j0, j1 in ccsd.prange(0, nocc, blksize):
-            eris_ovvv = ccsd._cp(eris.ovvv[j0:j1])
-            eris_ovvv = ccsd.unpack_tril(eris_ovvv.reshape((j1-j0)*nvir,-1))
+        for j0, j1 in prange(0, nocc, blksize):
+            eris_ovvv = _cp(eris.ovvv[j0:j1])
+            eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((j1-j0)*nvir,-1))
             eris_ovvv = eris_ovvv.reshape(j1-j0,nvir,nvir,nvir)
             #:wovvv += numpy.einsum('jabd,kjdc->kabc', eris_ovvv, t2[p0:p1,j0:j1]) * -1.5
             tmp_ovvv = numpy.empty((j1-j0,nvir,nvir,nvir))
             for i in range(j1-j0):
                 tmp_ovvv[i] = eris_ovvv[i].transpose(1,0,2)*2
-            tmp = lib.dot(ccsd._cp(t2[p0:p1,j0:j1].transpose(0,3,1,2).reshape((p1-p0)*nvir,-1)),
+            tmp = lib.dot(_cp(t2[p0:p1,j0:j1].transpose(0,3,1,2).reshape((p1-p0)*nvir,-1)),
                           tmp_ovvv.reshape(-1,nvir**2), -1.5/2).reshape(-1,nvir,nvir,nvir)
             wovvv += tmp.transpose(0,2,3,1)
             if p0 == j0:
@@ -321,7 +322,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
                 g2ovvv[i] -= eris_ovvv[i].transpose(1,2,0)
 #==== mem usage nvir**3*3
             eris_ovvv = None
-            theta = ccsd._cp(t2[p0:p1,j0:j1].transpose(0,2,1,3)*2)
+            theta = _cp(t2[p0:p1,j0:j1].transpose(0,2,1,3)*2)
             for i in range(p1-p0):
                 theta[i] -= t2[p0+i,j0:j1].transpose(2,0,1)
             #:vkbca = numpy.einsum('jdca,kbjd->kbca', g2ovvv, theta)
@@ -358,7 +359,8 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
 
     #:mba = numpy.einsum('klca,klcb->ba', l2, t2*2-t2.transpose(0,1,3,2))
     #:mij = numpy.einsum('ikcd,jkcd->ij', l2, t2*2-t2.transpose(0,1,3,2))
-    theta = make_theta(t2)
+    #:theta = t2*2 - t2.transpose(0,1,3,2)
+    theta = _ccsd.make_0132(t2, t2, 2, -1)
     mba = lib.dot(theta.reshape(-1,nvir).T, l2.reshape(-1,nvir))
     mij = lib.dot(l2.reshape(nocc,-1), theta.reshape(nocc,-1).T)
     theta = None
@@ -399,31 +401,31 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
     lib.dot(l2.reshape(-1,nvir), saved.w1, 1, l2new.reshape(-1,nvir), 1)
     lib.dot(saved.w2, l2.reshape(nocc,-1),-1, l2new.reshape(nocc,-1), 1)
 
-    eris_ooov = ccsd._cp(eris.ooov)
+    eris_ooov = _cp(eris.ooov)
     l1new -= numpy.einsum('jkia,kj->ia', eris_ooov, mij1) * 2
     l1new += numpy.einsum('ikja,kj->ia', eris_ooov, mij1)
     #:l2new -= numpy.einsum('ka,kijb->jiba', l1, eris_ooov)
-    lib.dot(ccsd._cp(eris_ooov.transpose(0,2,1,3).reshape(nocc,-1)).T,
+    lib.dot(_cp(eris_ooov.transpose(0,2,1,3).reshape(nocc,-1)).T,
             l1, -1, l2new.reshape(-1,nvir), 1)
     eris_ooov = None
 
-    tau = ccsd.make_tau(t2, t1, t1)
+    tau = _ccsd.make_tau(t2, t1, t1)
     #:l2tau = numpy.einsum('ijcd,klcd->ijkl', l2, tau)
     l2tau = lib.dot(l2.reshape(nocc**2,-1),
                     tau.reshape(nocc**2,-1).T).reshape((nocc,)*4)
     tau = None
     #:l2t1 = numpy.einsum('jidc,kc->ijkd', l2, t1)
     l2t1 = lib.dot(l2.reshape(-1,nvir), t1.T).reshape(nocc,nocc,nvir,nocc)
-    l2t1 = ccsd._cp(l2t1.transpose(1,0,3,2))
+    l2t1 = _cp(l2t1.transpose(1,0,3,2))
 
     max_memory = max_memory - lib.current_memory()[0]
     unit = max(nvir**3*2+nocc*nvir**2, nocc*nvir**2*5)
     blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
-    for p0, p1 in ccsd.prange(0, nocc, blksize):
-        eris_ovvv = ccsd._cp(eris.ovvv[p0:p1])
-        eris_ovvv = ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
+    for p0, p1 in prange(0, nocc, blksize):
+        eris_ovvv = _cp(eris.ovvv[p0:p1])
+        eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
 
         l1new[p0:p1] += numpy.einsum('iabc,bc->ia', eris_ovvv, mba1) * 2
@@ -433,11 +435,11 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
         l2new[p0:p1] += tmp.reshape(nocc,-1,nvir,nvir).transpose(1,0,2,3)
         tmp = None
         m4buf = numpy.empty((blksize,nocc,nvir,nvir))
-        eris_ovvv = ccsd._cp(eris_ovvv.transpose(0,2,1,3).reshape(-1,nvir**2))
-        for j0, j1 in ccsd.prange(0, nocc, blksize):
+        eris_ovvv = _cp(eris_ovvv.transpose(0,2,1,3).reshape(-1,nvir**2))
+        for j0, j1 in prange(0, nocc, blksize):
             #:m4 = numpy.einsum('ijkd,kadb->ijab', l2t1[j0:j1,:,p0:p1], eris_ovvv)
             m4 = m4buf[:j1-j0]
-            lib.dot(ccsd._cp(l2t1[j0:j1,:,p0:p1].reshape((j1-j0)*nocc,-1)),
+            lib.dot(_cp(l2t1[j0:j1,:,p0:p1].reshape((j1-j0)*nocc,-1)),
                     eris_ovvv, 1, m4.reshape(-1,nvir**2))
             l2new[j0:j1] -= m4
             l1new[j0:j1] -= numpy.einsum('ijab,jb->ia', m4, t1) * 2
@@ -447,7 +449,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
         eris_ovvv = m4buf = m4 = None
 #==== mem usage nvir**3*2 + nocc*nvir**2
 
-        eris_ovov = ccsd._cp(eris.ovov[p0:p1])
+        eris_ovov = _cp(eris.ovov[p0:p1])
         l1new[p0:p1] += numpy.einsum('jb,iajb->ia', l1, eris_ovov) * 2
         for i in range(p1-p0):
             l2new[p0+i] += eris_ovov[i].transpose(1,0,2) * .5
@@ -458,17 +460,17 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
             lib.dot(eris_ovov[j-p0].reshape(nvir,-1).T, mba1, 1,
                     tmp.reshape(-1,nvir))
             l2new[j] -= tmp.transpose(0,2,1)
-            lib.dot(mij1, ccsd._cp(eris_ovov[j-p0].transpose(1,0,2).reshape(nocc,-1)),
+            lib.dot(mij1, _cp(eris_ovov[j-p0].transpose(1,0,2).reshape(nocc,-1)),
                     -1, l2new[j].reshape(nocc,-1), 1)
         tmp = None
         l1new[p0:p1] += numpy.einsum('iajb,jb->ia', eris_ovov, mia1) * 2
         l1new[p0:p1] -= numpy.einsum('ibja,jb->ia', eris_ovov, mia1)
         m4buf = numpy.empty((blksize,nocc,nvir,nvir))
-        for j0, j1 in ccsd.prange(0, nocc, blksize):
+        for j0, j1 in prange(0, nocc, blksize):
             #:m4 = numpy.einsum('kalb,ijkl->ijab', eris_ovov, l2tau[j0:j1,:,p0:p1])
             m4 = m4buf[:j1-j0]
             lib.dot(l2tau[j0:j1,:,p0:p1].reshape((j1-j0)*nocc,-1).copy(),
-                    ccsd._cp(eris_ovov.transpose(0,2,1,3).reshape(-1,nvir**2)),
+                    _cp(eris_ovov.transpose(0,2,1,3).reshape(-1,nvir**2)),
                     .5, m4.reshape(-1,nvir**2))
             l2new[j0:j1] += m4
             l1new[j0:j1] += numpy.einsum('ijab,jb->ia', m4, t1) * 4
@@ -476,15 +478,15 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
         eris_ovov = m4buf = m4 = None
 #==== mem usage nocc*nvir**2 * 3
 
-        eris_oovv = ccsd._cp(eris.oovv[p0:p1])
+        eris_oovv = _cp(eris.oovv[p0:p1])
         l1new[p0:p1] -= numpy.einsum('jb,ijba->ia', l1, eris_oovv)
         eris_oovv = None
 
-        saved_wooov = ccsd._cp(saved.wooov[p0:p1])
+        saved_wooov = _cp(saved.wooov[p0:p1])
         #:l1new[p0:p1] -= numpy.einsum('jkca,ijkc->ia', l2, saved_wooov)
         l1new[p0:p1] -= lib.dot(saved_wooov.reshape(p1-p0,-1),
                                 l2.reshape(-1,nvir))
-        saved_wovvv = ccsd._cp(saved.wovvv[p0:p1])
+        saved_wovvv = _cp(saved.wovvv[p0:p1])
         #:l1new += numpy.einsum('kibc,kabc->ia', l2[p0:p1], saved_wovvv)
         for j in range(p1-p0):
             lib.dot(l2[p0+j].reshape(nocc,-1),
@@ -492,13 +494,13 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
         saved_wooov = saved_wovvv = None
 #==== mem usage nvir**3 + nocc**2*nvir
 
-        saved_wOvOv = ccsd._cp(saved.wOvOv[p0:p1])
-        tmp_ovov = ccsd._cp(saved.wOVov[p0:p1]) * 2
+        saved_wOvOv = _cp(saved.wOvOv[p0:p1])
+        tmp_ovov = _cp(saved.wOVov[p0:p1]) * 2
         tmp_ovov += saved_wOvOv
         tmp_ovov = lib.transpose(tmp_ovov.reshape(-1,nov)).reshape(nocc,nvir,-1,nvir)
         tmp1 = numpy.empty((p1-p0,nvir,nocc,nvir))
         tmp = numpy.empty((blksize,nvir,nocc,nvir))
-        for j0, j1 in ccsd.prange(0, nocc, blksize):
+        for j0, j1 in prange(0, nocc, blksize):
             #:tmp = l2[j0:j1].transpose(0,2,1,3) - l2[j0:j1].transpose(0,3,1,2)*.5
             #:l2new[p0:p1] += numpy.einsum('kcia,kcjb->jiba', tmp, tmp_ovov[j0:j1])
             for i in range(j1-j0):
@@ -519,7 +521,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
             l2new[p0:p1,j] += tmp * .5
         saved_wOvOv = tmp = None
 
-        saved_woooo = ccsd._cp(saved.woooo[p0:p1])
+        saved_woooo = _cp(saved.woooo[p0:p1])
         #:m3 = numpy.einsum('klab,ijkl->ijab', l2, saved_woooo)
         m3 = lib.dot(saved_woooo.reshape(-1,nocc**2),
                      l2.reshape(nocc**2,-1), .5).reshape(-1,nocc,nvir,nvir)
@@ -553,18 +555,12 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
     time0 = log.timer_debug1('update l1 l2', *time0)
     return l1new, l2new
 
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
-# t2*2 - t2.transpose(0,1,3,2)
-def make_theta(t2, out=None):
-    if out is None:
-        out = numpy.empty(t2.shape)
-    shape = numpy.asarray(t2.shape, dtype=numpy.int32)
-    ccsd.libcc.CCmake_g0132(out.ctypes.data_as(ctypes.c_void_p),
-                            t2.ctypes.data_as(ctypes.c_void_p),
-                            t2.ctypes.data_as(ctypes.c_void_p),
-                            shape.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_double(2), ctypes.c_double(-1))
-    return out
+def _cp(a):
+    return numpy.array(a, copy=False, order='C')
 
 
 if __name__ == '__main__':

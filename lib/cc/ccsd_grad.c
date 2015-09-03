@@ -53,23 +53,6 @@ int CCmmm_transpose_sum(double *vout, double *vin, struct _AO2MOEnvs *envs,
 }
 
 /*
- * out = in + in.transpose(0,2,1)
- */
-void CCsum021(double *out, double *in, int count, int m)
-{
-        int i, j, k, n;
-        size_t mm = m * m;
-        for (i = 0; i < count; i++) {
-                for (n = 0, j = 0; j < m; j++) {
-                for (k = 0; k < m; k++, n++) {
-                        out[n] = in[n] + in[k*m+j];
-                } }
-                out += mm;
-                in  += mm;
-        }
-}
-
-/*
  * for (ij|kl) == (ij|lk), in lower triangle kl
  * (ij|kl),lk->ij
  * (ij|kl),jk->il

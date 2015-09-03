@@ -11,8 +11,7 @@ import h5py
 import pyscf.lib as lib
 from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf.cc import ccsd_incore as ccsd
-from pyscf.cc import ccsd_lambda_incore as ccsd_lambda
+from pyscf.cc import _ccsd
 
 # dE = (goo * foo + gvv * fvv + doooo*eri_oooo + ...) * 2
 def gamma1_intermediates(mycc, t1, t2, l1, l2):
@@ -21,7 +20,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
     gvv = numpy.einsum('ia,ib->ab', l1, t1)
     #:goo -= numpy.einsum('jkab,ikab->ij', l2, theta)
     #:gvv += numpy.einsum('jica,jicb->ab', l2, theta)
-    theta = ccsd_lambda.make_theta(t2)
+    theta = make_theta(t2)
     goo -= lib.dot(theta.reshape(nocc,-1), l2.reshape(nocc,-1).T)
     gvv += lib.dot(l2.reshape(-1,nvir).T, theta.reshape(-1,nvir))
     return goo, gvv
@@ -36,7 +35,7 @@ def gamma2_incore(mycc, t1, t2, l1, l2):
     nov = nocc * nvir
 
     time1 = time.clock(), time.time()
-    #:theta = ccsd_lambda.make_theta(t2)
+    #:theta = make_theta(t2)
     #:mOvOv = numpy.einsum('ikca,jkcb->jbia', l2, t2)
     #:mOVov = -numpy.einsum('ikca,jkbc->jbia', l2, t2)
     #:mOVov += numpy.einsum('ikac,jkbc->jbia', l2, theta)
@@ -66,17 +65,17 @@ def gamma2_incore(mycc, t1, t2, l1, l2):
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
     gooov = numpy.zeros((nocc,nocc,nocc,nvir))
-    tau = ccsd.make_tau(t2, t1, t1)
+    tau = _ccsd.make_tau(t2, t1, t1)
     #:goooo = numpy.einsum('ijab,klab->klij', l2, tau)*.5
     goooo = lib.dot(tau.reshape(-1,nvir**2), l2.reshape(-1,nvir**2).T, .5)
     goooo = goooo.reshape(-1,nocc,nocc,nocc)
-    doooo = ccsd._cp(ccsd_lambda.make_theta(goooo).transpose(0,2,1,3))
+    doooo = _cp(make_theta(goooo).transpose(0,2,1,3))
 
     #:gooov -= numpy.einsum('ib,kjab->jkia', l1, tau)
     #:gooov -= numpy.einsum('kjab,ib->jkia', l2, t1)
     #:gooov += numpy.einsum('jkil,la->jkia', goooo, t1*2)
-    gooov = lib.dot(ccsd._cp(tau.reshape(-1,nvir)), l1.T, -1)
-    lib.dot(ccsd._cp(l2.reshape(-1,nvir)), t1.T, -1, gooov, 1)
+    gooov = lib.dot(_cp(tau.reshape(-1,nvir)), l1.T, -1)
+    lib.dot(_cp(l2.reshape(-1,nvir)), t1.T, -1, gooov, 1)
     gooov = gooov.reshape(nocc,nocc,nvir,nocc)
     tmp = numpy.einsum('ji,ka->jkia', moo*-.5, t1)
     tmp += gooov.transpose(1,0,3,2)
@@ -111,7 +110,7 @@ def gamma2_incore(mycc, t1, t2, l1, l2):
     gOvVo = numpy.einsum('ia,jb->jabi', l1, t1)
     gOvvO = numpy.empty((nocc,nvir,nvir,nocc))
     for i in range(nocc):
-        gOvVo[i] -= lib.dot(ccsd._cp(tmp[i].transpose(0,2,1).reshape(-1,nocc)),
+        gOvVo[i] -= lib.dot(_cp(tmp[i].transpose(0,2,1).reshape(-1,nocc)),
                             t1).reshape(nocc,nvir,-1).transpose(1,2,0)
         gOvVo[i] += mOVov[i].transpose(2,0,1)
         gOvvO[i] = lib.dot(tmp[i].reshape(nocc,-1).T,
@@ -128,12 +127,15 @@ def gamma2_incore(mycc, t1, t2, l1, l2):
         doovv[i] = tmp.transpose(2,0,1)
     gOvvO = gOvVo = None
 
-    tau2 = ccsd.make_tau(t2, t1, t1)
+    tau2 = _ccsd.make_tau(t2, t1, t1)
     #:goovv += numpy.einsum('ijkl,klab->ijab', goooo[:,:,j0:j1], tau2)
     lib.dot(goooo.reshape(nocc*nocc,-1),
             tau2.reshape(-1,nvir**2), 1, goovv.reshape(-1,nvir**2), 1)
     tau2 += numpy.einsum('ia,jb->ijab', t1, t1)
-    tau2 = ccsd._cp(tau2.transpose(0,3,1,2).reshape(nov,-1))
+    tau2p = tau2.reshape(nocc,nvir,nocc,nvir)
+    for i in range(nocc):
+        tau2p[i] = tau2[i].transpose(2,0,1)
+    tau2, tau2p = tau2p.reshape(nov,-1), None
     #:goovv += numpy.einsum('ibld,jlda->ijab', mOvOv, tau2) * .5
     #:goovv -= numpy.einsum('iald,jldb->ijab', mOVov, tau2) * .5
     tmp = lib.dot(mOvOv.reshape(-1,nov), tau2.T, .5).reshape(nocc,nvir,-1,nvir)
@@ -141,67 +143,88 @@ def gamma2_incore(mycc, t1, t2, l1, l2):
         tmp[i] = goovv[i].transpose(1,0,2) + tmp[i].transpose(2,1,0)
     goovv, tmp = tmp, None
     lib.dot(mOVov.reshape(-1,nov), tau2.T, -.5, goovv.reshape(nov,-1), 1)
-    tau2 = None
 
     #:goovv += numpy.einsum('iald,jlbd->ijab', mOVov*2+mOvOv, t2) * .5
-    tmp = mOVov*2
-    tmp += mOvOv
-    t2a = numpy.empty((nocc,nvir,nocc,nvir))
+    t2a, tau2 = tau2.reshape(nocc,nvir,nocc,nvir), None
     for i in range(nocc):
         t2a[i] = t2[i].transpose(1,0,2)
-    lib.dot(tmp.reshape(-1,nov), t2a.reshape(nov,-1),
-            .5, goovv.reshape(nov,-1), 1)
+    tmp = mOVov*2
+    tmp += mOvOv
+    lib.dot(tmp.reshape(-1,nov), t2a.reshape(nov,-1), .5, goovv.reshape(nov,-1), 1)
     t2a = tmp = None
-    dovov = goovv*2 - goovv.transpose(0,3,2,1)
+    for i in range(nocc):
+        goovv[i] = goovv[i] * 2 - goovv[i].transpose(2,1,0)
+    dovov = goovv
     goooo = goovv = None
+
+    #:gvovv += numpy.einsum('aick,kb->aibc', pvOVo, t1)
+    mOVov = lib.transpose(mOVov.reshape(nov,-1))
+    gvovv = lib.dot(mOVov.reshape(nocc,-1).T, t1).reshape(nvir,nocc,nvir,nvir)
+    mOVov = None
+    tmp = numpy.einsum('ja,jb->ab', l1, t1)
+    #:gvovv += numpy.einsum('ab,ic->aibc', tmp, t1)
+    #:gvovv += numpy.einsum('ba,ic->aibc', mvv, t1*.5)
+    for i in range(nvir):
+        gvovv[i] += numpy.einsum('b,ic->icb', tmp[i], t1)
+        gvovv[i] += numpy.einsum('b,ic->icb', mvv[:,i]*.5, t1)
+        gvovv[i] = gvovv[i].transpose(0,2,1)
+
+    #:gvovv += numpy.einsum('ja,jibc->aibc', l1, t2)
+    #:gvovv += numpy.einsum('jibc,ja->aibc', l2, t1)
+    #:gvovv -= numpy.einsum('aibk,kc->aibc', pvOvO, t1)
+    mOvOv = lib.transpose(mOvOv.reshape(nov,-1))
+    lib.dot(mOvOv.reshape(nocc,-1).T, t1, -1, gvovv.reshape(-1,nvir), 1)
+    mOvOv = None
+    lib.dot(l1.T, t2.reshape(nocc,-1), 1, gvovv.reshape(nvir,-1), 1)
+    lib.dot(t1.T, l2.reshape(nocc,-1), 1, gvovv.reshape(nvir,-1), 1)
+
+    tmp = numpy.empty((nocc,nvir,nvir))
+    for i in range(nvir):
+        #:gvovv*2 - gvovv.transpose(0,1,3,2)
+        gvovv[i] = _ccsd.make_021(gvovv[i], gvovv[i], 2, -1, out=tmp)
 
     #:gvvvv = numpy.einsum('ijab,ijcd->abcd', l2, t2)*.5
     #:jabc = numpy.einsum('ijab,ic->jabc', l2, t1) * .5
     #:gvvvv += numpy.einsum('jabc,jd->abcd', jabc, t1)
-    tau = ccsd.make_tau(t2, t1, t1)
-    l2tmp = ccsd.pack_tril(l2.reshape(-1,nvir,nvir))
-    tmp = lib.dot(l2tmp.T, tau.reshape(nocc**2,-1), .5).reshape(-1,nvir,nvir)
-    gvvvv = numpy.empty((nvir,)*4)
+    #:gvovv -= numpy.einsum('adbc,id->aibc', gvvvv, t1*2)
+    tau = _ccsd.make_tau(t2, t1, t1)
+    theta = make_theta(tau)
+    tau = None
+    l2tmp = _ccsd.pack_tril(l2.reshape(-1,nvir,nvir))
+    gtmp = lib.dot(l2tmp.T, theta.reshape(nocc**2,-1), .5).reshape(-1,nvir,nvir)
+    l2tmp = theta = None
+    nvir_pair = nvir * (nvir+1) //2
+    tmp = numpy.empty((nvir,nvir,nvir))
+    tmp1 = numpy.empty((nvir,nvir,nvir))
+    tmptril = numpy.empty((nvir,nvir_pair))
+    diag_idx = numpy.arange(nvir)
+    diag_idx = diag_idx*(diag_idx+1)//2 + diag_idx
+
+    dvvvv = numpy.empty((nvir_pair,nvir_pair))
+    dovvv = numpy.empty((nocc,nvir,nvir,nvir))
+# dvvov = (gvovv*2 - gvovv.transpose(0,1,3,2)).transpose(0,2,1,3)
+# dovvv = dvvov.transpose(2,3,0,1)
     p0 = 0
     for i in range(nvir):
-        gvvvv[i,:i] = tmp[p0:p0+i]
-        gvvvv[:i,i] = tmp[p0:p0+i].transpose(0,2,1)
-        gvvvv[i,i] = tmp[p0+i]
+        tmp[:i+1] = gtmp[p0:p0+i+1]
+        for j in range(i+1, nvir):
+            tmp[j] = gtmp[j*(j+1)//2+i].T
+        lib.dot(t1, tmp.reshape(nvir,-1), -2, gvovv[i].reshape(nocc,-1), 1)
+        dovvv[:,:,i] = gvovv[i].transpose(0,2,1)
+
+        #:gvvvv[i] = (tmp*2-tmp.transpose(0,2,1)).transpose(1,0,2)
+        #:gvvvv = .5*(gvvvv+gvvvv.transpose(0,1,3,2))
+        #:dvvvv = .5*(gvvvv+gvvvv.transpose(1,0,3,2))
+        tmp1[:] = tmp.transpose(1,0,2)
+        _ccsd.precontract(tmp1, diag_fac=2, out=tmptril)
+        dvvvv[p0:p0+i] += tmptril[:i]
+        dvvvv[p0:p0+i] *= .25
+        dvvvv[i*(i+1)//2+i] = tmptril[i] * .5
+        for j in range(i+1, nvir):
+            dvvvv[j*(j+1)//2+i] = tmptril[j]
         p0 += i + 1
-
-    #:gvovv = numpy.einsum('ja,jibc->aibc', l1, t2)
-    #:gvovv += numpy.einsum('jibc,ja->aibc', l2, t1)
-    tmp = numpy.einsum('ja,jb->ab', l1, t1)
-    gvovv  = numpy.einsum('ab,ic->aibc', tmp, t1)
-    gvovv += numpy.einsum('ba,ic->aibc', mvv, t1*.5)
-    lib.dot(l1.T, t2.reshape(nocc,-1), 1, gvovv.reshape(nvir,-1), 1)
-    lib.dot(t1.T, l2.reshape(nocc,-1), 1, gvovv.reshape(nvir,-1), 1)
-    #:gvovv -= numpy.einsum('adbc,id->aibc', gvvvv, t1*2)
-    theta = numpy.empty((nvir,nvir,nvir))
-    for j in range(nvir):
-        lib.dot(t1, gvvvv[j].reshape(nvir,-1), -2,
-                gvovv[j].reshape(nocc,-1), 1)
-
-        theta = ccsd_lambda.make_theta(gvvvv[j:j+1], theta)
-        gvvvv[j] = theta.transpose(1,0,2)
-    dvvvv, gvvvv = gvvvv, None
-    theta = None
-
-    #:gvovv -= numpy.einsum('aibk,kc->aibc', pvOvO, t1)
-    #:gvovv += numpy.einsum('aick,kb->aibc', pvOVo, t1)
-    mOvOv = lib.transpose(mOvOv.reshape(nov,-1))
-    lib.dot(mOvOv.reshape(nocc,-1).T, t1, -1, gvovv.reshape(-1,nvir), 1)
-    mOvOv = None
-
-    mOVov = lib.transpose(mOVov.reshape(nov,-1))
-    tmp = lib.dot(mOVov.reshape(nocc,-1).T, t1).reshape(nvir,nocc,nvir,-1)
-    mOVov = None
-    dvvov = numpy.empty((nvir,nvir,nocc,nvir))
-    for i in range(nvir):
-        gvovv[i] += tmp[i].transpose(0,2,1)
-        dvvov[i] = gvovv[i].transpose(1,0,2)*2 - gvovv[i].transpose(2,0,1)
-    dovvv = dvvov.transpose(2,3,0,1)
-    gvovv = None
+    gtmp = tmp = tmp1 = tmptril = gvovv = None
+    dvvov = dovvv.transpose(2,3,0,1)
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
 def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
@@ -248,7 +271,8 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     dm2[nocc:,:nocc,:nocc,nocc:] = \
             (dovvo.transpose(2,3,0,1)+dovvo.transpose(1,0,3,2))
 
-    dm2[nocc:,nocc:,nocc:,nocc:] =(dvvvv+dvvvv.transpose(1,0,3,2)) * 2
+    dm2[nocc:,nocc:,nocc:,nocc:] = ao2mo.restore(1, dvvvv, nvir)
+    dm2[nocc:,nocc:,nocc:,nocc:] *= 4
 
     dm2[:nocc,:nocc,:nocc,:nocc] =(doooo+doooo.transpose(1,0,3,2)) * 2
 
@@ -280,6 +304,12 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
             dm2[i,j,j,i] -= 2
 
     return dm2
+
+def _cp(a):
+    return numpy.array(a, copy=False, order='C')
+
+def make_theta(t2):
+    return _ccsd.make_0132(t2, t2, 2, -1)
 
 
 if __name__ == '__main__':
@@ -328,6 +358,7 @@ if __name__ == '__main__':
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             gamma2_intermediates(mcc, t1, t2, l1, l2)
 
+    dvvvv = ao2mo.restore(1, dvvvv, nvir)
     print('doooo',numpy.einsum('kilj,kilj', doooo, eris.oooo)*2-15939.9007625418)
     print('dvvvv',numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2-37581.823919588 )
     print('dooov',numpy.einsum('jkia,jkia', dooov, eris.ooov)*2-128470.009687716)
