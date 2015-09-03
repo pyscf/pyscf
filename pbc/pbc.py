@@ -61,17 +61,11 @@ def get_SI(cell, Gv):
 
     return SI
 
-def ewald_rs(cell, ewrc, ewcut):
+def ewald_rs(cell, gs, ew_eta, ew_cut):
     '''
     Real-space Ewald sum 
 
-    This implements Eq. (3.46), Eq. (3.47) in MH, but 
-    has only a single Ewald length (Rc is same for all ions).
-    This is equivalent to the formulation in Martin, App. F.3,
-    and should be equivalent to the uniform background formulae of Martin, App. F.2
-
-    ewrc : Ewald length (Rc param in MH)
-    ewcut : [ewcutx, ewcuty, ewcutz]
+    Formulation of Martin, App. F2.
 
     Returns
         float
@@ -81,7 +75,8 @@ def ewald_rs(cell, ewrc, ewcut):
     coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
 
     ewovrl = 0.
-    for (ix, iy, iz) in np.ndindex(ewcut):
+    # real-space sum
+    for (ix, iy, iz) in np.ndindex(ew_cut):
         L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
 
         # prime in summation to avoid self-interaction in unit cell
@@ -94,18 +89,87 @@ def ewald_rs(cell, ewrc, ewcut):
                     qj = chargs[ja]
                     rj = coords[ja]
                     r = np.linalg.norm(ri-rj)
-                    ewovrl += qi * qj / r * math.erfc(r / math.sqrt(2*ewrc**2))
+                    ewovrl += qi * qj / r * math.erfc(ew_eta * r)
             else:
+                #print "hello", ix,iy,iz, ewovrl
                 for ja in range(mol.natm):
                     qj=chargs[ja]
                     rj=coords[ja]
 
                     r=np.linalg.norm(ri-rj+L)
-                    ewovrl += qi * qj / r * math.erfc(r / math.sqrt(2*ewrc**2))
+                    ewovrl += qi * qj / r * math.erfc(ew_eta * r)
         
-    ewself = 1./(math.sqrt(2*pi) * ewrc) * np.dot(chargs,chargs)
+    # last line of Eq. (F.5) in Martin 
+    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / sqrt(pi)
+    ewself += -1./2. * np.sum(chargs)**2 * pi/(ew_eta**2 * cell.vol)
     
-    return ewovrl - ewself
+    # g-space sum (using g grid) (Eq. (F.6) in Martin 
+    # - note must include 4pi/cell.vol)
+    ewg=0.
+    Gv=get_Gv(cell, gs)
+    SI=get_SI(cell, Gv)
+
+    coulG=get_coulG(cell, gs)
+    print Gv.shape
+    print SI.shape
+    for ia in range(mol.natm):
+        tmp=np.empty(Gv.shape[1])
+        for ig in range(Gv.shape[1]):
+            tmp[ig]=SI[ia,ig]*exp(-np.linalg.norm(Gv[:,ig])**2/(8*ew_eta**2))
+
+        ewg+=np.sum(np.array(tmp)*coulG)
+    ewg/=cell.vol
+    
+    return ewovrl + ewself + ewg
+
+
+
+
+# def ewald_rs(cell, ewrc, ewcut):
+#     '''
+#     Real-space Ewald sum 
+
+#     This implements Eq. (3.46), Eq. (3.47) in MH, but 
+#     has only a single Ewald length (Rc is same for all ions).
+#     This is equivalent to the formulation in Martin, App. F.3,
+#     and should be equivalent to the uniform background formulae of Martin, App. F.2
+
+#     ewrc : Ewald length (Rc param in MH)
+#     ewcut : [ewcutx, ewcuty, ewcutz]
+
+#     Returns
+#         float
+#     '''
+#     mol=cell.mol
+#     chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
+#     coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
+
+#     ewovrl = 0.
+#     for (ix, iy, iz) in np.ndindex(ewcut):
+#         L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
+
+#         # prime in summation to avoid self-interaction in unit cell
+#         for ia in range(mol.natm):
+#             qi = chargs[ia]
+#             ri = coords[ia]
+
+#             if ix == 0 and iy == 0 and iz == 0:
+#                 for ja in range(ia):
+#                     qj = chargs[ja]
+#                     rj = coords[ja]
+#                     r = np.linalg.norm(ri-rj)
+#                     ewovrl += qi * qj / r * math.erfc(r / math.sqrt(2*ewrc**2))
+#             else:
+#                 for ja in range(mol.natm):
+#                     qj=chargs[ja]
+#                     rj=coords[ja]
+
+#                     r=np.linalg.norm(ri-rj+L)
+#                     ewovrl += qi * qj / r * math.erfc(r / math.sqrt(2*ewrc**2))
+        
+#     ewself = 1./(math.sqrt(2*pi) * ewrc) * np.dot(chargs,chargs)
+    
+#     return ewovrl - ewself
 
 def gen_qv(ngs):
     '''
@@ -174,9 +238,9 @@ def ifft(g, gs):
     f3d=np.fft.ifftn(g3d)
     return np.ravel(f3d)
 
-def get_nuc(cell, gs):
+def get_nuc(cell, gs, ewrc=1.e-6):
     '''
-    Bare nuc-el AO matrix
+    Bare nuc-el AO matrix (G=0 component removed)
     '''
     mol=cell.mol
 
@@ -187,12 +251,20 @@ def get_nuc(cell, gs):
     aoR=get_aoR(cell, coords)
 
     vneR=np.zeros(aoR.shape[0])
-    for ia in range(mol.natm):
-        qi = chargs[ia]
-        ri = nuc_coords[ia]
-        vneR-=np.array([qi/np.linalg.norm(ri-coords[j]) 
-                        for j in range(len(coords))])
-    
+
+    for a in range(mol.natm):
+        qa = chargs[a]
+        ra = nuc_coords[a]
+        riav = [np.linalg.norm(ra-ri) for ri in coords]
+        #vneR-=np.array([qa/ria*math.erf(ria/ewrc)
+        #                for ria in riav]) # Eq. (3.40) MH
+        vneR-=np.array([qa/ria for ria in riav])
+
+    # Set G=0 component to 0.
+    vneG=fft(vneR, gs)
+    vneG[0]=0.
+    vneR=ifft(vneG,gs)
+
     nao=aoR.shape[1]
     vne=np.zeros([nao, nao])
     for i in range(nao):
@@ -212,18 +284,22 @@ def get_t(cell, gs):
     aoR=get_aoR(cell, coords)
     aoG=np.empty(aoR.shape, np.complex128)
     TaoG=np.empty(aoR.shape, np.complex128)
-    TaoR=np.empty(aoR.shape, np.complex128)
+    #TaoR=np.empty(aoR.shape, np.complex128)
 
     nao=aoR.shape[1]
     for i in range(nao):
         aoG[:,i]=fft(aoR[:,i], gs)
         TaoG[:,i]=0.5*G2*aoG[:,i]
-        TaoR[:,i]=ifft(TaoG[:,i], gs)
+        #TaoR[:,i]=ifft(TaoG[:,i], gs)
                 
     t=np.empty([nao,nao])
+    # for i in range(nao):
+    #     for j in range(nao):
+    #         t[i,j]=np.vdot(aoR[:,i],TaoR[:,j])*cell.vol/aoR.shape[0]
     for i in range(nao):
         for j in range(nao):
-            t[i,j]=np.vdot(aoR[:,i],TaoR[:,j])*cell.vol/aoR.shape[0]
+            t[i,j]=np.vdot(aoG[:,i],TaoG[:,j])*cell.vol/(aoR.shape[0])**2
+
     return t
 
 def get_ovlp(cell, gs):
@@ -266,57 +342,61 @@ def get_j(cell, dm, gs):
 
     coords, weights=setup_ao_grids(cell, gs)
     aoR=get_aoR(cell, coords)
+
     rhoR=get_rhoR(cell, aoR, dm)
     rhoG=fft(rhoR, gs)
+
     vG=coulG*rhoG
-
     vR=ifft(vG, gs)
-    aoR=get_aoR(cell, coords)
-    nao=aoR.shape[1]
 
+    nao=aoR.shape[1]
     vj=np.zeros([nao,nao])
     for i in range(nao):
         for j in range(nao):
             vj[i,j]=cell.vol/aoR.shape[0]*np.dot(aoR[:,i],vR*aoR[:,j])
-
+           
     return vj
 
-def ecoul(cell, dm, gs, ewrc, ewcut):
-    '''
-    Combined e-e, e-n Coulomb energy using Ewald sums (Eq. (3.45) MH)
     
-    ******** this function is broken ********
-    Returns
-        float
-    '''
-    Gv=get_Gv(cell, gs)
-    SI=get_SI(cell, Gv)
 
-    coulG=get_coulG(cell, gs)
-
-    coords, weights=setup_ao_grids(cell, gs)
-    aoR=get_aoR(cell, coords)
-    rhoR=get_rhoR(cell, aoR, dm)
-    rhoG=fft(rhoR, gs)
-
-    rhocG=np.zeros(rhoG.shape, np.complex128)
-    mol=cell.mol
-    chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
-    print rhoG.shape, SI.shape, Gv.shape
-    for ia in range(mol.natm):
-        qi = chargs[ia]
-        rhocG-=np.array([qi/sqrt(4*pi)*
-                         exp(-0.25*np.linalg.norm(Gv[:,g])**2 * ewrc**2)
-                         *SI[ia,g] for g in range(SI.shape[1])])
+# def ecoul(cell, dm, gs, ewrc, ewcut):
+#     '''
+#     Combined e-e, e-n Coulomb energy using Ewald sums (Eq. (3.45) MH)
     
-    rho=rhoG+1./cell.vol*rhocG
+#     ******** this function is broken ********
+#     Returns
+#         float
+#     '''
+#     Gv=get_Gv(cell, gs)
+#     SI=get_SI(cell, Gv)
+
+#     coulG=get_coulG(cell, gs)
+
+#     coords, weights=setup_ao_grids(cell, gs)
+#     ngs=len(weights)
+#     aoR=get_aoR(cell, coords)
+#     rhoR=get_rhoR(cell, aoR, dm)
+#     rhoG=fft(rhoR, gs)
+
+#     rhocG=np.zeros(rhoG.shape, np.complex128)
+#     mol=cell.mol
+#     chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
+#     print "charges", chargs
+#     for ia in range(mol.natm):
+#         qi = chargs[ia]
+#         rhocG-=np.array([qi/sqrt(4*pi)*
+#                          exp(-0.25*np.linalg.norm(Gv[:,g])**2 * ewrc**2)
+#                          *SI[ia,g] for g in range(SI.shape[1])])
     
-    print cell.vol
-    print SI.shape[1]
-    e_g=2*pi*cell.vol*np.sum(coulG*np.abs(rho)**2)
-    e_rs=ewald_rs(cell, ewrc, ewcut)
-    print e_g, e_rs
-    return e_g+e_rs
+#     #rho=rhoG+1./cell.vol*rhocG ## what is the right factor?
+#     rho=rhoG+rhocG
+#     #rho=rhoG
+    
+#     e_g=.5*cell.vol*np.sum(coulG*np.abs(rho)**2)/ngs**2
+
+#     e_rs=ewald_rs(cell, ewrc, ewcut)
+#     print e_g, e_rs
+#     return e_g+e_rs
 
 def test():
     from pyscf import gto
@@ -329,8 +409,13 @@ def test():
     L=40
     h=np.eye(3.)*L
 
+
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
-    mol.basis = { 'He': 'cc-pVDZ'}
+    #mol.basis = { 'He': 'STO-3G'}
+    mol.basis = { 'He': [[0,
+                          (1.0, 1.0)]] }
+#        (0.2089, 0.307737),]] }
+    
     mol.build()
     m = rks.RKS(mol)
     m.xc = 'LDA,VWN_RPA'
@@ -342,13 +427,13 @@ def test():
     cell.h=h
     
     cell.vol=scipy.linalg.det(cell.h)
-    gs=np.array([20,20,20]) # number of G-points in grid. Real-space dim=2*gs+1
+    gs=np.array([10,10,10]) # number of G-points in grid. Real-space dim=2*gs+1
     Gv=get_Gv(cell, gs)
 
-    SI=get_SI(cell, Gv)
-    ewrc=0.5
-    ewcut=(1,1,1)
-    ew_rs=ewald_rs(cell, ewrc, ewcut)
+    # SI=get_SI(cell, Gv)
+    # ewrc=0.5
+    # ewcut=(1,1,1)
+    # ew_rs=ewald_rs(cell, ewrc, ewcut)
 
     coords, weights=setup_ao_grids(cell, gs)
 
@@ -375,28 +460,42 @@ def test():
     # print np.dot(np.ravel(sao), np.ravel(dm))
     # print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm))
 
-    print "Coulomb"
+    # print "Coulomb"
     jao=get_j(cell,dm,gs)
     print jao
     print m.get_j(dm)
-    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))
-    print np.dot(np.ravel(dm),np.ravel(jao))
+    # # print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))
+    # print "Coulomb energy", .5*np.dot(np.ravel(dm),np.ravel(jao))
 
     print "Nuc-el"
     neao=get_nuc(cell,gs)
-    print neao
+    # print neao
     vne=mol.intor_symmetric('cint1e_nuc_sph') 
-    print vne
+    # print vne
     print np.dot(np.ravel(dm), np.ravel(vne))
     print np.dot(np.ravel(dm), np.ravel(neao))
-
     print "Normalization"
     rhoR=get_rhoR(cell, aoR, dm)
 
-    # print cell.vol
-    # print rhoR.shape
-    # # should be 2.0, gets 1.99004869382. With 27 million pts!!
+    print "(Hartree + vne) * DM"
+    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))+np.dot(np.ravel(dm), np.ravel(vne))
+    print np.einsum("ij,ij",dm,neao+jao)
+
+    # # print cell.vol
+    # # print rhoR.shape
+    # # # should be 2.0, gets 1.99004869382. With 27 million pts!!
     print cell.vol/len(rhoR)*np.sum(rhoR) 
 
-    print "total coulomb"
-    print ecoul(cell, dm, gs, ewrc, ewcut)
+    # print "total coulomb"
+
+    ewcut=(10,10,10)
+
+    # print ecoul(cell, dm, gs, ewrc, ewcut)
+    for ew_eta in [0.5, 1., 2.]:
+
+        ew=ewald_rs(cell, gs, ew_eta, ewcut)
+        print "ewald divergent terms summation", ew
+
+    print "actual coulomb", .5*np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))+np.dot(np.ravel(dm), np.ravel(vne))
+
+    print "fft coul + ewald", np.einsum("ij,ij",dm,neao+.5*jao)+ew
