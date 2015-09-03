@@ -2,14 +2,20 @@ import math
 import numpy as np
 import scipy.linalg
 import pyscf.gto.mole
+import pyscf.dft.numint
+
 
 pi=math.pi
 
+'''PBC module. Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"'''
+
 class Cell:
-    def __init__(self, mol, h):
-        self.mol = mol
-        self.h=h
-        self.vol=scipy.linalg.det(h)
+    def __init__(self, **kwargs):
+        self.mol = None
+        self.h = None
+        self.vol = 0.
+        self.gs = []
+        self.Ns = []
 
 def get_gv(gs):
     '''
@@ -17,9 +23,10 @@ def get_gv(gs):
     gs: [gsx, gsy, gsz]
     
     Returns 
-        [[-gsx, -gsx+1, ..., gsx],
-         [-gsy  -gsy+1, ..., gsy],
-         [-gsz, -gsz+1, ..., gsz]]
+         3 * (gsx*gsy*gsz) matrix
+         [-gsx, -gsx,   ..., gsx]
+         [-gsy, -gsy,   ..., gsy]
+         [-gsz, -gsz+1, ..., gsz]
     '''
     ngs=tuple(2*np.array(gs)+1)
     gv=np.array(list(np.ndindex(ngs)))
@@ -29,7 +36,7 @@ def get_gv(gs):
 
 def get_Gv(cell, gv):
     '''
-    cube of G vectors (Eq. (3.8), HM),
+    cube of G vectors (Eq. (3.8), MH),
 
     Returns 
         np.array([3, ngs], np.complex128)
@@ -41,7 +48,7 @@ def get_Gv(cell, gv):
 
 def get_SI(cell, Gv):
     '''
-    structure factor (Eq. (3.34), HM)
+    structure factor (Eq. (3.34), MH)
 
     Returns 
         np.array([natm, ngs], np.complex128)
@@ -60,12 +67,12 @@ def ewald_rs(cell, ewrc, ewcut):
     '''
     Real-space Ewald sum 
 
-    This implements Eq. (3.46), Eq. (3.47) in HM, but 
+    This implements Eq. (3.46), Eq. (3.47) in MH, but 
     has only a single Ewald length (Rc is same for all ions).
     This is equivalent to the formulation in Martin, App. F.3,
     and should be equivalent to the uniform background formulae of martin, App. F.2
 
-    ewrc : Ewald length (Rc param in HM)
+    ewrc : Ewald length (Rc param in MH)
     ewcut : [ewcutx, ewcuty, ewcutz]
 
     Returns
@@ -102,6 +109,41 @@ def ewald_rs(cell, ewrc, ewcut):
     
     return ewovrl - ewself
 
+def gen_qv(Rs):
+    '''
+    integer cube of indices, 0...Ns-1 along each direction
+    Ns: [Nsx, Nsy, Nsz]
+
+    Returns 
+         3 * (Nsx*Nsy*Nsz) matrix
+         [0, 0, ... Nsx-1]
+         [0, 0, ... Nsy-1]
+         [0, 1, ... Nsz-1]
+    '''
+    return np.array(list(np.ndindex(tuple(Rs)))).T
+
+def setup_ao_grids(cell, qv):
+    '''
+    Real-space AO uniform grid, following Eq. (3.19) (MH)
+    '''
+    mol=cell.mol
+    invN=np.diag(1./np.array(cell.Ns))
+    R=np.dot(np.dot(cell.h, invN), qv)
+    coords=R.T.copy() #pyscf notation for grids (also make C-contiguous with copy)
+    weights=np.ones(coords.shape)
+    return coords, weights
+
+def get_aoR(cell, coords):
+    aoR=pyscf.dft.numint.eval_ao(cell.mol, coords)
+    return aoR
+
+def get_rhoR(cell, aoR, dm):
+    rhoR=pyscf.dft.numint.eval_rho(cell.mol, aoR, dm)
+    return rhoR
+
+def get_rhoK(rhoR, coords):
+    pass
+
 
 def test():
     from pyscf import gto
@@ -111,29 +153,43 @@ def test():
     mol.verbose = 7
     mol.output = '/dev/null'#'out_rks'
 
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
+    L=40
+    h=np.eye(3.)*L
+
+    mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
+    mol.basis = { 'He': 'sto-3g'}
     mol.build()
     m = rks.RKS(mol)
     m.xc = 'LDA,VWN_RPA'
     m.xc = 'b3lyp'
     print(m.scf()) # -2.90705411168
     
-    cell=Cell(mol, np.eye(3))
-    gs=np.array([2,2,2])
-    gv=get_gv(gs)
-    print gv
-
+    cell=Cell()
+    cell.mol=mol
+    cell.h=h
+    cell.gs=[2,2,2]
+    cell.Ns=[300,300,300]
+    cell.vol=scipy.linalg.det(cell.h)
+    
+    gv=get_gv(cell.gs)
     Gv=get_Gv(cell, gv)
-    print Gv
-    print Gv[:,0]
-    print Gv[:,-1]
 
     SI=get_SI(cell, Gv)
-    print SI.shape
 
     ewrc=0.5
     ewcut=(10,10,10)
     ew_rs=ewald_rs(cell, ewrc, ewcut)
+
+    qv=gen_qv(cell.Ns)
+    coords, weights=setup_ao_grids(cell, qv)
+
+    aoR=get_aoR(cell, coords)
+    dm=m.make_rdm1()
+    rhoR=get_rhoR(cell, aoR, dm)
+
+    print cell.vol
+    print rhoR.shape
+    # should be 2.0, gets 1.99004869382. With 27 million pts!!
+    print cell.vol/len(rhoR)*np.sum(rhoR) 
+
     
-    print ew_rs
