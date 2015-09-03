@@ -115,11 +115,7 @@ class localizer:
         eigs, vecs = np.linalg.eigh( B )
         C = np.dot(vecs.T, np.dot(self.u, vecs))
         D = np.zeros( C.shape, dtype=float )
-<<<<<<< HEAD
-        for row in range( C.shape[0] / 2 ):
-=======
         for row in range( C.shape[0] // 2 ):
->>>>>>> 3b89c52dfeb09f6910179533717c618c3dfa9238
             cosine = 0.5 * ( C[ 2*row, 2*row ] + C[ 2*row+1, 2*row+1 ] )
             sine   = 0.5 * ( C[ 2*row, 2*row+1 ] - C[ 2*row+1, 2*row ] )
             theta  = np.arctan2( sine, cosine )
