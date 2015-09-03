@@ -8,6 +8,8 @@ import pyscf.dft.numint
 
 
 pi=math.pi
+sqrt=math.sqrt
+exp=math.exp
 
 '''PBC module. Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"
 '''
@@ -172,6 +174,33 @@ def ifft(g, gs):
     f3d=np.fft.ifftn(g3d)
     return np.ravel(f3d)
 
+def get_nuc(cell, gs):
+    '''
+    Bare nuc-el AO matrix
+    '''
+    mol=cell.mol
+
+    chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
+    nuc_coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
+
+    coords, weights=setup_ao_grids(cell,gs)
+    aoR=get_aoR(cell, coords)
+
+    vneR=np.zeros(aoR.shape[0])
+    for ia in range(mol.natm):
+        qi = chargs[ia]
+        ri = nuc_coords[ia]
+        vneR-=np.array([qi/np.linalg.norm(ri-coords[j]) 
+                        for j in range(len(coords))])
+    
+    nao=aoR.shape[1]
+    vne=np.zeros([nao, nao])
+    for i in range(nao):
+        for j in range(nao):
+            vne[i,j]=cell.vol/aoR.shape[0]*np.vdot(aoR[:,i],vneR*aoR[:,j])
+
+    return vne
+
 def get_t(cell, gs):
     '''
     Kinetic energy AO matrix
@@ -214,9 +243,9 @@ def get_ovlp(cell, gs):
             s[i,j]=cell.vol/len(aoR)*np.vdot(aoR[:,i],aoR[:,j])
     return s
     
-def get_j(cell, dm, gs):
+def get_coulG(cell, gs):
     '''
-    Coulomb AO matrix 
+    Coulomb kernel in G space (4*pi/G^2 for G!=0, 0 for G=0)
     '''
     Gv=get_Gv(cell, gs)
 
@@ -226,6 +255,14 @@ def get_j(cell, dm, gs):
     # keep coulG[0]=0.0
     coulG[1:]=4*pi/np.array([np.inner(Gv[:,i], Gv[:,i]) 
                              for i in xrange(1, Gv.shape[1])])
+    
+    return coulG
+
+def get_j(cell, dm, gs):
+    '''
+    Coulomb AO matrix 
+    '''
+    coulG=get_coulG(cell, gs)
 
     coords, weights=setup_ao_grids(cell, gs)
     aoR=get_aoR(cell, coords)
@@ -240,9 +277,46 @@ def get_j(cell, dm, gs):
     vj=np.zeros([nao,nao])
     for i in range(nao):
         for j in range(nao):
-            vj[i,j]=cell.vol/aoR.shape[0]*np.vdot(aoR[:,i],vR*aoR[:,j])
+            vj[i,j]=cell.vol/aoR.shape[0]*np.dot(aoR[:,i],vR*aoR[:,j])
 
     return vj
+
+def ecoul(cell, dm, gs, ewrc, ewcut):
+    '''
+    Combined e-e, e-n Coulomb energy using Ewald sums (Eq. (3.45) MH)
+    
+    ******** this function is broken ********
+    Returns
+        float
+    '''
+    Gv=get_Gv(cell, gs)
+    SI=get_SI(cell, Gv)
+
+    coulG=get_coulG(cell, gs)
+
+    coords, weights=setup_ao_grids(cell, gs)
+    aoR=get_aoR(cell, coords)
+    rhoR=get_rhoR(cell, aoR, dm)
+    rhoG=fft(rhoR, gs)
+
+    rhocG=np.zeros(rhoG.shape, np.complex128)
+    mol=cell.mol
+    chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
+    print rhoG.shape, SI.shape, Gv.shape
+    for ia in range(mol.natm):
+        qi = chargs[ia]
+        rhocG-=np.array([qi/sqrt(4*pi)*
+                         exp(-0.25*np.linalg.norm(Gv[:,g])**2 * ewrc**2)
+                         *SI[ia,g] for g in range(SI.shape[1])])
+    
+    rho=rhoG+1./cell.vol*rhocG
+    
+    print cell.vol
+    print SI.shape[1]
+    e_g=2*pi*cell.vol*np.sum(coulG*np.abs(rho)**2)
+    e_rs=ewald_rs(cell, ewrc, ewcut)
+    print e_g, e_rs
+    return e_g+e_rs
 
 def test():
     from pyscf import gto
@@ -268,12 +342,12 @@ def test():
     cell.h=h
     
     cell.vol=scipy.linalg.det(cell.h)
-    gs=np.array([60,60,60]) # number of G-points in grid. Real-space dim=2*gs+1
+    gs=np.array([20,20,20]) # number of G-points in grid. Real-space dim=2*gs+1
     Gv=get_Gv(cell, gs)
 
     SI=get_SI(cell, Gv)
     ewrc=0.5
-    ewcut=(10,10,10)
+    ewcut=(1,1,1)
     ew_rs=ewald_rs(cell, ewrc, ewcut)
 
     coords, weights=setup_ao_grids(cell, gs)
@@ -283,23 +357,23 @@ def test():
 
     dm=m.make_rdm1()
 
-    print "Kinetic"
-    tao=get_t(cell, gs)
-    print tao
+    # print "Kinetic"
+    # tao=get_t(cell, gs)
+    # print tao
 
-    tao2 = mol.intor_symmetric('cint1e_kin_sph') 
-    print tao2
+    # tao2 = mol.intor_symmetric('cint1e_kin_sph') 
+    # print tao2
 
-    print "kinetic energies"
-    print np.dot(np.ravel(tao), np.ravel(dm))
-    print np.dot(np.ravel(tao2), np.ravel(dm))
-    sao=get_ovlp(cell,gs)
+    # print "kinetic energies"
+    # print np.dot(np.ravel(tao), np.ravel(dm))
+    # print np.dot(np.ravel(tao2), np.ravel(dm))
+    # sao=get_ovlp(cell,gs)
 
-    print "Overlap"
-    print sao
-    print m.get_ovlp()
-    print np.dot(np.ravel(sao), np.ravel(dm))
-    print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm))
+    # print "Overlap"
+    # print sao
+    # print m.get_ovlp()
+    # print np.dot(np.ravel(sao), np.ravel(dm))
+    # print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm))
 
     print "Coulomb"
     jao=get_j(cell,dm,gs)
@@ -308,6 +382,14 @@ def test():
     print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))
     print np.dot(np.ravel(dm),np.ravel(jao))
 
+    print "Nuc-el"
+    neao=get_nuc(cell,gs)
+    print neao
+    vne=mol.intor_symmetric('cint1e_nuc_sph') 
+    print vne
+    print np.dot(np.ravel(dm), np.ravel(vne))
+    print np.dot(np.ravel(dm), np.ravel(neao))
+
     print "Normalization"
     rhoR=get_rhoR(cell, aoR, dm)
 
@@ -315,3 +397,6 @@ def test():
     # print rhoR.shape
     # # should be 2.0, gets 1.99004869382. With 27 million pts!!
     print cell.vol/len(rhoR)*np.sum(rhoR) 
+
+    print "total coulomb"
+    print ecoul(cell, dm, gs, ewrc, ewcut)
