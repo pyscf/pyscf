@@ -5,12 +5,12 @@ import pyscf.gto.mole
 
 pi=math.pi
 
-class Cell(pyscf.gto.mole.Mole):
+class Cell:
     def __init__(self, mol, h):
-        pyscf.Mole.__init__(self, mol)
-        # h in HM (Eq. (3.1))
+        self.mol = mol
         self.h=h
-        
+        self.vol=scipy.linalg.det(h)
+
 def get_gv(gs):
     '''
     integer cube of indices, -gs...gs along each direction
@@ -21,37 +21,42 @@ def get_gv(gs):
          [-gsy  -gsy+1, ..., gsy],
          [-gsz, -gsz+1, ..., gsz]]
     '''
-    ngs=2*gs+1
-    gv=np.ndindex(2*gs+1)
-    gv-=np.array([gsx,gsy,gsz])
+    ngs=tuple(2*np.array(gs)+1)
+    gv=np.array(list(np.ndindex(ngs)))
+    gv-=np.array(gs)
+
     return gv.T
 
-def get_G(h, gv):
+def get_Gv(cell, gv):
     '''
     cube of G vectors (Eq. (3.8), HM),
 
     Returns 
         np.array([3, ngs], np.complex128)
     '''
-    invh=scipy.linalg.inv(h)
-    G=2*pi*np.dot(h,gs)
-    return G
+    invhT=scipy.linalg.inv(cell.h.T)
+    Gv=2*pi*np.dot(invhT,gv)
 
-def get_SI(cell, G):
+    return Gv
+
+def get_SI(cell, Gv):
     '''
     structure factor (Eq. (3.34), HM)
 
     Returns 
         np.array([natm, ngs], np.complex128)
     '''
-    ngs=G.shape[1]
-    SI=np.empty([natm, ngs], np.complex128)
+    ngs=Gv.shape[1]
+    mol=cell.mol
+    SI=np.empty([mol.natm, ngs], np.complex128)
+    mol=cell.mol
 
-    for ia in range(cell.natm):
-        SI[ia,:]=math.cexp(-1j*np.dot(G.T, cell.atom_coord(ia)))
+    for ia in range(mol.natm):
+        SI[ia,:]=np.exp(-1j*np.dot(Gv.T, mol.atom_coord(ia)))
+
     return SI
 
-def ewald_real_space(cell, SI, ewrc, ewcut):
+def ewald_rs(cell, ewrc, ewcut):
     '''
     Real-space Ewald sum 
 
@@ -66,15 +71,16 @@ def ewald_real_space(cell, SI, ewrc, ewcut):
     Returns
         float
     '''
+    mol=cell.mol
     chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
     coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
 
     ewovrl = 0.
-    for ix, iy, iz in ndenumerate(ewcut):
+    for (ix, iy, iz) in np.ndindex(ewcut):
         L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
 
         # prime in summation to avoid self-interaction in unit cell
-        for ia in range(cell.natm):
+        for ia in range(mol.natm):
             qi = chargs[ia]
             ri = coords[ia]
 
@@ -85,20 +91,22 @@ def ewald_real_space(cell, SI, ewrc, ewcut):
                     r = np.linalg.norm(ri-rj)
                     ewovrl += qi * qj / r * math.erfc(r / math.sqrt(2*ewrc**2))
             else:
-                for ja in range(cell.natm):
+                for ja in range(mol.natm):
                     qj=chargs[ja]
                     rj=coords[ja]
 
                     r=np.linalg.norm(ri-rj+L)
                     ewovrl += qi * qj / r * math.erfc(r / math.sqrt(2*ewrc**2))
         
-    ewself = 1./(math.sqrt(2*pi) * ewrc) * np.dot(chargs,charge)
+    ewself = 1./(math.sqrt(2*pi) * ewrc) * np.dot(chargs,chargs)
     
     return ewovrl - ewself
+
 
 def test():
     from pyscf import gto
     from pyscf.dft import rks
+
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'#'out_rks'
@@ -106,12 +114,26 @@ def test():
     mol.atom.extend([['He', (0.,0.,0.)], ])
     mol.basis = { 'He': 'cc-pvdz'}
     mol.build()
-
     m = rks.RKS(mol)
     m.xc = 'LDA,VWN_RPA'
     m.xc = 'b3lyp'
     print(m.scf()) # -2.90705411168
     
+    cell=Cell(mol, np.eye(3))
+    gs=np.array([2,2,2])
+    gv=get_gv(gs)
+    print gv
+
+    Gv=get_Gv(cell, gv)
+    print Gv
+    print Gv[:,0]
+    print Gv[:,-1]
+
+    SI=get_SI(cell, Gv)
+    print SI.shape
+
+    ewrc=0.5
+    ewcut=(10,10,10)
+    ew_rs=ewald_rs(cell, ewrc, ewcut)
     
-
-
+    print ew_rs
