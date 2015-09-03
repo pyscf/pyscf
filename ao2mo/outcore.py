@@ -472,8 +472,8 @@ def half_e1(mol, mo_coeffs, swapfile,
 def _load_from_h5g(h5group, row0, row1, vout):
     nrow = row1 - row0
     col0 = 0
-    for key in h5group.keys():
-        dat = h5group[key][row0:row1]
+    for key in range(len(h5group)):
+        dat = h5group[str(key)][row0:row1]
         col1 = col0 + dat.shape[1]
         vout[:nrow,col0:col1] = dat
         col0 = col1
