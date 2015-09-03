@@ -6,6 +6,7 @@
 import time
 import ctypes
 import tempfile
+from functools import reduce
 import numpy
 import h5py
 from pyscf import lib
@@ -424,7 +425,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self._nocc = int(self.mo_occ.sum()) // 2 - self.frozen
         else:
             mo_occ = self.mo_occ.copy()
-            mo_occ[self.frozen] = 0
+            if len(self.frozen) > 0:
+                mo_occ[numpy.asarray(self.frozen)] = 0
             self._nocc = int(mo_occ.sum()) // 2
         return self._nocc
 
@@ -617,8 +619,8 @@ class _ERIS:
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:cc.frozen] = False
-        else:
-            moidx[cc.frozen] = False
+        elif len(cc.frozen) > 0:
+            moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
             self.fock = numpy.diag(cc.mo_energy[moidx])

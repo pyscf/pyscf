@@ -48,8 +48,8 @@ m = scf.RHF(mol)
 m.level_shift_factor = .2
 m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 # init guess can also be read from chkfile
-m.make_init_guess = scf.hf.init_guess_by_chkfile(mol, 'cr_atom.chk')
-m.scf()
+dm = m.from_chk('cr_atom.chk')
+m.scf(dm)
 
 
 

@@ -91,7 +91,7 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
     
     S_ao     = myMF.get_ovlp( myMF.mol )
     OEI_ao   = myMF.get_hcore( myMF.mol )
-    numPairs = myMF.mol.nelectron / 2
+    numPairs = myMF.mol.nelectron // 2
     numVirt  = OEI_ao.shape[0] - numPairs
     numVars  = numPairs * numVirt
     
