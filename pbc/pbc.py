@@ -54,9 +54,9 @@ def ewald_real_space(cell, SI, ewrc, ewcut):
     Real-space Ewald sum 
 
     This implements Eq. (3.46), Eq. (3.47) in HM, but 
-    has only a single Ewald length (Rc is same for all ions)
-    and includes the additional second term in the last line of Eq. (F.5) in M,
-    which corrects the self-interaction of an ion with the uniform background
+    has only a single Ewald length (Rc is same for all ions).
+    This is equivalent to the formulation in Martin, App. F.3,
+    and should be equivalent to the uniform background formulae of martin, App. F.2
 
     ewrc : Ewald length (Rc param in HM)
     ewcut : [ewcutx, ewcuty, ewcutz]
@@ -92,10 +92,6 @@ def ewald_real_space(cell, SI, ewrc, ewcut):
         
     ewself = 1./(math.sqrt(2*pi) * ewrc) * np.dot(chargs,charge)
     
-    # 2nd term in last line of Eq. (F.5), M
-    eta = 1./(sqrt(2*ewrc)) # conversion to (F.5) notation
-    ewself += 1./2 * np.sum(chargs)**2 * pi / (eta**2 * cell.volume)
-
     return ewovrl - ewself
     
 
