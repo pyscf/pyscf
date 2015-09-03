@@ -20,8 +20,16 @@ exp=math.exp
 class PP:
     def __init__(self, **kwargs):
         self.typ = None
-        self.Z = Z
 
+        # EXAMPLE, B w/ LDA:
+        Z = 3
+        rloc = 0.4324996
+        C = [-5.6004798, 0.8062843]
+        rl = [0.3738823, 0.0]
+        hs = [6.2352212, 0.0]
+        h1p = 0.0
+
+        self.Z = Z
         # GTH-specific:
         self.rloc = rloc
         self.C = C
@@ -29,9 +37,13 @@ class PP:
         self.rl = rl   # a vector of length 2: [rs, rp]
         self.hs = hs   # a vector of length 2: [h1s, h2s]
         self.h1p = h1p # a scalar
+        # hs and hp should be zeros as necessary 
+        # (e.g. both zero for H,He,Li,Be)
+
 
     def v_gth_loc(r):
-        r_red = r/self.rloc
+        # Beware division by zero
+        r_red = r/(self.rloc+1e-10)
         return ( -self.Z/r * np.erf(r_red/sqrt(2))
             + exp(-0.5*r_red**2)*(self.C[0] + self.C[1]*r_red**2
                 + self.C[2]*r_red**4 + self.C[3]*r_red**6) )
