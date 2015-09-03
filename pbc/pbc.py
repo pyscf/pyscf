@@ -1,5 +1,7 @@
+import itertools
 import math
 import numpy as np
+import numpy.fft
 import scipy.linalg
 import pyscf.gto.mole
 import pyscf.dft.numint
@@ -7,42 +9,36 @@ import pyscf.dft.numint
 
 pi=math.pi
 
-'''PBC module. Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"'''
+'''PBC module. Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"
+'''
 
 class Cell:
     def __init__(self, **kwargs):
         self.mol = None
         self.h = None
         self.vol = 0.
-        self.gs = []
-        self.Ns = []
 
-def get_gv(gs):
-    '''
-    integer cube of indices, -gs...gs along each direction
-    gs: [gsx, gsy, gsz]
-    
-    Returns 
-         3 * (gsx*gsy*gsz) matrix
-         [-gsx, -gsx,   ..., gsx]
-         [-gsy, -gsy,   ..., gsy]
-         [-gsz, -gsz+1, ..., gsz]
-    '''
-    ngs=tuple(2*np.array(gs)+1)
-    gv=np.array(list(np.ndindex(ngs)))
-    gv-=np.array(gs)
-
-    return gv.T
-
-def get_Gv(cell, gv):
+def get_Gv(cell, gs):
     '''
     cube of G vectors (Eq. (3.8), MH),
 
+    Indices(along each direction go as
+    [0...gs, -gs...-1]
+    to follow FFT convention
+
     Returns 
-        np.array([3, ngs], np.complex128)
+        np.array([3, ngs], np.float64)
     '''
     invhT=scipy.linalg.inv(cell.h.T)
-    Gv=2*pi*np.dot(invhT,gv)
+
+    # maybe there's a better numpy way?
+    gxrange=range(gs[0]+1)+range(-gs[0],0)
+    gyrange=range(gs[1]+1)+range(-gs[1],0)
+    gzrange=range(gs[2]+1)+range(-gs[2],0)
+    gxyz=np.array([gxyz for gxyz in 
+                   itertools.product(gxrange, gyrange, gzrange)])
+
+    Gv=2*pi*np.dot(invhT,gxyz.T)
 
     return Gv
 
@@ -70,7 +66,7 @@ def ewald_rs(cell, ewrc, ewcut):
     This implements Eq. (3.46), Eq. (3.47) in MH, but 
     has only a single Ewald length (Rc is same for all ions).
     This is equivalent to the formulation in Martin, App. F.3,
-    and should be equivalent to the uniform background formulae of martin, App. F.2
+    and should be equivalent to the uniform background formulae of Martin, App. F.2
 
     ewrc : Ewald length (Rc param in MH)
     ewcut : [ewcutx, ewcuty, ewcutz]
@@ -109,25 +105,27 @@ def ewald_rs(cell, ewrc, ewcut):
     
     return ewovrl - ewself
 
-def gen_qv(Rs):
+def gen_qv(ngs):
     '''
-    integer cube of indices, 0...Ns-1 along each direction
-    Ns: [Nsx, Nsy, Nsz]
+    integer cube of indices, 0...ngs-1 along each direction
+    ngs: [ngsx, ngsy, ngsz]
 
     Returns 
-         3 * (Nsx*Nsy*Nsz) matrix
-         [0, 0, ... Nsx-1]
-         [0, 0, ... Nsy-1]
-         [0, 1, ... Nsz-1]
+         3 * (ngsx*ngsy*ngsz) matrix
+         [0, 0, ... ngsx-1]
+         [0, 0, ... ngsy-1]
+         [0, 1, ... ngsz-1]
     '''
-    return np.array(list(np.ndindex(tuple(Rs)))).T
+    return np.array(list(np.ndindex(tuple(ngs)))).T
 
-def setup_ao_grids(cell, qv):
+def setup_ao_grids(cell, gs):
     '''
     Real-space AO uniform grid, following Eq. (3.19) (MH)
     '''
     mol=cell.mol
-    invN=np.diag(1./np.array(cell.Ns))
+    ngs=2*gs+1
+    qv=gen_qv(ngs)
+    invN=np.diag(1./np.array(ngs))
     R=np.dot(np.dot(cell.h, invN), qv)
     coords=R.T.copy() #pyscf notation for grids (also make C-contiguous with copy)
     weights=np.ones(coords.shape)
@@ -141,9 +139,110 @@ def get_rhoR(cell, aoR, dm):
     rhoR=pyscf.dft.numint.eval_rho(cell.mol, aoR, dm)
     return rhoR
 
-def get_rhoK(rhoR, coords):
-    pass
+def fft(f, gs):
+    '''
+    3D FFT R to G space.
+    
+    f is evaluated on a real-space grid, assumed flattened
+    to a 1d array corresponding to the index order of gen_q, where q=(u, v, w)
+    u = range(0, ngs[0]), v = range(0, ngs[1]), w = range(0, ngs[2]).
+    
+    (re: Eq. (3.25), we assume Ns := ngs = 2*gs+1)
 
+    After FT, (u, v, w) -> (j, k, l).
+    (jkl) is in the index order of Gv
+
+    Returns
+        FFT 1D array in same index order as Gv (natural order of numpy.fft)
+
+    Note: FFT norm factor is 1., as in MH and in numpy.fft
+    '''
+    ngs=2*gs+1
+    f3d=np.reshape(f, ngs)
+    g3d=np.fft.fftn(f3d)
+    return np.ravel(g3d)
+
+def ifft(g, gs):
+    '''
+    Note: invFFT norm factor is 1./N - same as numpy but **different** 
+    from MH (they use 1.)
+    '''
+    ngs=2*gs+1
+    g3d=np.reshape(g, ngs)
+    f3d=np.fft.ifftn(g3d)
+    return np.ravel(f3d)
+
+def get_t(cell, gs):
+    '''
+    Kinetic energy AO matrix
+    '''
+    Gv=get_Gv(cell, gs)
+    G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
+
+    coords, weights=setup_ao_grids(cell, gs)
+    aoR=get_aoR(cell, coords)
+    aoG=np.empty(aoR.shape, np.complex128)
+    TaoG=np.empty(aoR.shape, np.complex128)
+    TaoR=np.empty(aoR.shape, np.complex128)
+
+    nao=aoR.shape[1]
+    for i in range(nao):
+        aoG[:,i]=fft(aoR[:,i], gs)
+        TaoG[:,i]=0.5*G2*aoG[:,i]
+        TaoR[:,i]=ifft(TaoG[:,i], gs)
+                
+    t=np.empty([nao,nao])
+    for i in range(nao):
+        for j in range(nao):
+            t[i,j]=np.vdot(aoR[:,i],TaoR[:,j])*cell.vol/aoR.shape[0]
+    return t
+
+def get_ovlp(cell, gs):
+    '''
+    Overlap AO matrix
+    '''
+    coords, weights=setup_ao_grids(cell, gs)
+    aoR=get_aoR(cell, coords)
+    aoG=np.empty(aoR.shape, np.complex128)
+    nao=aoR.shape[1]
+    for i in range(nao):
+        aoG[:,i]=fft(aoR[:,i], gs)
+
+    s=np.empty([nao,nao])
+    for i in range(nao):
+        for j in range(nao):
+            s[i,j]=cell.vol/len(aoR)*np.vdot(aoR[:,i],aoR[:,j])
+    return s
+    
+def get_j(cell, dm, gs):
+    '''
+    Coulomb AO matrix 
+    '''
+    Gv=get_Gv(cell, gs)
+
+    coulG=np.zeros(Gv.shape[1]) 
+
+    # must be better way to code this loop !!
+    # keep coulG[0]=0.0
+    coulG[1:]=4*pi/np.array([np.inner(Gv[:,i], Gv[:,i]) 
+                             for i in xrange(1, Gv.shape[1])])
+
+    coords, weights=setup_ao_grids(cell, gs)
+    aoR=get_aoR(cell, coords)
+    rhoR=get_rhoR(cell, aoR, dm)
+    rhoG=fft(rhoR, gs)
+    vG=coulG*rhoG
+
+    vR=ifft(vG, gs)
+    aoR=get_aoR(cell, coords)
+    nao=aoR.shape[1]
+
+    vj=np.zeros([nao,nao])
+    for i in range(nao):
+        for j in range(nao):
+            vj[i,j]=cell.vol/aoR.shape[0]*np.vdot(aoR[:,i],vR*aoR[:,j])
+
+    return vj
 
 def test():
     from pyscf import gto
@@ -157,7 +256,7 @@ def test():
     h=np.eye(3.)*L
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
-    mol.basis = { 'He': 'sto-3g'}
+    mol.basis = { 'He': 'cc-pVDZ'}
     mol.build()
     m = rks.RKS(mol)
     m.xc = 'LDA,VWN_RPA'
@@ -167,29 +266,52 @@ def test():
     cell=Cell()
     cell.mol=mol
     cell.h=h
-    cell.gs=[2,2,2]
-    cell.Ns=[300,300,300]
-    cell.vol=scipy.linalg.det(cell.h)
     
-    gv=get_gv(cell.gs)
-    Gv=get_Gv(cell, gv)
+    cell.vol=scipy.linalg.det(cell.h)
+    gs=np.array([60,60,60]) # number of G-points in grid. Real-space dim=2*gs+1
+    Gv=get_Gv(cell, gs)
 
     SI=get_SI(cell, Gv)
-
     ewrc=0.5
     ewcut=(10,10,10)
     ew_rs=ewald_rs(cell, ewrc, ewcut)
 
-    qv=gen_qv(cell.Ns)
-    coords, weights=setup_ao_grids(cell, qv)
+    coords, weights=setup_ao_grids(cell, gs)
 
     aoR=get_aoR(cell, coords)
+    print aoR.shape
+
     dm=m.make_rdm1()
+
+    print "Kinetic"
+    tao=get_t(cell, gs)
+    print tao
+
+    tao2 = mol.intor_symmetric('cint1e_kin_sph') 
+    print tao2
+
+    print "kinetic energies"
+    print np.dot(np.ravel(tao), np.ravel(dm))
+    print np.dot(np.ravel(tao2), np.ravel(dm))
+    sao=get_ovlp(cell,gs)
+
+    print "Overlap"
+    print sao
+    print m.get_ovlp()
+    print np.dot(np.ravel(sao), np.ravel(dm))
+    print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm))
+
+    print "Coulomb"
+    jao=get_j(cell,dm,gs)
+    print jao
+    print m.get_j(dm)
+    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))
+    print np.dot(np.ravel(dm),np.ravel(jao))
+
+    print "Normalization"
     rhoR=get_rhoR(cell, aoR, dm)
 
-    print cell.vol
-    print rhoR.shape
-    # should be 2.0, gets 1.99004869382. With 27 million pts!!
+    # print cell.vol
+    # print rhoR.shape
+    # # should be 2.0, gets 1.99004869382. With 27 million pts!!
     print cell.vol/len(rhoR)*np.sum(rhoR) 
-
-    
