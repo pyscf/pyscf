@@ -10,6 +10,7 @@ def main():
 
     header = []
     is_header = True
+    is_footer = False
     xcs = []
     all_pseudos = []
     current_pseudo = []
@@ -22,12 +23,21 @@ def main():
                     all_pseudos.append(current_pseudo)
                 current_pseudo = []
                 current_pseudo.append(line)
+                banner_count = 1
                 is_header = False
+                is_footer = False
             else: 
                 if is_header:
                     header.append(line)
                 else:
-                    current_pseudo.append(line)
+                    if banner_count > 3 and '#####' in line:
+                        current_pseudo.pop()
+                        is_footer = True
+                    if banner_count < 3 or is_footer:
+                        current_pseudo.append(line)
+                    else:
+                        current_pseudo.append(line.replace('#','#PSEUDOPOTENTIAL'))
+                    banner_count += 1
         # The last one:
         all_pseudos.append(current_pseudo)
 
