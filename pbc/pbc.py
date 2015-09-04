@@ -60,9 +60,9 @@ def get_SI(cell, Gv):
 
     return SI
 
-def ewald_rs(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
+def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     '''
-    Real-space Ewald sum 
+    Real and G-space Ewald sum 
 
     Formulation of Martin, App. F2.
 
@@ -395,7 +395,7 @@ def test():
     ewcut=(40,40,40)
     ew_eta=0.05
     for ew_eta in [0.1, 0.5, 1.]:
-        ew=ewald_rs(cell, gs, ew_eta, ewcut)
+        ew=ewald(cell, gs, ew_eta, ewcut)
         print "Ewald (eta, energy)", ew_eta, ew # should be same for all eta
 
     print "Ewald divergent terms summation", ew

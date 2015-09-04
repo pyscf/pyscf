@@ -339,8 +339,10 @@ class UniformGrids(object):
         if gs==None: gs=self.gs
 
         self.coords=setup_uniform_grids(self.cell, self.gs)
-        self.weights=np.ones(self.coords.shape[1]) # check shape
-        self.weights*=cell.vol/self.weights.shape[0]
+        print self.coords.shape, cell.vol
+        self.weights=np.ones(self.coords.shape[0]) # check shape
+        self.weights*=1.*cell.vol/self.weights.shape[0]
+        print self.weights
         return self.coords, self.weights
 
     def dump_flags(self):
