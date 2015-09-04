@@ -339,10 +339,9 @@ class UniformGrids(object):
         if gs==None: gs=self.gs
 
         self.coords=setup_uniform_grids(self.cell, self.gs)
-        print self.coords.shape, cell.vol
-        self.weights=np.ones(self.coords.shape[0]) # check shape
+        self.weights=np.ones(self.coords.shape[0]) 
         self.weights*=1.*cell.vol/self.weights.shape[0]
-        print self.weights
+
         return self.coords, self.weights
 
     def dump_flags(self):
@@ -385,16 +384,25 @@ class RHF(pyscf.scf.hf.SCF):
         
 class RKS(RHF):
     '''
-    RKS adapted for PBC
+    RKS adapted for PBC. This is a literal duplication of the
+    molecular RKS class with some "mol" variables replaced by cell.
     '''
     def __init__(self, cell, gs, ew_eta, ew_cut):
         RHF.__init__(self, cell, gs, ew_eta, ew_cut)
         self._numint = None
 
+    def dump_flags(self):
+        pass
+
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         return pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last, hermi)
+
+    def energy_elec(self, dm, h1e=None, vhf=None):
+        if h1e is None: h1e = ks.get_hcore()
+        return pyscf.dft.rks.energy_elec(self, dm, h1e)
+    
 
 def test():
     from pyscf import gto
@@ -408,17 +416,32 @@ def test():
     h=np.eye(3.)*L
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
-    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
+    #mol.basis = { 'He': [[0, (1.0, 1.0)]] }
+    mol.basis = { 'He': 'cc-pVTZ' }
     mol.build()
 
+    # benchmark first with molecular DFT calc
+    m=pyscf.dft.rks.RKS(mol)
+    m.xc = 'LDA,VWN_RPA'
+    print "Molecular DFT energy"
+    print (m.scf())
+
+    # this is the PBC DFT calc!!
     cell=cl.Cell()
     cell.mol=mol
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
 
-    gs=np.array([20,20,20])
+    # gs=np.array([40,40,40])
+    # ew_eta=0.05
+    # ew_cut=(40,40,40)
+    # mf=RKS(cell, gs, ew_eta, ew_cut)
+    # mf.xc = 'LDA,VWN_RPA'
+    # print (mf.scf()) # -2.33905569579385
+
+    gs=np.array([60,60,60])
     ew_eta=0.05
     ew_cut=(40,40,40)
     mf=RKS(cell, gs, ew_eta, ew_cut)
-    mf.xc = 'LDA,WIGNER'
-    print (mf.scf())
+    mf.xc = 'LDA,VWN_RPA'
+    print (mf.scf()) # 
