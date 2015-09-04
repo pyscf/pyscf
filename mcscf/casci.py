@@ -276,22 +276,6 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    if log.verbose >= logger.NOTE and hasattr(casci.fcisolver, 'spin_square'):
-        ss = casci.fcisolver.spin_square(fcivec, ncas, nelecas)
-        if isinstance(e_cas, (float, numpy.number)):
-            log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                     e_tot, e_cas, ss[0])
-        else:
-            for i, e in enumerate(e_cas):
-                log.note('CASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                         i, e_tot[i], e, ss[0][i])
-    else:
-        if isinstance(e_cas, (float, numpy.number)):
-            log.note('CASCI E = %.15g  E(CI) = %.15g', e_tot, e_cas)
-        else:
-            for i, e in enumerate(e_cas):
-                log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
-                         i, e_tot[i], e)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -434,9 +418,9 @@ class CASCI(object):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, ncore)
 
-    def kernel(self, mo_coeff=None, ci0=None):
-        return self.casci(mo_coeff, ci0)
     def casci(self, mo_coeff=None, ci0=None):
+        return self.kernel(mo_coeff, ci0)
+    def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -451,6 +435,24 @@ class CASCI(object):
 
         self.e_tot, e_cas, self.ci = \
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
+
+        log = logger.Logger(self.stdout, self.verbose)
+        if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
+            ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
+            if isinstance(e_cas, (float, numpy.number)):
+                log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                         self.e_tot, e_cas, ss[0])
+            else:
+                for i, e in enumerate(e_cas):
+                    log.note('CASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                             i, self.e_tot[i], e, ss[0][i])
+        else:
+            if isinstance(e_cas, (float, numpy.number)):
+                log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, e_cas)
+            else:
+                for i, e in enumerate(e_cas):
+                    log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
+                             i, self.e_tot[i], e)
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,

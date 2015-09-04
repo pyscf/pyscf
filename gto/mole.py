@@ -10,6 +10,7 @@ import time
 import math
 import itertools
 import numpy
+import scipy.special
 import ctypes
 import pyscf.lib.parameters as param
 from pyscf.lib import logger
@@ -34,18 +35,8 @@ def M(**kwargs):
 
 def _gaussian_int(n, alpha):
     r'''int_0^inf x^n exp(-alpha x^2) dx'''
-    if hasattr(math, 'gamma'):
-        n1 = (n + 1) * .5
-        return math.gamma(n1) / (2. * alpha**n1)
-    else:
-        assert(isinstance(n, int))
-        n1 = (n + 1) * .5
-        if n % 2:
-            return math.factorial(n1-1) / (2. * alpha**n1)
-        else:
-            gamma = (math.factorial(n-1) / (math.factorial(n//2-1) * 2.**(n-1))
-                     * 1.7724538509055159)
-            return gamma / (2. * alpha**n1)
+    n1 = (n + 1) * .5
+    return scipy.special.gamma(n1) / (2. * alpha**n1)
 
 def gto_norm(l, expnt):
     r'''Normalized factor for GTO   :math:`g=r^l e^{-\alpha r^2}`

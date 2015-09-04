@@ -549,13 +549,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
+        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, njk, imicro, e_tot, e_tot-elast)
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+                 imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
@@ -582,7 +583,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     if dump_chk:
         casscf.dump_chk(locals())
 
-    log.note('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 
@@ -877,6 +877,7 @@ class CASSCF(casci.CASCI):
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
+        logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
