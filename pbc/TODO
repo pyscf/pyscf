@@ -1,0 +1,3 @@
+spherical cutoff (should we assume cutoff s.t. Gaussians are represented analytically)
+real FFT
+exchange from analytic int (equiv. to truncation to unit cell?)
