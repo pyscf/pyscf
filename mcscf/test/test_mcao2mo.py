@@ -31,20 +31,20 @@ class KnowValues(unittest.TestCase):
         eris2 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', level=1)
         eris3 = mcscf.mc_ao2mo._ERIS(mc, mo, 'outcore', level=2)
         self.assertTrue(numpy.allclose(eris0.vhf_c, eris1.vhf_c))
-        self.assertTrue(numpy.allclose(eris0.j_cp , eris1.j_cp ))
-        self.assertTrue(numpy.allclose(eris0.k_cp , eris1.k_cp ))
-        self.assertTrue(numpy.allclose(eris0.aapp , eris1.aapp ))
-        self.assertTrue(numpy.allclose(eris0.appa , eris1.appa ))
+        self.assertTrue(numpy.allclose(eris0.j_pc , eris1.j_pc ))
+        self.assertTrue(numpy.allclose(eris0.k_pc , eris1.k_pc ))
+        self.assertTrue(numpy.allclose(eris0.ppaa , eris1.ppaa ))
+        self.assertTrue(numpy.allclose(eris0.papa , eris1.papa ))
 
         self.assertTrue(numpy.allclose(eris0.vhf_c, eris2.vhf_c))
-        self.assertTrue(numpy.allclose(eris0.j_cp , eris2.j_cp ))
-        self.assertTrue(numpy.allclose(eris0.k_cp , eris2.k_cp ))
-        self.assertTrue(numpy.allclose(eris0.aapp , eris2.aapp ))
-        self.assertTrue(numpy.allclose(eris0.appa , eris2.appa ))
+        self.assertTrue(numpy.allclose(eris0.j_pc , eris2.j_pc ))
+        self.assertTrue(numpy.allclose(eris0.k_pc , eris2.k_pc ))
+        self.assertTrue(numpy.allclose(eris0.ppaa , eris2.ppaa ))
+        self.assertTrue(numpy.allclose(eris0.papa , eris2.papa ))
 
         self.assertTrue(numpy.allclose(eris0.vhf_c, eris3.vhf_c))
-        self.assertTrue(numpy.allclose(eris0.aapp , eris3.aapp ))
-        self.assertTrue(numpy.allclose(eris0.appa , eris3.appa ))
+        self.assertTrue(numpy.allclose(eris0.ppaa , eris3.ppaa ))
+        self.assertTrue(numpy.allclose(eris0.papa , eris3.papa ))
 
         ncore = mc.ncore
         ncas = mc.ncas
@@ -55,16 +55,16 @@ class KnowValues(unittest.TestCase):
         jc_pp = numpy.einsum('iipq->ipq', eri[:ncore,:ncore,:,:])
         kc_pp = numpy.einsum('ipqi->ipq', eri[:ncore,:,:,:ncore])
         vhf_c = numpy.einsum('cij->ij', jc_pp)*2 - numpy.einsum('cij->ij', kc_pp)
-        j_cp = numpy.einsum('ijj->ij', jc_pp)
-        k_cp = numpy.einsum('ijj->ij', kc_pp)
-        aapp = numpy.array(eri[ncore:nocc,ncore:nocc,:,:])
-        appa = numpy.array(eri[ncore:nocc,:,:,ncore:nocc])
+        j_pc = numpy.einsum('ijj->ji', jc_pp)
+        k_pc = numpy.einsum('ijj->ji', kc_pp)
+        ppaa = numpy.array(eri[:,:,ncore:nocc,ncore:nocc])
+        papa = numpy.array(eri[:,ncore:nocc,:,ncore:nocc])
 
         self.assertTrue(numpy.allclose(vhf_c, eris0.vhf_c))
-        self.assertTrue(numpy.allclose(j_cp , eris0.j_cp ))
-        self.assertTrue(numpy.allclose(k_cp , eris0.k_cp ))
-        self.assertTrue(numpy.allclose(aapp , eris0.aapp ))
-        self.assertTrue(numpy.allclose(appa , eris0.appa ))
+        self.assertTrue(numpy.allclose(j_pc , eris0.j_pc ))
+        self.assertTrue(numpy.allclose(k_pc , eris0.k_pc ))
+        self.assertTrue(numpy.allclose(ppaa , eris0.ppaa ))
+        self.assertTrue(numpy.allclose(papa , eris0.papa ))
 
     def test_uhf(self):
         mol.atom = [

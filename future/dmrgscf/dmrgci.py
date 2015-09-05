@@ -497,7 +497,7 @@ def executeBLOCK(DMRGCI):
     try:
         output = check_call("%s  %s  %s > %s"%(DMRGCI.mpiprefix, DMRGCI.executable, inFile, outFile), shell=True)
     except ValueError:
-        print output
+        print(output)
         exit()
 
 def readEnergy(DMRGCI):

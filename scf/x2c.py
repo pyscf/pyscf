@@ -14,12 +14,22 @@ from pyscf.scf import dhf
 from pyscf.scf import _vhf
 
 
+EXP_DROP = 50.
+
 def sfx2c1e(mf):
     '''Spin-free X2C.
     For the given SCF object, update the hcore constructor.
 
     Args:
         mf : an SCF object
+
+    Attributes:
+        xuncontract : bool or str or list of str/int
+            Use uncontracted basis to expand X matrix.
+            When atom symbol (str type) is assigned to this attribute, the
+            uncontracted basis will be used for the specified atoms.  If a
+            list is given, the uncontracted basis will be applied for the
+            atoms or atom-ID specified by the given list.
 
     Returns:
         An SCF object
@@ -38,7 +48,7 @@ def sfx2c1e(mf):
 
     class HF(mf.__class__):
         def __init__(self):
-            self.xuncontract = False
+            self.xuncontract = True
             self.xequation = '1e'
             self.__dict__.update(mf.__dict__)
             self._keys = self._keys.union(['xequation', 'xuncontract'])
@@ -114,7 +124,7 @@ def get_hcore(mol, xuncontract=False):
     x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
     h1 = _get_hcore_fw(t, v, w, s, x, c)
     if xuncontract:
-        h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
+        h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
     return h1
 
 def get_jk(mol, dm, hermi=1, mf_opt=None):
@@ -269,6 +279,8 @@ class UHF(hf.SCF):
 def _uncontract_mol(mol, xuncontract=False):
     pmol = mol.copy()
     _bas = []
+    _env = []
+    ptr = len(pmol._env)
     contr_coeff = []
     for ib in range(mol.nbas):
         if isinstance(xuncontract, bool):
@@ -277,35 +289,46 @@ def _uncontract_mol(mol, xuncontract=False):
             ia = mol.bas_atom(ib)
             uncontract_me = ((xuncontract == mol.atom_pure_symbol(ia)) or
                              (xuncontract == mol.atom_symbol(ia)))
-        else: #isinstance(xuncontract, (tuple, list)):
+        elif isinstance(xuncontract, (tuple, list)):
             ia = mol.bas_atom(ib)
             uncontract_me = ((mol.atom_pure_symbol(ia) in xuncontract) or
-                             (mol.atom_symbol(ia) in xuncontract))
+                             (mol.atom_symbol(ia) in xuncontract) or
+                             (ia in xuncontract))
+        else:
+            raise RuntimeError('xuncontract needs to be bool, str, tuple or list type')
 
         if uncontract_me:
             np = mol._bas[ib,mole.NPRIM_OF]
+            nc = mol._bas[ib,mole.NCTR_OF]
             pexp = mol._bas[ib,mole.PTR_EXP]
-            pcoeff = mol._bas[ib,mole.PTR_COEFF]
-            pmol._env[pcoeff] = 1
-            bs = numpy.tile(mol._bas[ib], (np,1))
-            bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
-            bs[:,mole.PTR_EXP] = numpy.arange(pexp, pexp+np)
-            _bas.append(bs)
+# Bypass diffuse functions to avoid linear dependence
+            large = (pmol._env[pexp:pexp+np-nc] > EXP_DROP).sum()
+            if large > 0:
+                l = mol._bas[ib,mole.ANG_OF]
+                bs = numpy.empty((large,mol._bas.shape[1]), dtype=numpy.int32)
+                bs[:] = mol._bas[ib]
+                bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
+                bs[:,mole.PTR_EXP] = numpy.arange(pexp, pexp+large)
+                for i in range(large):
+                    nn = mole._gaussian_int(l*2+2, mol._env[pexp+i]*2)
+                    _env.append(1/numpy.sqrt(nn))
+                    bs[i,mole.PTR_COEFF] = ptr
+                    ptr += 1
+                _bas.append(bs)
+            _bas.append(mol._bas[ib])
 
             l = mol.bas_angular(ib)
             d = l * 2 + 1
-            c = mol.bas_ctr_coeff(ib)
-            nc = c.shape[1]
-            c1 = numpy.zeros((np*d,nc*d))
-            for j in range(l*2+1):
-                c1[j::d,j::d] = c
-            contr_coeff.append(c1)
+            c1 = numpy.zeros((d*large,d*mol.bas_nctr(ib)))
+            c2 = numpy.eye(d*mol.bas_nctr(ib))
+            contr_coeff.append(numpy.vstack((c1,c2)))
         else:
             _bas.append(mol._bas[ib])
             l = mol.bas_angular(ib)
             d = l * 2 + 1
             contr_coeff.append(numpy.eye(d*mol.bas_nctr(ib)))
     pmol._bas = numpy.vstack(_bas)
+    pmol._env = numpy.hstack((mol._env, _env))
     return pmol, scipy.linalg.block_diag(*contr_coeff)
 
 def _sqrt(a):
@@ -314,7 +337,7 @@ def _sqrt(a):
 
 def _invsqrt(a):
     e, v = numpy.linalg.eigh(a)
-    idx = e > 1e-14
+    idx = abs(e) > 1e-14
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def _get_hcore_fw(t, v, w, s, x, c):

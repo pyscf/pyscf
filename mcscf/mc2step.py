@@ -55,10 +55,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                        eris, r0, conv_tol_grad, log)
-            u, g_orb, njk = rota.next()
-            rota.close()
+            for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                                      eris, r0, conv_tol_grad, log):
+                break
             ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
@@ -86,8 +85,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         totmicro += imicro + 1
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, ninner, imicro+1, e_tot, e_tot-elast)
+        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+                 imacro, ninner, imicro+1, e_tot, e_tot-elast, ss[0])
         log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
                  norm_gorb, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
@@ -119,7 +119,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     if dump_chk:
         casscf.dump_chk(locals())
 
-    log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 

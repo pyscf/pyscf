@@ -508,12 +508,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             norm_gorb = numpy.linalg.norm(g_orb)
             if imicro == 1:
                 norm_gorb0 = norm_gorb
-            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('orbital rotation', *t3m)
             if imicro == max_cycle_micro:
-                log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ',
-                          imicro, de, norm_t, norm_gorb)
+                log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ',
+                          imicro, norm_t, norm_gorb)
                 break
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
@@ -525,15 +524,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  '
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  '
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
-                      imicro, de, norm_t, norm_gorb, norm_gci, norm_ddm)
+                      imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
-            if (norm_t < conv_tol_grad or abs(de) < tol*.2 or
+            if (norm_t < conv_tol_grad or
                 (norm_gorb < conv_tol_grad*.8 and
                  (norm_ddm < conv_tol_ddm or norm_ddm_micro < conv_tol_ddm*.1))):
                 break
@@ -552,13 +551,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
+        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, njk, imicro, e_tot, e_tot-elast)
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+                 imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
@@ -585,7 +585,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     if dump_chk:
         casscf.dump_chk(locals())
 
-    log.note('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 
@@ -880,6 +879,7 @@ class CASSCF(casci.CASCI):
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
+        logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
@@ -915,6 +915,7 @@ class CASSCF(casci.CASCI):
             if isinstance(frozen, (int, numpy.integer)):
                 mask[:frozen] = mask[:,:frozen] = False
             else:
+                frozen = numpy.asarray(frozen)
                 mask[frozen] = mask[:,frozen] = False
         return mask
 
@@ -1016,7 +1017,7 @@ class CASSCF(casci.CASCI):
             dm_core  = numpy.dot(mo1[:,:ncore], mo1[:,:ncore].T) * 2
             vj, vk = self._scf.get_jk(self.mol, dm_core-dm_core0)
             vhf_c =(reduce(numpy.dot, (mo1.T, vj-vk*.5, mo1[:,:nocc]))
-                        + reduce(numpy.dot, (u.T, eris.vhf_c, u[:,:nocc])))
+                  + reduce(numpy.dot, (u.T, eris.vhf_c, u[:,:nocc])))
             h1 =(reduce(numpy.dot, (ua.T, h1e_mo, ua)) + vhf_c[ncore:nocc,ncore:nocc])
             mo1_cas = mo1[:,ncore:nocc]
             if self._scf._eri is None:
