@@ -279,10 +279,11 @@ def get_nuc(cell, gs):
     vneR=ifft(vneG,gs)
 
     nao=aoR.shape[1]
-    vne=np.zeros([nao, nao])
-    for i in range(nao):
-        for j in range(nao):
-            vne[i,j]=np.vdot(aoR[:,i],vneR*aoR[:,j])
+    #:vne=np.zeros([nao, nao])
+    #:for i in range(nao):
+    #:    for j in range(nao):
+    #:        vne[i,j]=np.vdot(aoR[:,i],vneR*aoR[:,j])
+    vne = np.dot(aoR.T.conj(),vneR.reshape(-1,1)*aoR)
 
     ngs=aoR.shape[0]
     vne *= (cell.vol/ngs)
@@ -306,10 +307,11 @@ def get_t(cell, gs):
         aoG[:,i]=fft(aoR[:,i], gs)
         TaoG[:,i]=0.5*G2*aoG[:,i]
                 
-    t=np.empty([nao,nao])
-    for i in range(nao):
-        for j in range(nao):
-            t[i,j]=np.vdot(aoG[:,i],TaoG[:,j])
+    #:t=np.empty([nao,nao])
+    #:for i in range(nao):
+    #:    for j in range(nao):
+    #:        t[i,j]=np.vdot(aoG[:,i],TaoG[:,j])
+    t = np.dot(aoG.T.conj(), TaoG).real
 
     ngs=aoR.shape[0]
     t *= (cell.vol/ngs**2)
@@ -324,10 +326,11 @@ def get_ovlp(cell, gs):
     aoR=get_aoR(cell, coords)
     nao=aoR.shape[1]
 
-    s=np.empty([nao,nao])
-    for i in range(nao):
-        for j in range(nao):
-            s[i,j]=np.vdot(aoR[:,i],aoR[:,j])
+    #:s=np.empty([nao,nao])
+    #:for i in range(nao):
+    #:    for j in range(nao):
+    #:        s[i,j]=np.vdot(aoR[:,i],aoR[:,j])
+    s = np.dot(aoR.T.conj(),aoR).real
 
     ngs=aoR.shape[0]
     s *= cell.vol/ngs
@@ -359,10 +362,11 @@ def get_j(cell, dm, gs):
 
     nao=aoR.shape[1]
     ngs=aoR.shape[0]
-    vj=np.zeros([nao,nao])
-    for i in range(nao):
-        for j in range(nao):
-            vj[i,j]=cell.vol/ngs*np.dot(aoR[:,i],vR*aoR[:,j])
+    #:vj=np.zeros([nao,nao])
+    #:for i in range(nao):
+    #:    for j in range(nao):
+    #:        vj[i,j]=cell.vol/ngs*np.dot(aoR[:,i],vR*aoR[:,j])
+    vj = cell.vol/ngs * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
            
     return vj
 
