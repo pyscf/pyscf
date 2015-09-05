@@ -22,14 +22,14 @@ class PP:
         self.typ = None
 
         # EXAMPLE, B w/ LDA:
-        Z = 3
+        Zion = 3
         rloc = 0.4324996
         C = [-5.6004798, 0.8062843]
         rl = [0.3738823, 0.0]
         hs = [6.2352212, 0.0]
         h1p = 0.0
 
-        self.Z = Z
+        self.Zion = Zion
         # GTH-specific:
         self.rloc = rloc
         self.C = C
@@ -39,31 +39,44 @@ class PP:
         self.h1p = h1p # a scalar
         # hs and hp should be zeros as necessary 
         # (e.g. both zero for H,He,Li,Be)
+        self.h = np.array( [ [hs[0], hs[1]], [h1p, 12345] ] ).transpose()
 
+    def gth_vloc_r(r):
+        '''
+        local part of the GTH pseudopotential
 
-    def v_gth_loc(r):
-        # Beware division by zero
-        r_red = r/(self.rloc+1e-10)
-        return ( -self.Z/r * np.erf(r_red/sqrt(2))
+        r: scalar or 1D np.array
+
+        Returns 
+             scalar or 1D np.array
+        '''
+        r_red = r/self.rloc
+        return ( -self.Zion/r * math.erf(r_red/sqrt(2))
             + exp(-0.5*r_red**2)*(self.C[0] + self.C[1]*r_red**2
                 + self.C[2]*r_red**4 + self.C[3]*r_red**6) )
 
-    def v_gth_nonloc(rvec,rpvec):
-        # rvec and rpvec are vectors of length 3
-        # currently assumed to be referenced to the atom center
-        r, theta, phi = self.cart2polar(rvec)
-        rp, thetap, phip = self.cart2polar(rpvec)
-        sum_i = 0.
-        sum_m = 0.
-        for i in range(2):
-            sum_i += ( self.Ylm(0,0,theta,phi)*self.proj_il(i,0,r)*hs[i]
-                        *self.proj_il(i,0,rp)*self.Ylm(0,0,thetap,phip).conjugate() )
-        for m in [-1,0,1]:
-            sum_m += ( self.Ylm(1,m,theta,phi)*self.proj_il(i,1,r)*h1p
-                        *self.proj_il(i,1,rp)*self.Ylm(1,m,thetap,phip).conjugate() )
-        return sum_i + sum_m
-        
-    def proj_il(i,l,r):
+    def gth_vnonloc_r(rvecs):
+        '''
+        all contributing (separable) projectors needed for the
+        nonlocal part of the GTH pseudopotential
+
+        rvecs: np.array [nrpts, 3]
+
+        Returns
+            np.array [nproj=6], np.array [nproj=6, nrpts]
+        '''
+        hs = []
+        projs = []
+        for [i,l,m] in [ [0,0,0], [1,0,0], [0,1,-1], [0,1,0], [0,1,1] ]:
+            proj_vec = []
+            for rvec in rvecs:
+                r, theta, phi = self.cart2polar(rvec)
+                proj_vec.append(self.proj_il(i,l,r)*self.Ylm(l,m,theta,phi))
+            hs.append(self.h[i,l])
+            projs.append(np.array(proj_vec))
+        return np.array(hs), np.array(projs)
+
+    def proj_il_r(i,l,r):
         rl = self.rl[l]
         l = l + i*2 # gives either l or l+2 for i=0,1
         return sqrt(2) * ( r**l * exp(-0.5*(r/rl)**2)
