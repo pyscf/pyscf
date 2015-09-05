@@ -85,9 +85,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         totmicro += imicro + 1
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+        if hasattr(casscf.fcisolver,'spin_square'):
+            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+        else:
+            ss = ['not defined']
+        if hasattr(casscf.fcisolver,'spin_square'):
+            log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast, ss[0])
+        else:
+            log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g', imacro, ninner, imicro+1, e_tot, e_tot-elast)
         log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
                  norm_gorb, norm_ddm)
         log.debug('CAS space CI energy = %.15g', e_ci)
