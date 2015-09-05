@@ -1,8 +1,10 @@
+import sys
 import itertools
 import math
 import numpy as np
 import numpy.fft
 import scipy.linalg
+import scipy.special
 import pyscf.gto.mole
 import pyscf.dft.numint
 
@@ -11,6 +13,7 @@ from pyscf.lib import logger
 pi=math.pi
 sqrt=math.sqrt
 exp=math.exp
+erfc = scipy.special.erfc
 
 '''PBC module. Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"
 '''
@@ -34,13 +37,17 @@ def get_Gv(cell, gs):
     invhT=scipy.linalg.inv(cell.h.T)
 
     # maybe there's a better numpy way?
+    #:gxrange=range(gs[0]+1)+range(-gs[0],0)
+    #:gyrange=range(gs[1]+1)+range(-gs[1],0)
+    #:gzrange=range(gs[2]+1)+range(-gs[2],0)
+    #:gxyz=np.array([gxyz for gxyz in 
+    #:               itertools.product(gxrange, gyrange, gzrange)]).T
     gxrange=range(gs[0]+1)+range(-gs[0],0)
     gyrange=range(gs[1]+1)+range(-gs[1],0)
     gzrange=range(gs[2]+1)+range(-gs[2],0)
-    gxyz=np.array([gxyz for gxyz in 
-                   itertools.product(gxrange, gyrange, gzrange)])
+    gxyz = _span3(gxrange, gyrange, gzrange)
 
-    Gv=2*pi*np.dot(invhT,gxyz.T)
+    Gv=2*pi*np.dot(invhT,gxyz)
     return Gv
 
 def get_SI(cell, Gv):
@@ -87,30 +94,60 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewyrange=range(-ew_cut[1],ew_cut[1]+1)
     ewzrange=range(-ew_cut[2],ew_cut[2]+1)
 
-    ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
+    #:ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
+    ewxyz=_span3(ewxrange,ewyrange,ewzrange)
 
-    for (ix, iy, iz) in ewxyz:
-        L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
+    #:for ic, (ix, iy, iz) in enumerate(ewxyz):
+    #:    #:L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
+    #:    L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
 
-        # prime in summation to avoid self-interaction in unit cell
-        for ia in range(mol.natm):
-            qi = chargs[ia]
-            ri = coords[ia]
+    #:    # prime in summation to avoid self-interaction in unit cell
+    #:    if (ix == 0 and iy == 0 and iz == 0):
+    #:        for ia in range(mol.natm):
+    #:            qi = chargs[ia]
+    #:            ri = coords[ia]
+    #:            for ja in range(ia):
+    #:                qj = chargs[ja]
+    #:                rj = coords[ja]
+    #:                r = np.linalg.norm(ri-rj)
+    #:                ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #:    else:
+    #:        #:for ia in range(mol.natm):
+    #:        #:    qi = chargs[ia]
+    #:        #:    ri = coords[ia]
+    #:        #:    for ja in range(mol.natm):
+    #:        #:        qj=chargs[ja]
+    #:        #:        rj=coords[ja]
+    #:        #:        r=np.linalg.norm(ri-rj+L)
+    #:        #:        ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #:        r1 = rij + L
+    #:        r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+    #:        ewovrl += (qij/r * erfc(ew_eta * r)).sum()
+    nx = len(ewxrange)
+    ny = len(ewyrange)
+    nz = len(ewzrange)
+    Lall = numpy.einsum('ij,jk->ki', cell.h, ewxyz).reshape(3,nx,ny,nz)
+    #exclude the point where Lall == 0
+    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
+    Lall = Lall.reshape(-1,3)
+    for ia in range(mol.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(ia):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r = np.linalg.norm(ri-rj)
+            ewovrl += qi * qj / r * erfc(ew_eta * r)
+    for ia in range(mol.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(mol.natm):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r1 = ri-rj + Lall
+            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+            ewovrl += (qi * qj / r * erfc(ew_eta * r)).sum()
 
-            if (ix == 0 and iy == 0 and iz == 0):
-                for ja in range(ia):
-                    qj = chargs[ja]
-                    rj = coords[ja]
-                    r = np.linalg.norm(ri-rj)
-                    ewovrl += qi * qj / r * math.erfc(ew_eta * r)
-            else:
-                for ja in range(mol.natm):
-                    qj=chargs[ja]
-                    rj=coords[ja]
-
-                    r=np.linalg.norm(ri-rj+L)
-                    ewovrl += qi * qj / r * math.erfc(ew_eta * r)
-        
     ewovrl *= 0.5
 
     # last line of Eq. (F.5) in Martin 
@@ -152,7 +189,8 @@ def _gen_qv(ngs):
          [0, 0, ... ngsy-1]
          [0, 1, ... ngsz-1]
     '''
-    return np.array(list(np.ndindex(tuple(ngs)))).T
+    #return np.array(list(np.ndindex(tuple(ngs)))).T
+    return _span3(np.arange(ngs[0]), np.arange(ngs[1]), np.arange(ngs[2]))
 
 def setup_uniform_grids(cell, gs):
     '''
@@ -227,10 +265,13 @@ def get_nuc(cell, gs):
     for a in range(mol.natm):
         qa = chargs[a]
         ra = nuc_coords[a]
-        riav = [np.linalg.norm(ra-ri) for ri in coords]
+        #:riav = [np.linalg.norm(ra-ri) for ri in coords]
+        dd = ra-coords
+        riav = np.sqrt(np.einsum('ij,ij->i', dd, dd))
         #vneR-=np.array([qa/ria*math.erf(ria/ewrc)
         #                for ria in riav]) # Eq. (3.40) MH
-        vneR-=np.array([qa/ria for ria in riav])
+        #:vneR-=np.array([qa/ria for ria in riav])
+        vneR-=qa/riav
 
     # Set G=0 component to 0.
     vneG=fft(vneR, gs)
@@ -252,7 +293,8 @@ def get_t(cell, gs):
     Kinetic energy AO matrix
     '''
     Gv=get_Gv(cell, gs)
-    G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
+    #:G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
+    G2=np.einsum('ji,ji->i', Gv, Gv)
 
     coords=setup_uniform_grids(cell, gs)
     aoR=get_aoR(cell, coords)
@@ -290,7 +332,7 @@ def get_ovlp(cell, gs):
     ngs=aoR.shape[0]
     s *= cell.vol/ngs
     return s
-    
+
 def get_coulG(cell, gs):
     '''
     Coulomb kernel in G space (4*pi/G^2 for G!=0, 0 for G=0)
@@ -323,6 +365,13 @@ def get_j(cell, dm, gs):
             vj[i,j]=cell.vol/ngs*np.dot(aoR[:,i],vR*aoR[:,j])
            
     return vj
+
+def _span3(*xs):
+    c = np.empty([3]+[len(x) for x in xs])
+    c[0,:,:,:] = np.asarray(xs[0]).reshape(-1,1,1)
+    c[1,:,:,:] = np.asarray(xs[1]).reshape(1,-1,1)
+    c[2,:,:,:] = np.asarray(xs[2]).reshape(1,1,-1)
+    return c.reshape(3,-1)
 
 def test():
     from pyscf import gto
@@ -384,7 +433,7 @@ def test():
 
     print "Normalization"
     coords=setup_uniform_grids(cell, gs)
-    aoR=get_aoR(cell, gs)
+    aoR=get_aoR(cell, coords)
     rhoR=get_rhoR(cell, aoR, dm)
     print cell.vol/len(rhoR)*np.sum(rhoR) # should be 2.0
     
@@ -402,3 +451,6 @@ def test():
 
     print "Total coulomb (analytic)", .5*np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))+np.dot(np.ravel(dm), np.ravel(vne))
     print "Total coulomb (fft coul + ewald)", np.einsum("ij,ij",dm,neao+.5*jao)+ew
+
+if __name__ == '__main__':
+    test()

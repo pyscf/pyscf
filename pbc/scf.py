@@ -1,19 +1,23 @@
+import sys
 import itertools
 import math
 import numpy as np
 import numpy.fft
 import scipy.linalg
+import scipy.special
 import pyscf.gto.mole
 import pyscf.dft.numint
 import pyscf.scf
 import pyscf.scf.hf
 import cell as cl
+import pbc
 
 from pyscf.lib import logger
 
 pi=math.pi
 sqrt=math.sqrt
 exp=math.exp
+erfc = scipy.special.erfc
 
 def get_Gv(cell, gs):
     '''
@@ -32,10 +36,11 @@ def get_Gv(cell, gs):
     gxrange=range(gs[0]+1)+range(-gs[0],0)
     gyrange=range(gs[1]+1)+range(-gs[1],0)
     gzrange=range(gs[2]+1)+range(-gs[2],0)
-    gxyz=np.array([gxyz for gxyz in 
-                   itertools.product(gxrange, gyrange, gzrange)])
+    #:gxyz=np.array([gxyz for gxyz in 
+    #:               itertools.product(gxrange, gyrange, gzrange)])
+    gxyz = pbc._span3(gxrange, gyrange, gzrange)
 
-    Gv=2*pi*np.dot(invhT,gxyz.T)
+    Gv=2*pi*np.dot(invhT,gxyz)
     return Gv
 
 def get_SI(cell, Gv):
@@ -81,10 +86,13 @@ def get_nuc(cell, gs):
     for a in range(mol.natm):
         qa = chargs[a]
         ra = nuc_coords[a]
-        riav = [np.linalg.norm(ra-ri) for ri in coords]
+        #:riav = [np.linalg.norm(ra-ri) for ri in coords]
+        dd = ra-coords
+        riav = np.sqrt(np.einsum('ij,ij->i', dd, dd))
         #vneR-=np.array([qa/ria*math.erf(ria/ewrc)
         #                for ria in riav]) # Eq. (3.40) MH
-        vneR-=np.array([qa/ria for ria in riav])
+        #:vneR-=np.array([qa/ria for ria in riav])
+        vneR-=qa/riav
 
     # Set G=0 component to 0.
     vneG=fft(vneR, gs)
@@ -106,7 +114,8 @@ def get_t(cell, gs):
     Kinetic energy AO matrix
     '''
     Gv=get_Gv(cell, gs)
-    G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
+    #:G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
+    G2=np.einsum('ji,ji->i', Gv, Gv)
 
     coords=setup_uniform_grids(cell, gs)
     aoR=get_aoR(cell, coords)
@@ -189,7 +198,8 @@ def _gen_qv(ngs):
          [0, 0, ... ngsy-1]
          [0, 1, ... ngsz-1]
     '''
-    return np.array(list(np.ndindex(tuple(ngs)))).T
+    #return np.array(list(np.ndindex(tuple(ngs)))).T
+    return pbc._span3(np.arange(ngs[0]), np.arange(ngs[1]), np.arange(ngs[2]))
 
 def setup_uniform_grids(cell, gs):
     '''
@@ -270,30 +280,60 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewyrange=range(-ew_cut[1],ew_cut[1]+1)
     ewzrange=range(-ew_cut[2],ew_cut[2]+1)
 
-    ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
+    #:ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
+    ewxyz=pbc._span3(ewxrange,ewyrange,ewzrange)
 
-    for (ix, iy, iz) in ewxyz:
-        L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
+    #:for ic, (ix, iy, iz) in enumerate(ewxyz):
+    #:    #:L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
+    #:    L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
 
-        # prime in summation to avoid self-interaction in unit cell
-        for ia in range(mol.natm):
-            qi = chargs[ia]
-            ri = coords[ia]
+    #:    # prime in summation to avoid self-interaction in unit cell
+    #:    if (ix == 0 and iy == 0 and iz == 0):
+    #:        for ia in range(mol.natm):
+    #:            qi = chargs[ia]
+    #:            ri = coords[ia]
+    #:            for ja in range(ia):
+    #:                qj = chargs[ja]
+    #:                rj = coords[ja]
+    #:                r = np.linalg.norm(ri-rj)
+    #:                ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #:    else:
+    #:        #:for ia in range(mol.natm):
+    #:        #:    qi = chargs[ia]
+    #:        #:    ri = coords[ia]
+    #:        #:    for ja in range(mol.natm):
+    #:        #:        qj=chargs[ja]
+    #:        #:        rj=coords[ja]
+    #:        #:        r=np.linalg.norm(ri-rj+L)
+    #:        #:        ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #:        r1 = rij + L
+    #:        r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+    #:        ewovrl += (qij/r * erfc(ew_eta * r)).sum()
+    nx = len(ewxrange)
+    ny = len(ewyrange)
+    nz = len(ewzrange)
+    Lall = numpy.einsum('ij,jk->ki', cell.h, ewxyz).reshape(3,nx,ny,nz)
+    #exclude the point where Lall == 0
+    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
+    Lall = Lall.reshape(-1,3)
+    for ia in range(mol.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(ia):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r = np.linalg.norm(ri-rj)
+            ewovrl += qi * qj / r * erfc(ew_eta * r)
+    for ia in range(mol.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(mol.natm):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r1 = ri-rj + Lall
+            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+            ewovrl += (qi * qj / r * erfc(ew_eta * r)).sum()
 
-            if (ix == 0 and iy == 0 and iz == 0):
-                for ja in range(ia):
-                    qj = chargs[ja]
-                    rj = coords[ja]
-                    r = np.linalg.norm(ri-rj)
-                    ewovrl += qi * qj / r * math.erfc(ew_eta * r)
-            else:
-                for ja in range(mol.natm):
-                    qj=chargs[ja]
-                    rj=coords[ja]
-
-                    r=np.linalg.norm(ri-rj+L)
-                    ewovrl += qi * qj / r * math.erfc(ew_eta * r)
-        
     ewovrl *= 0.5
 
     # last line of Eq. (F.5) in Martin 
@@ -445,3 +485,6 @@ def test():
     mf=RKS(cell, gs, ew_eta, ew_cut)
     mf.xc = 'LDA,VWN_RPA'
     print (mf.scf()) # 
+
+if __name__ == '__main__':
+    test()
