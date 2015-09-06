@@ -284,7 +284,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
     old_det_idxa = numpy.argsort(guide_stringsa)
     old_det_idxb = numpy.argsort(guide_stringsb)
-    return pyscf.lib.take_2d(old_det_idxa, old_det_idxb)
+    return pyscf.lib.take_2d(ci, old_det_idxa, old_det_idxb)
 
 def overlap(string1, string2, norb, s=None):
     '''Determinants overlap on non-orthogonal one-particle basis'''

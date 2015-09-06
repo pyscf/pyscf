@@ -242,7 +242,7 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
         raise NotImplementedError('cint2e spinor AO integrals')
 
     if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
-        assert(bralst is None and ketlst is None)
+        assert(bras is None and kets is None)
         nao_pair = nao*(nao+1)//2
         if vout is None:
             vout = numpy.empty((nao_pair*(nao_pair+1)//2))
