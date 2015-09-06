@@ -343,6 +343,8 @@ def _is_x_and_c(xc_code):
 
 # parse xc_code
 def parse_xc_name(xc_name='LDA,VWN'):
+    '''Convert the XC functional name to libxc library internal ID.
+    '''
     if ',' in xc_name:
         x_name, c_name = [x.upper() for x in re.split(', *', xc_name)]
     else:

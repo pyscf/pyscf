@@ -17,7 +17,7 @@ from pyscf.dft import numint
 
 
 def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-    '''Coulomb + XC functional'''
+    '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py get_veff_ fore more details'''
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5,dm*.5))
     nset = len(dm) // 2
@@ -75,13 +75,16 @@ def energy_elec(ks, dm, h1e):
 
 
 class UKS(pyscf.scf.uhf.UHF):
-    ''' Restricted Kohn-Sham '''
+    '''Unrestricted Kohn-Sham
+    See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol):
         pyscf.scf.uhf.UHF.__init__(self, mol)
-        self._ecoul = 0
-        self._exc = 0
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(mol)
+##################################################
+# don't modify the following attributes, they are not input options
+        self._ecoul = 0
+        self._exc = 0
         self._numint = numint._NumInt()
         self._keys = self._keys.union(['xc', 'grids'])
 

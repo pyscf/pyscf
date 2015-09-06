@@ -14,6 +14,15 @@ from pyscf.scf import hf
 from pyscf.scf import rohf
 
 
+'''
+Non-relativistic restricted Hartree Fock with symmetry.
+
+The symmetry are not handled in a separate data structure.  Note that during
+the SCF iteration,  the orbitals are grouped in terms of symmetry irreps.
+But the orbitals in the result are sorted based on the orbital energies.
+Function symm.label_orb_symm can be used to detect the symmetry of the
+molecular orbitals.
+'''
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
 

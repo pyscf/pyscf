@@ -66,7 +66,22 @@ SG1RADII = numpy.array((
 
 
 def sg1_prune(nuc, rads, n_ang):
-    '''SG1, CPL, 209, 506'''
+    '''SG1, CPL, 209, 506
+
+    Args:
+        nuc : int
+            Nuclear charge.
+
+        rads : 1D array
+            Grid coordinates on radical axis.
+
+        n_ang : int
+            Max number of grids over angular part.
+
+    Returns:
+        A list has the same length as rads. The list element is the number of
+        grids over angular part for each radial grid.
+    '''
 # In SG1 the ang grids for the five regions
 #            6  38 86  194 86
     leb_ngrid = numpy.array([6, 38, 86, 194, 86])
@@ -83,7 +98,22 @@ def sg1_prune(nuc, rads, n_ang):
     return leb_ngrid[place]
 
 def nwchem_prune(nuc, rads, n_ang):
-    '''NWChem'''
+    '''NWChem
+
+    Args:
+        nuc : int
+            Nuclear charge.
+
+        rads : 1D array
+            Grid coordinates on radical axis.
+
+        n_ang : int
+            Max number of grids over angular part.
+
+    Returns:
+        A list has the same length as rads. The list element is the number of
+        grids over angular part for each radial grid.
+    '''
     alphas = numpy.array((
         (0.25  , 0.5, 1.0, 4.5),
         (0.1667, 0.5, 0.9, 3.5),
@@ -114,7 +144,22 @@ def nwchem_prune(nuc, rads, n_ang):
 
 # Prune scheme JCP 102, 346
 def treutler_prune(nuc, rads, n_ang):
-    '''Treutler-Ahlrichs'''
+    '''Treutler-Ahlrichs
+
+    Args:
+        nuc : int
+            Nuclear charge.
+
+        rads : 1D array
+            Grid coordinates on radical axis.
+
+        n_ang : int
+            Max number of grids over angular part.
+
+    Returns:
+        A list has the same length as rads. The list element is the number of
+        grids over angular part for each radial grid.
+    '''
     nr = len(rads)
     leb_ngrid = numpy.empty(nr, dtype=int)
     leb_ngrid[:nr//3] = 14 # l=5
@@ -163,6 +208,13 @@ def original_becke(g):
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune_scheme=treutler_prune):
+    '''Generate number of radial grids and angular grids for the given molecule.
+
+    Returns:
+        A dict, with the atom symbol for the dict key.  For each atom type,
+        the dict value has two items: one is the meshgrid coordinates wrt the
+        atom center; the second is the volume of that grid.
+    '''
     atom_grids_tab = {}
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
@@ -204,6 +256,13 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
 
 def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
                   becke_scheme=original_becke):
+    '''Generate the mesh grid coordinates and weights for DFT numerical integration.
+    We can change atomic_radii_adjust becke_scheme to generate different meshgrid.
+
+    Returns:
+        grid_coord and grid_weight arrays.  grid_coord array has shape (N,3);
+        weight 1D array has N elements.
+    '''
     atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
     atm_dist = radi._inter_distance(mol)
     def gen_grid_partition(coords):
@@ -238,6 +297,51 @@ def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
 
 
 class Grids(object):
+    '''DFT mesh grids
+
+    Attributes for Grids:
+        level : int (0 - 6)
+            big number for large mesh grids, default is 3
+
+        atomic_radii : function or None
+            can be one of
+            | radi.treutler_atomic_radii_adjust(mol, radi.BRAGG_RADII)
+            | radi.treutler_atomic_radii_adjust(mol, radi.COVALENT_RADII)
+            | radi.becke_atomic_radii_adjust(mol, radi.BRAGG_RADII)
+            | radi.becke_atomic_radii_adjust(mol, radi.COVALENT_RADII)
+            | None,          to switch off atomic radii adjustment
+
+        radi_method : function
+            scheme for radial grids, can be one of
+            | radi.treutler
+            | radi.gauss_chebyshev
+
+        becke_scheme : function
+            weight partition function, can be one of
+            | gen_grid.stratmann
+            | gen_grid.original_becke
+
+        prune_scheme : function
+            scheme to reduce number of grids, can be one of
+            | gen_grid.sg1_prune
+            | gen_grid.nwchem_prune
+            | gen_grid.treutler_prune
+
+        symmetry : bool
+            whether to symmetrize mesh grids (TODO)
+
+        atom_grid : dict
+            Set (radial, angular) grids for particular atoms.
+            Eg, grids.atom_grid = {'H': (20,110)} will generate 20 radial
+            grids and 110 angular grids for H atom.
+
+        Examples:
+
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
+        >>> grids = dft.gen_grid.Grids(mol)
+        >>> grids.level = 4
+        >>> grids.build_()
+        '''
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
@@ -255,6 +359,8 @@ class Grids(object):
         self.symmetry = mol.symmetry
         self.atom_grid = {}
 
+##################################################
+# don't modify the following attributes, they are not input options
         self.coords  = None
         self.weights = None
         self._keys = set(self.__dict__.keys())
@@ -271,6 +377,8 @@ class Grids(object):
         if self.atom_grid:
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
 
+    def build_(self, mol=None):
+        return self.setup_grids_(mol)
     def setup_grids(self, mol=None):
         return self.setup_grids_(mol)
     def setup_grids_(self, mol=None):
@@ -293,6 +401,7 @@ class Grids(object):
 
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
                          level=None, prune_scheme=None):
+        ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = mol.radi_method
         if level is None: level = self.level
@@ -302,32 +411,38 @@ class Grids(object):
 
     def gen_partition(self, mol, atom_grids_tab, atomic_radii=None,
                       becke_scheme=original_becke):
+        ''' See gen_grid.gen_partition function'''
         return gen_partition(mol, atom_grids_tab, atomic_radii,
                              becke_scheme)
 
 
 
 def _default_rad(nuc, level=3):
+    '''Number of radial grids '''
     tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-    grids = numpy.array(((20, 25, 35, 40, 50, 60, 70 ),
-                         (25, 30, 40, 45, 55, 65, 75 ),
-                         (30, 35, 45, 50, 60, 70, 80 ),
-                         (35, 40, 50, 55, 65, 75, 85 ),
-                         (40, 45, 55, 60, 70, 80, 90 ),
-                         (45, 50, 60, 65, 75, 85, 95 ),
-                         (50, 55, 65, 70, 80, 90, 100),))
+    #           Period    1   2   3   4   5   6   7         # level
+    grids = numpy.array(((20, 25, 35, 40, 50, 60, 70 ),     # 0
+                         (25, 30, 40, 45, 55, 65, 75 ),     # 1
+                         (30, 35, 45, 50, 60, 70, 80 ),     # 2
+                         (35, 40, 50, 55, 65, 75, 85 ),     # 3
+                         (40, 45, 55, 60, 70, 80, 90 ),     # 4
+                         (45, 50, 60, 65, 75, 85, 95 ),     # 5
+                         (50, 55, 65, 70, 80, 90, 100),))   # 6
     period = (nuc > tab).sum()
     return grids[level,period]
 
 def _default_ang(nuc, level=3):
+    '''Order of angular grids. See SPHERICAL_POINTS_ORDER for the mapping of
+    the order and the number of angular grids'''
     tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-    order = numpy.array(((15, 17, 17, 17, 17, 17, 17 ),
-                         (17, 23, 23, 23, 23, 23, 23 ),
-                         (23, 29, 29, 29, 29, 29, 29 ),
-                         (29, 35, 35, 35, 35, 35, 35 ),
-                         (35, 41, 41, 41, 41, 41, 41 ),
-                         (41, 47, 47, 47, 47, 47, 47 ),
-                         (47, 53, 53, 53, 53, 53, 53 ),))
+    #           Period    1   2   3   4   5   6   7         # level
+    order = numpy.array(((15, 17, 17, 17, 17, 17, 17 ),     # 0
+                         (17, 23, 23, 23, 23, 23, 23 ),     # 1
+                         (23, 29, 29, 29, 29, 29, 29 ),     # 2
+                         (29, 35, 35, 35, 35, 35, 35 ),     # 3
+                         (35, 41, 41, 41, 41, 41, 41 ),     # 4
+                         (41, 47, 47, 47, 47, 47, 47 ),     # 5
+                         (47, 53, 53, 53, 53, 53, 53 ),))   # 6
     period = (nuc > tab).sum()
     return SPHERICAL_POINTS_ORDER[order[level,period]]
 

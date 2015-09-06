@@ -307,9 +307,12 @@ def overlap(string1, string2, norb, s=None):
         return numpy.linalg.det(s1)
 
 def fix_spin_(fciobj, shift=.1):
-    '''If FCI solver cannot stick on spin eigenfunction, modify the solver by
+    r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
     a shift on spin square operator
-    (H + shift*S^2) |Psi> = E |Psi>
+
+    .. math::
+
+        (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
     '''
     from pyscf.fci import spin_op
     from pyscf.fci import direct_spin0

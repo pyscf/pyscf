@@ -17,8 +17,6 @@ h2o.atom.extend([
 
 h2o.basis = {"H": '6-31g',
              "O": '6-31g',}
-h2o.grids = {"H": (10, 50),
-             "O": (10, 50),}
 h2o.build()
 
 class KnowValues(unittest.TestCase):
@@ -29,6 +27,7 @@ class KnowValues(unittest.TestCase):
         grid.becke_scheme = gen_grid.original_becke
         grid.atomic_radii = radi.becke_atomic_radii_adjust(h2o, \
                 numpy.round(radi.BRAGG_RADII, 2))
+        grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
         coord, weight = grid.setup_grids()
         self.assertAlmostEqual(numpy.linalg.norm(coord), 185.91245945279027, 9)
         self.assertAlmostEqual(numpy.linalg.norm(weight), 1720.1317185648893, 9)
@@ -43,6 +42,7 @@ class KnowValues(unittest.TestCase):
         grid.atomic_radii = radi.becke_atomic_radii_adjust(h2o, \
                 numpy.round(radi.COVALENT_RADII, 2))
         grid.radi_method = radi.mura_knowles
+        grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
         coord, weight = grid.setup_grids()
         self.assertAlmostEqual(numpy.linalg.norm(weight), 1804.5437331817291, 9)
 
@@ -53,6 +53,7 @@ class KnowValues(unittest.TestCase):
     def test_prune(self):
         grid = gen_grid.Grids(h2o)
         grid.prune_scheme = gen_grid.sg1_prune
+        grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
         coord, weight = grid.setup_grids()
         self.assertAlmostEqual(numpy.linalg.norm(coord), 202.17732600266302, 9)
         self.assertAlmostEqual(numpy.linalg.norm(weight), 442.54536463517167, 9)
