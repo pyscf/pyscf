@@ -172,7 +172,7 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
         mf1 = scf.RHF(mf.mol)
         mf1.__dict__.update(mf.__dict__)
         mf1.mo_energy = mf.mo_energy[0]
@@ -200,7 +200,7 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
         mf1 = scf.RHF(mf.mol)
         mf1.__dict__.update(mf.__dict__)
         mf1.mo_energy = mf.mo_energy[0]
@@ -223,7 +223,7 @@ def UCASCI(mf, *args, **kwargs):
         isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
-    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
         mc = casci_uhf.CASCI(mf, *args, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
@@ -236,7 +236,7 @@ def UCASSCF(mf, *args, **kwargs):
         isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
-    if mf.__class__.__name__ in ('UHF') or isinstance(mf, scf.uhf.UHF):
+    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
         mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')

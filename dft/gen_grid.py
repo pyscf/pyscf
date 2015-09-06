@@ -161,7 +161,7 @@ def original_becke(g):
                              ctypes.c_int(g.size))
     return g1
 
-def gen_atomic_grids(mol, mol_grids={}, radi_method=radi.gauss_chebyshev,
+def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune_scheme=treutler_prune):
     atom_grids_tab = {}
     for ia in range(mol.natm):
@@ -169,8 +169,8 @@ def gen_atomic_grids(mol, mol_grids={}, radi_method=radi.gauss_chebyshev,
 
         if symb not in atom_grids_tab:
             chg = mol.atom_charge(ia)
-            if symb in mol_grids:
-                n_rad, n_ang = mol_grids[symb]
+            if symb in atom_grid:
+                n_rad, n_ang = atom_grid[symb]
                 assert(n_ang in SPHERICAL_POINTS_ORDER.values())
             else:
                 n_rad = _default_rad(chg, level)
@@ -253,9 +253,11 @@ class Grids(object):
         self.level = 3
         self.prune_scheme = treutler_prune
         self.symmetry = mol.symmetry
+        self.atom_grid = {}
 
         self.coords  = None
         self.weights = None
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
@@ -266,12 +268,16 @@ class Grids(object):
         if self.atomic_radii is not None:
             logger.info(self, 'atom radii adjust function: %s',
                         self.atomic_radii.__doc__)
+        if self.atom_grid:
+            logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
 
     def setup_grids(self, mol=None):
         return self.setup_grids_(mol)
     def setup_grids_(self, mol=None):
         if mol is None: mol = self.mol
-        atom_grids_tab = self.gen_atomic_grids(mol, mol_grids=mol.grids,
+        if self.verbose > logger.QUIET:
+            gto.mole.check_sanity(self, self._keys, self.stdout)
+        atom_grids_tab = self.gen_atomic_grids(mol, atom_grid=self.atom_grid,
                                                radi_method=self.radi_method,
                                                level=self.level,
                                                prune_scheme=self.prune_scheme)
@@ -285,13 +291,13 @@ class Grids(object):
         self.dump_flags()
         return self.setup_grids_(mol)
 
-    def gen_atomic_grids(self, mol, mol_grids=None, radi_method=None,
+    def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
                          level=None, prune_scheme=None):
-        if mol_grids is None: mol_grids = mol.grids
+        if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = mol.radi_method
         if level is None: level = self.level
         if prune_scheme is None: prune_scheme = self.prune_scheme
-        return gen_atomic_grids(mol, mol_grids, self.radi_method, level,
+        return gen_atomic_grids(mol, atom_grid, self.radi_method, level,
                                 prune_scheme)
 
     def gen_partition(self, mol, atom_grids_tab, atomic_radii=None,

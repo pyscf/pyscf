@@ -836,9 +836,9 @@ class SCF(object):
         self.direct_scf_tol = 1e-13
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.mo_energy = []
-        self.mo_coeff = []
-        self.mo_occ = []
+        self.mo_energy = None
+        self.mo_coeff = None
+        self.mo_occ = None
         self.hf_energy = 0
         self.converged = False
         self.callback = None
