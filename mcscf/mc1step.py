@@ -549,14 +549,18 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+        if hasattr(casscf.fcisolver, 'spin_square'):
+            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+            ss = '  S^2 = %.7f' % ss[0]
+        else:
+            ss = ''
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
-                 imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
+        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g%s',
+                 imacro, njk, imicro, e_tot, e_tot-elast, ss)
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)

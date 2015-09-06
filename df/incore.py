@@ -144,7 +144,6 @@ if __name__ == '__main__':
             pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                     auxmol._atm, auxmol._bas, auxmol._env)
     eri0 = numpy.empty((nao,nao,naoaux))
-    libri.CINTcgto_spheric.restype = ctypes.c_int
     pi = 0
     for i in range(mol.nbas):
         pj = 0

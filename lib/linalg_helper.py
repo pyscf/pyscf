@@ -121,7 +121,7 @@ def davidson(a, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
 
                 #xt.append(precond(dxtmp, ek, x0[k])) # not accurate enough?
                 xt.append(precond(dxtmp, e[0], x0[k]))
-                xt[-1] *= 1/numpy.linalg.norm(xt[-1])
+                xt[-1] *= 1/(numpy.linalg.norm(xt[-1])+1e-15)
                 axt.append(a(xt[-1]))
         rnow = len(xt)
 # Cannot require both dx_norm and de converged, because we want to stick on
