@@ -1,8 +1,17 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 from functools import reduce
 import numpy
-from pyscf import gto, scf, ao2mo, fci
+from pyscf import gto, scf, ao2mo
 from pyscf import tools
 from pyscf import symm
+
+'''
+Write FCIDUMP file
+'''
 
 mol = gto.M(
     atom = [['H', 0, 0, i] for i in range(6)],
@@ -14,16 +23,24 @@ myhf = scf.RHF(mol)
 myhf.kernel()
 c = myhf.mo_coeff
 
+#
+# FCIDUMP for given 1e and 2e integrals
+#
 h1e = reduce(numpy.dot, (c.T, myhf.get_hcore(), c))
-eri = ao2mo.outcore.full_iofree(mol, c)
+eri = ao2mo.kernel(mol, c)
 
 tools.fcidump.from_integrals('fcidump.example1', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0)
 
-# to bypass small matrix elements
+#
+# Bypass small matrix elements in FCIDUMP
+#
 tools.fcidump.from_integrals('fcidump.example2', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0, tol=1e-10)
 
+#
+# Inculde the symmetry information in FCIDUMP
+#
 # to write the irreps for each orbital, first use pyscf.symm.label_orb_symm to
 # get the irrep ids
 MOLPRO_ID = {'D2h': { 'Ag' : 1,

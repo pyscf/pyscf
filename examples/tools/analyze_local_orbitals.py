@@ -1,16 +1,17 @@
+#!/usr/bin/env python
 #
-# Read localized orbitals from molden, then find out C 2py and 2pz orbitals
+# Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-#
-
 
 import numpy
 import re
-import scipy.linalg
-from pyscf import gto
 from pyscf import tools
-from pyscf import lo
 from pyscf.tools import mo_mapping
+
+'''
+Read localized orbitals from molden, then find out C 2py and 2pz orbitals
+'''
+
 
 mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
         tools.molden.load('benzene-631g-boys.molden')
