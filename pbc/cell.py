@@ -1,7 +1,8 @@
+import pyscf.gto
 
-class Cell:
+class Cell(pyscf.gto.Mole):
     def __init__(self, **kwargs):
-        self.mol = None
+        self.__dict__.update(kwargs)
         self.h = None
         self.vol = 0.
 

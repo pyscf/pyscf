@@ -1,27 +1,16 @@
-import sys
-import itertools
-import math
-import numpy as np
-import numpy.fft
-import scipy.linalg
-import scipy.special
-import pyscf.gto.mole
-import pyscf.dft.numint
-
+import pyscf.dft
 from pyscf.lib import logger
 
-pi=math.pi
-sqrt=math.sqrt
-exp=math.exp
-erfc = scipy.special.erfc
+import math
+import numpy as np
+import scipy
+import scipy.linalg
+import scipy.special
 
-'''PBC module. Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"
-'''
-class Cell:
-    def __init__(self, **kwargs):
-        self.mol = None
-        self.h = None
-        self.vol = 0.
+pi=math.pi
+exp=np.exp
+sqrt=np.sqrt
+erfc=scipy.special.erfc
 
 def get_Gv(cell, gs):
     '''
@@ -37,14 +26,11 @@ def get_Gv(cell, gs):
     invhT=scipy.linalg.inv(cell.h.T)
 
     # maybe there's a better numpy way?
-    #:gxrange=range(gs[0]+1)+range(-gs[0],0)
-    #:gyrange=range(gs[1]+1)+range(-gs[1],0)
-    #:gzrange=range(gs[2]+1)+range(-gs[2],0)
-    #:gxyz=np.array([gxyz for gxyz in 
-    #:               itertools.product(gxrange, gyrange, gzrange)]).T
     gxrange=range(gs[0]+1)+range(-gs[0],0)
     gyrange=range(gs[1]+1)+range(-gs[1],0)
     gzrange=range(gs[2]+1)+range(-gs[2],0)
+    #:gxyz=np.array([gxyz for gxyz in 
+    #:               itertools.product(gxrange, gyrange, gzrange)])
     gxyz = _span3(gxrange, gyrange, gzrange)
 
     Gv=2*pi*np.dot(invhT,gxyz)
@@ -58,125 +44,21 @@ def get_SI(cell, Gv):
         np.array([natm, ngs], np.complex128)
     '''
     ngs=Gv.shape[1]
-    mol=cell.mol
-    SI=np.empty([mol.natm, ngs], np.complex128)
-    mol=cell.mol
+    SI=np.empty([cell.natm, ngs], np.complex128)
 
-    for ia in range(mol.natm):
-        SI[ia,:]=np.exp(-1j*np.dot(Gv.T, mol.atom_coord(ia)))
+    for ia in range(cell.natm):
+        SI[ia,:]=np.exp(-1j*np.dot(Gv.T, cell.atom_coord(ia)))
 
     return SI
 
-def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
+def get_coulG(cell, gs):
     '''
-    Real and G-space Ewald sum 
-
-    Formulation of Martin, App. F2.
-
-    Returns
-        float
+    Coulomb kernel in G space (4*pi/G^2 for G!=0, 0 for G=0)
     '''
-    mol=cell.mol
-
-    log=logger.Logger
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
-
-    chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
-    coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
-
-    ewovrl = 0.
-
-    # set up real-space lattice indices [-ewcut ... ewcut]
-    ewxrange=range(-ew_cut[0],ew_cut[0]+1)
-    ewyrange=range(-ew_cut[1],ew_cut[1]+1)
-    ewzrange=range(-ew_cut[2],ew_cut[2]+1)
-
-    #:ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
-    ewxyz=_span3(ewxrange,ewyrange,ewzrange)
-
-    #:for ic, (ix, iy, iz) in enumerate(ewxyz):
-    #:    #:L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
-    #:    L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
-
-    #:    # prime in summation to avoid self-interaction in unit cell
-    #:    if (ix == 0 and iy == 0 and iz == 0):
-    #:        for ia in range(mol.natm):
-    #:            qi = chargs[ia]
-    #:            ri = coords[ia]
-    #:            for ja in range(ia):
-    #:                qj = chargs[ja]
-    #:                rj = coords[ja]
-    #:                r = np.linalg.norm(ri-rj)
-    #:                ewovrl += qi * qj / r * erfc(ew_eta * r)
-    #:    else:
-    #:        #:for ia in range(mol.natm):
-    #:        #:    qi = chargs[ia]
-    #:        #:    ri = coords[ia]
-    #:        #:    for ja in range(mol.natm):
-    #:        #:        qj=chargs[ja]
-    #:        #:        rj=coords[ja]
-    #:        #:        r=np.linalg.norm(ri-rj+L)
-    #:        #:        ewovrl += qi * qj / r * erfc(ew_eta * r)
-    #:        r1 = rij + L
-    #:        r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-    #:        ewovrl += (qij/r * erfc(ew_eta * r)).sum()
-    nx = len(ewxrange)
-    ny = len(ewyrange)
-    nz = len(ewzrange)
-    Lall = numpy.einsum('ij,jk->ki', cell.h, ewxyz).reshape(3,nx,ny,nz)
-    #exclude the point where Lall == 0
-    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
-    Lall = Lall.reshape(-1,3)
-    for ia in range(mol.natm):
-        qi = chargs[ia]
-        ri = coords[ia]
-        for ja in range(ia):
-            qj = chargs[ja]
-            rj = coords[ja]
-            r = np.linalg.norm(ri-rj)
-            ewovrl += qi * qj / r * erfc(ew_eta * r)
-    for ia in range(mol.natm):
-        qi = chargs[ia]
-        ri = coords[ia]
-        for ja in range(mol.natm):
-            qj = chargs[ja]
-            rj = coords[ja]
-            r1 = ri-rj + Lall
-            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            ewovrl += (qi * qj / r * erfc(ew_eta * r)).sum()
-
-    ewovrl *= 0.5
-
-    # last line of Eq. (F.5) in Martin 
-    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / sqrt(pi)
-    ewself += -1./2. * np.sum(chargs)**2 * pi/(ew_eta**2 * cell.vol)
-    
-    # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
-    ewg=0.
-
     Gv=get_Gv(cell, gs)
-    SI=get_SI(cell, Gv)
-
-    # Eq. (F.6) in Martin is off by a factor of 2, the
-    # exponent is wrong (8->4) and the square is in the wrong place
-    #
-    # Formula should be
-    #
-    # 2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |S_I(G)|^2 \exp[-|G|^2/4\eta^2]
-    coulG=get_coulG(cell, gs)
-    absG2=np.einsum('ij,ij->j',np.conj(Gv),Gv)
-    SIG2=np.abs(SI)**2
-    expG2=np.exp(-absG2/(4*ew_eta**2))
-    JexpG2=2*coulG*expG2
-    ewgI=np.dot(SIG2,JexpG2)
-    ewg=np.sum(ewgI)
-    ewg/=cell.vol
-
-    log.debug('ewald components= %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
-    return ewovrl + ewself + ewg
+    coulG=np.zeros(Gv.shape[1]) 
+    coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
+    return coulG
 
 def _gen_qv(ngs):
     '''
@@ -192,11 +74,17 @@ def _gen_qv(ngs):
     #return np.array(list(np.ndindex(tuple(ngs)))).T
     return _span3(np.arange(ngs[0]), np.arange(ngs[1]), np.arange(ngs[2]))
 
+def _span3(*xs):
+    c = np.empty([3]+[len(x) for x in xs])
+    c[0,:,:,:] = np.asarray(xs[0]).reshape(-1,1,1)
+    c[1,:,:,:] = np.asarray(xs[1]).reshape(1,-1,1)
+    c[2,:,:,:] = np.asarray(xs[2]).reshape(1,1,-1)
+    return c.reshape(3,-1)
+
 def setup_uniform_grids(cell, gs):
     '''
     Real-space AO uniform grid, following Eq. (3.19) (MH)
     '''
-    mol=cell.mol
     ngs=2*gs+1
     qv=_gen_qv(ngs)
     invN=np.diag(1./np.array(ngs))
@@ -205,11 +93,11 @@ def setup_uniform_grids(cell, gs):
     return coords
 
 def get_aoR(cell, coords):
-    aoR=pyscf.dft.numint.eval_ao(cell.mol, coords)
+    aoR=pyscf.dft.numint.eval_ao(cell, coords)
     return aoR
 
 def get_rhoR(cell, aoR, dm):
-    rhoR=pyscf.dft.numint.eval_rho(cell.mol, aoR, dm)
+    rhoR=pyscf.dft.numint.eval_rho(cell, aoR, dm)
     return rhoR
 
 def fft(f, gs):
@@ -245,212 +133,226 @@ def ifft(g, gs):
     f3d=np.fft.ifftn(g3d)
     return np.ravel(f3d)
 
-def get_nuc(cell, gs):
+def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     '''
-    Bare nuc-el AO matrix (G=0 component removed)
-    
+    Real and G-space Ewald sum 
+
+    Formulation of Martin, App. F2.
+
     Returns
-        v_nuc (nao x nao) matrix
+        float
     '''
-    mol=cell.mol
+    log=logger.Logger
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(cell.stdout, verbose)
 
-    chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
-    nuc_coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
+    chargs = [cell.atom_charge(i) for i in range(len(cell._atm))]
+    coords = [cell.atom_coord(i) for i in range(len(cell._atm))]
 
-    coords=setup_uniform_grids(cell,gs)
-    aoR=get_aoR(cell, coords)
+    ewovrl = 0.
 
-    vneR=np.zeros(aoR.shape[0])
+    # set up real-space lattice indices [-ewcut ... ewcut]
+    ewxrange=range(-ew_cut[0],ew_cut[0]+1)
+    ewyrange=range(-ew_cut[1],ew_cut[1]+1)
+    ewzrange=range(-ew_cut[2],ew_cut[2]+1)
 
-    for a in range(mol.natm):
-        qa = chargs[a]
-        ra = nuc_coords[a]
-        #:riav = [np.linalg.norm(ra-ri) for ri in coords]
-        dd = ra-coords
-        riav = np.sqrt(np.einsum('ij,ij->i', dd, dd))
-        #vneR-=np.array([qa/ria*math.erf(ria/ewrc)
-        #                for ria in riav]) # Eq. (3.40) MH
-        #:vneR-=np.array([qa/ria for ria in riav])
-        vneR-=qa/riav
+    #:ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
+    ewxyz=_span3(ewxrange,ewyrange,ewzrange)
 
-    # Set G=0 component to 0.
-    vneG=fft(vneR, gs)
-    vneG[0]=0.
-    vneR=ifft(vneG,gs)
+    #:for ic, (ix, iy, iz) in enumerate(ewxyz):
+    #:    #:L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
+    #:    L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
 
-    nao=aoR.shape[1]
-    vne=np.zeros([nao, nao])
-    for i in range(nao):
-        for j in range(nao):
-            vne[i,j]=np.vdot(aoR[:,i],vneR*aoR[:,j])
+    #:    # prime in summation to avoid self-interaction in unit cell
+    #:    if (ix == 0 and iy == 0 and iz == 0):
+    #:        for ia in range(cell.natm):
+    #:            qi = chargs[ia]
+    #:            ri = coords[ia]
+    #:            for ja in range(ia):
+    #:                qj = chargs[ja]
+    #:                rj = coords[ja]
+    #:                r = np.linalg.norm(ri-rj)
+    #:                ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #:    else:
+    #:        #:for ia in range(cell.natm):
+    #:        #:    qi = chargs[ia]
+    #:        #:    ri = coords[ia]
+    #:        #:    for ja in range(cell.natm):
+    #:        #:        qj=chargs[ja]
+    #:        #:        rj=coords[ja]
+    #:        #:        r=np.linalg.norm(ri-rj+L)
+    #:        #:        ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #:        r1 = rij + L
+    #:        r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+    #:        ewovrl += (qij/r * erfc(ew_eta * r)).sum()
+    nx = len(ewxrange)
+    ny = len(ewyrange)
+    nz = len(ewzrange)
+    Lall = np.einsum('ij,jk->ki', cell.h, ewxyz).reshape(3,nx,ny,nz)
+    #exclude the point where Lall == 0
+    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
+    Lall = Lall.reshape(-1,3)
+    for ia in range(cell.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(ia):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r = np.linalg.norm(ri-rj)
+            ewovrl += qi * qj / r * erfc(ew_eta * r)
+    for ia in range(cell.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(cell.natm):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r1 = ri-rj + Lall
+            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+            ewovrl += (qi * qj / r * erfc(ew_eta * r)).sum()
 
-    ngs=aoR.shape[0]
-    vne *= (cell.vol/ngs)
-    return vne
+    ewovrl *= 0.5
 
-def get_t(cell, gs):
-    '''
-    Kinetic energy AO matrix
-    '''
+    # last line of Eq. (F.5) in Martin 
+    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / sqrt(pi)
+    ewself += -1./2. * np.sum(chargs)**2 * pi/(ew_eta**2 * cell.vol)
+    
+    # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
     Gv=get_Gv(cell, gs)
-    #:G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
-    G2=np.einsum('ji,ji->i', Gv, Gv)
+    SI=get_SI(cell, Gv)
 
-    coords=setup_uniform_grids(cell, gs)
-    aoR=get_aoR(cell, coords)
-    aoG=np.empty(aoR.shape, np.complex128)
-    TaoG=np.empty(aoR.shape, np.complex128)
-
-    nao=aoR.shape[1]
-    for i in range(nao):
-        aoG[:,i]=fft(aoR[:,i], gs)
-        TaoG[:,i]=0.5*G2*aoG[:,i]
-                
-    t=np.empty([nao,nao])
-    for i in range(nao):
-        for j in range(nao):
-            t[i,j]=np.vdot(aoG[:,i],TaoG[:,j])
-
-    ngs=aoR.shape[0]
-    t *= (cell.vol/ngs**2)
-
-    return t
-
-def get_ovlp(cell, gs):
-    '''
-    Overlap AO matrix
-    '''
-    coords=setup_uniform_grids(cell, gs)
-    aoR=get_aoR(cell, coords)
-    nao=aoR.shape[1]
-
-    s=np.empty([nao,nao])
-    for i in range(nao):
-        for j in range(nao):
-            s[i,j]=np.vdot(aoR[:,i],aoR[:,j])
-
-    ngs=aoR.shape[0]
-    s *= cell.vol/ngs
-    return s
-
-def get_coulG(cell, gs):
-    '''
-    Coulomb kernel in G space (4*pi/G^2 for G!=0, 0 for G=0)
-    '''
-    Gv=get_Gv(cell, gs)
-    coulG=np.zeros(Gv.shape[1]) 
-    coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
-    return coulG
-
-def get_j(cell, dm, gs):
-    '''
-    Coulomb AO matrix 
-    '''
+    # Eq. (F.6) in Martin is off by a factor of 2, the
+    # exponent is wrong (8->4) and the square is in the wrong place
+    #
+    # Formula should be
+    #
+    # 2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |S_I(G)|^2 \exp[-|G|^2/4\eta^2]
     coulG=get_coulG(cell, gs)
+    absG2=np.einsum('ij,ij->j',np.conj(Gv),Gv)
+    SIG2=np.abs(SI)**2
+    expG2=np.exp(-absG2/(4*ew_eta**2))
+    JexpG2=2*coulG*expG2
+    ewgI=np.dot(SIG2,JexpG2)
+    ewg=np.sum(ewgI)
+    ewg/=cell.vol
 
+    log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
+    return ewovrl + ewself + ewg
+
+def get_ao_pairs_G(cell, gs):
+    '''
+    forward and inverse FFT of AO pairs -> (ij|G), (G|ij)
+
+    Returns
+        [ndarray, ndarray] : ndarray [ngs, nao*(nao+1)/2]
+    '''
     coords=setup_uniform_grids(cell, gs)
-    aoR=get_aoR(cell, coords)
-
-    rhoR=get_rhoR(cell, aoR, dm)
-    rhoG=fft(rhoR, gs)
-
-    vG=coulG*rhoG
-    vR=ifft(vG, gs)
-
+    aoR=get_aoR(cell, coords) # shape(coords, nao)
     nao=aoR.shape[1]
-    ngs=aoR.shape[0]
-    vj=np.zeros([nao,nao])
+    npair=nao*(nao+1)/2
+    ao_pairs_G=np.zeros([coords.shape[0], npair], np.complex128)
+    ao_pairs_invG=np.zeros([coords.shape[0], npair], np.complex128)
+    ij=0
     for i in range(nao):
-        for j in range(nao):
-            vj[i,j]=cell.vol/ngs*np.dot(aoR[:,i],vR*aoR[:,j])
-           
-    return vj
-
-def _span3(*xs):
-    c = np.empty([3]+[len(x) for x in xs])
-    c[0,:,:,:] = np.asarray(xs[0]).reshape(-1,1,1)
-    c[1,:,:,:] = np.asarray(xs[1]).reshape(1,-1,1)
-    c[2,:,:,:] = np.asarray(xs[2]).reshape(1,1,-1)
-    return c.reshape(3,-1)
-
-def test():
-    from pyscf import gto
-    from pyscf.dft import rks
-
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = None
-
-    L=40
-    h=np.eye(3.)*L
-
-    mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
-    #mol.basis = { 'He': 'STO-3G'}
-    mol.basis = { 'He': [[0,
-                          (1.0, 1.0)]] }
-#        (0.2089, 0.307737),]] }
+        for j in range(i+1):
+            ao_ij_R=np.einsum('r,r->r', aoR[:,i], aoR[:,j])
+            ao_pairs_G[:, ij]=fft(ao_ij_R, gs)         
+            ao_pairs_invG[:, ij]=ifft(ao_ij_R, gs)
+            ij+=1
+    return ao_pairs_G, ao_pairs_invG
     
-    mol.build()
-    m = rks.RKS(mol)
-    m.xc = 'LDA,VWN_RPA'
-    m.xc = 'b3lyp'
-    print(m.scf()) # -2.90705411168
+def get_mo_pairs_G(cell, gs, mo_coeffs):
+    '''
+    forward and inverse FFT of MO pairs -> (ij|G), (G|ij)
     
-    cell=Cell()
-    cell.mol=mol
-    cell.h=h
-    cell.vol=scipy.linalg.det(cell.h)
-
-    #gs=np.array([10,10,10]) # number of G-points in grid. Real-space dim=2*gs+1
-    gs=np.array([60,60,60]) # number of G-points in grid. Real-space dim=2*gs+1
-    Gv=get_Gv(cell, gs)
-
-    dm=m.make_rdm1()
-
-    print "Kinetic"
-    tao=get_t(cell, gs)
-    tao2 = mol.intor_symmetric('cint1e_kin_sph') 
-
-    print "Kinetic energies"
-    print np.dot(np.ravel(tao), np.ravel(dm))
-    print np.dot(np.ravel(tao2), np.ravel(dm))
-    
-    print "Overlap"
-    sao=get_ovlp(cell,gs)
-    print np.dot(np.ravel(sao), np.ravel(dm))
-    print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm))
-
-    print "Coulomb (G!=0)"
-    jao=get_j(cell,dm,gs)
-    print np.dot(np.ravel(dm),np.ravel(jao))
-    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))
-
-    print "Nuc-el (G!=0)"
-    neao=get_nuc(cell,gs)
-    vne=mol.intor_symmetric('cint1e_nuc_sph') 
-    print np.dot(np.ravel(dm), np.ravel(neao))
-    print np.dot(np.ravel(dm), np.ravel(vne))
-
-    print "Normalization"
+    Not correctly implemented: simplifications for real (ij), or for complex MOs!
+    Returns
+        [ndarray, ndarray] : ndarray [ngs, nmo[0]*nmo[1]]
+    '''
     coords=setup_uniform_grids(cell, gs)
-    aoR=get_aoR(cell, coords)
-    rhoR=get_rhoR(cell, aoR, dm)
-    print cell.vol/len(rhoR)*np.sum(rhoR) # should be 2.0
-    
-    print "(Hartree + vne) * DM"
-    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))+np.dot(np.ravel(dm), np.ravel(vne))
-    print np.einsum("ij,ij",dm,neao+jao)
+    aoR=get_aoR(cell, coords) # shape(coords, nao)
+    nmoi=mo_coeffs[0].shape[1]
+    nmoj=mo_coeffs[1].shape[1]
 
-    ewcut=(40,40,40)
-    ew_eta=0.05
-    for ew_eta in [0.1, 0.5, 1.]:
-        ew=ewald(cell, gs, ew_eta, ewcut)
-        print "Ewald (eta, energy)", ew_eta, ew # should be same for all eta
+    # this also doesn't check for the (common) case
+    # where mo_coeffs[0] == mo_coeffs[1]
+    moiR=np.einsum('ri,ia->ra',aoR, mo_coeffs[0])
+    mojR=np.einsum('ri,ia->ra',aoR, mo_coeffs[1])
 
-    print "Ewald divergent terms summation", ew
+    # this would need a conj on moiR if we have complex fns
+    mo_pairs_R=np.einsum('ri,rj->rij',moiR,mojR)
+    mo_pairs_G=np.zeros([coords.shape[0],nmoi*nmoj], np.complex128)
+    mo_pairs_invG=np.zeros([coords.shape[0],nmoi*nmoj], np.complex128)
 
-    print "Total coulomb (analytic)", .5*np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))+np.dot(np.ravel(dm), np.ravel(vne))
-    print "Total coulomb (fft coul + ewald)", np.einsum("ij,ij",dm,neao+.5*jao)+ew
+    for i in xrange(nmoi):
+        for j in xrange(nmoj):
+            mo_pairs_G[:,i*nmoj+j]=fft(mo_pairs_R[:,i,j], gs)
+            mo_pairs_invG[:,i*nmoj+j]=ifft(mo_pairs_R[:,i,j], gs)
+    return mo_pairs_G, mo_pairs_invG
 
-if __name__ == '__main__':
-    test()
+def assemble_eri(cell, gs, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
+    '''
+    Assemble 4-index ERI
+
+    \sum_G (ij|G)(G|kl) 
+
+    Returns
+        [nmo1*nmo2, nmo3*nmo4] ndarray
+    '''
+    log=logger.Logger
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(cell.stdout, verbose)
+
+    log.debug('Performing periodic ERI assembly of (%i, %i) ij pairs', 
+              orb_pair_G1.shape[1], orb_pair_invG2.shape[1])
+    coulG=get_coulG(cell, gs)
+    ngs=orb_pair_invG2.shape[0]
+    Jorb_pair_invG2=np.einsum('g,gn->gn',coulG,orb_pair_invG2)*(cell.vol/ngs)
+    eri=np.einsum('gm,gn->mn',orb_pair_G1, Jorb_pair_invG2)
+    return eri
+
+def get_ao_eri(cell, gs):
+    '''
+    Convenience function to return AO integrals
+    '''
+    ao_pairs_G, ao_pairs_invG=get_ao_pairs_G(cell, gs)
+    return assemble_eri(cell, gs, ao_pairs_G, ao_pairs_invG)
+        
+def get_mo_eri(cell, gs, mo_coeffs12, mo_coeffs34):
+    '''
+    Convenience function to return MO integrals
+    '''
+    # don't really need FFT and iFFT for both sets
+    mo_pairs12_G, mo_pairs12_invG=get_mo_pairs_G(cell, gs, mo_coeffs12)
+    mo_pairs34_G, mo_pairs34_invG=get_mo_pairs_G(cell, gs, mo_coeffs34)
+    return assemble_eri(cell, gs, mo_pairs12_G, mo_pairs34_invG)
+
+class UniformGrids(object):
+    '''
+    Uniform Grid
+    '''
+    def __init__(self, cell, gs):
+        self.cell = cell
+        self.gs = gs
+        self.coords = None
+        self.weights = None
+        
+    def setup_grids_(self, cell=None, gs=None):
+        if cell==None: cell=self.cell
+        if gs==None: gs=self.gs
+
+        self.coords=setup_uniform_grids(self.cell, self.gs)
+        self.weights=np.ones(self.coords.shape[0]) 
+        self.weights*=1.*cell.vol/self.weights.shape[0]
+
+        return self.coords, self.weights
+
+    def dump_flags(self):
+        logger.info(self, 'uniform grid')
+
+    def kernel(self, cell=None):
+        self.dump_flags()
+        return self.setup_grids()
