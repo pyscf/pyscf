@@ -268,6 +268,7 @@ def get_mo_pairs_G(cell, gs, mo_coeffs):
     
     Not correctly implemented: simplifications for real (ij), or for complex MOs!
     Returns
+
         [ndarray, ndarray] : ndarray [ngs, nmo[0]*nmo[1]]
     '''
     coords=setup_uniform_grids(cell, gs)
@@ -318,6 +319,7 @@ def get_ao_eri(cell, gs):
     '''
     Convenience function to return AO integrals
     '''
+
     ao_pairs_G, ao_pairs_invG=get_ao_pairs_G(cell, gs)
     return assemble_eri(cell, gs, ao_pairs_G, ao_pairs_invG)
         
