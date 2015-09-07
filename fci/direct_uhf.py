@@ -144,7 +144,7 @@ def make_hdiag(h1e, eri, norb, nelec):
                              ctypes.c_int(neleca), ctypes.c_int(nelecb),
                              occslista.ctypes.data_as(ctypes.c_void_p),
                              occslistb.ctypes.data_as(ctypes.c_void_p))
-    return numpy.array(hdiag)
+    return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     h1e_a, h1e_b = h1e

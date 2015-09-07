@@ -254,7 +254,7 @@ def get_fock(casscf, mo_coeff=None, ci=None):
         return casscf.get_fock(mo_coeff, ci)
 
 def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
-    '''Restore natrual orbitals
+    '''Natrual orbitals in CAS space
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
