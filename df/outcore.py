@@ -28,6 +28,8 @@ def _fpointer(name):
 def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=None,
                  int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
                  ioblk_size=256, verbose=0):
+    '''3-center 2-electron AO integrals
+    '''
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
     time0 = (time.clock(), time.time())
@@ -106,6 +108,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
 def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
                    int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph',
                    comp=1, ioblk_size=256, verbose=logger.NOTE):
+    '''3-center 2-electron AO integrals
+    '''
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
     time0 = (time.clock(), time.time())

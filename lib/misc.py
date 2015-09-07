@@ -11,6 +11,10 @@ import math
 import ctypes
 import numpy
 
+'''
+Some hacky functions
+'''
+
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 

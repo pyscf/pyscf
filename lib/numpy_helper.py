@@ -16,6 +16,14 @@ ANTIHERMI = 2
 
 # 2d -> 1d
 def pack_tril(mat):
+    '''flatten the lower triangular part of a matrix.
+    Given mat, it returns mat[numpy.tril_indices(mat.shape[0])]
+
+    Examples:
+
+    >>> pack_tril(numpy.arange(9).reshape(3,3))
+    [0 3 4 6 7 8]
+    '''
     mat = numpy.ascontiguousarray(mat)
     nd = mat.shape[0]
     tril = numpy.empty(nd*(nd+1)//2, mat.dtype)
@@ -30,6 +38,33 @@ def pack_tril(mat):
 
 # 1d -> 2d, write hermitian lower triangle to upper triangle
 def unpack_tril(tril, filltriu=HERMITIAN):
+    '''Reverse operation of pack_tril.  Put a vector in the lower triangular
+    part of a matrix.
+
+    Kwargs:
+        filltriu : int
+
+            | 0           Do not fill the upper triangular part, random number may appear
+                          in the upper triangular part
+            | 1 (default) Transpose the lower triangular part to fill the upper triangular part
+            | 2           Similar to filltriu=1, negative of the lower triangular part is assign
+                          to the upper triangular part to make the matrix anti-hermitian
+
+    Examples:
+
+    >>> unpack_tril(numpy.arange(6.))
+    [[ 0. 1. 3.]
+     [ 1. 2. 4.]
+     [ 3. 4. 5.]]
+    >>> unpack_tril(numpy.arange(6.), 0)
+    [[ 0. 0. 0.]
+     [ 1. 2. 0.]
+     [ 3. 4. 5.]]
+    >>> unpack_tril(numpy.arange(6.), 2)
+    [[ 0. -1. -3.]
+     [ 1.  2. -4.]
+     [ 3.  4.  5.]]
+    '''
     tril = numpy.ascontiguousarray(tril)
     nd = int(numpy.sqrt(tril.size*2))
     mat = numpy.empty((nd,nd), tril.dtype)
@@ -45,6 +80,16 @@ def unpack_tril(tril, filltriu=HERMITIAN):
 
 # extract a row from a tril-packed matrix
 def unpack_row(tril, row_id):
+    '''Extract one row of the lower triangular part of a matrix.
+    It is equivalent to unpack_tril(a)[row_id]
+
+    Examples:
+
+    >>> unpack_row(numpy.arange(6.), 0)
+    [ 0. 1. 3.]
+    >>> unpack_tril(numpy.arange(6.))[0]
+    [ 0. 1. 3.]
+    '''
     tril = numpy.ascontiguousarray(tril)
     nd = int(numpy.sqrt(tril.size*2))
     mat = numpy.empty(nd, tril.dtype)
@@ -60,6 +105,27 @@ def unpack_row(tril, row_id):
 
 # for i > j of 2d mat, mat[j,i] = mat[i,j]
 def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
+    return hermi_triu_(mat, hermi, inplace)
+def hermi_triu_(mat, hermi=HERMITIAN, inplace=True):
+    '''Use the elements of the lower triangular part to fill the upper triangular part.
+
+    Kwargs:
+        filltriu : int
+
+            | 1 (default) return a hermitian matrix
+            | 2           return an anti-hermitian matrix
+
+    Examples:
+
+    >>> unpack_row(numpy.arange(9.).reshape(3,3), 1)
+    [[ 0.  3.  6.]
+     [ 3.  4.  7.]
+     [ 6.  7.  8.]]
+    >>> unpack_row(numpy.arange(9.).reshape(3,3), 2)
+    [[ 0. -3. -6.]
+     [ 3.  4. -7.]
+     [ 6.  7.  8.]]
+    '''
     assert(hermi == HERMITIAN or hermi == ANTIHERMI)
     if not mat.flags.c_contiguous or not inplace:
         mat = mat.copy(order='C')
@@ -109,6 +175,18 @@ def take_2d(a, idx, idy, out=None):
     return out
 
 def takebak_2d(out, a, idx, idy):
+    return takebak_2d_(out, a, idx, idy)
+def takebak_2d_(out, a, idx, idy):
+    '''Reverse operation of take_2d.  out(idx,idy) = a
+
+    Examples:
+
+    >>> out = numpy.zeros((3,3))
+    >>> takebak_2d(out, numpy.ones((2,2)), [0,2], [0,2])
+    [[ 1.  0.  1.]
+     [ 0.  0.  0.]
+     [ 1.  0.  1.]]
+    '''
     if numpy.iscomplexobj(a):
         out[idx[:,None],idy] += a
     else:
@@ -125,6 +203,14 @@ def takebak_2d(out, a, idx, idy):
     return out
 
 def transpose(a, inplace=False, out=None):
+    '''Transpose array for better memory efficiency
+
+    Examples:
+
+    >>> transpose(numpy.ones((3,2)))
+    [[ 1.  1.  1.]
+     [ 1.  1.  1.]]
+    '''
     arow, acol = a.shape
     if inplace:
         assert(arow == acol)
@@ -167,6 +253,14 @@ def transpose(a, inplace=False, out=None):
         return out
 
 def transpose_sum(a, inplace=False, out=None):
+    '''a + a.T for better memory efficiency
+
+    Examples:
+
+    >>> transpose_sum(numpy.arange(4.).reshape(2,2))
+    [[ 0.  3.]
+     [ 3.  6.]]
+    '''
     assert(a.shape[0] == a.shape[1])
     na = a.shape[0]
     if inplace:
@@ -187,6 +281,8 @@ def transpose_sum(a, inplace=False, out=None):
 # pointers we want to pass in.
 # numpy.dot might not call optimized blas
 def dot(a, b, alpha=1, c=None, beta=0):
+    '''Matrix-matrix multiplication for double precision arrays
+    '''
     m = a.shape[0]
     k = a.shape[1]
     n = b.shape[1]
@@ -216,6 +312,9 @@ def dot(a, b, alpha=1, c=None, beta=0):
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
 def zdot(a, b, alpha=1, c=None, beta=0):
+    '''Matrix-matrix multiplication for double complex arrays using Gauss's
+    complex multiplication algorithm
+    '''
     if numpy.iscomplexobj(a):
         if numpy.iscomplexobj(b):
             k1 = dot(a.real+a.imag, b.real.copy())
@@ -294,9 +393,9 @@ if __name__ == '__main__':
         a[i,i] = a[i,i].real
     b = a-a.T.conj()
     b = numpy.array((b,b))
-    x = hermi_triu(b[0], hermi=2, inplace=0)
+    x = hermi_triu_(b[0], hermi=2, inplace=0)
     print(abs(b[0]-x).sum())
-    x = hermi_triu(b[1], hermi=2, inplace=0)
+    x = hermi_triu_(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
 
     a = numpy.random.random((400,400))

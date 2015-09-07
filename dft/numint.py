@@ -17,13 +17,59 @@ BLKSIZE = 224
 
 def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
             non0tab=None, verbose=None):
+    '''Evaluate AO function value on the given grids, for LDA and GGA functional.
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        coords : 2D array, shape (N,3)
+            The coordinates of the grids.
+
+    Kwargs:
+        isgga : bool
+            Whether to evalute the AO gradients for GGA functional.  It affects
+            the shape of the return array.  If isgga=False,  the returned AO
+            values are stored in a (N,nao) array.  Otherwise the AO values are
+            stored in an array of shape (4,N,nao).  Here N is the number of
+            grids, nao is the number of AO functions.
+        relativity : bool
+            No effects.
+        bastart, bascount : int
+            If given, only part of AOs (bastart <= shell_id < bastart+bascount) are evaluated.
+        non0tab : 2D bool array
+            mask array to indicate whether the AO values are zero.  The mask
+            array can be obtained by calling :func:`make_mask`
+              verbose=None):
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        2D array of shape (N,nao) for AO values if isgga is False.
+        Or 3D array of shape (4,N,nao) for AO values and AO gradients if isgga is True.
+        In the 3D array, the first (N,nao) elements are the AO values.  The
+        following (3,N,nao) are the AO gradients for x,y,z compoents.
+
+    Examples:
+
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
+    >>> coords = numpy.random.random((100,3))  # 100 random points
+    >>> ao_value = eval_ao(mol, coords)
+    >>> print(ao_value.shape)
+    (100, 24)
+    >>> ao_value = eval_ao(mol, coords, isgga=True, bastart=1, bascount=3)
+    >>> print(ao_value.shape)
+    (4, 100, 7)
+    '''
     assert(coords.flags.c_contiguous)
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
-    nao = mol.nao_nr()
     ngrids = len(coords)
     if bascount is None:
         bascount = mol.nbas - bastart
+        nao = mol.nao_nr()
+    else:
+        nao_bound = mol.nao_nr_range(bastart, bastart+bascount)
+        nao = nao_bound[1] - nao_bound[0]
     if isgga:
         ao = numpy.empty((4, ngrids,nao)) # plain, dx, dy, dz
         feval = _ctypes.dlsym(libdft._handle, 'VXCeval_nr_gto_grad')
@@ -49,6 +95,30 @@ def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
 
 def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
               verbose=None):
+    '''Mask to indicate whether a shell is zero on particular grid
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        coords : 2D array, shape (N,3)
+            The coordinates of the grids.
+
+    Kwargs:
+        relativity : bool
+            No effects.
+        bastart, bascount : int
+            If given, only part of AOs (bastart <= shell_id < bastart+bascount) are evaluated.
+        non0tab : 2D bool array
+            mask array to indicate whether the AO values are zero.  The mask
+            array can be obtained by calling :func:`make_mask`
+              verbose=None):
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        2D bool array of shape (N,nbas), where N is the number of grids, nbas
+        is the number of shells
+    '''
     assert(coords.flags.c_contiguous)
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
@@ -56,7 +126,7 @@ def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
     if bascount is None:
         bascount = mol.nbas - bastart
 
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,bascount),
                           dtype=numpy.int8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
@@ -67,6 +137,45 @@ def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
     return non0tab
 
 def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
+    '''Calculate the electron density for LDA functional, and the density
+    derivatives for GGA functional.
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        ao : 2D array of shape (N,nao) for LDA or 3D array of shape (4,N,nao) for GGA
+            N is the number of grids, nao is the number of AO functions.
+            AO values on a set of grids.  If isgga is True, the AO values
+            need to be 3D array in which ao[0] is the AO values and ao[1:3]
+            are the AO gradients.
+        dm : 2D array
+            Density matrix
+
+    Kwargs:
+        isgga : bool
+            Whether to evalute the AO gradients for GGA functional.  It affects
+            the shape of the argument `ao` and the returned density.
+        non0tab : 2D bool array
+            mask array to indicate whether the AO values are zero.  The mask
+            array can be obtained by calling :func:`make_mask`
+              verbose=None):
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        1D array of size N to store electron density if isgga is False.  2D
+        array of (4,N) to store density and "density derivatives" for x,y,z
+        components if isgga is True.
+
+    Examples:
+
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
+    >>> coords = numpy.random.random((100,3))  # 100 random points
+    >>> ao_value = eval_ao(mol, coords, isgga=True)
+    >>> dm = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
+    >>> dm = dm + dm.T
+    >>> rho, dx_rho, dy_rho, dz_rho = eval_rho(mol, ao, dm, isgga=True)
+    '''
     if isgga:
         ngrids, nao = ao[0].shape
     else:
@@ -89,6 +198,41 @@ def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
 
 def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, isgga=False,
               verbose=None):
+    '''Calculate the electron density for LDA functional, and the density
+    derivatives for GGA functional.  This function has the same functionality
+    as :func:`eval_rho` except that the density are evaluated based on orbital
+    coefficients and orbital occupancy.  It is more efficient than
+    :func:`eval_rho` in most scenario.
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        ao : 2D array of shape (N,nao) for LDA or 3D array of shape (4,N,nao) for GGA
+            N is the number of grids, nao is the number of AO functions.
+            AO values on a set of grids.  If isgga is True, the AO values
+            need to be 3D array in which ao[0] is the AO values and ao[1:3]
+            are the AO gradients.
+        mo_coeff : 2D array
+            Orbital coefficients
+        mo_occ : 2D array
+            Orbital occupancy
+
+    Kwargs:
+        isgga : bool
+            Whether to evalute the AO gradients for GGA functional.  It affects
+            the shape of the argument `ao` and the returned density.
+        non0tab : 2D bool array
+            mask array to indicate whether the AO values are zero.  The mask
+            array can be obtained by calling :func:`make_mask`
+              verbose=None):
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        1D array of size N to store electron density if isgga is False.  2D
+        array of (4,N) to store density and "density derivatives" for x,y,z
+        components if isgga is True.
+    '''
     if isgga:
         ngrids, nao = ao[0].shape
     else:
@@ -126,7 +270,40 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, isgga=False,
 
 def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
              isgga=False, verbose=None):
-    ''' RKS matrix
+    '''Calculate XC potential matrix.
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        ao : 2D array of shape (N,nao) for LDA or 3D array of shape (4,N,nao) for GGA
+            N is the number of grids, nao is the number of AO functions.
+            AO values on a set of grids.  If isgga is True, the AO values
+            need to be 3D array in which ao[0] is the AO values and ao[1:3]
+            are the AO gradients.
+        weight : 1D array
+            Integral weights on grids.
+        rho : 1D array of size N for LDA or 2D array of shape (4,N) for GGA
+            electron density on each grid.  If isgga is True, it also stores
+            the density derivatives.
+        vrho : 1D array of size N
+            XC potential value on each grid.
+
+    Kwargs:
+        vsigma : 2D array of shape (3,N)
+            GGA potential value on each grid
+        isgga : bool
+            Whether to evalute the AO gradients for GGA functional.  It affects
+            the shape of the argument `ao` and `rho`.
+        non0tab : 2D bool array
+            mask array to indicate whether the AO values are zero.  The mask
+            array can be obtained by calling :func:`make_mask`
+              verbose=None):
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        XC potential matrix in 2D array of shape (nao,nao) where nao is the
+        number of AO functions.
     '''
     if isgga:
         ngrids, nao = ao[0].shape
@@ -158,9 +335,33 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
     return mat + mat.T
 
 def eval_x(x_id, rho, sigma, spin=0, relativity=0, verbose=None):
-    '''
-    For LDA and GGA functional, ec, vcrho, vcsigma are not zero
-    For hybrid functional, ec, vcrho, vcsigma are zero
+    '''Interface to call libxc library to evaluate exchange functional and potential.
+
+    Args:
+        x_id : int
+            Exchange functional ID used by libxc library.  See pyscf/dft/vxc.py for more details.
+        rho : 1D array or 2D array
+            Shape of (N) for electron density if spin = 0;
+            Shape of (N,2) for alpha electron density and beta density if spin = 1
+            where N is number of grids
+        sigma : 1D array or 2D array
+            (Density derivatives)^2.
+            Shape of (N) if spin = 0;
+            Shape of (N,3) for alpha*alpha, alpha*beta, beta*beta components if spin = 1
+            where N is the number of grids
+
+    Kwargs:
+        spin : int
+            spin polarized if spin = 1
+        relativity : int
+            No effects.
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        3 1D arrays ex, vrho, vsigma  where exc is the exchange functional
+        value on each grid, vrho is exchange potential on each grid, vsigma is
+        the derivative potential for GGA
     '''
     rho = numpy.asarray(rho, order='C')
     sigma = numpy.asarray(sigma, order='C')
@@ -186,6 +387,35 @@ def eval_x(x_id, rho, sigma, spin=0, relativity=0, verbose=None):
     return exc, vrho, vsigma
 
 def eval_c(c_id, rho, sigma, spin=0, relativity=0, verbose=None):
+    '''Interface to call libxc library to evaluate correlation functional and potential.
+    For hybrid functional, the returned ec, vcrho, vcsigma are all zero.
+
+    Args:
+        c_id : int
+            Correlation functional ID used by libxc library.  See pyscf/dft/vxc.py for more details.
+        rho : 1D array or 2D array
+            Shape of (N) for electron density if spin = 0;
+            Shape of (N,2) for alpha electron density and beta density if spin = 1
+            where N is number of grids
+        sigma : 1D array or 2D array
+            (Density derivatives)^2.
+            Shape of (N) if spin = 0;
+            Shape of (N,3) for alpha*alpha, alpha*beta, beta*beta components if spin = 1
+            where N is the number of grids
+
+    Kwargs:
+        spin : int
+            spin polarized if spin = 1
+        relativity : int
+            No effects.
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        3 1D arrays ec, vrho, vsigma  where ec is the correlation functional
+        value on each grid, vrho is correlation potential on each grid, vsigma
+        is the derivative potential for GGA
+    '''
     rho = numpy.asarray(rho, order='C')
     sigma = numpy.asarray(sigma, order='C')
     ngrids = len(rho)
@@ -210,13 +440,34 @@ def eval_c(c_id, rho, sigma, spin=0, relativity=0, verbose=None):
     return exc, vrho, vsigma
 
 def eval_xc(x_id, c_id, rho, sigma, spin=0, relativity=0, verbose=None):
-    '''
-    For LDA and GGA functional, ec, vcrho, vcsigma are not zero
-    For hybrid functional, ec, vcrho, vcsigma are zero
+    '''Interface to call libxc library to evaluate XC functional and potential.
 
-    Args
-        rho[n] if spin = 0
-        rho[n,2] if spin = 1
+    Args:
+        x_id, c_id : int
+            Exchange/Correlation functional ID used by libxc library.
+            See pyscf/dft/vxc.py for more details.
+        rho : 1D array or 2D array
+            Shape of (N) for electron density if spin = 0;
+            Shape of (N,2) for alpha electron density and beta density if spin = 1
+            where N is number of grids
+        sigma : 1D array or 2D array
+            (Density derivatives)^2.
+            Shape of (N) if spin = 0;
+            Shape of (N,3) for alpha*alpha, alpha*beta, beta*beta components if spin = 1
+            where N is the number of grids
+
+    Kwargs:
+        spin : int
+            spin polarized if spin = 1
+        relativity : int
+            No effects.
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        3 1D arrays ec, vrho, vsigma  where ec is the correlation functional
+        value on each grid, vrho is correlation potential on each grid, vsigma
+        is the derivative potential for GGA
     '''
     rho = numpy.asarray(rho, order='C')
     sigma = numpy.asarray(sigma, order='C')
@@ -243,7 +494,7 @@ def eval_xc(x_id, c_id, rho, sigma, spin=0, relativity=0, verbose=None):
 
 
 def _dot_ao_ao(mol, ao1, ao2, nao, ngrids, non0tab):
-    #return pyscf.lib.dot(ao1.T, ao2)
+    '''return pyscf.lib.dot(ao1.T, ao2)'''
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     vv = numpy.empty((nao,nao))
@@ -259,7 +510,7 @@ def _dot_ao_ao(mol, ao1, ao2, nao, ngrids, non0tab):
     return vv
 
 def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
-    #return pyscf.lib.dot(ao, dm)
+    '''return pyscf.lib.dot(ao, dm)'''
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     vm = numpy.empty((ngrids,dm.shape[1]))
@@ -276,7 +527,47 @@ def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
 
 def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
-    '''RKS Vxc matrix
+    '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        grids : an instance of :class:`Grids`
+            grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+        x_id, c_id : int
+            Exchange/Correlation functional ID used by libxc library.
+            See pyscf/dft/vxc.py for more details.
+        dm : 2D array
+            Density matrix
+
+    Kwargs:
+        spin : int
+            spin polarized if spin = 1
+        relativity : int
+            No effects.
+        hermi : int
+            No effects
+        max_memory : int or float
+            The maximum size of cache to use (in MB).
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        nelec, excsum, vmat.
+        nelec is the number of electrons generated by numerical integration.
+        excsum is the XC functional value.  vmat is the XC potential matrix in
+        2D array of shape (nao,nao) where nao is the number of AO functions.
+
+    Examples:
+
+    >>> from pyscf import gto, dft
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
+    >>> grids = dft.gen_grid.Grids(mol)
+    >>> grids.coords = numpy.random.random((100,3))  # 100 random points
+    >>> grids.weights = numpy.random.random(100)
+    >>> x_id, c_id = dft.vxc.parse_xc_name('lda,vwn')
+    >>> dm = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
+    >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, x_id, c_id, dm)
     '''
     nao = dm.shape[0]
     ngrids = len(grids.weights)
@@ -318,6 +609,10 @@ class _NumInt(object):
 
     def nr_vxc(self, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
+        '''Evaluate RKS/UKS XC functional and potential matrix matrix for given meshgrids
+        and a set of density matrices.  See :func:`nr_rks` and :func:`nr_uks`
+        for more details.
+        '''
         if spin == 0:
             return self.nr_rks(mol, grids, x_id, c_id, dm, hermi=hermi,
                                max_memory=max_memory, verbose=verbose)
@@ -327,6 +622,33 @@ class _NumInt(object):
 
     def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
                max_memory=2000, verbose=None):
+        '''Calculate RKS XC functional and potential matrix matrix for given meshgrids
+        and a set of density matrices
+
+        Args:
+            mol : an instance of :class:`Mole`
+
+            grids : an instance of :class:`Grids`
+                grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+            x_id, c_id : int
+                Exchange/Correlation functional ID used by libxc library.
+                See pyscf/dft/vxc.py for more details.
+            dm : 2D array a list of 2D arrays
+                Density matrix or multiple density matrices
+
+        Kwargs:
+            hermi : int
+                No effects
+            max_memory : int or float
+                The maximum size of cache to use (in MB).
+            verbose : int or object of :class:`Logger`
+
+        Returns:
+            nelec, excsum, vmat.
+            nelec is the number of electrons generated by numerical integration.
+            excsum is the XC functional value.  vmat is the XC potential matrix in
+            2D array of shape (nao,nao) where nao is the number of AO functions.
+        '''
         if self.non0tab is None:
             self.non0tab = make_mask(mol, grids.coords)
         nao = mol.nao_nr()
@@ -395,6 +717,33 @@ class _NumInt(object):
 
     def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
                max_memory=2000, verbose=None):
+        '''Calculate UKS XC functional and potential matrix matrix for given meshgrids
+        and a set of density matrices
+
+        Args:
+            mol : an instance of :class:`Mole`
+
+            grids : an instance of :class:`Grids`
+                grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+            x_id, c_id : int
+                Exchange/Correlation functional ID used by libxc library.
+                See pyscf/dft/vxc.py for more details.
+            dm : 2D array a list of 2D arrays
+                Density matrix or multiple density matrices
+
+        Kwargs:
+            hermi : int
+                No effects
+            max_memory : int or float
+                The maximum size of cache to use (in MB).
+            verbose : int or object of :class:`Logger`
+
+        Returns:
+            nelec, excsum, vmat.
+            nelec is the number of (alpha,beta) electrons generated by numerical integration.
+            excsum is the XC functional value.
+            vmat is the XC potential matrix for (alpha,beta) spin.
+        '''
         if self.non0tab is None:
             self.non0tab = make_mask(mol, grids.coords)
         nao = mol.nao_nr()

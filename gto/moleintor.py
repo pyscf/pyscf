@@ -214,10 +214,10 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         return mat
     else:
         if comp == 1:
-            pyscf.lib.hermi_triu(mat, hermi=hermi)
+            pyscf.lib.hermi_triu_(mat, hermi=hermi)
         else:
             for i in range(comp):
-                pyscf.lib.hermi_triu(mat[i], hermi=hermi)
+                pyscf.lib.hermi_triu_(mat[i], hermi=hermi)
         return mat
 
 def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,

@@ -75,6 +75,9 @@ def make_rdm1_ao(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     return rdm1
 
 def make_rdm1(mp, t2, verbose=logger.NOTE):
+    '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
+    the orbital response contribution are not included.
+    '''
     if isinstance(verbose, numpy.ndarray):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v1.0-alpha.

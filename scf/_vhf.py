@@ -144,10 +144,10 @@ def incore(eri, dm, hermi=0):
          vk.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nao), fvj, fvk)
     if hermi != 0:
-        vj = pyscf.lib.hermi_triu(vj, hermi)
-        vk = pyscf.lib.hermi_triu(vk, hermi)
+        vj = pyscf.lib.hermi_triu_(vj, hermi)
+        vk = pyscf.lib.hermi_triu_(vk, hermi)
     else:
-        vj = pyscf.lib.hermi_triu(vj, 1)
+        vj = pyscf.lib.hermi_triu_(vj, 1)
     return vj, vk
 
 # use cint2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
@@ -208,10 +208,10 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
 
     # vj must be symmetric
     for idm in range(n_dm):
-        vjk[0,idm] = pyscf.lib.hermi_triu(vjk[0,idm], 1)
+        vjk[0,idm] = pyscf.lib.hermi_triu_(vjk[0,idm], 1)
     if hermi != 0: # vk depends
         for idm in range(n_dm):
-            vjk[1,idm] = pyscf.lib.hermi_triu(vjk[1,idm], hermi)
+            vjk[1,idm] = pyscf.lib.hermi_triu_(vjk[1,idm], hermi)
     if n_dm == 1:
         vjk = vjk.reshape(2,nao,nao)
     return vjk

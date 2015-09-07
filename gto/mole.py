@@ -305,7 +305,7 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
 
 # <bas-of-mol1|intor|bas-of-mol2>
 def intor_cross(intor, mol1, mol2, comp=1):
-    r'''Cross 1-electron integrals like
+    r'''1-electron integrals from two molecules like
 
     .. math::
 
@@ -1748,7 +1748,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return self.intor(intor, comp, 2, aosym='a4')
 
     def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', vout=None):
-        r'''Cross 1-electron integrals like
+        r'''1-electron integrals for different bra and ket space, like
 
         .. math::
 

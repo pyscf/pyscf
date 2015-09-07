@@ -1,26 +1,21 @@
-
-* CCSD lambda
+* CCSD(T)
 
 * EOM-IP-CCSD, EOM-EA-CCSD, EOM-EE-CCSD
 
-* MP2 gradients
+* ECP
 
-* MP2 NMR
+* COSMO or PCM solvent model
 
-* Density fitting for DFT
+* CASPT2
 
-* Spin-polarized DFT
+* DFT, MP2 gradients
 
-* DFT gradients
-
-* DFT NMR
+* DFT, MP2 NMR
 
 * TDDFT
 
-* HF/DFT Hessian
+* HF, DFT Hessian
 
 * Geometry optimizer
 
-* dryrun.py
-
-* IQmol, or IBOviewer interface
+* Periodic boundary condition
