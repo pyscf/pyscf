@@ -311,17 +311,17 @@ class Grids(object):
             | radi.becke_atomic_radii_adjust(mol, radi.COVALENT_RADII)
             | None,          to switch off atomic radii adjustment
 
-        radi_method : function
+        radi_method : function(n) => (rad_grids, rad_weights)
             scheme for radial grids, can be one of
             | radi.treutler
             | radi.gauss_chebyshev
 
-        becke_scheme : function
+        becke_scheme : function(v) => array_like_v
             weight partition function, can be one of
             | gen_grid.stratmann
             | gen_grid.original_becke
 
-        prune_scheme : function
+        prune_scheme : function(nuc, rad_grids, n_ang) => list_n_ang_for_each_rad_grid
             scheme to reduce number of grids, can be one of
             | gen_grid.sg1_prune
             | gen_grid.nwchem_prune

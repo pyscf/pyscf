@@ -18,7 +18,9 @@ from pyscf.dft import numint
 
 def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
-    Note this function will change the ks object.
+
+    .. note::
+        This function will change the ks object.
 
     Args:
         ks : an instance of :class:`RKS`
@@ -182,7 +184,7 @@ class RKS(pyscf.scf.hf.RHF):
         return get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = ks.get_hcore()
+        if h1e is None: h1e = self.get_hcore()
         return energy_elec(self, dm, h1e)
 
 
@@ -214,7 +216,7 @@ class ROKS(pyscf.scf.rohf.ROHF):
 
     def energy_elec(self, dm, h1e=None, vhf=None):
         from pyscf.dft import uks
-        if h1e is None: h1e = ks.get_hcore()
+        if h1e is None: h1e = self.get_hcore()
         return uks.energy_elec(self, dm, h1e)
 
 

@@ -131,7 +131,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
+    h0 = pyscf.lib.hermi_triu_(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may lead to the

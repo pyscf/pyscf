@@ -9,12 +9,12 @@ from pyscf.fci import cistring
 librdm = pyscf.lib.load_library('libfci')
 
 '''FCI 1, 2, 3, 4-particle density matrices.
-
-Note the index difference to the mean-field density matrix.  Here,
-        dm[p,q,r,s,...] = <p^+ q r^+ s ... >
-rather than the mean-field DM
-        dm[p,q] = < q^+ p >
 '''
+
+# Note the index difference to the mean-field density matrix.  Here,
+#         dm[p,q,r,s,...] = <p^+ q r^+ s ... >
+# rather than the mean-field DM
+#         dm[p,q] = < q^+ p >
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]
@@ -139,10 +139,11 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 def make_dm123(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2 and 3-particle density matrices.
 
-    NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
-    stored as [p,r,q,s];
-    The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
-    stored as [p,s,q,t,r,u].
+    .. note::
+        The 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
+        stored as [p,r,q,s];
+        The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
+        stored as [p,s,q,t,r,u].
     '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
@@ -201,12 +202,13 @@ def _complete_dm3_(dm2, dm3):
 def make_dm1234(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2, 3 and 4-particle density matrices.
 
-    NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
-    stored as [p,r,q,s];
-    The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
-    stored as [p,s,q,t,r,u];
-    The 4pdm is :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`,
-    stored as [p,w,q,v,r,u,s,t].
+    .. note::
+        The 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
+        stored as [p,r,q,s];
+        The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
+        stored as [p,s,q,t,r,u];
+        The 4pdm is :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`,
+        stored as [p,w,q,v,r,u,s,t].
     '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2

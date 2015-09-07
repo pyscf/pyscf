@@ -11,7 +11,7 @@ from pyscf.symm import param
 THRESHOLD = 1e-9
 
 def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
-    ''' Label the symmetry of given orbitals
+    '''Label the symmetry of given orbitals
 
     irrep_name can be either the symbol or the ID of the irreducible
     representation.  If the ID is provided, it returns the numeric code
@@ -101,6 +101,17 @@ def std_symb(gpname):
     return gpname[0].upper() + gpname[1:].lower()
 
 def irrep_name2id(gpname, symb):
+    '''Convert the irrep symbol to internal irrep ID
+
+    Args:
+        gpname : str
+            The point group symbol
+        symb : str
+            Irrep symbol
+
+    Returns:
+        Irrep ID, int
+    '''
     gpname = std_symb(gpname)
     symb = std_symb(symb)
     if gpname in ('Dooh', 'Coov'):
@@ -109,6 +120,16 @@ def irrep_name2id(gpname, symb):
         return param.IRREP_ID_TABLE[gpname][symb]
 
 def irrep_id2name(gpname, irrep_id):
+    '''Convert the internal irrep ID to irrep symbol
+
+    Args:
+        gpname : str
+            The point group symbol
+        irrep_id : int
+
+    Returns:
+        Irrep sybmol, str
+    '''
     gpname = std_symb(gpname)
     if gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_id2symb(gpname, irrep_id)

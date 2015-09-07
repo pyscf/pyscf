@@ -262,7 +262,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = fcivec.take(maska, axis=0).take(maskb, axis=1)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: t1[ida.reshape(-1,1),idb] += citmp
-            pyscf.lib.takebak_2d(t1, citmp, ida, idb)
+            pyscf.lib.takebak_2d_(t1, citmp, ida, idb)
         for i in range(norb):
             signa = aindex[:,i,1]
             signb = bindex[:,i,1]
@@ -273,7 +273,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = t1.take(ida, axis=0).take(idb, axis=1)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: ci1[maska.reshape(-1,1), maskb] += citmp
-            pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
+            pyscf.lib.takebak_2d_(ci1, citmp, maska, maskb)
 
     ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-
