@@ -53,11 +53,20 @@ def get_nuc(cell, gs):
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR).real
     return vne
 
-def get_t(cell, gs):
+def get_t(cell, gs, kpt=None):
     '''
     Kinetic energy AO matrix
     '''
+    if kpt is None:
+        kpt=np.zeros([3,1])
+    
     Gv=pbc.get_Gv(cell, gs)
+
+    print type(kpt)
+    print type(Gv)
+    print kpt
+
+    Gv+=kpt
     #:G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
     G2=np.einsum('ji,ji->i', Gv, Gv)
 
@@ -130,6 +139,9 @@ def get_j(cell, dm, gs):
 class RHF(pyscf.scf.hf.RHF):
     '''
     RHF adapted for PBC
+
+    TODO: maybe should create SCF class derived from pyscf.scf.hf.SCF, then
+          derive from that
     '''
     def __init__(self, cell, gs, ew_eta, ew_cut):
         self.cell=cell
@@ -191,12 +203,6 @@ class RHF(pyscf.scf.hf.RHF):
     def ewald_nuc(self):
         return pbc.ewald(self.cell, self.gs, self.ew_eta, self.ew_cut)
         
-class KRHF(RHF):
-    '''
-    RHF with K-points
-    '''
-    pass
-
 class RKS(RHF):
     '''
     RKS adapted for PBC. This is a literal duplication of the
