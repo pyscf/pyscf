@@ -17,7 +17,8 @@ from pyscf.dft import numint
 
 
 def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
-    '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py get_veff_ fore more details'''
+    '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
+    :func:`get_veff_` fore more details'''
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5,dm*.5))
     nset = len(dm) // 2

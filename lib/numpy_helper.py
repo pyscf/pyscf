@@ -7,6 +7,10 @@ import ctypes
 import numpy
 from pyscf.lib import misc
 
+'''
+Extension to numpy module
+'''
+
 _np_helper = misc.load_library('libnp_helper')
 
 BLOCK_DIM = 192
