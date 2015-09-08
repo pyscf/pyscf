@@ -93,7 +93,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     mol = mf.mol
     if dm0 is None:
-        dm = mf.get_init_guess(key=mf.init_guess, mol=mol)
+        dm = mf.get_init_guess(mol, mf.init_guess)
     else:
         dm = dm0
 
@@ -131,7 +131,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        vhf = mf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
+        vhf = mf.get_veff(mol, dm, dm_last, vhf)
         hf_energy = mf.energy_tot(dm, h1e, vhf)
 
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
