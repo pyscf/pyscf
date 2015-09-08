@@ -28,8 +28,6 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
             ks.grids might be initialized.  The ._exc and ._ecoul attributes
             will be updated after return.  Attributes ._dm_last, ._vj_last and
             ._vk_last might be changed if direct SCF method is applied.
-        mol : an instance of :class:`Mole`
-
         dm : ndarray or list of ndarrays
             A density matrix or a list of density matrices
 

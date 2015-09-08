@@ -71,26 +71,20 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     .. math::
 
-        \begin{equation}
-        h2e = eri_{pq,rs} p^+ q r^+ s
-            = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-        \end{equation}
+        h2e &= eri_{pq,rs} p^+ q r^+ s \\
+            &= (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
 
     So eri is defined as
 
     .. math::
 
-        \begin{equation}
         eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-        \end{equation}
 
     to restore the symmetry between pq and rs,
 
     .. math::
 
-        \begin{equation}
         eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-        \end{equation}
 
     Please refer to the treatment in :func:`direct_spin1.absorb_h1e`
     '''
