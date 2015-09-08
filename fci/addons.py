@@ -6,6 +6,8 @@ from pyscf.fci import cistring
 from pyscf import symm
 
 def large_ci(ci, norb, nelec, tol=.1):
+    '''Search for the largest CI coefficients
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
@@ -19,6 +21,8 @@ def large_ci(ci, norb, nelec, tol=.1):
     return res
 
 def initguess_triplet(norb, nelec, binstring):
+    '''Generate a triplet initial guess for FCI solver
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
@@ -32,8 +36,24 @@ def initguess_triplet(norb, nelec, binstring):
     return ci0
 
 def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
-    '''CI wavefunction initial guess which matches the given symmetry.
-    Based on RHF/ROHF orbitals
+    '''Generate CI wavefunction initial guess which has the given symmetry.
+
+    Args:
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        orbsym : list of int
+            The irrep ID for each orbital.
+
+    Kwags:
+        wfnsym : int
+            The irrep ID of target symmetry
+        irrep_nelec : dict
+            Freeze occupancy for certain irreps
+
+    Returns:
+        CI coefficients 2D array which has the target symmetry.
     '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
@@ -160,6 +180,26 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
 
 
 def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
+    '''Symmetrize the CI wavefunction by zeroing out the determinants which
+    do not have the right symmetry.
+
+    Args:
+        ci : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        orbsym : list of int
+            The irrep ID for each orbital.
+
+    Kwags:
+        wfnsym : int
+            The irrep ID of target symmetry
+
+    Returns:
+        2D array which is the symmetrized CI coefficients
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -180,10 +220,28 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     return ci1
 
 
-# construct (N-1)-electron wavefunction by removing an alpha electron from
-# N-electron wavefunction:
-# |N-1> = a_p |N>
 def des_a(ci0, norb, nelec, ap_id):
+    r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
+    the N-electron wavefunction.
+
+    ... math::
+
+        |N-1\rangle = \hat{a}_p |N\rangle
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the annihilation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings.  Note it
+        has different number of rows to the input CI coefficients
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -202,9 +260,24 @@ def des_a(ci0, norb, nelec, ap_id):
     ci1[addr_ci1] = sign.reshape(-1,1) * ci0[addr_ci0]
     return ci1
 
-# construct (N-1)-electron wavefunction by removing a beta electron from
-# N-electron wavefunction:
 def des_b(ci0, norb, nelec, ap_id):
+    r'''Construct (N-1)-electron wavefunction by removing a beta electron from
+    N-electron wavefunction.
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the annihilation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings. Note it
+        has different number of columns to the input CI coefficients.
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -220,10 +293,28 @@ def des_b(ci0, norb, nelec, ap_id):
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
-# construct (N+1)-electron wavefunction by adding an alpha electron to
-# N-electron wavefunction:
-# |N+1> = a_p^+ |N>
 def cre_a(ci0, norb, nelec, ap_id):
+    r'''Construct (N+1)-electron wavefunction by adding an alpha electron in
+    the N-electron wavefunction.
+
+    ... math::
+
+        |N+1\rangle = \hat{a}^+_p |N\rangle
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the creation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings. Note it
+        has different number of rows to the input CI coefficients.
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -242,6 +333,23 @@ def cre_a(ci0, norb, nelec, ap_id):
 # construct (N+1)-electron wavefunction by adding a beta electron to
 # N-electron wavefunction:
 def cre_b(ci0, norb, nelec, ap_id):
+    r'''Construct (N+1)-electron wavefunction by adding a beta electron in
+    the N-electron wavefunction.
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the creation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings. Note it
+        has different number of columns to the input CI coefficients.
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -259,6 +367,8 @@ def cre_b(ci0, norb, nelec, ap_id):
 
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
+    '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.
+    '''
     from pyscf.fci import direct_spin1
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = direct_spin1.contract_2e(h2e, fcivec, norb, nelec, link_index)
@@ -266,11 +376,13 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 
 def reorder(ci, nelec, orbidxa, orbidxb=None):
-    '''reorder the CI coefficients wrt the reordering of orbitals (The relation
+    '''Reorder the CI coefficients, to adapt the reordered orbitals (The relation
     of the reordered orbitals and original orbitals is  new = old[idx]).  Eg.
-    orbidx = [2,0,1] to map   old orbital  a b c  ->   new orbital  c a b
-    old-strings   0b011, 0b101, 0b110 ==  (1,2), (1,3), (2,3)
-    orb-strings   (3,1), (3,2), (1,2) ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
+
+    The orbital ordering indices ``orbidx = [2,0,1]`` indicates the map
+    old orbital  a b c  ->   new orbital  c a b.  The strings are reordered as
+    old-strings   0b011, 0b101, 0b110 ==  (1,2), (1,3), (2,3)   <= apply orbidx to get orb-strings
+    orb-strings   (3,1), (3,2), (1,2) ==  0B101, 0B110, 0B011   <= by gen_strings4orblist
     then argsort to translate the string representation to the address
     [2(=0B011), 0(=0B101), 1(=0B110)]
     '''
@@ -307,9 +419,22 @@ def overlap(string1, string2, norb, s=None):
         return numpy.linalg.det(s1)
 
 def fix_spin_(fciobj, shift=.1):
-    '''If FCI solver cannot stick on spin eigenfunction, modify the solver by
-    a shift on spin square operator
-    (H + shift*S^2) |Psi> = E |Psi>
+    r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
+    adding a shift on spin square operator
+
+    .. math::
+
+        (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
+
+    Args:
+        fciobj : An instance of :class:`FCISolver`
+
+    Kwargs:
+        shift : float
+            Level shift for states which have different spin
+
+    Returns
+            A modified FCI object based on fciobj.
     '''
     from pyscf.fci import spin_op
     from pyscf.fci import direct_spin0

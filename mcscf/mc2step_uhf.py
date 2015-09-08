@@ -50,10 +50,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                        eris, r0, conv_tol_grad, log)
-            u, g_orb, njk = rota.next()
-            rota.close()
+            for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                                      eris, r0, conv_tol_grad, log):
+                break
             ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
@@ -107,7 +106,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     else:
         log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
-    log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 

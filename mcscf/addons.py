@@ -46,8 +46,10 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         nmo = mo_coeff.shape[1]
         if base != 0:
             caslst = [i-base for i in caslst]
-        idx = [i for i in range(nmo) if i not in caslst]
-        return numpy.hstack((mo_coeff[:,idx[:ncore]], mo_coeff[:,caslst], mo_coeff[:,idx[ncore:]]))
+        idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
+        return numpy.hstack((mo_coeff[:,idx[:ncore]],
+                             mo_coeff[:,caslst],
+                             mo_coeff[:,idx[ncore:]]))
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
             assert(casscf.ncas == len(caslst))
@@ -58,13 +60,16 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
             assert(casscf.ncas == len(caslst[0]))
             assert(casscf.ncas == len(caslst[1]))
             if base != 0:
-                caslst = ([i-base for i in caslst[0]], [i-base for i in caslst[1]])
+                caslst = ([i-base for i in caslst[0]],
+                          [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idx = [i for i in range(nmo) if i not in caslst[0]]
-        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]], mo_coeff[0][:,caslst[0]],
+        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
+        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]],
+                             mo_coeff[0][:,caslst[0]],
                              mo_coeff[0][:,idx[ncore[0]:]]))
-        idx = [i for i in range(nmo) if i not in caslst[1]]
-        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]], mo_coeff[1][:,caslst[1]],
+        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
+        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]],
+                             mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idx[ncore[1]:]]))
         return (mo_a, mo_b)
 
@@ -249,7 +254,7 @@ def get_fock(casscf, mo_coeff=None, ci=None):
         return casscf.get_fock(mo_coeff, ci)
 
 def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
-    '''Restore natrual orbitals
+    '''Natrual orbitals in CAS space
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):

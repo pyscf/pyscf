@@ -1,7 +1,16 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import sys
-from pyscf import gto, scf, tools
+from pyscf import gto, scf
 from pyscf import lo
 from pyscf.tools import molden
+
+'''
+Write orbitals in molden format
+'''
 
 mol = gto.M(
     atom = '''
@@ -22,12 +31,18 @@ mol = gto.M(
     symmetry = 1)
 
 mf = scf.RHF(mol)
-mf.scf()
+mf.kernel()
 
+#
+# First method is to explicit call the functions provided by molden.py
+#
 with open('C6H6mo.molden', 'w') as f1:
     molden.header(mol, f1)
     molden.orbital_coeff(mol, f1, mf.mo_coeff, ene=mf.mo_energy, occ=mf.mo_occ)
 
+#
+# Second method is to simply call from_mo function to write the orbitals
+#
 c_loc_orth = lo.orth.orth_ao(mol)
 molden.from_mo(mol, 'C6H6loc.molden', c_loc_orth)
 

@@ -131,7 +131,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
+    h0 = pyscf.lib.hermi_triu_(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may lead to the
@@ -272,7 +272,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         #ci0[addr] = pv[:,0]
         ci0[0] = 1
     elif fci.nroots > 1:
-        ci0 = [x.ravel() for x in ci0]
+        if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
+            ci0 = [ci0.ravel()]
+        else:
+            ci0 = [x.ravel() for x in ci0]
     else:
         ci0 = ci0.ravel()
 

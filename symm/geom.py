@@ -72,7 +72,8 @@ def householder(vec):
 
 #TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
-    '''
+    '''Detect the point group symmetry for given molecule.
+
     Return group name, charge center, and nex_axis (three rows for x,y,z)
     '''
     if isinstance(verbose, logger.Logger):

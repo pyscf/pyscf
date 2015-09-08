@@ -27,6 +27,9 @@ from pyscf.fci import rdm
 libfci = pyscf.lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
+    '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
+    vector.
+    '''
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
@@ -60,15 +63,31 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
-# h2e = eri_{pq,rs} p^+ q r^+ s
-#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-# so eri is defined as
-#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-# to restore the symmetry between pq and rs,
-#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
+    r'''Contract the 2-electron Hamiltonian with a FCI vector to get a new FCI
+    vector.
+
+    Note the input arg eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
+
+    .. math::
+
+        h2e &= eri_{pq,rs} p^+ q r^+ s \\
+            &= (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
+
+    So eri is defined as
+
+    .. math::
+
+        eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
+
+    to restore the symmetry between pq and rs,
+
+    .. math::
+
+        eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
+
+    Please refer to the treatment in :func:`direct_spin1.absorb_h1e`
+    '''
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
@@ -97,6 +116,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     return ci1
 
 def make_hdiag(h1e, eri, norb, nelec):
+    '''Diagonal Hamiltonian for Davidson preconditioner
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -127,9 +148,11 @@ def make_hdiag(h1e, eri, norb, nelec):
                              ctypes.c_int(neleca), ctypes.c_int(nelecb),
                              occslista.ctypes.data_as(ctypes.c_void_p),
                              occslistb.ctypes.data_as(ctypes.c_void_p))
-    return numpy.array(hdiag)
+    return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
+    '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
+    '''
     if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
     eri = eri.copy()
@@ -141,8 +164,9 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
         h2e[:,:,k,k] += f1e
     return pyscf.ao2mo.restore(4, h2e, norb) * fac
 
-# pspace Hamiltonian matrix, CPL, 169, 463
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
+    '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -169,7 +193,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
+    h0 = pyscf.lib.hermi_triu_(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may diverge the
@@ -193,13 +217,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
     return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
+    '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.
+    '''
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
 
-# dm_pq = <|p^+ q|>
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
+    '''Spin searated 1-particle density matrices, (alpha,beta)
+    '''
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
@@ -215,12 +242,21 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
                                 norb, nelec, link_index)
     return rdm1a, rdm1b
 
-# spacial part of DM, dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
+    '''spin-traced 1-particle density matrix
+    '''
     rdm1a, rdm1b = make_rdm1s(fcivec, norb, nelec, link_index)
     return rdm1a + rdm1b
 
 def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
+    r'''Spin searated 1- and 2-particle density matrices,
+    (alpha,beta) for 1-particle density matrices.
+    (alpha,alpha,alpha,alpha), (alpha,alpha,beta,beta),
+    (beta,beta,beta,beta) for 2-particle density matrices.
+
+    NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
+    stored as [p,r,q,s]
+    '''
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCIrdm12kern_a', fcivec, fcivec,
                                        norb, nelec, link_index, 1)
     dm1b, dm2bb = rdm.make_rdm12_spin1('FCIrdm12kern_b', fcivec, fcivec,
@@ -233,6 +269,11 @@ def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
 
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
+    r'''Spin traced 1- and 2-particle density matrices,
+
+    NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
+    stored as [p,r,q,s]
+    '''
     #(dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
     #        make_rdm12s(fcivec, norb, nelec, link_index, reorder)
     #return dm1a+dm1b, dm2aa+dm2ab+dm2ab.transpose(2,3,0,1)+dm2bb
@@ -243,6 +284,8 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     return dm1, dm2
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
+    '''Spin separated transition 1-particle density matrices
+    '''
     rdm1a = rdm.make_rdm1_spin1('FCItrans_rdm1a', cibra, ciket,
                                 norb, nelec, link_index)
     rdm1b = rdm.make_rdm1_spin1('FCItrans_rdm1b', cibra, ciket,
@@ -251,10 +294,14 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
 
 # spacial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
+    '''Spin traced transition 1-particle density matrices
+    '''
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
+    '''Spin separated transition 1- and 2-particle density matrices.
+    '''
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCItdm12kern_a', cibra, ciket,
                                        norb, nelec, link_index, 2)
     dm1b, dm2bb = rdm.make_rdm12_spin1('FCItdm12kern_b', cibra, ciket,
@@ -270,6 +317,8 @@ def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb)
 
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
+    '''Spin traced transition 1- and 2-particle density matrices.
+    '''
     #(dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb) = \
     #        trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
     #return dm1a+dm1b, dm2aa+dm2ab+dm2ba+dm2bb
@@ -326,7 +375,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         ci0 = numpy.zeros(na*nb)
         ci0[0] = 1
     elif fci.nroots > 1:
-        ci0 = [x.ravel() for x in ci0]
+        if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
+            ci0 = [ci0.ravel()]
+        else:
+            ci0 = [x.ravel() for x in ci0]
     else:
         ci0 = ci0.ravel()
 

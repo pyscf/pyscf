@@ -24,6 +24,7 @@
 
 from pyscf import gto, scf
 from pyscf.lib import logger
+from pyscf.lib import linalg_helper
 from pyscf.scf import _vhf
 
 import numpy as np
@@ -90,7 +91,7 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
     
     S_ao     = myMF.get_ovlp( myMF.mol )
     OEI_ao   = myMF.get_hcore( myMF.mol )
-    numPairs = myMF.mol.nelectron / 2
+    numPairs = myMF.mol.nelectron // 2
     numVirt  = OEI_ao.shape[0] - numPairs
     numVars  = numPairs * numVirt
     
@@ -115,16 +116,58 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
     
     iteration = 0
 
-    while ( grdnorm > 1e-8 ):
+    while ( grdnorm > 1e-7 ):
     
         iteration += 1
         tempJK_mo = __JKengine( myMF, orbitals )
-        AugmentedHessian = scipy.sparse.linalg.LinearOperator( ( numVars+1, numVars+1 ), __wrapAugmentedHessian( FOCK_mo, numPairs, numVirt, tempJK_mo ), dtype=float )
         ini_guess = np.ones( [ numVars+1 ], dtype=float )
         for occ in range( numPairs ):
             for virt in range( numVirt ):
                 ini_guess[ occ + numPairs * virt ] = - FOCK_mo[ occ, numPairs + virt ] / max( FOCK_mo[ numPairs + virt, numPairs + virt ] - FOCK_mo[ occ, occ ], 1e-6 )
-        eigenval, eigenvec = scipy.sparse.linalg.eigsh( AugmentedHessian, k=1, which='SA', v0=ini_guess, ncv=1024, maxiter=(numVars+1) )
+        
+        def myprecon( resid, eigval, eigvec ):
+            
+            myprecon_cutoff = 1e-10
+            local_myprecon = np.zeros( [ numVars+1 ], dtype=float )
+            for occ in range( numPairs ):
+                for virt in range( numVirt ):
+                    denominator = FOCK_mo[ numPairs + virt, numPairs + virt ] - FOCK_mo[ occ, occ ] - eigval
+                    if ( abs( denominator ) < myprecon_cutoff ):
+                        local_myprecon[ occ + numPairs * virt ] = eigvec[ occ + numPairs * virt ] / myprecon_cutoff
+                    else:
+                        # local_myprecon = eigvec / ( diag(H) - eigval ) = K^{-1} u
+                        local_myprecon[ occ + numPairs * virt ] = eigvec[ occ + numPairs * virt ] / denominator
+            if ( abs( eigval ) < myprecon_cutoff ):
+                local_myprecon[ numVars ] = eigvec[ numVars ] / myprecon_cutoff
+            else:
+                local_myprecon[ numVars ] = - eigvec[ numVars ] / eigval
+            # alpha_myprecon = - ( r, K^{-1} u ) / ( u, K^{-1} u )
+            alpha_myprecon = - np.einsum( 'i,i->', local_myprecon, resid ) / np.einsum( 'i,i->', local_myprecon, eigvec )
+            # local_myprecon = r - ( r, K^{-1} u ) / ( u, K^{-1} u ) * u
+            local_myprecon = resid + alpha_myprecon * eigvec
+            for occ in range( numPairs ):
+                for virt in range( numVirt ):
+                    denominator = FOCK_mo[ numPairs + virt, numPairs + virt ] - FOCK_mo[ occ, occ ] - eigval
+                    if ( abs( denominator ) < myprecon_cutoff ):
+                        local_myprecon[ occ + numPairs * virt ] = - local_myprecon[ occ + numPairs * virt ] / myprecon_cutoff
+                    else:
+                        local_myprecon[ occ + numPairs * virt ] = - local_myprecon[ occ + numPairs * virt ] / denominator
+            if ( abs( eigval ) < myprecon_cutoff ):
+                local_myprecon[ numVars ] = - local_myprecon[ occ + numPairs * virt ] / myprecon_cutoff
+            else:
+                local_myprecon[ numVars ] = local_myprecon[ occ + numPairs * virt ] / eigval
+            return local_myprecon
+        
+        eigenval, eigenvec = linalg_helper.davidson( a=__wrapAugmentedHessian( FOCK_mo, numPairs, numVirt, tempJK_mo ), \
+                                                     x0=ini_guess, \
+                                                     precond=myprecon, \
+                                                     #tol=1e-14, \
+                                                     #max_cycle=50, \
+                                                     max_space=20, \
+                                                     #lindep=1e-16, \
+                                                     #max_memory=2000, \
+                                                     nroots=1 )
+        
         #logger.note(myMF, "   RHF:NewtonRaphson :: # JK computs  (iteration %d) = %d", iteration, tempJK_mo.iter)
         eigenvec = eigenvec / eigenvec[ numVars ]
         update   = np.reshape( eigenvec[:-1], ( numPairs, numVirt ), order='F' )

@@ -288,4 +288,4 @@ if __name__ == '__main__':
     ftmp = tempfile.NamedTemporaryFile()
     from_mo(mol, ftmp.name, m.mo_coeff)
 
-    print parse(ftmp.name)
+    print(parse(ftmp.name))

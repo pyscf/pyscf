@@ -88,11 +88,9 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                             add_so(ir, c[ir]/norms[ir])
                     ib += 1
     so = []
-    irrep_ids = sodic.keys()
-    idx = numpy.argsort(irrep_ids)
-    for i in idx:
-        so.append(numpy.vstack(sodic[irrep_ids[i]]).T)
-    irrep_ids = [irrep_ids[i] for i in idx]
+    irrep_ids = sorted(sodic.keys())
+    for ir in irrep_ids:
+        so.append(numpy.vstack(sodic[ir]).T)
     return so, irrep_ids
 
 def dump_symm_adapted_basis(mol, so):
@@ -413,7 +411,7 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
 
     so = []
     irrep_ids = []
-    irrep_names = sodic.keys()
+    irrep_names = list(sodic.keys())
     for irname in irrep_names:
         irrep_ids.append(linearmole_irrep_symb2id(gpname, irname))
     idx = numpy.argsort(irrep_ids)

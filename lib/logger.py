@@ -5,7 +5,63 @@
 
 
 '''
-logger
+Logging system
+**************
+
+Log level
+---------
+
+======= ======
+Level   number
+------- ------
+DEBUG4  9 
+DEBUG3  8 
+DEBUG2  7 
+DEBUG1  6 
+DEBUG   5 
+INFO    4 
+NOTE    3 
+WARN    2 
+ERROR   1 
+QUIET   0 
+======= ======
+
+Big ``verbose`` number means more noise in the output file.
+
+.. note::
+    At log level 1 (ERROR) and 2 (WARN), the messages are also output to stderr.
+
+Each Logger object has its own output destination and verbose level.  So
+multiple Logger objects can be created to manage the message system without
+affecting each other.
+The methods provided by Logger class has the direct connection to the log level.
+E.g.  :func:`info` print messages if the verbose level >= 4 (INFO):
+
+>>> import sys
+>>> from pyscf import lib
+>>> log = lib.logger.Logger(sys.stdout, 4)
+>>> log.info('info level')
+info level
+>>> log.verbose = 3
+>>> log.info('info level')
+>>> log.note('note level')
+note level
+
+
+timer
+-----
+Logger object provides timer method for timing.  Set :attr:`TIMER_LEVEL` to
+control which level to output the timing.  It is 5 (DEBUG) by default.
+
+>>> import sys, time
+>>> from pyscf import lib
+>>> log = lib.logger.Logger(sys.stdout, 4)
+>>> t0 = time.clock()
+>>> log.timer('test', t0)
+>>> lib.logger.TIMER_LEVEL = 4
+>>> log.timer('test', t0)
+    CPU time for test      0.00 sec
+
 '''
 
 import sys
@@ -35,7 +91,7 @@ TIMER_LEVEL  = param.TIMER_LEVEL
 sys.verbose = NOTE
 
 class Logger(object):
-    def __init__(self, stdout, verbose):
+    def __init__(self, stdout=sys.stdout, verbose=NOTE):
         self.stdout = stdout
         self.verbose = verbose
         self._t0 = time.clock()

@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
+from pyscf import gto
+from pyscf import scf
+from pyscf import mcscf
+from pyscf import dmrgscf
+
+'''
+Use CASSCF orbitals for initial guess of DMRG-SCF
+'''
+
+b = 1.2
+mol = gto.Mole()
+mol.build(
+    verbose = 5,
+    output = 'out-dmrgscf',
+    atom = [['N', (0.,0.,0.)], ['N', (0.,0.,b)]],
+    basis = 'cc-pvdz',
+    symmetry = True,
+)
+m = scf.RHF(mol)
+m.scf()
+
+mc = mcscf.CASSCF(m, 6, 6)
+mc.max_cycle_macro = 5
+mc.max_cycle_micro = 1
+mc.conv_tol = 1e-5
+mc.conv_tol_grad = 1e-4
+mc.mc1step()
+mo = mc.mo_coeff
+
+mol.stdout.write('\n*********** Call DMRGSCF **********\n')
+#
+# Use CheMPS2 program as the FCI Solver
+#
+mc = mcscf.CASSCF(m, 8, 8)
+mc.fcisolver = dmrgscf.CheMPS2(mol)
+mc.fcisolver.dmrg_e_convergence = 1e-9
+emc = mc.mc2step(mo)[0]
+
+#
+# Use Block program as the FCI Solver
+#
+mc = dmrgscf.dmrgci.DMRGSCF(m, 8, 8)
+emc = mc.kernel(mo)[0]
+print(emc)

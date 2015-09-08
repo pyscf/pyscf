@@ -46,12 +46,21 @@ librdm = pyscf.lib.load_library('libfci')
 #       <CI|ao><ao|S^2|CI>
 # For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
 def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
-    '''General spin square operator'''
-# <CI|S+*S-|CI> = neleca + \delta_{ik}\delta_{jl}Gamma_{iakb,jbla}
-# <CI|S-*S+|CI> = nelecb + \delta_{ik}\delta_{jl}Gamma_{ibka,jalb}
-# <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
-#                                       -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb})
-#               + (neleca+nelecb)/4
+    r'''General spin square operator.
+
+    ... math::
+
+        \begin{align}
+        <CI|S_+*S_-|CI> &= neleca + \delta_{ik}\delta_{jl}Gamma_{iakb,jbla} \\
+        <CI|S_-*S_+|CI> &= nelecb + \delta_{ik}\delta_{jl}Gamma_{ibka,jalb} \\
+        <CI|S_z*S_z|CI> &= \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
+                         -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb}) + (n_\alpha+n_\beta)/4
+        \end{align}
+
+    Given the overlap betwen non-degenerate alpha and beta orbitals, this
+    function can compute the expectation value spin square operator for
+    UHF-FCI wavefunction
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -99,7 +108,8 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     return ss, multip
 
 def spin_square0(fcivec, norb, nelec):
-    '''Spin square for CI wfn of spin-degenerated Hamiltonian'''
+    '''Spin square for RHF-FCI CI wfn only (obtained from spin-degenerated
+    Hamiltonian)'''
     ss = numpy.einsum('ij,ij->', fcivec, contract_ss(fcivec, norb, nelec))
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
@@ -199,6 +209,8 @@ def make_rdm2_abba(fcivec, norb, nelec):
 
 
 def contract_ss(fcivec, norb, nelec):
+    '''Contract spin square operator with FCI wavefunction :math:`S^2 |CI>`
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -250,7 +262,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = fcivec.take(maska, axis=0).take(maskb, axis=1)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: t1[ida.reshape(-1,1),idb] += citmp
-            pyscf.lib.takebak_2d(t1, citmp, ida, idb)
+            pyscf.lib.takebak_2d_(t1, citmp, ida, idb)
         for i in range(norb):
             signa = aindex[:,i,1]
             signb = bindex[:,i,1]
@@ -261,7 +273,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = t1.take(ida, axis=0).take(idb, axis=1)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: ci1[maska.reshape(-1,1), maskb] += citmp
-            pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
+            pyscf.lib.takebak_2d_(ci1, citmp, maska, maskb)
 
     ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-

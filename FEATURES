@@ -1,0 +1,79 @@
+* Hartree-Fock (up to ~3000 basis)
+  - Non-relativistic restricted open-shell, unrestricted HF
+  - scalar relativistic HF
+  - 2-component relativistic HF
+  - 4-component relativistic Dirac-Hartree-Fock
+  - density fitting HF (up to ~5000 basis)
+  - Second order SCF
+
+* DFT (up to ~3000 basis)
+  - Non-relativistic restricted, restricted open-shell, unrestricted Kohn-Sham
+  - scalar relativistic DFT
+  - density fitting DFT (up to ~5000 basis)
+
+* General CASCI/CASSCF solver (up to ~2500 basis)
+  - State-average CASCI/CASSCF
+  - Multiple roots CASCI
+  - Support DMRG as plugin CI solver to do DMRG-CASSCF
+  - Support FCIQMC as plugin CI solver to do FCIQMC-CASSCF
+  - UHF-based UCASSCF
+
+* MP2 (up to ~200 occupied, ~1000 virtual orbitals)
+  - RHF-based MP2
+  - RI-MP2
+
+* CCSD (up to ~100 occupied, ~800 virtual orbitals)
+  - canonical CCSD
+  - canonical CCSD lambda solver
+  - CCSD 1-particle density matrix, 2-particle density matrix
+  - CCSD gradients
+
+* Full CI
+  - Direct-CI solver for spin degenerated Hamiltonian
+  - Direct-CI solver for spin non-degenerated Hamiltonian
+  - 1, and 2-particle transition density matrices
+  - 1, 2, 3, and 4-particle density matrices
+
+* Gradients
+  - non-relativistic RHF gradients
+  - 4-component DHF gradients
+
+* NMR
+  - non-relativistic RHF NMR shielding
+  - 4-component DHF NMR shielding
+
+* MRPT
+  - Strongly contracted NEVPT2
+
+* AO integrals
+  - Interface to call Libcint library
+  - 41 types of 1-electron real-GTO integrals
+  - 29 types of 1-electron spinor-GTO integrals
+  - 9 types of 2-electron real-GTO integrals
+  - 33 types of 2-electron spinor-GTO integrals
+  - 4 types of 3-center 2-electron real-GTO integrals
+  - 6 types of 3-center 2-electron spinor-GTO integrals
+
+* MO integrals
+  - 2-electron integral transformation for any integrals provided by
+    Libcint library
+  - Support for 4-index integral transformation with 4 different orbitals
+
+* Localizer
+  - Boys
+  - Edmiston
+  - Meta-Lowdin
+  - Natural atomic orbital (NAO)
+  - Intrinsic atomic orbital (IAO)
+
+* D2h symmetry and linear molecule symmetry
+  - Molecule symmetry detection
+  - Symmetry adapted basis
+  - Label orbital symmetry on the fly
+  - Change symmetry information on the fly
+
+* Tools
+  - fcidump
+  - molden
+  - cubegen
+
