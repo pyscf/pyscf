@@ -30,8 +30,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
-        conv_tol_grad = numpy.sqrt(tol)
+        conv_tol_grad = numpy.sqrt(tol*.1)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
+    conv_tol_ddm = conv_tol_grad * 3
     conv = False
     elast = e_tot
     totmicro = totinner = 0
@@ -49,13 +50,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            rota = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0,
-                                        conv_tol_grad, log)
-            u, g_orb, njk = rota.next()
-            rota.close()
+            for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                                      eris, r0, conv_tol_grad, log):
+                break
             ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
+            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = list(map(numpy.dot, mo, u))
@@ -64,14 +65,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g', \
-                      imicro, norm_t, norm_gorb, norm_ddm)
+            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g',
+                      imicro, de, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < conv_tol_grad or norm_gorb < conv_tol_grad:
+            if norm_t < 1e-4 or abs(de) < tol*.8 or norm_gorb < conv_tol_grad*.8:
                 break
 
         r0 = casscf.pack_uniq_var(u)
@@ -88,7 +89,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(elast - e_tot) < tol and
-            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad):
+            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm):
             conv = True
         else:
             elast = e_tot
@@ -105,7 +106,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     else:
         log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
-    log.note('2-step CASSCF, energy = %.15g', e_tot)
     log.timer('2-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 

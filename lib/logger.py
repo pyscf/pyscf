@@ -5,7 +5,63 @@
 
 
 '''
-logger
+Logging system
+**************
+
+Log level
+---------
+
+======= ======
+Level   number
+------- ------
+DEBUG4  9 
+DEBUG3  8 
+DEBUG2  7 
+DEBUG1  6 
+DEBUG   5 
+INFO    4 
+NOTE    3 
+WARN    2 
+ERROR   1 
+QUIET   0 
+======= ======
+
+Big ``verbose`` number means more noise in the output file.
+
+.. note::
+    At log level 1 (ERROR) and 2 (WARN), the messages are also output to stderr.
+
+Each Logger object has its own output destination and verbose level.  So
+multiple Logger objects can be created to manage the message system without
+affecting each other.
+The methods provided by Logger class has the direct connection to the log level.
+E.g.  :func:`info` print messages if the verbose level >= 4 (INFO):
+
+>>> import sys
+>>> from pyscf import lib
+>>> log = lib.logger.Logger(sys.stdout, 4)
+>>> log.info('info level')
+info level
+>>> log.verbose = 3
+>>> log.info('info level')
+>>> log.note('note level')
+note level
+
+
+timer
+-----
+Logger object provides timer method for timing.  Set :attr:`TIMER_LEVEL` to
+control which level to output the timing.  It is 5 (DEBUG) by default.
+
+>>> import sys, time
+>>> from pyscf import lib
+>>> log = lib.logger.Logger(sys.stdout, 4)
+>>> t0 = time.clock()
+>>> log.timer('test', t0)
+>>> lib.logger.TIMER_LEVEL = 4
+>>> log.timer('test', t0)
+    CPU time for test      0.00 sec
+
 '''
 
 import sys
@@ -30,10 +86,12 @@ CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
 
+TIMER_LEVEL  = param.TIMER_LEVEL
+
 sys.verbose = NOTE
 
 class Logger(object):
-    def __init__(self, stdout, verbose):
+    def __init__(self, stdout=sys.stdout, verbose=NOTE):
         self.stdout = stdout
         self.verbose = verbose
         self._t0 = time.clock()
@@ -138,14 +196,17 @@ def stdout(rec, msg, *args):
     sys.stdout.write('>>> %s\n' % msg)
 
 def timer(rec, msg, cpu0, wall0=None):
-    cpu1 = time.clock()
+    cpu1, wall1 = time.clock(), time.time()
     if wall0:
-        wall1 = time.time()
-        debug(rec, ' '.join(('    CPU time for', msg, '%9.2f sec, wall time %9.2f sec')),
-              cpu1-cpu0, wall1-wall0)
+        if rec.verbose >= TIMER_LEVEL:
+            flush(rec, ' '.join(('    CPU time for', msg,
+                                 '%9.2f sec, wall time %9.2f sec')),
+                  cpu1-cpu0, wall1-wall0)
         return cpu1, wall1
     else:
-        debug(rec, ' '.join(('    CPU time for', msg, '%9.2f sec')), cpu1-cpu0)
+        if rec.verbose >= TIMER_LEVEL:
+            flush(rec, ' '.join(('    CPU time for', msg, '%9.2f sec')),
+                  cpu1-cpu0)
         return cpu1
 
 def timer_debug1(rec, msg, cpu0, wall0=None):

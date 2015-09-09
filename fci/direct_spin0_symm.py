@@ -91,8 +91,10 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown), __name__))
 
-    #wfnsym = direct_spin1_symm._id_wfnsym(cis, norb, nelec, cis.wfnsym)
-    wfnsym = 0
+    wfnsym = direct_spin1_symm._id_wfnsym(cis, norb, nelec, cis.wfnsym)
+    if cis.wfnsym is not None and ci0 is None:
+        ci0 = addons.symm_initguess(norb, nelec, orbsym, wfnsym)
+
     e, c = direct_spin0.kernel_ms0(cis, h1e, eri, norb, nelec, ci0=ci0)
     if cis.wfnsym is not None:
         if cis.nroots > 1:
@@ -163,8 +165,13 @@ class FCISolver(direct_spin0.FCISolver):
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
-        logger.debug(self, 'total symmetry = %s',
-                     symm.irrep_id2name(self.mol.groupname, wfnsym))
+        if 'verbose' in kwargs and isinstance(kwargs['verbose'], logger.Logger):
+            log = kwargs['verbose']
+            log.debug('total symmetry = %s',
+                      symm.irrep_id2name(self.mol.groupname, wfnsym))
+        else:
+            logger.debug(self, 'total symmetry = %s',
+                         symm.irrep_id2name(self.mol.groupname, wfnsym))
         if self.wfnsym is not None and ci0 is None:
             ci0 = addons.symm_initguess(norb, nelec, self.orbsym, wfnsym)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,

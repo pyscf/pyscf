@@ -3,6 +3,7 @@
  *
  */
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 //#include <omp.h>
@@ -14,16 +15,16 @@
  * Hamming weight popcount
  */
 
-int FCIpopcount_1(size_t x)
+int FCIpopcount_1(int64_t x)
 {
-        const size_t m1  = 0x5555555555555555; //binary: 0101...
-        const size_t m2  = 0x3333333333333333; //binary: 00110011..
-        const size_t m4  = 0x0f0f0f0f0f0f0f0f; //binary:  4 zeros,  4 ones ...
-        const size_t m8  = 0x00ff00ff00ff00ff; //binary:  8 zeros,  8 ones ...
-        const size_t m16 = 0x0000ffff0000ffff; //binary: 16 zeros, 16 ones ...
-        const size_t m32 = 0x00000000ffffffff; //binary: 32 zeros, 32 ones
-//        const size_t hff = 0xffffffffffffffff; //binary: all ones
-//        const size_t h01 = 0x0101010101010101; //the sum of 256 to the power of 0,1,2,3...
+        const int64_t m1  = 0x5555555555555555; //binary: 0101...
+        const int64_t m2  = 0x3333333333333333; //binary: 00110011..
+        const int64_t m4  = 0x0f0f0f0f0f0f0f0f; //binary:  4 zeros,  4 ones ...
+        const int64_t m8  = 0x00ff00ff00ff00ff; //binary:  8 zeros,  8 ones ...
+        const int64_t m16 = 0x0000ffff0000ffff; //binary: 16 zeros, 16 ones ...
+        const int64_t m32 = 0x00000000ffffffff; //binary: 32 zeros, 32 ones
+//        const int64_t hff = 0xffffffffffffffff; //binary: all ones
+//        const int64_t h01 = 0x0101010101010101; //the sum of 256 to the power of 0,1,2,3...
         x = (x & m1 ) + ((x >>  1) & m1 ); //put count of each  2 bits into those  2 bits 
         x = (x & m2 ) + ((x >>  2) & m2 ); //put count of each  4 bits into those  4 bits 
         x = (x & m4 ) + ((x >>  4) & m4 ); //put count of each  8 bits into those  8 bits 
@@ -33,7 +34,7 @@ int FCIpopcount_1(size_t x)
         return x;
 }
 
-int FCIpopcount_4(size_t x)
+int FCIpopcount_4(int64_t x)
 {
         int count;
         for (count = 0; x; count++) {
@@ -43,9 +44,9 @@ int FCIpopcount_4(size_t x)
 }
 
 
-int FCIparity(size_t string0, size_t string1)
+int FCIparity(int64_t string0, int64_t string1)
 {
-        size_t ss;
+        int64_t ss;
         if (string1 > string0) {
                 ss = string1 - string0;
                 // string1&ss gives the number of 1s between two strings
@@ -69,8 +70,8 @@ int FCIparity(size_t string0, size_t string1)
 static int binomial(int n, int m)
 {
         int i;
-        size_t num = 1;
-        size_t div = 1;
+        int64_t num = 1;
+        int64_t div = 1;
         double dnum = 1;
         double ddiv = 1;
         if (n < 28) {
@@ -102,7 +103,7 @@ static int binomial(int n, int m)
         }
 }
 
-int FCIstr2addr(int norb, int nelec, size_t string)
+int FCIstr2addr(int norb, int nelec, int64_t string)
 {
         int addr = 0;
         int nelec_left = nelec;
@@ -110,7 +111,7 @@ int FCIstr2addr(int norb, int nelec, size_t string)
         for (norb_left = norb - 1; norb_left >= 0; norb_left--) {
                 if (nelec_left == 0 || norb_left < nelec_left) {
                         break;
-                } else if ((1UL<<norb_left) & string) {
+                } else if ((1ULL<<norb_left) & string) {
                         addr += binomial(norb_left, nelec_left);
                         nelec_left--;
                 }
@@ -120,20 +121,20 @@ int FCIstr2addr(int norb, int nelec, size_t string)
 
 
 void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
-                      size_t *strs, int store_trilidx)
+                      int64_t *strs, int store_trilidx)
 {
         int occ[norb];
         int vir[norb];
         int nvir = norb - nocc;
         int nlink = nocc * nvir + nocc;
         int str_id, io, iv, i, a, k, ia;
-        size_t str0, str1;
+        int64_t str0, str1;
         int *tab;
 
         for (str_id = 0; str_id < na; str_id++) {
                 str0 = strs[str_id];
                 for (i = 0, io = 0, iv = 0; i < norb; i++) {
-                        if (str0 & (1UL<<i)) {
+                        if (str0 & (1ULL<<i)) {
                                 occ[io] = i;
                                 io += 1;
                         } else {
@@ -151,8 +152,8 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                         }
                         for (i = 0; i < nocc; i++) {
                                 for (a = 0; a < nvir; a++, k++) {
-                                        str1 = (str0^(1UL<<occ[i])) |
-                                                (1UL<<vir[a]);
+                                        str1 = (str0^(1ULL<<occ[i])) |
+                                                (1ULL<<vir[a]);
                                         if (vir[a] > occ[i]) {
                                                 ia = vir[a]*(vir[a]+1)/2+occ[i];
                                         } else {
@@ -175,8 +176,8 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
 
                         for (i = 0; i < nocc; i++) {
                                 for (a = 0; a < nvir; a++, k++) {
-                                        str1 = (str0^(1UL<<occ[i])) |
-                                                (1UL<<vir[a]);
+                                        str1 = (str0^(1ULL<<occ[i])) |
+                                                (1ULL<<vir[a]);
                                         tab[k*4+0] = vir[a];
                                         tab[k*4+1] = occ[i];
                                         tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
@@ -186,3 +187,61 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                 }
         }
 }
+
+void FCIcre_str_index(int *link_index, int norb, int na, int nocc,
+                      int64_t *strs)
+{
+        int nvir = norb - nocc;
+        int str_id, i, k;
+        int64_t str0, str1;
+        int *tab = link_index;
+
+        for (str_id = 0; str_id < na; str_id++) {
+                str0 = strs[str_id];
+                k = 0;
+                for (i = 0; i < norb; i++) {
+                        if (!(str0 & (1ULL<<i))) {
+                                str1 = str0 | (1ULL<<i);
+                                tab[k*4+0] = i;
+                                tab[k*4+1] = i*(i+1)/2;
+                                tab[k*4+2] = FCIstr2addr(norb, nocc+1, str1);
+                                if (FCIpopcount_1(str0>>(i+1)) % 2) {
+                                        tab[k*4+3] = -1;
+                                } else {
+                                        tab[k*4+3] = 1;
+                                }
+                                k++;
+                        }
+                }
+                tab += nvir * 4;
+        }
+}
+
+void FCIdes_str_index(int *link_index, int norb, int na, int nocc,
+                      int64_t *strs)
+{
+        int str_id, i, k;
+        int64_t str0, str1;
+        int *tab = link_index;
+
+        for (str_id = 0; str_id < na; str_id++) {
+                str0 = strs[str_id];
+                k = 0;
+                for (i = 0; i < norb; i++) {
+                        if (str0 & (1ULL<<i)) {
+                                str1 = str0 ^ (1ULL<<i);
+                                tab[k*4+0] = i;
+                                tab[k*4+1] = i*(i+1)/2;
+                                tab[k*4+2] = FCIstr2addr(norb, nocc-1, str1);
+                                if (FCIpopcount_1(str0>>(i+1)) % 2) {
+                                        tab[k*4+3] = -1;
+                                } else {
+                                        tab[k*4+3] = 1;
+                                }
+                                k++;
+                        }
+                }
+                tab += nocc * 4;
+        }
+}
+

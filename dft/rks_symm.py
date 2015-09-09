@@ -37,7 +37,7 @@ class RKS(pyscf.scf.hf_symm.RHF):
         return rks.get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = ks.get_hcore()
+        if h1e is None: h1e = self.get_hcore()
         return rks.energy_elec(self, dm, h1e)
 
 
@@ -64,7 +64,7 @@ class ROKS(pyscf.scf.hf_symm.ROHF):
         return uks.get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = ks.get_hcore()
+        if h1e is None: h1e = self.get_hcore()
         return uks.energy_elec(self, dm, h1e)
 
 

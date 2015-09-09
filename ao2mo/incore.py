@@ -196,6 +196,7 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     >>> print(eri1.shape)
     (55, 28)
     '''
+    eri_ao = numpy.asarray(eri_ao, order='C')
     ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
 
     nmoi = mo_coeffs[0].shape[1]

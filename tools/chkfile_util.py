@@ -8,6 +8,9 @@ from pyscf.scf import chkfile
 from pyscf.scf import hf
 
 def mulliken(filename, key='scf'):
+    '''Reading scf/mcscf information from chkfile, then do Mulliken population
+    analysis for the density matrix
+    '''
     if key.lower() == 'mcscf':
         mol = chkfile.load_mol(filename)
         mo_coeff = chkfile.load(filename, 'mcscf/mo_coeff')
@@ -20,6 +23,9 @@ def mulliken(filename, key='scf'):
     hf.mulliken_meta(mol, dm)
 
 def dump_mo(filename, key='scf'):
+    '''Read scf/mcscf information from chkfile, then dump the orbital
+    coefficients.
+    '''
     from pyscf.tools import dump_mat
     if key.lower() == 'mcscf':
         mol = chkfile.load_mol(filename)
@@ -30,6 +36,9 @@ def dump_mo(filename, key='scf'):
     dump_mat.dump_mo(mol, mo_coeff)
 
 def molden(filename, key='scf'):
+    '''Read scf/mcscf information from chkfile, then convert the scf/mcscf
+    orbitals to molden format.
+    '''
     from pyscf.tools import molden
     molden.from_chkfile(filename+'.molden', filename, key+'/mo_coeff')
 

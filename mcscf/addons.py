@@ -5,6 +5,7 @@ import numpy
 import pyscf.lib
 from pyscf.lib import logger
 import pyscf.fci
+from pyscf import scf
 
 
 def sort_mo(casscf, mo_coeff, caslst, base=1):
@@ -45,8 +46,10 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         nmo = mo_coeff.shape[1]
         if base != 0:
             caslst = [i-base for i in caslst]
-        idx = [i for i in range(nmo) if i not in caslst]
-        return numpy.hstack((mo_coeff[:,idx[:ncore]], mo_coeff[:,caslst], mo_coeff[:,idx[ncore:]]))
+        idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
+        return numpy.hstack((mo_coeff[:,idx[:ncore]],
+                             mo_coeff[:,caslst],
+                             mo_coeff[:,idx[ncore:]]))
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
             assert(casscf.ncas == len(caslst))
@@ -57,17 +60,20 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
             assert(casscf.ncas == len(caslst[0]))
             assert(casscf.ncas == len(caslst[1]))
             if base != 0:
-                caslst = ([i-base for i in caslst[0]], [i-base for i in caslst[1]])
+                caslst = ([i-base for i in caslst[0]],
+                          [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idx = [i for i in range(nmo) if i not in caslst[0]]
-        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]], mo_coeff[0][:,caslst[0]],
+        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
+        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]],
+                             mo_coeff[0][:,caslst[0]],
                              mo_coeff[0][:,idx[ncore[0]:]]))
-        idx = [i for i in range(nmo) if i not in caslst[1]]
-        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]], mo_coeff[1][:,caslst[1]],
+        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
+        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]],
+                             mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idx[ncore[1]:]]))
         return (mo_a, mo_b)
 
-def project_init_guess(casscf, init_mo):
+def project_init_guess(casscf, init_mo, prev_mol=None):
     '''Project the given initial guess to the current CASSCF problem.  The
     projected initial guess has two parts.  The core orbitals are directly
     taken from the Hartree-Fock orbitals, and the active orbitals are
@@ -80,6 +86,12 @@ def project_init_guess(casscf, init_mo):
             Initial guess orbitals which are not orth-normal for the current
             molecule.  When the casscf is UHF-CASSCF, the init_mo needs to be
             a list of two ndarrays, for alpha and beta orbitals
+
+    Kwargs:
+        prev_mol : an instance of :class:`Mole`
+            If given, the inital guess orbitals are expanded on the geometry
+            specified by prev_mol.  Otherwise, the orbitals are expanded on
+            current geometry specified by casscf.mol
 
     Returns:
         New orthogonal initial guess orbitals with the core taken from
@@ -117,14 +129,14 @@ def project_init_guess(casscf, init_mo):
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
-        logger.debug(casscf, 'Core indices %s', str(idx[-ncore:][::-1]))
+        logger.debug(casscf, 'Core indices %s', str(numpy.sort(idx[-ncore:])))
         # take HF core
-        mocore = mfmo[:,idx[-ncore:][::-1]]
+        mocore = mfmo[:,numpy.sort(idx[-ncore:])]
 
         # take projected CAS space
         mocas = init_mo[:,ncore:nocc] \
-            - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
-        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)))
+              - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
+        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
 
         # remove core and active space from rest
         mou = init_mo[:,nocc:] \
@@ -132,21 +144,28 @@ def project_init_guess(casscf, init_mo):
         mo = lo.orth.vec_lowdin(numpy.hstack((mocc, mou)), s)
 
         if casscf.verbose >= logger.DEBUG:
-            s = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
-            idx = numpy.argwhere(abs(s) > 0.4)
+            s1 = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
+            idx = numpy.argwhere(abs(s1) > 0.4)
             for i,j in idx:
                 logger.debug(casscf, 'Init guess <mo-CAS|mo-hf>  %d  %d  %12.8f',
-                             ncore+i+1, j+1, s[i,j])
+                             ncore+i+1, j+1, s1[i,j])
         return mo
 
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff
     s = casscf._scf.get_ovlp()
     if isinstance(ncore, (int, numpy.integer)):
-        assert(mfmo.shape[0] == init_mo.shape[0])
+        if prev_mol is not None:
+            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
+        else:
+            assert(mfmo.shape[0] == init_mo.shape[0])
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF
-        assert(mfmo[0].shape[0] == init_mo[0].shape[0])
+        if prev_mol is not None:
+            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
+                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
+        else:
+            assert(mfmo[0].shape[0] == init_mo[0].shape[0])
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
@@ -235,7 +254,7 @@ def get_fock(casscf, mo_coeff=None, ci=None):
         return casscf.get_fock(mo_coeff, ci)
 
 def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
-    '''Restore natrual orbitals
+    '''Natrual orbitals in CAS space
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
@@ -282,9 +301,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     ncas     = casscf.ncas
     nelecas  = casscf.nelecas
     if isinstance(ncore, (int, numpy.integer)):
-        nocc = ncore + ncas
-        mocas = mo_coeff[:,ncore:nocc]
-        return pyscf.fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        return pyscf.fci.spin_op.spin_square0(ci, ncas, nelecas)
     else:
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
@@ -316,6 +333,8 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
         def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
             e, c = fcibase.kernel(h1, h2, ncas, nelecas, ci0,
                                   nroots=self.nroots, **kwargs)
+            for i, ei in enumerate(e):
+                logger.debug(casscf, 'Energy for state %d = %.15g', i, ei)
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase.kernel(h1, h2, norb, nelec, ci0,
@@ -335,6 +354,11 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
+        def spin_square(self, ci0, norb, nelec):
+            ss = fcibase.spin_square(ci0, norb, nelec)[0]
+            ss = numpy.einsum('i,i->', weights, ss)
+            multip = numpy.sqrt(ss+.25)*2
+            return ss, multip
     casscf.fcisolver = FakeCISolver()
     return casscf
 

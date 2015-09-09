@@ -22,6 +22,7 @@ def finger(mat):
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
+        rhf.conv_tol = 1e-14
         rhf.scf()
         g = grad.hf.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 7.9210392362911595, 7)

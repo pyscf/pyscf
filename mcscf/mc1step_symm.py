@@ -79,11 +79,11 @@ class CASSCF(mc1step.CASSCF):
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def gen_g_hop(self, mo, casdm1, casdm2, eris):
+    def gen_g_hop(self, mo, u, casdm1, casdm2, eris):
         casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
                              self.mol.groupname)
         g_orb, gorb_op, h_op, h_diag = \
-                mc1step.gen_g_hop(self, mo, casdm1, casdm2, eris)
+                mc1step.gen_g_hop(self, mo, u, casdm1, casdm2, eris)
         g_orb = _symmetrize(self.unpack_uniq_var(g_orb), self.orbsym,
                             self.mol.groupname)
         h_diag = _symmetrize(self.unpack_uniq_var(h_diag), self.orbsym,
@@ -98,7 +98,7 @@ class CASSCF(mc1step.CASSCF):
             g = _symmetrize(self.unpack_uniq_var(g), self.orbsym,
                             self.mol.groupname)
             return self.pack_uniq_var(g)
-        return self.pack_uniq_var(g_orb), gorb_op, sym_h_op, \
+        return self.pack_uniq_var(g_orb), sym_gorb_op, sym_h_op, \
                self.pack_uniq_var(h_diag)
 
     def update_rotate_matrix(self, dx, u0=1):

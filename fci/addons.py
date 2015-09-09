@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
 import numpy
+import pyscf.lib
 from pyscf.fci import cistring
 from pyscf import symm
 
 def large_ci(ci, norb, nelec, tol=.1):
+    '''Search for the largest CI coefficients
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
@@ -18,6 +21,8 @@ def large_ci(ci, norb, nelec, tol=.1):
     return res
 
 def initguess_triplet(norb, nelec, binstring):
+    '''Generate a triplet initial guess for FCI solver
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec//2
     else:
@@ -31,8 +36,24 @@ def initguess_triplet(norb, nelec, binstring):
     return ci0
 
 def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
-    '''CI wavefunction initial guess which matches the given symmetry.
-    Based on RHF/ROHF orbitals
+    '''Generate CI wavefunction initial guess which has the given symmetry.
+
+    Args:
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        orbsym : list of int
+            The irrep ID for each orbital.
+
+    Kwags:
+        wfnsym : int
+            The irrep ID of target symmetry
+        irrep_nelec : dict
+            Freeze occupancy for certain irreps
+
+    Returns:
+        CI coefficients 2D array which has the target symmetry.
     '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
@@ -47,6 +68,8 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     nb = cistring.num_strings(norb, nelecb)
     ci1 = numpy.zeros((na,nb))
 
+########################
+# pass 1: The fixed occs
     orbleft = numpy.ones(norb, dtype=bool)
     stra = numpy.zeros(norb, dtype=bool)
     strb = numpy.zeros(norb, dtype=bool)
@@ -72,31 +95,111 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     assert(nelecb_left >= 0)
     assert(spin >= 0)
 
-# assume "nelecb_left" doubly occupied orbitals
-    if spin == 0:
-        assert(wfnsym == 0)
-        socclst = []
-    else:
-        socclst = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])]
-        if len(socclst) != spin:
-            raise RuntimeError('No occ pattern found for wfnsym %s' % wfnsym)
-    docclst = numpy.zeros(norb, dtype=bool)
-    docclst[orbleft] = True
-    docclst[socclst] = False
-    docclst = numpy.where(docclst)[0][:nelecb_left]
+########################
+# pass 2: search pattern
+    def gen_str_iter(orb_list, nelec):
+        if nelec == 1:
+            for i in orb_list:
+                yield [i]
+        elif nelec >= len(orb_list):
+            yield orb_list
+        else:
+            restorb = orb_list[1:]
+            #yield from gen_str_iter(restorb, nelec)
+            for x in gen_str_iter(restorb, nelec):
+                yield x
+            for x in gen_str_iter(restorb, nelec-1):
+                yield [orb_list[0]] + x
 
+# search for alpha and beta pattern which match to the required symmetry
+    def query(target, nelec_atmost, spin, orbsym):
+        norb = len(orbsym)
+        for excite_level in range(1, nelec_atmost+1):
+            for beta_only in gen_str_iter(range(norb), excite_level):
+                alpha_allow = [i for i in range(norb) if i not in beta_only]
+                alpha_orbsym = orbsym[alpha_allow]
+                alpha_target = target
+                for i in beta_only:
+                    alpha_target ^= orbsym[i]
+                alpha_only = symm.route(alpha_target, spin+excite_level, alpha_orbsym)
+                if alpha_only:
+                    alpha_only = [alpha_allow[i] for i in alpha_only]
+                    return alpha_only, beta_only
+        raise RuntimeError('No pattern found for wfn irrep %s over orbsym %s'
+                           % (target, orbsym))
+
+    if spin == 0:
+        aonly = bonly = []
+        if wfnsym != 0:
+            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
+    else:
+        # 1. assume "nelecb_left" doubly occupied orbitals
+        # search for alpha pattern which match to the required symmetry
+        aonly, bonly = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])], []
+        # dcompose doubly occupied orbitals, search for alpha and beta pattern
+        if len(aonly) != spin:
+            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
+
+    ndocc = neleca_left - len(aonly) # == nelecb_left - len(bonly)
+    docc_allow = numpy.ones(len(orbleft), dtype=bool)
+    docc_allow[aonly] = False
+    docc_allow[bonly] = False
+    docclst = orbleft[numpy.where(docc_allow)[0]][:ndocc]
     stra[docclst] = True
     strb[docclst] = True
-    stra[socclst] = True
-    stra = ''.join([str(int(i)) for i in stra])[::-1]
-    strb = ''.join([str(int(i)) for i in strb])[::-1]
-    #print stra, strb
-    addra = cistring.str2addr(norb, neleca, int(stra,2))
-    addrb = cistring.str2addr(norb, nelecb, int(strb,2))
-    ci1[addra,addrb] = 1
+
+    def find_addr_(stra, aonly, nelec):
+        stra[orbleft[aonly]] = True
+        return cistring.str2addr(norb, nelec, ('%i'*norb)%tuple(stra)[::-1])
+    if bonly:
+        if spin > 0:
+            aonly, socc_only = aonly[:-spin], aonly[-spin:]
+            stra[orbleft[socc_only]] = True
+        stra1 = stra.copy()
+        strb1 = strb.copy()
+
+        addra = find_addr_(stra, aonly, neleca)
+        addrb = find_addr_(strb, bonly, nelecb)
+        addra1 = find_addr_(stra1, bonly, neleca)
+        addrb1 = find_addr_(strb1, aonly, nelecb)
+        ci1[addra,addrb] = ci1[addra1,addrb1] = numpy.sqrt(.5)
+    else:
+        addra = find_addr_(stra, aonly, neleca)
+        addrb = find_addr_(strb, bonly, nelecb)
+        ci1[addra,addrb] = 1
+
+#    target = 0
+#    for i,k in enumerate(stra):
+#        if k:
+#            target ^= orbsym[i]
+#    for i,k in enumerate(strb):
+#        if k:
+#            target ^= orbsym[i]
+#    print target
     return ci1
 
+
 def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
+    '''Symmetrize the CI wavefunction by zeroing out the determinants which
+    do not have the right symmetry.
+
+    Args:
+        ci : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        orbsym : list of int
+            The irrep ID for each orbital.
+
+    Kwags:
+        wfnsym : int
+            The irrep ID of target symmetry
+
+    Returns:
+        2D array which is the symmetrized CI coefficients
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -117,10 +220,28 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     return ci1
 
 
-# construct (N-1)-electron wavefunction by removing an alpha electron from
-# N-electron wavefunction:
-# |N-1> = a_p |N>
 def des_a(ci0, norb, nelec, ap_id):
+    r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
+    the N-electron wavefunction.
+
+    ... math::
+
+        |N-1\rangle = \hat{a}_p |N\rangle
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the annihilation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings.  Note it
+        has different number of rows to the input CI coefficients
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -139,9 +260,24 @@ def des_a(ci0, norb, nelec, ap_id):
     ci1[addr_ci1] = sign.reshape(-1,1) * ci0[addr_ci0]
     return ci1
 
-# construct (N-1)-electron wavefunction by removing a beta electron from
-# N-electron wavefunction:
 def des_b(ci0, norb, nelec, ap_id):
+    r'''Construct (N-1)-electron wavefunction by removing a beta electron from
+    N-electron wavefunction.
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the annihilation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings. Note it
+        has different number of columns to the input CI coefficients.
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -157,10 +293,28 @@ def des_b(ci0, norb, nelec, ap_id):
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
-# construct (N+1)-electron wavefunction by adding an alpha electron to
-# N-electron wavefunction:
-# |N+1> = a_p^+ |N>
 def cre_a(ci0, norb, nelec, ap_id):
+    r'''Construct (N+1)-electron wavefunction by adding an alpha electron in
+    the N-electron wavefunction.
+
+    ... math::
+
+        |N+1\rangle = \hat{a}^+_p |N\rangle
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the creation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings. Note it
+        has different number of rows to the input CI coefficients.
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -179,6 +333,23 @@ def cre_a(ci0, norb, nelec, ap_id):
 # construct (N+1)-electron wavefunction by adding a beta electron to
 # N-electron wavefunction:
 def cre_b(ci0, norb, nelec, ap_id):
+    r'''Construct (N+1)-electron wavefunction by adding a beta electron in
+    the N-electron wavefunction.
+
+    Args:
+        ci0 : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        ap_id : int
+            Orbital index (0-based), for the creation operator
+
+    Returns:
+        2D array, row for alpha strings and column for beta strings. Note it
+        has different number of columns to the input CI coefficients.
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -196,6 +367,8 @@ def cre_b(ci0, norb, nelec, ap_id):
 
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
+    '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.
+    '''
     from pyscf.fci import direct_spin1
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = direct_spin1.contract_2e(h2e, fcivec, norb, nelec, link_index)
@@ -203,11 +376,13 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 
 def reorder(ci, nelec, orbidxa, orbidxb=None):
-    '''reorder the CI coefficients wrt the reordering of orbitals (The relation
+    '''Reorder the CI coefficients, to adapt the reordered orbitals (The relation
     of the reordered orbitals and original orbitals is  new = old[idx]).  Eg.
-    orbidx = [2,0,1] to map   old orbital  a b c  ->   new orbital  c a b
-    old-strings   0b011, 0b101, 0b110 ==  (1,2), (1,3), (2,3)
-    orb-strings   (3,1), (3,2), (1,2) ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
+
+    The orbital ordering indices ``orbidx = [2,0,1]`` indicates the map
+    old orbital  a b c  ->   new orbital  c a b.  The strings are reordered as
+    old-strings   0b011, 0b101, 0b110 ==  (1,2), (1,3), (2,3)   <= apply orbidx to get orb-strings
+    orb-strings   (3,1), (3,2), (1,2) ==  0B101, 0B110, 0B011   <= by gen_strings4orblist
     then argsort to translate the string representation to the address
     [2(=0B011), 0(=0B101), 1(=0B110)]
     '''
@@ -243,6 +418,41 @@ def overlap(string1, string2, norb, s=None):
         s1 = numpy.take(numpy.take(s, idx1, axis=0), idx2, axis=1)
         return numpy.linalg.det(s1)
 
+def fix_spin_(fciobj, shift=.1):
+    r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
+    adding a shift on spin square operator
+
+    .. math::
+
+        (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
+
+    Args:
+        fciobj : An instance of :class:`FCISolver`
+
+    Kwargs:
+        shift : float
+            Level shift for states which have different spin
+
+    Returns
+            A modified FCI object based on fciobj.
+    '''
+    from pyscf.fci import spin_op
+    from pyscf.fci import direct_spin0
+    fciobj.davidson_only = True
+    def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        ci1 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        if isinstance(nelec, (int, numpy.integer)):
+            sz = (nelec % 2) * .5
+        else:
+            sz = (nelec[0]-nelec[1]) * .5
+        ci1 += shift * spin_op.contract_ss(fcivec, norb, nelec)
+        ci1 -= sz*(sz+1)*shift * fcivec.reshape(ci1.shape)
+        if isinstance(fciobj, direct_spin0.FCISolver):
+            ci1 = pyscf.lib.transpose_sum(ci1, inplace=True) * .5
+        return ci1
+    fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
+    return fciobj
+
 
 if __name__ == '__main__':
     a4 = 10*numpy.arange(4)[:,None]
@@ -271,15 +481,25 @@ if __name__ == '__main__':
     print(cre_b(a6+b6, 4, 4, 2))
     print(cre_b(a6+b6, 4, 4, 3))
 
-    symm_initguess(6, (4,3), [0,1,0,0,3,0], wfnsym=1, irrep_nelec=None)
-    symm_initguess(6, (4,3), [0,1,0,0,3,0], wfnsym=0, irrep_nelec={0:[3,2],3:2})
+    print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=1,
+                                     irrep_nelec=None)!=0), [0], [2])
+    print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=0,
+                                irrep_nelec={0:[3,2],3:2})!=0), [2,3], [5,4])
+    print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=2,
+                                     irrep_nelec={1:[0,1],3:[1,0]})!=0), [5], [0])
+    print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3,
+                                     irrep_nelec={5:[0,1],3:[1,0]})!=0), [4,7], [2,0])
 
+    def finger(ci1):
+        numpy.random.seed(1)
+        fact = numpy.random.random(ci1.shape).ravel()
+        return numpy.dot(ci1.ravel(), fact.ravel())
     norb = 6
     nelec = neleca, nelecb = 4,3
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci = numpy.ones((na,nb))
-    print(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2))
+    print(finger(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)), 18.801458376605162)
     s1 = numpy.random.seed(1)
     s1 = numpy.random.random((6,6))
     s1 = s1 + s1.T

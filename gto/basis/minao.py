@@ -1,5 +1,15 @@
-# These are minimal basis sets are provided by Gerald Knizia in his ir-wmme
-# program.  They are contracted from cc-pVTZ (H-Kr) or cc-pVTZ-PP basis sets.
+# The minimal basis sets used by Molpro.
+#
+# Comments from Molpro
+#
+# ! These are minimal basis sets created by taking the first
+# ! nOcc contracted functions out of the cc-pVTZ or cc-pVTZ-PP
+# ! basis sets. They are intended as auxiliary sets for SCF
+# ! convergence experiments and atomic density guess purposes.
+# ! See "When SCF does not converge" chapter in SCF program
+# ! documentation.
+# !
+# ! -- Gerald Knizia, 29.5.2011
 
 
 H  = [[0,

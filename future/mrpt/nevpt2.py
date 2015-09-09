@@ -269,7 +269,7 @@ def make_a13(h1e,h2e,dm1,dm2,dm3):
     return a13
 
 
-def Sr(mc,orbe, dms, eris=None, verbose=None):
+def Sr(mc,ci,orbe, dms, eris=None, verbose=None):
     #The subspace S_r^{(-1)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -296,10 +296,9 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
 
 
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
-        state = 0
-        a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,state)
+        a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,ci)
     else:
-        a16 = make_a16(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
+        a16 = make_a16(h1e,h2e, dms, ci, mc.ncas, mc.nelecas)
     a17 = make_a17(h1e,h2e,dm2,dm3)
     a19 = make_a19(h1e,h2e,dm1,dm2)
 
@@ -313,7 +312,7 @@ def Sr(mc,orbe, dms, eris=None, verbose=None):
 
     return _norm_to_energy(norm, ener, orbe[mc.ncore+mc.ncas:])
 
-def Si(mc, orbe, dms, eris=None, verbose=None):
+def Si(mc, ci, orbe, dms, eris=None, verbose=None):
     #Subspace S_i^{(1)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -339,10 +338,9 @@ def Si(mc, orbe, dms, eris=None, verbose=None):
 
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         #mc.fcisolver.make_a22(mc.ncas, state)
-        state = 0
-        a22 = mc.fcisolver.nevpt_intermediate('A22',mc.ncas,mc.nelecas,state)
+        a22 = mc.fcisolver.nevpt_intermediate('A22',mc.ncas,mc.nelecas,ci)
     else:
-        a22 = make_a22(h1e,h2e, dms, mc.ci, mc.ncas, mc.nelecas)
+        a22 = make_a22(h1e,h2e, dms, ci, mc.ncas, mc.nelecas)
     a23 = make_a23(h1e,h2e,dm1,dm2,dm3)
     a25 = make_a25(h1e,h2e,dm1,dm2)
     delta = numpy.eye(mc.ncas)
@@ -562,8 +560,11 @@ def Sir(mc,orbe, dms, eris, verbose=None):
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
-def sc_nevpt(mc, verbose=None):
+def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
     '''Strongly contracted NEVPT2'''
+    if ci==None:
+        ci=mc.ci
+    #mc.cas_natorb(ci=ci)
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -574,12 +575,16 @@ def sc_nevpt(mc, verbose=None):
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
     logger.debug(mc, 'mc.fcisolver = %s', type(mc.fcisolver))
+
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         logger.info(mc, 'DMRG-NEVPT')
-        dm1, dm2, dm3 = mc.fcisolver.make_rdm123(None,mc.ncas,mc.nelecas,None)
+        dm1, dm2, dm3 = mc.fcisolver.make_rdm123(ci,mc.ncas,mc.nelecas,None)
     else:
+        if useMPS:
+            logger.error(mc,"MPS nevpt only used for DMRG calculation")
+            exit()
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
-                                           mc.ci, mc.ci, mc.ncas, mc.nelecas)
+                                           ci, ci, mc.ncas, mc.nelecas)
     dm4 = None
 
     #hdm1 = make_hdm1(dm1)
@@ -595,13 +600,15 @@ def sc_nevpt(mc, verbose=None):
     time1 = log.timer('integral transformation', *time1)
     nocc = mc.ncore + mc.ncas
 
+
+
     if not hasattr(mc.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
         link_indexa = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[0])
         link_indexb = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[1])
         aaaa = eris['ppaa'][mc.ncore:nocc,mc.ncore:nocc].copy()
-        f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, mc.ci, mc.ncas,
+        f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, ci, mc.ncas,
                              mc.nelecas, (link_indexa,link_indexb))
-        f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, mc.ci, mc.ncas,
+        f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, ci, mc.ncas,
                              mc.nelecas, (link_indexa,link_indexb))
         dms['f3ca'] = f3ca
         dms['f3ac'] = f3ac
@@ -609,15 +616,26 @@ def sc_nevpt(mc, verbose=None):
 
     fake_eris = lambda: None
     fake_eris.__dict__.update(eris.items())
-    orbe = mc.get_fock(eris=fake_eris).diagonal()
+    orbe = mc.get_fock(ci=ci,eris=fake_eris).diagonal()
     fake_eris = None
 
-    norm_Sr   , e_Sr    = Sr(mc,orbe, dms, eris)
-    logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
-    time1 = log.timer("space Sr (-1)'", *time1)
-    norm_Si   , e_Si    = Si(mc,orbe, dms, eris)
-    logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
-    time1 = log.timer("space Si (+1)'", *time1)
+    if useMPS:
+        fh5 = h5py.File('Perturbation_%d'%ci,'r')
+        e_Si     =   fh5['Vi/energy'].value    
+        norm_Si  =   fh5['Vi/norm'].value       
+        e_Sr     =   fh5['Vr/energy'].value     
+        norm_Sr  =   fh5['Vr/norm'].value       
+        fh5.close()
+        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
+        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
+
+    else:
+        norm_Sr   , e_Sr    = Sr(mc,ci,orbe, dms, eris)
+        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
+        time1 = log.timer("space Sr (-1)'", *time1)
+        norm_Si   , e_Si    = Si(mc,ci,orbe, dms, eris)
+        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
+        time1 = log.timer("space Si (+1)'", *time1)
     norm_Sijrs, e_Sijrs = Sijrs(mc,orbe, eris)
     logger.note(mc, "Sijrs (0)  , Norm = %.14f  E = %.14f", norm_Sijrs,e_Sijrs)
     time1 = log.timer('space Sijrs (0)', *time1)

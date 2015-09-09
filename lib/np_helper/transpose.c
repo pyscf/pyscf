@@ -2,6 +2,7 @@
  *
  */
 
+#include <stddef.h>
 #include <complex.h>
 
 /*
@@ -9,7 +10,8 @@
  */
 void NPdtranspose(int n, int m, double *a, double *at, int blk)
 {
-        int i, j, ic, jc;
+        int ic, jc;
+        size_t i, j;
         double *po, *pi;
 
         for (jc = 0; jc < m-blk; jc+=blk) {
@@ -40,7 +42,8 @@ void NPdtranspose(int n, int m, double *a, double *at, int blk)
 }
 void NPztranspose(int n, int m, double complex *a, double complex *at, int blk)
 {
-        int i, j, ic, jc;
+        int ic, jc;
+        size_t i, j;
         double complex *po, *pi;
 
         for (jc = 0; jc < m-blk; jc+=blk) {

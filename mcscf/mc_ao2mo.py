@@ -65,7 +65,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     return j_pc, k_pc, ppaa, papa
 
 
-# level = 1: ppaa, papa and vhf, jcp, kcp
+# level = 1: ppaa, papa and jpc, kpc
 # level = 2 or 3: ppaa, papa
 def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                      max_memory=None, level=1, verbose=logger.WARN):
@@ -87,11 +87,8 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     mo = numpy.asarray(mo, order='F')
     pashape = (0, nmo, ncore, ncas)
     papa_buf = numpy.zeros((nao,ncas,nmo*ncas))
-    if level == 1:
-        j_pc = numpy.zeros((nmo,ncore))
-        k_pc = numpy.zeros((nmo,ncore))
-    else:
-        j_pc = k_pc = None
+    j_pc = numpy.zeros((nmo,ncore))
+    k_pc = numpy.zeros((nmo,ncore))
 
     mem_words = int(max(2000,max_memory-papa_buf.nbytes/1e6)*1e6/8)
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
@@ -121,9 +118,9 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
         bufpa = bufs2[:sh_range[2]]
+        _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
 # jc_pp, kc_pp
         if level == 1: # ppaa, papa and vhf, jcp, kcp
-            _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('buffer-pa', *ti1)
             buf1 = bufs3[:sh_range[2]]
@@ -176,8 +173,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                 p0 += dij
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('j_cp and k_cp', *ti1)
-        else: # ppaa, papa
-            _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
 
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('half transformation of the buffer', *ti1)
@@ -245,13 +240,13 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
 
     faapp_buf.close()
     feri.close()
+    _tmpfile1 = None
     time0 = log.timer('mc_ao2mo', *time0)
     return j_pc, k_pc
 
 
-# level = 1: ppaa, papa and vhf, jcp, kcp
-# level = 2: ppaa, papa, vhf
-# level = 3: ppaa, papa
+# level = 1: ppaa, papa and vhf, jpc, kpc
+# level = 2: ppaa, papa, vhf,  jpc=0, kpc=0
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore', level=1):
         mol = casscf.mol
@@ -293,6 +288,8 @@ class _ERIS(object):
     def __del__(self):
         if hasattr(self, 'feri'):
             self.feri.close()
+            self.feri = None
+            self._tmpfile = None
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore

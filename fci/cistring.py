@@ -10,13 +10,22 @@ import pyscf.lib
 
 libfci = pyscf.lib.load_library('libfci')
 
-# generate string from the given orbital list, the strings are ordered that
-# the first orbital runs fast (as the innerest loop), e.g.
-# gen_strings4orblist((0,1,2,3),2) gives ordered strings
-#       [0b11, 0b101, 0b110, 0b1001, 0b1010, 0b1100]
-# gen_strings4orblist((3,1,0,2),2) gives
-#       [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
 def gen_strings4orblist(orb_list, nelec):
+    '''Generate string from the given orbital list.
+
+    Returns:
+        list of int64.  One int64 element represents one string in binary format.
+        The binary format takes the convention that the one bit stands for one
+        orbital, bit-1 means occupied and bit-0 means unoccupied.  The lowest
+        (right-most) bit corresponds to the lowest orbital in the orb_list.
+
+    Exampels:
+
+    >>> [bin(x) for x in gen_strings4orblist((0,1,2,3),2)]
+    [0b11, 0b101, 0b110, 0b1001, 0b1010, 0b1100]
+    >>> [bin(x) for x in gen_strings4orblist((3,1,0,2),2)]
+    [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
+    '''
     assert(nelec >= 0)
     if nelec == 0:
         return [0]
@@ -43,12 +52,6 @@ def num_strings(n, m):
     return math.factorial(n) \
             // (math.factorial(n-m)*math.factorial(m))
 
-# Return an mapping-index for each string
-# For given string str0, index[str0] is (nocc+nocc*nvir) x 4 array.
-# The first nocc rows [i(:occ),i(:occ),str0,sign] are occupied-occupied
-# excitations, which do not change the string. The next nocc*nvir rows
-# [a(:vir),i(:occ),str1,sign] are occupied-virtual exciations, starting from
-# str0, annihilating i, creating a, to get str1.
 def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nelec)
@@ -74,9 +77,18 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     return numpy.array(t, dtype=numpy.int32)
 
 def gen_linkstr_index(orb_list, nocc, strs=None):
+    '''Look up table, for the strings relationship in terms of a
+    creation-annihilating operator pair.
+
+    For given string str0, index[str0] is (nocc+nocc*nvir) x 4 array.
+    The first nocc rows [i(:occ),i(:occ),str0,sign] are occupied-occupied
+    excitations, which do not change the string. The next nocc*nvir rows
+    [a(:vir),i(:occ),str1,sign] are occupied-virtual exciations, starting from
+    str0, annihilating i, creating a, to get str1.
+    '''
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs)
+    strs = numpy.array(strs, dtype=numpy.int64)
     norb = len(orb_list)
     nvir = norb - nocc
     na = num_strings(norb, nocc)
@@ -88,8 +100,10 @@ def gen_linkstr_index(orb_list, nocc, strs=None):
                             ctypes.c_int(0))
     return link_index
 
-# compress the a, i index, to fit the symmetry of integrals
 def reform_linkstr_index(link_index):
+    '''Compress the (a, i) pair index in linkstr_index to a lower triangular
+    index, to match the 4-fold symmetry of integrals.
+    '''
     link_new = numpy.empty_like(link_index)
     for k, tab in enumerate(link_index):
         for j, (a, i, str1, sign) in enumerate(tab):
@@ -100,14 +114,18 @@ def reform_linkstr_index(link_index):
             link_new[k,j] = (ai,str1,sign,0)
     return link_new
 
-# p^+ q|0> where p > q, link_index [pq, *, str1, sign]
 def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
+    r'''Generate linkstr_index with the assumption that :math:`p^+ q|0\rangle`
+    where :math:`p > q`.
+    So the resultant link_index has the structure ``[pq, *, str1, sign]``.
+    It is identical to a call to ``reform_linkstr_index(gen_linkstr_index(...))``.
+    '''
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs)
+    strs = numpy.array(strs, dtype=numpy.int64)
     norb = len(orb_list)
     nvir = norb - nocc
-    na = num_strings(norb, nocc)
+    na = strs.shape[0]
     link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
@@ -116,10 +134,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
                             ctypes.c_int(1))
     return link_index
 
-# a mapping between N electron string to N+1 electron string.
-# creation of an electron for the given string -> the address of the
-# resultant string
-def gen_cre_str_index(orb_list, nelec):
+def gen_cre_str_index_o0(orb_list, nelec):
     cre_strs = gen_strings4orblist(orb_list, nelec+1)
     credic = dict(zip(cre_strs,range(cre_strs.__len__())))
     def parity(str0, cre_bit):
@@ -134,11 +149,26 @@ def gen_cre_str_index(orb_list, nelec):
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
     return numpy.array(t, dtype=numpy.int32)
+def gen_cre_str_index_o1(orb_list, nelec):
+    norb = len(orb_list)
+    assert(nelec < norb)
+    strs = gen_strings4orblist(orb_list, nelec)
+    strs = numpy.array(strs, dtype=numpy.int64)
+    na = strs.shape[0]
+    link_index = numpy.empty((len(strs),norb-nelec,4), dtype=numpy.int32)
+    libfci.FCIcre_str_index(link_index.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(norb), ctypes.c_int(na),
+                            ctypes.c_int(nelec),
+                            strs.ctypes.data_as(ctypes.c_void_p))
+    return link_index
+def gen_cre_str_index(orb_list, nelec):
+    '''linkstr_index to map between N electron string to N+1 electron string.
+    It maps the given string to the address of the string which is generated by
+    the creation operator.
+    '''
+    return gen_cre_str_index_o1(orb_list, nelec)
 
-# a mapping between N electron string to N-1 electron string.
-# annihilation of an electron for the given string -> the address of the
-# resultant string
-def gen_des_str_index(orb_list, nelec):
+def gen_des_str_index_o0(orb_list, nelec):
     des_strs = gen_strings4orblist(orb_list, nelec-1)
     desdic = dict(zip(des_strs,range(des_strs.__len__())))
     def parity(str0, des_bit):
@@ -153,6 +183,24 @@ def gen_des_str_index(orb_list, nelec):
 
     t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
     return numpy.array(t, dtype=numpy.int32)
+def gen_des_str_index_o1(orb_list, nelec):
+    assert(nelec > 0)
+    strs = gen_strings4orblist(orb_list, nelec)
+    strs = numpy.array(strs, dtype=numpy.int64)
+    norb = len(orb_list)
+    na = strs.shape[0]
+    link_index = numpy.empty((len(strs),nelec,4), dtype=numpy.int32)
+    libfci.FCIdes_str_index(link_index.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(norb), ctypes.c_int(na),
+                            ctypes.c_int(nelec),
+                            strs.ctypes.data_as(ctypes.c_void_p))
+    return link_index
+def gen_des_str_index(orb_list, nelec):
+    '''linkstr_index to map between N electron string to N-1 electron string.
+    It maps the given string to the address of the string which is generated by
+    the annihilation operator.
+    '''
+    return gen_des_str_index_o1(orb_list, nelec)
 
 
 
@@ -169,15 +217,15 @@ def parity(string0, string1):
     else:
         return (-1) ** (count_bit1(string0&(-ss)))
 
-#def addr2str_o0(norb, nelec, addr):
-#    assert(num_strings(norb, nelec) > addr)
-#    if addr == 0 or nelec == norb or nelec == 0:
-#        return (1<<nelec) - 1   # ..0011..11
-#    else:
-#        for i in reversed(range(norb)):
-#            addrcum = num_strings(i, nelec)
-#            if addrcum <= addr:
-#                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
+def addr2str_o0(norb, nelec, addr):
+    assert(num_strings(norb, nelec) > addr)
+    if addr == 0 or nelec == norb or nelec == 0:
+        return (1<<nelec) - 1   # ..0011..11
+    else:
+        for i in reversed(range(norb)):
+            addrcum = num_strings(i, nelec)
+            if addrcum <= addr:
+                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
 def addr2str_o1(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
     if addr == 0 or nelec == norb or nelec == 0:
@@ -197,6 +245,7 @@ def addr2str_o1(norb, nelec, addr):
             nelec_left -= 1
     return str1
 def addr2str(norb, nelec, addr):
+    '''Convert CI determinant address to string'''
     return addr2str_o1(norb, nelec, addr)
 
 #def str2addr_o0(norb, nelec, string):
@@ -219,6 +268,7 @@ def addr2str(norb, nelec, addr):
 #            nelec_left -= 1
 #    return addr
 def str2addr(norb, nelec, string):
+    '''Convert the string to the CI determinant address'''
     if isinstance(string, str):
         assert(string.count('1') == nelec)
         string = int(string, 2)
@@ -245,3 +295,10 @@ if __name__ == '__main__':
     print(str2addr(6, 3, addr2str(6, 3, 7)) - 7)
     print(str2addr(6, 3, addr2str(6, 3, 8)) - 8)
     print(str2addr(7, 4, addr2str(7, 4, 9)) - 9)
+
+    tab1 = gen_cre_str_index_o0(range(8), 4)
+    tab2 = gen_cre_str_index_o1(range(8), 4)
+    print(abs(tab1 - tab2).sum())
+    tab1 = gen_des_str_index_o0(range(8), 4)
+    tab2 = gen_des_str_index_o1(range(8), 4)
+    print(abs(tab1 - tab2).sum())
