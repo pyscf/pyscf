@@ -226,9 +226,7 @@ def des_a(ci0, norb, nelec, ap_id):
 
     ... math::
 
-        \begin{equation}
         |N-1\rangle = \hat{a}_p |N\rangle
-        \end{equation}
 
     Args:
         ci0 : 2D array
@@ -301,9 +299,7 @@ def cre_a(ci0, norb, nelec, ap_id):
 
     ... math::
 
-        \begin{equation}
         |N+1\rangle = \hat{a}^+_p |N\rangle
-        \end{equation}
 
     Args:
         ci0 : 2D array
@@ -428,9 +424,7 @@ def fix_spin_(fciobj, shift=.1):
 
     .. math::
 
-        \begin{equation}
         (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
-        \end{equation}
 
     Args:
         fciobj : An instance of :class:`FCISolver`

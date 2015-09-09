@@ -39,7 +39,6 @@ def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
-              verbose=None):
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -111,7 +110,6 @@ def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
-              verbose=None):
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -158,7 +156,6 @@ def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
-              verbose=None):
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -224,7 +221,6 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, isgga=False,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
-              verbose=None):
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -297,7 +293,6 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
-              verbose=None):
         verbose : int or object of :class:`Logger`
             No effects.
 

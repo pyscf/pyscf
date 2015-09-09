@@ -71,26 +71,20 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     .. math::
 
-        \begin{equation}
-        h2e = eri_{pq,rs} p^+ q r^+ s
-            = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-        \end{equation}
+        h2e &= eri_{pq,rs} p^+ q r^+ s \\
+            &= (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
 
     So eri is defined as
 
     .. math::
 
-        \begin{equation}
         eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-        \end{equation}
 
     to restore the symmetry between pq and rs,
 
     .. math::
 
-        \begin{equation}
         eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-        \end{equation}
 
     Please refer to the treatment in :func:`direct_spin1.absorb_h1e`
     '''
@@ -381,7 +375,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         ci0 = numpy.zeros(na*nb)
         ci0[0] = 1
     elif fci.nroots > 1:
-        ci0 = [x.ravel() for x in ci0]
+        if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
+            ci0 = [ci0.ravel()]
+        else:
+            ci0 = [x.ravel() for x in ci0]
     else:
         ci0 = ci0.ravel()
 
