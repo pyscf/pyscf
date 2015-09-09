@@ -519,7 +519,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     return vj, vk
 
 
-def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
+def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     '''Hartree-Fock potential matrix for the given density matrix
 
     Args:
@@ -563,9 +563,15 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     >>> numpy.allclose(vhf1, vhf2)
     True
     '''
-    ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+    if dm_last is None:
+        ddm = numpy.asarray(dm)
+    else:
+        ddm = numpy.asarray(dm) - numpy.array(dm_last)
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
-    return numpy.array(vhf_last, copy=False) + vj - vk * .5
+    if vhf_last is None:
+        return vj - vk * .5
+    else:
+        return vj - vk * .5 + numpy.asarray(vhf_last)
 
 def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
               diis_start_cycle=0, level_shift_factor=0, damp_factor=0):

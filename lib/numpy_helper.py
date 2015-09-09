@@ -157,6 +157,15 @@ def solve_lineq_by_SVD(a, b):
     return x
 
 def take_2d(a, idx, idy, out=None):
+    '''a(idx,idy)
+
+    Examples:
+
+    >>> out = numpy.arange(9.).reshape(3,3)
+    >>> take_2d(a, [0,2], [0,2])
+    [[ 0.  2.]
+     [ 6.  8.]]
+    '''
     if out is None:
         out = numpy.zeros((len(idx),len(idy)))
     if numpy.iscomplexobj(a):

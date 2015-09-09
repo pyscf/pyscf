@@ -264,35 +264,8 @@ def eigh(a, *args, **kwargs):
 dsyev = eigh
 
 
-def krylov(a, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
-           lindep=1e-16, callback=None, hermi=False, verbose=logger.WARN):
-    '''
-    Krylov subspace method to solve   (1+a) x = b
-    ref: J. A. Pople, R. Krishnan, H. B. Schlegel, and J. S. Binkley, Int. J. Quantum. Chem. Symp. 13, 225 (1979).
-
-    Args:
-        a : function
-            operator a(x) = A*x
-        b : 1D ndarray
-
-    Kwargs:
-        x0 : 1D ndarray, same type as b
-            initial guess
-        tol : float
-            convergence tolerance
-        max_cycle : int
-
-        hermi : bool
-            symmetry of matrix A
-
-    Returns:
-        1D array, same type as b
-    '''
-    if isinstance(a, numpy.ndarray) and a.ndim == 2:
-        return numpy.linalg.solve(a, b)
-
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
-           lindep=1e-16, callback=None, verbose=logger.WARN):
+           lindep=1e-16, callback=None, hermi=False, verbose=logger.WARN):
     '''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -333,7 +306,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
     >>> numpy.allclose(numpy.dot(a,x)+x, b)
     True
     '''
->>>>>>> bb250d8f78f1fc11cab3a57f812c49041f5befc4
+    if isinstance(aop, numpy.ndarray) and aop.ndim == 2:
+        return numpy.linalg.solve(aop, b)
+
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -341,10 +316,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
 
     if x0 is None:
         xs = [b]
-        ax = [a(xs[0])]
+        ax = [aop(xs[0])]
     else:
-        xs = [b-(x0 + a(x0))]
-        ax = [a(xs[0])]
+        xs = [b-(x0 + aop(x0))]
+        ax = [aop(xs[0])]
 
     innerprod = [dot(xs[0].conj(), xs[0])]
 
@@ -361,7 +336,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
         if innerprod[-1] < lindep:
             break
         xs.append(x1)
-        ax.append(a(x1))
+        ax.append(aop(x1))
 
         if callable(callback):
             callback(cycle, xs, ax)
@@ -389,6 +364,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
     if x0 is not None:
         x += x0
     return x
+
 
 def dsolve(aop, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot,
            lindep=1e-16, verbose=0):
