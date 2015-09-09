@@ -165,8 +165,11 @@ class FCISolver(direct_spin0.FCISolver):
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
-        if 'verbose' in kwargs and isinstance(kwargs['verbose'], logger.Logger):
-            log = kwargs['verbose']
+        if 'verbose' in kwargs:
+            if isinstance(kwargs['verbose'], logger.Logger):
+                log = kwargs['verbose']
+            else:
+                log = logger.Logger(self.stdout, kwargs['verbose'])
             log.debug('total symmetry = %s',
                       symm.irrep_id2name(self.mol.groupname, wfnsym))
         else:

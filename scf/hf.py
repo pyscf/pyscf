@@ -269,17 +269,21 @@ def init_guess_by_minao(mol):
     basis = {}
     occdic = {}
     for symb in atmlst:
-        occ_add, basis_add = minao_basis(symb)
-        occdic[symb] = occ_add
-        basis[symb] = basis_add
+        if symb != 'GHOST':
+            occ_add, basis_add = minao_basis(symb)
+            occdic[symb] = occ_add
+            basis[symb] = basis_add
     occ = []
+    new_atom = []
     for ia in range(mol.natm):
         symb = mol.atom_pure_symbol(ia)
-        occ.append(occdic[symb])
+        if symb != 'GHOST':
+            occ.append(occdic[symb])
+            new_atom.append(mol.atom[ia])
     occ = numpy.hstack(occ)
 
     pmol = pyscf.gto.Mole()
-    pmol._atm, pmol._bas, pmol._env = pmol.make_env(mol.atom, basis, [])
+    pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     c = addons.project_mo_nr2nr(pmol, 1, mol)
 
     dm = numpy.dot(c*occ, c.T)

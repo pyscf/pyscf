@@ -372,15 +372,16 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         return hc.ravel()
 
     if ci0 is None:
-        ci0 = numpy.zeros(na*nb)
-        ci0[0] = 1
-    elif fci.nroots > 1:
+        ci0 = []
+        for i in range(fci.nroots):
+            x = numpy.zeros(na*nb)
+            x[addr[i]] = 1
+            ci0.append(x)
+    else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
-    else:
-        ci0 = ci0.ravel()
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, **kwargs)
@@ -483,7 +484,7 @@ class FCISolver(object):
                 'max_memory': self.max_memory,
                 'nroots': self.nroots,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if self.nroots == 1 and x0.size > 6.5e7: # 500MB
+        if self.nroots == 1 and x0[0].size > 6.5e7: # 500MB
             opts['lessio'] = True
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)
