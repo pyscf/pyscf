@@ -44,7 +44,10 @@ def FCI(mol, mo, singlet=True):
     import numpy
     from pyscf import scf
     from pyscf import ao2mo
-    cis = solver(mol, singlet)
+    if mol.spin > 0:
+        cis = solver(mol, False)
+    else:
+        cis = solver(mol, singlet)
     class CISolver(cis.__class__):
         def __init__(self):
             self.__dict__.update(cis.__dict__)
