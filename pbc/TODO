@@ -1,3 +1,12 @@
 spherical cutoff (should we assume cutoff s.t. Gaussians are represented analytically)
 real FFT
 exchange from analytic int (equiv. to truncation to unit cell?)
+
+Notes on pseudopotentials:
+ - Some analogies:
+     pyscf.gto           ---   pyscf.pbc
+     gto.Mole            ---   pbc.Cell
+     gto/mole.py         ---   pbc/cell.py
+     Mole.format_basis   ---   Cell.format_pseudo
+     gto.basis           ---   pbc.pseudo
+     basis.parse_nwchem  ---   pseudo.parse_cp2k

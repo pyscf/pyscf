@@ -41,14 +41,13 @@ def main():
         # The last one:
         all_pseudos.append(current_pseudo)
 
-    print "Len of xcs =", len(xcs)
-    print "Len of pseudos =", len(all_pseudos)
+    print "Found", len(xcs), "XC pseudopotentials."
 
 #    for line in header:
 #        print line
 #
     for xc, pseudo in zip(xcs, all_pseudos):
-        with open('GTH_%s.dat'%(xc),'w') as f:
+        with open('gth-%s.dat'%(xc.lower()),'w') as f:
             for line in header:
                 f.write(line)
             for line in pseudo:

@@ -230,6 +230,38 @@ class KRKS(RKS):
     '''
     pass
 
+def test_pp():
+    from pyscf import gto
+
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = None
+
+    L=60
+    h=np.eye(3.)*L
+
+    mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
+    mol.basis = { 'He': 'STO-3G'}
+    
+    mol.build()
+    
+    cell=cl.Cell()
+    cell.__dict__=mol.__dict__
+
+    cell.h=h
+    cell.vol=scipy.linalg.det(cell.h)
+    cell.pseudo=None
+    cell.output=None
+    cell.verbose=7
+
+    # Add a pseudopotential:
+    cell.pseudo = 'gth-blyp'
+
+    cell.build()
+
+    print "Internal PP format"
+    print cell._pseudo
+
 def test_components():
     from pyscf import gto
     from pyscf.dft import rks
@@ -255,6 +287,7 @@ def test_components():
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.pseudo=None
     cell.output=None
     cell.verbose=7
     cell.build()
@@ -356,6 +389,7 @@ def test_ks():
     cell.__dict__=mol.__dict__ # hacky way to make a cell
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.pseudo=None
     cell.output=None
     cell.verbose=7
     cell.build()
@@ -398,6 +432,7 @@ def test_hf():
     cell.__dict__=mol.__dict__
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.pseudo=None
     cell.output=None
     cell.verbose=7
     cell.build()
@@ -449,6 +484,7 @@ def test_moints():
     cell.__dict__=mol.__dict__
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.pseudo=None
     cell.output=None
     cell.verbose=7
     cell.build()
@@ -488,9 +524,12 @@ def test_moints():
             Ecoul+=2*eri_mo[i*nmo+i,j*nmo+j]-eri_mo[i*nmo+j,i*nmo+j]
             Ecoul2+=2*eri_mo2[i*nmo+i,j*nmo+j]-eri_mo2[i*nmo+j,i*nmo+j]
     print Ecoul, Ecoul2
-    
+
 if __name__ == '__main__':
+    test_pp()
     test_components()
     test_ks()
     test_hf()
     test_moints()
+    
+
