@@ -645,7 +645,7 @@ class ROHF(rohf.ROHF):
             dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_pop(mol, dm, ovlp_ao, verbose)
+        return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm

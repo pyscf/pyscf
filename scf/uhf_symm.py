@@ -101,7 +101,7 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Alpha/beta electron numbers for each irreducible representation.

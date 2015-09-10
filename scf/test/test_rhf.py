@@ -177,8 +177,22 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(j0,j1))
         self.assertTrue(numpy.allclose(k0,k1))
         j1, k1 = scf.hf.dot_eri_dm(mf._eri, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(j1), 77.035779188661465, 0)
-        self.assertAlmostEqual(numpy.linalg.norm(k1), 46.253491700647963, 0)
+        self.assertAlmostEqual(numpy.linalg.norm(j1), 77.035779188661465, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(k1), 46.253491700647963, 9)
+
+    def test_ghost_atm_meta_lowdin(self):
+        mol = gto.Mole()
+        mol.atom = [["O" , (0. , 0.     , 0.)],
+                    ['ghost'   , (0. , -0.757, 0.587)],
+                    [1   , (0. , 0.757 , 0.587)] ]
+        mol.spin = 1
+        mol.symmetry = True
+        mol.basis = {'O':'ccpvdz', 'H':'ccpvdz',
+                     'GHOST': gto.basis.load('ccpvdz','H')}
+        mol.build()
+        mf = scf.RHF(mol)
+        self.assertAlmostEqual(mf.kernel(), -75.393287998638741, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for rhf")
