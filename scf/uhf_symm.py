@@ -354,6 +354,10 @@ class UHF(uhf.UHF):
         self.mo_occ[0][nocc_a:] = 0
         self.mo_occ[1][:nocc_b] = 1
         self.mo_occ[1][nocc_b:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)
