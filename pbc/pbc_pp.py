@@ -15,24 +15,18 @@ exp=math.exp
    Notation follows Marx and Hutter (MH), "Ab Initio Molecular Dynamics"
 '''
 
-class Cell:
-    def __init__(self, **kwargs):
-        self.mol = None
-        self.h = None
-        self.vol = 0.
-        # Add a pseudo member (e.g. a list of instances of the PP class)
-        self.pseudo = None
-
-def get_vpp(cell, gs):
+def get_vpp(cell, gs, kpt=None):
     '''
     Pseudopotential AO matrix
     '''
-    mol=cell.mol
+    if kpt is None:
+        kpt=np.zeros([3,1])
 
-    nuc_coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
+    #mol=cell.mol
+    #nuc_coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
 
-    coords, weights=setup_ao_grids(cell,gs)
-    aoR=get_aoR(cell, coords)
+    coords=pbc.setup_uniform_grids(cell,gs)
+    aoR=pbc.get_aoR(cell, coords)
 
     # The non-divergent part of Vhartree(G=0)+Vloc(G=0)
     nondiv_G0 = 0.

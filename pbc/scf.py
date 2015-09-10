@@ -80,7 +80,6 @@ def get_t(cell, gs, kpt=None):
         aoG[:,i]=pbc.fft(aoR[:,i], gs)
         TaoG[:,i]=0.5*G2*aoG[:,i]
                 
-    t = numpy.dot(aoG.T, TaoG)
     #:t=np.empty([nao,nao])
     #:for i in range(nao):
     #:    for j in range(nao):
@@ -89,7 +88,6 @@ def get_t(cell, gs, kpt=None):
 
     ngs=aoR.shape[0]
     t *= (cell.vol/ngs**2)
-
     return t
 
 def get_ovlp(cell, gs):
@@ -100,14 +98,15 @@ def get_ovlp(cell, gs):
     aoR=pbc.get_aoR(cell, coords)
     nao=aoR.shape[1]
 
-    #:s=np.empty([nao,nao])
-    #:for i in range(nao):
-    #:    for j in range(nao):
-    #:        s[i,j]=np.vdot(aoR[:,i],aoR[:,j])
-    s = np.dot(aoR.T.conj(), aoR).real
+    aoG=np.empty(aoR.shape, np.complex128)
+
+    for i in range(nao):
+        aoG[:,i]=pbc.fft(aoR[:,i], gs)
+                
+    s = np.dot(aoG.T.conj(), aoG).real
 
     ngs=aoR.shape[0]
-    s *= cell.vol/ngs
+    s *= (cell.vol/ngs**2)
     return s
     
 def get_j(cell, dm, gs):
