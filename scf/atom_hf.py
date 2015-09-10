@@ -24,10 +24,16 @@ def get_atm_nrhf(mol):
         atm.natm = atm._atm.__len__()
         atm.nbas = atm._bas.__len__()
         atm._built = True
-        atm_hf = AtomSphericAverageRHF(atm)
-        atm_hf.verbose = 0
-        atm_scf_result[a] = atm_hf.scf()[1:]
-        atm_hf._eri = None
+        if atm.nelectron == 0:  # GHOST
+            nao = atm.nao_nr()
+            mo_occ = mo_energy = numpy.zeros(nao)
+            mo_coeff = numpy.zeros((nao,nao))
+            atm_scf_result[a] = (0, mo_energy, mo_coeff, mo_occ)
+        else:
+            atm_hf = AtomSphericAverageRHF(atm)
+            atm_hf.verbose = 0
+            atm_scf_result[a] = atm_hf.scf()[1:]
+            atm_hf._eri = None
     mol.stdout.flush()
     return atm_scf_result
 

@@ -43,6 +43,7 @@ def FCI(mol, mo, singlet=True):
     from functools import reduce
     import numpy
     from pyscf import scf
+    from pyscf import symm
     from pyscf import ao2mo
     if mol.spin > 0:
         cis = solver(mol, False)
@@ -55,13 +56,19 @@ def FCI(mol, mo, singlet=True):
             self.eri = ao2mo.outcore.full_iofree(mol, mo)
             self.eci = None
             self.ci = None
+            if mol.symmetry:
+                self.orbsym = symm.label_orb_symm(mol, mol.irrep_id,
+                                                  mol.symm_orb, mo)
             self._keys = set(self.__dict__.keys())
 
         def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None, **kwargs):
             if h1e is None: h1e = self.h1e
             if eri is None: eri = self.eri
             if norb is None: norb = mo.shape[1]
-            if nelec is None: nelec = mol.nelectron
+            if nelec is None:
+                nelec_a = (mol.nelectron + mol.spin) // 2
+                nelec_b = mol.nelectron - nelec_a
+                nelec = (nelec_a, nelec_b)
             self.eci, self.ci = \
                     cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0, **kwargs)
             return self.eci, self.ci

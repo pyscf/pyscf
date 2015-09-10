@@ -75,6 +75,18 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(c), 8.9823854843222257, 9)
         self.assertAlmostEqual(abs(c).sum(), 93.029386338534394, 8)
 
+    def test_ghost_atm_meta_lowdin(self):
+        mol = gto.Mole()
+        mol.atom = [["O" , (0. , 0.     , 0.)],
+                    ['ghost'   , (0. , -0.757, 0.587)],
+                    [1   , (0. , 0.757 , 0.587)] ]
+        mol.spin = 1
+        mol.basis = {'O':'ccpvdz', 'H':'ccpvdz',
+                     'GHOST': gto.basis.load('631g','H')}
+        mol.build()
+        c = orth.orth_ao(mol, method='meta_lowdin')
+        self.assertAlmostEqual(numpy.linalg.norm(c), 7.9067188905237256, 9)
+
 
 if __name__ == "__main__":
     print("Test orth")

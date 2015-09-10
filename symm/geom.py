@@ -158,10 +158,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 gpname = 'Cs'
             else:
                 gpname = 'C1'
-    charge_center = get_charge_center(atoms)
-    if not numpy.allclose(charge_center, rawsys.charge_center, atol=tol):
-        assert(parallel_vectors(charge_center-rawsys.charge_center, axes[2]))
-    return gpname, charge_center, _pesudo_vectors(axes)
+    return gpname, rawsys.charge_center, _pesudo_vectors(axes)
 
 
 # reduce to D2h and its subgroups
