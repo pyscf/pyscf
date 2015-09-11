@@ -13,6 +13,7 @@ import pyscf.symm
 from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
+from pyscf.scf import chkfile
 
 
 def analyze(mf, verbose=logger.DEBUG):

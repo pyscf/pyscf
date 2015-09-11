@@ -12,6 +12,7 @@ from pyscf.lib import logger
 from pyscf import symm
 from pyscf.scf import hf
 from pyscf.scf import rohf
+from pyscf.scf import chkfile
 
 
 '''
