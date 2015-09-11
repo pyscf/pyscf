@@ -337,31 +337,15 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
 
-    init_strs = []
+    ci0 = []
     iroot = 0
     for addr in numpy.argsort(hdiag):
-        addra = addr // nb
-        addrb = addr % nb
-        if neleca != nelecb:
-            init_strs.append((addra,addrb))
-            iroot += 1
-        elif (addrb,addra) not in init_strs:  # avoid initial guess linear dependency
-            init_strs.append((addra,addrb))
-            iroot += 1
+        x = numpy.zeros((na*nb))
+        x[addr] = 1
+        ci0.append(x.ravel())
+        iroot += 1
         if iroot >= nroots:
             break
-
-    ci0 = []
-    for addra,addrb in init_strs:
-        x = numpy.zeros((na,nb))
-        if neleca == nelecb:
-            if addra == addrb == 0:
-                x[addra,addrb] = 1
-            else:
-                x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-        else:
-            x[addra,addrb] = 1
-        ci0.append(x.ravel())
     return ci0
 
 
@@ -408,7 +392,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, addr)
+            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, hdiag)
         else:
             ci0 = []
             for i in range(fci.nroots):

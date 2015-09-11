@@ -194,33 +194,18 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     na = len(strsa)
     nb = len(strsb)
 
-    init_strs = []
+    ci0 = []
     iroot = 0
     for addr in numpy.argsort(hdiag):
+        x = numpy.zeros((na*nb))
         addra = addr // nb
         addrb = addr % nb
         if airreps[addra] ^ birreps[addrb] == wfnsym:
-            if neleca != nelecb:
-                init_strs.append((addra,addrb))
-                iroot += 1
-            elif (addrb,addra) not in init_strs:
-                init_strs.append((addra,addrb))
-                iroot += 1
-
-        if iroot >= nroots:
-            break
-
-    ci0 = []
-    for addra,addrb in init_strs:
-        x = numpy.zeros((na,nb))
-        if neleca == nelecb:
-            if addra == addrb == 0:
-                x[addra,addrb] = 1
-            else:
-                x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-        else:
-            x[addra,addrb] = 1
-        ci0.append(x.ravel())
+            x[addr] = 1
+            ci0.append(x)
+            iroot += 1
+            if iroot >= nroots:
+                break
     return ci0
 
 

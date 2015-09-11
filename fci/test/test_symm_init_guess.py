@@ -41,6 +41,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests for spin0")
+    print("Full Tests for init_guess")
     unittest.main()
 
