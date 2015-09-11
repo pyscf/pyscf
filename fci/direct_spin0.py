@@ -267,16 +267,19 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
 #TODO: check spin of initial guess
     if ci0 is None:
-        ci0 = []
-        for i in range(fci.nroots):
-            x = numpy.zeros(na*na)
-            if addr[i] == 0:
-                x[0] = 1
-            else:
-                addra = addr[i] // na
-                addrb = addr[i] % na
-                x[addr[i]] = x[addrb*na+addra] = numpy.sqrt(.5)
-            ci0.append(x)
+        if hasattr(fci, 'get_init_guess'):
+            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, addr)
+        else:
+            ci0 = []
+            for i in range(fci.nroots):
+                x = numpy.zeros(na,na)
+                if addr[i] == 0:
+                    x[0,0] = 1
+                else:
+                    addra = addr[i] // na
+                    addrb = addr[i] % na
+                    x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+                ci0.append(x.ravel())
     else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*na:
             ci0 = [ci0.ravel()]
