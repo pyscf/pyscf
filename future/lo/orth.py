@@ -69,6 +69,11 @@ def pre_orth_project_ano(mol, basname):
         atm = gto.Mole()
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
+
+        if 'GHOST' in symb.upper():
+            aos[symb] = numpy.eye(atm.nao_nr())
+            continue
+
         s0 = atm.intor_symmetric('cint1e_ovlp_sph')
 
         basis_add = gto.basis.load(basname, stdsymb)

@@ -123,7 +123,7 @@ def load_mol(chkfile):
         mol.verbose = 0
         mol.output = '/dev/null'
         moldic = eval(fh5['mol'].value)
-        if hasattr(moldic, 'grids'):
+        if 'grids' in moldic:
             del(moldic['grids'])
         mol.build(False, False, **moldic)
     return mol

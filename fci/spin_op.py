@@ -50,12 +50,13 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
 
     ... math::
 
-        \begin{align}
-        <CI|S_+*S_-|CI> &= neleca + \delta_{ik}\delta_{jl}Gamma_{iakb,jbla} \\
-        <CI|S_-*S_+|CI> &= nelecb + \delta_{ik}\delta_{jl}Gamma_{ibka,jalb} \\
-        <CI|S_z*S_z|CI> &= \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
-                         -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb}) + (n_\alpha+n_\beta)/4
-        \end{align}
+        <CI|S_+*S_-|CI> &= n_\alpha + \delta_{ik}\delta_{jl}Gamma_{i\alpha k\beta ,j\beta l\alpha } \\
+        <CI|S_-*S_+|CI> &= n_\beta + \delta_{ik}\delta_{jl}Gamma_{i\beta k\alpha ,j\alpha l\beta } \\
+        <CI|S_z*S_z|CI> &= \delta_{ik}\delta_{jl}(Gamma_{i\alpha k\alpha ,j\alpha l\alpha }
+                         - Gamma_{i\alpha k\alpha ,j\beta l\beta }
+                         - Gamma_{i\beta k\beta ,j\alpha l\alpha}
+                         + Gamma_{i\beta k\beta ,j\beta l\beta})
+                         + (n_\alpha+n_\beta)/4
 
     Given the overlap betwen non-degenerate alpha and beta orbitals, this
     function can compute the expectation value spin square operator for

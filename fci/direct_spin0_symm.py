@@ -135,6 +135,43 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
+def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
+    birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
+    for i in range(norb):
+        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= orbsym[i]
+        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= orbsym[i]
+    na = len(strsa)
+    nb = len(strsb)
+
+    init_strs = []
+    iroot = 0
+    for addr in numpy.argsort(hdiag):
+        addra = addr // nb
+        addrb = addr % nb
+        if airreps[addra] ^ birreps[addrb] == wfnsym:
+            if (addrb,addra) not in init_strs:
+                init_strs.append((addra,addrb))
+                iroot += 1
+                if iroot >= nroots:
+                    break
+    ci0 = []
+    for addra,addrb in init_strs:
+        x = numpy.zeros((na,nb))
+        if addra == addrb == 0:
+            x[addra,addrb] = 1
+        else:
+            x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+        ci0.append(x.ravel())
+    return ci0
+
 
 class FCISolver(direct_spin0.FCISolver):
     def __init__(self, mol, **kwargs):
@@ -160,20 +197,25 @@ class FCISolver(direct_spin0.FCISolver):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
+    def get_init_guess(self, norb, nelec, nroots, hdiag):
+        wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
+        return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
+
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
-        if 'verbose' in kwargs and isinstance(kwargs['verbose'], logger.Logger):
-            log = kwargs['verbose']
+        if 'verbose' in kwargs:
+            if isinstance(kwargs['verbose'], logger.Logger):
+                log = kwargs['verbose']
+            else:
+                log = logger.Logger(self.stdout, kwargs['verbose'])
             log.debug('total symmetry = %s',
                       symm.irrep_id2name(self.mol.groupname, wfnsym))
         else:
             logger.debug(self, 'total symmetry = %s',
                          symm.irrep_id2name(self.mol.groupname, wfnsym))
-        if self.wfnsym is not None and ci0 is None:
-            ci0 = addons.symm_initguess(norb, nelec, self.orbsym, wfnsym)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
                                        **kwargs)
         if self.wfnsym is not None:
