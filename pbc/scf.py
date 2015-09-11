@@ -53,6 +53,26 @@ def get_nuc(cell, gs):
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR).real
     return vne
 
+def get_pp(cell, gs):
+    '''
+    Nuc-el pseudopotential AO matrix
+    '''
+    coords=pbc.setup_uniform_grids(cell, gs)
+    aoR=pbc.get_aoR(cell, coords)
+    nao=aoR.shape[1]
+
+    aoG=np.empty(aoR.shape, np.complex128)
+
+    for i in range(nao):
+        aoG[:,i]=pbc.fft(aoR[:,i], gs)
+                
+    s = np.dot(aoG.T.conj(), aoG).real
+
+    ngs=aoR.shape[0]
+    s *= (cell.vol/ngs**2)
+    return s
+
+
 def get_t(cell, gs, kpt=None):
     '''
     Kinetic energy AO matrix
@@ -97,16 +117,19 @@ def get_ovlp(cell, gs):
     coords=pbc.setup_uniform_grids(cell, gs)
     aoR=pbc.get_aoR(cell, coords)
     nao=aoR.shape[1]
-
-    aoG=np.empty(aoR.shape, np.complex128)
-
-    for i in range(nao):
-        aoG[:,i]=pbc.fft(aoR[:,i], gs)
-                
-    s = np.dot(aoG.T.conj(), aoG).real
-
     ngs=aoR.shape[0]
-    s *= (cell.vol/ngs**2)
+
+    s = np.dot(aoR.T.conj(), aoR).real
+    s *= cell.vol/ngs
+
+    #aoG=np.empty(aoR.shape, np.complex128)
+    #
+    #for i in range(nao):
+    #    aoG[:,i]=pbc.fft(aoR[:,i], gs)
+    #            
+    #s = np.dot(aoG.T.conj(), aoG).real
+    #s *= (cell.vol/ngs**2)
+
     return s
     
 def get_j(cell, dm, gs):
@@ -249,6 +272,7 @@ def test_pp():
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 1
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -286,6 +310,7 @@ def test_components():
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 0
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -388,6 +413,7 @@ def test_ks():
     cell.__dict__=mol.__dict__ # hacky way to make a cell
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 1
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -431,6 +457,7 @@ def test_hf():
     cell.__dict__=mol.__dict__
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 1
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -483,6 +510,7 @@ def test_moints():
     cell.__dict__=mol.__dict__
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 1
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
