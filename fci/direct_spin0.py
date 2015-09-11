@@ -211,6 +211,35 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
+def get_init_guess(norb, nelec, nroots, hdiag):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+
+    init_strs = []
+    iroot = 0
+    for addr in numpy.argsort(hdiag):
+        addra = addr // nb
+        addrb = addr % nb
+        if (addrb,addra) not in init_strs:  # avoid initial guess linear dependency
+            init_strs.append((addra,addrb))
+            iroot += 1
+            if iroot >= nroots:
+                break
+    ci0 = []
+    for addra,addrb in init_strs:
+        x = numpy.zeros((na,nb))
+        if addra == addrb == 0:
+            x[addra,addrb] = 1
+        else:
+            x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+        ci0.append(x.ravel())
+    return ci0
+
 
 ###############################################################
 # direct-CI driver
@@ -268,7 +297,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 #TODO: check spin of initial guess
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, addr)
+            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, hdiag)
         else:
             ci0 = []
             for i in range(fci.nroots):
@@ -334,6 +363,9 @@ class FCISolver(direct_spin1.FCISolver):
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                                 self.level_shift)
+
+    def get_init_guess(self, norb, nelec, nroots, hdiag):
+        return get_init_guess(norb, nelec, nroots, hdiag)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         if self.verbose > pyscf.lib.logger.QUIET:
