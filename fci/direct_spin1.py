@@ -328,6 +328,41 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
+def get_init_guess(norb, nelec, nroots, hdiag):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+
+    init_strs = []
+    iroot = 0
+    for addr in numpy.argsort(hdiag):
+        addra = addr // nb
+        addrb = addr % nb
+        if neleca != nelecb:
+            init_strs.append((addra,addrb))
+            iroot += 1
+        elif (addrb,addra) not in init_strs:  # avoid initial guess linear dependency
+            init_strs.append((addra,addrb))
+            iroot += 1
+        if iroot >= nroots:
+            break
+
+    ci0 = []
+    for addra,addrb in init_strs:
+        x = numpy.zeros((na,nb))
+        if neleca == nelecb:
+            if addra == addrb == 0:
+                x[addra,addrb] = 1
+            else:
+                x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+        else:
+            x[addra,addrb] = 1
+        ci0.append(x.ravel())
+    return ci0
 
 
 ###############################################################
@@ -372,11 +407,14 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         return hc.ravel()
 
     if ci0 is None:
-        ci0 = []
-        for i in range(fci.nroots):
-            x = numpy.zeros(na*nb)
-            x[addr[i]] = 1
-            ci0.append(x)
+        if hasattr(fci, 'get_init_guess'):
+            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, addr)
+        else:
+            ci0 = []
+            for i in range(fci.nroots):
+                x = numpy.zeros(na*nb)
+                x[addr[i]] = 1
+                ci0.append(x)
     else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
@@ -494,6 +532,9 @@ class FCISolver(object):
                                    self.level_shift)
 #    def make_precond(self, hdiag, *args):
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+
+    def get_init_guess(self, norb, nelec, nroots, hdiag):
+        return get_init_guess(norb, nelec, nroots, hdiag)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         if self.verbose > pyscf.lib.logger.QUIET:

@@ -160,6 +160,11 @@ class FCISolver(direct_spin0.FCISolver):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
+    def get_init_guess(self, norb, nelec, nroots, hdiag):
+        wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
+        return direct_spin1_symm.get_init_guess(norb, nelec, nroots, hdiag,
+                                                self.orbsym, wfnsym)
+
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
@@ -175,8 +180,6 @@ class FCISolver(direct_spin0.FCISolver):
         else:
             logger.debug(self, 'total symmetry = %s',
                          symm.irrep_id2name(self.mol.groupname, wfnsym))
-        if self.wfnsym is not None and ci0 is None:
-            ci0 = addons.symm_initguess(norb, nelec, self.orbsym, wfnsym)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
                                        **kwargs)
         if self.wfnsym is not None:

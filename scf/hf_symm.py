@@ -12,6 +12,7 @@ from pyscf.lib import logger
 from pyscf import symm
 from pyscf.scf import hf
 from pyscf.scf import rohf
+from pyscf.scf import chkfile
 
 
 '''
@@ -263,6 +264,10 @@ class RHF(hf.RHF):
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
 # analyze at last, in terms of the ordered orbital energies
         #if self.verbose >= logger.INFO:
@@ -584,6 +589,10 @@ class ROHF(rohf.ROHF):
         self.mo_occ[:ncore] = 2
         self.mo_occ[ncore:nocc] = 1
         self.mo_occ[nocc:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)
