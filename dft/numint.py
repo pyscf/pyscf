@@ -522,9 +522,16 @@ def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
 
 def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
+    return nr_rks_vxc(_NumInt(), mol, grids, x_id, c_id, dm, spin, relativity,
+                      hermi, max_memory, verbose)
+
+def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
+               max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
     Args:
+        ni : an instance of :class:`_NumInt`
+
         mol : an instance of :class:`Mole`
 
         grids : an instance of :class:`Grids`
@@ -576,26 +583,30 @@ def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         weight = grids.weights[ip0:ip1]
         if pyscf.dft.vxc._is_lda(x_id) and pyscf.dft.vxc._is_lda(c_id):
             isgga = False
-            ao = eval_ao(mol, coords, isgga=isgga)
-            rho = eval_rho(mol, ao, dm, isgga=isgga)
-            exc, vrho, vsigma = eval_xc(x_id, c_id, rho, rho,
-                                        spin, relativity, verbose)
+            ao = ni.eval_ao(mol, coords, isgga=isgga)
+            rho = ni.eval_rho(mol, ao, dm, isgga=isgga)
+            exc, vrho, vsigma = ni.eval_xc(x_id, c_id, rho, rho,
+                                           spin, relativity, verbose)
             den = rho*weight
             nelec += den.sum()
             excsum += (den*exc).sum()
         else:
             isgga = True
-            ao = eval_ao(mol, coords, isgga=isgga)
-            rho = eval_rho(mol, ao, dm, isgga=isgga)
+            ao = ni.eval_ao(mol, coords, isgga=isgga)
+            rho = ni.eval_rho(mol, ao, dm, isgga=isgga)
             sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
-            exc, vrho, vsigma = eval_xc(x_id, c_id, rho[0], sigma,
-                                        spin, relativity, verbose)
+            exc, vrho, vsigma = ni.eval_xc(x_id, c_id, rho[0], sigma,
+                                           spin, relativity, verbose)
             den = rho[0]*weight
             nelec += den.sum()
             excsum += (den*exc).sum()
         vmat += eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga=isgga,
                          verbose=verbose)
     return nelec, excsum, vmat
+
+def nr_uks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
+               max_memory=2000, verbose=None):
+    raise NotImplementedError('UKS vxc')
 
 
 class _NumInt(object):
@@ -645,7 +656,7 @@ class _NumInt(object):
             2D array of shape (nao,nao) where nao is the number of AO functions.
         '''
         if self.non0tab is None:
-            self.non0tab = make_mask(mol, grids.coords)
+            self.non0tab = self.make_mask(mol, grids.coords)
         nao = mol.nao_nr()
         ngrids = len(grids.weights)
 # NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
@@ -674,14 +685,14 @@ class _NumInt(object):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0tab = self.non0tab[ip0//BLKSIZE:]
-            ao = eval_ao(mol, coords, isgga=isgga, non0tab=non0tab)
+            ao = self.eval_ao(mol, coords, isgga=isgga, non0tab=non0tab)
             for idm in range(nset):
-                rho = eval_rho2(mol, ao, natorb[idm], natocc[idm],
-                                non0tab=non0tab, isgga=isgga)
+                rho = self.eval_rho2(mol, ao, natorb[idm], natocc[idm],
+                                     non0tab=non0tab, isgga=isgga)
                 if isgga:
                     sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
-                    exc, vrho, vsigma = eval_xc(x_id, c_id, rho[0], sigma,
-                                                spin=0, verbose=verbose)
+                    exc, vrho, vsigma = self.eval_xc(x_id, c_id, rho[0], sigma,
+                                                     spin=0, verbose=verbose)
                     den = rho[0]*weight
                     nelec[idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
@@ -693,8 +704,8 @@ class _NumInt(object):
                     vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
                                             non0tab)
                 else:
-                    exc, vrho, vsigma = eval_xc(x_id, c_id, rho, rho,
-                                                spin=0, verbose=verbose)
+                    exc, vrho, vsigma = self.eval_xc(x_id, c_id, rho, rho,
+                                                     spin=0, verbose=verbose)
                     den = rho*weight
                     nelec[idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
@@ -740,7 +751,7 @@ class _NumInt(object):
             vmat is the XC potential matrix for (alpha,beta) spin.
         '''
         if self.non0tab is None:
-            self.non0tab = make_mask(mol, grids.coords)
+            self.non0tab = self.make_mask(mol, grids.coords)
         nao = mol.nao_nr()
         ngrids = len(grids.weights)
 # NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
@@ -771,12 +782,12 @@ class _NumInt(object):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0tab = self.non0tab[ip0//BLKSIZE:]
-            ao = eval_ao(mol, coords, isgga=isgga, non0tab=non0tab)
+            ao = self.eval_ao(mol, coords, isgga=isgga, non0tab=non0tab)
             for idm in range(nset):
                 c_a, c_b = natorb[idm]
                 e_a, e_b = natocc[idm]
-                rho_a = eval_rho2(mol, ao, c_a, e_a, non0tab=non0tab, isgga=isgga)
-                rho_b = eval_rho2(mol, ao, c_b, e_b, non0tab=non0tab, isgga=isgga)
+                rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab=non0tab, isgga=isgga)
+                rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab=non0tab, isgga=isgga)
                 if isgga:
                     rho = numpy.hstack((rho_a[0].reshape(-1,1),
                                         rho_b[0].reshape(-1,1)))
@@ -784,8 +795,8 @@ class _NumInt(object):
                     sigma[:,0] = numpy.einsum('ip,ip->p', rho_a[1:], rho_a[1:])
                     sigma[:,1] = numpy.einsum('ip,ip->p', rho_a[1:], rho_b[1:])
                     sigma[:,2] = numpy.einsum('ip,ip->p', rho_b[1:], rho_b[1:])
-                    exc, vrho, vsigma = eval_xc(x_id, c_id, rho, sigma,
-                                                spin=1, verbose=verbose)
+                    exc, vrho, vsigma = self.eval_xc(x_id, c_id, rho, sigma,
+                                                     spin=1, verbose=verbose)
                     den = rho[:,0]*weight
                     nelec[0,idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
@@ -809,8 +820,8 @@ class _NumInt(object):
 
                 else:
                     rho = numpy.hstack((rho_a[:,None],rho_b[:,None]))
-                    exc, vrho, vsigma = eval_xc(x_id, c_id, rho, rho,
-                                                spin=1, verbose=verbose)
+                    exc, vrho, vsigma = self.eval_xc(x_id, c_id, rho, rho,
+                                                     spin=1, verbose=verbose)
                     den = rho[:,0]*weight
                     nelec[0,idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
@@ -834,6 +845,32 @@ class _NumInt(object):
             vmat = vmat.reshape(2,nao,nao)
         return nelec, excsum, vmat
 
+    def eval_ao(self, mol, coords, isgga=False, relativity=0, bastart=0,
+                bascount=None, non0tab=None, verbose=None):
+        return eval_ao(mol, coords, isgga, relativity, bastart, bascount,
+                       non0tab, verbose)
+
+    def make_mask(self, mol, coords, relativity=0, bastart=0, bascount=None,
+                  verbose=None):
+        return make_mask(mol, coords, relativity, bastart, bascount, verbose)
+
+    def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, isgga=False,
+                  verbose=None):
+        return eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, isgga, verbose)
+
+    def eval_rho(self, mol, ao, dm, non0tab=None, isgga=False,
+                  verbose=None):
+        return eval_rho(mol, ao, dm, non0tab, isgga, verbose)
+
+    def eval_xc(self, x_id, c_id, rho, sigma, spin=0, relativity=0, verbose=None):
+        return eval_xc(x_id, c_id, rho, sigma, spin, relativity, verbose)
+
+    def eval_x(self, x_id, rho, sigma, spin=0, relativity=0, verbose=None):
+        return eval_x(x_id, rho, sigma, spin, relativity, verbose)
+
+    def eval_c(self, c_id, rho, sigma, spin=0, relativity=0, verbose=None):
+        return eval_c(c_id, rho, sigma, spin, relativity, verbose)
+
 def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
@@ -848,8 +885,6 @@ if __name__ == '__main__':
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
         [1   , (0. , 0.757  , 0.587)] ],
-        grids = {"H": (100, 194),
-                 "O": (100, 194),},
         basis = '6311g*',)
     mf = dft.RKS(mol)
     mf.grids.setup_grids()
