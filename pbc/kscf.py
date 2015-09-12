@@ -202,7 +202,46 @@ class KRHF(scf.RHF):
             energy_elec+=pyscf.scf.hf.energy_elec(self, dm_kpts[k,:,:], h1e_kpts[k,:,:], vhf)[0]
         return energy_elec + self.ewald_nuc()
 
-            
+def test_kscf_sc():            
+    from pyscf import gto
+    from pyscf.dft import rks
+
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = None
+
+    Lx=2
+    L=60
+    h=numpy.eye(3.)*L
+    mol.atom.extend([['He', (0.5,L/2.,L/2.)], ])
+    mol.atom.extend([['He', (1.5,L/2.,L/2.)], ])
+
+    mol.basis = { 'He': [[0,(1.0, 1.0)]] }
+    mol.build()
+
+    m=pyscf.scf.hf.RHF(mol)
+    print (m.scf())
+
+    cell=cl.Cell()
+    cell.__dict__=mol.__dict__
+    cell.h=h
+    cell.vol=scipy.linalg.det(cell.h)
+    cell.output=None
+    cell.verbose=7
+    cell.build()
+
+def test_kscf_kpts():
+
+    gs=numpy.array([80,80,80])
+    ew_eta=0.05
+    ew_cut=(40,40,40)
+    kpts=numpy.vstack(([0,0,0],
+                       [0,0,1]))
+    print kpts.shape
+    #mf=scf.RHF(cell, gs, ew_eta, ew_cut)
+    kmf=KRHF(cell, gs, ew_eta, ew_cut, kpts)
+
+
 def test_kscf():
     from pyscf import gto
     from pyscf.dft import rks
