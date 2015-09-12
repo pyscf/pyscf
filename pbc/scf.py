@@ -12,6 +12,7 @@ import pyscf.scf.hf
 import pyscf.dft
 import cell as cl
 import pbc
+import pp
 
 from pyscf.lib import logger
 

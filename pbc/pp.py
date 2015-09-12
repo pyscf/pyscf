@@ -45,7 +45,7 @@ def get_gth_vlocG(G):
                  15 - 10*G_red**2 + G_red**4, 
                  105 - 105*G_red**2 + 21*G_red**4 - G_red**6]
 
-        vlocG[ia,:] = ( -4*pi*Zion * exp(-0.5*G_red**2)/G**2
+        vlocG[ia,:] = ( -4*pi * exp(-0.5*G_red**2)/G**2
                        + (2*pi)**(3/2.)*rloc**3*exp(-0.5*G_red**2)*(
                             np.vdot(cexp, cfacs[:nexp])) )
 
