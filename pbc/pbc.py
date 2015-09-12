@@ -56,8 +56,12 @@ def get_coulG(cell, gs):
     Coulomb kernel in G space (4*pi/G^2 for G!=0, 0 for G=0)
     '''
     Gv=get_Gv(cell, gs)
-    coulG=np.zeros(Gv.shape[1]) 
-    coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
+    #coulG=np.zeros(Gv.shape[1]) 
+    #coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
+    with np.errstate(divide='ignore'):
+        coulG=4*pi/np.sum(np.conj(Gv)*Gv,axis=0)
+    coulG[0] = 0.
+
     return coulG
 
 def _gen_qv(ngs):
@@ -93,7 +97,18 @@ def setup_uniform_grids(cell, gs):
     return coords
 
 def get_aoR(cell, coords):
+    return _eval_ao(cell, coords)
+
+def _eval_ao(cell, coords):
+    nimgs = cell.nimgs
     aoR=pyscf.dft.numint.eval_ao(cell, coords)
+    Ts = [[i,j,k] for i in range(-nimgs,nimgs+1)
+                  for j in range(-nimgs,nimgs+1)
+                  for k in range(-nimgs,nimgs+1) 
+                  if i**2+j**2+k**2 <= nimgs**2 and i**2+j**2+k**2 != 0]
+
+    for T in Ts:
+        aoR+=pyscf.dft.numint.eval_ao(cell, coords+np.dot(cell.h,T))
     return aoR
 
 def get_rhoR(cell, aoR, dm):

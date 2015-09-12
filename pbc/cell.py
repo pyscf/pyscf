@@ -9,11 +9,11 @@ def format_pseudo(pseudo_tab):
     ``{ atom: ( (nelec_s, nele_p, nelec_d, ...),
                 rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
                 nproj_types,
-                (r1, nrpoj1, ( (hproj1[1,1], hrpoj1[1,2], ..., hproj1[1,nproj1]),
+                (r1, nproj1, ( (hproj1[1,1], hrpoj1[1,2], ..., hproj1[1,nproj1]),
                                (hproj1[2,1], hrpoj1[2,2], ..., hproj1[2,nproj1]),
                                ...
                                (hproj1[nproj1,1], hrpoj1[nproj1,2], ...        ) )),
-                (r2, nrpoj2, ( (hproj2[1,1], hrpoj2[1,2], ..., hproj2[1,nproj1]),
+                (r2, nproj2, ( (hproj2[1,1], hrpoj2[1,2], ..., hproj2[1,nproj1]),
                 ... ) )
                 )
         ... }``
@@ -51,6 +51,7 @@ class Cell(pyscf.gto.Mole):
         self.__dict__.update(kwargs)
         self.h = None
         self.vol = 0.
+        self.nimgs = 0
         self.pseudo = None
 
     def build(self, *args, **kwargs):
@@ -67,9 +68,7 @@ class Cell(pyscf.gto.Mole):
         if 'pseudo' in kwargs.keys():
             self.pseudo = kwargs.pop('pseudo')
 
-        # First, call regular Mole.build_
-        pyscf.gto.Mole.build_(self,*args,**kwargs)
-
+        # Set-up pseudopotential if it exists
         if self.pseudo is not None:
             # release circular referred objs
             # Note obj.x = obj.member_function causes circular referrence
@@ -88,8 +87,22 @@ class Cell(pyscf.gto.Mole):
             if (self.nelectron+self.spin) % 2 != 0:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
                                    (self.nelectron, self.spin))
+                                   
+        # Finally, call regular Mole.build_
+        pyscf.gto.Mole.build_(self,*args,**kwargs)
 
         self._built = True
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
+
+    def atom_charge(self, atm_id):
+        if self.pseudo is None:
+            # This is what the original Mole.atom_charge() returns
+            CHARGE_OF  = 0
+            return self._atm[atm_id,CHARGE_OF]
+        else:
+            # Remember, _pseudo is a dict
+            nelecs = self._pseudo[ self.atom_symbol(atm_id) ][0]
+            return sum(nelecs)
+            
