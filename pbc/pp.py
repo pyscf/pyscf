@@ -12,24 +12,42 @@ exp=math.exp
    For GTH PPs, see Goedecker, Teter, Hutter, PRB 54, 1703 (1996)
 '''
 
-def gth_vloc_G(G):
+def get_vlocG(cell, gs):
     '''
-    local part of the GTH pseudopotential
+    Local PP kernel in G space (Vloc(G) for G!=0, 0 for G=0)
 
-    G: scalar or 1D np.array
+    Returns
+        np.array([natm, ngs])
+    '''
+    Gvnorm=np.linalg.norm(get_Gv(cell, gs),axis=0)
+    #vlocG=4*pi/np.sum(np.conj(Gv)*Gv,axis=0)
+    vlocG = get_gth_vlocG(cell, Gvnorm)
+    vlocG[:,0] = 0.
+    return vlocG
+
+def get_gth_vlocG(G):
+    '''
+    Local part of the GTH pseudopotential
+
+    G: np.array([ngs]) 
 
     Returns 
-         scalar or 1D np.array
+         np.array([natm,ngs])
     '''
-    G_red = G*rloc
+    vlocG = np.zeros((cell.natm,len(G))) 
+    for ia in range(cell.natm):
+        pp = cell._pseudo[ self.atom_symbol(ia) ] 
+        rloc, nexp, cexp = pp[1:3+1]
 
-    Cfacs = [1., 3 - G_red**2, 
-             15 - 10*G_red**2 + G_red**4, 
-             105 - 105*G_red**2 + 21*G_red**4 - G_red**6]
+        G_red = G*rloc
 
-    return ( -4*pi*Zion * exp(-0.5*G_red**2)/G**2
-            + (2*pi)**(3/2.)*rloc**3*exp(-0.5*G_red**2)*(
-                np.vdot(cexp, cfacs[:nexp])) )
+        Cfacs = [1., 3 - G_red**2, 
+                 15 - 10*G_red**2 + G_red**4, 
+                 105 - 105*G_red**2 + 21*G_red**4 - G_red**6]
+
+        vlocG[ia,:] = ( -4*pi*Zion * exp(-0.5*G_red**2)/G**2
+                       + (2*pi)**(3/2.)*rloc**3*exp(-0.5*G_red**2)*(
+                            np.vdot(cexp, cfacs[:nexp])) )
 
 def gtth_vnonloc_G(Gvecs):
     '''

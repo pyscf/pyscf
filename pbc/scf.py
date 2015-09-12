@@ -42,9 +42,10 @@ def get_nuc(cell, gs):
     
     coords=pbc.setup_uniform_grids(cell,gs)
 
-    vneG=np.zeros(coords.shape[0], np.complex128)
-    for ia, qa in enumerate(chargs):
-        vneG+=-chargs[ia] * SI[ia,:] * coulG
+    #vneG=np.zeros(coords.shape[0], np.complex128)
+    #for ia, qa in enumerate(chargs):
+    #    vneG+=-chargs[ia] * SI[ia,:] * coulG
+    vneG = -np.dot(chargs,SI) * coulG
 
     vneR=pbc.ifft(vneG, gs)
     aoR=pbc.get_aoR(cell, coords)
@@ -56,22 +57,29 @@ def get_nuc(cell, gs):
 def get_pp(cell, gs):
     '''
     Nuc-el pseudopotential AO matrix
+    
+    Only local part right now, completely untested.
     '''
-    coords=pbc.setup_uniform_grids(cell, gs)
+    chargs=[cell.atom_charge(i) for i in range(len(cell._atm))]
+
+    Gv=pbc.get_Gv(cell, gs)
+    SI=pbc.get_SI(cell, Gv)
+    vlocG=pp.get_vlocG(cell, gs)
+    
+    coords=pbc.setup_uniform_grids(cell,gs)
+
+    #vpplocG=np.zeros(coords.shape[0], np.complex128)
+    #for ia, qa in enumerate(chargs):
+    #    vpplocG+=-chargs[ia] * SI[ia,:] * vlocG
+    qvlocG = chargs*vlocG
+    vpplocG = -np.sum(SI * qvlocG, axis=0)
+
+    vpplocR=pbc.ifft(vpplocG, gs)
     aoR=pbc.get_aoR(cell, coords)
+        
     nao=aoR.shape[1]
-
-    aoG=np.empty(aoR.shape, np.complex128)
-
-    for i in range(nao):
-        aoG[:,i]=pbc.fft(aoR[:,i], gs)
-                
-    s = np.dot(aoG.T.conj(), aoG).real
-
-    ngs=aoR.shape[0]
-    s *= (cell.vol/ngs**2)
-    return s
-
+    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR).real
+    return vpploc
 
 def get_t(cell, gs, kpt=None):
     '''
@@ -272,7 +280,7 @@ def test_pp():
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 1
+    cell.nimgs = 0
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -310,7 +318,7 @@ def test_components():
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 0
+    cell.nimgs = 1
     cell.pseudo=None
     cell.output=None
     cell.verbose=7

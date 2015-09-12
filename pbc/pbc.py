@@ -56,8 +56,12 @@ def get_coulG(cell, gs):
     Coulomb kernel in G space (4*pi/G^2 for G!=0, 0 for G=0)
     '''
     Gv=get_Gv(cell, gs)
-    coulG=np.zeros(Gv.shape[1]) 
-    coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
+    #coulG=np.zeros(Gv.shape[1]) 
+    #coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
+    with np.errstate(divide='ignore'):
+        coulG=4*pi/np.sum(np.conj(Gv)*Gv,axis=0)
+    coulG[0] = 0.
+
     return coulG
 
 def _gen_qv(ngs):

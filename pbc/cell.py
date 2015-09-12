@@ -68,9 +68,7 @@ class Cell(pyscf.gto.Mole):
         if 'pseudo' in kwargs.keys():
             self.pseudo = kwargs.pop('pseudo')
 
-        # First, call regular Mole.build_
-        pyscf.gto.Mole.build_(self,*args,**kwargs)
-
+        # Set-up pseudopotential if it exists
         if self.pseudo is not None:
             # release circular referred objs
             # Note obj.x = obj.member_function causes circular referrence
@@ -89,8 +87,22 @@ class Cell(pyscf.gto.Mole):
             if (self.nelectron+self.spin) % 2 != 0:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
                                    (self.nelectron, self.spin))
+                                   
+        # Finally, call regular Mole.build_
+        pyscf.gto.Mole.build_(self,*args,**kwargs)
 
         self._built = True
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
+
+    def atom_charge(self, atm_id):
+        if self.pseudo is None:
+            # This is what the original Mole.atom_charge() returns
+            CHARGE_OF  = 0
+            return self._atm[atm_id,CHARGE_OF]
+        else:
+            # Remember, _pseudo is a dict
+            nelecs = self._pseudo[ self.atom_symbol(atm_id) ][0]
+            return sum(nelecs)
+            
