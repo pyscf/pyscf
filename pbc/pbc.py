@@ -6,6 +6,7 @@ import numpy as np
 import scipy
 import scipy.linalg
 import scipy.special
+import scipy.optimize
 
 pi=math.pi
 exp=np.exp
@@ -148,6 +149,39 @@ def ifft(g, gs):
     f3d=np.fft.ifftn(g3d)
     return np.ravel(f3d)
 
+def ewald_params(cell, gs, precision):
+    '''
+    Based on largest G vector and desired relative precision,
+    choose a reasonable value of ewald eta parameter
+
+    G sum Relative error given by (keeping only exponential factors)
+
+        precision ~ e^{(-Gmax^2)/(4 \eta^2)} 
+
+    This determines alpha. Then, real-space cutoff is 
+    determined by (exp. factors only)
+
+        precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
+
+    Returns
+
+        ew_eta, ew_cut
+    '''
+    invhT=scipy.linalg.inv(cell.h.T)
+
+    Gmax=2*pi*np.dot(invhT, gs)
+    Gmax=abs(np.min(Gmax))
+    log_precision=math.log(precision)
+    ew_eta=math.sqrt(-Gmax**2/(4*log_precision))
+
+    rcut=sqrt(-log_precision)/ew_eta
+    rlengths=np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
+    ew_cut=np.rint(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+
+    return ew_eta, ew_cut
+    
+    
+
 def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     '''
     Real and G-space Ewald sum 
@@ -172,43 +206,47 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewxrange=range(-ew_cut[0],ew_cut[0]+1)
     ewyrange=range(-ew_cut[1],ew_cut[1]+1)
     ewzrange=range(-ew_cut[2],ew_cut[2]+1)
-
-    #:ewxyz=np.array([xyz for xyz in itertools.product(ewxrange,ewyrange,ewzrange)])
     ewxyz=_span3(ewxrange,ewyrange,ewzrange)
 
-    #:for ic, (ix, iy, iz) in enumerate(ewxyz):
-    #:    #:L=ix*cell.h[:,0]+iy*cell.h[:,1]+iz*cell.h[:,2]
-    #:    L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
+    # SLOW=True
+    # if SLOW==True:
+    #     ewxyz=ewxyz.T
+    #     for ic, (ix, iy, iz) in enumerate(ewxyz):
+    #         L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
 
-    #:    # prime in summation to avoid self-interaction in unit cell
-    #:    if (ix == 0 and iy == 0 and iz == 0):
-    #:        for ia in range(cell.natm):
-    #:            qi = chargs[ia]
-    #:            ri = coords[ia]
-    #:            for ja in range(ia):
-    #:                qj = chargs[ja]
-    #:                rj = coords[ja]
-    #:                r = np.linalg.norm(ri-rj)
-    #:                ewovrl += qi * qj / r * erfc(ew_eta * r)
-    #:    else:
-    #:        #:for ia in range(cell.natm):
-    #:        #:    qi = chargs[ia]
-    #:        #:    ri = coords[ia]
-    #:        #:    for ja in range(cell.natm):
-    #:        #:        qj=chargs[ja]
-    #:        #:        rj=coords[ja]
-    #:        #:        r=np.linalg.norm(ri-rj+L)
-    #:        #:        ewovrl += qi * qj / r * erfc(ew_eta * r)
-    #:        r1 = rij + L
-    #:        r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-    #:        ewovrl += (qij/r * erfc(ew_eta * r)).sum()
+    #         # prime in summation to avoid self-interaction in unit cell
+    #         if (ix == 0 and iy == 0 and iz == 0):
+    #             print "L is", L
+    #             for ia in range(cell.natm):
+    #                 qi = chargs[ia]
+    #                 ri = coords[ia]
+    #                 #for ja in range(ia):
+    #                 for ja in range(cell.natm):
+    #                     if ja != ia:
+    #                         qj = chargs[ja]
+    #                         rj = coords[ja]
+    #                         r = np.linalg.norm(ri-rj)
+    #                         ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #         else:
+    #             for ia in range(cell.natm):
+    #                 qi = chargs[ia]
+    #                 ri = coords[ia]
+    #                 for ja in range(cell.natm):
+    #                     qj=chargs[ja]
+    #                     rj=coords[ja]
+    #                     r=np.linalg.norm(ri-rj+L)
+    #                     ewovrl += qi * qj / r * erfc(ew_eta * r)
+
+    # # else:
     nx = len(ewxrange)
     ny = len(ewyrange)
     nz = len(ewzrange)
-    Lall = np.einsum('ij,jk->ki', cell.h, ewxyz).reshape(3,nx,ny,nz)
+    Lall = np.einsum('ij,jk->ik', cell.h, ewxyz).reshape(3,nx,ny,nz)
     #exclude the point where Lall == 0
     Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
-    Lall = Lall.reshape(-1,3)
+    Lall=Lall.reshape(3,nx*ny*nz)
+    Lall = Lall.T
+
     for ia in range(cell.natm):
         qi = chargs[ia]
         ri = coords[ia]
@@ -216,7 +254,8 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
             qj = chargs[ja]
             rj = coords[ja]
             r = np.linalg.norm(ri-rj)
-            ewovrl += qi * qj / r * erfc(ew_eta * r)
+            ewovrl += 2 * qi * qj / r * erfc(ew_eta * r)
+
     for ia in range(cell.natm):
         qi = chargs[ia]
         ri = coords[ia]
@@ -236,20 +275,29 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
     Gv=get_Gv(cell, gs)
     SI=get_SI(cell, Gv)
+    ZSI=np.einsum("i,ij->j", chargs, SI)
 
     # Eq. (F.6) in Martin is off by a factor of 2, the
     # exponent is wrong (8->4) and the square is in the wrong place
     #
     # Formula should be
     #
-    # 2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |S_I(G)|^2 \exp[-|G|^2/4\eta^2]
+    # 1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
+    #
+    # where
+    #
+    #     ZS_I(G) = \sum_a Z_a exp (i G.R_a)
+    #
+    # See also Eq. (32) of ewald.pdf at 
+    #     http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
     coulG=get_coulG(cell, gs)
     absG2=np.einsum('ij,ij->j',np.conj(Gv),Gv)
-    SIG2=np.abs(SI)**2
+
+    ZSIG2=np.abs(ZSI)**2
     expG2=np.exp(-absG2/(4*ew_eta**2))
-    JexpG2=2*coulG*expG2
-    ewgI=np.dot(SIG2,JexpG2)
-    ewg=np.sum(ewgI)
+    JexpG2=coulG*expG2
+    ewgI=np.dot(ZSIG2,JexpG2)
+    ewg=.5*np.sum(ewgI)
     ewg/=cell.vol
 
     log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
@@ -373,3 +421,60 @@ class UniformGrids(object):
     def kernel(self, cell=None):
         self.dump_flags()
         return self.setup_grids()
+
+def test_ewald():
+
+    from pyscf import gto
+    from pyscf.dft import rks
+    from pyscf.lib.parameters import BOHR
+    import cell as cl
+
+    B=BOHR
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = None
+
+
+    Lunit=5
+    Ly=Lz=Lunit
+    Lx=Lunit
+
+    h=np.diag([Lx,Ly,Lz])
+    
+    mol.atom.extend([['He', (2*B,0.5*Ly*B,0.5*Lz*B)],
+                     ['He', (3*B,0.5*Ly*B,0.5*Lz*B)]])
+
+    # these are some exponents which are 
+    # not hard to integrate
+    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
+    mol.build()
+
+    cell=cl.Cell()
+    cell.__dict__=mol.__dict__ # hacky way to make a cell
+    cell.h=h
+    cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 1
+    cell.pseudo=None
+    cell.output=None
+    cell.verbose=7
+    cell.build()
+
+    ew_cut=(20,20,20)
+    #ew_cut=(2,2,2)
+
+    gs=np.array([20,20,20])
+    ew_eta0, ew_cut0=ewald_params(cell, gs, 1.e-3)
+    print ew_eta0, ew_cut0
+
+    for ew_eta in [0.05, 0.1, 0.2, 1]:
+        print ewald(cell, gs, ew_eta, ew_cut) # -0.468640671931
+
+    for precision in [1.e-3, 1.e-5, 1.e-7, 1.e-9]:
+        ew_eta0, ew_cut0=ewald_params(cell, gs, precision)
+        print "precision", precision, ew_eta0, ew_cut0
+        print ewald(cell, gs, ew_eta0, ew_cut0) 
+        # Ewald values
+        # 1.e-3: -0.469112631739
+        # 1.e-5: -0.468642153932
+        # 1.e-7: -0.468640678042
+        # 1.e-9: -0.46864067196

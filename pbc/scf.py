@@ -561,6 +561,84 @@ def test_moints():
             Ecoul2+=2*eri_mo2[i*nmo+i,j*nmo+j]-eri_mo2[i*nmo+j,i*nmo+j]
     print Ecoul, Ecoul2
 
+def test_dimer():
+
+    from pyscf import gto
+    from pyscf.dft import rks
+    from pyscf.lib.parameters import BOHR
+
+    B=BOHR
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = None
+
+    
+    Lunit=10
+    Ly=Lz=Lunit
+    Lx=2*Lunit
+
+    h=np.diag([Lx,Ly,Lz])
+    
+    # place atom in middle of big box
+    #mol.atom.extend([['He', (0.5*Lunit*B,0.5*Ly*B,0.5*Lz*B)]])
+
+    #mol.atom.extend([['He', (0.5*Lunit*B,0.5*Ly*B,0.5*Lz*B)],
+    #                 ['He', (1.5*Lunit*B,0.5*Ly*B,0.5*Lz*B)]])
+    mol.atom.extend([['He', (5*B,0.5*Ly*B,0.5*Lz*B)],
+                     ['He', (6*B,0.5*Ly*B,0.5*Lz*B)]])
+
+    # these are some exponents which are 
+    # not hard to integrate
+    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
+    mol.build()
+
+    # benchmark first with molecular DFT calc
+    m=pyscf.dft.rks.RKS(mol)
+    m.xc = 'LDA,VWN_RPA'
+    print "overlap"
+    print m.get_ovlp()
+    print mol.intor_symmetric('cint1e_ovlp_sph')
+    
+    #print "Molecular DFT energy"
+    print (m.scf()) # 
+
+    # this is the PBC DFT calc!!
+    cell=cl.Cell()
+    cell.__dict__=mol.__dict__ # hacky way to make a cell
+    cell.h=h
+    cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = 0
+    cell.pseudo=None
+    cell.output=None
+    cell.verbose=7
+    cell.build()
+    
+    # points in grid (x,y,z)
+    gs=np.array([100,100,100])
+
+
+
+    # Ewald parameters
+    ew_eta=0.05
+    ew_cut=(100,100,100)
+    
+    # check ewald
+    for ew_eta in [0.05, 0.1, 0.5, 1.]:
+        ew=pbc.ewald(cell, gs, ew_eta, ew_cut)
+        print "Ewald (eta, energy)", ew_eta, ew # should be same for all eta
+
+    #ew_cut=(20,20,20)
+    ovlp=get_ovlp(cell, gs)
+    print "pbc ovlp"
+    print ovlp
+    mf=RKS(cell, gs, ew_eta, ew_cut)
+    mf.xc='LDA,VWN_RPA'
+    mf.scf()
+    dm=mf.make_rdm1()
+    print np.einsum('ij,ij',dm,ovlp)
+
+
+
 if __name__ == '__main__':
     test_pp()
     test_components()
