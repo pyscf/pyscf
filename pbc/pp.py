@@ -4,6 +4,8 @@ import numpy as np
 import scipy.linalg
 import scipy.special
 
+import pbc
+
 pi=math.pi
 sqrt=math.sqrt
 exp=math.exp
@@ -19,13 +21,13 @@ def get_vlocG(cell, gs):
     Returns
         np.array([natm, ngs])
     '''
-    Gvnorm=np.linalg.norm(get_Gv(cell, gs),axis=0)
+    Gvnorm=np.linalg.norm(pbc.get_Gv(cell, gs),axis=0)
     #vlocG=4*pi/np.sum(np.conj(Gv)*Gv,axis=0)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
 
-def get_gth_vlocG(G):
+def get_gth_vlocG(cell, G):
     '''
     Local part of the GTH pseudopotential
 
@@ -36,18 +38,22 @@ def get_gth_vlocG(G):
     '''
     vlocG = np.zeros((cell.natm,len(G))) 
     for ia in range(cell.natm):
-        pp = cell._pseudo[ self.atom_symbol(ia) ] 
+        pp = cell._pseudo[ cell.atom_symbol(ia) ] 
         rloc, nexp, cexp = pp[1:3+1]
 
         G_red = G*rloc
-
-        Cfacs = [1., 3 - G_red**2, 
+        cfacs = np.array(
+                [1*G_red**0, 
+                 3 - G_red**2, 
                  15 - 10*G_red**2 + G_red**4, 
-                 105 - 105*G_red**2 + 21*G_red**4 - G_red**6]
+                 105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
 
-        vlocG[ia,:] = ( -4*pi * exp(-0.5*G_red**2)/G**2
-                       + (2*pi)**(3/2.)*rloc**3*exp(-0.5*G_red**2)*(
-                            np.vdot(cexp, cfacs[:nexp])) )
+        with np.errstate(divide='ignore'):
+            # Note the signs -- potential here is positive
+            vlocG[ia,:] = ( 4*pi * np.exp(-0.5*G_red**2)/G**2
+                           - (2*pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
+                                np.dot(cexp, cfacs[:nexp])) )
+    return vlocG
 
 def gtth_vnonloc_G(Gvecs):
     '''
@@ -65,7 +71,7 @@ def gtth_vnonloc_G(Gvecs):
                 hij = hproj[i,j]
                 pYs = []
                 for Gvec in Gvecs:
-                    G, theta, phi = self.cart2polar(Gvec)
+                    G, theta, phi = cart2polar(Gvec)
                     pYs.append( proj_il_G(i,j,G,rl)*Ylm(l,m,theta,phi) )
                 projs.append(hij, pYs)
         

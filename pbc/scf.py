@@ -260,6 +260,7 @@ class KRKS(RKS):
 
 def test_pp():
     from pyscf import gto
+    from pyscf.dft import rks
 
     mol = gto.Mole()
     mol.verbose = 7
@@ -270,8 +271,13 @@ def test_pp():
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
     mol.basis = { 'He': 'STO-3G'}
-    
+
     mol.build()
+    m = rks.RKS(mol)
+    m.xc = 'LDA,VWN_RPA'
+    #m.xc = 'b3lyp'
+    print(m.scf()) # -2.90705411168
+    
     
     cell=cl.Cell()
     cell.__dict__=mol.__dict__
@@ -290,6 +296,42 @@ def test_pp():
 
     print "Internal PP format"
     print cell._pseudo
+
+    gs=np.array([100,100,100]) # number of G-points in grid. Real-space dim=2*gs+1
+    Gv=pbc.get_Gv(cell, gs)
+
+    dm=m.make_rdm1()
+
+    print "PP Nuc-el (G!=0)"
+    neao=get_pp(cell,gs)
+    print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
+
+    print "Kinetic"
+    tao=get_t(cell, gs) 
+    tao2 = mol.intor_symmetric('cint1e_kin_sph') 
+
+    # These should match reasonably well (roughly with accuracy of normalization)
+    print "Kinetic energies" 
+    print np.dot(np.ravel(tao), np.ravel(dm))  # 2.82793077196
+    print np.dot(np.ravel(tao2), np.ravel(dm)) # 2.82352636524
+    
+    print "Overlap"
+    sao=get_ovlp(cell,gs)
+    print np.dot(np.ravel(sao), np.ravel(dm)) # 1.99981725342
+    print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm)) # 2.0
+
+    # The next two entries should *not* match, since G=0 component is removed
+    print "Coulomb (G!=0)"
+    jao=get_j(cell,dm,gs)
+    print np.dot(np.ravel(dm),np.ravel(jao))  # 4.03425518427
+    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm))) # 4.22285177049
+
+    # The next two entries should *not* match, since G=0 component is removed
+    print "Nuc-el (G!=0)"
+    neao=get_nuc(cell,gs)
+    vne=mol.intor_symmetric('cint1e_nuc_sph') 
+    print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
+    print np.dot(np.ravel(dm), np.ravel(vne))  # -6.68702326551
 
 def test_components():
     from pyscf import gto
