@@ -156,6 +156,8 @@ mol.basis = {'O': 'sto-3g', 'H': 'sto3g', 'H1': '6-31G'}
 mol.charge = 0
 mol.spin = 0 # 2j == nelec_alpha - nelec_beta
 mol.symmetry = 1
+# can be 'bohr', 'ang' to indicate the coordinates unit of the input mol.atom
+mol.unit = 'Ang'
 
 # nuclear model
 # -------------

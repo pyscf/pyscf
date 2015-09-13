@@ -126,6 +126,7 @@ def irrep_id2name(gpname, irrep_id):
         gpname : str
             The point group symbol
         irrep_id : int
+            See IRREP_ID_TABLE in pyscf/symm/param.py
 
     Returns:
         Irrep sybmol, str
