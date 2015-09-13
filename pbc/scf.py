@@ -125,19 +125,16 @@ def get_ovlp(cell, gs):
     '''
     coords=pbc.setup_uniform_grids(cell, gs)
     aoR=pbc.get_aoR(cell, coords)
-    nao=aoR.shape[1]
-    ngs=aoR.shape[0]
 
+    #nao=aoR.shape[1]
+    # aoG=np.empty(aoR.shape, np.complex128)
+    # for i in range(nao):
+    #     aoG[:,i]=pbc.fft(aoR[:,i], gs)
+    # s = np.dot(aoG.T.conj(), aoG).real
     s = np.dot(aoR.T.conj(), aoR).real
-    s *= cell.vol/ngs
-
-    #aoG=np.empty(aoR.shape, np.complex128)
-    #
-    #for i in range(nao):
-    #    aoG[:,i]=pbc.fft(aoR[:,i], gs)
-    #            
-    #s = np.dot(aoG.T.conj(), aoG).real
+    ngs=aoR.shape[0]
     #s *= (cell.vol/ngs**2)
+    s *= (cell.vol/ngs)
 
     return s
     
