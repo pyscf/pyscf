@@ -157,7 +157,7 @@ mol.charge = 0
 mol.spin = 0 # 2j == nelec_alpha - nelec_beta
 mol.symmetry = 1
 # can be 'bohr', 'ang' to indicate the coordinates unit of the input mol.atom
-mol.unit = 'Ang'
+mol.unit = 'Ang'    # (New in version 1.1)
 
 # nuclear model
 # -------------
