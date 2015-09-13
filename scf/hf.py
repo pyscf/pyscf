@@ -279,7 +279,7 @@ def init_guess_by_minao(mol):
         symb = mol.atom_pure_symbol(ia)
         if symb != 'GHOST':
             occ.append(occdic[symb])
-            new_atom.append(mol.atom[ia])
+            new_atom.append(mol._atom[ia])
     occ = numpy.hstack(occ)
 
     pmol = pyscf.gto.Mole()

@@ -20,7 +20,7 @@ def get_atm_nrhf(mol):
         atm.nelectron = gto.mole._charge(a)
         atm.spin = atm.nelectron % 2
         atm._atm, atm._bas, atm._env = \
-                atm.make_env(atm.atom, atm._basis, atm._env)
+                atm.make_env(atm._atom, atm._basis, atm._env)
         atm.natm = atm._atm.__len__()
         atm.nbas = atm._bas.__len__()
         atm._built = True
