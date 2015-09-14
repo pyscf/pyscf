@@ -404,7 +404,7 @@ class localizer:
                     return local_myprecon
                 
                 #self.ahnr_cnt = 0
-                eigenval, eigenvec = linalg_helper.davidson( a=self.__augmented_hessian_matvec, \
+                eigenval, eigenvec = linalg_helper.davidson( aop=self.__augmented_hessian_matvec, \
                                                              x0=ini_guess, \
                                                              precond=myprecon, \
                                                              #tol=1e-14, \
