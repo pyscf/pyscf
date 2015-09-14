@@ -75,8 +75,7 @@ class CASSCF(mc1step.CASSCF):
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
+        logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def gen_g_hop(self, mo, u, casdm1, casdm2, eris):
