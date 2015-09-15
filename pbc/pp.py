@@ -55,7 +55,85 @@ def get_gth_vlocG(cell, G):
                                 np.dot(cexp, cfacs[:nexp])) )
     return vlocG
 
-def gtth_vnonloc_G(Gvecs):
+def get_projG(cell, gs):
+    '''
+    PP weight and projector for the nonlocal PP in G space 
+    (proj(G) for G!=0, 0 for G=0)
+
+    Returns
+        hs :: list( list( np.array( , ) ) )
+         - hs[atm][l][i,j]
+        projs :: list( list( list( list( np.array(ngs) ) ) ) )
+         - projs[atm][l][m][i][ngs]
+    '''
+    Gv=pbc.get_Gv(cell, gs)
+    return get_gth_projG(cell, Gv) 
+
+def get_gth_projG(cell, Gvs):
+    Gs = []
+    thetas = []
+    phis = []
+    for Gv in Gvs.T:
+        G, theta, phi = cart2polar(Gv)
+        Gs.append(G)
+        thetas.append(theta)
+        phis.append(phi)
+        
+    hs = []
+    projs = []
+    for ia in range(cell.natm):
+        pp = cell._pseudo[ cell.atom_symbol(ia) ] 
+        nproj_types = pp[4]
+        h_ia = []
+        proj_ia = []
+        for l,proj in enumerate(pp[5:]):
+            rl, nl, hl = proj
+            h_ia.append( (-1)**l * np.array(hl) )
+            proj_ia_l = []
+            for m in range(-l,l+1):
+                projG_ang = Ylm(l,m,thetas,phis)
+                proj_ia_lm = []
+                for i in range(nl):
+                    projG_radial = projG_li(Gs,l,i,rl)
+                    proj_ia_lm.append( projG_radial*projG_ang )
+                proj_ia_l.append(proj_ia_lm)
+            proj_ia.append(proj_ia_l)
+        hs.append(h_ia)
+        projs.append(proj_ia)
+
+    return hs, projs
+
+def projG_li(G, l, i, rl): 
+    G = np.array(G)
+    G_red = G*rl
+    exp_fac = np.exp(0.5*G_red**2)
+    if l==0 and i==0:
+        return 4*sqrt(2.*rl**3)*pi**(5./4) / exp_fac
+    elif l==0 and i==1:
+        return sqrt(8*2*rl**3/15.)*pi**(5./4)*(3-G_red**2) / exp_fac
+    elif l==0 and i==2:
+        return 16*sqrt(2*rl**3/105.)*pi**(5./4)*(15-10*G_red**2+G_red**4) / (3*exp_fac)
+    elif l==1 and i==0:
+        return 8*sqrt(rl**5/3)*pi**(5./4)*G / exp_fac
+    elif l==1 and i==1:
+        return 16*sqrt(rl**5/105.)*pi**(5./4)*G*(5-G_red**2) / exp_fac
+    elif l==1 and i==2:
+        return 32*sqrt(rl**5/1155.)*pi**(5./4)*G*(35-14*G_red**2+G_red**4) / (3*exp_fac)
+    else:
+        print "*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!"
+        return 0.
+
+def Ylm(l,m,theta,phi):
+    if isinstance(theta, (list,np.ndarray)):
+        ylm = []
+        for t,p in zip(theta,phi):
+            # Note: l and m are reversed in sph_harm
+            ylm.append( scipy.special.sph_harm(m,l,t,p) )
+        return np.array(ylm)
+    else:
+        return scipy.special.sph_harm(m,l,theta,phi)
+
+def gth_vnonloc_G(Gvecs):
     '''
     Returns
         list of length len(nprojs)
@@ -116,10 +194,6 @@ def proj_il_r(i,l,r):
     l = l + i*2 # gives either l or l+2 for i=0,1
     return sqrt(2) * ( r**l * exp(-0.5*(r/rl)**2)
               /(rl**(l+3/2.)*sqrt(math.gamma(l+3/2.))) )
-
-def Ylm(l,m,theta,phi):
-    # Note: l and m are reversed in sph_harm
-    return scipy.special.sph_harm(m,l,theta,phi)
 
 def cart2polar(rvec):
     x,y,z = rvec

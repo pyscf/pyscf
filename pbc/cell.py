@@ -9,11 +9,11 @@ def format_pseudo(pseudo_tab):
     ``{ atom: ( (nelec_s, nele_p, nelec_d, ...),
                 rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
                 nproj_types,
-                (r1, nproj1, ( (hproj1[1,1], hrpoj1[1,2], ..., hproj1[1,nproj1]),
-                               (hproj1[2,1], hrpoj1[2,2], ..., hproj1[2,nproj1]),
+                (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
+                               (hproj1[2,1], hproj1[2,2], ..., hproj1[2,nproj1]),
                                ...
-                               (hproj1[nproj1,1], hrpoj1[nproj1,2], ...        ) )),
-                (r2, nproj2, ( (hproj2[1,1], hrpoj2[1,2], ..., hproj2[1,nproj1]),
+                               (hproj1[nproj1,1], hproj1[nproj1,2], ...        ) )),
+                (r2, nproj2, ( (hproj2[1,1], hproj2[1,2], ..., hproj2[1,nproj1]),
                 ... ) )
                 )
         ... }``
