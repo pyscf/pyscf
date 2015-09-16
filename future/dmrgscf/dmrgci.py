@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Author: Sandeep Sharma <sanshar@gmail.com>
+#         Sheng Guo <shengg@princeton.edu>
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 

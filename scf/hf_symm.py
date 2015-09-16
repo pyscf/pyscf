@@ -435,6 +435,8 @@ class ROHF(rohf.ROHF):
             level_shift_factor = self.level_shift_factor
         if damp_factor is None:
             damp_factor = self.damp_factor
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+            dm = numpy.array((dm*.5, dm*.5))
         self._focka_ao = h1e + vhf[0]
         fockb_ao = h1e + vhf[1]
         ncore = (self.mol.nelectron-self.mol.spin) // 2
