@@ -86,7 +86,6 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     t1 = log.timer('FCI solver', *t1)
     e_tot = e_cas + energy_core + casci.mol.energy_nuc()
-    log.note('CASCI E = %.15g', e_tot)
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 
@@ -202,9 +201,9 @@ class CASCI(object):
             mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, nelecas)
 
-    def kernel(self, mo_coeff=None, ci0=None):
-        return self.casci(mo_coeff, ci0)
     def casci(self, mo_coeff=None, ci0=None):
+        return self.kernel(mo_coeff, ci0)
+    def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if ci0 is None:
@@ -219,6 +218,7 @@ class CASCI(object):
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
+        logger.note(self, 'CASCI E = %.15g', self.e_tot)
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
@@ -231,9 +231,9 @@ class CASCI(object):
         from pyscf.tools import dump_mat
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
-        nelecas = casscf.nelecas
-        ncas = casscf.ncas
-        ncore = casscf.ncore
+        nelecas = self.nelecas
+        ncas = self.ncas
+        ncore = self.ncore
 
         casdm1a, casdm1b = self.fcisolver.make_rdm1s(ci, ncas, nelecas)
         mocore = mo_coeff[0][:,:ncore[0]]

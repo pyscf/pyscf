@@ -8,6 +8,7 @@ def dump_tri(stdout, c, label=None, ncol=5, digits=5, start=0):
             eg sys.stdout, or stdout = open('/path/to/file') or
             mol.stdout if mol is an object initialized from :class:`gto.Mole`
         c : numpy.ndarray
+            coefficients
 
     Kwargs:
         label : list of strings
@@ -75,6 +76,7 @@ def dump_rec(stdout, c, label=None, label2=None, ncol=5, digits=5, start=0):
             eg sys.stdout, or stdout = open('/path/to/file') or
             mol.stdout if mol is an object initialized from :class:`gto.Mole`
         c : numpy.ndarray
+            coefficients
 
     Kwargs:
         label : list of strings

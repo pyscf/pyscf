@@ -577,7 +577,7 @@ def newton(mf):
             vhf = self._scf.get_veff(mol, dm)
             fock = self.get_fock(h1e, s1e, vhf, dm, 0, None)
             mo_energy, mo_coeff = self.get_mo_energy(fock, s1e, dm)
-            mo_occ = mf.get_occ(mo_energy, mo_coeff)
+            mo_occ = self.get_occ(mo_energy, mo_coeff)
             return mo_coeff, mo_occ
 
     if isinstance(mf, pyscf.scf.rohf.ROHF):
@@ -607,6 +607,7 @@ def newton(mf):
 
             def get_mo_energy(self, fock, s1e, dm):
                 focka_ao, fockb_ao = fock
+                self._focka_ao = focka_ao
                 fc = (focka_ao + fockb_ao) * .5
 # Projector for core, open-shell, and virtual
                 nao = s1e.shape[0]

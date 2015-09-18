@@ -18,6 +18,9 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def format_aux_basis(mol, auxbasis='weigend'):
+    '''Generate a fake Mole object which uses the density fitting auxbasis as
+    the basis sets
+    '''
     pmol = pyscf.gto.Mole()
     pmol.verbose = 0
     pmol.atom = mol.atom
@@ -33,6 +36,8 @@ def format_aux_basis(mol, auxbasis='weigend'):
 
 # (ij|L)
 def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
+    '''3-center 2-electron AO integrals (ij|L), where L is the auxiliary basis.
+    '''
     assert(aosym in ('s1', 's2ij'))
     atm, bas, env = \
             pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
@@ -67,12 +72,16 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
 
 # (L|ij)
 def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
+    '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
+    '''
     eri = aux_e2(mol, auxmol, intor, aosym, comp, hermi)
     naux = eri.shape[1]
     return pyscf.lib.transpose(eri.reshape(-1,naux))
 
 
 def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
+    '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
+    '''
     c_atm = numpy.array(auxmol._atm, dtype=numpy.int32)
     c_bas = numpy.array(auxmol._bas, dtype=numpy.int32)
     c_env = numpy.array(auxmol._env)
@@ -144,7 +153,6 @@ if __name__ == '__main__':
             pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                     auxmol._atm, auxmol._bas, auxmol._env)
     eri0 = numpy.empty((nao,nao,naoaux))
-    libri.CINTcgto_spheric.restype = ctypes.c_int
     pi = 0
     for i in range(mol.nbas):
         pj = 0

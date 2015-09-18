@@ -22,8 +22,66 @@ BLOCK_SIZE  = int(20e6) # ~ 160/320 MB
 # C2DIIS, IJQC, 45, 31
 # SCF-EDIIS, JCP 116, 8255
 class DIIS(object):
-    '''diis.space is the maximum of the allowed space
-    diis.min_space is the minimal number of vectors to store before damping'''
+    '''Direct inversion in the iterative subspace method.
+
+    Attributes:
+        space : int
+            DIIS subspace size. The maximum number of the vectors to be stored.
+        min_space
+            The minimal size of subspace before DIIS extrapolation.
+
+    Functions:
+        update(x, xerr=None) :
+            If xerr the error vector is given, this function will push the target
+            vector and error vector in the DIIS subspace, and use the error vector
+            to extrapolate the vector and return the extrapolated vector.
+            If xerr is None, this function will take the difference between
+            the current given vector and the last given vector as the error
+            vector to extrapolate the vector.
+
+    Examples:
+
+    >>> from pyscf import gto, scf, lib
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz')
+    >>> mf = scf.RHF(mol)
+    >>> h = mf.get_hcore()
+    >>> s = mf.get_ovlp()
+    >>> e, c = mf.eig(h, s)
+    >>> occ = mf.get_occ(e, c)
+    >>> # DIIS without error vector
+    >>> adiis = lib.diis.DIIS()
+    >>> for i in range(7):
+    ...     dm = mf.make_rdm1(c, occ)
+    ...     f = h + mf.get_veff(mol, dm)
+    ...     if i > 1:
+    ...         f = adiis.update(f)
+    ...     e, c = mf.eig(f, s)
+    ...     print('E_%d = %.12f' % (i, mf.energy_tot(dm, h, mf.get_veff(mol, dm))))
+    E_0 = -1.050329433306
+    E_1 = -1.098566175145
+    E_2 = -1.100103795287
+    E_3 = -1.100152104615
+    E_4 = -1.100153706922
+    E_5 = -1.100153764848
+    E_6 = -1.100153764878
+
+    >>> # Take Hartree-Fock gradients as the error vector
+    >>> adiis = lib.diis.DIIS()
+    >>> for i in range(7):
+    ...     dm = mf.make_rdm1(c, occ)
+    ...     f = h + mf.get_veff(mol, dm)
+    ...     if i > 1:
+    ...         f = adiis.update(f, mf.get_grad(c, occ, f))
+    ...     e, c = mf.eig(f, s)
+    ...     print('E_%d = %.12f' % (i, mf.energy_tot(dm, h, mf.get_veff(mol, dm))))
+    E_0 = -1.050329433306
+    E_1 = -1.098566175145
+    E_2 = -1.100103795287
+    E_3 = -1.100152104615
+    E_4 = -1.100153763813
+    E_5 = -1.100153764878
+    E_6 = -1.100153764878
+    '''
     def __init__(self, dev=None, filename=None):
         if dev is not None:
             self.verbose = dev.verbose
@@ -34,6 +92,8 @@ class DIIS(object):
         self.space = 6
         self.min_space = 1
 
+##################################################
+# don't modify the following private variables, they are not input options
         self.filename = filename
         if isinstance(filename, str):
             self._diisfile = h5py.File(filename, 'w')
@@ -127,7 +187,15 @@ class DIIS(object):
         return len(self._bookkeep)
 
     def update(self, x, xerr=None):
-        '''use DIIS method to solve Eq.  operator(x) = x.'''
+        '''Extrapolate vector 
+
+        * If xerr the error vector is given, this function will push the target
+        vector and error vector in the DIIS subspace, and use the error vector
+        to extrapolate the vector and return the extrapolated vector.
+        * If xerr is None, this function will take the difference between
+        the current given vector and the last given vector as the error
+        vector to extrapolate the vector.
+        '''
         if xerr is not None:
             self.push_err_vec(xerr)
         self.push_vec(x)
@@ -140,7 +208,7 @@ class DIIS(object):
         for i in range(nd):
             tmp = 0
             dti = self.get_err_vec(i)
-            for p0,p1 in prange(0, x.size, BLOCK_SIZE):
+            for p0,p1 in prange(0, dt.size, BLOCK_SIZE):
                 tmp += numpy.dot(dt[p0:p1].conj(), dti[p0:p1])
             self._H[self._head,i+1] = tmp
             self._H[i+1,self._head] = tmp.conjugate()

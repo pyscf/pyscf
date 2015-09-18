@@ -189,7 +189,7 @@ static void s1_copy(double *eri, double *buf,
         int dijkl = dijk * dl;
         int i, j, k, l, icomp;
         size_t nao2 = nao * nao;
-        size_t neri = naoi * naoj * nao2;
+        size_t neri = nao2 * naoi * naoj;
         double *peri, *pbuf;
         eri += nao2 * (i0*naoj+j0) + k0*nao+l0;
 
@@ -219,7 +219,7 @@ static void s1_set0(double *eri, double *nop,
         int lsh = shls[3];
         int i, j, k, l, icomp;
         size_t nao2 = nao * nao;
-        size_t neri = naoi * naoj * nao2;
+        size_t neri = nao2 * naoi * naoj;
         double *peri;
 
         for (icomp = 0; icomp < ncomp; icomp++) {
@@ -407,7 +407,7 @@ static void s2kl_set0(double *eri, double *nop,
         int dl = ao_loc[lsh+1] - l0;
         int i, j, k, l, icomp;
         size_t nao2 = nao*(nao+1)/2;
-        size_t neri = nao2 * nao * nao;
+        size_t neri = nao2 * naoi * naoj;
         double *peri;
         eri += k0*(k0+1)/2+l0;
 

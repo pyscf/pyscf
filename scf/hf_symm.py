@@ -12,8 +12,18 @@ from pyscf.lib import logger
 from pyscf import symm
 from pyscf.scf import hf
 from pyscf.scf import rohf
+from pyscf.scf import chkfile
 
 
+'''
+Non-relativistic restricted Hartree Fock with symmetry.
+
+The symmetry are not handled in a separate data structure.  Note that during
+the SCF iteration,  the orbitals are grouped in terms of symmetry irreps.
+But the orbitals in the result are sorted based on the orbital energies.
+Function symm.label_orb_symm can be used to detect the symmetry of the
+molecular orbitals.
+'''
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
 
@@ -244,6 +254,10 @@ class RHF(hf.RHF):
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
@@ -312,10 +326,6 @@ class ROHF(rohf.ROHF):
 # do not overwrite them
         self._irrep_doccs = []
         self._irrep_soccs = []
-# The _core_mo_energy is the orbital energy to help get_occ find doubly
-# occupied core orbitals
-        self._core_mo_energy = None
-        self._open_mo_energy = None
         self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
@@ -329,8 +339,13 @@ class ROHF(rohf.ROHF):
         for ir in range(self.mol.symm_orb.__len__()):
             irname = self.mol.irrep_name[ir]
             if irname in self.irrep_nelec:
-                fix_na += self.irrep_nelec[irname][0]
-                fix_nb += self.irrep_nelec[irname][1]
+                if isinstance(self.irrep_nelec[irname], (int, numpy.integer)):
+                    nb = self.irrep_nelec[irname] // 2
+                    fix_na += self.irrep_nelec[irname] - nb
+                    fix_nb += nb
+                else:
+                    fix_na += self.irrep_nelec[irname][0]
+                    fix_nb += self.irrep_nelec[irname][1]
             else:
                 float_irname.append(irname)
         float_irname = set(float_irname)
@@ -355,8 +370,16 @@ class ROHF(rohf.ROHF):
 
     def build_(self, mol=None):
         # specify alpha,beta for same irreps
-        na = sum([x[0] for x in self.irrep_nelec.values()])
-        nb = sum([x[1] for x in self.irrep_nelec.values()])
+        na = 0
+        nb = 0
+        for x in self.irrep_nelec.values():
+            if isinstance(x, (int, numpy.integer)):
+                v = x // 2
+                na += x - v
+                nb += v
+            else:
+                na += x[0]
+                nb += x[1]
         nopen = self.mol.spin
         assert(na >= nb and nopen >= na-nb)
         for irname in self.irrep_nelec.keys():
@@ -368,35 +391,14 @@ class ROHF(rohf.ROHF):
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nirrep = self.mol.symm_orb.__len__()
-        fa = symm.symmetrize_matrix(self._focka_ao, self.mol.symm_orb)
         h = symm.symmetrize_matrix(h, self.mol.symm_orb)
         s = symm.symmetrize_matrix(s, self.mol.symm_orb)
         cs = []
         es = []
-        ecore = []
-        eopen = []
         for ir in range(nirrep):
             e, c = hf.SCF.eig(self, h[ir], s[ir])
-            ecore.append(e.copy())
-            eopen.append(numpy.einsum('ik,ik->k', c, numpy.dot(fa[ir], c)))
-            if len(self._irrep_doccs) > 0:
-                ncore = self._irrep_doccs[ir]
-                ea = eopen[ir][ncore:]
-                if len(ea) > 0:
-                    idx = ea.argsort()
-                    e[ncore:] = ea[idx]
-                    c[:,ncore:] = c[:,ncore:][:,idx]
-            elif self.mol.irrep_name[ir] in self.irrep_nelec:
-                ncore = self.irrep_nelec[self.mol.irrep_name[ir]][1]
-                ea = eopen[ir][ncore:]
-                if len(ea) > 0:
-                    idx = ea.argsort()
-                    e[ncore:] = ea[idx]
-                    c[:,ncore:] = c[:,ncore:][:,idx]
             cs.append(c)
             es.append(e)
-        self._core_mo_energy = numpy.hstack(ecore)
-        self._open_mo_energy = numpy.hstack(eopen)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
@@ -455,8 +457,12 @@ class ROHF(rohf.ROHF):
             irname = mol.irrep_name[ir]
             nso = mol.symm_orb[ir].shape[1]
             if irname in self.irrep_nelec:
-                ncore = self.irrep_nelec[irname][1]
-                nocc = self.irrep_nelec[irname][0]
+                if isinstance(self.irrep_nelec[irname], (int, numpy.integer)):
+                    ncore = self.irrep_nelec[irname] // 2
+                    nocc = self.irrep_nelec[irname] - ncore
+                else:
+                    ncore = self.irrep_nelec[irname][1]
+                    nocc = self.irrep_nelec[irname][0]
                 mo_occ[p0:p0+ncore] = 2
                 mo_occ[p0+ncore:p0+nocc] = 1
                 neleca_fix += nocc
@@ -465,17 +471,24 @@ class ROHF(rohf.ROHF):
                 float_idx.append(range(p0,p0+nso))
             p0 += nso
 
+        mo_energy = mo_energy.copy()  # Roothan Fock eigenvalue + alpha energy
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
         assert(nelec_float >= 0)
         if len(float_idx) > 0:
             float_idx = numpy.hstack(float_idx)
             nopen = mol.spin - (neleca_fix - nelecb_fix)
             ncore = (nelec_float - nopen)//2
-            ecore = self._core_mo_energy[float_idx]
+            ecore = mo_energy[float_idx]
             core_sort = numpy.argsort(ecore)
             core_idx = float_idx[core_sort][:ncore]
             open_idx = float_idx[core_sort][ncore:]
-            eopen = self._open_mo_energy[open_idx]
+            if mo_coeff is None:
+                open_mo_energy = mo_energy
+            else:
+                open_mo_energy = numpy.einsum('ki,ki->i', mo_coeff,
+                                              self._focka_ao.dot(mo_coeff))
+            eopen = open_mo_energy[open_idx]
+            mo_energy[open_idx] = eopen
             open_sort = numpy.argsort(eopen)
             open_idx = open_idx[open_sort]
             mo_occ[core_idx] = 2
@@ -515,10 +528,10 @@ class ROHF(rohf.ROHF):
             for ir in range(nirrep):
                 irname = mol.irrep_name[ir]
                 nso = mol.symm_orb[ir].shape[1]
-                logger.debug1(self, '_core_mo_energy of %s = %s',
-                              irname, self._core_mo_energy[p0:p0+nso])
-                logger.debug1(self, '_open_mo_energy of %s = %s',
-                              irname, self._open_mo_energy[p0:p0+nso])
+                logger.debug2(self, 'core_mo_energy of %s = %s',
+                              irname, mo_energy[p0:p0+nso])
+                logger.debug2(self, 'open_mo_energy of %s = %s',
+                              irname, open_mo_energy[p0:p0+nso])
                 p0 += nso
         return mo_occ
 
@@ -551,6 +564,10 @@ class ROHF(rohf.ROHF):
         self.mo_occ[:ncore] = 2
         self.mo_occ[ncore:nocc] = 1
         self.mo_occ[nocc:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
     def analyze(self, verbose=logger.DEBUG):
         from pyscf.tools import dump_mat
@@ -608,7 +625,7 @@ class ROHF(rohf.ROHF):
             dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_pop(mol, dm, ovlp_ao, verbose)
+        return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm

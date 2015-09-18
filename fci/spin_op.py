@@ -46,12 +46,22 @@ librdm = pyscf.lib.load_library('libfci')
 #       <CI|ao><ao|S^2|CI>
 # For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
 def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
-    '''General spin square operator'''
-# <CI|S+*S-|CI> = neleca + \delta_{ik}\delta_{jl}Gamma_{iakb,jbla}
-# <CI|S-*S+|CI> = nelecb + \delta_{ik}\delta_{jl}Gamma_{ibka,jalb}
-# <CI|Sz*Sz|CI> = \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
-#                                       -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb})
-#               + (neleca+nelecb)/4
+    r'''General spin square operator.
+
+    ... math::
+
+        <CI|S_+*S_-|CI> &= n_\alpha + \delta_{ik}\delta_{jl}Gamma_{i\alpha k\beta ,j\beta l\alpha } \\
+        <CI|S_-*S_+|CI> &= n_\beta + \delta_{ik}\delta_{jl}Gamma_{i\beta k\alpha ,j\alpha l\beta } \\
+        <CI|S_z*S_z|CI> &= \delta_{ik}\delta_{jl}(Gamma_{i\alpha k\alpha ,j\alpha l\alpha }
+                         - Gamma_{i\alpha k\alpha ,j\beta l\beta }
+                         - Gamma_{i\beta k\beta ,j\alpha l\alpha}
+                         + Gamma_{i\beta k\beta ,j\beta l\beta})
+                         + (n_\alpha+n_\beta)/4
+
+    Given the overlap betwen non-degenerate alpha and beta orbitals, this
+    function can compute the expectation value spin square operator for
+    UHF-FCI wavefunction
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -99,7 +109,8 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     return ss, multip
 
 def spin_square0(fcivec, norb, nelec):
-    '''Spin square for CI wfn of spin-degenerated Hamiltonian'''
+    '''Spin square for RHF-FCI CI wfn only (obtained from spin-degenerated
+    Hamiltonian)'''
     ss = numpy.einsum('ij,ij->', fcivec, contract_ss(fcivec, norb, nelec))
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
@@ -199,6 +210,8 @@ def make_rdm2_abba(fcivec, norb, nelec):
 
 
 def contract_ss(fcivec, norb, nelec):
+    '''Contract spin square operator with FCI wavefunction :math:`S^2 |CI>`
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -250,7 +263,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = pyscf.lib.take_2d(fcivec, maska, maskb)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: t1[ida.reshape(-1,1),idb] += citmp
-            pyscf.lib.takebak_2d(t1, citmp, ida, idb)
+            pyscf.lib.takebak_2d_(t1, citmp, ida, idb)
         for i in range(norb):
             signa = aindex[:,i,1]
             signb = bindex[:,i,1]
@@ -261,7 +274,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = pyscf.lib.take_2d(t1, ida, idb)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: ci1[maska.reshape(-1,1), maskb] += citmp
-            pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
+            pyscf.lib.takebak_2d_(ci1, citmp, maska, maskb)
 
     ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-

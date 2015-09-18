@@ -254,7 +254,7 @@ def get_fock(casscf, mo_coeff=None, ci=None):
         return casscf.get_fock(mo_coeff, ci)
 
 def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
-    '''Restore natrual orbitals
+    '''Natrual orbitals in CAS space
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
@@ -326,7 +326,6 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-10)
     fcibase = casscf.fcisolver
-    fcibase.nroots = len(weights)
     class FakeCISolver(casscf.fcisolver.__class__):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)

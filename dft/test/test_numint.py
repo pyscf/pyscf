@@ -13,10 +13,10 @@ mol = gto.Mole()
 mol.verbose = 0
 mol.output = None
 mol.atom = [('h', (0,0,i*3)) for i in range(12)]
-mol.grids = {"H": (50, 110)}
 mol.basis = 'ccpvtz'
 mol.build()
 mf = dft.RKS(mol)
+mf.grids.atom_grid = {"H": (50, 110)}
 mf.grids.setup_grids_()
 nao = mol.nao_nr()
 

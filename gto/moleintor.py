@@ -214,10 +214,10 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         return mat
     else:
         if comp == 1:
-            pyscf.lib.hermi_triu(mat, hermi=hermi)
+            pyscf.lib.hermi_triu_(mat, hermi=hermi)
         else:
             for i in range(comp):
-                pyscf.lib.hermi_triu(mat[i], hermi=hermi)
+                pyscf.lib.hermi_triu_(mat[i], hermi=hermi)
         return mat
 
 def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
@@ -242,7 +242,7 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
         raise NotImplementedError('cint2e spinor AO integrals')
 
     if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
-        assert(bralst is None and ketlst is None)
+        assert(bras is None and kets is None)
         nao_pair = nao*(nao+1)//2
         if vout is None:
             vout = numpy.empty((nao_pair*(nao_pair+1)//2))
