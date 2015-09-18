@@ -507,9 +507,6 @@ class CASSCF(casci_uhf.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def make_precond(self, h_diag):
-        return mc1step.make_precond(h_diag, self.ah_level_shift)
-
     def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, x0_guess,
                       conv_tol_grad, verbose):
         return mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, x0_guess,

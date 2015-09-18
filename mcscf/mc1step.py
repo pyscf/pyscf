@@ -223,19 +223,6 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
 
     return g_orb, gorb_update, h_op, h_diag
 
-def make_precond(h_diag, level_shift=0):
-    '''Preconditioner for orbital rotation'''
-    def precond(x, e):
-        hdiagd = h_diag-(e-level_shift)
-        hdiagd[abs(hdiagd)<1e-8] = 1e-8
-        x = x/hdiagd
-        norm_x = numpy.linalg.norm(x)
-        x *= 1/norm_x
-        #if norm_x < 1e-2:
-        #    x *= 1e-2/norm_x
-        return x
-    return precond
-
 def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                   conv_tol_grad=1e-4, verbose=None):
     if isinstance(verbose, logger.Logger):
@@ -252,7 +239,18 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
     log.debug('    |g|= %4.3g', norm_gorb)
     t3m = log.timer('gen h_op', *t3m)
 
-    precond = casscf.make_precond(h_diag)
+    def precond(x, e):
+        if callable(h_diag):
+            x = h_diag(x, e-casscf.ah_level_shift)
+        else:
+            hdiagd = h_diag-(e-casscf.ah_level_shift)
+            hdiagd[abs(hdiagd)<1e-8] = 1e-8
+            x = x/hdiagd
+        norm_x = numpy.linalg.norm(x)
+        x *= 1/norm_x
+        #if norm_x < 1e-2:
+        #    x *= 1e-2/norm_x
+        return x
 
 # Dynamically increase the number of micro cycles when approach convergence?
 #    if norm_gorb < 0.01:
@@ -950,9 +948,6 @@ class CASSCF(casci.CASCI):
 
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
-
-    def make_precond(self, h_diag):
-        return make_precond(h_diag, self.ah_level_shift)
 
     def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, r0,
                       conv_tol_grad, verbose):
