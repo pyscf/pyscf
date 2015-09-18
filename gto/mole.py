@@ -977,6 +977,8 @@ class Mole(object):
             |         ...
             |         [atomN, (x, y, z)]]
 
+        unit : str
+            Angstrom or Bohr
         basis : dict or str
             To define basis set.
         nucmod : dict or str

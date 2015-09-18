@@ -399,7 +399,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    if factor < 0:
+    if abs(factor) < 1e-4:
         return f
     else:
         dm_vir = s - reduce(numpy.dot, (s, d, s))
@@ -407,7 +407,7 @@ def level_shift(s, d, f, factor):
 
 
 def damping(s, d, f, factor):
-    if factor < 1e-3:
+    if abs(factor) < 1e-4:
         return f
     else:
         #dm_vir = s - reduce(numpy.dot, (s,d,s))
