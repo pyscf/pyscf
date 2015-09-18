@@ -274,7 +274,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
                       imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
