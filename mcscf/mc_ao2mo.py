@@ -215,7 +215,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     log.debug1('Half transformation done. Current memory %d',
                pyscf.lib.current_memory()[0])
 
-    nblk = int(max(1, min(nmo, (max_memory*1e6/8-papa_buf.size) / (ncas**2*nmo))))
+    nblk = int(max(8, min(nmo, max(2000,max_memory*1e6/8-papa_buf.size)/(ncas**2*nmo))))
     log.debug1('nblk for papa = %d', nblk)
     dset = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
@@ -229,12 +229,12 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     for istep, sh_range in enumerate(shranges):
         tmp[:,p0:p0+sh_range[2]] = faapp_buf[str(istep)]
         p0 += sh_range[2]
-    nblk = int(max(1, min(nmo, (max_memory*1e6/8-tmp.size) / (ncas**2*nmo))))
+    nblk = int(max(8, min(nmo, max(2000,max_memory*1e6/8-tmp.size)/(ncas**2*nmo))))
     log.debug1('nblk for ppaa = %d', nblk)
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
         tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1-i0,0,nmo), 's4', 's1', ao_loc=ao_loc)
-        dset[i0:i1] = tmp1.T.reshape(i1-i0,nmo,ncas,ncas)
+        dset[i0:i1] = pyscf.lib.transpose(tmp1).reshape(i1-i0,nmo,ncas,ncas)
     tmp = tmp1 = None
     time1 = log.timer('ppaa pass 2', *time1)
 
