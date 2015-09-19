@@ -351,7 +351,6 @@ class DMRGCI(object):
     def restart_scheduler_(self):
         def callback(envs):
             if (envs['norm_gorb'] < self.dmrg_switch_tol or
-                ('norm_gci' in envs and envs['norm_gci'] < self.dmrg_switch_tol) or
                 ('norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10)):
                 self.restart = True
             else :
