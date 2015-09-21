@@ -101,8 +101,16 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
 
-    cond = numpy.linalg.cond(s1e)
-    if cond*1e-17 > conv_tol:
+    # cond = numpy.linalg.cond(s1e)
+    # numpy.linalg.cond has a bug, where it
+    # does not correctly generalize
+    # condition number if s1e is not a matrix
+    sigma = numpy.linalg.svd(s1e, compute_uv=False)
+    cond=sigma.T[0]/sigma.T[-1] # values are along last dimension, so
+                                # so must transpose. This transpose
+                                # is omitted in numpy.linalg
+
+    if numpy.linalg.norm(cond)*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
                     'SCF may be inaccurate and hard to converge.', cond)
 

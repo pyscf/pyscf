@@ -9,11 +9,11 @@ def format_pseudo(pseudo_tab):
     ``{ atom: ( (nelec_s, nele_p, nelec_d, ...),
                 rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
                 nproj_types,
-                (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
-                               (hproj1[2,1], hproj1[2,2], ..., hproj1[2,nproj1]),
+                (r1, nproj1, ( (hproj1[1,1], hrpoj1[1,2], ..., hproj1[1,nproj1]),
+                               (hproj1[2,1], hrpoj1[2,2], ..., hproj1[2,nproj1]),
                                ...
-                               (hproj1[nproj1,1], hproj1[nproj1,2], ...        ) )),
-                (r2, nproj2, ( (hproj2[1,1], hproj2[1,2], ..., hproj2[1,nproj1]),
+                               (hproj1[nproj1,1], hrpoj1[nproj1,2], ...        ) )),
+                (r2, nproj2, ( (hproj2[1,1], hrpoj2[1,2], ..., hproj2[1,nproj1]),
                 ... ) )
                 )
         ... }``
@@ -51,11 +51,12 @@ class Cell(pyscf.gto.Mole):
         self.__dict__.update(kwargs)
         self.h = None
         self.vol = 0.
-        self.nimgs = 0
+        self.nimgs = []
         self.pseudo = None
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
+
     def build_(self, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.  
         Whenever you change the value of the attributes of :class:`Cell`, 

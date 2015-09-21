@@ -12,6 +12,8 @@ pi=math.pi
 exp=np.exp
 sqrt=np.sqrt
 erfc=scipy.special.erfc
+cos=math.cos
+sin=math.sin
 
 def get_Gv(cell, gs):
     '''
@@ -97,24 +99,193 @@ def setup_uniform_grids(cell, gs):
     coords=R.T.copy() # make C-contiguous with copy() for pyscf
     return coords
 
-def get_aoR(cell, coords):
-    return _eval_ao(cell, coords)
+def get_aoR(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
+            bascount=None, non0tab=None, verbose=None):
+    '''
+    Values of AO crystal orbitals on a set of coords.
 
-def _eval_ao(cell, coords):
+    With the optional kpt arguments, returns the pair of 
+    sin, cos crystal orbitals at that kpt. 
+
+    (kpt==0 denotes Gamma pt, returns values of only one set)
+
+    Returns
+        ndarray [ncoords, nao] where nao=cell.nbas at Gamma point
+                               
+                                        =2*cell.nbas (any other k point)
+    '''  
+    if kpt is None:
+        kpt=np.zeros([3,1])
+
+    # if nimgs is None:
     nimgs = cell.nimgs
-    aoR=pyscf.dft.numint.eval_ao(cell, coords)
-    Ts = [[i,j,k] for i in range(-nimgs,nimgs+1)
-                  for j in range(-nimgs,nimgs+1)
-                  for k in range(-nimgs,nimgs+1) 
-                  if i**2+j**2+k**2 <= nimgs**2 and i**2+j**2+k**2 != 0]
+
+    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
+                  for j in range(-nimgs[1],nimgs[1]+1)
+                  for k in range(-nimgs[2],nimgs[2]+1)
+                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
+    
+    nao=cell.nbas
+
+
+    if isgga:
+        aoR=np.zeros([4,coords.shape[0], nao], np.complex128)
+    else:
+        aoR=np.zeros([coords.shape[0], nao], np.complex128)
 
     for T in Ts:
-        aoR+=pyscf.dft.numint.eval_ao(cell, coords+np.dot(cell.h,T))
+        L = np.dot(cell.h, T)
+
+        aoR+=(exp(1j*np.dot(kpt.T,L)) *
+              pyscf.dft.numint.eval_ao(cell, coords-L,
+                                       isgga, relativity, 
+                                       bastart, bascount, 
+                                       non0tab, verbose))
     return aoR
 
-def get_rhoR(cell, aoR, dm):
-    rhoR=pyscf.dft.numint.eval_rho(cell, aoR, dm)
-    return rhoR
+def get_rhoR(mol, ao, dm, non0tab=None, 
+             isgga=False, verbose=None):
+    '''
+    See pyscf.dft.numint.eval_rho, generalized for complex aoR.
+
+    Returns 
+        *Real* density (and optionally derivatives) on grid
+    '''
+    import numpy
+    from pyscf.dft.numint import _dot_ao_dm, eval_rho, BLKSIZE
+
+    if isgga:
+        ngrids, nao = ao[0].shape
+    else:
+        ngrids, nao = ao.shape
+
+    if non0tab is None:
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                             dtype=numpy.int8)
+
+    # For below code, also see pyscf.dft.numint.eval_rho
+    #if ao[0].dtype==numpy.complex128: # complex orbitals
+    if True:
+        dm_re=numpy.ascontiguousarray(dm.real)
+        dm_im=numpy.ascontiguousarray(dm.imag)
+
+        if isgga:
+            rho = numpy.empty((4,ngrids))
+            ao_re=numpy.ascontiguousarray(ao[0].real)
+            ao_im=numpy.ascontiguousarray(ao[0].imag)
+            ao_re=numpy.ascontiguousarray(ao[0].real)
+            ao_im=numpy.ascontiguousarray(ao[0].imag)
+
+            # DM * ket: e.g. ir denotes dm_im | ao_re >
+            c0_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
+            c0_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
+            c0_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
+            c0_ii = _dot_ao_dm(mol, ao_im, dm_im, nao, ngrids, non0tab)
+
+            # bra * DM
+            rho[0] = (numpy.einsum('pi,pi->p', ao_im, c0_ri) +
+                      numpy.einsum('pi,pi->p', ao_re, c0_rr) +
+                      numpy.einsum('pi,pi->p', ao_im, c0_ir) -
+                      numpy.einsum('pi,pi->p', ao_re, c0_ii))
+
+            for i in range(1, 4):
+                ao_re=numpy.ascontiguousarray(ao[i].real)
+                ao_im=numpy.ascontiguousarray(ao[i].imag)
+
+                c1_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
+                c1_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
+                c1_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
+                c1_ii = _dot_ao_dm(mol, ao_im, dm_im, nao, ngrids, non0tab)
+
+                rho[i] = (numpy.einsum('pi,pi->p', ao_im, c1_ri) +
+                          numpy.einsum('pi,pi->p', ao_re, c1_rr) +
+                          numpy.einsum('pi,pi->p', ao_im, c1_ir) -
+                          numpy.einsum('pi,pi->p', ao_re, c1_ii)) * 2 # *2 for +c.c.       
+        else:
+            ao_re=numpy.ascontiguousarray(ao.real)
+            ao_im=numpy.ascontiguousarray(ao.imag)
+            # DM * ket: e.g. ir denotes dm_im | ao_re >
+            
+            c0_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
+            c0_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
+            c0_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
+            c0_ii = _dot_ao_dm(mol, ao_im, dm_im, nao, ngrids, non0tab)
+            # bra * DM
+            rho = (numpy.einsum('pi,pi->p', ao_im, c0_ri) +
+                   numpy.einsum('pi,pi->p', ao_re, c0_rr) +
+                   numpy.einsum('pi,pi->p', ao_im, c0_ir) -
+                   numpy.einsum('pi,pi->p', ao_re, c0_ii))
+                                    
+    else:
+        rho=eval_rho(mol, ao, dm, non0tab,
+                     isgga, verbose)
+    
+    return rho
+
+
+def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+             isgga=False, verbose=None):
+    '''Calculate XC potential matrix.
+    
+    See also pyscf.dft.numint.eval_mat
+    '''
+    from pyscf.dft.numint import BLKSIZE, _dot_ao_ao
+    import numpy
+
+    if isgga:
+        ngrids, nao = ao[0].shape
+    else:
+        ngrids, nao = ao.shape
+
+    if non0tab is None:
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                             dtype=numpy.int8)
+
+    if ao[0].dtype==numpy.complex128:
+        if isgga:
+            assert(vsigma is not None and rho.ndim==2)
+            #wv = weight * vsigma * 2
+            #aow  = numpy.einsum('pi,p->pi', ao[1], rho[1]*wv)
+            #aow += numpy.einsum('pi,p->pi', ao[2], rho[2]*wv)
+            #aow += numpy.einsum('pi,p->pi', ao[3], rho[3]*wv)
+            #aow += numpy.einsum('pi,p->pi', ao[0], .5*weight*vrho)
+            wv = numpy.empty_like(rho)
+            wv[0]  = weight * vrho * .5
+            wv[1:] = rho[1:] * (weight * vsigma * 2)
+            aow = numpy.einsum('npi,np->pi', ao, wv)
+
+            ao_re=numpy.ascontiguousarray(ao[0].real)
+            ao_im=numpy.ascontiguousarray(ao[0].imag)
+
+            aow_re = numpy.ascontiguousarray(aow.real)
+            aow_im = numpy.ascontiguousarray(aow.imag)
+
+        else:
+            # *.5 because return mat + mat.T
+            #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
+            ao_re=numpy.ascontiguousarray(ao.real)
+            ao_im=numpy.ascontiguousarray(ao.imag)
+
+            aow_re = ao_re * (.5*weight*vrho).reshape(-1,1)
+            aow_im = ao_im * (.5*weight*vrho).reshape(-1,1)
+            #mat = pyscf.lib.dot(ao.T, aow)
+
+        mat_re = _dot_ao_ao(mol, ao_re, aow_re, nao, ngrids, non0tab)
+        mat_re += _dot_ao_ao(mol, ao_im, aow_im, nao, ngrids, non0tab)
+        mat_im = _dot_ao_ao(mol, ao_re, aow_im, nao, ngrids, non0tab)
+        mat_im -= _dot_ao_ao(mol, ao_im, aow_re, nao, ngrids, non0tab)
+
+        mat=mat_re+1j*mat_im
+
+        # print "MATRIX", mat.dtype
+        return mat + mat.T.conj()
+        
+    else:
+        return pyscf.dft.numint.eval_mat(mol, ao, 
+                                         weight, rho, vrho, 
+                                         vsigma=None, non0tab=None,
+                                         isgga=False, verbose=None)
+
 
 def fft(f, gs):
     '''
@@ -149,6 +320,16 @@ def ifft(g, gs):
     f3d=np.fft.ifftn(g3d)
     return np.ravel(f3d)
 
+def get_nimgs_cutoff(cell, precision):
+    '''
+    Returns number of AO lattice images
+    to include to achieve a given precision
+
+    Returns
+        nimgs: ndarray
+    '''
+    pass
+
 def ewald_params(cell, gs, precision):
     '''
     Based on largest G vector and desired relative precision,
@@ -176,6 +357,7 @@ def ewald_params(cell, gs, precision):
 
     rcut=sqrt(-log_precision)/ew_eta
     rlengths=np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
+    #print "rlengths", rcut, rlengths
     ew_cut=np.rint(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
     return ew_eta, ew_cut
@@ -404,7 +586,9 @@ class UniformGrids(object):
         self.gs = gs
         self.coords = None
         self.weights = None
-        
+        self.stdout = cell.stdout
+        self.verbose = cell.verbose
+
     def setup_grids_(self, cell=None, gs=None):
         if cell==None: cell=self.cell
         if gs==None: gs=self.gs
@@ -416,11 +600,55 @@ class UniformGrids(object):
         return self.coords, self.weights
 
     def dump_flags(self):
-        logger.info(self, 'uniform grid')
+        logger.info(self, 'Uniform grid')
 
     def kernel(self, cell=None):
         self.dump_flags()
         return self.setup_grids()
+
+class _NumInt(pyscf.dft.numint._NumInt):
+    '''
+    Generalization for a single k-pt shift, and
+    periodic images
+    '''
+    def __init__(self, kpt=None):
+        pyscf.dft.numint._NumInt.__init__(self)
+        self.kpt=kpt
+
+    def eval_ao(self, mol, coords, isgga=False, relativity=0, bastart=0,
+                bascount=None, non0tab=None, verbose=None):
+        return get_aoR(mol, coords, self.kpt, isgga, relativity, bastart, bascount,
+                       non0tab, verbose)
+
+    def eval_rho(self, mol, ao, dm, non0tab=None, 
+             isgga=False, verbose=None):
+        return get_rhoR(mol, ao, dm, non0tab=None, 
+             isgga=False, verbose=None)
+
+    def eval_rho2(self, mol, ao, dm, non0tab=None, isgga=False,
+                  verbose=None):
+        raise NotImplementedError
+
+    def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
+               max_memory=2000, verbose=None):
+        '''
+        Use slow function in numint, which only calls eval_rho, eval_mat.
+        Faster function uses eval_rho2 which is not yet implemented.
+        '''
+        return pyscf.dft.numint.nr_rks_vxc(self, mol, grids, x_id, c_id, dms, 
+                                           spin=0, relativity=0, hermi=1,
+                                           max_memory=2000, verbose=None)
+
+    def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
+               max_memory=2000, verbose=None):
+        raise NotImplementedError
+
+    def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+                 isgga=False, verbose=None):
+        # use local function for complex eval_mat
+        return eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+                        isgga=False, verbose=None)
+
 
 def test_ewald():
 
@@ -453,7 +681,7 @@ def test_ewald():
     cell.__dict__=mol.__dict__ # hacky way to make a cell
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 1
+    cell.nimgs = [1,1,1]
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
