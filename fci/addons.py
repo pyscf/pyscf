@@ -355,7 +355,7 @@ def cre_b(ci0, norb, nelec, ap_id):
     else:
         neleca, nelecb = nelec
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)
-    nb_ci1 = cistring.num_strings(norb, nelecb-1)
+    nb_ci1 = cistring.num_strings(norb, nelecb+1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
 
     entry_has_ap = (cre_index[:,:,0] == ap_id)
