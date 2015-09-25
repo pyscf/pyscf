@@ -15,7 +15,7 @@ def get_atm_nrhf(mol):
     for a, b in mol._basis.items():
         atm = gto.Mole()
         atm.stdout = mol.stdout
-        atm.atom = [[a, (0, 0, 0)]]
+        atm.atom = atm._atom = [[a, (0, 0, 0)]]
         atm._basis = {a: b}
         atm.nelectron = gto.mole._charge(a)
         atm.spin = atm.nelectron % 2

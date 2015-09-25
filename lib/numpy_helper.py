@@ -388,6 +388,18 @@ def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
 
+def norm(x, ord=None, axis=None):
+    if axis is None:
+        return numpy.linalg.norm(x, ord)
+    elif axis == 0:
+        xx = numpy.linalg.einsum('ij,ij->j', x, x)
+        return numpy.sqrt(xx)
+    elif axis == 1:
+        xx = numpy.linalg.einsum('ij,ij->i', x, x)
+        return numpy.sqrt(xx)
+    else:
+        raise RuntimeError('Not support for axis = %d' % axis)
+
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))

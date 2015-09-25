@@ -102,6 +102,8 @@ def mura_knowles(n, charge=None, **kwargs):
     w = r*r * dr * 4 * numpy.pi
     return r, w
 
+# Gauss-Chebyshev of the second kind,  and the transformed interval [0,\infty)
+# Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
 def gauss_chebyshev(n, **kwargs):
     '''Gauss-Chebyshev'''
     r = numpy.empty(n)
