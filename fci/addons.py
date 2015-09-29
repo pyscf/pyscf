@@ -450,7 +450,7 @@ def fix_spin_(fciobj, shift=.1):
         if isinstance(nelec, (int, numpy.integer)):
             sz = (nelec % 2) * .5
         else:
-            sz = (nelec[0]-nelec[1]) * .5
+            sz = abs(nelec[0]-nelec[1]) * .5
         ci1 += shift * spin_op.contract_ss(fcivec, norb, nelec)
         ci1 -= sz*(sz+1)*shift * fcivec.reshape(ci1.shape)
         if isinstance(fciobj, direct_spin0.FCISolver):
