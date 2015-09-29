@@ -381,6 +381,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
     return state_average_e_(casscf, weights)
 
 
+
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
