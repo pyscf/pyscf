@@ -644,7 +644,6 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
         double tmp;
 
         for (i = 0; i < np; i++) {
-                assert(stra[i] > 0);
         for (j = 0; j < i; j++) {
                 da = stra[i] ^ stra[j];
                 db = strb[i] ^ strb[j];
