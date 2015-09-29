@@ -28,11 +28,6 @@ class CASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
-        self.dump_flags()
-
         #irrep_name = self.mol.irrep_name
         irrep_name = self.mol.irrep_id
         self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
@@ -45,11 +40,8 @@ class CASCI(casci.CASCI):
             nocc = self.ncore + self.ncas
             self.fcisolver.orbsym = self.orbsym[ncore:nocc]
 
-        self.e_tot, e_cas, self.ci = \
-                casci.kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
+        self.e_tot, e_cas, self.ci = self.kernel(mo_coeff, ci0)
 
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         return self.e_tot, e_cas, self.ci
 
 

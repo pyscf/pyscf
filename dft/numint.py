@@ -239,16 +239,22 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, isgga=False,
                              dtype=numpy.int8)
     pos = mo_occ > OCCDROP
     cpos = numpy.einsum('ij,j->ij', mo_coeff[:,pos], numpy.sqrt(mo_occ[pos]))
-    if isgga:
-        rho = numpy.empty((4,ngrids))
-        c0 = _dot_ao_dm(mol, ao[0], cpos, nao, ngrids, non0tab)
-        rho[0] = numpy.einsum('pi,pi->p', c0, c0)
-        for i in range(1, 4):
-            c1 = _dot_ao_dm(mol, ao[i], cpos, nao, ngrids, non0tab)
-            rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+    if pos.sum() > 0:
+        if isgga:
+            rho = numpy.empty((4,ngrids))
+            c0 = _dot_ao_dm(mol, ao[0], cpos, nao, ngrids, non0tab)
+            rho[0] = numpy.einsum('pi,pi->p', c0, c0)
+            for i in range(1, 4):
+                c1 = _dot_ao_dm(mol, ao[i], cpos, nao, ngrids, non0tab)
+                rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+        else:
+            c0 = _dot_ao_dm(mol, ao, cpos, nao, ngrids, non0tab)
+            rho = numpy.einsum('pi,pi->p', c0, c0)
     else:
-        c0 = _dot_ao_dm(mol, ao, cpos, nao, ngrids, non0tab)
-        rho = numpy.einsum('pi,pi->p', c0, c0)
+        if isgga:
+            rho = numpy.zeros((4,ngrids))
+        else:
+            rho = numpy.zeros(ngrids)
 
     neg = mo_occ < -OCCDROP
     if neg.sum() > 0:

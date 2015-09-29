@@ -83,6 +83,7 @@ mp
 symm
     Symmetry
 tools
+    fcidump, molden etc
 
 
 Pure function and Class
