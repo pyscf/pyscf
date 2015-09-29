@@ -158,7 +158,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     eri = eri.copy()
     h2e = pyscf.ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
-    f1e = f1e * (1./nelec)
+    f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
         h2e[k,k,:,:] += f1e
         h2e[:,:,k,k] += f1e
