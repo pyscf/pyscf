@@ -13,6 +13,7 @@ import pyscf.symm
 from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
+from pyscf.scf import chkfile
 
 
 def analyze(mf, verbose=logger.DEBUG):
@@ -101,7 +102,7 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Alpha/beta electron numbers for each irreducible representation.
@@ -354,6 +355,10 @@ class UHF(uhf.UHF):
         self.mo_occ[0][nocc_a:] = 0
         self.mo_occ[1][:nocc_b] = 1
         self.mo_occ[1][nocc_b:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)

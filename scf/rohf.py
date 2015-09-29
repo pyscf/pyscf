@@ -46,8 +46,7 @@ The first argument is chk file name.''')
     else:  # UHF
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
-        dm =(make_rdm1(fproj(mo[0]), mo_occ[0]),
-             make_rdm1(fproj(mo[1]), mo_occ[1]))
+        dm = uhf.make_rdm1((fproj(mo[0]),fproj(mo[1])), mo_occ)
     return dm
 
 def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
@@ -78,6 +77,8 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         level_shift_factor = mf.level_shift_factor
     if damp_factor is None:
         damp_factor = mf.damp_factor
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
 # Fc = (Fa+Fb)/2
     mf._focka_ao = h1e + vhf[0]
     fockb_ao = h1e + vhf[1]
@@ -123,7 +124,7 @@ def get_grad(mo_coeff, mo_occ, fock=None):
     g[viridxb[:,None],occidxb] += fockb[viridxb[:,None],occidxb]
     return g[mask]
 
-def make_rdm1(mo_coeff=None, mo_occ=None):
+def make_rdm1(mo_coeff, mo_occ):
     mo_a = mo_coeff[:,mo_occ>0]
     mo_b = mo_coeff[:,mo_occ==2]
     dm_a = numpy.dot(mo_a, mo_a.T)
@@ -132,6 +133,8 @@ def make_rdm1(mo_coeff=None, mo_occ=None):
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
+    elif isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
     ee, ecoul = uhf.energy_elec(mf, dm, h1e, vhf)
     logger.debug(mf, 'Ecoul = %.15g', ecoul)
     return ee, ecoul

@@ -181,6 +181,8 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     '''
     if h1e is None:
         h1e = mf.get_hcore()
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
@@ -344,6 +346,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
     pop_a = numpy.einsum('ij->i', dm[0]*s)
     pop_b = numpy.einsum('ij->i', dm[1]*s)
     label = mol.spheric_labels(False)
@@ -378,6 +382,8 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
+    if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
+        dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
     c = orth.pre_orth_ao(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
     c_inv = numpy.dot(orth_coeff.T, s)
@@ -528,17 +534,19 @@ class UHF(hf.SCF):
     def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        dm = numpy.asarray(dm)
+        nao = dm.shape[-1]
         cpu0 = (time.clock(), time.time())
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
-            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
             if self.direct_scf:
                 self.opt = self.init_direct_scf(mol)
-            vj, vk = hf.get_jk(mol, dm, hermi, self.opt)
+            vj, vk = hf.get_jk(mol, dm.reshape(-1,nao,nao), hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj, vk
+        return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         '''Hartree-Fock potential matrix for the given density matrices.

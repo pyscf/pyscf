@@ -12,6 +12,7 @@ from pyscf.lib import logger
 from pyscf import symm
 from pyscf.scf import hf
 from pyscf.scf import rohf
+from pyscf.scf import chkfile
 
 
 '''
@@ -263,6 +264,10 @@ class RHF(hf.RHF):
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
 # analyze at last, in terms of the ordered orbital energies
         #if self.verbose >= logger.INFO:
@@ -430,6 +435,8 @@ class ROHF(rohf.ROHF):
             level_shift_factor = self.level_shift_factor
         if damp_factor is None:
             damp_factor = self.damp_factor
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+            dm = numpy.array((dm*.5, dm*.5))
         self._focka_ao = h1e + vhf[0]
         fockb_ao = h1e + vhf[1]
         ncore = (self.mol.nelectron-self.mol.spin) // 2
@@ -584,6 +591,10 @@ class ROHF(rohf.ROHF):
         self.mo_occ[:ncore] = 2
         self.mo_occ[ncore:nocc] = 1
         self.mo_occ[nocc:] = 0
+        if self.chkfile:
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             self.hf_energy, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
 
         #if self.verbose >= logger.INFO:
         #    self.analyze(self.verbose)
@@ -645,7 +656,7 @@ class ROHF(rohf.ROHF):
             dump_mat.dump_rec(mol.stdout, mo_coeff, label, molabel, start=1)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_pop(mol, dm, ovlp_ao, verbose)
+        return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm

@@ -158,7 +158,7 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
                 local_myprecon[ numVars ] = local_myprecon[ occ + numPairs * virt ] / eigval
             return local_myprecon
         
-        eigenval, eigenvec = linalg_helper.davidson( a=__wrapAugmentedHessian( FOCK_mo, numPairs, numVirt, tempJK_mo ), \
+        eigenval, eigenvec = linalg_helper.davidson( aop=__wrapAugmentedHessian( FOCK_mo, numPairs, numVirt, tempJK_mo ), \
                                                      x0=ini_guess, \
                                                      precond=myprecon, \
                                                      #tol=1e-14, \

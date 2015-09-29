@@ -96,11 +96,11 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
             mf._cderi = tempfile.NamedTemporaryFile()
             df.outcore.cholesky_eri(mol, mf._cderi.name, auxbasis=mf.auxbasis,
                                     verbose=log)
-            if (nao_pair*mf._naoaux*8/1e6+pyscf.lib.current_memory()[0]
-                < mf.max_memory*.9):
-                with df.load(mf._cderi) as feri:
-                    cderi = numpy.asarray(feri)
-                mf._cderi = cderi
+#            if (nao_pair*mf._naoaux*8/1e6+pyscf.lib.current_memory()[0]
+#                < mf.max_memory*.9):
+#                with df.load(mf._cderi) as feri:
+#                    cderi = numpy.asarray(feri)
+#                mf._cderi = cderi
 
     if len(dms) == 0:
         return [], []

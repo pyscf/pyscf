@@ -54,9 +54,6 @@ coverage.xml
 *.log
 *.pot
 
-# Sphinx documentation
-docs/_build/
-
 CMakeCache.txt
 CMakeFiles
 Makefile

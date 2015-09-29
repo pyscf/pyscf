@@ -85,8 +85,6 @@ def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=1):
     for k, v in cas_occ_num.iteritems():
         orb_irrep = [ casscf.ncore + base + i for i in range(len(orbsym)) if orbsym[i]== symm.irrep_name2id(casscf.mol.groupname,k) ]
         caslst.extend(orb_irrep[:v])
-    print caslst
-    print type(caslst)
     return caslst
 
 
