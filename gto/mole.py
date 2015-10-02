@@ -1494,10 +1494,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         Examples:
 
         >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1')
-        >>> mol.bas_coord(2)
+        >>> mol.bas_coord(1)
         [ 0.          0.          2.07869874]
         '''
-        atm_id = self.bas_atom(bas_id) - 1
+        atm_id = self.bas_atom(bas_id)
         ptr = self._atm[atm_id,PTR_COORD]
         return self._env[ptr:ptr+3].copy()
 
