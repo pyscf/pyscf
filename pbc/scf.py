@@ -27,6 +27,7 @@ def get_hcore(mf, cell, kpt=None):
         kpt=np.zeros([3,1])
 
     hcore=get_nuc(cell, mf.gs, kpt)
+    #hcore=get_pp(cell, mf.gs, kpt)
     hcore+=get_t(cell, mf.gs, kpt)
     return hcore
 
@@ -34,9 +35,6 @@ def get_nuc(cell, gs, kpt=None):
     '''
     Bare periodic nuc-el AO matrix (G=0 component removed).
     c.f. Martin Eq. (12.16)-(12.21)
-    
-    Returns
-        v_nuc (nao x nao) matrix
     '''
     if kpt is None:
         kpt=np.zeros([3,1])
@@ -64,32 +62,48 @@ def get_nuc(cell, gs, kpt=None):
 def get_pp(cell, gs, kpt):
     '''
     Nuc-el pseudopotential AO matrix
-    
-    Only local part right now, completely untested.
     '''
     if kpt is None:
         kpt=np.zeros([3,1])
 
-    chargs=[cell.atom_charge(i) for i in range(len(cell._atm))]
-
     Gv=pbc.get_Gv(cell, gs)
     SI=pbc.get_SI(cell, Gv)
-    vlocG=pp.get_vlocG(cell, gs)
-    
     coords=pbc.setup_uniform_grids(cell,gs)
-
-    #vpplocG=np.zeros(coords.shape[0], np.complex128)
-    #for ia, qa in enumerate(chargs):
-    #    vpplocG+=-chargs[ia] * SI[ia,:] * vlocG
-    qvlocG = chargs*vlocG
-    vpplocG = -np.sum(SI * qvlocG, axis=0)
-
-    vpplocR=pbc.ifft(vpplocG, gs)
     aoR=pbc.get_aoR(cell, coords, kpt)
-        
     nao=aoR.shape[1]
+
+    vlocG=pp.get_vlocG(cell, gs)
+    vpplocG = np.sum(SI * vlocG, axis=0)
+    
+    # vpploc in real-space
+    vpplocR=pbc.ifft(vpplocG, gs)
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR).real
-    return vpploc
+
+    # vppnonloc in reciprocal space
+    aoG=np.empty(aoR.shape, np.complex128)
+    for i in range(nao):
+        aoG[:,i]=pbc.fft(aoR[:,i], gs)
+
+    ngs=aoG.shape[0]
+    vppnl = np.zeros((nao,nao))
+    hs, projGs = pp.get_projG(cell, gs)
+    for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
+        for l, h in enumerate(h_ia):
+            nl = h.shape[0]
+            for m in range(-l,l+1):
+                for i in range(nl):
+                    SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
+                    SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aoG)
+                    for j in range(nl):
+                        SPG_lmj= SI[ia,:] * projG_ia[l][m][j]
+                        SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
+                        vppnl += h[i,j]*np.einsum('p,q->pq', 
+                                                SPG_lmi_aoG.conj(), 
+                                                SPG_lmj_aoG).real
+
+    vppnl *= (1./ngs**2)
+    # Potential is attractive
+    return -(vpploc + vppnl)
 
 def get_t(cell, gs, kpt=None):
     '''
