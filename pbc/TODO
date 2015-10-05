@@ -1,6 +1,9 @@
-spherical cutoff (should we assume cutoff s.t. Gaussians are represented analytically)
-real FFT
-exchange from analytic int (equiv. to truncation to unit cell?)
+- spherical cutoff in G space for Gaussians
+- exchange part of Fock matrix for k-points
+- FIX numpy.ComplexWarning for SCF if kpt != 0; SCF may not work
+  for kpt shifted away from Gamma point
+- Change Mole class check, so that can run KRKS calculations so long
+  as nelec * ncell is even (e.g. 4 H atoms) (may need to shift kpts to cell)
 
 Notes on pseudopotentials:
  - Some analogies:

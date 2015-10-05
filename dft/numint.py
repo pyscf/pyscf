@@ -600,7 +600,7 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
             den = rho[0]*weight
             nelec += den.sum()
             excsum += (den*exc).sum()
-        vmat += eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga=isgga,
+        vmat += ni.eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga=isgga,
                          verbose=verbose)
     return nelec, excsum, vmat
 
@@ -870,6 +870,12 @@ class _NumInt(object):
 
     def eval_c(self, c_id, rho, sigma, spin=0, relativity=0, verbose=None):
         return eval_c(c_id, rho, sigma, spin, relativity, verbose)
+
+    def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+             isgga=False, verbose=None):
+        return eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+                        isgga=False, verbose=None)
+
 
 def prange(start, end, step):
     for i in range(start, end, step):

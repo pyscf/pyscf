@@ -1,5 +1,4 @@
-import sys
-import itertools
+
 import math
 import numpy as np
 import numpy.fft
@@ -21,14 +20,17 @@ sqrt=math.sqrt
 exp=math.exp
 erfc = scipy.special.erfc
 
-def get_hcore(mf, cell):
+def get_hcore(mf, cell, kpt=None):
     '''H core. Modeled after get_veff_ in rks.py'''
-    #hcore=get_nuc(cell, mf.gs) 
-    hcore=get_pp(cell, mf.gs) 
-    hcore+=get_t(cell, mf.gs)
+
+    if kpt is None:
+        kpt=np.zeros([3,1])
+
+    hcore=get_nuc(cell, mf.gs, kpt)
+    hcore+=get_t(cell, mf.gs, kpt)
     return hcore
 
-def get_nuc(cell, gs):
+def get_nuc(cell, gs, kpt=None):
     '''
     Bare periodic nuc-el AO matrix (G=0 component removed).
     c.f. Martin Eq. (12.16)-(12.21)
@@ -36,7 +38,10 @@ def get_nuc(cell, gs):
     Returns
         v_nuc (nao x nao) matrix
     '''
-    chargs=[cell.atom_charge(i) for i in range(cell.natm)]
+    if kpt is None:
+        kpt=np.zeros([3,1])
+
+    chargs=[cell.atom_charge(i) for i in range(len(cell._atm))]
 
     Gv=pbc.get_Gv(cell, gs)
     SI=pbc.get_SI(cell, Gv)
@@ -50,96 +55,98 @@ def get_nuc(cell, gs):
     vneG = -np.dot(chargs,SI) * coulG
 
     vneR=pbc.ifft(vneG, gs)
-    aoR=pbc.get_aoR(cell, coords)
+    aoR=pbc.get_aoR(cell, coords, kpt)
         
     nao=aoR.shape[1]
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR).real
     return vne
 
-def get_pp(cell, gs):
+def get_pp(cell, gs, kpt):
     '''
     Nuc-el pseudopotential AO matrix
+    
+    Only local part right now, completely untested.
     '''
+    if kpt is None:
+        kpt=np.zeros([3,1])
+
+    chargs=[cell.atom_charge(i) for i in range(len(cell._atm))]
+
     Gv=pbc.get_Gv(cell, gs)
     SI=pbc.get_SI(cell, Gv)
-    coords=pbc.setup_uniform_grids(cell,gs)
-    aoR=pbc.get_aoR(cell, coords)
-    nao=aoR.shape[1]
-
     vlocG=pp.get_vlocG(cell, gs)
-    vpplocG = np.sum(SI * vlocG, axis=0)
+    
+    coords=pbc.setup_uniform_grids(cell,gs)
 
-    # vpploc in real-space
+    #vpplocG=np.zeros(coords.shape[0], np.complex128)
+    #for ia, qa in enumerate(chargs):
+    #    vpplocG+=-chargs[ia] * SI[ia,:] * vlocG
+    qvlocG = chargs*vlocG
+    vpplocG = -np.sum(SI * qvlocG, axis=0)
+
     vpplocR=pbc.ifft(vpplocG, gs)
+    aoR=pbc.get_aoR(cell, coords, kpt)
+        
+    nao=aoR.shape[1]
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR).real
-
-    # vppnonloc in reciprocal space
-    aoG=np.empty(aoR.shape, np.complex128)
-    for i in range(nao):
-        aoG[:,i]=pbc.fft(aoR[:,i], gs)
-
-    ngs=aoG.shape[0]
-    vppnl = np.zeros((nao,nao))
-    print "Getting NL projectors ...",
-    hs, projGs = pp.get_projG(cell, gs)
-    print "done."
-    for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
-        for l, h in enumerate(h_ia):
-            nl = h.shape[0]
-            for m in range(-l,l+1):
-                for i in range(nl):
-                    SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
-                    SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aoG)
-                    for j in range(nl):
-                        SPG_lmj= SI[ia,:] * projG_ia[l][m][j]
-                        SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
-                        vppnl += h[i,j]*np.einsum('p,q->pq', 
-                                                SPG_lmi_aoG.conj(), 
-                                                SPG_lmj_aoG).real
-
-    vppnl *= (1./ngs**2)
-    # Potential is attractive
-    return -(vpploc + vppnl)
+    return vpploc
 
 def get_t(cell, gs, kpt=None):
     '''
     Kinetic energy AO matrix
+
+    Note:  evaluated in real space
     '''
     if kpt is None:
         kpt=np.zeros([3,1])
     
-    Gv=pbc.get_Gv(cell, gs)
-
-    #print type(kpt)
-    #print type(Gv)
-    #print kpt
-
-    Gv+=kpt
+    #Gv=pbc.get_Gv(cell, gs)
+    #:G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
     #G2=np.einsum('ji,ji->i', Gv, Gv)
-    G2=np.sum(Gv*Gv,axis=0)
 
     coords=pbc.setup_uniform_grids(cell, gs)
-    aoR=pbc.get_aoR(cell, coords)
-    aoG=np.empty(aoR.shape, np.complex128)
-    TaoG=np.empty(aoR.shape, np.complex128)
+    #aoR=pbc.get_aoR(cell, coords, kpt)
 
-    nao=aoR.shape[1]
-    for i in range(nao):
-        aoG[:,i]=pbc.fft(aoR[:,i], gs)
-        TaoG[:,i]=0.5*G2*aoG[:,i]
-                
-    t = np.dot(aoG.T.conj(), TaoG).real
+    aoR=pbc.get_aoR(cell, coords, kpt, isgga=True)
+    #aoR0=pbc.get_aoR(cell, coords, kpt, nimgs=(0,0,0))
 
-    ngs=aoR.shape[0]
-    t *= (cell.vol/ngs**2)
+    # aoG=np.empty(aoR.shape, np.complex128)
+    # TaoG=np.empty(aoR.shape, np.complex128)
+    # TaoR=np.empty(aoR.shape, np.complex128)
+
+    # nao=aoR.shape[1]
+    # for i in range(nao):
+    #     aoG[:,i]=pbc.fft(aoR[:,i], gs)
+    #     TaoG[:,i]=0.5*G2*aoG[:,i]
+    #     TaoR[:,i]=pbc.ifft(TaoG[:,i], gs)
+   
+    #:t=np.empty([nao,nao])
+    #:for i in range(nao):
+    #:    for j in range(nao):
+    #:        t[i,j]=np.vdot(aoG[:,i],TaoG[:,j])
+    #t = np.dot(aoG.T.conj(), TaoG).real
+
+    #t = np.dot(aoR.T.conj(), TaoR).real
+    t = (np.dot(aoR[1].T.conj(), aoR[1]).real +
+         np.dot(aoR[2].T.conj(), aoR[2]).real +
+         np.dot(aoR[3].T.conj(), aoR[3]).real)
+
+    t*= 0.5
+
+    ngs=aoR.shape[1]
+    #t *= (cell.vol/ngs**2)
+    t *= (cell.vol/ngs)
     return t
 
-def get_ovlp(cell, gs):
+def get_ovlp(cell, gs, kpt=None):
     '''
     Overlap AO matrix
     '''
+    if kpt is None:
+        kpt=np.zeros([3,1])
+    
     coords=pbc.setup_uniform_grids(cell, gs)
-    aoR=pbc.get_aoR(cell, coords)
+    aoR=pbc.get_aoR(cell, coords, kpt)
 
     #nao=aoR.shape[1]
     # aoG=np.empty(aoR.shape, np.complex128)
@@ -150,17 +157,19 @@ def get_ovlp(cell, gs):
     ngs=aoR.shape[0]
     #s *= (cell.vol/ngs**2)
     s *= (cell.vol/ngs)
-
     return s
     
-def get_j(cell, dm, gs):
+def get_j(cell, dm, gs, kpt=None):
     '''
     Coulomb AO matrix 
     '''
+    if kpt is None:
+        kpt=np.zeros([3,1])
+
     coulG=pbc.get_coulG(cell, gs)
 
     coords=pbc.setup_uniform_grids(cell, gs)
-    aoR=pbc.get_aoR(cell, coords)
+    aoR=pbc.get_aoR(cell, coords, kpt)
 
     rhoR=pbc.get_rhoR(cell, aoR, dm)
     rhoG=pbc.fft(rhoR, gs)
@@ -186,7 +195,7 @@ class RHF(pyscf.scf.hf.RHF):
     TODO: maybe should create SCF class derived from pyscf.scf.hf.SCF, then
           derive from that
     '''
-    def __init__(self, cell, gs, ew_eta, ew_cut):
+    def __init__(self, cell, gs, ew_eta, ew_cut, kpt=None):
         self.cell=cell
         pyscf.scf.hf.RHF.__init__(self, cell)
         self.grids=pbc.UniformGrids(cell, gs)
@@ -194,21 +203,39 @@ class RHF(pyscf.scf.hf.RHF):
         self.ew_eta=ew_eta
         self.ew_cut=ew_cut
         self.mol_ex=False
+        if kpt is None:
+            kpt=np.array([0,0,0])
 
-    def get_hcore(self, cell=None):
+        self.kpt=np.array([0,0,0])
+
+    def dump_flags(self):
+        pyscf.scf.hf.RHF.dump_flags(self)
+        logger.info(self, '\n')
+        logger.info(self, '******** PBC SCF flags ********')
+        logger.info(self, 'Ewald eta = %g', self.ew_eta)
+        logger.info(self, 'Ewald real-space cutoff = (%d, %d, %d)', 
+                    self.ew_cut[0], self.ew_cut[1], self.ew_cut[2])
+        logger.info(self, 'Grid size = (%d, %d, %d)', 
+                    self.gs[0], self.gs[1], self.gs[2])
+        logger.info(self, 'Use molecule exchange = %s', self.mol_ex)
+
+    def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell=self.cell
-        return get_hcore(self, cell)
+        if kpt is None: kpt=self.kpt
+        return get_hcore(self, cell, np.reshape(kpt, (3,1)))
 
-    def get_ovlp(self, cell=None):
+    def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell=self.cell
-        return get_ovlp(cell, self.gs)
+        if kpt is None: kpt=self.kpt
+        return get_ovlp(cell, self.gs, np.reshape(kpt, (3,1)))
 
-    def get_j(self, cell=None, dm=None, hermi=1):
+    def get_j(self, cell=None, dm=None, hermi=1, kpt=None):
         if cell is None: cell=self.cell
         if dm is None: dm = self.make_rdm1()
-        return get_j(cell, dm, self.gs)
+        if kpt is None: kpt=self.kpt
+        return get_j(cell, dm, self.gs, np.reshape(kpt, (3,1)))
 
-    def get_jk_(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG):
+    def get_jk_(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):
         '''
         *Incore* version of Coulomb and exchange build only.
         
@@ -229,6 +256,7 @@ class RHF(pyscf.scf.hf.RHF):
         log.debug('JK PBC build: incore only with PBC integrals')
 
         if self._eri is None:
+            log.debug('Building PBC AO integrals')
             self._eri=np.real(pbc.get_ao_eri(cell, self.gs))
 
         vj, vk=pyscf.scf.hf.RHF.get_jk_(self, cell, dm, hermi) 
@@ -251,27 +279,61 @@ class RKS(RHF):
     RKS adapted for PBC. This is a literal duplication of the
     molecular RKS class with some "mol" variables replaced by cell.
     '''
-    def __init__(self, cell, gs, ew_eta, ew_cut):
-        RHF.__init__(self, cell, gs, ew_eta, ew_cut)
-        self._numint = None
+    def __init__(self, cell, gs, ew_eta, ew_cut, kpt=None):
+        RHF.__init__(self, cell, gs, ew_eta, ew_cut, kpt)
+        self.xc = 'LDA,VWN'
+        self._ecoul = 0
+        self._exc = 0
+        self._numint = pbc._NumInt(self.kpt) # use periodic images of AO in 
+                                             # numerical integration
+        self._keys = self._keys.union(['xc', 'grids'])
 
     def dump_flags(self):
-        pass
+        RHF.dump_flags(self)
+        logger.info(self, 'XC functionals = %s', self.xc)
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
-        return pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last, hermi)
+        return pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last, 
+                                       hermi)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
         if h1e is None: h1e = get_hcore(self, self.cell)
         return pyscf.dft.rks.energy_elec(self, dm, h1e)
     
-class KRKS(RKS):
-    '''
-    Periodic RKS with K-points
-    '''
-    pass
+def test_pp():
+    from pyscf import gto
+
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = None
+
+    L=60
+    h=np.eye(3.)*L
+
+    mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
+    mol.basis = { 'He': 'STO-3G'}
+    
+    mol.build()
+    
+    cell=cl.Cell()
+    cell.__dict__=mol.__dict__
+
+    cell.h=h
+    cell.vol=scipy.linalg.det(cell.h)
+    cell.nimgs = [0,0,0]
+    cell.pseudo=None
+    cell.output=None
+    cell.verbose=7
+
+    # Add a pseudopotential:
+    cell.pseudo = 'gth-blyp'
+
+    cell.build()
+
+    print "Internal PP format"
+    print cell._pseudo
 
 def test_components():
     from pyscf import gto
@@ -286,38 +348,29 @@ def test_components():
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
     mol.basis = { 'He': 'STO-3G'}
-    #mol.atom.extend([['Be', (L/2.,L/2.,L/2.)], ])
-    #mol.basis = { 'Be': 'STO-3G'}
     
     mol.build()
     m = rks.RKS(mol)
     m.xc = 'LDA,VWN_RPA'
     #m.xc = 'b3lyp'
     print(m.scf()) # -2.90705411168
-    #dm=m.make_rdm1()
     
     cell=cl.Cell()
     cell.__dict__=mol.__dict__
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 0
-    cell.pseudo='gth-lda'
+    cell.nimgs = [1,1,1]
+    cell.pseudo=None
     cell.output=None
     cell.verbose=7
     cell.build()
-    print "Pseudo internal format"
-    print cell._pseudo
-
-    mpp = rks.RKS(cell)
-    mpp.xc = 'LDA,VWN_RPA'
-    #mpp.xc = 'b3lyp'
-    mpp.init_guess = '1e'
-    print(mpp.scf()) # -2.90705411168
-    dm=mpp.make_rdm1()
     
+    #gs=np.array([10,10,10]) # number of G-points in grid. Real-space dim=2*gs+1
     gs=np.array([100,100,100]) # number of G-points in grid. Real-space dim=2*gs+1
     Gv=pbc.get_Gv(cell, gs)
+
+    dm=m.make_rdm1()
 
     print "Kinetic"
     tao=get_t(cell, gs) 
@@ -339,13 +392,11 @@ def test_components():
     print np.dot(np.ravel(dm),np.ravel(jao))  # 4.03425518427
     print np.dot(np.ravel(dm),np.ravel(m.get_j(dm))) # 4.22285177049
 
-    # The next three entries should *not* match, since G=0 component is removed
+    # The next two entries should *not* match, since G=0 component is removed
     print "Nuc-el (G!=0)"
     neao=get_nuc(cell,gs)
-    ppao=get_pp(cell,gs)
     vne=mol.intor_symmetric('cint1e_nuc_sph') 
     print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
-    print np.dot(np.ravel(dm), np.ravel(ppao)) # -6.53755800568
     print np.dot(np.ravel(dm), np.ravel(vne))  # -6.68702326551
 
     print "Normalization" 
@@ -382,7 +433,8 @@ def test_components():
 def test_ks():
     from pyscf import gto
     from pyscf.dft import rks
-
+    from pyscf.lib.parameters import BOHR
+    B=BOHR
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = None
@@ -391,7 +443,8 @@ def test_ks():
     h=np.eye(3.)*L
     
     # place atom in middle of big box
-    mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
+    mol.atom.extend([['He', (B*L/2.,B*L/2.,B*L/2.)], ])
+
 
     # these are some exponents which are 
     # not hard to integrate
@@ -400,6 +453,9 @@ def test_ks():
                          [0, (1.2, 1.0)]
                          ]}
     mol.build()
+
+    print "coordinates"
+    print numpy.array([mol.atom_coord(i) for i in range(len(mol._atm))])
 
     # benchmark first with molecular DFT calc
     m=pyscf.dft.rks.RKS(mol)
@@ -412,20 +468,21 @@ def test_ks():
     cell.__dict__=mol.__dict__ # hacky way to make a cell
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 1
+    cell.nimgs = [1,1,1]
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
     cell.build()
     
     # points in grid (x,y,z)
-    gs=np.array([80,80,80])
+    gs=np.array([60,60,60])
 
     # Ewald parameters
-    ew_eta=0.05
-    ew_cut=(40,40,40)
+    ew_eta, ew_cut=pbc.ewald_params(cell,gs,1.e-7)
+
     mf=RKS(cell, gs, ew_eta, ew_cut)
     mf.xc = 'LDA,VWN_RPA'
+    mf.kpt=np.reshape(np.array([1,1,1]), (3,1))
     print (mf.scf()) # -2.64086844062, not bad!
 
 def test_hf():
@@ -439,7 +496,7 @@ def test_hf():
     L=60
     h=np.eye(3.)*L
 
-    mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
+    mol.atom.extend([['He', (B*L/2.,B*L/2.,B*L/2.)], ])
 
     mol.basis = { 'He': [[0,(0.8, 1.0)], 
                          [0,(1.0, 1.0)],
@@ -456,7 +513,7 @@ def test_hf():
     cell.__dict__=mol.__dict__
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 1
+    cell.nimgs = [1,1,1]
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -509,7 +566,7 @@ def test_moints():
     cell.__dict__=mol.__dict__
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 1
+    cell.nimgs = [1,1,1]
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
@@ -551,85 +608,12 @@ def test_moints():
             Ecoul2+=2*eri_mo2[i*nmo+i,j*nmo+j]-eri_mo2[i*nmo+j,i*nmo+j]
     print Ecoul, Ecoul2
 
-def test_dimer():
-
-    from pyscf import gto
-    from pyscf.dft import rks
-    from pyscf.lib.parameters import BOHR
-
-    B=BOHR
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = None
-
-    
-    Lunit=10
-    Ly=Lz=Lunit
-    Lx=2*Lunit
-
-    h=np.diag([Lx,Ly,Lz])
-    
-    # place atom in middle of big box
-    #mol.atom.extend([['He', (0.5*Lunit*B,0.5*Ly*B,0.5*Lz*B)]])
-
-    #mol.atom.extend([['He', (0.5*Lunit*B,0.5*Ly*B,0.5*Lz*B)],
-    #                 ['He', (1.5*Lunit*B,0.5*Ly*B,0.5*Lz*B)]])
-    mol.atom.extend([['He', (5*B,0.5*Ly*B,0.5*Lz*B)],
-                     ['He', (6*B,0.5*Ly*B,0.5*Lz*B)]])
-
-    # these are some exponents which are 
-    # not hard to integrate
-    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
-    mol.build()
-
-    # benchmark first with molecular DFT calc
-    m=pyscf.dft.rks.RKS(mol)
-    m.xc = 'LDA,VWN_RPA'
-    print "overlap"
-    print m.get_ovlp()
-    print mol.intor_symmetric('cint1e_ovlp_sph')
-    
-    #print "Molecular DFT energy"
-    print (m.scf()) # 
-
-    # this is the PBC DFT calc!!
-    cell=cl.Cell()
-    cell.__dict__=mol.__dict__ # hacky way to make a cell
-    cell.h=h
-    cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 0
-    cell.pseudo=None
-    cell.output=None
-    cell.verbose=7
-    cell.build()
-    
-    # points in grid (x,y,z)
-    gs=np.array([100,100,100])
-
-
-
-    # Ewald parameters
-    ew_eta=0.05
-    ew_cut=(100,100,100)
-    
-    # check ewald
-    for ew_eta in [0.05, 0.1, 0.5, 1.]:
-        ew=pbc.ewald(cell, gs, ew_eta, ew_cut)
-        print "Ewald (eta, energy)", ew_eta, ew # should be same for all eta
-
-    #ew_cut=(20,20,20)
-    ovlp=get_ovlp(cell, gs)
-    print "pbc ovlp"
-    print ovlp
-    mf=RKS(cell, gs, ew_eta, ew_cut)
-    mf.xc='LDA,VWN_RPA'
-    mf.scf()
-    dm=mf.make_rdm1()
-    print np.einsum('ij,ij',dm,ovlp)
 
 if __name__ == '__main__':
+    test_pp()
     test_components()
     test_ks()
     test_hf()
     test_moints()
+    
 
