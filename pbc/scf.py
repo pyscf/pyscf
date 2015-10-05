@@ -23,7 +23,8 @@ erfc = scipy.special.erfc
 
 def get_hcore(mf, cell):
     '''H core. Modeled after get_veff_ in rks.py'''
-    hcore=get_nuc(cell, mf.gs) 
+    #hcore=get_nuc(cell, mf.gs) 
+    hcore=get_pp(cell, mf.gs) 
     hcore+=get_t(cell, mf.gs)
     return hcore
 
@@ -35,7 +36,7 @@ def get_nuc(cell, gs):
     Returns
         v_nuc (nao x nao) matrix
     '''
-    chargs=[cell.atom_charge(i) for i in range(len(cell._atm))]
+    chargs=[cell.atom_charge(i) for i in range(cell.natm)]
 
     Gv=pbc.get_Gv(cell, gs)
     SI=pbc.get_SI(cell, Gv)
@@ -58,38 +59,45 @@ def get_nuc(cell, gs):
 def get_pp(cell, gs):
     '''
     Nuc-el pseudopotential AO matrix
-    
-    Only local part right now, completely untested.
     '''
-    chargs=[cell.atom_charge(i) for i in range(len(cell._atm))]
-
     Gv=pbc.get_Gv(cell, gs)
     SI=pbc.get_SI(cell, Gv)
-    vlocG=pp.get_vlocG(cell, gs)
-    qvlocG = chargs*vlocG
-    vpplocG = np.sum(SI * qvlocG, axis=0)
-    vpplocR=pbc.ifft(vpplocG, gs)
-
     coords=pbc.setup_uniform_grids(cell,gs)
     aoR=pbc.get_aoR(cell, coords)
-        
     nao=aoR.shape[1]
+
+    vlocG=pp.get_vlocG(cell, gs)
+    vpplocG = np.sum(SI * vlocG, axis=0)
+
+    # vpploc in real-space
+    vpplocR=pbc.ifft(vpplocG, gs)
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR).real
 
-    hs, projGs = pp.get_projG(cell, gs)
+    # vppnonloc in reciprocal space
+    aoG=np.empty(aoR.shape, np.complex128)
+    for i in range(nao):
+        aoG[:,i]=pbc.fft(aoR[:,i], gs)
+
+    ngs=aoG.shape[0]
     vppnl = np.zeros((nao,nao))
+    print "Getting NL projectors ...",
+    hs, projGs = pp.get_projG(cell, gs)
+    print "done."
     for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
         for l, h in enumerate(h_ia):
             nl = h.shape[0]
             for m in range(-l,l+1):
                 for i in range(nl):
-                    vprojG_lmi = SI[ia] * projG_ia[l][m][i]
-                    vproj_lmi_aoR = np.dot( pbc.ifft(vprojG_lmi, gs), aoR )
+                    SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
+                    SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aoG)
                     for j in range(nl):
-                        vprojG_lmj = SI[ia] * projG_ia[l][m][j]
-                        vproj_lmj_aoR = np.dot( pbc.ifft(vprojG_lmj, gs), aoR )
-                        vppnl += h[i,j]*np.outer( vproj_lmi_aoR.conj(), vproj_lmj_aoR ).sum()
+                        SPG_lmj= SI[ia,:] * projG_ia[l][m][j]
+                        SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
+                        vppnl += h[i,j]*np.einsum('p,q->pq', 
+                                                SPG_lmi_aoG.conj(), 
+                                                SPG_lmj_aoG).real
 
+    vppnl *= (1./ngs**2)
     # Potential is attractive
     return -(vpploc + vppnl)
 
@@ -102,13 +110,13 @@ def get_t(cell, gs, kpt=None):
     
     Gv=pbc.get_Gv(cell, gs)
 
-    print type(kpt)
-    print type(Gv)
-    print kpt
+    #print type(kpt)
+    #print type(Gv)
+    #print kpt
 
     Gv+=kpt
-    #:G2=np.array([np.inner(Gv[:,i], Gv[:,i]) for i in xrange(Gv.shape[1])])
-    G2=np.einsum('ji,ji->i', Gv, Gv)
+    #G2=np.einsum('ji,ji->i', Gv, Gv)
+    G2=np.sum(Gv*Gv,axis=0)
 
     coords=pbc.setup_uniform_grids(cell, gs)
     aoR=pbc.get_aoR(cell, coords)
@@ -120,10 +128,6 @@ def get_t(cell, gs, kpt=None):
         aoG[:,i]=pbc.fft(aoR[:,i], gs)
         TaoG[:,i]=0.5*G2*aoG[:,i]
                 
-    #:t=np.empty([nao,nao])
-    #:for i in range(nao):
-    #:    for j in range(nao):
-    #:        t[i,j]=np.vdot(aoG[:,i],TaoG[:,j])
     t = np.dot(aoG.T.conj(), TaoG).real
 
     ngs=aoR.shape[0]
@@ -269,133 +273,6 @@ class KRKS(RKS):
     '''
     pass
 
-def test_pp():
-    from pyscf import gto
-    from pyscf.dft import rks
-
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = None
-
-    L=30
-    h=np.eye(3.)*L
-
-    mol.atom.extend([['Ne', (L/2.,L/2.,L/2.)], ])
-    #mol.basis = { 'Ne': '6-31G*'}
-    mol.basis = { 'Ne': 'STO-3G'}
-
-    mol.build()
-    m = rks.RKS(mol)
-    m.xc = 'b88,lyp'
-    #m.xc = 'LDA,VWN_RPA'
-    #m.max_cycle = 1000
-    #m.init_guess = 'minao'
-    print(m.scf()) # -2.90705411168
-    
-    ##############################################
-    # No pseudopotential
-    ##############################################
-    
-    cell=cl.Cell()
-    cell.__dict__=mol.__dict__
-
-    cell.h=h
-    cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 2
-    cell.pseudo=None
-    cell.output=None
-    cell.verbose=7
-
-    cell.build()
-
-    gs=np.array([90,90,90]) # number of G-points in grid. Real-space dim=2*gs+1
-    #gs=np.array([100,100,100]) # number of G-points in grid. Real-space dim=2*gs+1
-    Gv=pbc.get_Gv(cell, gs)
-
-    dm=m.make_rdm1()
-
-    print "Kinetic"
-    tao=get_t(cell, gs) 
-    tao2 = mol.intor_symmetric('cint1e_kin_sph') 
-
-    # These should match reasonably well (roughly with accuracy of normalization)
-    print "Kinetic energies" 
-    print np.dot(np.ravel(tao), np.ravel(dm))  # 2.82793077196
-    print np.dot(np.ravel(tao2), np.ravel(dm)) # 2.82352636524
-    
-    print "Overlap"
-    sao=get_ovlp(cell,gs)
-    print np.dot(np.ravel(sao), np.ravel(dm)) # 1.99981725342
-    print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm)) # 2.0
-
-    # The next two entries should *not* match, since G=0 component is removed
-    print "Coulomb (G!=0)"
-    jao=get_j(cell,dm,gs)
-    print np.dot(np.ravel(dm),np.ravel(jao))  # 4.03425518427
-    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm))) # 4.22285177049
-
-    # The next two entries should *not* match, since G=0 component is removed
-    print "Nuc-el (G!=0)"
-    neao=get_nuc(cell,gs)
-    vne=mol.intor_symmetric('cint1e_nuc_sph') 
-    print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
-    print np.dot(np.ravel(dm), np.ravel(vne))  # -6.68702326551
-
-    return -1
-
-    ##############################################
-    # With pseudopotential
-    ##############################################
-
-    cell=cl.Cell()
-    cell.__dict__=mol.__dict__
-
-    cell.h=h
-    cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 0
-    cell.pseudo=None
-    cell.output=None
-    cell.verbose=7
-
-    # Add a pseudopotential:
-    cell.pseudo = 'gth-blyp'
-
-    cell.build()
-
-    print "Internal PP format"
-    print cell._pseudo
-
-    print "PP Nuc-el (G!=0)"
-    neao=get_pp(cell,gs)
-    print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
-
-    print "Kinetic"
-    tao=get_t(cell, gs) 
-    tao2 = mol.intor_symmetric('cint1e_kin_sph') 
-
-    # These should match reasonably well (roughly with accuracy of normalization)
-    print "Kinetic energies" 
-    print np.dot(np.ravel(tao), np.ravel(dm))  # 2.82793077196
-    print np.dot(np.ravel(tao2), np.ravel(dm)) # 2.82352636524
-    
-    print "Overlap"
-    sao=get_ovlp(cell,gs)
-    print np.dot(np.ravel(sao), np.ravel(dm)) # 1.99981725342
-    print np.dot(np.ravel(m.get_ovlp()), np.ravel(dm)) # 2.0
-
-    # The next two entries should *not* match, since G=0 component is removed
-    print "Coulomb (G!=0)"
-    jao=get_j(cell,dm,gs)
-    print np.dot(np.ravel(dm),np.ravel(jao))  # 4.03425518427
-    print np.dot(np.ravel(dm),np.ravel(m.get_j(dm))) # 4.22285177049
-
-    # The next two entries should *not* match, since G=0 component is removed
-    print "Nuc-el (G!=0)"
-    neao=get_nuc(cell,gs)
-    vne=mol.intor_symmetric('cint1e_nuc_sph') 
-    print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
-    print np.dot(np.ravel(dm), np.ravel(vne))  # -6.68702326551
-
 def test_components():
     from pyscf import gto
     from pyscf.dft import rks
@@ -409,29 +286,38 @@ def test_components():
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
     mol.basis = { 'He': 'STO-3G'}
+    #mol.atom.extend([['Be', (L/2.,L/2.,L/2.)], ])
+    #mol.basis = { 'Be': 'STO-3G'}
     
     mol.build()
     m = rks.RKS(mol)
     m.xc = 'LDA,VWN_RPA'
     #m.xc = 'b3lyp'
     print(m.scf()) # -2.90705411168
+    #dm=m.make_rdm1()
     
     cell=cl.Cell()
     cell.__dict__=mol.__dict__
 
     cell.h=h
     cell.vol=scipy.linalg.det(cell.h)
-    cell.nimgs = 1
-    cell.pseudo=None
+    cell.nimgs = 0
+    cell.pseudo='gth-lda'
     cell.output=None
     cell.verbose=7
     cell.build()
+    print "Pseudo internal format"
+    print cell._pseudo
+
+    mpp = rks.RKS(cell)
+    mpp.xc = 'LDA,VWN_RPA'
+    #mpp.xc = 'b3lyp'
+    mpp.init_guess = '1e'
+    print(mpp.scf()) # -2.90705411168
+    dm=mpp.make_rdm1()
     
-    #gs=np.array([10,10,10]) # number of G-points in grid. Real-space dim=2*gs+1
     gs=np.array([100,100,100]) # number of G-points in grid. Real-space dim=2*gs+1
     Gv=pbc.get_Gv(cell, gs)
-
-    dm=m.make_rdm1()
 
     print "Kinetic"
     tao=get_t(cell, gs) 
@@ -453,11 +339,13 @@ def test_components():
     print np.dot(np.ravel(dm),np.ravel(jao))  # 4.03425518427
     print np.dot(np.ravel(dm),np.ravel(m.get_j(dm))) # 4.22285177049
 
-    # The next two entries should *not* match, since G=0 component is removed
+    # The next three entries should *not* match, since G=0 component is removed
     print "Nuc-el (G!=0)"
     neao=get_nuc(cell,gs)
+    ppao=get_pp(cell,gs)
     vne=mol.intor_symmetric('cint1e_nuc_sph') 
     print np.dot(np.ravel(dm), np.ravel(neao)) # -6.50203360062
+    print np.dot(np.ravel(dm), np.ravel(ppao)) # -6.53755800568
     print np.dot(np.ravel(dm), np.ravel(vne))  # -6.68702326551
 
     print "Normalization" 
@@ -739,13 +627,9 @@ def test_dimer():
     dm=mf.make_rdm1()
     print np.einsum('ij,ij',dm,ovlp)
 
-
-
 if __name__ == '__main__':
-    test_pp()
-    #test_components()
-    #test_ks()
-    #test_hf()
-    #test_moints()
-    
+    test_components()
+    test_ks()
+    test_hf()
+    test_moints()
 

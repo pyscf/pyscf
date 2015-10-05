@@ -60,7 +60,7 @@ def get_coulG(cell, gs):
     #coulG=np.zeros(Gv.shape[1]) 
     #coulG[1:]=4*pi/np.einsum('ij,ij->j',np.conj(Gv[:,1:]),Gv[:,1:])
     with np.errstate(divide='ignore'):
-        coulG=4*pi/np.sum(np.conj(Gv)*Gv,axis=0)
+        coulG=4*pi/np.sum(Gv*Gv,axis=0)
     coulG[0] = 0.
 
     return coulG

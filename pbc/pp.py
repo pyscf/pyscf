@@ -11,7 +11,10 @@ sqrt=math.sqrt
 exp=math.exp
 
 '''PP module.
-   For GTH PPs, see Goedecker, Teter, Hutter, PRB 54, 1703 (1996)
+    
+For GTH/HGH PPs, see: 
+    Goedecker, Teter, Hutter, PRB 54, 1703 (1996)
+    Hartwigsen, Goedecker, and Hutter, PRB 58, 3641 (1998)
 '''
 
 def get_vlocG(cell, gs):
@@ -22,7 +25,6 @@ def get_vlocG(cell, gs):
         np.array([natm, ngs])
     '''
     Gvnorm=np.linalg.norm(pbc.get_Gv(cell, gs),axis=0)
-    #vlocG=4*pi/np.sum(np.conj(Gv)*Gv,axis=0)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
@@ -30,6 +32,7 @@ def get_vlocG(cell, gs):
 def get_gth_vlocG(cell, G):
     '''
     Local part of the GTH pseudopotential
+    MH Eq.(4.79)
 
     G: np.array([ngs]) 
 
@@ -38,6 +41,7 @@ def get_gth_vlocG(cell, G):
     '''
     vlocG = np.zeros((cell.natm,len(G))) 
     for ia in range(cell.natm):
+        Zia = cell.atom_charge(ia)
         pp = cell._pseudo[ cell.atom_symbol(ia) ] 
         rloc, nexp, cexp = pp[1:3+1]
 
@@ -50,7 +54,7 @@ def get_gth_vlocG(cell, G):
 
         with np.errstate(divide='ignore'):
             # Note the signs -- potential here is positive
-            vlocG[ia,:] = ( 4*pi * np.exp(-0.5*G_red**2)/G**2
+            vlocG[ia,:] = ( 4*pi * Zia * np.exp(-0.5*G_red**2)/G**2
                            - (2*pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
                                 np.dot(cexp, cfacs[:nexp])) )
     return vlocG
@@ -70,14 +74,10 @@ def get_projG(cell, gs):
     return get_gth_projG(cell, Gv) 
 
 def get_gth_projG(cell, Gvs):
-    Gs = []
-    thetas = []
-    phis = []
-    for Gv in Gvs.T:
-        G, theta, phi = cart2polar(Gv)
-        Gs.append(G)
-        thetas.append(theta)
-        phis.append(phi)
+    '''
+    MH Eq.(4.80)
+    '''
+    Gs,thetas,phis = cart2polar(Gvs)
         
     hs = []
     projs = []
@@ -91,11 +91,12 @@ def get_gth_projG(cell, Gvs):
             h_ia.append( (-1)**l * np.array(hl) )
             proj_ia_l = []
             for m in range(-l,l+1):
-                projG_ang = Ylm(l,m,thetas,phis)
+                projG_ang = Ylm(l,m,thetas,phis).conj()
                 proj_ia_lm = []
                 for i in range(nl):
                     projG_radial = projG_li(Gs,l,i,rl)
                     proj_ia_lm.append( projG_radial*projG_ang )
+
                 proj_ia_l.append(proj_ia_lm)
             proj_ia.append(proj_ia_l)
         hs.append(h_ia)
@@ -106,99 +107,47 @@ def get_gth_projG(cell, Gvs):
 def projG_li(G, l, i, rl): 
     G = np.array(G)
     G_red = G*rl
-    exp_fac = np.exp(0.5*G_red**2)
+
+    # MH Eq. (4.81)
+    return _qli(G_red,l,i)*pi**(5/4.)*G**l*sqrt(rl**(2*l+3))/np.exp(0.5*G_red**2)
+
+def _qli(x,l,i):
+    # MH Eqs. (4.82)-(4.93)
+    # x vs. sqrt(2)x -- check this
     if l==0 and i==0:
-        return 4*sqrt(2.*rl**3)*pi**(5./4) / exp_fac
+        return 4*sqrt(2.)
     elif l==0 and i==1:
-        return sqrt(8*2*rl**3/15.)*pi**(5./4)*(3-G_red**2) / exp_fac
+        return 8*sqrt(2/15.)*(3-x**2) # check the 8 in this one
     elif l==0 and i==2:
-        return 16*sqrt(2*rl**3/105.)*pi**(5./4)*(15-10*G_red**2+G_red**4) / (3*exp_fac)
+        return 16/3.*sqrt(2/105.)*(15-20*x**2+4*x**4) # check the 20,4 in this one
     elif l==1 and i==0:
-        return 8*sqrt(rl**5/3)*pi**(5./4)*G / exp_fac
+        return 8*sqrt(1/3.)
     elif l==1 and i==1:
-        return 16*sqrt(rl**5/105.)*pi**(5./4)*G*(5-G_red**2) / exp_fac
+        return 16*sqrt(1/105.)*(5-x**2)
     elif l==1 and i==2:
-        return 32*sqrt(rl**5/1155.)*pi**(5./4)*G*(35-14*G_red**2+G_red**4) / (3*exp_fac)
+        return 32/3.*sqrt(1/1155.)*(35-28*x**2+4*x**4) # check  28,4 in this one
+    elif l==2 and i==0:
+        return 8*sqrt(2/15.)
+    elif l==2 and i==1:
+        return 16/3.*sqrt(2/105.)*(7-x**2)
+    elif l==2 and i==2:
+        return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4)
     else:
         print "*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!"
         return 0.
 
 def Ylm(l,m,theta,phi):
-    if isinstance(theta, (list,np.ndarray)):
-        ylm = []
-        for t,p in zip(theta,phi):
-            # Note: l and m are reversed in sph_harm
-            ylm.append( scipy.special.sph_harm(m,l,t,p) )
-        return np.array(ylm)
-    else:
-        return scipy.special.sph_harm(m,l,theta,phi)
-
-def gth_vnonloc_G(Gvecs):
     '''
-    Returns
-        list of length len(nprojs)
+    Spherical harmonics; returns a complex number
     '''
-    G_red = G*rloc
-
-    projs = []
-    for l in range(nproj_types):
-        rl = r[l]
-        npl = nproj[l]
-        for i in range(npl):
-            for j in range(i,npl):
-                hij = hproj[i,j]
-                pYs = []
-                for Gvec in Gvecs:
-                    G, theta, phi = cart2polar(Gvec)
-                    pYs.append( proj_il_G(i,j,G,rl)*Ylm(l,m,theta,phi) )
-                projs.append(hij, pYs)
-        
-
-def gth_vloc_r(r):
-    '''
-    local part of the GTH pseudopotential
-
-    r: scalar or 1D np.array
-
-    Returns 
-         scalar or 1D np.array
-    '''
-    r_red = r/self.rloc
-    return ( -self.Zion/r * math.erf(r_red/sqrt(2))
-        + exp(-0.5*r_red**2)*(self.C[0] + self.C[1]*r_red**2
-            + self.C[2]*r_red**4 + self.C[3]*r_red**6) )
-
-def gth_vnonloc_r(rvecs):
-    '''
-    all contributing (separable) projectors needed for the
-    nonlocal part of the GTH pseudopotential
-
-    rvecs: np.array [nrpts, 3]
-
-    Returns
-        np.array [nproj=6], np.array [nproj=6, nrpts]
-    '''
-    hs = []
-    projs = []
-    for [i,l,m] in [ [0,0,0], [1,0,0], [0,1,-1], [0,1,0], [0,1,1] ]:
-        proj_vec = []
-        for rvec in rvecs:
-            r, theta, phi = self.cart2polar(rvec)
-            proj_vec.append(self.proj_il(i,l,r)*self.Ylm(l,m,theta,phi))
-        hs.append(self.h[i,l])
-        projs.append(np.array(proj_vec))
-    return np.array(hs), np.array(projs)
-
-def proj_il_r(i,l,r):
-    rl = self.rl[l]
-    l = l + i*2 # gives either l or l+2 for i=0,1
-    return sqrt(2) * ( r**l * exp(-0.5*(r/rl)**2)
-              /(rl**(l+3/2.)*sqrt(math.gamma(l+3/2.))) )
+    return scipy.special.sph_harm(m,l,theta,phi)
 
 def cart2polar(rvec):
+    # The columns of rvec are the 3-component vectors
+    # i.e. rvec is 3 x N
     x,y,z = rvec
-    r = scipy.linalg.norm(rvec)
-    theta = math.atan2(z,sqrt(x**2+y**2))
-    phi = math.atan2(y,x)
+    r = np.linalg.norm(rvec,axis=0)
+    theta = np.arctan2(z,np.sqrt(x**2+y**2))
+    phi = np.arctan2(y,x)
     return r, theta, phi
 
