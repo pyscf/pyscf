@@ -234,9 +234,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
         tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1-i0,0,nmo), 's4', 's1', ao_loc=ao_loc)
-        tmp1 = tmp1.reshape(ncas,ncas,i1-i0,nmo)
-        for j in range(i1-i0):
-            dset[j] = tmp1[:,:,j].transpose(2,0,1)
+        dset[i0:i1] = tmp1.reshape(ncas,ncas,i1-i0,nmo).transpose(2,3,0,1)
     tmp = tmp1 = None
     time1 = log.timer('ppaa pass 2', *time1)
 
