@@ -69,9 +69,13 @@ class CheMPS2(object):
         Initializer = PyCheMPS2.PyInitialize()
         Initializer.Init()
 
-        groupNumber = GROUPNAME_ID[self.groupname]
+        if self.groupname:
+            groupNumber = GROUPNAME_ID[self.groupname]
+        else:
+            groupNumber = 0
+            self.orbsym = numpy.zeros(norb, int)
         Ham = PyCheMPS2.PyHamiltonian(norb, groupNumber,
-                                      numpy.array(self.orbsym))
+                                      numpy.asarray(self.orbsym))
         eri = pyscf.ao2mo.restore(1, eri, norb)
         for i in range(norb):
             for j in range(norb):
