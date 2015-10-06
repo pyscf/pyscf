@@ -73,9 +73,9 @@ class CheMPS2(object):
             groupNumber = GROUPNAME_ID[self.groupname]
         else:
             groupNumber = 0
-            self.orbsym = numpy.zeros(norb, int)
+            self.orbsym = numpy.zeros(norb, numpy.int32)
         Ham = PyCheMPS2.PyHamiltonian(norb, groupNumber,
-                                      numpy.asarray(self.orbsym))
+                                      numpy.asarray(self.orbsym, numpy.int32))
         eri = pyscf.ao2mo.restore(1, eri, norb)
         for i in range(norb):
             for j in range(norb):
@@ -147,7 +147,7 @@ class CheMPS2(object):
         return rdm1, rdm2
 
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
-        return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
+        return self.make_rdm12(fcivec, norb, nelec, **kwargs)[0]
 
 
 
