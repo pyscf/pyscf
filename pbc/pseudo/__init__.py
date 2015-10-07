@@ -51,6 +51,7 @@ def load(pseudo_name, symb):
         'gthhcth120' : 'gth-hcth120.dat',
         'gthhcth407' : 'gth-hcth407.dat',
         'gtholyp'    : 'gth-olyp.dat'   ,
+        'gthlda'     : 'gth-pade.dat'   ,
         'gthpade'    : 'gth-pade.dat'   ,
         'gthpbe'     : 'gth-pbe.dat'    ,
         'gthpbesol'  : 'gth-pbesol.dat' ,

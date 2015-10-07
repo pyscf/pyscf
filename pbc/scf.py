@@ -324,7 +324,7 @@ def test_pp():
     mol.output = None
 
     L=60
-    h=np.eye(3.)*L
+    h=np.eye(3)*L
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
     mol.basis = { 'He': 'STO-3G'}
@@ -358,7 +358,7 @@ def test_components():
     mol.output = None
 
     L=60
-    h=np.eye(3.)*L
+    h=np.eye(3)*L
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
     mol.basis = { 'He': 'STO-3G'}
@@ -454,7 +454,7 @@ def test_ks():
     mol.output = None
 
     L=60
-    h=np.eye(3.)*L
+    h=np.eye(3)*L
     
     # place atom in middle of big box
     mol.atom.extend([['He', (B*L/2.,B*L/2.,B*L/2.)], ])
@@ -508,7 +508,7 @@ def test_hf():
     mol.output = None
 
     L=60
-    h=np.eye(3.)*L
+    h=np.eye(3)*L
 
     mol.atom.extend([['He', (B*L/2.,B*L/2.,B*L/2.)], ])
 
@@ -563,7 +563,7 @@ def test_moints():
     mol.output = None
 
     L=60
-    h=np.eye(3.)*L
+    h=np.eye(3)*L
 
     mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
 

@@ -23,7 +23,7 @@ def format_pseudo(pseudo_tab):
             Similar to :attr:`Cell.pseudo` (a dict), it **cannot** be a str
 
     Returns:
-        Formated :attr:`~Cell.pseudo`
+        Formatted :attr:`~Cell.pseudo`
 
     Examples:
 
@@ -98,6 +98,7 @@ class Cell(pyscf.gto.Mole):
         return format_pseudo(pseudo_tab)
 
     def atom_charge(self, atm_id):
+        '''Return the atom charge, accounting for pseudopotential.'''
         if self.pseudo is None:
             # This is what the original Mole.atom_charge() returns
             CHARGE_OF  = 0
