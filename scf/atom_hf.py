@@ -15,19 +15,25 @@ def get_atm_nrhf(mol):
     for a, b in mol._basis.items():
         atm = gto.Mole()
         atm.stdout = mol.stdout
-        atm.atom = [[a, (0, 0, 0)]]
+        atm.atom = atm._atom = [[a, (0, 0, 0)]]
         atm._basis = {a: b}
         atm.nelectron = gto.mole._charge(a)
         atm.spin = atm.nelectron % 2
         atm._atm, atm._bas, atm._env = \
-                atm.make_env(atm.atom, atm._basis, atm._env)
+                atm.make_env(atm._atom, atm._basis, atm._env)
         atm.natm = atm._atm.__len__()
         atm.nbas = atm._bas.__len__()
         atm._built = True
-        atm_hf = AtomSphericAverageRHF(atm)
-        atm_hf.verbose = 0
-        atm_scf_result[a] = atm_hf.scf()[1:]
-        atm_hf._eri = None
+        if atm.nelectron == 0:  # GHOST
+            nao = atm.nao_nr()
+            mo_occ = mo_energy = numpy.zeros(nao)
+            mo_coeff = numpy.zeros((nao,nao))
+            atm_scf_result[a] = (0, mo_energy, mo_coeff, mo_occ)
+        else:
+            atm_hf = AtomSphericAverageRHF(atm)
+            atm_hf.verbose = 0
+            atm_scf_result[a] = atm_hf.scf()[1:]
+            atm_hf._eri = None
     mol.stdout.flush()
     return atm_scf_result
 

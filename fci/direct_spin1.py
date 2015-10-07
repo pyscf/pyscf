@@ -158,7 +158,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     eri = eri.copy()
     h2e = pyscf.ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
-    f1e = f1e * (1./nelec)
+    f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
         h2e[k,k,:,:] += f1e
         h2e[:,:,k,k] += f1e
@@ -328,6 +328,25 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
+def get_init_guess(norb, nelec, nroots, hdiag):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+
+    ci0 = []
+    iroot = 0
+    for addr in numpy.argsort(hdiag):
+        x = numpy.zeros((na*nb))
+        x[addr] = 1
+        ci0.append(x.ravel())
+        iroot += 1
+        if iroot >= nroots:
+            break
+    return ci0
 
 
 ###############################################################
@@ -372,15 +391,19 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
         return hc.ravel()
 
     if ci0 is None:
-        ci0 = numpy.zeros(na*nb)
-        ci0[0] = 1
-    elif fci.nroots > 1:
+        if hasattr(fci, 'get_init_guess'):
+            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, hdiag)
+        else:
+            ci0 = []
+            for i in range(fci.nroots):
+                x = numpy.zeros(na*nb)
+                x[addr[i]] = 1
+                ci0.append(x)
+    else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
-    else:
-        ci0 = ci0.ravel()
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, **kwargs)
@@ -483,7 +506,7 @@ class FCISolver(object):
                 'max_memory': self.max_memory,
                 'nroots': self.nroots,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if self.nroots == 1 and x0.size > 6.5e7: # 500MB
+        if self.nroots == 1 and x0[0].size > 6.5e7: # 500MB
             opts['lessio'] = True
         opts.update(kwargs)
         return pyscf.lib.davidson(op, x0, precond, **opts)
@@ -493,6 +516,9 @@ class FCISolver(object):
                                    self.level_shift)
 #    def make_precond(self, hdiag, *args):
 #        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+
+    def get_init_guess(self, norb, nelec, nroots, hdiag):
+        return get_init_guess(norb, nelec, nroots, hdiag)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
         if self.verbose > pyscf.lib.logger.QUIET:

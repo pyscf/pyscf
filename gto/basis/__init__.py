@@ -36,6 +36,7 @@ def load(basis_name, symb):
     Args:
         basis_name : str
             Case insensitive basis set name. Special characters will be removed.
+            or a string of "path/to/file" which stores the basis functions
         symb : str
             Atomic symbol, Special characters will be removed.
 
@@ -51,13 +52,27 @@ def load(basis_name, symb):
         'anoroostz'  : 'roos-tz.dat'    ,
         'roosdz'     : 'roos-dz.dat'    ,
         'roostz'     : 'roos-tz.dat'    ,
-        'ccpv5z'     : 'cc-pv5z.dat'    ,
         'ccpvdz'     : 'cc-pvdz.dat'    ,
-        'augccpvdz'  : 'aug-cc-pvdz.dat',
-        'ccpvqz'     : 'cc-pvqz.dat'    ,
-        'augccpvqz'  : 'aug-cc-pvqz.dat',
         'ccpvtz'     : 'cc-pvtz.dat'    ,
+        'ccpvqz'     : 'cc-pvqz.dat'    ,
+        'ccpv5z'     : 'cc-pv5z.dat'    ,
+        'augccpvdz'  : 'aug-cc-pvdz.dat',
         'augccpvtz'  : 'aug-cc-pvtz.dat',
+        'augccpvqz'  : 'aug-cc-pvqz.dat',
+        'ccpvdzdk'   : 'cc-pvdz-dk.dat' ,
+        'ccpvtzdk'   : 'cc-pvtz-dk.dat' ,
+        'ccpvqzdk'   : 'cc-pvqz-dk.dat' ,
+        'ccpv5zdk'   : 'cc-pv5z-dk.dat' ,
+        'augccpvdzdk': 'aug-cc-pvdz-dk.dat',
+        'augccpvtzdk': 'aug-cc-pvtz-dk.dat',
+        'augccpvqzdk': 'aug-cc-pvqz-dk.dat',
+        'ccpvdzdkh'   : 'cc-pvdz-dk.dat' ,
+        'ccpvtzdkh'   : 'cc-pvtz-dk.dat' ,
+        'ccpvqzdkh'   : 'cc-pvqz-dk.dat' ,
+        'ccpv5zdkh'   : 'cc-pv5z-dk.dat' ,
+        'augccpvdzdkh': 'aug-cc-pvdz-dk.dat',
+        'augccpvtzdkh': 'aug-cc-pvtz-dk.dat',
+        'augccpvqzdkh': 'aug-cc-pvqz-dk.dat',
         'dyalldz'    : 'dyall_dz'       ,
         'dyallqz'    : 'dyall_qz'       ,
         'dyalltz'    : 'dyall_tz'       ,
@@ -84,6 +99,12 @@ def load(basis_name, symb):
         'dzp'        : 'dzp.dat'        ,
         'tzp'        : 'tzp.dat'        ,
         'qzp'        : 'qzp.dat'        ,
+        'dzpdk'      : 'dzp-dkh.dat'    ,
+        'tzpdk'      : 'tzp-dkh.dat'    ,
+        'qzpdk'      : 'qzp-dkh.dat'    ,
+        'dzpdkh'     : 'dzp-dkh.dat'    ,
+        'tzpdkh'     : 'tzp-dkh.dat'    ,
+        'qzpdkh'     : 'qzp-dkh.dat'    ,
         'def2svp'    : 'def2-svp.dat'   ,
         'def2svpd'   : 'def2-svpd.dat'  ,
         'def2qzvpd'  : 'def2-qzvpd.dat' ,
@@ -100,7 +121,16 @@ def load(basis_name, symb):
         'ahlrichs'   : 'ahlrichs_cfit.dat',
         'ccpvtzfit'  : 'cc-pvtz_fit.dat',
         'ccpvdzfit'  : 'cc-pvdz_fit.dat',
+        'dgaussa1cfit': 'DgaussA1_dft_cfit.dat',
+        'dgaussa1xfit': 'DgaussA1_dft_xfit.dat',
+        'dgaussa2cfit': 'DgaussA2_dft_cfit.dat',
+        'dgaussa2xfit': 'DgaussA2_dft_xfit.dat',
     }
+
+    if os.path.isfile(basis_name):
+        # read basis from given file
+        return parse_nwchem.parse(basis_name, symb)
+
     name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
     basmod = alias[name]
     symb = ''.join(i for i in symb if i.isalpha())

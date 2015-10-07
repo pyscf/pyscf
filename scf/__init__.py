@@ -100,6 +100,7 @@ from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
 from pyscf.scf import x2c
 from pyscf.scf.x2c import sfx2c1e, sfx2c
+from pyscf.scf import newton_ah
 
 
 
@@ -158,6 +159,40 @@ def X2C(mol, *args):
 
 def density_fit(mf, auxbasis='weigend'):
     return mf.density_fit(auxbasis)
+
+def newton(mf):
+    '''augmented hessian for Newton Raphson'''
+    return newton_ah.newton(mf)
+
+def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
+    if dm0 is not None:
+        mf1 = density_fit(newton(mf))
+        mf1.kernel(*mf1.from_dm(dm0))
+    elif mo_coeff is None or mo_occ is None:
+        mf0 = density_fit(mf)
+        mf0.conv_tol = .1
+        mf0.kernel()
+        mf1 = density_fit(newton(mf))
+        mf1._cderi = mf0._cderi
+        mf1._naoaux = mf0._naoaux
+        mf1.kernel(mf0.mo_coeff, mf0.mo_occ)
+    else:
+        mf1 = density_fit(newton(mf))
+        mf1.kernel(mo_coeff, mo_occ)
+    #return mf.kernel(mf1.make_rdm1())
+    mf.mo_occ = mf1.mo_occ
+    mf.mo_energy = mf1.mo_energy
+    mf.mo_coeff = mf1.mo_coeff
+    mf.hf_energy = mf1.hf_energy
+    mf.converged = mf1.converged
+    return mf
+
+def fast_scf(mf):
+    from pyscf.lib import logger
+    logger.warn(mf, 'NOTE the  fast_scf  function will be removed in the recent updates. '
+                'Use the fast_newton instead')
+    return fast_newton(mf)
+
 
 def RKS(mol, *args):
     from pyscf import dft

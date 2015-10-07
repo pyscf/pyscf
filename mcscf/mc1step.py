@@ -223,7 +223,6 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
 
     return g_orb, gorb_update, h_op, h_diag
 
-
 def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                   conv_tol_grad=1e-4, verbose=None):
     if isinstance(verbose, logger.Logger):
@@ -241,9 +240,12 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
     t3m = log.timer('gen h_op', *t3m)
 
     def precond(x, e):
-        hdiagd = h_diag-(e-casscf.ah_level_shift)
-        hdiagd[abs(hdiagd)<1e-8] = 1e-8
-        x = x/hdiagd
+        if callable(h_diag):
+            x = h_diag(x, e-casscf.ah_level_shift)
+        else:
+            hdiagd = h_diag-(e-casscf.ah_level_shift)
+            hdiagd[abs(hdiagd)<1e-8] = 1e-8
+            x = x/hdiagd
         norm_x = numpy.linalg.norm(x)
         x *= 1/norm_x
         #if norm_x < 1e-2:
@@ -502,8 +504,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         if casscf.dynamic_micro_step:
             max_cycle_micro = max(micro, int(micro-1-numpy.log(norm_ddm)))
         imicro = 0
-        for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                                  eris, r0, conv_tol_grad, log):
+        rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                    eris, r0, conv_tol_grad, log)
+        for u, g_orb, njk in rota:
             imicro += 1
             norm_gorb = numpy.linalg.norm(g_orb)
             if imicro == 1:
@@ -537,7 +540,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                  (norm_ddm < conv_tol_ddm or norm_ddm_micro < conv_tol_ddm*.1))):
                 break
 
-        log.debug1('current memory %d MB', pyscf.lib.current_memory()[0])
+        rota.close()
 
         totmicro += imicro
         totinner += njk
@@ -545,7 +548,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         r0 = casscf.pack_uniq_var(u)
         mo = numpy.dot(mo, u)
 
-        eris = None
+        u = g_orb = eris = None
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
@@ -869,7 +872,7 @@ class CASSCF(casci.CASCI):
                callback=None, _kern=kernel):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        else:
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
             self.mo_coeff = mo_coeff
         if macro is None: macro = self.max_cycle_macro
         if micro is None: micro = self.max_cycle_micro

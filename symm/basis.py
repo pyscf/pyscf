@@ -431,17 +431,17 @@ if __name__ == "__main__":
     h2o.basis = {'H': 'cc-pvdz',
                  'O': 'cc-pvdz',}
     h2o.build()
-    gpname, origin, axes = geom.detect_symm(h2o.atom)
-    atoms = pyscf.gto.mole.format_atom(h2o.atom, origin, axes)
+    gpname, origin, axes = geom.detect_symm(h2o._atom)
+    atoms = pyscf.gto.mole.format_atom(h2o._atom, origin, axes)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
     print(symm_adapted_basis(gpname, eql_atoms, atoms, h2o._basis))
 
     mol = pyscf.gto.M(
         atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]],
-        basis = 'ccpvtz')
-    gpname, orig, axes = geom.detect_symm(mol.atom)
-    atoms = pyscf.gto.mole.format_atom(mol.atom, orig, axes)
+        basis = 'ccpvtz', charge=1)
+    gpname, orig, axes = geom.detect_symm(mol._atom)
+    atoms = pyscf.gto.mole.format_atom(mol._atom, orig, axes)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
     print(symm_adapted_basis(gpname, eql_atoms, atoms, mol._basis)[1])
@@ -449,8 +449,8 @@ if __name__ == "__main__":
     mol = pyscf.gto.M(
         atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['He', (0,0,1)]],
         basis = 'ccpvtz')
-    gpname, orig, axes = geom.detect_symm(mol.atom)
-    atoms = pyscf.gto.mole.format_atom(mol.atom, orig, axes)
+    gpname, orig, axes = geom.detect_symm(mol._atom)
+    atoms = pyscf.gto.mole.format_atom(mol._atom, orig, axes)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
     print(symm_adapted_basis(gpname, eql_atoms, atoms, mol._basis)[1])

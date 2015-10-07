@@ -290,6 +290,9 @@ def des_b(ci0, norb, nelec, ap_id):
     addr_ci0 = numpy.any(entry_has_ap, axis=1)
     addr_ci1 = des_index[entry_has_ap,2]
     sign = des_index[entry_has_ap,3]
+    # This sign prefactor accounts for interchange of operators with alpha and beta spins
+    if neleca % 2 == 1:
+        sign *= -1
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
@@ -355,13 +358,16 @@ def cre_b(ci0, norb, nelec, ap_id):
     else:
         neleca, nelecb = nelec
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)
-    nb_ci1 = cistring.num_strings(norb, nelecb-1)
+    nb_ci1 = cistring.num_strings(norb, nelecb+1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
 
     entry_has_ap = (cre_index[:,:,0] == ap_id)
     addr_ci0 = numpy.any(entry_has_ap, axis=1)
     addr_ci1 = cre_index[entry_has_ap,2]
     sign = cre_index[entry_has_ap,3]
+    # This sign prefactor accounts for interchange of operators with alpha and beta spins
+    if neleca % 2 == 1:
+        sign *= -1
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
@@ -396,7 +402,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
     old_det_idxa = numpy.argsort(guide_stringsa)
     old_det_idxb = numpy.argsort(guide_stringsb)
-    return ci.take(old_det_idxa, axis=0).take(old_det_idxb, axis=1)
+    return pyscf.lib.take_2d(ci, old_det_idxa, old_det_idxb)
 
 def overlap(string1, string2, norb, s=None):
     '''Determinants overlap on non-orthogonal one-particle basis'''
@@ -415,7 +421,7 @@ def overlap(string1, string2, norb, s=None):
             assert(bin(string2).count('1') == nelec)
         idx1 = [i for i in range(norb) if (1<<i & string1)]
         idx2 = [i for i in range(norb) if (1<<i & string2)]
-        s1 = numpy.take(numpy.take(s, idx1, axis=0), idx2, axis=1)
+        s1 = pyscf.lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
 def fix_spin_(fciobj, shift=.1):
@@ -444,7 +450,7 @@ def fix_spin_(fciobj, shift=.1):
         if isinstance(nelec, (int, numpy.integer)):
             sz = (nelec % 2) * .5
         else:
-            sz = (nelec[0]-nelec[1]) * .5
+            sz = abs(nelec[0]-nelec[1]) * .5
         ci1 += shift * spin_op.contract_ss(fcivec, norb, nelec)
         ci1 -= sz*(sz+1)*shift * fcivec.reshape(ci1.shape)
         if isinstance(fciobj, direct_spin0.FCISolver):
@@ -489,6 +495,10 @@ if __name__ == '__main__':
                                      irrep_nelec={1:[0,1],3:[1,0]})!=0), [5], [0])
     print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3,
                                      irrep_nelec={5:[0,1],3:[1,0]})!=0), [4,7], [2,0])
+    try:
+        symm_initguess(6, (3,2), [3,3,3,3,3,3], wfnsym=2)
+    except RuntimeError:
+        pass
 
     def finger(ci1):
         numpy.random.seed(1)

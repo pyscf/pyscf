@@ -50,12 +50,13 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
 
     ... math::
 
-        \begin{align}
-        <CI|S_+*S_-|CI> &= neleca + \delta_{ik}\delta_{jl}Gamma_{iakb,jbla} \\
-        <CI|S_-*S_+|CI> &= nelecb + \delta_{ik}\delta_{jl}Gamma_{ibka,jalb} \\
-        <CI|S_z*S_z|CI> &= \delta_{ik}\delta_{jl}(Gamma_{iaka,jala} - Gamma_{iaka,jblb}
-                         -Gamma_{ibkb,jala} + Gamma_{ibkb,jblb}) + (n_\alpha+n_\beta)/4
-        \end{align}
+        <CI|S_+*S_-|CI> &= n_\alpha + \delta_{ik}\delta_{jl}Gamma_{i\alpha k\beta ,j\beta l\alpha } \\
+        <CI|S_-*S_+|CI> &= n_\beta + \delta_{ik}\delta_{jl}Gamma_{i\beta k\alpha ,j\alpha l\beta } \\
+        <CI|S_z*S_z|CI> &= \delta_{ik}\delta_{jl}(Gamma_{i\alpha k\alpha ,j\alpha l\alpha }
+                         - Gamma_{i\alpha k\alpha ,j\beta l\beta }
+                         - Gamma_{i\beta k\beta ,j\alpha l\alpha}
+                         + Gamma_{i\beta k\beta ,j\beta l\beta})
+                         + (n_\alpha+n_\beta)/4
 
     Given the overlap betwen non-degenerate alpha and beta orbitals, this
     function can compute the expectation value spin square operator for
@@ -259,7 +260,7 @@ def contract_ss(fcivec, norb, nelec):
             maskb = numpy.where(signb!=0)[0]
             ida = aindex[maska,i,0]
             idb = bindex[maskb,i,0]
-            citmp = fcivec.take(maska, axis=0).take(maskb, axis=1)
+            citmp = pyscf.lib.take_2d(fcivec, maska, maskb)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: t1[ida.reshape(-1,1),idb] += citmp
             pyscf.lib.takebak_2d_(t1, citmp, ida, idb)
@@ -270,7 +271,7 @@ def contract_ss(fcivec, norb, nelec):
             maskb = numpy.where(signb!=0)[0]
             ida = aindex[maska,i,0]
             idb = bindex[maskb,i,0]
-            citmp = t1.take(ida, axis=0).take(idb, axis=1)
+            citmp = pyscf.lib.take_2d(t1, ida, idb)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: ci1[maska.reshape(-1,1), maskb] += citmp
             pyscf.lib.takebak_2d_(ci1, citmp, maska, maskb)
@@ -278,7 +279,8 @@ def contract_ss(fcivec, norb, nelec):
     ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-
     trans(ci1, acre, bdes, neleca+1, nelecb-1) # S-*S+
-    ci1 = ci1 * .5 + (neleca-nelecb)**2*.25*fcivec
+    ci1 *= .5
+    ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
 
 

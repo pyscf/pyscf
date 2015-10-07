@@ -6,6 +6,7 @@ import pyscf.lib
 from pyscf.lib import logger
 import pyscf.fci
 from pyscf import scf
+from pyscf import symm
 
 
 def sort_mo(casscf, mo_coeff, caslst, base=1):
@@ -72,6 +73,20 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
                              mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idx[ncore[1]:]]))
         return (mo_a, mo_b)
+
+def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=1):
+    if mo is None:
+        mo = casscf.mo_coeff
+    orbsym = pyscf.symm.label_orb_symm(casscf.mol, casscf.mol.irrep_id,
+                                                casscf.mol.symm_orb,
+                                                mo, s=casscf._scf.get_ovlp())
+    orbsym = orbsym[casscf.ncore:]
+    caslst = []
+    for k, v in cas_occ_num.iteritems():
+        orb_irrep = [ casscf.ncore + base + i for i in range(len(orbsym)) if orbsym[i]== symm.irrep_name2id(casscf.mol.groupname,k) ]
+        caslst.extend(orb_irrep[:v])
+    return caslst
+
 
 def project_init_guess(casscf, init_mo, prev_mol=None):
     '''Project the given initial guess to the current CASSCF problem.  The
@@ -326,7 +341,6 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-10)
     fcibase = casscf.fcisolver
-    fcibase.nroots = len(weights)
     class FakeCISolver(casscf.fcisolver.__class__):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
@@ -364,6 +378,7 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
 
 def state_average_(casscf, weights=(0.5,0.5)):
     return state_average_e_(casscf, weights)
+
 
 
 if __name__ == '__main__':

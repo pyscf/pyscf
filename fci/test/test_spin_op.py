@@ -548,7 +548,11 @@ h2 = numpy.array((
 
 norb = 10
 nelec = (5,5)
-e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec)
+na = fci.cistring.num_strings(norb, nelec[0])
+c0 = numpy.zeros((na,na))
+c0[0,0] = 1
+c0[-1,-1] = 1e-4
+e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
 
 
 class KnowValues(unittest.TestCase):
@@ -561,14 +565,23 @@ class KnowValues(unittest.TestCase):
     def test_contract_ss(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
         nelec = (6,4)
+        na = fci.cistring.num_strings(norb, nelec[0])
+        nb = fci.cistring.num_strings(norb, nelec[1])
+        c0 = numpy.zeros((na,nb))
+        c0[0,0] = 1
+        c0[-1,-1] = 1e-4
         fci.addons.fix_spin_(fci.direct_spin1)
-        e, ci0 = fci.direct_spin1.kernel(h1, h2, norb, nelec)
+        e, ci0 = fci.direct_spin1.kernel(h1, h2, norb, nelec, ci0=c0)
         self.assertAlmostEqual(e, -25.4437866823, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 2, 9)
 
         nelec = (5,5)
         fci.addons.fix_spin_(fci.direct_spin0)
-        e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec)
+        na = fci.cistring.num_strings(norb, nelec[0])
+        c0 = numpy.zeros((na,na))
+        c0[0,0] = 1
+        c0[-1,-1] = 1e-4
+        e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
         self.assertAlmostEqual(e, -25.4095560762, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 9)
 

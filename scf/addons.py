@@ -21,7 +21,7 @@ def frac_occ(mf, tol=1e-3):
             nsocc = int(lst.sum())
             ndocc = nocc - int(lst[:nocc].sum())
             frac = 2.*(nocc-ndocc)/nsocc
-            mo_occ[nsocc:ndocc] = frac
+            mo_occ[ndocc:nsocc+ndocc] = frac
             logger.warn(mf, 'fraction occ = %6g  [%d:%d]',
                         frac, ndocc, ndocc+nsocc)
         if nocc < mo_occ.size:

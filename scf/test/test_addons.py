@@ -77,7 +77,7 @@ class KnowValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol)
         mf.get_occ = scf.addons.frac_occ(mf)
-        self.assertAlmostEqual(mf.scf(), -107.35665427207526, 9)
+        self.assertAlmostEqual(mf.scf(), -107.13465364012296, 9)
 
     def test_dynamic_occ(self):
         mol = gto.Mole()

@@ -190,7 +190,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
             HF potential
 
     Returns:
-        Hartree-Fock electronic energy and the 2-electron part contribution
+        Hartree-Fock electronic energy and the Coulomb energy
 
     Examples:
 
@@ -277,17 +277,21 @@ def init_guess_by_minao(mol):
     basis = {}
     occdic = {}
     for symb in atmlst:
-        occ_add, basis_add = minao_basis(symb)
-        occdic[symb] = occ_add
-        basis[symb] = basis_add
+        if symb != 'GHOST':
+            occ_add, basis_add = minao_basis(symb)
+            occdic[symb] = occ_add
+            basis[symb] = basis_add
     occ = []
+    new_atom = []
     for ia in range(mol.natm):
         symb = mol.atom_pure_symbol(ia)
-        occ.append(occdic[symb])
+        if symb != 'GHOST':
+            occ.append(occdic[symb])
+            new_atom.append(mol._atom[ia])
     occ = numpy.hstack(occ)
 
     pmol = pyscf.gto.Mole()
-    pmol._atm, pmol._bas, pmol._env = pmol.make_env(mol.atom, basis, [])
+    pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     c = addons.project_mo_nr2nr(pmol, 1, mol)
 
     dm = numpy.dot(c*occ, c.T)
@@ -403,7 +407,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    if factor < 0:
+    if abs(factor) < 1e-4:
         return f
     else:
         dm_vir = s - reduce(numpy.dot, (s, d, s))
@@ -411,7 +415,7 @@ def level_shift(s, d, f, factor):
 
 
 def damping(s, d, f, factor):
-    if factor < 1e-3:
+    if abs(factor) < 1e-4:
         return f
     else:
         #dm_vir = s - reduce(numpy.dot, (s,d,s))
@@ -528,7 +532,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     return vj, vk
 
 
-def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
+def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     '''Hartree-Fock potential matrix for the given density matrix
 
     Args:
@@ -572,9 +576,15 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     >>> numpy.allclose(vhf1, vhf2)
     True
     '''
-    ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+    if dm_last is None:
+        ddm = numpy.asarray(dm)
+    else:
+        ddm = numpy.asarray(dm) - numpy.array(dm_last)
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
-    return numpy.array(vhf_last, copy=False) + vj - vk * .5
+    if vhf_last is None:
+        return vj - vk * .5
+    else:
+        return vj - vk * .5 + numpy.asarray(vhf_last)
 
 def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
               diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
@@ -1079,7 +1089,7 @@ class SCF(object):
         '''
         cput0 = (time.clock(), time.time())
 
-        self.build()
+        self.build(self.mol)
         self.dump_flags()
         self.converged, self.hf_energy, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -1087,10 +1097,16 @@ class SCF(object):
                        dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
-        self.dump_energy(self.hf_energy, self.converged)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(self.verbose)
+        self._finalize_()
         return self.hf_energy
+
+    def _finalize_(self):
+        if self.converged:
+            logger.note(self, 'converged SCF energy = %.15g', self.hf_energy)
+        else:
+            logger.note(self, 'SCF not converge.')
+            logger.note(self, 'SCF energy = %.15g after %d cycles',
+                        self.hf_energy, self.max_cycle)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
@@ -1140,17 +1156,6 @@ class SCF(object):
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
-
-    def dump_energy(self, hf_energy=None, converged=None):
-        if hf_energy is None: hf_energy = self.hf_energy
-        if converged is None: converged = self.converged
-        if converged:
-            logger.note(self, 'converged SCF energy = %.15g',
-                        hf_energy)
-        else:
-            logger.note(self, 'SCF not converge.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles',
-                        hf_energy, self.max_cycle)
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)

@@ -1,0 +1,8 @@
+cc
+**
+
+.. automodule:: pyscf.cc
+ 
+
+
+
