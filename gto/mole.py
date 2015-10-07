@@ -39,7 +39,7 @@ def _gaussian_int(n, alpha):
     return scipy.special.gamma(n1) / (2. * alpha**n1)
 
 def gto_norm(l, expnt):
-    r'''Normalized factor for GTO   :math:`g=r^l e^{-\alpha r^2}`
+    r'''Normalized factor for GTO radial part   :math:`g=r^l e^{-\alpha r^2}`
 
     .. math::
 
@@ -345,7 +345,7 @@ def intor_cross(intor, mol1, mol2, comp=1):
     '''
     nbas1 = len(mol1._bas)
     nbas2 = len(mol2._bas)
-    atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env, \
+    atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env,
                                 mol2._atm, mol2._bas, mol2._env)
     bras = range(nbas1)
     kets = range(nbas1, nbas1+nbas2)

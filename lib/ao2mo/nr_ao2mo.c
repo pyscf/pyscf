@@ -72,14 +72,15 @@
  * ----------------------+---------------------
  *  AO2MOtranse1_nr_s4   |  AO2MOmmm_nr_s2_s2
  *  AO2MOtranse1_nr_s2ij |  AO2MOmmm_nr_s2_iltj
- *  AO2MOtranse2_nr_s4   |  AO2MOmmm_nr_s2_igtj                                                                                   
- *  AO2MOtranse2_nr_s2kl |                               
+ *  AO2MOtranse2_nr_s4   |  AO2MOmmm_nr_s2_igtj
+ *  AO2MOtranse2_nr_s2kl |
  * ----------------------+---------------------
  *  AO2MOtranse1_nr_s2kl |  AO2MOmmm_nr_s2_s2
- *  AO2MOtranse1_nr_s1   |  AO2MOmmm_nr_s2_iltj
  *  AO2MOtranse2_nr_s2ij |  AO2MOmmm_nr_s2_igtj
- *  AO2MOtranse2_nr_s1   |  AO2MOmmm_nr_s1_iltj
- *                       |  AO2MOmmm_nr_s1_igtj
+ *                       |  AO2MOmmm_nr_s2_iltj
+ * ----------------------+---------------------
+ *  AO2MOtranse1_nr_s1   |  AO2MOmmm_nr_s1_iltj
+ *  AO2MOtranse2_nr_s1   |  AO2MOmmm_nr_s1_igtj
  *
  */
 
@@ -154,8 +155,8 @@ void AO2MOdtriumm_o2(int m, int n, int k, int diag_off,
  *      vout[:,bra_count*ket_count], eri[:,nao*nao]
  * s1, s2 here to label the AO symmetry
  */
-int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case OUTPUTIJ: return envs->bra_count * envs->ket_count;
@@ -171,7 +172,6 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*i_count);
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
         dgemm_(&TRANS_N, &TRANS_N, &nao, &i_count, &nao,
@@ -180,7 +180,6 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &i_count, &nao,
                &D1, mo_coeff+j_start*nao, &nao, buf, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 /*
@@ -188,8 +187,8 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * shape requirements:
  *      vout[:,bra_count*ket_count], eri[:,nao*nao]
  */
-int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case OUTPUTIJ: return envs->bra_count * envs->ket_count;
@@ -205,7 +204,6 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*j_count);
 
         // C_qj (pq| = (pj|, where (pq| is in C-order
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &nao, &nao,
@@ -214,7 +212,6 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_N, &TRANS_N, &j_count, &i_count, &nao,
                &D1, buf, &j_count, mo_coeff+i_start*nao, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 
@@ -225,8 +222,8 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  *      eri[:,nao*(nao+1)/2]
  * first s2 is the AO symmetry, second s2 is the MO symmetry
  */
-int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s2_s2(double *vout, double *eri, double *buf,
+                      struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case OUTPUTIJ: assert(envs->bra_count == envs->ket_count);
@@ -243,7 +240,6 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*(nao*i_count+i_count*j_count));
         double *buf1 = buf + nao*i_count;
         int i, j, ij;
 
@@ -260,7 +256,6 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
                 }
                 buf1 += j_count;
         }
-        free(buf);
         return 0;
 }
 
@@ -269,8 +264,8 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * shape requirements:
  *      vout[:,bra_count*ket_count], eri[:,nao*(nao+1)/2]
  */
-int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case OUTPUTIJ: return envs->bra_count * envs->ket_count;
@@ -288,7 +283,6 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*i_count);
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
         dsymm_(&SIDE_L, &UPLO_U, &nao, &i_count,
@@ -298,7 +292,6 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &i_count, &nao,
                &D1, mo_coeff+j_start*nao, &nao, buf, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 
@@ -307,8 +300,8 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * shape requirements:
  *      vout[:,bra_count*ket_count], eri[:,nao*(nao+1)/2]
  */
-int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case OUTPUTIJ: return envs->bra_count * envs->ket_count;
@@ -326,7 +319,6 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*j_count);
 
         // C_qj (pq| = (pj|, where (pq| is in C-order
         dsymm_(&SIDE_L, &UPLO_U, &nao, &j_count,
@@ -336,7 +328,6 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &i_count, &nao,
                &D1, buf, &nao, mo_coeff+i_start*nao, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 
@@ -653,7 +644,8 @@ static void s1_set0(double *eri, double *nop,
         }
 
 void AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                     double *eri, double *buf,
+                     int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * nao;
@@ -665,7 +657,6 @@ void AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
         int kl, jsh, ksh, lsh, dj, dk, dl;
         int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
         double *pbuf, *peri;
 
         shls[0] = ish;
@@ -686,11 +677,11 @@ void AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
                 }
                 eri += nao2 * dk * dl;
         }
-        free(buf);
 }
 
 void AO2MOfill_nr_s2ij(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                       double *eri, double *buf,
+                       int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * (nao+1) / 2;
@@ -702,7 +693,6 @@ void AO2MOfill_nr_s2ij(int (*intor)(), int (*fprescreen)(),
         int kl, jsh, ksh, lsh, dj, dk, dl;
         int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
         double *pbuf = buf;
         double *peri;
 
@@ -729,11 +719,11 @@ void AO2MOfill_nr_s2ij(int (*intor)(), int (*fprescreen)(),
                 DISTR_INTS_BY(s4_copy_ieqj, s4_set0_ieqj, ao_loc[ish]+1);
                 eri += nao2 * dk * dl;
         }
-        free(buf);
 }
 
 void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                       double *eri, double *buf,
+                       int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * nao;
@@ -745,7 +735,6 @@ void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
         int kl, jsh, ksh, lsh, dj, dk, dl;
         int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
         double *pbuf = buf;
         double *peri;
 
@@ -778,11 +767,11 @@ void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
                 }
                 eri += nao2 * dk * dl;
         } }
-        free(buf);
 }
 
 void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                     double *eri, double *buf,
+                     int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * (nao+1) / 2;
@@ -794,7 +783,6 @@ void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
         int kl, jsh, ksh, lsh, dj, dk, dl;
         int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
         double *pbuf = buf;
         double *peri;
 
@@ -839,47 +827,44 @@ void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
                 DISTR_INTS_BY(s4_copy_ieqj, s4_set0_ieqj, ao_loc[ish]+1);
                 eri += nao2 * dk * dl;
         } }
-        free(buf);
 }
 
 /*
  * ************************************************
  * s1, s2ij, s2kl, s4 here to label the AO symmetry
  */
-void AO2MOtranse1_nr_s1(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s1(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         size_t nao2 = envs->nao * envs->nao;
-        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
+        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, buf, envs, 0);
 }
 
-void AO2MOtranse1_nr_s2ij(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s2ij(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         size_t nao2 = nao*(nao+1)/2;
-        double *buf = malloc(sizeof(double) * nao*nao);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOtranse1_nr_s2kl(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s2kl(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse1_nr_s1(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse1_nr_s1(fmmm, row_id, vout, vin, buf, envs);
 }
 
-void AO2MOtranse1_nr_s4(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s4(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse1_nr_s2ij(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse1_nr_s2ij(fmmm, row_id, vout, vin, buf, envs);
 }
 
 
@@ -887,40 +872,38 @@ void AO2MOtranse1_nr_s4(int (*fmmm)(),
  * ************************************************
  * s1, s2ij, s2kl, s4 here to label the AO symmetry
  */
-void AO2MOtranse2_nr_s1(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s1(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, OUTPUTIJ);
-        size_t nao2 = (*fmmm)(NULL, NULL, envs, INPUT_IJ);
-        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
+        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, buf, envs, 0);
 }
 
-void AO2MOtranse2_nr_s2ij(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s2ij(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse2_nr_s1(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse2_nr_s1(fmmm, row_id, vout, vin, buf, envs);
 }
 
-void AO2MOtranse2_nr_s2kl(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s2kl(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, OUTPUTIJ);
-        size_t nao2 = (*fmmm)(NULL, NULL, envs, INPUT_IJ);
-        double *buf = malloc(sizeof(double) * nao*nao);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOtranse2_nr_s4(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s4(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse2_nr_s2kl(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse2_nr_s2kl(fmmm, row_id, vout, vin, buf, envs);
 }
 
 
@@ -929,17 +912,16 @@ void AO2MOtranse2_nr_s4(int (*fmmm)(),
  * ************************************************
  * sort (shell-based) integral blocks then transform
  */
-void AO2MOsortranse2_nr_s1(int (*fmmm)(),
-                           double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s1(int (*fmmm)(), int row_id,
+                           double *vout, double *vin, double *buf,
                            struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
         int *ao_loc = envs->ao_loc;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, OUTPUTIJ);
-        size_t nao2 = (*fmmm)(NULL, NULL, envs, INPUT_IJ);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         int ish, jsh, di, dj;
         int i, j, ij;
-        double *buf = malloc(sizeof(double) * nao2);
         double *pbuf;
 
         vin += nao2 * row_id;
@@ -956,29 +938,26 @@ void AO2MOsortranse2_nr_s1(int (*fmmm)(),
                 }
         }
 
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOsortranse2_nr_s2ij(int (*fmmm)(),
-                             double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s2ij(int (*fmmm)(), int row_id,
+                             double *vout, double *vin, double *buf,
                              struct _AO2MOEnvs *envs)
 {
-        AO2MOsortranse2_nr_s1(fmmm, vout, vin, row_id, envs);
+        AO2MOsortranse2_nr_s1(fmmm, row_id, vout, vin, buf, envs);
 }
 
-void AO2MOsortranse2_nr_s2kl(int (*fmmm)(),
-                             double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s2kl(int (*fmmm)(), int row_id,
+                             double *vout, double *vin, double *buf,
                              struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
         int *ao_loc = envs->ao_loc;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, OUTPUTIJ);
-        size_t nao2 = (*fmmm)(NULL, NULL, envs, INPUT_IJ);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         int ish, jsh, di, dj;
         int i, j, ij;
-        double *buf = malloc(sizeof(double) * nao * nao);
         double *pbuf;
 
         vin += nao2 * row_id;
@@ -1003,19 +982,90 @@ void AO2MOsortranse2_nr_s2kl(int (*fmmm)(),
                 vin += di * (di+1) / 2;
         }
 
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOsortranse2_nr_s4(int (*fmmm)(),
-                           double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s4(int (*fmmm)(), int row_id,
+                           double *vout, double *vin, double *buf,
                            struct _AO2MOEnvs *envs)
 {
-        AO2MOsortranse2_nr_s2kl(fmmm, vout, vin, row_id, envs);
+        AO2MOsortranse2_nr_s2kl(fmmm, row_id, vout, vin, buf, envs);
 }
 
+/*
+ * ************************************************
+ * combine ftrans and fmmm
+ */
 
+void AO2MOtrans_nr_s1_iltj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s1(AO2MOmmm_nr_s1_iltj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_s1_igtj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s1(AO2MOmmm_nr_s1_igtj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts1_iltj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s1(AO2MOmmm_nr_s1_iltj, row_id, vout, eri, buf,envs);
+}
+
+void AO2MOtrans_nr_sorts1_igtj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s1(AO2MOmmm_nr_s1_igtj, row_id, vout, eri, buf,envs);
+}
+
+void AO2MOtrans_nr_s2_iltj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(AO2MOmmm_nr_s2_iltj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_s2_igtj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(AO2MOmmm_nr_s2_igtj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_s2_s2(void *nop, int row_id,
+                         double *vout, double *eri, double *buf,
+                         struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(AO2MOmmm_nr_s2_s2, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts2_iltj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(AO2MOmmm_nr_s2_iltj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts2_igtj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(AO2MOmmm_nr_s2_igtj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts2_s2(void *nop, int row_id,
+                             double *vout, double *eri, double *buf,
+                             struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(AO2MOmmm_nr_s2_s2, row_id, vout, eri, buf,envs);
+}
 
 /*
  * ************************************************
@@ -1074,12 +1124,16 @@ void AO2MOnr_e2_drv(void (*ftrans)(), int (*fmmm)(),
 
         int i;
 #pragma omp parallel default(none) \
-        shared(ftrans, fmmm, vout, vin, nijcount, envs) \
+        shared(ftrans, fmmm, vout, vin, nijcount, envs, nao, i_count, j_count) \
         private(i)
-#pragma omp for nowait schedule(static)
+{
+        double *buf = malloc(sizeof(double) * (nao+i_count) * (nao+j_count));
+#pragma omp for schedule(dynamic)
         for (i = 0; i < nijcount; i++) {
-                (*ftrans)(fmmm, vout, vin, i, &envs);
+                (*ftrans)(fmmm, i, vout, vin, buf, &envs);
         }
+        free(buf);
+}
 }
 
 /*
@@ -1092,11 +1146,14 @@ void AO2MOnr_e1fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int *ao_loc = malloc(sizeof(int)*(nbas+1));
-        int ish;
+        int ish, di;
         int nao = 0;
+        int dmax = 0;
         for (ish = 0; ish < nbas; ish++) {
                 ao_loc[ish] = nao;
-                nao += (*cgto_in_shell)(ish, bas);
+                di = (*cgto_in_shell)(ish, bas);
+                dmax = MAX(dmax, di);
+                nao += di;
         }
         ao_loc[nbas] = nao;
         struct _AO2MOEnvs envs = {natm, nbas, atm, bas, env, nao,
@@ -1110,13 +1167,16 @@ void AO2MOnr_e1fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
         }
 
 #pragma omp parallel default(none) \
-        shared(fill, fprescreen, eri, envs, intor, nkl, nbas) \
+        shared(fill, fprescreen, eri, envs, intor, nkl, nbas, dmax, ncomp) \
         private(ish)
-#pragma omp for nowait schedule(dynamic)
+{
+        double *buf = malloc(sizeof(double)*dmax*dmax*dmax*dmax*ncomp);
+#pragma omp for schedule(dynamic, 1)
         for (ish = 0; ish < nbas; ish++) {
-                (*fill)(intor, fprescreen, eri, nkl, ish, &envs);
+                (*fill)(intor, fprescreen, eri, buf, nkl, ish, &envs);
         }
-
+        free(buf);
+}
         free(ao_loc);
 }
 

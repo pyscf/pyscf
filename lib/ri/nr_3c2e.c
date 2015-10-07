@@ -15,6 +15,8 @@
 #include "ao2mo/nr_ao2mo.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
+#define OUTPUTIJ        1
+#define INPUT_IJ        2
 
 
 void RIfill_s1_auxe2(int (*intor)(), double *eri,
@@ -211,8 +213,8 @@ void RInr_int3c2e_auxe1(int (*intor)(), void (*fill)(), double *eri,
 /*
  * transform bra, s1 to label AO symmetry
  */
-int RIhalfmmm_nr_s1_bra(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int RIhalfmmm_nr_s1_bra(double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case 1: return envs->bra_count * envs->nao;
@@ -235,12 +237,12 @@ int RIhalfmmm_nr_s1_bra(double *vout, double *vin, struct _AO2MOEnvs *envs,
 /*
  * transform ket, s1 to label AO symmetry
  */
-int RIhalfmmm_nr_s1_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int RIhalfmmm_nr_s1_ket(double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->nao * envs->ket_count;
-                case 2: return envs->nao * envs->nao;
+                case OUTPUTIJ: return envs->nao * envs->ket_count;
+                case INPUT_IJ: return envs->nao * envs->nao;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -260,12 +262,12 @@ int RIhalfmmm_nr_s1_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
 /*
  * transform bra, s2 to label AO symmetry
  */
-int RIhalfmmm_nr_s2_bra(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int RIhalfmmm_nr_s2_bra(double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->bra_count * envs->nao;
-                case 2: return envs->nao * (envs->nao+1) / 2;
+                case OUTPUTIJ: return envs->bra_count * envs->nao;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -285,12 +287,12 @@ int RIhalfmmm_nr_s2_bra(double *vout, double *vin, struct _AO2MOEnvs *envs,
 /*
  * transform ket, s2 to label AO symmetry
  */
-int RIhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int RIhalfmmm_nr_s2_ket(double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->nao * envs->ket_count;
-                case 2: return envs->nao * (envs->nao+1) / 2;
+                case OUTPUTIJ: return envs->nao * envs->ket_count;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -300,7 +302,6 @@ int RIhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*j_count);
         int i, j;
 
         dsymm_(&SIDE_L, &UPLO_U, &nao, &j_count,
@@ -312,19 +313,18 @@ int RIhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
                 }
                 vout += j_count;
         }
-        free(buf);
         return 0;
 }
 
 /*
  * unpack the AO integrals and copy to vout, s2 to label AO symmetry
  */
-int RImmm_nr_s2_copy(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                     int seekdim)
+int RImmm_nr_s2_copy(double *vout, double *vin, double *buf,
+                     struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->nao * envs->nao;
-                case 2: return envs->nao * (envs->nao+1) / 2;
+                case OUTPUTIJ: return envs->nao * envs->nao;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
         }
         int nao = envs->nao;
         int i, j;
@@ -338,3 +338,4 @@ int RImmm_nr_s2_copy(double *vout, double *vin, struct _AO2MOEnvs *envs,
         }
         return 0;
 }
+

@@ -21,14 +21,20 @@ def format_aux_basis(mol, auxbasis='weigend'):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
     the basis sets
     '''
-    pmol = pyscf.gto.Mole()
-    pmol.verbose = 0
-    pmol.atom = mol.atom
-    pmol.basis = auxbasis
-    pmol.spin = mol.spin
-    pmol.charge = mol.charge
-    pmol.build(False, False)
+    pmol = mol.copy()
     pmol.verbose = mol.verbose
+    if isinstance(auxbasis, str):
+        uniq_atoms = set([a[0] for a in mol._atom])
+        pmol._basis = pmol.format_basis(dict([(a, auxbasis)
+                                              for a in uniq_atoms]))
+    else:
+        pmol._basis = pmol.format_basis(auxbasis)
+    pmol._atom = mol._atom
+    pmol._atm, pmol._bas, pmol._env = \
+            pmol.make_env(mol._atom, pmol._basis, pmol._env)
+    pmol.natm = len(pmol._atm)
+    pmol.nbas = len(pmol._bas)
+    pmol._build = True
     logger.debug(mol, 'aux basis %s, num shells = %d, num cGTO = %d',
                  auxbasis, pmol.nbas, pmol.nao_nr())
     return pmol
@@ -45,7 +51,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
-    natm = ctypes.c_int(mol.natm)
+    natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
 
     nao = mol.nao_nr()

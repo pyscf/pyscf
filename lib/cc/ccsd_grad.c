@@ -16,8 +16,8 @@
  * a = reduce(numpy.dot, (mo_coeff, vin, mo_coeff.T))
  * numpy.tril(a + a.T)
  */
-int CCmmm_transpose_sum(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int CCmmm_transpose_sum(double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case OUTPUTIJ: return envs->nao * (envs->nao + 1) / 2;
@@ -34,8 +34,7 @@ int CCmmm_transpose_sum(double *vout, double *vin, struct _AO2MOEnvs *envs,
         int j_count = envs->ket_count;
         int i, j, ij;
         double *mo_coeff = envs->mo_coeff; // in Fortran order
-        double *buf = malloc(sizeof(double)*nao*nao*2);
-        double *buf1 = buf + nao*nao;
+        double *buf1 = buf + nao*j_count;
 
         dgemm_(&TRANS_N, &TRANS_T, &j_count, &nao, &i_count,
                &D1, vin, &j_count, mo_coeff+i_start*nao, &nao,
@@ -48,7 +47,6 @@ int CCmmm_transpose_sum(double *vout, double *vin, struct _AO2MOEnvs *envs,
         for (j = 0; j <= i; j++, ij++) {
                 vout[ij] = buf1[i*nao+j] + buf1[j*nao+i];
         } }
-        free(buf);
         return 0;
 }
 

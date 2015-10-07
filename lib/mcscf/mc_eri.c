@@ -16,8 +16,8 @@
  * transform ket, s2 to label AO symmetry
  * copy from RIhalfmmm_nr_s2_ket
  */
-int MCSCFhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
-                           int seekdim)
+int MCSCFhalfmmm_nr_s2_ket(double *vout, double *vin, double *buf,
+                           struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
                 case 1: return envs->nao * envs->ket_count;
@@ -31,7 +31,6 @@ int MCSCFhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*j_count);
         int i, j;
 
         dsymm_(&SIDE_L, &UPLO_U, &nao, &j_count,
@@ -43,7 +42,6 @@ int MCSCFhalfmmm_nr_s2_ket(double *vout, double *vin, struct _AO2MOEnvs *envs,
                 }
                 vout += j_count;
         }
-        free(buf);
         return 0;
 }
 
