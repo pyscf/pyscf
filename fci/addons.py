@@ -290,6 +290,9 @@ def des_b(ci0, norb, nelec, ap_id):
     addr_ci0 = numpy.any(entry_has_ap, axis=1)
     addr_ci1 = des_index[entry_has_ap,2]
     sign = des_index[entry_has_ap,3]
+    # This sign prefactor accounts for interchange of operators with alpha and beta spins
+    if neleca % 2 == 1:
+        sign *= -1
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
@@ -362,6 +365,9 @@ def cre_b(ci0, norb, nelec, ap_id):
     addr_ci0 = numpy.any(entry_has_ap, axis=1)
     addr_ci1 = cre_index[entry_has_ap,2]
     sign = cre_index[entry_has_ap,3]
+    # This sign prefactor accounts for interchange of operators with alpha and beta spins
+    if neleca % 2 == 1:
+        sign *= -1
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
@@ -444,7 +450,7 @@ def fix_spin_(fciobj, shift=.1):
         if isinstance(nelec, (int, numpy.integer)):
             sz = (nelec % 2) * .5
         else:
-            sz = (nelec[0]-nelec[1]) * .5
+            sz = abs(nelec[0]-nelec[1]) * .5
         ci1 += shift * spin_op.contract_ss(fcivec, norb, nelec)
         ci1 -= sz*(sz+1)*shift * fcivec.reshape(ci1.shape)
         if isinstance(fciobj, direct_spin0.FCISolver):
