@@ -6,5 +6,5 @@ set_target_properties(ri PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(ri cint np_helper ${BLAS_LIBRARIES})
+target_link_libraries(ri cint cvhf np_helper ${BLAS_LIBRARIES})
 

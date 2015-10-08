@@ -472,7 +472,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         dtype = numpy.complex
         num_cgto_of = lambda basid: _cint.CINTcgto_spinor(ctypes.c_int(basid),
                                                           c_bas)
-    if '3c2e' in intor_name or '2e3c' in intor_name:
+    if '3c' in intor_name:
         assert(len(shls) == 3)
         #di, dj, dk = map(num_cgto_of, shls)
         di = num_cgto_of(shls[0])
@@ -490,7 +490,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.reshape(di,dj,dk)
         else:
             return buf.transpose(3,0,1,2)
-    elif '2c2e' in intor_name or '2e2c' in intor_name:
+    elif '2c' in intor_name:
         assert(len(shls) == 2)
         #di, dj = map(num_cgto_of, shls)
         #buf = numpy.empty((di,dj,comp), dtype, order='F')
