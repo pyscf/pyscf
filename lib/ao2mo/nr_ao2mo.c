@@ -22,6 +22,8 @@
 #define MAX(X,Y)        ((X) > (Y) ? (X) : (Y))
 // 9f or 7g or 5h functions should be enough
 #define NCTRMAX         64
+#define OUTPUTIJ        1
+#define INPUT_IJ        2
 
 /*
  * Denoting 2e integrals (ij|kl),
@@ -70,14 +72,15 @@
  * ----------------------+---------------------
  *  AO2MOtranse1_nr_s4   |  AO2MOmmm_nr_s2_s2
  *  AO2MOtranse1_nr_s2ij |  AO2MOmmm_nr_s2_iltj
- *  AO2MOtranse2_nr_s4   |  AO2MOmmm_nr_s2_igtj                                                                                   
- *  AO2MOtranse2_nr_s2kl |                               
+ *  AO2MOtranse2_nr_s4   |  AO2MOmmm_nr_s2_igtj
+ *  AO2MOtranse2_nr_s2kl |
  * ----------------------+---------------------
  *  AO2MOtranse1_nr_s2kl |  AO2MOmmm_nr_s2_s2
- *  AO2MOtranse1_nr_s1   |  AO2MOmmm_nr_s2_iltj
  *  AO2MOtranse2_nr_s2ij |  AO2MOmmm_nr_s2_igtj
- *  AO2MOtranse2_nr_s1   |  AO2MOmmm_nr_s1_iltj
- *                       |  AO2MOmmm_nr_s1_igtj
+ *                       |  AO2MOmmm_nr_s2_iltj
+ * ----------------------+---------------------
+ *  AO2MOtranse1_nr_s1   |  AO2MOmmm_nr_s1_iltj
+ *  AO2MOtranse2_nr_s1   |  AO2MOmmm_nr_s1_igtj
  *
  */
 
@@ -152,12 +155,12 @@ void AO2MOdtriumm_o2(int m, int n, int k, int diag_off,
  *      vout[:,bra_count*ket_count], eri[:,nao*nao]
  * s1, s2 here to label the AO symmetry
  */
-int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->bra_count * envs->ket_count;
-                case 2: return envs->nao * envs->nao;
+                case OUTPUTIJ: return envs->bra_count * envs->ket_count;
+                case INPUT_IJ: return envs->nao * envs->nao;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -169,7 +172,6 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*i_count);
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
         dgemm_(&TRANS_N, &TRANS_N, &nao, &i_count, &nao,
@@ -178,7 +180,6 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &i_count, &nao,
                &D1, mo_coeff+j_start*nao, &nao, buf, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 /*
@@ -186,12 +187,12 @@ int AO2MOmmm_nr_s1_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * shape requirements:
  *      vout[:,bra_count*ket_count], eri[:,nao*nao]
  */
-int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->bra_count * envs->ket_count;
-                case 2: return envs->nao * envs->nao;
+                case OUTPUTIJ: return envs->bra_count * envs->ket_count;
+                case INPUT_IJ: return envs->nao * envs->nao;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -203,7 +204,6 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*j_count);
 
         // C_qj (pq| = (pj|, where (pq| is in C-order
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &nao, &nao,
@@ -212,7 +212,6 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_N, &TRANS_N, &j_count, &i_count, &nao,
                &D1, buf, &j_count, mo_coeff+i_start*nao, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 
@@ -223,13 +222,13 @@ int AO2MOmmm_nr_s1_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  *      eri[:,nao*(nao+1)/2]
  * first s2 is the AO symmetry, second s2 is the MO symmetry
  */
-int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s2_s2(double *vout, double *eri, double *buf,
+                      struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: assert(envs->bra_count == envs->ket_count);
-                        return envs->bra_count * (envs->bra_count+1) / 2;
-                case 2: return envs->nao * (envs->nao+1) / 2;
+                case OUTPUTIJ: assert(envs->bra_count == envs->ket_count);
+                               return envs->bra_count * (envs->bra_count+1) / 2;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -241,7 +240,6 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*(nao*i_count+i_count*j_count));
         double *buf1 = buf + nao*i_count;
         int i, j, ij;
 
@@ -258,7 +256,6 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
                 }
                 buf1 += j_count;
         }
-        free(buf);
         return 0;
 }
 
@@ -267,12 +264,12 @@ int AO2MOmmm_nr_s2_s2(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * shape requirements:
  *      vout[:,bra_count*ket_count], eri[:,nao*(nao+1)/2]
  */
-int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->bra_count * envs->ket_count;
-                case 2: return envs->nao * (envs->nao+1) / 2;
+                case OUTPUTIJ: return envs->bra_count * envs->ket_count;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -286,7 +283,6 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*i_count);
 
         // C_pi (pq| = (iq|, where (pq| is in C-order
         dsymm_(&SIDE_L, &UPLO_U, &nao, &i_count,
@@ -296,7 +292,6 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &i_count, &nao,
                &D1, mo_coeff+j_start*nao, &nao, buf, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 
@@ -305,12 +300,12 @@ int AO2MOmmm_nr_s2_iltj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * shape requirements:
  *      vout[:,bra_count*ket_count], eri[:,nao*(nao+1)/2]
  */
-int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
-                        int seekdim)
+int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, double *buf,
+                        struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
-                case 1: return envs->bra_count * envs->ket_count;
-                case 2: return envs->nao * (envs->nao+1) / 2;
+                case OUTPUTIJ: return envs->bra_count * envs->ket_count;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
         }
         const double D0 = 0;
         const double D1 = 1;
@@ -324,7 +319,6 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         int j_start = envs->ket_start;
         int j_count = envs->ket_count;
         double *mo_coeff = envs->mo_coeff;
-        double *buf = malloc(sizeof(double)*nao*j_count);
 
         // C_qj (pq| = (pj|, where (pq| is in C-order
         dsymm_(&SIDE_L, &UPLO_U, &nao, &j_count,
@@ -334,7 +328,6 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
         dgemm_(&TRANS_T, &TRANS_N, &j_count, &i_count, &nao,
                &D1, buf, &nao, mo_coeff+i_start*nao, &nao,
                &D0, vout, &j_count);
-        free(buf);
         return 0;
 }
 
@@ -343,8 +336,8 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, struct _AO2MOEnvs *envs,
  * s1, s2ij, s2kl, s4 here to label the AO symmetry
  * eris[ncomp,nkl,nao_pair_ij]
  */
-static void inc_copy(double *eri, double *ints, int di, int dj, int dk, int dl,
-                     int i0plus1, int ericol)
+static void s4_copy(double *eri, double *ints, int di, int dj, int dk, int dl,
+                    int istride, size_t nao2)
 {
         int i, j, k, l;
         double *pints, *peri, *peri1;
@@ -356,33 +349,33 @@ static void inc_copy(double *eri, double *ints, int di, int dj, int dk, int dl,
                         for (j = 0; j < dj; j++) {
                                 eri[j] = pints[j];
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
                 break;
         case 2:
                 for (k = 0; k < dk; k++) {
                 for (l = 0; l < dl; l++) {
                         pints = ints + di * dj * (l*dk+k);
-                        peri = eri + i0plus1;
+                        peri = eri + istride;
                         for (j = 0; j < dj;j++) {
                                 eri [j] = pints[j*2+0];
                                 peri[j] = pints[j*2+1];
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
                 break;
         case 3:
                 for (k = 0; k < dk; k++) {
                 for (l = 0; l < dl; l++) {
                         pints = ints + di * dj * (l*dk+k);
-                        peri  = eri + i0plus1;
-                        peri1 = peri + i0plus1 + 1;
+                        peri  = eri + istride;
+                        peri1 = peri + istride + 1;
                         for (j = 0; j < dj;j++) {
                                 eri  [j] = pints[j*3+0];
                                 peri [j] = pints[j*3+1];
                                 peri1[j] = pints[j*3+2];
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
                 break;
         default:
@@ -391,18 +384,19 @@ static void inc_copy(double *eri, double *ints, int di, int dj, int dk, int dl,
                         pints = ints + di * dj * (l*dk+k);
                         peri = eri;
                         for (i = 0; i < di; i++) {
-                                for (j = 0; j < dj;j++) {
+                                for (j = 0; j < dj; j++) {
 //TODO: call nontemporal write to avoid write-allocate
                                         peri[j] = pints[j*di+i];
                                 }
-                                peri += i0plus1 + i;
+                                peri += istride + i;
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
         }
 }
-static void inc_set0(double *eri, int di, int dj, int dk, int dl,
-                     int i0plus1, int ericol)
+static void s4_set0(double *eri, double *nop,
+                    int di, int dj, int dk, int dl,
+                    int istride, size_t nao2)
 {
         int i, j, k, l;
         double *peri, *peri1;
@@ -413,31 +407,31 @@ static void inc_set0(double *eri, int di, int dj, int dk, int dl,
                         for (j = 0; j < dj; j++) {
                                 eri[j] = 0;
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
                 break;
         case 2:
                 for (k = 0; k < dk; k++) {
                 for (l = 0; l < dl; l++) {
-                        peri = eri + i0plus1;
-                        for (j = 0; j < dj;j++) {
+                        peri = eri + istride;
+                        for (j = 0; j < dj; j++) {
                                 eri [j] = 0;
                                 peri[j] = 0;
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
                 break;
         case 3:
                 for (k = 0; k < dk; k++) {
                 for (l = 0; l < dl; l++) {
-                        peri  = eri + i0plus1;
-                        peri1 = peri + i0plus1 + 1;
-                        for (j = 0; j < dj;j++) {
+                        peri  = eri + istride;
+                        peri1 = peri + istride + 1;
+                        for (j = 0; j < dj; j++) {
                                 eri  [j] = 0;
                                 peri [j] = 0;
                                 peri1[j] = 0;
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
                 break;
         default:
@@ -445,18 +439,20 @@ static void inc_set0(double *eri, int di, int dj, int dk, int dl,
                 for (l = 0; l < dl; l++) {
                         peri = eri;
                         for (i = 0; i < di; i++) {
-                                for (j = 0; j < dj;j++) {
+                                for (j = 0; j < dj; j++) {
+//TODO: call nontemporal write to avoid write-allocate
                                         peri[j] = 0;
                                 }
-                                peri += i0plus1 + i;
+                                peri += istride + i;
                         }
-                        eri += ericol;
+                        eri += nao2;
                 } }
         }
 }
 
-static void inc_copy_keql(double *eri, double *ints, int di, int dj, int dk, int dl,
-                          int i0plus1, int ericol)
+static void s4_copy_keql(double *eri, double *ints,
+                         int di, int dj, int dk, int dl,
+                         int istride, size_t nao2)
 {
         int i, j, k, l;
         double *pints, *peri;
@@ -465,16 +461,17 @@ static void inc_copy_keql(double *eri, double *ints, int di, int dj, int dk, int
                 pints = ints + di * dj * (l*dk+k);
                 peri = eri;
                 for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj;j++) {
+                        for (j = 0; j < dj; j++) {
                                 peri[j] = pints[j*di+i];
                         }
-                        peri += i0plus1 + i;
+                        peri += istride + i;
                 }
-                eri += ericol;
+                eri += nao2;
         } }
 }
-static void inc_set0_keql(double *eri, int di, int dj, int dk, int dl,
-                          int i0plus1, int ericol)
+static void s4_set0_keql(double *eri, double *nop,
+                         int di, int dj, int dk, int dl,
+                         int istride, size_t nao2)
 {
         int i, j, k, l;
         double *peri;
@@ -482,17 +479,173 @@ static void inc_set0_keql(double *eri, int di, int dj, int dk, int dl,
         for (l = 0; l <= k; l++) {
                 peri = eri;
                 for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj;j++) {
+                        for (j = 0; j < dj; j++) {
                                 peri[j] = 0;
                         }
-                        peri += i0plus1 + i;
+                        peri += istride + i;
                 }
-                eri += ericol;
+                eri += nao2;
+        } }
+}
+static void s4_copy_ieqj(double *eri, double *ints,
+                         int di, int dj, int dk, int dl,
+                         int istride, size_t nao2)
+{
+        int i, j, k, l;
+        double *pints, *peri;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l < dl; l++) {
+                pints = ints + di * dj * (l*dk+k);
+                peri = eri;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j <= i; j++) {
+                                peri[j] = pints[j*di+i];
+                        }
+                        peri += istride + i;
+                }
+                eri += nao2;
+        } }
+}
+static void s4_set0_ieqj(double *eri, double *nop,
+                         int di, int dj, int dk, int dl,
+                         int istride, size_t nao2)
+{
+        int i, j, k, l;
+        double *peri;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l < dl; l++) {
+                peri = eri;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j <= i; j++) {
+                                peri[j] = 0;
+                        }
+                        peri += istride + i;
+                }
+                eri += nao2;
+        } }
+}
+static void s4_copy_keql_ieqj(double *eri, double *ints,
+                              int di, int dj, int dk, int dl,
+                              int istride, size_t nao2)
+{
+        int i, j, k, l;
+        double *pints, *peri;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l <= k; l++) {
+                pints = ints + di * dj * (l*dk+k);
+                peri = eri;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j <= i; j++) {
+                                peri[j] = pints[j*di+i];
+                        }
+                        peri += istride + i;
+                }
+                eri += nao2;
+        } }
+}
+static void s4_set0_keql_ieqj(double *eri, double *nop,
+                              int di, int dj, int dk, int dl,
+                              int istride, size_t nao2)
+{
+        int i, j, k, l;
+        double *peri;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l <= k; l++) {
+                peri = eri;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j <= i; j++) {
+                                peri[j] = 0;
+                        }
+                        peri += istride + i;
+                }
+                eri += nao2;
+        } }
+}
+static void s2kl_copy_keql(double *eri, double *ints,
+                           int di, int dj, int dk, int dl,
+                           int istride, size_t nao2)
+{
+        int i, j, k, l;
+        double *pints;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l <= k; l++) {
+                pints = ints + di * dj * (l*dk+k);
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                eri[i*istride+j] = pints[j*di+i];
+                        }
+                }
+                eri += nao2;
+        } }
+}
+static void s2kl_set0_keql(double *eri, double *nop,
+                           int di, int dj, int dk, int dl,
+                           int istride, size_t nao2)
+{
+        int i, j, k, l;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l <= k; l++) {
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                eri[i*istride+j] = 0;
+                        }
+                }
+                eri += nao2;
+        } }
+}
+static void s1_copy(double *eri, double *ints,
+                    int di, int dj, int dk, int dl,
+                    int istride, size_t nao2)
+{
+        int i, j, k, l;
+        double *pints;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l < dl; l++) {
+                pints = ints + di * dj * (l*dk+k);
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                eri[i*istride+j] = pints[j*di+i];
+                        }
+                }
+                eri += nao2;
+        } }
+}
+static void s1_set0(double *eri, double *nop,
+                    int di, int dj, int dk, int dl,
+                    int istride, size_t nao2)
+{
+        int i, j, k, l;
+        for (k = 0; k < dk; k++) {
+        for (l = 0; l < dl; l++) {
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                eri[i*istride+j] = 0;
+                        }
+                }
+                eri += nao2;
         } }
 }
 
+#define DISTR_INTS_BY(fcopy, fset0, istride) \
+        if ((*fprescreen)(shls, envs->vhfopt, envs->atm, envs->bas, envs->env) && \
+            (*intor)(buf, shls, envs->atm, envs->natm, \
+                     envs->bas, envs->nbas, envs->env, envs->cintopt)) { \
+                pbuf = buf; \
+                for (icomp = 0; icomp < envs->ncomp; icomp++) { \
+                        peri = eri + nao2 * nkl * icomp + ioff + ao_loc[jsh]; \
+                        fcopy(peri, pbuf, di, dj, dk, dl, istride, nao2); \
+                        pbuf += di * dj * dk * dl; \
+                } \
+        } else { \
+                for (icomp = 0; icomp < envs->ncomp; icomp++) { \
+                        peri = eri + nao2 * nkl * icomp + ioff + ao_loc[jsh]; \
+                        fset0(peri, pbuf, di, dj, dk, dl, istride, nao2); \
+                } \
+        }
+
 void AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                     double *eri, double *buf,
+                     int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * nao;
@@ -500,11 +653,11 @@ void AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
         const int klsh_start = envs->klsh_start;
         const int klsh_end = klsh_start + envs->klsh_count;
         const int di = ao_loc[ish+1] - ao_loc[ish];
+        const int ioff = ao_loc[ish] * nao;
         int kl, jsh, ksh, lsh, dj, dk, dl;
-        int icomp, i, j, k, l;
+        int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
-        double *pbuf, *pbuf1, *peri;
+        double *pbuf, *peri;
 
         shls[0] = ish;
 
@@ -520,48 +673,15 @@ void AO2MOfill_nr_s1(int (*intor)(), int (*fprescreen)(),
                 for (jsh = 0; jsh < envs->nbas; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         shls[1] = jsh;
-                        if ((*fprescreen)(shls, envs->vhfopt,
-                                          envs->atm, envs->bas, envs->env) &&
-                            (*intor)(buf, shls, envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env,
-                                     envs->cintopt)) {
-                                pbuf = buf;
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                             + ao_loc[ish] * nao + ao_loc[jsh];
-                                        for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                pbuf1 = pbuf + di * dj * (l*dk+k);
-                                                for (i = 0; i < di; i++) {
-                                                for (j = 0; j < dj; j++) {
-                                                        peri[i*nao+j] = pbuf1[j*di+i];
-                                                } }
-                                                peri += nao2;
-                                        } }
-                                        pbuf += di * dj * dk * dl;
-                                }
-                        } else {
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                             + ao_loc[ish] * nao + ao_loc[jsh];
-                                        for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                for (i = 0; i < di; i++) {
-                                                for (j = 0; j < dj; j++) {
-                                                        peri[i*nao+j] = 0;
-                                                } }
-                                                peri += nao2;
-                                        } }
-                                }
-                        }
+                        DISTR_INTS_BY(s1_copy, s1_set0, nao);
                 }
                 eri += nao2 * dk * dl;
         }
-        free(buf);
 }
 
 void AO2MOfill_nr_s2ij(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                       double *eri, double *buf,
+                       int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * (nao+1) / 2;
@@ -571,10 +691,10 @@ void AO2MOfill_nr_s2ij(int (*intor)(), int (*fprescreen)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int ioff = ao_loc[ish] * (ao_loc[ish]+1) / 2;
         int kl, jsh, ksh, lsh, dj, dk, dl;
-        int icomp, i, j, k, l;
+        int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
-        double *pbuf, *pbuf1, *peri, *peri1;
+        double *pbuf = buf;
+        double *peri;
 
         shls[0] = ish;
 
@@ -590,79 +710,20 @@ void AO2MOfill_nr_s2ij(int (*intor)(), int (*fprescreen)(),
                 for (jsh = 0; jsh < ish; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         shls[1] = jsh;
-                        if ((*fprescreen)(shls, envs->vhfopt,
-                                          envs->atm, envs->bas, envs->env) &&
-                            (*intor)(buf, shls, envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env,
-                                     envs->cintopt)) {
-                                pbuf = buf;
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                                + ioff + ao_loc[jsh];
-                                        inc_copy(peri, pbuf, di, dj, dk, dl,
-                                                 ao_loc[ish]+1, nao2);
-                                        pbuf += di * dj * dk * dl;
-                                }
-                        } else {
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                                + ioff + ao_loc[jsh];
-                                        inc_set0(peri, di, dj, dk, dl,
-                                                 ao_loc[ish]+1, nao2);
-                                }
-                        }
+                        DISTR_INTS_BY(s4_copy, s4_set0, ao_loc[ish]+1);
                 }
 
                 jsh = ish;
                 dj = di;
                 shls[1] = jsh;
-                if ((*fprescreen)(shls, envs->vhfopt,
-                                  envs->atm, envs->bas, envs->env) &&
-                    (*intor)(buf, shls, envs->atm, envs->natm,
-                             envs->bas, envs->nbas, envs->env,
-                             envs->cintopt)) {
-                        pbuf = buf;
-                        for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao2 * nkl * icomp
-                                        + ioff + ao_loc[ish];
-                                for (k = 0; k < dk; k++) {
-                                for (l = 0; l < dl; l++) {
-                                        pbuf1 = pbuf + di * di * (l*dk+k);
-                                        peri1 = peri;
-                                        for (i = 0; i < di; i++) {
-                                                for (j = 0; j <= i; j++) {
-                                                        peri1[j] =pbuf1[j*di+i];
-                                                }
-                                                peri1 += ao_loc[ish] + i + 1;
-                                        }
-                                        peri += nao2;
-                                } }
-                                pbuf += di * di * dk * dl;
-                        }
-                } else {
-                        for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao2 * nkl * icomp
-                                        + ioff + ao_loc[ish];
-                                for (k = 0; k < dk; k++) {
-                                for (l = 0; l < dl; l++) {
-                                        peri1 = peri;
-                                        for (i = 0; i < di; i++) {
-                                                for (j = 0; j <= i; j++) {
-                                                        peri1[j] = 0;
-                                                }
-                                                peri1 += ao_loc[ish] + i + 1;
-                                        }
-                                        peri += nao2;
-                                } }
-                        }
-                }
+                DISTR_INTS_BY(s4_copy_ieqj, s4_set0_ieqj, ao_loc[ish]+1);
                 eri += nao2 * dk * dl;
         }
-        free(buf);
 }
 
 void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                       double *eri, double *buf,
+                       int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * nao;
@@ -670,11 +731,12 @@ void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
         const int klsh_start = envs->klsh_start;
         const int klsh_end = klsh_start + envs->klsh_count;
         const int di = ao_loc[ish+1] - ao_loc[ish];
+        const int ioff = ao_loc[ish] * nao;
         int kl, jsh, ksh, lsh, dj, dk, dl;
-        int icomp, i, j, k, l;
+        int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
-        double *pbuf, *pbuf1, *peri;
+        double *pbuf = buf;
+        double *peri;
 
         shls[0] = ish;
 
@@ -692,40 +754,7 @@ void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
                 for (jsh = 0; jsh < envs->nbas; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         shls[1] = jsh;
-                        if ((*fprescreen)(shls, envs->vhfopt,
-                                          envs->atm, envs->bas, envs->env) &&
-                            (*intor)(buf, shls, envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env,
-                                     envs->cintopt)) {
-                                pbuf = buf;
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                             + ao_loc[ish] * nao + ao_loc[jsh];
-                                        for (k = 0; k < dk; k++) {
-                                        for (l = 0; l <= k; l++) {
-                                                pbuf1 = pbuf + di * dj * (l*dk+k);
-                                                for (i = 0; i < di; i++) {
-                                                for (j = 0; j < dj; j++) {
-                                                        peri[i*nao+j] = pbuf1[j*di+i];
-                                                } }
-                                                peri += nao2;
-                                        } }
-                                        pbuf += di * dj * dk * dl;
-                                }
-                        } else {
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                             + ao_loc[ish] * nao + ao_loc[jsh];
-                                        for (k = 0; k < dk; k++) {
-                                        for (l = 0; l <= k; l++) {
-                                                for (i = 0; i < di; i++) {
-                                                for (j = 0; j < dj; j++) {
-                                                        peri[i*nao+j] = 0;
-                                                } }
-                                                peri += nao2;
-                                        } }
-                                }
-                        }
+                        DISTR_INTS_BY(s2kl_copy_keql, s2kl_set0_keql, nao);
                 }
                 eri += nao2 * dk*(dk+1)/2;
 
@@ -734,48 +763,15 @@ void AO2MOfill_nr_s2kl(int (*intor)(), int (*fprescreen)(),
                 for (jsh = 0; jsh < envs->nbas; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         shls[1] = jsh;
-                        if ((*fprescreen)(shls, envs->vhfopt,
-                                          envs->atm, envs->bas, envs->env) &&
-                            (*intor)(buf, shls, envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env,
-                                     envs->cintopt)) {
-                                pbuf = buf;
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                             + ao_loc[ish] * nao + ao_loc[jsh];
-                                        for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                pbuf1 = pbuf + di * dj * (l*dk+k);
-                                                for (i = 0; i < di; i++) {
-                                                for (j = 0; j < dj; j++) {
-                                                        peri[i*nao+j] = pbuf1[j*di+i];
-                                                } }
-                                                peri += nao2;
-                                        } }
-                                        pbuf += di * dj * dk * dl;
-                                }
-                        } else {
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                             + ao_loc[ish] * nao + ao_loc[jsh];
-                                        for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                for (i = 0; i < di; i++) {
-                                                for (j = 0; j < dj; j++) {
-                                                        peri[i*nao+j] = 0;
-                                                } }
-                                                peri += nao2;
-                                        } }
-                                }
-                        }
+                        DISTR_INTS_BY(s1_copy, s1_set0, nao);
                 }
                 eri += nao2 * dk * dl;
         } }
-        free(buf);
 }
 
 void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int nkl, int ish, struct _AO2MOEnvs *envs)
+                     double *eri, double *buf,
+                     int nkl, int ish, struct _AO2MOEnvs *envs)
 {
         const int nao = envs->nao;
         const size_t nao2 = nao * (nao+1) / 2;
@@ -785,10 +781,10 @@ void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int ioff = ao_loc[ish] * (ao_loc[ish]+1) / 2;
         int kl, jsh, ksh, lsh, dj, dk, dl;
-        int icomp, i, j, k, l;
+        int icomp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*NCTRMAX*NCTRMAX*NCTRMAX*envs->ncomp);
-        double *pbuf, *pbuf1, *peri, *peri1;
+        double *pbuf = buf;
+        double *peri;
 
         shls[0] = ish;
 
@@ -806,72 +802,15 @@ void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
                 for (jsh = 0; jsh < ish; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         shls[1] = jsh;
-                        if ((*fprescreen)(shls, envs->vhfopt,
-                                          envs->atm, envs->bas, envs->env) &&
-                            (*intor)(buf, shls, envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env,
-                                     envs->cintopt)) {
-                                pbuf = buf;
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                                + ioff + ao_loc[jsh];
-                                        inc_copy_keql(peri, pbuf, di, dj, dk, dl,
-                                                      ao_loc[ish]+1, nao2);
-                                        pbuf += di * dj * dk * dl;
-                                }
-                        } else {
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                                + ioff + ao_loc[jsh];
-                                        inc_set0_keql(peri, di, dj, dk, dl,
-                                                      ao_loc[ish]+1, nao2);
-                                }
-                        }
+                        DISTR_INTS_BY(s4_copy_keql, s4_set0_keql,
+                                      ao_loc[ish]+1);
                 }
 
                 jsh = ish;
                 dj = di;
                 shls[1] = ish;
-                if ((*fprescreen)(shls, envs->vhfopt,
-                                  envs->atm, envs->bas, envs->env) &&
-                    (*intor)(buf, shls, envs->atm, envs->natm,
-                             envs->bas, envs->nbas, envs->env,
-                             envs->cintopt)) {
-                        pbuf = buf;
-                        for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao2 * nkl * icomp
-                                        + ioff + ao_loc[ish];
-                                for (k = 0; k < dk; k++) {
-                                for (l = 0; l <= k; l++) {
-                                        pbuf1 = pbuf + di * di * (l*dk+k);
-                                        peri1 = peri;
-                                        for (i = 0; i < di; i++) {
-                                                for (j = 0; j <= i; j++) {
-                                                        peri1[j] =pbuf1[j*di+i];
-                                                }
-                                                peri1 += ao_loc[ish] + i + 1;
-                                        }
-                                        peri += nao2;
-                                } }
-                                pbuf += di * di * dk * dl;
-                        }
-                } else {
-                        for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao2 * nkl * icomp
-                                        + ioff + ao_loc[ish];
-                                for (k = 0; k < dk; k++) {
-                                for (l = 0; l <= k; l++) {
-                                        peri1 = peri;
-                                        for (i = 0; i < di; i++) {
-                                                for (j = 0; j <= i; j++) {
-                                                        peri1[j] = 0;
-                                                }
-                                                peri1 += ao_loc[ish] + i + 1;
-                                        }
-                                        peri += nao2;
-                                } }
-                        }
-                }
+                DISTR_INTS_BY(s4_copy_keql_ieqj, s4_set0_keql_ieqj,
+                              ao_loc[ish]+1);
                 eri += nao2 * dk*(dk+1)/2;
 
         } else {
@@ -879,115 +818,53 @@ void AO2MOfill_nr_s4(int (*intor)(), int (*fprescreen)(),
                 for (jsh = 0; jsh < ish; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         shls[1] = jsh;
-                        if ((*fprescreen)(shls, envs->vhfopt,
-                                          envs->atm, envs->bas, envs->env) &&
-                            (*intor)(buf, shls, envs->atm, envs->natm,
-                                     envs->bas, envs->nbas, envs->env,
-                                     envs->cintopt)) {
-                                pbuf = buf;
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                                + ioff + ao_loc[jsh];
-                                        inc_copy(peri, pbuf, di, dj, dk, dl,
-                                                 ao_loc[ish]+1, nao2);
-                                        pbuf += di * dj * dk * dl;
-                                }
-                        } else {
-                                for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                        peri = eri + nao2 * nkl * icomp
-                                                + ioff + ao_loc[jsh];
-                                        inc_set0(peri, di, dj, dk, dl,
-                                                 ao_loc[ish]+1, nao2);
-                                }
-                        }
+                        DISTR_INTS_BY(s4_copy, s4_set0, ao_loc[ish]+1);
                 }
 
                 jsh = ish;
                 dj = di;
                 shls[1] = ish;
-                if ((*fprescreen)(shls, envs->vhfopt,
-                                  envs->atm, envs->bas, envs->env) &&
-                    (*intor)(buf, shls, envs->atm, envs->natm,
-                             envs->bas, envs->nbas, envs->env,
-                             envs->cintopt)) {
-                        pbuf = buf;
-                        for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao2 * nkl * icomp
-                                        + ioff + ao_loc[ish];
-                                for (k = 0; k < dk; k++) {
-                                for (l = 0; l < dl; l++) {
-                                        pbuf1 = pbuf + di * di * (l*dk+k);
-                                        peri1 = peri;
-                                        for (i = 0; i < di; i++) {
-                                                for (j = 0; j <= i; j++) {
-                                                        peri1[j] =pbuf1[j*di+i];
-                                                }
-                                                peri1 += ao_loc[ish] + i + 1;
-                                        }
-                                        peri += nao2;
-                                } }
-                                pbuf += di * di * dk * dl;
-                        }
-                } else {
-                        for (icomp = 0; icomp < envs->ncomp; icomp++) {
-                                peri = eri + nao2 * nkl * icomp
-                                        + ioff + ao_loc[ish];
-                                for (k = 0; k < dk; k++) {
-                                for (l = 0; l < dl; l++) {
-                                        peri1 = peri;
-                                        for (i = 0; i < di; i++) {
-                                                for (j = 0; j <= i; j++) {
-                                                        peri1[j] = 0;
-                                                }
-                                                peri1 += ao_loc[ish] + i + 1;
-                                        }
-                                        peri += nao2;
-                                } }
-                        }
-                }
+                DISTR_INTS_BY(s4_copy_ieqj, s4_set0_ieqj, ao_loc[ish]+1);
                 eri += nao2 * dk * dl;
         } }
-        free(buf);
 }
 
 /*
  * ************************************************
  * s1, s2ij, s2kl, s4 here to label the AO symmetry
  */
-void AO2MOtranse1_nr_s1(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s1(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         size_t nao2 = envs->nao * envs->nao;
-        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
+        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, buf, envs, 0);
 }
 
-void AO2MOtranse1_nr_s2ij(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s2ij(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         size_t nao2 = nao*(nao+1)/2;
-        double *buf = malloc(sizeof(double) * nao*nao);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOtranse1_nr_s2kl(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s2kl(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse1_nr_s1(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse1_nr_s1(fmmm, row_id, vout, vin, buf, envs);
 }
 
-void AO2MOtranse1_nr_s4(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse1_nr_s4(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse1_nr_s2ij(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse1_nr_s2ij(fmmm, row_id, vout, vin, buf, envs);
 }
 
 
@@ -995,40 +872,38 @@ void AO2MOtranse1_nr_s4(int (*fmmm)(),
  * ************************************************
  * s1, s2ij, s2kl, s4 here to label the AO symmetry
  */
-void AO2MOtranse2_nr_s1(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s1(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        size_t nao2 = envs->nao * envs->nao;
-        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, envs, 0);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
+        (*fmmm)(vout+ij_pair*row_id, vin+nao2*row_id, buf, envs, 0);
 }
 
-void AO2MOtranse2_nr_s2ij(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s2ij(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse2_nr_s1(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse2_nr_s1(fmmm, row_id, vout, vin, buf, envs);
 }
 
-void AO2MOtranse2_nr_s2kl(int (*fmmm)(),
-                          double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s2kl(int (*fmmm)(), int row_id,
+                          double *vout, double *vin, double *buf,
                           struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        size_t nao2 = nao*(nao+1)/2;
-        double *buf = malloc(sizeof(double) * nao*nao);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOtranse2_nr_s4(int (*fmmm)(),
-                        double *vout, double *vin, int row_id,
+void AO2MOtranse2_nr_s4(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
                         struct _AO2MOEnvs *envs)
 {
-        AO2MOtranse2_nr_s2kl(fmmm, vout, vin, row_id, envs);
+        AO2MOtranse2_nr_s2kl(fmmm, row_id, vout, vin, buf, envs);
 }
 
 
@@ -1037,56 +912,52 @@ void AO2MOtranse2_nr_s4(int (*fmmm)(),
  * ************************************************
  * sort (shell-based) integral blocks then transform
  */
-void AO2MOsortranse2_nr_s1(int (*fmmm)(),
-                           double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s1(int (*fmmm)(), int row_id,
+                           double *vout, double *vin, double *buf,
                            struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
         int *ao_loc = envs->ao_loc;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        size_t nao2 = envs->nao * envs->nao;
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         int ish, jsh, di, dj;
         int i, j, ij;
-        double *buf = malloc(sizeof(double) * nao2);
         double *pbuf;
 
         vin += nao2 * row_id;
+        ij = 0;
         for (ish = 0; ish < envs->nbas; ish++) {
                 di = ao_loc[ish+1] - ao_loc[ish];
                 for (jsh = 0; jsh < envs->nbas; jsh++) {
                         dj = ao_loc[jsh+1] - ao_loc[jsh];
                         pbuf = buf + ao_loc[ish] * nao + ao_loc[jsh];
-                        for (ij = 0, i = 0; i < di; i++) {
+                        for (i = 0; i < di; i++) {
                         for (j = 0; j < dj; j++, ij++) {
                                 pbuf[i*nao+j] = vin[ij];
                         } }
-                        vin += di * dj;
                 }
         }
 
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOsortranse2_nr_s2ij(int (*fmmm)(),
-                             double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s2ij(int (*fmmm)(), int row_id,
+                             double *vout, double *vin, double *buf,
                              struct _AO2MOEnvs *envs)
 {
-        AO2MOsortranse2_nr_s1(fmmm, vout, vin, row_id, envs);
+        AO2MOsortranse2_nr_s1(fmmm, row_id, vout, vin, buf, envs);
 }
 
-void AO2MOsortranse2_nr_s2kl(int (*fmmm)(),
-                             double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s2kl(int (*fmmm)(), int row_id,
+                             double *vout, double *vin, double *buf,
                              struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
         int *ao_loc = envs->ao_loc;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        size_t nao2 = nao * (nao+1) / 2;
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         int ish, jsh, di, dj;
         int i, j, ij;
-        double *buf = malloc(sizeof(double) * nao * nao);
         double *pbuf;
 
         vin += nao2 * row_id;
@@ -1111,19 +982,90 @@ void AO2MOsortranse2_nr_s2kl(int (*fmmm)(),
                 vin += di * (di+1) / 2;
         }
 
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-
-        free(buf);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOsortranse2_nr_s4(int (*fmmm)(),
-                           double *vout, double *vin, int row_id,
+void AO2MOsortranse2_nr_s4(int (*fmmm)(), int row_id,
+                           double *vout, double *vin, double *buf,
                            struct _AO2MOEnvs *envs)
 {
-        AO2MOsortranse2_nr_s2kl(fmmm, vout, vin, row_id, envs);
+        AO2MOsortranse2_nr_s2kl(fmmm, row_id, vout, vin, buf, envs);
 }
 
+/*
+ * ************************************************
+ * combine ftrans and fmmm
+ */
 
+void AO2MOtrans_nr_s1_iltj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s1(AO2MOmmm_nr_s1_iltj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_s1_igtj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s1(AO2MOmmm_nr_s1_igtj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts1_iltj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s1(AO2MOmmm_nr_s1_iltj, row_id, vout, eri, buf,envs);
+}
+
+void AO2MOtrans_nr_sorts1_igtj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s1(AO2MOmmm_nr_s1_igtj, row_id, vout, eri, buf,envs);
+}
+
+void AO2MOtrans_nr_s2_iltj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(AO2MOmmm_nr_s2_iltj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_s2_igtj(void *nop, int row_id,
+                           double *vout, double *eri, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(AO2MOmmm_nr_s2_igtj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_s2_s2(void *nop, int row_id,
+                         double *vout, double *eri, double *buf,
+                         struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(AO2MOmmm_nr_s2_s2, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts2_iltj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(AO2MOmmm_nr_s2_iltj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts2_igtj(void *nop, int row_id,
+                               double *vout, double *eri, double *buf,
+                               struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(AO2MOmmm_nr_s2_igtj, row_id, vout, eri, buf, envs);
+}
+
+void AO2MOtrans_nr_sorts2_s2(void *nop, int row_id,
+                             double *vout, double *eri, double *buf,
+                             struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(AO2MOmmm_nr_s2_s2, row_id, vout, eri, buf,envs);
+}
 
 /*
  * ************************************************
@@ -1136,7 +1078,7 @@ void AO2MOsortranse2_nr_s4(int (*fmmm)(),
  * C-order.  Transposing is needed before calling AO2MOnr_e2_drv.
  * eri[ncomp,nkl,mo_i,mo_j]
  */
-void AO2MOnr_e1_drv(int (*intor)(), void (*fill)(),
+void AO2MOnr_e1_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
                     void (*ftrans)(), int (*fmmm)(),
                     double *eri, double *mo_coeff,
                     int klsh_start, int klsh_count, int nkl,
@@ -1145,11 +1087,16 @@ void AO2MOnr_e1_drv(int (*intor)(), void (*fill)(),
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int *ao_loc = malloc(sizeof(int)*(nbas+1));
-        CINTshells_spheric_offset(ao_loc, bas, nbas);
-        ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1, bas);
-        int nao = ao_loc[nbas];
+        int ish;
+        int nao = 0;
+        for (ish = 0; ish < nbas; ish++) {
+                ao_loc[ish] = nao;
+                nao += (*cgto_in_shell)(ish, bas);
+        }
+        ao_loc[nbas] = nao;
         double *eri_ao = malloc(sizeof(double) * nao*nao*nkl*ncomp);
-        AO2MOnr_e1fill_drv(intor, fill, eri_ao, klsh_start, klsh_count,
+        AO2MOnr_e1fill_drv(intor, cgto_in_shell, fill,
+                           eri_ao, klsh_start, klsh_count,
                            nkl, ncomp, cintopt, vhfopt,
                            atm, natm, bas, nbas, env);
         AO2MOnr_e2_drv(ftrans, fmmm, eri, eri_ao, mo_coeff,
@@ -1177,31 +1124,41 @@ void AO2MOnr_e2_drv(void (*ftrans)(), int (*fmmm)(),
 
         int i;
 #pragma omp parallel default(none) \
-        shared(ftrans, fmmm, vout, vin, nijcount, envs) \
+        shared(ftrans, fmmm, vout, vin, nijcount, envs, nao, i_count, j_count) \
         private(i)
-#pragma omp for nowait schedule(static)
+{
+        double *buf = malloc(sizeof(double) * (nao+i_count) * (nao+j_count));
+#pragma omp for schedule(dynamic)
         for (i = 0; i < nijcount; i++) {
-                (*ftrans)(fmmm, vout, vin, i, &envs);
+                (*ftrans)(fmmm, i, vout, vin, buf, &envs);
         }
+        free(buf);
+}
 }
 
 /*
  * The size of eri is ncomp*nkl*nao*nao, note the upper triangular part
  * may not be filled
  */
-void AO2MOnr_e1fill_drv(int (*intor)(), void (*fill)(), double *eri,
-                        int klsh_start, int klsh_count, int nkl,
+void AO2MOnr_e1fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
+                        double *eri, int klsh_start, int klsh_count, int nkl,
                         int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int *ao_loc = malloc(sizeof(int)*(nbas+1));
-        CINTshells_spheric_offset(ao_loc, bas, nbas);
-        ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1, bas);
-        int nao = ao_loc[nbas];
+        int ish, di;
+        int nao = 0;
+        int dmax = 0;
+        for (ish = 0; ish < nbas; ish++) {
+                ao_loc[ish] = nao;
+                di = (*cgto_in_shell)(ish, bas);
+                dmax = MAX(dmax, di);
+                nao += di;
+        }
+        ao_loc[nbas] = nao;
         struct _AO2MOEnvs envs = {natm, nbas, atm, bas, env, nao,
                                   klsh_start, klsh_count, 0, 0, 0, 0,
                                   ncomp, ao_loc, NULL, cintopt, vhfopt};
-        int ish;
         int (*fprescreen)();
         if (vhfopt) {
                 fprescreen = vhfopt->fprescreen;
@@ -1210,13 +1167,16 @@ void AO2MOnr_e1fill_drv(int (*intor)(), void (*fill)(), double *eri,
         }
 
 #pragma omp parallel default(none) \
-        shared(fill, fprescreen, eri, envs, intor, nkl, nbas) \
+        shared(fill, fprescreen, eri, envs, intor, nkl, nbas, dmax, ncomp) \
         private(ish)
-#pragma omp for nowait schedule(dynamic)
+{
+        double *buf = malloc(sizeof(double)*dmax*dmax*dmax*dmax*ncomp);
+#pragma omp for schedule(dynamic, 1)
         for (ish = 0; ish < nbas; ish++) {
-                (*fill)(intor, fprescreen, eri, nkl, ish, &envs);
+                (*fill)(intor, fprescreen, eri, buf, nkl, ish, &envs);
         }
-
+        free(buf);
+}
         free(ao_loc);
 }
 

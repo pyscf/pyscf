@@ -157,7 +157,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
-    natm = ctypes.c_int(mol.natm)
+    natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
     fintor = _fpointer(int3c)
     cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, int3c)

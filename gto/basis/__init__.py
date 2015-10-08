@@ -36,6 +36,7 @@ def load(basis_name, symb):
     Args:
         basis_name : str
             Case insensitive basis set name. Special characters will be removed.
+            or a string of "path/to/file" which stores the basis functions
         symb : str
             Atomic symbol, Special characters will be removed.
 
@@ -125,6 +126,11 @@ def load(basis_name, symb):
         'dgaussa2cfit': 'DgaussA2_dft_cfit.dat',
         'dgaussa2xfit': 'DgaussA2_dft_xfit.dat',
     }
+
+    if os.path.isfile(basis_name):
+        # read basis from given file
+        return parse_nwchem.parse(basis_name, symb)
+
     name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
     basmod = alias[name]
     symb = ''.join(i for i in symb if i.isalpha())

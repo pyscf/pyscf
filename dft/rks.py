@@ -59,12 +59,10 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     #n, ks._exc, vx = vxc.nr_vxc(mol, ks.grids, x_code, c_code,
     #                              dm, spin=1, relativity=0)
     if ks._numint is None:
-        n, ks._exc, vx = numint.nr_vxc(mol, ks.grids, x_code, c_code,
-                                       dm, spin=mol.spin, relativity=0)
+        n, ks._exc, vx = numint.nr_rks_vxc(mol, ks.grids, x_code, c_code, dm)
     else:
         n, ks._exc, vx = \
-                ks._numint.nr_vxc(mol, ks.grids, x_code, c_code,
-                                  dm, spin=mol.spin, relativity=0)
+                ks._numint.nr_rks(mol, ks.grids, x_code, c_code, dm)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 

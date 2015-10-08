@@ -24,12 +24,12 @@ struct _AO2MOEnvs {
 };
 #endif
 
-void AO2MOnr_e1fill_drv(int (*intor)(), void (*fill)(), double *eri,
-                        int klsh_start, int klsh_count, int nkl,
+void AO2MOnr_e1fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
+                        double *eri, int klsh_start, int klsh_count, int nkl,
                         int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt,
                         int *atm, int natm, int *bas, int nbas, double *env);
 
-void AO2MOnr_e1_drv(int (*intor)(), void (*fill)(),
+void AO2MOnr_e1_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
                     void (*ftrans)(), int (*fmmm)(),
                     double *eri, double *mo_coeff,
                     int klsh_start, int klsh_count, int nkl,

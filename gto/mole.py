@@ -39,14 +39,14 @@ def _gaussian_int(n, alpha):
     return scipy.special.gamma(n1) / (2. * alpha**n1)
 
 def gto_norm(l, expnt):
-    r'''Normalized factor for GTO   :math:`g=r^l e^{-\alpha r^2}`
+    r'''Normalized factor for GTO radial part   :math:`g=r^l e^{-\alpha r^2}`
 
     .. math::
 
         \frac{1}{\sqrt{\int g^2 r^2 dr}}
         = \sqrt{\frac{2^{2l+3} (l+1)! (2a)^{l+1.5}}{(2l+2)!\sqrt{\pi}}}
 
-    Ref: H. B. Schlegel and M. J. Frisch, Int. J. Quant.  Chem., 54(1955), 83-87.
+    Ref: H. B. Schlegel and M. J. Frisch, Int. J. Quant.  Chem., 54(1995), 83-87.
 
     Args:
         l (int):
@@ -137,8 +137,9 @@ def atom_types(atoms, basis=None):
 
 def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     '''Convert the input :attr:`Mole.atom` to the internal data format.
-    Including, changing the nuclear charge to atom symbol, rotate and shift
-    molecule.  If the :attr:`~Mole.atom` is a string, it takes ";" and "\\n"
+    Including, changing the nuclear charge to atom symbol, converting the
+    coordinates to AU, rotate and shift the molecule.
+    If the :attr:`~Mole.atom` is a string, it takes ";" and "\\n"
     for the mark to separate atoms;  "," and arbitrary length of blank space
     to spearate the individual terms for an atom.  Blank line will be ignored.
 
@@ -151,11 +152,15 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
             new axis origin.
         axes : ndarray
             (new_x, new_y, new_z), each entry is a length-3 array
-        unit : str
-            set to Bohr/bohr to indicate the coordinates are in atomic unit
+        unit : str or number
+            If unit is one of strings (B, b, Bohr, bohr, AU, au), the coordinates
+            of the input atoms are the atomic unit;  If unit is one of strings
+            (A, a, Angstrom, angstrom, Ang, ang), the coordinates are in the
+            unit of angstrom;  If a number is given, the number are considered
+            as the Bohr value (in angstrom), which should be around 0.53
 
     Returns:
-        formated :attr:`~Mole.atom`
+        "atoms" in the internal format as :attr:`~Mole._atom`
 
     Examples:
 
@@ -165,9 +170,11 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     [['F', [-1.0, -1.0, -1.0]], ['H', [-1, -1, 0]]]
     '''
     if unit.startswith(('B','b','au','AU')):
-        convert = param.BOHR
-    else:
         convert = 1
+    elif unit.startswith(('A','a')):
+        convert = 1/param.BOHR
+    else:
+        convert = 1/unit
     fmt_atoms = []
     def str2atm(line):
         dat = line.split()
@@ -176,7 +183,7 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
         else:
             rawsymb = _rm_digit(dat[0])
             symb = dat[0].replace(rawsymb, _std_symbol(rawsymb))
-        c = numpy.array([float(x) for x in dat[1:4]]) - origin
+        c = numpy.asarray([float(x) for x in dat[1:4]]) - origin
         return [symb, numpy.dot(axes, c*convert).tolist()]
 
     if isinstance(atoms, str):
@@ -198,9 +205,9 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
                     rawsymb = _rm_digit(atom[0])
                     symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
-                    c = numpy.array(atom[1:4]) - origin
+                    c = numpy.asarray(atom[1:4]) - origin
                 else:
-                    c = numpy.array(atom[1]) - origin
+                    c = numpy.asarray(atom[1]) - origin
                 fmt_atoms.append([symb, numpy.dot(axes, c*convert).tolist()])
     return fmt_atoms
 
@@ -296,7 +303,7 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     atm2 = numpy.copy(atm2)
     bas2 = numpy.copy(bas2)
     atm2[:,PTR_COORD] += off
-    atm2[:,PTR_MASS ] += off
+    atm2[:,PTR_ZETA ] += off
     bas2[:,ATOM_OF  ] += natm_off
     bas2[:,PTR_EXP  ] += off
     bas2[:,PTR_COEFF] += off
@@ -338,7 +345,7 @@ def intor_cross(intor, mol1, mol2, comp=1):
     '''
     nbas1 = len(mol1._bas)
     nbas2 = len(mol2._bas)
-    atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env, \
+    atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env,
                                 mol2._atm, mol2._bas, mol2._env)
     bras = range(nbas1)
     kets = range(nbas1, nbas1+nbas2)
@@ -346,16 +353,17 @@ def intor_cross(intor, mol1, mol2, comp=1):
 
 # append (charge, pointer to coordinates, nuc_mod) to _atm
 def make_atm_env(atom, ptr=0):
-    '''Convert :attr:`Mole.atom` to the argument ``atm`` for ``libcint`` integrals
+    '''Convert the internal format :attr:`Mole._atom` to the format required
+    by ``libcint`` integrals
     '''
-    _atm = [0] * 6
-    _env = [x/param.BOHR for x in atom[1]]
-    _env.append(param.ELEMENTS[_atm[CHARGE_OF]][1])
-    _atm[CHARGE_OF] = _charge(atom[0])
+    nuc_charge = _charge(atom[0])
+    _env = numpy.hstack((atom[1], dyall_nuc_mod(param.ELEMENTS[nuc_charge][1])))
+    _atm = numpy.zeros(6, dtype=numpy.int32)
+    _atm[CHARGE_OF] = nuc_charge
     _atm[PTR_COORD] = ptr
     _atm[NUC_MOD_OF] = NUC_POINT
-    _atm[PTR_MASS ] = ptr + 3
-    return numpy.array(_atm, numpy.int32), numpy.array(_env)
+    _atm[PTR_ZETA ] = ptr + 3
+    return _atm, _env
 
 # append (atom, l, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0) to bas
 # absorb normalization into GTO contraction coefficients
@@ -397,9 +405,9 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     _env = list(itertools.chain.from_iterable(_env)) # flatten nested lists
     return numpy.array(_bas, numpy.int32), numpy.array(_env)
 
-def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
-    '''Generate the input arguments for ``libcint`` library in terms of
-    :attr:`Mole.atoms` and :attr:`Mole.basis`
+def make_env(atoms, basis, pre_env=[], nucmod={}):
+    '''Generate the input arguments for ``libcint`` library based on internal
+    format :attr:`Mole._atom` and :attr:`Mole._basis`
     '''
     _atm = []
     _bas = []
@@ -422,20 +430,6 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[symb])
             elif _rm_digit(symb) in nucmod:
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[_rm_digit(symb)])
-
-        if mass:
-            if ia+1 in mass:
-                atm0[PTR_MASS] = ptr_env
-                env0 = numpy.hstack((env0, mass[ia+1]))
-                ptr_env = ptr_env + 1
-            elif symb in mass:
-                atm0[PTR_MASS] = ptr_env
-                env0 = numpy.hstack((env0, mass[symb]))
-                ptr_env = ptr_env + 1
-            elif _rm_digit(symb) in mass:
-                atm0[PTR_MASS] = ptr_env
-                env0 = numpy.hstack((env0, mass[_rm_digit(symb)]))
-                ptr_env = ptr_env + 1
         _atm.append(atm0)
         _env.append(env0)
 
@@ -457,11 +451,11 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, mass={}):
         _bas.append(b)
 
     if _atm:
-        _atm = numpy.array(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
+        _atm = numpy.asarray(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
     else:
         _atm = numpy.zeros((0,ATM_SLOTS), numpy.int32)
     if _bas:
-        _bas = numpy.array(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
+        _bas = numpy.asarray(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
     else:
         _bas = numpy.zeros((0,BAS_SLOTS), numpy.int32)
     if _env:
@@ -496,6 +490,7 @@ def copy(mol):
     newmol._bas = numpy.copy(mol._bas)
     newmol._env = numpy.copy(mol._env)
     newmol.atom    = copy.deepcopy(mol.atom)
+    newmol._atom   = copy.deepcopy(mol._atom)
     newmol.basis   = copy.deepcopy(mol.basis)
     newmol._basis  = copy.deepcopy(mol._basis)
     return newmol
@@ -504,12 +499,12 @@ def pack(mol):
     '''Pack the given :class:`Mole` to a dict, which can be serialized with :mod:`pickle`
     '''
     return {'atom'    : mol.atom,
-            'basis'   : mol._basis,
+            'unit'    : mol.unit,
+            'basis'   : mol.basis,
             'charge'  : mol.charge,
             'spin'    : mol.spin,
             'symmetry': mol.symmetry,
             'nucmod'  : mol.nucmod,
-            'mass'    : mol.mass,
             'light_speed': mol.light_speed}
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, return a :class:`Mole` object.
@@ -692,8 +687,8 @@ def energy_nuc(mol):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atm))])
-    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atm))])
+    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atom))])
+    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atom))])
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()
     rr = rd[:,None] + rd - rr*2
@@ -860,10 +855,11 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:                return ibf + (atmshell-l1-1)*degen + (degen+m)
 #TODO:        ibf += degen
 
+#FIXME:
 def is_same_mol(mol1, mol2):
-    if mol1.atom.__len__() != mol2.atom.__len__():
+    if mol1._atom.__len__() != mol2._atom.__len__():
         return False
-    for a1, a2 in zip(mol1.atom, mol2.atom):
+    for a1, a2 in zip(mol1._atom, mol2._atom):
         if a1[0] != a2[0] \
            or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
             return False
@@ -900,9 +896,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
-PTR_MASS   = 3
-RAD_GRIDS  = 4
-ANG_GRIDS  = 5
+PTR_ZETA   = 3
 ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1
@@ -916,12 +910,24 @@ BAS_SLOTS  = 8
 PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
+PTR_RINV_ZETA   = 7
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
 NUC_GAUSS = 2
+NUC_ECP   = 3
 
 
+#
+# Mole class handles three layers: input, internal format, libcint arguments.
+# The relationship of the three layers are, eg
+#    .atom (input) <=>  ._atom (for python) <=> ._atm (for libcint)
+#   .basis (input) <=> ._basis (for python) <=> ._bas (for libcint)
+# input layer does not talk to libcint directly.  Data are held in python
+# internal fomrat layer.  Most of methods defined in this class only operates
+# on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
+# set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
+#
 class Mole(object):
     '''Basic class to hold molecular structure and global options
 
@@ -956,12 +962,12 @@ class Mole(object):
             |         ...
             |         [atomN, (x, y, z)]]
 
+        unit : str
+            Angstrom or Bohr
         basis : dict or str
             To define basis set.
         nucmod : dict or str
             Nuclear model
-        mass : dict
-            Similar struct as :attr:`Mole.nucmod`
 
         ** Following attributes are generated by :func:`Mole.build` **
 
@@ -996,7 +1002,7 @@ class Mole(object):
         ** Following attributes are arguments used by ``libcint`` library **
 
         _atm :
-            :code:`[[charge, ptr-of-coord, nuc-model, mass, 0, 0], [...]]`
+            :code:`[[charge, ptr-of-coord, nuc-model, ptr-zeta, 0, 0], [...]]`
             each element reperesents one atom
         natm :
             number of atoms
@@ -1036,15 +1042,15 @@ class Mole(object):
         self.symmetry = False
         self.symmetry_subgroup = None
 
-# atom, etb, basis, nucmod, mass to save inputs
+# Save inputs
 # self.atom = [(symb/nuc_charge, (coord(Angstrom):0.,0.,0.)), ...]
         self.atom = []
+# the unit (angstrom/bohr) of the coordinates defined by the input self.atom
+        self.unit = 'angstrom'
 # self.basis = {atom_type/nuc_charge: [l, kappa, (expnt, c_1, c_2,..),..]}
         self.basis = 'sto-3g'
 # self.nucmod = {atom_symbol: nuclear_model, atom_id: nuc_mod}, atom_id is 1-based
         self.nucmod = {}
-# self.mass = {atom_symbol: mass, atom_id: mass}, atom_id is 1-based
-        self.mass = {}
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = []
@@ -1061,6 +1067,7 @@ class Mole(object):
         self.irrep_id = None
         self.irrep_name = None
         self.incore_anyway = False
+        self._atom = None
         self._basis = None
         self._built = False
         self._keys = set(self.__dict__.keys())
@@ -1101,7 +1108,7 @@ class Mole(object):
         return self.build_(*args, **kwargs)
     def build_(self, dump_input=True, parse_arg=True,
                verbose=None, output=None, max_memory=None,
-               atom=None, basis=None, nucmod=None, mass=None,
+               atom=None, basis=None, unit=None, nucmod=None,
                charge=None, spin=None, symmetry=None,
                symmetry_subgroup=None, light_speed=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
@@ -1120,13 +1127,11 @@ class Mole(object):
             max_memory : int, float
                 Allowd memory in MB.  If given, overwrite :attr:`Mole.max_memory`
             atom : list or str
-                To define molecluar structure.  If given, overwrite :attr:`Mole.atom`
+                To define molecluar structure.
             basis : dict or str
-                To define basis set.  If given, overwrite :attr:`Mole.basis`
+                To define basis set.
             nucmod : dict or str
                 Nuclear model.  If given, overwrite :attr:`Mole.nucmod`
-            mass : dict
-                If given, overwrite :attr:`Mole.mass`
             charge : int
                 Charge of molecule. It affects the electron numbers
                 If given, overwrite :attr:`Mole.charge`
@@ -1149,8 +1154,8 @@ class Mole(object):
         if max_memory is not None: self.max_memory = max_memory
         if atom is not None: self.atom = atom
         if basis is not None: self.basis = basis
+        if unit is not None: self.unit = unit
         if nucmod is not None: self.nucmod = nucmod
-        if mass is not None: self.mass = mass
         if charge is not None: self.charge = charge
         if spin is not None: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
@@ -1167,10 +1172,10 @@ class Mole(object):
 
         self.check_sanity(self)
 
-        self.atom = self.format_atom(self.atom)
+        self._atom = self.format_atom(self.atom, unit=self.unit)
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            uniq_atoms = set([a[0] for a in self.atom])
+            uniq_atoms = set([a[0] for a in self._atom])
             self._basis = self.format_basis(dict([(a, self.basis)
                                                   for a in uniq_atoms]))
         else:
@@ -1183,17 +1188,17 @@ class Mole(object):
                 orig = 0
                 axes = numpy.eye(3)
                 self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
-                if not pyscf.symm.check_given_symm(self.groupname, self.atom,
+                if not pyscf.symm.check_given_symm(self.groupname, self._atom,
                                                    self._basis):
                     self.topgroup, orig, axes = \
-                            pyscf.symm.detect_symm(self.atom, self._basis)
+                            pyscf.symm.detect_symm(self._atom, self._basis)
                     sys.stderr.write('Warn: unable to identify input symmetry %s,'
                                      'use %s instead.\n' %
                                      (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
             else:
                 self.topgroup, orig, axes = \
-                        pyscf.symm.detect_symm(self.atom, self._basis)
+                        pyscf.symm.detect_symm(self._atom, self._basis)
                 self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
                 if isinstance(self.symmetry_subgroup, str):
                     self.symmetry_subgroup = \
@@ -1203,14 +1208,14 @@ class Mole(object):
                     if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
                         raise RuntimeError('TODO: rotate mirror or axes')
                     self.groupname = self.symmetry_subgroup
-            self.atom = self.format_atom(self.atom, orig, axes)
+# Note the internal _format is in Bohr
+            self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
         self._env[PTR_LIGHT_SPEED] = self.light_speed
         self._atm, self._bas, self._env = \
-                self.make_env(self.atom, self._basis, self._env, \
-                              self.nucmod, self.mass)
-        self.natm = len(self._atm)
-        self.nbas = len(self._bas)
+                self.make_env(self._atom, self._basis, self._env, self.nucmod)
+        self.natm = len(self._atm) # == len(self._atom)
+        self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
@@ -1219,13 +1224,13 @@ class Mole(object):
         if self.symmetry:
             import pyscf.symm
             try:
-                eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self.atom)
+                eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self._atom)
             except RuntimeError:
                 raise RuntimeError('''Given symmetry and molecule structure not match.
 Note when symmetry attributes is assigned, the molecule needs to be put in the proper orientation.''')
             self.symm_orb, self.irrep_id = \
                     pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,
-                                                  self.atom, self._basis)
+                                                  self._atom, self._basis)
             self.irrep_name = [pyscf.symm.irrep_id2name(self.groupname, ir)
                                for ir in self.irrep_id]
 
@@ -1239,8 +1244,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self._built = True
         #return self._atm, self._bas, self._env
 
-    def format_atom(self, atom, origin=0, axes=1):
-        return format_atom(atom, origin, axes)
+    def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
+        return format_atom(atom, origin, axes, unit)
 
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
@@ -1251,8 +1256,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
 
-    def make_env(self, atoms, basis, pre_env=[], nucmod={}, mass={}):
-        return make_env(atoms, basis, pre_env, nucmod, mass)
+    def make_env(self, atoms, basis, pre_env=[], nucmod={}):
+        return make_env(atoms, basis, pre_env, nucmod)
 
     def make_atm_env(self, atom, ptr=0):
         return make_atm_env(atom, ptr)
@@ -1304,24 +1309,15 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('[INPUT] charge = %d\n' % self.charge)
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
 
-        for ia,atom in enumerate(self.atom):
+        for ia,atom in enumerate(self._atom):
             coorda = tuple(atom[1])
-            coordb = tuple([x/param.BOHR for x in atom[1]])
+            coordb = tuple([x for x in atom[1]])
             self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '\
                               '%16.12f %16.12f %16.12f Bohr\n' \
                               % ((ia+1, _symbol(atom[0])) + coorda + coordb))
-        for kn in self.nucmod.keys():
-            if kn in self.mass:
-                mass = self.mass[kn]
-            else:
-                if isinstance(kn, int):
-                    symb = _symbol(self.atom[kn-1][0])
-                    mass = param.ELEMENTS[_charge(symb)][1]
-                else:
-                    mass = param.ELEMENTS[_charge(kn)][1]
-
-            self.stdout.write('[INPUT] Gaussian nuclear model for atom %s, mass = %f\n' %
-                              (str(kn), mass))
+        if self.nucmod:
+            self.stdout.write('[INPUT] Gaussian nuclear model for atoms %s\n' %
+                              self.nucmod.keys())
 
         self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
         self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
@@ -1391,6 +1387,30 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def set_rinv_orig_(self, coord):
         self.set_rinv_origin_(coord)
 
+    def set_nuc_mod_(self, atm_id, zeta):
+        '''Change the nuclear charge distribution of the given atom ID.  The charge
+        distribution is defined as: rho(r) = nuc_charge * Norm * exp(-zeta * r^2).
+        This function can **only** be called after .build() method is executed.
+
+        Examples:
+
+        >>> for ia in range(mol.natm):
+        ...     zeta = gto.filatov_nuc_mod(mol.atom_charge(ia))
+        ...     mol.set_nuc_mod_(ia, zeta)
+        '''
+        ptr = self._atm[atm_id,PTR_ZETA]
+        self._env[ptr] = zeta
+
+    def set_rinv_zeta_(self, zeta):
+        '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
+        to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
+        **Be careful** when call this function. It affects the behavior of
+        cint1e_rinv_* functions.  Make sure to set it back to 0 after using it!
+        '''
+        self._env[PTR_RINV_ZETA] = zeta
+
+
+#######################################################
 #NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):
         r'''For the given atom id, return the input symbol (without striping special characters)
@@ -1405,7 +1425,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> mol.atom_symbol(0)
         H^2
         '''
-        return _symbol(self.atom[atm_id][0])
+        return _symbol(self._atom[atm_id][0])
 
     def atom_pure_symbol(self, atm_id):
         r'''For the given atom id, return the standard symbol (striping special characters)
@@ -1420,7 +1440,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> mol.atom_symbol(0)
         H
         '''
-        return _symbol(self.atom_charge(atm_id))
+        return _std_symbol(self._atom[atm_id][0])
 
     def atom_charge(self, atm_id):
         r'''Nuclear charge of the given atom id
@@ -1451,7 +1471,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        return self._env[ptr:ptr+3].copy()
+        return self._env[ptr:ptr+3]
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom
@@ -1499,7 +1519,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         atm_id = self.bas_atom(bas_id)
         ptr = self._atm[atm_id,PTR_COORD]
-        return self._env[ptr:ptr+3].copy()
+        return self._env[ptr:ptr+3]
 
     def bas_atom(self, bas_id):
         r'''The atom (0-based id) that the given basis sits on
@@ -1653,7 +1673,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def time_reversal_map(self):
         return time_reversal_map(self)
 
-    def intor(self, intor, comp=1, hermi=0):
+    def intor(self, intor, comp=1, hermi=0, aosym='s1', vout=None,
+              bras=None, kets=None):
         '''One-electron integral generator.
 
         Args:
@@ -1691,7 +1712,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 comp=comp, hermi=hermi)
+                                 bras=bras, kets=kets, comp=comp, hermi=hermi,
+                                 aosym=aosym, vout=vout)
 
     def intor_symmetric(self, intor, comp=1):
         '''One-electron integral generator. The integrals are assumed to be hermitian
@@ -1717,7 +1739,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return self.intor(intor, comp, 1)
+        return self.intor(intor, comp, 1, aosym='s4')
 
     def intor_asymmetric(self, intor, comp=1):
         '''One-electron integral generator. The integrals are assumed to be anti-hermitian
@@ -1743,10 +1765,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return self.intor(intor, comp, 2)
+        return self.intor(intor, comp, 2, aosym='a4')
 
-    def intor_cross(self, intor, bras, kets, comp=1):
-        r'''1-electron integrals for different bra and ket space, like
+    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', vout=None):
+        r'''Cross 1-electron integrals like
 
         .. math::
 
@@ -1780,7 +1802,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.          0.37820346]]
         '''
         return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 bras, kets, comp, 0)
+                                 bras, kets, comp=comp, hermi=0,
+                                 aosym=aosym, vout=vout)
 
     def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
@@ -1915,4 +1938,25 @@ def from_zmatrix(atomstr):
                 atoms.append([rawd[0], atoms[bonda][1]+c])
     return atoms
 zmat = from_zmatrix
+
+def dyall_nuc_mod(mass, c=param.LIGHTSPEED):
+    ''' Generate the nuclear charge distribution parameter zeta
+    rho(r) = nuc_charge * Norm * exp(-zeta * r^2)
+
+    Ref. L. Visscher and K. Dyall, At. Data Nucl. Data Tables, 67, 207 (1997)
+    '''
+    r = (0.836 * mass**(1./3) + 0.570) / 52917.7249;
+    zeta = 1.5 / (r**2);
+    return zeta
+
+def filatov_nuc_mod(nuc_charge, c=param.LIGHTSPEED):
+    ''' Generate the nuclear charge distribution parameter zeta
+    rho(r) = nuc_charge * Norm * exp(-zeta * r^2)
+
+    Ref. M. Filatov and D. Cremer, Theor. Chem. Acc. 108, 168 (2002)
+         M. Filatov and D. Cremer, Chem. Phys. Lett. 351, 259 (2002)
+    '''
+    r = (-0.263188*nuc_charge + 106.016974 + 138.985999/nuc_charge) / c**2
+    zeta = 1 / (r**2)
+    return zeta
 

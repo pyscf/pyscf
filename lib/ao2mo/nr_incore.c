@@ -11,38 +11,37 @@
 
 #include "np_helper/np_helper.h"
 #include "nr_ao2mo.h"
+#define OUTPUTIJ        1
+#define INPUT_IJ        2
 
 
-void AO2MOtranse1_incore_s4(int (*fmmm)(),
-                            double *vout, double *eri_ao, int row_id,
+void AO2MOtranse1_incore_s4(int (*fmmm)(), int row_id,
+                            double *vout, double *eri_ao, double *buf,
                             struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        size_t npair = nao * (nao+1) / 2;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        double *buf = malloc(sizeof(double) * nao*nao);
-        double *buf1 = eri_ao + npair * (row_id+envs->klsh_start);
+        size_t npair = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        double *peri = eri_ao + npair * (row_id+envs->klsh_start);
 
-        NPdunpack_tril(nao, buf1, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-        free(buf);
+        NPdunpack_tril(nao, peri, buf, 0);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
-void AO2MOtranse1_incore_s8(int (*fmmm)(),
-                            double *vout, double *eri_ao, int row_id,
+void AO2MOtranse1_incore_s8(int (*fmmm)(), int row_id,
+                            double *vout, double *eri_ao, double *buf,
                             struct _AO2MOEnvs *envs)
 {
         int nao = envs->nao;
-        int npair = nao * (nao+1) / 2;
-        size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
-        double *buf = malloc(sizeof(double) * nao*nao*2);
-        double *buf1 = buf + nao*nao;
+        size_t npair = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
+        size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
+        double *buf0 = malloc(sizeof(double) * npair);
 
 // Note AO2MOnr_e1incore_drv stores ij_start in envs.klsh_start
-        NPdunpack_row(npair, row_id+envs->klsh_start, eri_ao, buf1);
-        NPdunpack_tril(nao, buf1, buf, 0);
-        (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
-        free(buf);
+        NPdunpack_row(npair, row_id+envs->klsh_start, eri_ao, buf0);
+        NPdunpack_tril(nao, buf0, buf, 0);
+        (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
+        free(buf0);
 }
 
 // ij_start and ij_count for the ij-AO-pair in eri_ao
@@ -63,11 +62,16 @@ void AO2MOnr_e1incore_drv(void (*ftranse2_like)(), int (*fmmm)(),
 
         int i;
 #pragma omp parallel default(none) \
-        shared(ftranse2_like, fmmm, vout, eri_ao, ij_count, envs) \
+        shared(ftranse2_like, fmmm, vout, eri_ao, ij_count, envs, \
+               nao, i_count, j_count) \
         private(i)
-#pragma omp for nowait schedule(static)
+{
+        double *buf = malloc(sizeof(double) * (nao+i_count) * (nao+j_count));
+#pragma omp for schedule(dynamic)
         for (i = 0; i < ij_count; i++) {
-                (*ftranse2_like)(fmmm, vout, eri_ao, i, &envs);
+                (*ftranse2_like)(fmmm, i, vout, eri_ao, buf, &envs);
         }
+        free(buf);
+}
 }
 

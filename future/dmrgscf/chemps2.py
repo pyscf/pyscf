@@ -75,7 +75,7 @@ class CheMPS2(object):
             groupNumber = 0
             self.orbsym = numpy.zeros(norb, numpy.int32)
         Ham = PyCheMPS2.PyHamiltonian(norb, groupNumber,
-                                      numpy.asarray(self.orbsym, numpy.int32))
+                                      numpy.asarray(self.orbsym, dtype=numpy.int32))
         eri = pyscf.ao2mo.restore(1, eri, norb)
         for i in range(norb):
             for j in range(norb):

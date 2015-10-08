@@ -341,7 +341,6 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-10)
     fcibase = casscf.fcisolver
-    fcibase.nroots = len(weights)
     class FakeCISolver(casscf.fcisolver.__class__):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)

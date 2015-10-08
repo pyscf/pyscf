@@ -25,7 +25,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
             AO integrals will be generated in terms of mol._atm, mol._bas, mol._env
         mo_coeff : ndarray
             Transform (ij|kl) with the same set of orbitals.
-        erifile : str
+        erifile : str or h5py File or h5py Group object
             To store the transformed integrals, in HDF5 format.
 
     Kwargs
@@ -115,7 +115,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         mo_coeffs : 4-item list of ndarray
             Four sets of orbital coefficients, corresponding to the four
             indices of (ij|kl)
-        erifile : str
+        erifile : str or h5py File or h5py Group object
             To store the transformed integrals, in HDF5 format.
 
     Kwargs
@@ -241,12 +241,16 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')
 
-    if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
+    if isinstance(erifile, str):
+        if h5py.is_hdf5(erifile):
+            feri = h5py.File(erifile)
+            if dataname in feri:
+                del(feri[dataname])
+        else:
+            feri = h5py.File(erifile, 'w')
     else:
-        feri = h5py.File(erifile, 'w')
+        assert(isinstance(erifile, h5py.Group))
+        feri = erifile
     if comp == 1:
         chunks = (nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
@@ -257,15 +261,17 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
                                       'f8', chunks=chunks)
 
     if nij_pair == 0 or nkl_pair == 0:
-        feri.close()
+        if isinstance(erifile, str):
+            feri.close()
         return erifile
     log.debug('num. MO ints = %.8g, require disk %.8g', \
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
 # transform e1
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
-            max_memory, ioblk_size, log, compact)
+    fswap = h5py.File(swapfile.name, 'w')
+    half_e1(mol, mo_coeffs, fswap, intor, aosym, comp, max_memory, ioblk_size,
+            log, compact)
 
     time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
 
@@ -276,10 +282,9 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
               iobuflen*nkl_pair*8/1e6)
 
-    fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
-    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
+    ao_loc = numpy.asarray(mol.ao_loc_nr(), dtype=numpy.int32)
     ti0 = time_1pass
     bufs1 = numpy.empty((iobuflen,nkl_pair))
     buf = numpy.empty((iobuflen, nao_pair))
@@ -293,12 +298,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             log.debug('step 2 [%d/%d], [%d,%d:%d], row = %d', \
                       istep, ijmoblks, icomp, row0, row1, nrow)
 
-            col0 = 0
-            for ic in range(klaoblks):
-                dat = fswap['%d/%d'%(icomp,ic)]
-                col1 = col0 + dat.shape[1]
-                buf[:nrow,col0:col1] = dat[row0:row1]
-                col0 = col1
+            buf = _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
             ti2 = log.timer('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
             tioi += ti2[1]-ti0[1]
             pbuf = bufs1[:nrow]
@@ -316,8 +316,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
-    feri.close()
+    for key in fswap.keys():
+        del(fswap[key])
     fswap.close()
+    if isinstance(erifile, str):
+        feri.close()
 
     log.timer('AO->MO eri transformation 2 pass', *time_1pass)
     log.timer('AO->MO eri transformation', *time_0pass)
@@ -337,7 +340,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             AO integrals will be generated in terms of mol._atm, mol._bas, mol._env
         mo_coeff : ndarray
             Transform (ij|kl) with the same set of orbitals.
-        swapfile : str
+        swapfile : str or h5py File or h5py Group object
             To store the transformed integrals, in HDF5 format.  The transformed
             integrals are saved in blocks.
 
@@ -425,7 +428,10 @@ def half_e1(mol, mo_coeffs, swapfile,
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
               nij_pair, nao_pair, mem_words*8/1e6, iobuf_words*8/1e6)
 
-    fswap = h5py.File(swapfile, 'w')
+    if isinstance(swapfile, str):
+        fswap = h5py.File(swapfile, 'w')
+    else:
+        fswap = swapfile
     for icomp in range(comp):
         g = fswap.create_group(str(icomp)) # for h5py old version
 
@@ -455,15 +461,29 @@ def half_e1(mol, mo_coeffs, swapfile,
 
         e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
         for icomp in range(comp):
-            dset = fswap.create_dataset('%d/%d'%(icomp,istep),
-                                        (nij_pair,iobuf.shape[1]), 'f8',
-                                        chunks=None)
-            for col0, col1 in prange(0, nij_pair, e2buflen):
-                dset[col0:col1] = pyscf.lib.transpose(iobuf[icomp,:,col0:col1])
+            _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf[icomp],
+                              e2buflen, None)
         ti0 = log.timer('transposing to disk', *ti2)
     bufs1 = bufs2 = None
-    fswap.close()
+    if isinstance(swapfile, str):
+        fswap.close()
     return swapfile
+
+def _load_from_h5g(h5group, row0, row1, vout):
+    nrow = row1 - row0
+    col0 = 0
+    for key in range(len(h5group)):
+        dat = h5group[str(key)][row0:row1]
+        col1 = col0 + dat.shape[1]
+        vout[:nrow,col0:col1] = dat
+        col0 = col1
+    return vout
+
+def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
+    nrow, ncol = dat.shape
+    dset = h5group.create_dataset(key, (ncol,nrow), 'f8', chunks=chunks)
+    for col0, col1 in prange(0, ncol, blksize):
+        dset[col0:col1] = pyscf.lib.transpose(dat[:,col0:col1])
 
 def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
                 verbose=logger.WARN, compact=True):
@@ -550,11 +570,14 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     (3, 100, 55)
     '''
     erifile = tempfile.NamedTemporaryFile()
-    general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
-            intor=intor, aosym=aosym, comp=comp,
-            verbose=verbose, compact=compact)
-    with h5py.File(erifile.name, 'r') as feri:
-        return numpy.array(feri['eri_mo'])
+    with h5py.File(erifile.name, 'w') as feri:
+        general(mol, (mo_coeff,)*4, feri, dataname='eri_mo',
+                intor=intor, aosym=aosym, comp=comp,
+                verbose=verbose, compact=compact)
+        eri = numpy.asarray(feri['eri_mo'])
+        for key in feri.keys():
+            del(feri[key])
+        return eri
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
                    verbose=logger.WARN, compact=True):
@@ -634,11 +657,14 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
     (3, 100, 55)
     '''
     erifile = tempfile.NamedTemporaryFile()
-    general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
-            intor=intor, aosym=aosym, comp=comp,
-            verbose=verbose, compact=compact)
-    with h5py.File(erifile.name, 'r') as feri:
-        return numpy.array(feri['eri_mo'])
+    with h5py.File(erifile.name, 'w') as feri:
+        general(mol, mo_coeffs, feri, dataname='eri_mo',
+                intor=intor, aosym=aosym, comp=comp,
+                verbose=verbose, compact=compact)
+        eri = numpy.asarray(feri['eri_mo'])
+        for key in feri.keys():
+            del(feri[key])
+        return eri
 
 
 def iden_coeffs(mo1, mo2):

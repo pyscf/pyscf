@@ -242,7 +242,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     totmicro = totinner = 0
     norm_gorb = norm_gci = 0
     elast = e_tot
-    de = 1e9
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -254,17 +253,17 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         if casscf.dynamic_micro_step:
             max_cycle_micro = max(micro, int(micro-2-numpy.log(norm_ddm)))
         imicro = 0
-        for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                                  eris, r0, conv_tol_grad, log):
+        rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                    eris, r0, conv_tol_grad, log)
+        for u, g_orb, njk in rota:
             imicro += 1
             norm_gorb = numpy.linalg.norm(g_orb)
             if imicro == 1:
                 norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
-            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             if imicro == max_cycle_micro:
-                log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ',
-                          imicro, de, norm_t, norm_gorb)
+                log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ',
+                          imicro, norm_t, norm_gorb)
                 break
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
@@ -275,19 +274,19 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
-                      imicro, de, norm_t, norm_gorb, norm_gci, norm_ddm)
+                      imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
-            if (norm_t < 1e-4 or abs(de) < tol * .2 or
+            if (norm_t < 1e-4 or
                 (norm_gorb < conv_tol_grad*.8 and norm_ddm < conv_tol_ddm)):
                 break
 
-        log.debug1('current memory %d MB', pyscf.lib.current_memory()[0])
+        rota.close()
 
         totmicro += imicro
         totinner += njk
@@ -585,6 +584,14 @@ class CASSCF(casci_uhf.CASCI):
         return va, vc
 
     def update_casdm(self, mo, u, fcivec, e_ci, eris):
+
+        ecore, h1cas, h2cas = self.approx_cas_integral(mo, u, eris)
+
+        ci1, g = self.solve_approx_ci(h1cas, h2cas, fcivec, ecore, e_ci)
+        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, self.ncas, self.nelecas)
+        return casdm1, casdm2, g, ci1
+
+    def approx_cas_integral(self, mo, u, eris):
         ncas = self.ncas
         nelecas = self.nelecas
         ncore = self.ncore
@@ -646,9 +653,7 @@ class CASSCF(casci_uhf.CASCI):
               + numpy.einsum('jp,pj->', jka[:ncore[0]], rmat[0][:,:ncore[0]])*2
               + numpy.einsum('jp,pj->', jkb[:ncore[1]], rmat[1][:,:ncore[1]])*2)
 
-        ci1, g = self.solve_approx_ci(h1cas, (aaaa,aaAA,AAAA), fcivec, ecore, e_ci)
-        casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, ncas, nelecas)
-        return casdm1, casdm2, g, ci1
+        return ecore, h1cas, (aaaa, aaAA, AAAA)
 
     def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci):
         ''' Solve CI eigenvalue/response problem approximately
