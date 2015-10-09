@@ -35,6 +35,7 @@ class DMRGCI(object):
         self.mol = mol
         self.verbose = mol.verbose
         self.stdout = mol.stdout
+        self.outputlevel = 2
 
         self.executable = settings.BLOCKEXE
         self.scratchDirectory = settings.BLOCKSCRATCHDIR
@@ -53,11 +54,11 @@ class DMRGCI(object):
         self.weights = []
         self.wfnsym = 1
 
-        if tol == None:
+        if tol is None:
             self.tol = 1e-8
         else:
             self.tol = tol/10
-        if maxM == None:
+        if maxM is None:
             self.maxM = 1000
         else:
             self.maxM = maxM
@@ -421,7 +422,7 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         f.write('maxiter %i\n'%DMRGCI.maxIter)
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
 
-    f.write('outputlevel 2\n')
+    f.write('outputlevel %s\n'%DMRGCI.outputlevel)
     f.write('hf_occ integral\n')
     if(DMRGCI.twopdm):
         f.write('twopdm\n')
@@ -545,7 +546,7 @@ def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None,maxm = 500, tol =1e-6, parallel= T
 
 
 
-    if fcisolver ==None:
+    if fcisolver is None:
         fcisolver = DMRGCI(mol, maxm, tol)
     fcisolver.twopdm = False
     fcisolver.nroots = mc.fcisolver.nroots
