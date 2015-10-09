@@ -11,6 +11,7 @@ import subprocess
 import numpy
 from pyscf import lib
 from pyscf import gto, scf
+from pyscf import df
 
 '''
 COSMO interface
@@ -267,15 +268,15 @@ class COSMO(object):
 
 def exe_cosmo(mycosmo):
     mycosmo.stdout.flush()
+    cmd = ' '.join((settings.COSMOEXE, mycosmo.base, mycosmo.suffix))
     try:
-        cmd = ' '.join((settings.COSMOEXE, mycosmo.base, mycosmo.suffix))
         output = subprocess.check_output(cmd, cwd=mycosmo.tmpdir, shell=True)
         if output:
             lib.logger.debug(mycosmo, 'COSMO output\n%s', output)
     except AttributeError:  # python 2.6 and older
         p = subprocess.check_call(cmd, cwd=mycosmo.tmpdir, shell=True)
 
-def cosmo_fock(mf,dm):
+def cosmo_fock_o0(mf,dm):
     debug = False
     mol = mf.mol
     cosmo = mf.mol.cosmo
@@ -307,8 +308,35 @@ def cosmo_fock(mf,dm):
         vpot = mol.intor('cint1e_rinv_sph')
         fock -= vpot*cosmo.qcos[i]
     return fock
+def cosmo_fock_o1(mf,dm):
+    mol = mf.mol
+    nao = dm.shape[0]
+    cosmo = mf.mol.cosmo
+    # phi
+    cosmo.loadsegs()
+    coords = cosmo.cosurf[:cosmo.nps*3].reshape(-1,3)
+    fakemol = _make_fakemol(coords)
+    j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_sph', aosym='s2ij')
+    tril_dm = lib.pack_tril(dm) * 2
+    diagidx = numpy.arange(nao)
+    diagidx = diagidx*(diagidx+1)//2 + diagidx
+    tril_dm[diagidx] *= .5
+    cosmo.phi = -numpy.einsum('x,xk->k', tril_dm, j3c)
+    for ia in range(mol.natm):
+        cosmo.phi += mol.atom_charge(ia)/lib.norm(mol.atom_coord(ia)-coords, axis=1)
+    cosmo.savesegs()
+    # qk
+    cosmo.charges()
+    # vpot
+    cosmo.loadsegs()
+#X    fakemol = _make_fakemol(cosmo.cosurf[:cosmo.nps*3].reshape(-1,3))
+#X    j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_sph', aosym='s2ij')
+    fock = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -cosmo.qcos[:cosmo.nps]))
+    return fock
+def cosmo_fock(mf, dm):
+    return cosmo_fock_o1(mf, dm)
 
-def cosmo_occ(mf,dm,escf):
+def cosmo_occ_o0(mf,dm,escf):
     mol = mf.mol
     cosmo = mf.mol.cosmo
     #cosmo.check()
@@ -330,6 +358,57 @@ def cosmo_occ(mf,dm,escf):
     cosmo.savesegs()
     cosmo.occ1(mol, escf)
     return 0
+def cosmo_occ_o1(mf,dm,escf):
+    mol = mf.mol
+    nao = dm.shape[0]
+    cosmo = mf.mol.cosmo
+    #cosmo.check()
+    cosmo.occ0()
+    cosmo.loadsegs()
+    #cosmo.check()
+    ioff = 3*cosmo.nps
+    coords = cosmo.cosurf[ioff:ioff+cosmo.npspher*3].reshape(-1,3)
+    fakemol = _make_fakemol(coords)
+    j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_sph', aosym='s2ij')
+    tril_dm = lib.pack_tril(dm) * 2
+    diagidx = numpy.arange(nao)
+    diagidx = diagidx*(diagidx+1)//2 + diagidx
+    tril_dm[diagidx] *= .5
+    cosmo.phio = -numpy.einsum('x,xk->k', tril_dm, j3c)
+    for ia in range(mol.natm):
+        cosmo.phio += mol.atom_charge(ia)/lib.norm(mol.atom_coord(ia)-coords, axis=1)
+    cosmo.savesegs()
+    cosmo.occ1(mol, escf)
+    return 0
+def cosmo_occ(mf, dm, escf):
+    return cosmo_occ_o1(mf, dm, escf)
+
+def _make_fakemol(coords):
+    nbas = coords.shape[0]
+    fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
+    fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
+    fakeenv = []
+    ptr = 0
+    fakeatm[:,gto.PTR_COORD] = numpy.arange(0, nbas*3, 3)
+    fakeenv.append(coords.ravel())
+    ptr += nbas*3
+    fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
+    fakebas[:,gto.NPRIM_OF] = 1
+    fakebas[:,gto.NCTR_OF] = 1
+# approximate point charge with gaussian distribution exp(-1e9*r^2)
+    fakebas[:,gto.PTR_EXP] = ptr
+    fakebas[:,gto.PTR_COEFF] = ptr+1
+    expnt = 1e9
+    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.mole._gaussian_int(2,expnt))])
+    ptr += 2
+    fakemol = gto.Mole()
+    fakemol._atm = fakeatm
+    fakemol._bas = fakebas
+    fakemol._env = numpy.hstack(fakeenv)
+    fakemol.natm = nbas
+    fakemol.nbas = nbas
+    fakemol._built = True
+    return fakemol
 
 
 
