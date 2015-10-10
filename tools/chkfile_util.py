@@ -44,7 +44,7 @@ def molden(filename, key='scf'):
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        print('%s [pop|mo|molden] [scf|mcscf]' % sys.argv[0])
+        print('%s chkfile_name [pop|mo|molden] [scf|mcscf]' % sys.argv[0])
         exit()
     filename = sys.argv[1]
     fndic = {'pop': mulliken,

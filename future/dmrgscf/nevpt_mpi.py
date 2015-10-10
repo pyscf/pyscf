@@ -72,6 +72,31 @@ def write_chk(mc,root,chkfile):
     fh5['h1e_Sr']     =       h1e_Sr   
     h1e = mc.h1e_for_cas()
     fh5['h1e']       =       h1e[0]
+
+    if mc._scf._eri is None:
+        eri = _vhf.int2e_sph(mc.mol._atm, mol._bas, mol._env)
+    else:
+        eri = mc._scf._eri
+
+
+    #FIXME
+    #add outcore later
+
+    h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False)
+    h2e = h2e.reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas)
+    fh5['h2e'] = h2e
+    h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False)
+    h2e_Sr = h2e_Sr.reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+    fh5['h2e_Sr'] = h2e_Sr
+    h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False)
+    h2e_Si = h2e_Si.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+    fh5['h2e_Si'] = h2e_Si
+
+
+
+
+
+
     fh5.close()
 
 def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
@@ -106,20 +131,13 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     h1e_Si    =     fh5['h1e_Si'].value
     h1e_Sr    =     fh5['h1e_Sr'].value
     h1e       =     fh5['h1e'].value
-    fh5.close()
+    h2e       =     fh5['h2e'].value
 
 
-    eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
 
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:ncore+ncas]
     mo_virt = mo_coeff[:,ncore+ncas:]
-    h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False)
-    h2e = h2e.reshape(ncas,ncas,ncas,ncas)
-    h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False)
-    h2e_Sr = h2e_Sr.reshape(nvirt,ncas,ncas,ncas)
-    h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False)
-    h2e_Si = h2e_Si.reshape(ncas,ncore,ncas,ncas)
 
     nelec = nelecas[0] + nelecas[1]
 
@@ -159,15 +177,15 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
        #     norb = ncas + ncore + nvirt - num_of_orb_begin
         else :
             h1e_Si = h1e_Si[:,num_of_orb_begin:]
-            h2e_Si = h2e_Si[:,num_of_orb_begin:,:,:]
+            h2e_Si = fh5['h2e_Si'].value[:,num_of_orb_begin:,:,:]
             h1e_Sr = h1e_Sr[:num_of_orb_end - ncore,:]
-            h2e_Sr = h2e_Sr[:num_of_orb_end - ncore,:,:,:]
+            h2e_Sr = fh5['h2e_Sr'].value[:num_of_orb_end - ncore,:,:,:]
     elif num_of_orb_begin < ncore + nvirt :
         if num_of_orb_end <= ncore + nvirt:
             h1e_Si = []
             h2e_Si = []
             h1e_Sr = h1e_Sr[num_of_orb_begin - ncore:num_of_orb_end - ncore,:]
-            h2e_Sr = h2e_Sr[num_of_orb_begin - ncore:num_of_orb_end - ncore,:,:,:]
+            h2e_Sr = fh5['h2e_Sr'].value[num_of_orb_begin - ncore:num_of_orb_end - ncore,:,:,:]
     #    else :
     #        h1e_Si = []
     #        h2e_Si = []
@@ -178,6 +196,8 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     else :
         print 'No job for this processor'
         return
+
+    fh5.close()
 
     norb = ncas + num_of_orb_end - num_of_orb_begin
     orbsym = orbsym[:ncas] + orbsym[ncas + num_of_orb_begin:ncas + num_of_orb_end]
