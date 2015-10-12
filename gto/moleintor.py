@@ -480,7 +480,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         if '_ssc' in intor_name: # mixed spheric-cartesian
             dk = _cint.CINTcgto_cart(ctypes.c_int(shls[2]), c_bas)
         else:
-            dk = _cint.CINTcgto_spheric(ctypes.c_int(shls[2]), c_bas) # spheric-GTO for aux function?
+            dk = num_cgto_of(shls[2])
         buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
@@ -497,8 +497,8 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         assert(len(shls) == 2)
         #di, dj = map(num_cgto_of, shls)
         #buf = numpy.empty((di,dj,comp), dtype, order='F')
-        di = _cint.CINTcgto_spheric(ctypes.c_int(shls[0]), c_bas)
-        dj = _cint.CINTcgto_spheric(ctypes.c_int(shls[1]), c_bas)
+        di = num_cgto_of(shls[0])
+        dj = num_cgto_of(shls[1])
         buf = numpy.empty((di,dj,comp), order='F') # no complex?
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
