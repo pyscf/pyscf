@@ -297,6 +297,13 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
             cintopt, cvhfopt, c_atm, natm, c_bas, nbas, c_env)
         return vout
 
+ANG_OF     = 1
+NPRIM_OF   = 2
+NCTR_OF    = 3
+KAPPA_OF   = 4
+PTR_EXP    = 5
+PTR_COEFF  = 6
+BAS_SLOTS  = 8
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
     r'''For given 2, 3 or 4 shells, interface for libcint to get 1e, 2e,
     2-center-2e or 3-center-2e integrals
@@ -462,25 +469,31 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
     nbas = ctypes.c_int(bas.shape[0])
     if '_cart' in intor_name:
         dtype = numpy.double
-        num_cgto_of = lambda basid: _cint.CINTcgto_cart(ctypes.c_int(basid),
-                                                        c_bas)
-    elif '_sph' in intor_name or '_ssc' in intor_name:
+        def num_cgto_of(basid):
+            l = bas[basid,ANG_OF]
+            return (l+1)*(l+2)//2 * bas[basid,NCTR_OF]
+    elif '_sph' in intor_name:
         dtype = numpy.double
-        num_cgto_of = lambda basid: _cint.CINTcgto_spheric(ctypes.c_int(basid),
-                                                           c_bas)
+        def num_cgto_of(basid):
+            l = bas[basid,ANG_OF]
+            return (l*2+1) * bas[basid,NCTR_OF]
     else:
+        from pyscf.gto import mole
         dtype = numpy.complex
-        num_cgto_of = lambda basid: _cint.CINTcgto_spinor(ctypes.c_int(basid),
-                                                          c_bas)
+        def num_cgto_of(basid):
+            l = bas[basid,ANG_OF]
+            k = bas[basid,KAPPA_OF]
+            return mole.len_spinor(l,k) * bas[basid,NCTR_OF]
     if '3c' in intor_name:
         assert(len(shls) == 3)
         #di, dj, dk = map(num_cgto_of, shls)
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
+        l = bas[shls[2],ANG_OF]
         if '_ssc' in intor_name: # mixed spheric-cartesian
-            dk = _cint.CINTcgto_cart(ctypes.c_int(shls[2]), c_bas)
+            dk = (l+1)*(l+2)//2 * bas[shls[2],NCTR_OF]
         else:
-            dk = num_cgto_of(shls[2])
+            dk = (l*2+1) * bas[shls[2],NCTR_OF]
         buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
         nullopt = ctypes.c_void_p()
