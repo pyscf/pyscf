@@ -173,6 +173,7 @@ def eval_rho(mol, ao, dm, non0tab=None, isgga=False, verbose=None):
     >>> dm = dm + dm.T
     >>> rho, dx_rho, dy_rho, dz_rho = eval_rho(mol, ao, dm, isgga=True)
     '''
+    assert(ao.flags.c_contiguous)
     if isgga:
         ngrids, nao = ao[0].shape
     else:
@@ -229,6 +230,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, isgga=False,
         array of (4,N) to store density and "density derivatives" for x,y,z
         components if isgga is True.
     '''
+    assert(ao.flags.c_contiguous)
     if isgga:
         ngrids, nao = ao[0].shape
     else:
@@ -306,6 +308,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         XC potential matrix in 2D array of shape (nao,nao) where nao is the
         number of AO functions.
     '''
+    assert(ao.flags.c_contiguous)
     if isgga:
         ngrids, nao = ao[0].shape
     else:
