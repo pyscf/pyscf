@@ -62,6 +62,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
+    assert(fcivec.flags.c_contiguous)
     if not orbsym:
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
