@@ -1104,13 +1104,14 @@ class Mole(object):
         self.__dict__.update(moldic)
         return self
 
+#TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
     def build_(self, dump_input=True, parse_arg=True,
                verbose=None, output=None, max_memory=None,
                atom=None, basis=None, unit=None, nucmod=None,
                charge=None, spin=None, symmetry=None,
-               symmetry_subgroup=None, light_speed=None):
+               symmetry_subgroup=None, light_speed=None, mass=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.

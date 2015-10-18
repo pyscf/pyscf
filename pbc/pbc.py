@@ -166,7 +166,7 @@ def get_aoR(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             The real-space grid point coordinates.
 
     Returns:
-        aoR : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray [nao=cell.nao_nr() if k==0]
+        aoR : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the orbitals gradient in the
             x, y, and z directions.
@@ -206,7 +206,7 @@ def get_rhoR(mol, ao, dm, non0tab=None,
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray [nao=cell.nao_nr() if k==0]
+        ao : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray 
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the gradient in the x, y,
             and z directions.
@@ -297,7 +297,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray [nao=cell.nao_nr() if k==0]
+        ao : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the gradient in the x, y,
             and z directions.

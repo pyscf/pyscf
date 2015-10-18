@@ -761,7 +761,7 @@ void VXCeval_nr_gto(int nao, int ngrids, int blksize,
                         grid_cart_gto(cart_gto, pcoord, ectr, l, nc, blksize);
                         pcart = cart_gto;
                         for (k = 0; k < nc; k++) {
-                                pgto = (CINTc2s_ket_sph[l])(paobuf, blksize, pcart, l);
+                                pgto = CINTc2s_ket_sph(paobuf, blksize, pcart, l);
                                 if (pgto != paobuf) { // s,p functions
                                         memcpy(paobuf, pcart, sizeof(double)*deg*blksize);
                                 }
@@ -819,8 +819,8 @@ void VXCeval_nr_gto_grad(int nao, int ngrids, int blksize,
                                 pcart = cart_gto + i*nc*_len_cart[l]*blksize;
                                 paobuf1 = paobuf + i*nao*blksize;
                                 for (k = 0; k < nc; k++) {
-                                        pgto = (CINTc2s_ket_sph[l])(paobuf1, blksize,
-                                                                    pcart, l);
+                                        pgto = CINTc2s_ket_sph(paobuf1, blksize,
+                                                               pcart, l);
                                         if (pgto != paobuf1) { // s,p functions
                                                 memcpy(paobuf1, pcart,
                                                        sizeof(double)*deg*blksize);

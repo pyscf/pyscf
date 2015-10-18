@@ -434,7 +434,7 @@ def test_kscf_gamma(atom, ncells):
     
     # place atom in middle of big box
     for i in range(ncells):
-        mol.atom.extend([[atom, (.5+(i+1)*Lunit*B,0.5*Ly*B,0.5*Lz*B)]])
+        mol.atom.extend([[atom, ((.5+i)*Lunit*B,0.5*Ly*B,0.5*Lz*B)]])
 
     # these are some exponents which are 
     # not hard to integrate
@@ -456,7 +456,7 @@ def test_kscf_gamma(atom, ncells):
     cell.build()
     
     # points in grid (x,y,z)
-    gs=np.array([20*ncells,40,40])
+    gs=np.array([40*ncells,40,40])
 
     # Ewald parameters
     precision=1.e-9

@@ -392,10 +392,10 @@ def norm(x, ord=None, axis=None):
     if axis is None:
         return numpy.linalg.norm(x, ord)
     elif axis == 0:
-        xx = numpy.linalg.einsum('ij,ij->j', x, x)
+        xx = numpy.einsum('ij,ij->j', x, x)
         return numpy.sqrt(xx)
     elif axis == 1:
-        xx = numpy.linalg.einsum('ij,ij->i', x, x)
+        xx = numpy.einsum('ij,ij->i', x, x)
         return numpy.sqrt(xx)
     else:
         raise RuntimeError('Not support for axis = %d' % axis)
