@@ -13,6 +13,7 @@ import pyscf.scf
 import pyscf.scf.hf
 import pyscf.dft
 import pyscf.gto
+import pyscf.lib.parameters as param
 import cell as cl
 import pbc
 import pp
@@ -50,11 +51,19 @@ def get_int1e(intor, cell, kpt=None):
     int1e = np.zeros((cell.nbas,cell.nbas))
     
     Ls = get_lattice_Ls(cell)
+
+    if cell.unit.startswith(('B','b','au','AU')):
+        convert = 1
+    elif cell.unit.startswith(('A','a')):
+        convert = param.BOHR
+    else:
+        convert = cell.unit
+
     for L in Ls:
         cellL = cell.copy()
         atomL = list()
         for atom, coord in cell.atom:
-            atomL.append([atom, tuple(list(coord) + L)])
+            atomL.append([atom, tuple(list(coord) + L*convert)])
         cellL.atom = atomL
         cellL.build()
         int1e += (np.exp(1j*np.dot(kpt.T,L)) *
@@ -77,4 +86,57 @@ def get_t(cell, kpt=None):
     
     t = get_int1e('cint1e_kin_sph', cell, kpt) 
     return t
+
+def test_periodic_ints():
+    from pyscf import gto
+    from pyscf.lib.parameters import BOHR
+    import cell as cl
+    import scf
+
+    B = BOHR
+
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = None
+
+    Lunit = 3
+    Ly = Lz = Lunit
+    Lx = Lunit
+
+    h = np.diag([Lx,Ly,Lz])
+    
+    mol.atom.extend([['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
+                     ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]])
+
+    # these are some exponents which are 
+    # not hard to integrate
+    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
+    mol.unit='A'
+    mol.build()
+
+    cell = cl.Cell()
+    cell.__dict__ = mol.__dict__ # hacky way to make a cell
+    cell.h = h
+    cell.vol = scipy.linalg.det(cell.h)
+    cell.nimgs = [2,2,2]
+    cell.pseudo = None
+    cell.output = None
+    cell.verbose = 0
+    cell.build()
+
+    gs = np.array([20,20,20])
+
+    # Analytic
+    sA=get_ovlp(cell)
+    tA=get_t(cell)
+
+    # Grid
+    sG=scf.get_ovlp(cell, gs)
+    tG=scf.get_t(cell, gs)
+
+    # These differences should be 0 up to grid integration error
+    print "Diff", np.linalg.norm(sA-sG) # 1.05796568891e-06
+    print "Diff", np.linalg.norm(tA-tG) # 4.82330435721e-06
+
+
 
