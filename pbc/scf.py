@@ -24,10 +24,10 @@ def get_hcore(mf, cell, kpt=None):
     if kpt is None:
         kpt = np.zeros([3,1])
 
-    if cell.pseudo is None:
-        hcore = get_nuc(cell, mf.gs, kpt)
-    else:
+    if cell.pseudo:
         hcore = get_pp(cell, mf.gs, kpt) + get_jvloc_G0(cell, mf.gs, kpt)
+    else:
+        hcore = get_nuc(cell, mf.gs, kpt)
     hcore += get_t(cell, mf.gs, kpt)
     return hcore
 
