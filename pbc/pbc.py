@@ -1,19 +1,9 @@
 import pyscf.dft
 from pyscf.lib import logger
 
-import math
 import numpy as np
-import scipy
 import scipy.linalg
 import scipy.special
-import scipy.optimize
-
-pi=math.pi
-exp=np.exp
-sqrt=np.sqrt
-erfc=scipy.special.erfc
-cos=math.cos
-sin=math.sin
 
 def get_Gv(cell, gs):
     '''Calculate three-dimensional G-vectors for a given cell; see MH (3.8).
@@ -39,7 +29,7 @@ def get_Gv(cell, gs):
     gzrange = range(gs[2]+1)+range(-gs[2],0)
     gxyz = _span3(gxrange, gyrange, gzrange)
 
-    Gv = 2*pi*np.dot(invhT,gxyz)
+    Gv = 2*np.pi*np.dot(invhT,gxyz)
     return Gv
 
 def get_SI(cell, Gv):
@@ -79,7 +69,7 @@ def get_coulG(cell, gs):
     Gv = get_Gv(cell, gs)
     absG2 = np.einsum('ij,ij->j',np.conj(Gv),Gv)
     with np.errstate(divide='ignore'):
-        coulG = 4*pi/absG2
+        coulG = 4*np.pi/absG2
     coulG[0] = 0.
 
     return coulG
@@ -176,7 +166,7 @@ def get_aoR(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             The real-space grid point coordinates.
 
     Returns:
-        aoR : ([4,] nx*ny*nz, nao=2*cell.nbas) ndarray [nao=cell.nbas if k==0]
+        aoR : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray [nao=cell.nao_nr() if k==0]
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the orbitals gradient in the
             x, y, and z directions.
@@ -194,7 +184,7 @@ def get_aoR(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
                   for k in range(-nimgs[2],nimgs[2]+1)
                   if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
     
-    nao = cell.nbas
+    nao = cell.nao_nr()
     if isgga:
         aoR = np.zeros([4,coords.shape[0], nao], np.complex128)
     else:
@@ -202,7 +192,7 @@ def get_aoR(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
 
     for T in Ts:
         L = np.dot(cell.h, T)
-        aoR += (exp(1j*np.dot(kpt.T,L)) *
+        aoR += (np.exp(1j*np.dot(kpt.T,L)) *
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 
                                          bastart, bascount, 
@@ -216,7 +206,7 @@ def get_rhoR(mol, ao, dm, non0tab=None,
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=2*cell.nbas) ndarray [nao=cell.nbas if k==0]
+        ao : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray [nao=cell.nao_nr() if k==0]
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the gradient in the x, y,
             and z directions.
@@ -302,12 +292,12 @@ def get_rhoR(mol, ao, dm, non0tab=None,
 
 def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
              isgga=False, verbose=None):
-    '''Calculate the XC potential matrix.
+    '''Calculate the XC potential AO matrix.
 
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=2*cell.nbas) ndarray [nao=cell.nbas if k==0]
+        ao : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray [nao=cell.nao_nr() if k==0]
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the gradient in the x, y,
             and z directions.
@@ -457,12 +447,12 @@ def ewald_params(cell, gs, precision):
 
     '''
     invhT = scipy.linalg.inv(cell.h.T)
-    Gmax = 2*pi*np.dot(invhT, gs)
+    Gmax = 2*np.pi*np.dot(invhT, gs)
     Gmax = np.min(Gmax)
-    log_precision = math.log(precision)
-    ew_eta = math.sqrt(-Gmax**2/(4*log_precision))
+    log_precision = np.log(precision)
+    ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
-    rcut = sqrt(-log_precision)/ew_eta
+    rcut = np.sqrt(-log_precision)/ew_eta
     rlengths = np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
     #print "rlengths", rcut, rlengths
     ew_cut = np.rint(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
@@ -525,7 +515,7 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     #                         qj = chargs[ja]
     #                         rj = coords[ja]
     #                         r = np.linalg.norm(ri-rj)
-    #                         ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #                         ewovrl += qi * qj / r * scipy.special.erfc(ew_eta * r)
     #         else:
     #             for ia in range(cell.natm):
     #                 qi = chargs[ia]
@@ -534,7 +524,7 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     #                     qj=chargs[ja]
     #                     rj=coords[ja]
     #                     r=np.linalg.norm(ri-rj+L)
-    #                     ewovrl += qi * qj / r * erfc(ew_eta * r)
+    #                     ewovrl += qi * qj / r * scipy.special.erfc(ew_eta * r)
 
     # # else:
     nx = len(ewxrange)
@@ -553,7 +543,7 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
             qj = chargs[ja]
             rj = coords[ja]
             r = np.linalg.norm(ri-rj)
-            ewovrl += 2 * qi * qj / r * erfc(ew_eta * r)
+            ewovrl += 2 * qi * qj / r * scipy.special.erfc(ew_eta * r)
 
     for ia in range(cell.natm):
         qi = chargs[ia]
@@ -563,13 +553,13 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
             rj = coords[ja]
             r1 = ri-rj + Lall
             r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            ewovrl += (qi * qj / r * erfc(ew_eta * r)).sum()
+            ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
 
     ewovrl *= 0.5
 
     # last line of Eq. (F.5) in Martin 
-    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / sqrt(pi)
-    ewself += -1./2. * np.sum(chargs)**2 * pi/(ew_eta**2 * cell.vol)
+    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
+    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
     
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
     Gv = get_Gv(cell, gs)
@@ -632,13 +622,19 @@ def get_ao_pairs_G(cell, gs):
     return ao_pairs_G, ao_pairs_invG
     
 def get_mo_pairs_G(cell, gs, mo_coeffs):
-    '''
-    forward and inverse FFT of MO pairs -> (ij|G), (G|ij)
+    '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all MO pairs.
     
-    Not correctly implemented: simplifications for real (ij), or for complex MOs!
-    Returns
+    TODO: - Implement simplifications for real orbitals.
+          - Allow for complex orbitals.
 
-        [ndarray, ndarray] : ndarray [ngs, nmo[0]*nmo[1]]
+    Args:
+        mo_coeffs: length-2 list of (nao,nmo) ndarrays
+            The two sets of MO coefficients to use in calculating the 
+            product |ij).
+
+    Returns:
+        mo_pairs_G, mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
+            The FFTs of the real-space MO pairs.
     '''
     coords = setup_uniform_grids(cell, gs)
     aoR = get_aoR(cell, coords) # shape(coords, nao)
@@ -685,13 +681,13 @@ def assemble_eri(cell, gs, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
     return eri
 
 def get_ao_eri(cell, gs):
-    '''Convenience function to return AO integrals.'''
+    '''Convenience function to return AO 2-el integrals.'''
 
     ao_pairs_G, ao_pairs_invG = get_ao_pairs_G(cell, gs)
     return assemble_eri(cell, gs, ao_pairs_G, ao_pairs_invG)
         
 def get_mo_eri(cell, gs, mo_coeffs12, mo_coeffs34):
-    '''Convenience function to return MO integrals.'''
+    '''Convenience function to return MO 2-el integrals.'''
 
     # don't really need FFT and iFFT for both sets
     mo_pairs12_G, mo_pairs12_invG = get_mo_pairs_G(cell, gs, mo_coeffs12)
@@ -727,10 +723,9 @@ class UniformGrids(object):
         return self.setup_grids()
 
 class _NumInt(pyscf.dft.numint._NumInt):
-    '''
-    Generalization for a single k-pt shift, and
-    periodic images
-    '''
+    '''Generalization of pyscf's _NumInt class for a single k-pt shift and
+    periodic images.'''
+
     def __init__(self, kpt=None):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt

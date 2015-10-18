@@ -12,11 +12,10 @@ from pyscf.lib import logger
 pi=numpy.pi
 
 def get_ovlp(mf, cell, kpts):
-    '''
-    K pt version of get_ovlp
+    '''Get overlap AO matrices at sampled k-points.
     '''
     nkpts=kpts.shape[0]
-    nao=cell.nbas
+    nao=cell.nao_nr()
     ovlp_kpts=numpy.zeros([nkpts,nao,nao], numpy.complex128)
     for k in range(nkpts):
         kpt=numpy.reshape(kpts[k,:], (3,1))
@@ -26,8 +25,7 @@ def get_ovlp(mf, cell, kpts):
     
 
 def get_j(mf, cell, dm_kpts, kpts):
-    '''
-    K pt version of get_j
+    '''Get Coulomb (J) AO matrices at sampled k-points.
 
     kpts: ndarray [nkpts, 3]
 
@@ -39,7 +37,7 @@ def get_j(mf, cell, dm_kpts, kpts):
     nkpts=kpts.shape[0]
 
     ngs=coords.shape[0]
-    nao=cell.nbas
+    nao=cell.nao_nr()
     aoR_kpts=numpy.zeros((nkpts, ngs, nao),numpy.complex128)
     rhoR=numpy.zeros([ngs])
 
@@ -338,7 +336,7 @@ class _KNumInt(pbc._NumInt):
         '''
         nkpts=self.kpts.shape[0]
         ngs=coords.shape[0]
-        nao=mol.nbas
+        nao=mol.nao_nr()
 
         ao_kpts=numpy.empty([nkpts, ngs, nao],numpy.complex128)
         for k in range(nkpts):

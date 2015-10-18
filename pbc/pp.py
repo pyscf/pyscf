@@ -17,12 +17,35 @@ For GTH/HGH PPs, see:
     Hartwigsen, Goedecker, and Hutter, PRB 58, 3641 (1998)
 '''
 
-def get_vlocG(cell, gs):
-    '''
-    Local PP kernel in G space (Vloc(G) for G!=0, 0 for G=0)
+def get_alphas(cell):
+    '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
 
-    Returns
-        np.array([natm, ngs])
+    See ewald.pdf
+
+    Returns:
+        alphas : (natm,) ndarray
+    '''
+    return get_alphas_gth(cell)
+
+def get_alphas_gth(cell):
+    '''alpha parameters for the local GTH pseudopotential.'''
+
+    alphas = np.zeros(cell.natm) 
+    for ia in range(cell.natm):
+        Zia = cell.atom_charge(ia)
+        pp = cell._pseudo[ cell.atom_symbol(ia) ] 
+        rloc, nexp, cexp = pp[1:3+1]
+
+        cfacs = [1., 3., 15., 105.]
+        alphas[ia] = ( 2*np.pi*Zia*rloc**2
+                     + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
+    return alphas
+
+def get_vlocG(cell, gs):
+    '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
+
+    Returns:
+        (natm, ngs) ndarray
     '''
     Gvnorm=np.linalg.norm(pbc.get_Gv(cell, gs),axis=0)
     vlocG = get_gth_vlocG(cell, Gvnorm)
@@ -30,14 +53,15 @@ def get_vlocG(cell, gs):
     return vlocG
 
 def get_gth_vlocG(cell, G):
-    '''
-    Local part of the GTH pseudopotential
-    MH Eq.(4.79)
+    '''Local part of the GTH pseudopotential.
 
-    G: np.array([ngs]) 
+    See MH (4.79).
 
-    Returns 
-         np.array([natm,ngs])
+    Args:
+        G : (ngs,) ndarray
+
+    Returns: 
+         (natm, ngs) ndarray
     '''
     vlocG = np.zeros((cell.natm,len(G))) 
     for ia in range(cell.natm):
@@ -60,14 +84,12 @@ def get_gth_vlocG(cell, G):
     return vlocG
 
 def get_projG(cell, gs):
-    '''
-    PP weight and projector for the nonlocal PP in G space 
-    (proj(G) for G!=0, 0 for G=0)
+    '''PP weight and projector for the nonlocal PP in G space.
 
-    Returns
-        hs :: list( list( np.array( , ) ) )
+    Returns:
+        hs : list( list( np.array( , ) ) )
          - hs[atm][l][i,j]
-        projs :: list( list( list( list( np.array(ngs) ) ) ) )
+        projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
     Gv=pbc.get_Gv(cell, gs)
