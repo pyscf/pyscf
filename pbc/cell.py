@@ -2,6 +2,7 @@ import gc
 import pyscf
 from pyscf.gto.mole import _symbol, _rm_digit, _std_symbol
 import pseudo
+import basis
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -46,6 +47,40 @@ def format_pseudo(pseudo_tab):
             fmt_pseudo[symb] = pseudo_tab[atom]
     return fmt_pseudo
 
+def format_basis(basis_tab):
+    '''Convert the input :attr:`Cell.basis` to the internal data format.
+
+    ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
+
+    Args:
+        basis_tab : list
+            Similar to :attr:`Cell.basis`, it **cannot** be a str
+
+    Returns:
+        Formated :attr:`~Cell.basis`
+
+    Examples:
+
+    >>> pbc.format_basis({'H':'gth-szv'})
+    {'H': [[0,
+        (8.3744350009, -0.0283380461),
+        (1.8058681460, -0.1333810052),
+        (0.4852528328, -0.3995676063),
+        (0.1658236932, -0.5531027541)]]}
+    '''
+    fmt_basis = {}
+    for atom in basis_tab.keys():
+        symb = _symbol(atom)
+        rawsymb = _rm_digit(symb)
+        stdsymb = _std_symbol(rawsymb)
+        symb = symb.replace(rawsymb, stdsymb)
+
+        if isinstance(basis_tab[atom], str):
+            fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
+        else:
+            fmt_basis[symb] = basis_tab[atom]
+    return fmt_basis
+
 class Cell(pyscf.gto.Mole):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -88,7 +123,20 @@ class Cell(pyscf.gto.Mole):
             if (self.nelectron+self.spin) % 2 != 0:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
                                    (self.nelectron, self.spin))
-                                   
+
+        # Check if we're using a GTH basis
+        if 'basis' in kwargs.keys():
+            self.basis = kwargs['basis']
+        if isinstance(self.basis, str):
+            basis_name = self.basis.lower().replace(' ', '').replace('-', '').replace('_', '')
+            if basis_name in ['gthaugdzvp','gthaugqzv2p','gthaugqzv3p','gthaugtzv2p','gthaugtzvp','gthdzv','gthdzvp','gthqzv2p','gthqzv3p','gthszv','gthtzv2p','gthtzvp']:
+                # specify global basis for whole molecule
+                uniq_atoms = set([a[0] for a in self._atom])
+                self.basis = self.format_basis(dict([(a, basis_name)
+                                                     for a in uniq_atoms]))
+            # This sets self.basis to be internal format, and will
+            # be parsed appropriately by Mole.build
+                               
         # Finally, call regular Mole.build_
         pyscf.gto.Mole.build_(self,*args,**kwargs)
 
@@ -96,6 +144,9 @@ class Cell(pyscf.gto.Mole):
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
+
+    def format_basis(self, basis_tab):
+        return format_basis(basis_tab)
 
     def atom_charge(self, atm_id):
         '''Return the atom charge, accounting for pseudopotential.'''
