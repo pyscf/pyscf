@@ -8,6 +8,7 @@ from pyscf.gto import mole
 from pyscf.gto import basis
 from pyscf.gto.mole import *
 from pyscf.gto.moleintor import getints, getints_by_shell
+from pyscf.gto import ecp
 
 parse = basis.parse
 #import pyscf.gto.mole.cmd_args

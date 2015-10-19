@@ -17,6 +17,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
+import pyscf.gto.ecp
 
 
 def M(**kwargs):
@@ -249,6 +250,23 @@ def format_basis(basis_tab):
             fmt_basis[symb] = basis_tab[atom]
     return fmt_basis
 
+def format_ecp(ecp_tab):
+    fmt_ecp = {}
+    for atom in ecp_tab.keys():
+        symb = _symbol(atom)
+        rawsymb = _rm_digit(symb)
+        stdsymb = _std_symbol(rawsymb)
+        symb = symb.replace(rawsymb, stdsymb)
+
+        if isinstance(ecp_tab[atom], str):
+            try:
+                fmt_ecp[symb] = basis.load_ecp(ecp_tab[atom], stdsymb)
+            except RuntimeError:
+                pass
+        else:
+            fmt_ecp[symb] = ecp_tab[atom]
+    return fmt_ecp
+
 # transform etb to basis format
 def expand_etb(l, n, alpha, beta):
     r'''Generate the exponents of even tempered basis for :attr:`Mole.basis`.
@@ -466,6 +484,51 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
     else:
         _env = numpy.array(pre_env, copy=False)
     return _atm, _bas, _env
+
+def make_ecp_env(mol, _atm, ecp, pre_env=[]):
+    _env = []
+    ptr_env = len(pre_env)
+
+    _ecpdic = {}
+    for symb, ecp_add in ecp.items():
+        ecp0 = []
+        nelec = ecp_add[0]
+        for lb in ecp_add[1]:
+            for rorder, bi in enumerate(lb[1]):
+                if len(bi) > 0:
+                    ec = numpy.array(bi)
+                    _env.append(ec[:,0])
+                    ptr_exp = ptr_env
+                    _env.append(ec[:,1])
+                    ptr_coeff = ptr_exp + ec.shape[0]
+                    ptr_env = ptr_coeff + ec.shape[0]
+                    ecp0.append([0, lb[0], ec.shape[0], rorder, 0,
+                                 ptr_exp, ptr_coeff, 0])
+        _ecpdic[symb] = (nelec, numpy.asarray(ecp0, dtype=numpy.int32))
+
+    _ecpbas = []
+    if _ecpdic:
+        _atm = _atm.copy()
+        for ia, atom in enumerate(mol._atom):
+            symb = atom[0]
+            if symb in _ecpdic:
+                ecp0 = _ecpdic[symb]
+            elif _rm_digit(symb) in _ecpdic:
+                ecp0 = _ecpdic[_rm_digit(symb)]
+            else:
+                ecp0 = None
+            if ecp0 is not None:
+                _atm[ia,CHARGE_OF ] = _charge(symb) - ecp0[0]
+                b = ecp0[1].copy()
+                b[:,ATOM_OF] = ia
+                _ecpbas.append(b)
+    if _ecpbas:
+        _ecpbas = numpy.asarray(numpy.vstack(_ecpbas), numpy.int32)
+        _env = numpy.hstack((pre_env, numpy.hstack(_env)))
+    else:
+        _ecpbas = numpy.zeros((0,BAS_SLOTS), numpy.int32)
+        _env = pre_env
+    return _atm, _ecpbas, _env
 
 def tot_electrons(mol):
     '''Total number of electrons for the given molecule
@@ -722,6 +785,12 @@ def spheric_labels(mol, fmt=True):
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
+    ecpcore_dic = {}
+    for symb in mol._ecp.keys():
+        nelec_ecp = mol._ecp[symb][0]
+        coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+        ecpcore_dic[symb] = coreshl
+
     label = []
     for ib in range(len(mol._bas)):
         ia = mol.bas_atom(ib)
@@ -729,7 +798,11 @@ def spheric_labels(mol, fmt=True):
         strl = param.ANGULAR[l]
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        for n in range(count[ia,l]+l+1, count[ia,l]+l+1+nc):
+        if symb in ecpcore_dic:
+            shl_start = ecpcore_dic[symb][l]+count[ia,l]+l+1
+        else:
+            shl_start = count[ia,l]+l+1
+        for n in range(shl_start, shl_start+nc):
             for m in range(-l, l+1):
                 label.append((ia, symb, '%d%s' % (n, strl), \
                               '%s' % param.REAL_SPHERIC[l][l+m]))
@@ -905,6 +978,7 @@ ATOM_OF    = 0
 ANG_OF     = 1
 NPRIM_OF   = 2
 NCTR_OF    = 3
+RADI_POWER = 3 # for ECP
 KAPPA_OF   = 4
 PTR_EXP    = 5
 PTR_COEFF  = 6
@@ -918,7 +992,6 @@ PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
 NUC_GAUSS = 2
-NUC_ECP   = 3
 
 
 #
@@ -1054,6 +1127,8 @@ class Mole(object):
         self.basis = 'sto-3g'
 # self.nucmod = {atom_symbol: nuclear_model, atom_id: nuc_mod}, atom_id is 1-based
         self.nucmod = {}
+# self.ecp = {atom_symbol: [[l, (r_order, expnt, c),...]]}
+        self.ecp = {}
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = []
@@ -1061,6 +1136,7 @@ class Mole(object):
         self._bas = []
         self.nbas = 0
         self._env = [0] * PTR_ENV_START
+        self._ecpbas = []
 
         self.stdout = sys.stdout
         self.groupname = 'C1'
@@ -1072,6 +1148,7 @@ class Mole(object):
         self.incore_anyway = False
         self._atom = None
         self._basis = None
+        self._ecp = None
         self._built = False
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
@@ -1112,7 +1189,7 @@ class Mole(object):
         return self.build_(*args, **kwargs)
     def build_(self, dump_input=True, parse_arg=True,
                verbose=None, output=None, max_memory=None,
-               atom=None, basis=None, unit=None, nucmod=None,
+               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
                charge=None, spin=None, symmetry=None,
                symmetry_subgroup=None, light_speed=None, mass=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
@@ -1160,6 +1237,7 @@ class Mole(object):
         if basis is not None: self.basis = basis
         if unit is not None: self.unit = unit
         if nucmod is not None: self.nucmod = nucmod
+        if ecp is not None: self.ecp = ecp
         if charge is not None: self.charge = charge
         if spin is not None: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
@@ -1177,13 +1255,23 @@ class Mole(object):
         self.check_sanity(self)
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
+        uniq_atoms = set([a[0] for a in self._atom])
+
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            uniq_atoms = set([a[0] for a in self._atom])
             self._basis = self.format_basis(dict([(a, self.basis)
                                                   for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)
+
+# TODO: Consider ECP info into symmetry
+        if self.ecp:
+            if isinstance(self.ecp, str):
+                self._ecp = self.format_ecp(dict([(a, self.ecp)
+                                                  for a in uniq_atoms]))
+            else:
+                self._ecp = self.format_ecp(self.ecp)
+
         if self.symmetry:
             import pyscf.symm
             if isinstance(self.symmetry, str):
@@ -1218,6 +1306,9 @@ class Mole(object):
         self._env[PTR_LIGHT_SPEED] = self.light_speed
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
+        if self._ecp:
+            self._atm, self._ecpbas, self._env = \
+                    self.make_ecp_env(self._atm, self._ecp, self._env)
         self.natm = len(self._atm) # == len(self._atom)
         self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
@@ -1241,9 +1332,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
-        logger.debug2(self, 'arg.atm = %s', str(self._atm))
-        logger.debug2(self, 'arg.bas = %s', str(self._bas))
-        logger.debug2(self, 'arg.env = %s', str(self._env))
+        logger.debug3(self, 'arg.atm = %s', str(self._atm))
+        logger.debug3(self, 'arg.bas = %s', str(self._bas))
+        logger.debug3(self, 'arg.env = %s', str(self._env))
+        logger.debug3(self, 'ecpbas  = %s', str(self._ecpbas))
 
         self._built = True
         #return self._atm, self._bas, self._env
@@ -1253,6 +1345,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
+
+    def format_ecp(self, ecp_tab):
+        return format_ecp(ecp_tab)
 
     def expand_etb(self, l, n, alpha, beta):
         return expand_etb(l, n, alpha, beta)
@@ -1268,6 +1363,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def make_bas_env(self, basis_add, atom_id=0, ptr=0):
         return make_bas_env(basis_add, atom_id, ptr)
+
+    def make_ecp_env(self, atm, ecp, pre_env=[]):
+        return make_ecp_env(self, atm, ecp, pre_env)
 
     def tot_electrons(self):
         return tot_electrons(self)
@@ -1448,6 +1546,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def atom_charge(self, atm_id):
         r'''Nuclear charge of the given atom id
+        Note "atom_charge /= _charge(atom_symbol)" when ECP is enabled.
+        Number of electrons screened by ECP can be obtained by _charge(atom_symbol)-atom_charge
 
         Args:
             atm_id : int

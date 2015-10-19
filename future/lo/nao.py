@@ -226,29 +226,34 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
     return cnao
 
 def _core_val_ryd_list(mol):
+    import pyscf.gto.ecp
     count = numpy.zeros((mol.natm, 9), dtype=int)
     core_lst = []
     val_lst = []
     rydbg_lst = []
     k = 0
-    valenceof = lambda nuc, l: \
-            int(numpy.ceil(pyscf.lib.parameters.ELEMENTS[nuc][2][l]/(4*l+2.)))
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
         nuc = mol.atom_charge(ia)
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
+        symb = mol.atom_symbol(ia)
+        if symb in mol._ecp:
+            nelec_ecp = mol._ecp[symb][0]
+            ecpcore = pyscf.gto.ecp.core_configuration(nelec_ecp)
+        else:
+            ecpcore = (0,0,0,0)
+        coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
+        cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
         for n in range(nc):
-            coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
-            cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
             if l > 3:
-                rydbg_lst += list(range(k, k+(2*l+1)))
-            elif count[ia,l]+n < coreshell[l]:
-                core_lst += list(range(k, k+(2*l+1)))
-            elif count[ia,l]+n < cvshell[l]:
-                val_lst += list(range(k, k+(2*l+1)))
+                rydbg_lst.extend(range(k, k+(2*l+1)))
+            elif ecpcore[l]+count[ia,l]+n < coreshell[l]:
+                core_lst.extend(range(k, k+(2*l+1)))
+            elif ecpcore[l]+count[ia,l]+n < cvshell[l]:
+                val_lst.extend(range(k, k+(2*l+1)))
             else:
-                rydbg_lst += list(range(k, k+(2*l+1)))
+                rydbg_lst.extend(range(k, k+(2*l+1)))
             k = k + 2*l+1
         count[ia,l] += nc
     return core_lst, val_lst, rydbg_lst

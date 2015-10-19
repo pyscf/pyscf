@@ -15,6 +15,7 @@ import numpy
 import scipy.linalg
 import pyscf.gto
 import pyscf.lib
+import pyscf.gto.ecp
 from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import diis
@@ -222,6 +223,8 @@ def get_hcore(mol):
     '''
     h = mol.intor_symmetric('cint1e_kin_sph') \
       + mol.intor_symmetric('cint1e_nuc_sph')
+    if mol._ecp:
+        h += pyscf.gto.ecp.intor(mol)
     return h
 
 
@@ -249,14 +252,18 @@ def init_guess_by_minao(mol):
     from pyscf.scf import atom_hf
     from pyscf.scf import addons
 
-    def minao_basis(symb):
+    def minao_basis(symb, nelec_ecp):
         basis_add = pyscf.gto.basis.load('ano', symb)
         occ = []
         basis_new = []
+        coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+        #coreshl = (0,0,0,0)
         for l in range(4):
             ndocc, nfrac = atom_hf.frac_occ(symb, l)
-            if ndocc > 0:
-                occ.extend([2]*ndocc*(2*l+1))
+            if coreshl[l] > 0:
+                occ.extend([0]*coreshl[l]*(2*l+1))
+            if ndocc-coreshl[l] > 0:
+                occ.extend([2]*(ndocc-coreshl[l])*(2*l+1))
             if nfrac > 1e-15:
                 occ.extend([nfrac]*(2*l+1))
                 ndocc += 1
@@ -270,7 +277,11 @@ def init_guess_by_minao(mol):
     occdic = {}
     for symb in atmlst:
         if symb != 'GHOST':
-            occ_add, basis_add = minao_basis(symb)
+            if symb in mol._ecp:
+                nelec_ecp = mol._ecp[symb][0]
+            else:
+                nelec_ecp = 0
+            occ_add, basis_add = minao_basis(symb, nelec_ecp)
             occdic[symb] = occ_add
             basis[symb] = basis_add
     occ = []
@@ -693,8 +704,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         chg[s[0]] += pop[i]
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        nuc = mol.atom_charge(ia)
-        chg[ia] = nuc - chg[ia]
+        chg[ia] = mol.atom_charge(ia) - chg[ia]
         log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 

@@ -363,8 +363,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         chg[s[0]] += pop_a[i] + pop_b[i]
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        nuc = mol.atom_charge(ia)
-        chg[ia] = nuc - chg[ia]
+        chg[ia] = mol.atom_charge(ia) - chg[ia]
         log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
 
