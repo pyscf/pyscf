@@ -238,7 +238,7 @@ def _core_val_ryd_list(mol):
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        if symb in mol._ecp:
+        if mol._ecp and symb in mol._ecp:
             nelec_ecp = mol._ecp[symb][0]
             ecpcore = pyscf.gto.ecp.core_configuration(nelec_ecp)
         else:

@@ -785,11 +785,12 @@ def spheric_labels(mol, fmt=True):
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
-    ecpcore_dic = {}
-    for symb in mol._ecp.keys():
-        nelec_ecp = mol._ecp[symb][0]
-        coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
-        ecpcore_dic[symb] = coreshl
+    if mol._ecp:
+        ecpcore_dic = {}
+        for symb in mol._ecp.keys():
+            nelec_ecp = mol._ecp[symb][0]
+            coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+            ecpcore_dic[symb] = coreshl
 
     label = []
     for ib in range(len(mol._bas)):
@@ -798,7 +799,7 @@ def spheric_labels(mol, fmt=True):
         strl = param.ANGULAR[l]
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        if symb in ecpcore_dic:
+        if mol._ecp and symb in ecpcore_dic:
             shl_start = ecpcore_dic[symb][l]+count[ia,l]+l+1
         else:
             shl_start = count[ia,l]+l+1

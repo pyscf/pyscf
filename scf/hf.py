@@ -277,7 +277,7 @@ def init_guess_by_minao(mol):
     occdic = {}
     for symb in atmlst:
         if symb != 'GHOST':
-            if symb in mol._ecp:
+            if mol._ecp and symb in mol._ecp:
                 nelec_ecp = mol._ecp[symb][0]
             else:
                 nelec_ecp = 0
