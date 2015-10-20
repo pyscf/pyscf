@@ -1,6 +1,6 @@
 import gc
 import pyscf
-from pyscf.gto.mole import _symbol, _rm_digit, _std_symbol
+from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
 import pseudo
 import basis
 
@@ -83,11 +83,12 @@ def format_basis(basis_tab):
 
 class Cell(pyscf.gto.Mole):
     def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+        pyscf.gto.Mole.__init__(self, **kwargs)
         self.h = None
         self.vol = 0.
         self.nimgs = []
         self.pseudo = None
+        self.__dict__.update(kwargs)
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
@@ -101,19 +102,20 @@ class Cell(pyscf.gto.Mole):
             pseudo : dict or str
                 To define pseudopotential.  If given, overwrite :attr:`Cell.pseudo`
         '''
-        if 'pseudo' in kwargs.keys():
-            self.pseudo = kwargs.pop('pseudo')
 
-        # Set-up pseudopotential if it exists
+        _atom = format_atom(self.atom, unit=self.unit)
+
+        # First, set-up pseudopotential if it exists
+        if 'pseudo' in kwargs.keys():
+            self.pseudo = kwargs['pseudo']
         if self.pseudo is not None:
             # release circular referred objs
             # Note obj.x = obj.member_function causes circular referrence
             gc.collect()
         
-            # Second, do pseudopotential-related things
             if isinstance(self.pseudo, str):
                 # specify global pseudo for whole molecule
-                uniq_atoms = set([a[0] for a in self.atom])
+                uniq_atoms = set([a[0] for a in _atom])
                 self._pseudo = self.format_pseudo(dict([(a, self.pseudo)
                                                       for a in uniq_atoms]))
             else:
@@ -124,23 +126,21 @@ class Cell(pyscf.gto.Mole):
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
                                    (self.nelectron, self.spin))
 
-        # Check if we're using a GTH basis
+        # Next, check if we're using a GTH basis
         if 'basis' in kwargs.keys():
             self.basis = kwargs['basis']
         if isinstance(self.basis, str):
             basis_name = self.basis.lower().replace(' ', '').replace('-', '').replace('_', '')
             if basis_name in ['gthaugdzvp','gthaugqzv2p','gthaugqzv3p','gthaugtzv2p','gthaugtzvp','gthdzv','gthdzvp','gthqzv2p','gthqzv3p','gthszv','gthtzv2p','gthtzvp']:
                 # specify global basis for whole molecule
-                uniq_atoms = set([a[0] for a in self._atom])
+                uniq_atoms = set([a[0] for a in _atom])
                 self.basis = self.format_basis(dict([(a, basis_name)
                                                      for a in uniq_atoms]))
             # This sets self.basis to be internal format, and will
             # be parsed appropriately by Mole.build
-                               
-        # Finally, call regular Mole.build_
-        pyscf.gto.Mole.build_(self,*args,**kwargs)
 
-        self._built = True
+        # Finally, do regular Mole.build_
+        pyscf.gto.Mole.build_(self,*args,**kwargs)
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
