@@ -14,7 +14,7 @@ def format_aux_basis(cell, auxbasis='weigend'):
     auxcell=cell.copy()
     auxcell.basis=auxbasis
     precision=1.e-9 # FIXME
-    auxcell.build()
+    auxcell.build(False,False)
     auxcell.nimgs=pbc.get_nimgs(auxcell, precision)
 
     # auxcell.__dict__.update(auxmol.__dict__)
@@ -54,7 +54,7 @@ def aux_e2(cell, auxcell, intor):
         for atom, coord in cell._atom:
             rep_cell.atom.append([atom, tuple((list(coord) + L)*convert)])
 
-    rep_cell.build()
+    rep_cell.build(False,False)
 
     rep_aux_e2 = pyscf.df.incore.aux_e2(rep_cell, auxcell, intor, aosym='s1')
 

@@ -20,9 +20,9 @@ import pp
 
 from pyscf.lib import logger
 
-def get_lattice_Ls(cell):
+def get_lattice_Ls(cell, nimgs):
     '''Get the (unitful) lattice translation vectors for nearby images.'''
-    nimgs = cell.nimgs
+    #nimgs = cell.nimgs
     Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
                   for j in range(-nimgs[1],nimgs[1]+1)
                   for k in range(-nimgs[2],nimgs[2]+1)
@@ -48,9 +48,9 @@ def get_int1e(intor, cell, kpt=None):
     if kpt is None:
         kpt = np.zeros([3,1])
 
-    int1e = np.zeros((cell.nbas,cell.nbas))
+    int1e = np.zeros((cell.nao_nr(),cell.nao_nr()))
     
-    Ls = get_lattice_Ls(cell)
+    Ls = get_lattice_Ls(cell, cell.nimgs)
 
     if cell.unit.startswith(('B','b','au','AU')):
         convert = 1
@@ -59,13 +59,19 @@ def get_int1e(intor, cell, kpt=None):
     else:
         convert = cell.unit
 
+    print "ATOMS"
+    print cell.atom
+    print cell._atom
+
     for L in Ls:
         cellL = cell.copy()
         atomL = list()
-        for atom, coord in cell.atom:
-            atomL.append([atom, tuple(list(coord) + L*convert)])
+        # Use internal format ._atom; convert internal format to
+        # units used by .atom (which reconverts to ._atom after build() call)
+        for atom, coord in cell._atom: 
+            atomL.append([atom, tuple((list(coord) + L)*convert)]) 
         cellL.atom = atomL
-        cellL.build()
+        cellL.build(False,False)
         int1e += (np.exp(1j*np.dot(kpt.T,L)) *
                   pyscf.gto.intor_cross(intor, cell, cellL))
 
@@ -105,20 +111,35 @@ def test_periodic_ints():
 
     h = np.diag([Lx,Ly,Lz])
     
-    mol.atom.extend([['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
-                     ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]])
+    # mol.atom.extend([['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
+    #                  ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]])
+    #mol.atom.extend([['H', (0, 0, 0)],
+    #                  ['H', (1, 0, 0)]])
+
+
+    #mol.atom
+    mol.build(
+        verbose = 0,
+        atom = '''H     0    0.       0.
+        H     1    0.       0.
+        ''',
+        basis={'H':'sto-3g'})
+    #    basis={'H':[[0,(1.0,1.0)]]})
 
     # these are some exponents which are 
     # not hard to integrate
-    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
-    mol.unit='A'
-    mol.build()
+    # mol.basis = { 'He': [[0, (1.0, 1.0)], [0, [2.0, 1.0]]] }
+    #mol.basis = { 'H': [[0, (1.0, 1.0)], [0, [2.0, 1.0]]] }
+    #mol.unit='A'
+    #mol.build()
 
     cell = cl.Cell()
     cell.__dict__ = mol.__dict__ # hacky way to make a cell
     cell.h = h
     cell.vol = scipy.linalg.det(cell.h)
-    cell.nimgs = [2,2,2]
+    cell.nimgs = pbc.get_nimgs(cell, 1.e-6)
+    # print "NIMG",  
+    print "NIMGS", cell.nimgs
     cell.pseudo = None
     cell.output = None
     cell.verbose = 0
@@ -138,5 +159,5 @@ def test_periodic_ints():
     print "Diff", np.linalg.norm(sA-sG) # 1.05796568891e-06
     print "Diff", np.linalg.norm(tA-tG) # 4.82330435721e-06
 
-
-
+    print sA
+    print tA

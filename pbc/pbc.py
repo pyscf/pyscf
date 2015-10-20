@@ -4,6 +4,33 @@ from pyscf.lib import logger
 import numpy as np
 import scipy.linalg
 import scipy.special
+import scipy.optimize
+
+def get_nimgs(cell, precision):
+    '''Choose number of basis function images in lattice sums
+    to include for given precision in overlap, using
+
+    precision ~ 4 * pi * r^2 * e^{-\alpha r^2}
+
+    where \alpha is the smallest exponent in the basis. Note
+    that assumes an isolated exponent in the middle of the box, so
+    it adds one additional lattice vector to be safe.
+    '''
+    min_exp=np.min([np.min(cell.bas_exp(ib)) for ib in range(cell.nbas)])
+
+    def fn(r):
+        return (np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision))**2
+    
+
+    rcut=np.sqrt(-(np.log(precision)/min_exp)) # guess
+    rcut=scipy.optimize.fsolve(fn, rcut)[0]
+    rlengths = np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
+    nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+
+    return nimgs+1 # additional lattice vector to take into account
+                   # case where there are functions on the edges of the box.
+
+
 
 def get_Gv(cell, gs):
     '''Calculate three-dimensional G-vectors for a given cell; see MH (3.8).
@@ -455,7 +482,7 @@ def ewald_params(cell, gs, precision):
     rcut = np.sqrt(-log_precision)/ew_eta
     rlengths = np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
     #print "rlengths", rcut, rlengths
-    ew_cut = np.rint(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+    ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
     return ew_eta, ew_cut
     
