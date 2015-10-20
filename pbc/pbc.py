@@ -763,7 +763,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
                        bascount, non0tab, verbose)
 
     def eval_rho(self, mol, ao, dm, non0tab=None, isgga=False, verbose=None):
-        return get_rhoR(mol, ao, dm, non0tab=None, isgga=False, verbose=None)
+        return get_rhoR(mol, ao, dm, non0tab, isgga, verbose)
 
     def eval_rho2(self, mol, ao, dm, non0tab=None, isgga=False, verbose=None):
         raise NotImplementedError
@@ -776,7 +776,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
         '''
         return pyscf.dft.numint.nr_rks_vxc(self, mol, grids, x_id, c_id, dms, 
                                            spin=0, relativity=0, hermi=1,
-                                           max_memory=2000, verbose=None)
+                                           max_memory=max_memory, verbose=verbose)
 
     def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
                max_memory=2000, verbose=None):
@@ -785,8 +785,8 @@ class _NumInt(pyscf.dft.numint._NumInt):
     def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                  isgga=False, verbose=None):
         # use local function for complex eval_mat
-        return eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-                        isgga=False, verbose=None)
+        return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
+                        isgga, verbose)
 
 
 def test_ewald():
