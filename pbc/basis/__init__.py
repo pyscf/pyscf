@@ -6,6 +6,7 @@ import os
 import imp
 #from pyscf.pbc.basis import parse_cp2k
 import parse_cp2k
+import pyscf.gto.basis
 
 def parse(string):
     '''Parse the basis text which is in CP2K format, return an internal
@@ -63,6 +64,8 @@ def load(basis_name, symb):
     }
 
     name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    if 'gth' not in basis_name:
+        return pyscf.gto.basis.load(basis_name, symb)
     basmod = alias[name]
     symb = ''.join(i for i in symb if i.isalpha())
     b = parse_cp2k.parse(os.path.join(os.path.dirname(__file__), basmod), symb)
