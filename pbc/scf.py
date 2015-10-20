@@ -278,7 +278,6 @@ class RKS(RHF):
 def test_components(pseudo=None):
     from pyscf import gto
     from pyscf.dft import rks
-    import scfint
 
     mol = gto.Mole()
     #mol.verbose = 7
@@ -304,9 +303,11 @@ def test_components(pseudo=None):
     cell.vol = scipy.linalg.det(cell.h)
     cell.nimgs = [0,0,0]
     cell.pseudo = pseudo 
+    cell.basis = 'gth-szv'
     cell.output = None
     cell.verbose = 7
     cell.build()
+    print cell._basis
     
     #gs = np.array([10,10,10]) # number of G-points in grid. Real-space dim=2*gs+1
     gs = np.array([80,80,80]) # number of G-points in grid. Real-space dim=2*gs+1
@@ -569,9 +570,9 @@ def test_moints():
 
 
 if __name__ == '__main__':
-    #test_components('gth-lda')
+    test_components('gth-lda')
     #test_hf('gth-lda')
-    test_ks('gth-lda')
+    #test_ks('gth-lda')
     #test_moints()
     
 
