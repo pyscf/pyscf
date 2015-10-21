@@ -231,6 +231,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
                 vj, vk = mf.get_jk(mol, numpy.array((d1a+d1a.T,d1b+d1b.T)))
                 if abs(hyb) < 1e-10:
                     dvhf = vj[0] + vj[1]
+                    dvhf = (dvhf, dvhf)
                 else:
                     dvhf = (vj[0] + vj[1]) - vk * hyb
             else:

@@ -209,7 +209,8 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
             ti1 = log.timer('ppaa and papa buffer', *ti1)
 
         ti0 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
-    buf = buf1 = bufs1 = bufs2 = bufs3 = bufpa = None
+    buf = buf1 = bufpa = None
+    bufs1 = bufs2 = bufs3 = None
     time1 = log.timer('mc_ao2mo pass 1', *time0)
 
     log.debug1('Half transformation done. Current memory %d',

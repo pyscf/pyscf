@@ -400,6 +400,20 @@ def norm(x, ord=None, axis=None):
     else:
         raise RuntimeError('Not support for axis = %d' % axis)
 
+# numpy.linalg.cond has a bug, where it
+# does not correctly generalize
+# condition number if s1e is not a matrix
+def cond(x, p=None):
+    '''Compute the condition number'''
+    if p is None:
+        sigma = numpy.linalg.svd(numpy.asarray(x), compute_uv=False)
+        c = sigma.T[0]/sigma.T[-1] # values are along last dimension, so
+                                   # so must transpose. This transpose
+                                   # is omitted in numpy.linalg
+        return c
+    else:
+        return numpy.linalg.cond(x, p)
+
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))

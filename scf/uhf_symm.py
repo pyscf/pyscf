@@ -37,7 +37,7 @@ def analyze(mf, verbose=logger.DEBUG):
     for ir in range(nirrep):
         if (noccsa[ir]+noccsb[ir]) % 2:
             tot_sym ^= mol.irrep_id[ir]
-    if mol.groupname in ('Dooh', 'Coov'):
+    if mol.groupname in ('Dooh', 'Coov', 'SO3'):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
         log.info('total symmetry = %s', \
@@ -329,15 +329,15 @@ class UHF(uhf.UHF):
         va_sort = numpy.argsort(ea[self.mo_occ[0]==0])
         ob_sort = numpy.argsort(eb[self.mo_occ[1]>0])
         vb_sort = numpy.argsort(eb[self.mo_occ[1]==0])
-        self.mo_energy = (numpy.hstack((ea[self.mo_occ[0]>0 ][oa_sort], \
-                                        ea[self.mo_occ[0]==0][va_sort])), \
-                          numpy.hstack((eb[self.mo_occ[1]>0 ][ob_sort], \
+        self.mo_energy = (numpy.hstack((ea[self.mo_occ[0]>0 ][oa_sort],
+                                        ea[self.mo_occ[0]==0][va_sort])),
+                          numpy.hstack((eb[self.mo_occ[1]>0 ][ob_sort],
                                         eb[self.mo_occ[1]==0][vb_sort])))
         ca = self.mo_coeff[0]
         cb = self.mo_coeff[1]
-        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ][:,oa_sort], \
-                                       ca[:,self.mo_occ[0]==0][:,va_sort])), \
-                         numpy.hstack((cb[:,self.mo_occ[1]>0 ][:,ob_sort], \
+        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ][:,oa_sort],
+                                       ca[:,self.mo_occ[0]==0][:,va_sort])),
+                         numpy.hstack((cb[:,self.mo_occ[1]>0 ][:,ob_sort],
                                        cb[:,self.mo_occ[1]==0][:,vb_sort])))
         nocc_a = int(self.mo_occ[0].sum())
         nocc_b = int(self.mo_occ[1].sum())

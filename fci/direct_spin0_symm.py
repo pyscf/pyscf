@@ -41,6 +41,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 # Please refer to the treatment in direct_spin1.absorb_h1e
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
+    assert(fcivec.flags.c_contiguous)
     if not orbsym:
         return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
 

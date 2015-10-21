@@ -1,5 +1,5 @@
 /*
- * numpy helper
+ *
  */
 
 #include <stdlib.h>

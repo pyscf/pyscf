@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import time
 import ctypes
@@ -243,6 +246,8 @@ def r_get_jk_(mf, mol, dms, hermi=1):
             mf._cderi = df.r_outcore.cholesky_eri(mol, mf._cderi,
                                                   auxbasis=mf.auxbasis,
                                                   verbose=log)
+    elif isinstance(mf._cderi, numpy.ndarray):
+        mf._naoaux = mf._cderi[0].shape[0]
     n2c = mol.nao_2c()
     c1 = .5 / mol.light_speed
 

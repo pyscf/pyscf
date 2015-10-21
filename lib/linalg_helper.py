@@ -433,7 +433,8 @@ class _Xlist(list):
         return len(self.index)
 
     def pop(self, index):
-        self.index.pop(index)
+        key = self.index.pop(index)
+        del(self.scr_h5[key])
 
 
 if __name__ == '__main__':

@@ -3,7 +3,6 @@
 #
 
 import unittest
-import ctypes
 import tempfile
 import numpy
 import h5py
