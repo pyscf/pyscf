@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#         Timothy Berkelbach <tim.berkelbach@gmail.com> 
 
 import os
 import imp
-#from pyscf.pbc.basis import parse_cp2k
-import parse_cp2k
 import pyscf.gto.basis
+from pyscf.pbc.gto.basis import parse_cp2k
 
 def parse(string):
     '''Parse the basis text which is in CP2K format, return an internal
@@ -17,8 +17,8 @@ def parse(string):
 
     Examples:
 
-    >>> cl = pbc.Cell()
-    >>> cl.basis = {'C': pbc.basis.parse("""
+    >>> cell = gto.Cell()
+    >>> cell.basis = {'C': gto.basis.parse("""
     ... C DZVP-GTH
     ...   2
     ...   2  0  1  4  2  2
@@ -45,8 +45,8 @@ def load(basis_name, symb):
     Examples:
         Load DZVP-GTH of carbon 
 
-    >>> cl = pbc.Cell()
-    >>> cl.basis = {'C': load('gth-dzvp', 'C')}
+    >>> cell = gto.Cell()
+    >>> cell.basis = {'C': load('gth-dzvp', 'C')}
     '''
     alias = {
         'gthaugdzvp'  : 'gth-aug-dzvp.dat',

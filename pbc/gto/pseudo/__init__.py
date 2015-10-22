@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Timothy Berkelbach
+#         Timothy Berkelbach <tim.berkelbach@gmail.com>
 
 import os
 import imp
-#from pyscf.pbc.pseudo import parse_cp2k
-import parse_cp2k
+from pyscf.pbc.gto.pseudo import parse_cp2k
+from pp import *
 
 def parse(string):
     '''Parse the pseudo text which is in CP2K format, return an internal
@@ -17,8 +17,8 @@ def parse(string):
 
     Examples:
 
-    >>> cl = pbc.Cell()
-    >>> cl.pseudo = {'C': pbc.pseudo.parse("""
+    >>> cell = gto.Cell()
+    >>> cell.pseudo = {'C': gto.pseudo.parse("""
     ... #PSEUDOPOTENTIAL
     ... C GTH-BLYP-q4
     ...     2    2
@@ -42,8 +42,8 @@ def load(pseudo_name, symb):
     Examples:
         Load GTH-BLYP pseudopotential of carbon 
 
-    >>> cl = pbc.Cell()
-    >>> cl.pseudo = {'C': load('gth-blyp', 'C')}
+    >>> cell = gto.Cell()
+    >>> cell.pseudo = {'C': load('gth-blyp', 'C')}
     '''
     alias = {
         'gthblyp'    : 'gth-blyp.dat'   ,

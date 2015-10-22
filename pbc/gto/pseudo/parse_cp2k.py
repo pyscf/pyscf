@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Timothy Berkelbach
+#         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 # parse CP2K PP format, following parse_nwchem.py
 

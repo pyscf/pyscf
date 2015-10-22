@@ -6,43 +6,14 @@ import scipy.linalg
 import scipy.special
 import scipy.optimize
 
-def get_nimgs(cell, precision):
-    '''Choose number of basis function images in lattice sums
-    to include for given precision in overlap, using
-
-    precision ~ 4 * pi * r^2 * e^{-\alpha r^2}
-
-    where \alpha is the smallest exponent in the basis. Note
-    that assumes an isolated exponent in the middle of the box, so
-    it adds one additional lattice vector to be safe.
-    '''
-    min_exp=np.min([np.min(cell.bas_exp(ib)) for ib in range(cell.nbas)])
-
-    def fn(r):
-        return (np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision))**2
-    
-
-    rcut=np.sqrt(-(np.log(precision)/min_exp)) # guess
-    rcut=scipy.optimize.fsolve(fn, rcut)[0]
-    rlengths = np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
-    nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
-
-    return nimgs+1 # additional lattice vector to take into account
-                   # case where there are functions on the edges of the box.
-
-
-
-def get_Gv(cell, gs):
+def get_Gv(cell):
     '''Calculate three-dimensional G-vectors for a given cell; see MH (3.8).
 
-    Indices along each direction go as [0...gs, -gs...-1]
-    to follow FFT convention. Note that, for each direction, ngs = 2*gs+1.
+    Indices along each direction go as [0...cell.gs, -cell.gs...-1]
+    to follow FFT convention. Note that, for each direction, ngs = 2*cell.gs+1.
 
     Args:
         cell : instance of :class:`Cell`
-
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
 
     Returns:
         Gv : (3, ngs) ndarray of floats
@@ -51,9 +22,9 @@ def get_Gv(cell, gs):
     '''
     invhT = scipy.linalg.inv(cell.h.T)
 
-    gxrange = range(gs[0]+1)+range(-gs[0],0)
-    gyrange = range(gs[1]+1)+range(-gs[1],0)
-    gzrange = range(gs[2]+1)+range(-gs[2],0)
+    gxrange = range(cell.gs[0]+1)+range(-cell.gs[0],0)
+    gyrange = range(cell.gs[1]+1)+range(-cell.gs[1],0)
+    gzrange = range(cell.gs[2]+1)+range(-cell.gs[2],0)
     gxyz = _span3(gxrange, gyrange, gzrange)
 
     Gv = 2*np.pi*np.dot(invhT,gxyz)
@@ -79,21 +50,18 @@ def get_SI(cell, Gv):
         SI[ia,:] = np.exp(-1j*np.dot(Gv.T, cell.atom_coord(ia)))
     return SI
 
-def get_coulG(cell, gs):
+def get_coulG(cell):
     '''Calculate the Coulomb kernel 4*pi/G^2 for all G-vectors (0 for G=0).
 
     Args:
         cell : instance of :class:`Cell`
-
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
 
     Returns:
         coulG : (ngs,) ndarray
             The Coulomb kernel.
 
     '''
-    Gv = get_Gv(cell, gs)
+    Gv = get_Gv(cell)
     absG2 = np.einsum('ij,ij->j',np.conj(Gv),Gv)
     with np.errstate(divide='ignore'):
         coulG = 4*np.pi/absG2
@@ -156,21 +124,18 @@ def _span3(*xs):
     c[2,:,:,:] = np.asarray(xs[2]).reshape(1,1,-1)
     return c.reshape(3,-1)
 
-def setup_uniform_grids(cell, gs):
+def setup_uniform_grids(cell):
     '''Set-up a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
         cell : instance of :class:`Cell`
-
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
 
     Returns:
         coords : (ngx*ngy*ngz, 3) ndarray
             The real-space grid point coordinates.
         
     '''
-    ngs = 2*gs+1
+    ngs = 2*cell.gs+1
     qv = _gen_qv(ngs)
     invN = np.diag(1./ngs)
     R = np.dot(np.dot(cell.h, invN), qv)
@@ -447,46 +412,8 @@ def ifft(g, gs):
     g3d = np.reshape(g, ngs)
     f3d = np.fft.ifftn(g3d)
     return np.ravel(f3d)
-
-def get_nimgs_cutoff(cell, precision):
-    '''Return the required number of lattice images for a desired precision.
-
-    Returns
-        nimgs: ndarray
-    '''
-    pass
-
-def ewald_params(cell, gs, precision):
-    '''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
-
-    Choice is based on largest G vector and desired relative precision.
-
-    The relative error in the G-space sum is given by (keeping only exponential
-    factors)
-        precision ~ e^{(-Gmax^2)/(4 \eta^2)} 
-    which determines alpha. Then, real-space cutoff is determined by (exp.
-    factors only)
-        precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
-
-    Returns:
-        ew_eta, ew_cut : float
-            The Ewald 'eta' and 'cut' parameters.
-
-    '''
-    invhT = scipy.linalg.inv(cell.h.T)
-    Gmax = 2*np.pi*np.dot(invhT, gs)
-    Gmax = np.min(Gmax)
-    log_precision = np.log(precision)
-    ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
-
-    rcut = np.sqrt(-log_precision)/ew_eta
-    rlengths = np.sqrt(np.diag(np.dot(cell.h, cell.h.T)))
-    #print "rlengths", rcut, rlengths
-    ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
-
-    return ew_eta, ew_cut
     
-def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
+def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
 
     Formulation of Martin, App. F2.
@@ -494,8 +421,6 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     Args:
         cell : instance of :class:`Cell`
 
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
 
@@ -589,7 +514,7 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
     
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
-    Gv = get_Gv(cell, gs)
+    Gv = get_Gv(cell)
     SI = get_SI(cell, Gv)
     ZSI = np.einsum("i,ij->j", chargs, SI)
 
@@ -603,7 +528,7 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     # See also Eq. (32) of ewald.pdf at 
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
-    coulG = get_coulG(cell, gs)
+    coulG = get_coulG(cell)
     absG2 = np.einsum('ij,ij->j',np.conj(Gv),Gv)
 
     ZSIG2 = np.abs(ZSI)**2
@@ -616,7 +541,7 @@ def ewald(cell, gs, ew_eta, ew_cut, verbose=logger.DEBUG):
     log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
 
-def get_ao_pairs_G(cell, gs):
+def get_ao_pairs_G(cell):
     '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all AO pairs.
 
     (G|ij) = \sum_r e^{-iGr} i(r) j(r)
@@ -625,15 +550,12 @@ def get_ao_pairs_G(cell, gs):
     Args:
         cell : instance of :class:`Cell`
 
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
-
     Returns:
         ao_pairs_G, ao_pairs_invG : (ngs, nao*(nao+1)/2) ndarray
             The FFTs of the real-space AO pairs.
 
     '''
-    coords = setup_uniform_grids(cell, gs)
+    coords = setup_uniform_grids(cell)
     aoR = get_aoR(cell, coords) # shape = (coords, nao)
     nao = aoR.shape[1]
     npair = nao*(nao+1)/2
@@ -643,12 +565,12 @@ def get_ao_pairs_G(cell, gs):
     for i in range(nao):
         for j in range(i+1):
             ao_ij_R = np.einsum('r,r->r', aoR[:,i], aoR[:,j])
-            ao_pairs_G[:,ij] = fft(ao_ij_R, gs)         
-            ao_pairs_invG[:,ij] = ifft(ao_ij_R, gs)
+            ao_pairs_G[:,ij] = fft(ao_ij_R, cell.gs)         
+            ao_pairs_invG[:,ij] = ifft(ao_ij_R, cell.gs)
             ij += 1
     return ao_pairs_G, ao_pairs_invG
     
-def get_mo_pairs_G(cell, gs, mo_coeffs):
+def get_mo_pairs_G(cell, mo_coeffs):
     '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all MO pairs.
     
     TODO: - Implement simplifications for real orbitals.
@@ -663,7 +585,7 @@ def get_mo_pairs_G(cell, gs, mo_coeffs):
         mo_pairs_G, mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
             The FFTs of the real-space MO pairs.
     '''
-    coords = setup_uniform_grids(cell, gs)
+    coords = setup_uniform_grids(cell)
     aoR = get_aoR(cell, coords) # shape(coords, nao)
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
@@ -680,11 +602,11 @@ def get_mo_pairs_G(cell, gs, mo_coeffs):
 
     for i in xrange(nmoi):
         for j in xrange(nmoj):
-            mo_pairs_G[:,i*nmoj+j] = fft(mo_pairs_R[:,i,j], gs)
-            mo_pairs_invG[:,i*nmoj+j] = ifft(mo_pairs_R[:,i,j], gs)
+            mo_pairs_G[:,i*nmoj+j] = fft(mo_pairs_R[:,i,j], cell.gs)
+            mo_pairs_invG[:,i*nmoj+j] = ifft(mo_pairs_R[:,i,j], cell.gs)
     return mo_pairs_G, mo_pairs_invG
 
-def assemble_eri(cell, gs, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
+def assemble_eri(cell, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
     '''Assemble all 4-index electron repulsion integrals.
 
     (ij|kl) = \sum_G (ij|G)(G|kl) 
@@ -701,42 +623,40 @@ def assemble_eri(cell, gs, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
 
     log.debug('Performing periodic ERI assembly of (%i, %i) ij pairs', 
               orb_pair_G1.shape[1], orb_pair_invG2.shape[1])
-    coulG = get_coulG(cell, gs)
+    coulG = get_coulG(cell)
     ngs = orb_pair_invG2.shape[0]
     Jorb_pair_invG2 = np.einsum('g,gn->gn',coulG,orb_pair_invG2)*(cell.vol/ngs)
     eri = np.einsum('gm,gn->mn',orb_pair_G1, Jorb_pair_invG2)
     return eri
 
-def get_ao_eri(cell, gs):
+def get_ao_eri(cell):
     '''Convenience function to return AO 2-el integrals.'''
 
-    ao_pairs_G, ao_pairs_invG = get_ao_pairs_G(cell, gs)
-    return assemble_eri(cell, gs, ao_pairs_G, ao_pairs_invG)
+    ao_pairs_G, ao_pairs_invG = get_ao_pairs_G(cell)
+    return assemble_eri(cell, ao_pairs_G, ao_pairs_invG)
         
-def get_mo_eri(cell, gs, mo_coeffs12, mo_coeffs34):
+def get_mo_eri(cell, mo_coeffs12, mo_coeffs34):
     '''Convenience function to return MO 2-el integrals.'''
 
     # don't really need FFT and iFFT for both sets
-    mo_pairs12_G, mo_pairs12_invG = get_mo_pairs_G(cell, gs, mo_coeffs12)
-    mo_pairs34_G, mo_pairs34_invG = get_mo_pairs_G(cell, gs, mo_coeffs34)
-    return assemble_eri(cell, gs, mo_pairs12_G, mo_pairs34_invG)
+    mo_pairs12_G, mo_pairs12_invG = get_mo_pairs_G(cell, mo_coeffs12)
+    mo_pairs34_G, mo_pairs34_invG = get_mo_pairs_G(cell, mo_coeffs34)
+    return assemble_eri(cell, mo_pairs12_G, mo_pairs34_invG)
 
 class UniformGrids(object):
     '''Uniform Grid class.'''
 
-    def __init__(self, cell, gs):
+    def __init__(self, cell):
         self.cell = cell
-        self.gs = gs
         self.coords = None
         self.weights = None
         self.stdout = cell.stdout
         self.verbose = cell.verbose
 
-    def setup_grids_(self, cell=None, gs=None):
+    def setup_grids_(self, cell=None):
         if cell == None: cell = self.cell
-        if gs == None: gs = self.gs
 
-        self.coords = setup_uniform_grids(self.cell, self.gs)
+        self.coords = setup_uniform_grids(self.cell)
         self.weights = np.ones(self.coords.shape[0]) 
         self.weights *= 1.*cell.vol/self.weights.shape[0]
 
@@ -788,60 +708,3 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
                         isgga, verbose)
 
-
-def test_ewald():
-
-    from pyscf import gto
-    from pyscf.dft import rks
-    from pyscf.lib.parameters import BOHR
-    import cell as cl
-
-    B = BOHR
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = None
-
-
-    Lunit = 5
-    Ly = Lz = Lunit
-    Lx = Lunit
-
-    h = np.diag([Lx,Ly,Lz])
-    
-    mol.atom.extend([['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
-                     ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]])
-
-    # these are some exponents which are 
-    # not hard to integrate
-    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
-    mol.build()
-
-    cell = cl.Cell()
-    cell.__dict__ = mol.__dict__ # hacky way to make a cell
-    cell.h = h
-    cell.vol = scipy.linalg.det(cell.h)
-    cell.nimgs = [1,1,1]
-    cell.pseudo = None
-    cell.output = None
-    cell.verbose = 7
-    cell.build()
-
-    ew_cut = (20,20,20)
-    #ew_cut = (2,2,2)
-
-    gs = np.array([20,20,20])
-    ew_eta0, ew_cut0 = ewald_params(cell, gs, 1.e-3)
-    print ew_eta0, ew_cut0
-
-    for ew_eta in [0.05, 0.1, 0.2, 1]:
-        print ewald(cell, gs, ew_eta, ew_cut) # -0.468640671931
-
-    for precision in [1.e-3, 1.e-5, 1.e-7, 1.e-9]:
-        ew_eta0, ew_cut0 = ewald_params(cell, gs, precision)
-        print "precision", precision, ew_eta0, ew_cut0
-        print ewald(cell, gs, ew_eta0, ew_cut0) 
-        # Ewald values
-        # 1.e-3: -0.469112631739
-        # 1.e-5: -0.468642153932
-        # 1.e-7: -0.468640678042
-        # 1.e-9: -0.46864067196

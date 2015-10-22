@@ -1,14 +1,8 @@
-import itertools
-import math
 import numpy as np
 import scipy.linalg
 import scipy.special
 
-import pbc
-
-pi=math.pi
-sqrt=math.sqrt
-exp=math.exp
+from pyscf.pbc import tools as pbc 
 
 '''PP module.
     
@@ -41,13 +35,13 @@ def get_alphas_gth(cell):
                      + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
     return alphas
 
-def get_vlocG(cell, gs):
+def get_vlocG(cell):
     '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
 
     Returns:
         (natm, ngs) ndarray
     '''
-    Gvnorm=np.linalg.norm(pbc.get_Gv(cell, gs),axis=0)
+    Gvnorm = np.linalg.norm(pbc.get_Gv(cell),axis=0)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
@@ -78,12 +72,12 @@ def get_gth_vlocG(cell, G):
 
         with np.errstate(divide='ignore'):
             # Note the signs -- potential here is positive
-            vlocG[ia,:] = ( 4*pi * Zia * np.exp(-0.5*G_red**2)/G**2
-                           - (2*pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
+            vlocG[ia,:] = ( 4*np.pi * Zia * np.exp(-0.5*G_red**2)/G**2
+                           - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
                                 np.dot(cexp, cfacs[:nexp])) )
     return vlocG
 
-def get_projG(cell, gs):
+def get_projG(cell):
     '''PP weight and projector for the nonlocal PP in G space.
 
     Returns:
@@ -92,7 +86,7 @@ def get_projG(cell, gs):
         projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
-    Gv=pbc.get_Gv(cell, gs)
+    Gv = pbc.get_Gv(cell)
     return get_gth_projG(cell, Gv) 
 
 def get_gth_projG(cell, Gvs):
@@ -131,11 +125,12 @@ def projG_li(G, l, i, rl):
     G_red = G*rl
 
     # MH Eq. (4.81)
-    return _qli(G_red,l,i)*pi**(5/4.)*G**l*sqrt(rl**(2*l+3))/np.exp(0.5*G_red**2)
+    return _qli(G_red,l,i)*np.pi**(5/4.)*G**l*np.sqrt(rl**(2*l+3))/np.exp(0.5*G_red**2)
 
 def _qli(x,l,i):
     # MH Eqs. (4.82)-(4.93)
     # x vs. sqrt(2)x -- check this
+    sqrt = np.sqrt
     if l==0 and i==0:
         return 4*sqrt(2.)
     elif l==0 and i==1:

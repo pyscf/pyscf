@@ -1,8 +1,18 @@
+#!/usr/bin/env python
+# -*- coding: utf-8
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#         Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 import gc
+import numpy as np
+import scipy.linalg
 import pyscf
+import pyscf.lib.parameters as param
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
-import pseudo
-import basis
+from pyscf.pbc.gto import basis
+from pyscf.pbc.gto import pseudo
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -85,29 +95,53 @@ class Cell(pyscf.gto.Mole):
     def __init__(self, **kwargs):
         pyscf.gto.Mole.__init__(self, **kwargs)
         self.h = None
-        self.vol = 0.
-        self.nimgs = []
+        self.vol = None
+        self.gs = None
+        self.precision = 1.e-8
+        self.nimgs = None
+        self.ew_eta = None
+        self.ew_cut = None
         self.pseudo = None
         self.__dict__.update(kwargs)
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
 
-    def build_(self, *args, **kwargs):
+    def build_(self, h=None, gs=None, precision=None, nimgs=None, 
+               ew_eta=None, ew_cut=None, pseudo=None,
+               *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.  
         Whenever you change the value of the attributes of :class:`Cell`, 
         you need call this function to refresh the internal data of Cell.
 
         Kwargs:
+            h : (3,3) ndarray
+                The real-space unit cell lattice vectors.
+            gs : (3,) ndarray of ints
+                The number of *positive* G-vectors along each direction.
             pseudo : dict or str
                 To define pseudopotential.  If given, overwrite :attr:`Cell.pseudo`
         '''
+        if h is not None: self.h = h
+        if gs is not None: self.gs = gs
+        if nimgs is not None: self.nimgs = nimgs
+        if ew_eta is not None: self.ew_eta = ew_eta
+        if ew_cut is not None: self.ew_cut = ew_cut
+        if pseudo is not None: self.pseudo = pseudo
 
+        if 'unit' in kwargs.keys():
+            self.unit = kwargs['unit']
+        if self.unit.startswith(('A','a')):
+            self.h *= (1./param.BOHR)
+        self.vol = scipy.linalg.det(self.h)
+
+        if 'atom' in kwargs.keys():
+            self.atom = kwargs['atom']
         _atom = format_atom(self.atom, unit=self.unit)
 
-        # First, set-up pseudopotential if it exists
-        if 'pseudo' in kwargs.keys():
-            self.pseudo = kwargs['pseudo']
+        # Set-up pseudopotential if it exists
+        # This must happen before build() because it affects
+        # tot_electrons() via atom_charge()
         if self.pseudo is not None:
             # release circular referred objs
             # Note obj.x = obj.member_function causes circular referrence
@@ -120,18 +154,18 @@ class Cell(pyscf.gto.Mole):
                                                       for a in uniq_atoms]))
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
-            #TODO(TCB): Change this - PP gives fewer nelectrons!
             self.nelectron = self.tot_electrons()
             if (self.nelectron+self.spin) % 2 != 0:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
                                    (self.nelectron, self.spin))
 
-        # Next, check if we're using a GTH basis
+        # Check if we're using a GTH basis
+        # This must happen before build() because it prepares self.basis
         if 'basis' in kwargs.keys():
             self.basis = kwargs['basis']
         if isinstance(self.basis, str):
             basis_name = self.basis.lower().replace(' ', '').replace('-', '').replace('_', '')
-            if basis_name in ['gthaugdzvp','gthaugqzv2p','gthaugqzv3p','gthaugtzv2p','gthaugtzvp','gthdzv','gthdzvp','gthqzv2p','gthqzv3p','gthszv','gthtzv2p','gthtzvp']:
+            if 'gth' in basis_name: 
                 # specify global basis for whole molecule
                 uniq_atoms = set([a[0] for a in _atom])
                 self.basis = self.format_basis(dict([(a, basis_name)
@@ -139,8 +173,13 @@ class Cell(pyscf.gto.Mole):
             # This sets self.basis to be internal format, and will
             # be parsed appropriately by Mole.build
 
-        # Finally, do regular Mole.build_
+        # Do regular Mole.build_ with usual kwargs
         pyscf.gto.Mole.build_(self,*args,**kwargs)
+
+        if self.nimgs is None:
+            self.nimgs = self.get_nimgs(self.precision)
+        if self.ew_eta is None or self.ew_cut is None:
+            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
@@ -158,4 +197,56 @@ class Cell(pyscf.gto.Mole):
             # Remember, _pseudo is a dict
             nelecs = self._pseudo[ self.atom_symbol(atm_id) ][0]
             return sum(nelecs)
-            
+
+    def get_nimgs(self, precision):
+        '''Choose number of basis function images in lattice sums
+        to include for given precision in overlap, using
+
+        precision ~ 4 * pi * r^2 * e^{-\alpha r^2}
+
+        where \alpha is the smallest exponent in the basis. Note
+        that assumes an isolated exponent in the middle of the box, so
+        it adds one additional lattice vector to be safe.
+        '''
+        min_exp = np.min([np.min(self.bas_exp(ib)) for ib in range(self.nbas)])
+
+        def fn(r):
+            return (np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision))**2
+        
+        rcut = np.sqrt(-(np.log(precision)/min_exp)) # guess
+        rcut = scipy.optimize.fsolve(fn, rcut)[0]
+        rlengths = np.sqrt(np.diag(np.dot(self.h, self.h.T)))
+        nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+
+        return nimgs+1 # additional lattice vector to take into account
+                       # case where there are functions on the edges of the box.
+
+    def get_ewald_params(self, precision):
+        '''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+
+        Choice is based on largest G vector and desired relative precision.
+
+        The relative error in the G-space sum is given by (keeping only exponential
+        factors)
+            precision ~ e^{(-Gmax^2)/(4 \eta^2)} 
+        which determines alpha. Then, real-space cutoff is determined by (exp.
+        factors only)
+            precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
+
+        Returns:
+            ew_eta, ew_cut : float
+                The Ewald 'eta' and 'cut' parameters.
+
+        '''
+        invhT = scipy.linalg.inv(self.h.T)
+        Gmax = 2*np.pi*np.dot(invhT, self.gs)
+        Gmax = np.min(Gmax)
+        log_precision = np.log(precision)
+        ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
+
+        rcut = np.sqrt(-log_precision)/ew_eta
+        rlengths = np.sqrt(np.diag(np.dot(self.h, self.h.T)))
+        #print "rlengths", rcut, rlengths
+        ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+
+        return ew_eta, ew_cut

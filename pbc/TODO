@@ -5,8 +5,9 @@
 - Change Mole class check, so that can run KRKS calculations so long
   as nelec * ncell is even (e.g. 4 H atoms) (may need to shift kpts to cell)
 
-- Streamline cell construction 
-  - add 'precision' to cell, use to set nimgs, ewald parameters in build()
+DONE(TCB):
+x Streamline cell construction 
+  x add 'precision' to cell, use to set nimgs, ewald parameters in build()
 
   (Poisson)
   [can use: 
@@ -15,11 +16,7 @@
        possibly grid of Gaussians for PBC with lots of vacuum]
 
 - Add atomic-based grids for PBC
-Notes on pseudopotentials:
- - Some analogies:
-     pyscf.gto           ---   pyscf.pbc
-     gto.Mole            ---   pbc.Cell
-     gto/mole.py         ---   pbc/cell.py
-     Mole.format_basis   ---   Cell.format_pseudo
-     gto.basis           ---   pbc.pseudo
-     basis.parse_nwchem  ---   pseudo.parse_cp2k
+
+- Clean-up, document, and integrate: 
+    scf/kscf.py
+    df/df.py
