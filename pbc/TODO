@@ -20,3 +20,6 @@ x Streamline cell construction
 - Clean-up, document, and integrate: 
     scf/kscf.py
     df/df.py
+
+- Decide on best place for tools/pbc.py functions. Should some of them 
+  be in gto/cell.py?
