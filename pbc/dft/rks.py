@@ -11,6 +11,7 @@ import scipy.linalg
 import pyscf.scf
 import pyscf.scf.hf
 import pyscf.dft
+import pyscf.pbc.scf
 from pyscf.pbc import tools as pbc
 from pyscf.pbc.gto import pseudo
 
