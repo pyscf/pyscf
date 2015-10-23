@@ -368,7 +368,7 @@ class Grids(object):
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
-        logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
+        logger.info(self, 'pruning grids: %s', str(self.prune_scheme))
         logger.info(self, 'grids dens level: %d', self.level)
         logger.info(self, 'symmetrized grids: %d', self.symmetry)
         if self.atomic_radii is not None:
