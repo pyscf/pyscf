@@ -21,5 +21,8 @@ x Streamline cell construction
     scf/kscf.py
     df/df.py
 
-- Decide on best place for tools/pbc.py functions. Should some of them 
-  be in gto/cell.py?
+- Decide on best place for remaining tools/pbc.py functions:
+    span3
+    fft/ifft
+    get_coulG
+

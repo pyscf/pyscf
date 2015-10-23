@@ -8,11 +8,13 @@
 import gc
 import numpy as np
 import scipy.linalg
+import scipy.optimize
 import pyscf
 import pyscf.lib.parameters as param
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.tools import span3
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -97,6 +99,7 @@ class Cell(pyscf.gto.Mole):
         self.h = None
         self.vol = None
         self.gs = None
+        self.Gv = None
         self.precision = 1.e-8
         self.nimgs = None
         self.ew_eta = None
@@ -107,7 +110,7 @@ class Cell(pyscf.gto.Mole):
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
 
-    def build_(self, h=None, gs=None, precision=None, nimgs=None, 
+    def build_(self, h=None, gs=None, Gv=None, precision=None, nimgs=None, 
                ew_eta=None, ew_cut=None, pseudo=None,
                *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.  
@@ -124,6 +127,7 @@ class Cell(pyscf.gto.Mole):
         '''
         if h is not None: self.h = h
         if gs is not None: self.gs = gs
+        if Gv is not None: self.Gv = Gv
         if nimgs is not None: self.nimgs = nimgs
         if ew_eta is not None: self.ew_eta = ew_eta
         if ew_cut is not None: self.ew_cut = ew_cut
@@ -180,6 +184,8 @@ class Cell(pyscf.gto.Mole):
             self.nimgs = self.get_nimgs(self.precision)
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
+        if self.Gv is None:
+            self.Gv = self.get_Gv()
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
@@ -250,3 +256,48 @@ class Cell(pyscf.gto.Mole):
         ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
         return ew_eta, ew_cut
+
+    def get_Gv(self):
+        '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
+
+        Indices along each direction go as [0...self.gs, -self.gs...-1]
+        to follow FFT convention. Note that, for each direction, ngs = 2*self.gs+1.
+
+        Args:
+            self : instance of :class:`Cell`
+
+        Returns:
+            Gv : (3, ngs) ndarray of floats
+                The array of G-vectors.
+
+        '''
+        invhT = scipy.linalg.inv(self.h.T)
+
+        gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
+        gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)
+        gzrange = range(self.gs[2]+1)+range(-self.gs[2],0)
+        gxyz = span3(gxrange, gyrange, gzrange)
+
+        Gv = 2*np.pi*np.dot(invhT,gxyz)
+        return Gv
+
+    def get_SI(self):
+        '''Calculate the structure factor for all atoms; see MH (3.34).
+
+        Args:
+            self : instance of :class:`Cell`
+
+            Gv : (3, ngs) ndarray of floats
+                The array of G-vectors.
+
+        Returns:
+            SI : (natm, ngs) ndarray, dtype=np.complex128
+                The structure factor for each atom at each G-vector.
+
+        '''
+        ngs = self.Gv.shape[1]
+        SI = np.empty([self.natm, ngs], np.complex128)
+        for ia in range(self.natm):
+            SI[ia,:] = np.exp(-1j*np.dot(self.Gv.T, self.atom_coord(ia)))
+        return SI
+

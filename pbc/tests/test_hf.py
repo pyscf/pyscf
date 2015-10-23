@@ -4,7 +4,7 @@ from pyscf import gto
 from pyscf.scf import hf
 
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc import scf as pbchf
+from pyscf.pbc.scf import hf as pbchf
 
 def test_hf(pseudo=None):
     # The molecular calculation
@@ -26,7 +26,7 @@ def test_hf(pseudo=None):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.h = np.diag([L,L,L])
-    cell.gs = np.array([94,94,94])
+    cell.gs = np.array([80,80,80])
     cell.nimgs = [0,0,0]
 
     cell.atom = mol.atom

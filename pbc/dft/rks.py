@@ -6,14 +6,9 @@ See Also:
     kscf.py : SCF tools for periodic systems with k-point *sampling*.
 '''
 
-import numpy as np
-import scipy.linalg
-import pyscf.scf
-import pyscf.scf.hf
 import pyscf.dft
 import pyscf.pbc.scf
-from pyscf.pbc import tools as pbc
-from pyscf.pbc.gto import pseudo
+from pyscf.pbc.dft import numint
 
 from pyscf.lib import logger
 
@@ -29,8 +24,8 @@ class RKS(pyscf.pbc.scf.hf.RHF):
         self.xc = 'LDA,VWN'
         self._ecoul = 0
         self._exc = 0
-        self._numint = pbc._NumInt(self.kpt) # use periodic images of AO in 
-                                             # numerical integration
+        self._numint = numint._NumInt(self.kpt) # use periodic images of AO in 
+                                                # numerical integration
         self._keys = self._keys.union(['xc', 'grids'])
 
     def dump_flags(self):

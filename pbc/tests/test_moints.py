@@ -5,8 +5,8 @@ from pyscf.scf import hf
 from pyscf import ao2mo
 
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc import scf as pbchf
-from pyscf.pbc import tools
+from pyscf.pbc.scf import hf as pbchf
+from pyscf.pbc import ao2mo as pbcao2mo
 
 def test_moints():
     # not yet working
@@ -39,10 +39,10 @@ def test_moints():
     nmo = mf.mo_coeff.shape[1]
     print mf.mo_coeff
 
-    eri_mo = tools.get_mo_eri(cell, 
+    eri_mo = pbcao2mo.get_mo_eri(cell, 
              [mf.mo_coeff, mf.mo_coeff], [mf.mo_coeff, mf.mo_coeff])
     
-    eri_ao = tools.get_ao_eri(cell)
+    eri_ao = pbcao2mo.get_ao_eri(cell)
     eri_mo2 = ao2mo.incore.general(np.real(eri_ao), 
               (mf.mo_coeff,mf.mo_coeff,mf.mo_coeff,mf.mo_coeff), compact=False)
     print eri_mo.shape

@@ -1,4 +1,5 @@
-from pyscf.pbc.tools import _span3
+import numpy as np
+from pyscf.pbc.tools import span3
 
 def gen_uniform_grids(cell):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
@@ -12,8 +13,7 @@ def gen_uniform_grids(cell):
         
     '''
     ngs = 2*cell.gs+1
-    #qv = _gen_qv(ngs)
-    qv = _span3(np.arange(ngs[0]), np.arange(ngs[1]), np.arange(ngs[2]))
+    qv = span3(np.arange(ngs[0]), np.arange(ngs[1]), np.arange(ngs[2]))
     invN = np.diag(1./ngs)
     R = np.dot(np.dot(cell.h, invN), qv)
     coords = R.T.copy() # make C-contiguous with copy() for pyscf

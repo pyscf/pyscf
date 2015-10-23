@@ -4,7 +4,7 @@ from pyscf import gto
 from pyscf.dft import rks
 
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc import dft as pbcdft
+from pyscf.pbc.dft import rks as pbcrks
 
 def test_ks(pseudo=None):
     # The molecular calculation
@@ -38,7 +38,7 @@ def test_ks(pseudo=None):
     cell.pseudo = pseudo
     cell.build()
 
-    mf = pbcdft.RKS(cell)
+    mf = pbcrks.RKS(cell)
     mf.xc = 'LDA,VWN_RPA'
     mf.kpt = np.reshape(np.array([1,1,1]), (3,1))
     print (mf.scf()) 

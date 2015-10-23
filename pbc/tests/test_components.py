@@ -4,7 +4,8 @@ from pyscf import gto
 from pyscf.dft import rks
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
-from pyscf.pbc import tools
+from pyscf.pbc.dft.gen_grid import gen_uniform_grids
+from pyscf.pbc.dft.numint import eval_ao, eval_rho
 
 # These are the components to be tested:
 from pyscf.pbc.scf import hf as pbchf
@@ -27,7 +28,7 @@ def test_components(pseudo=None):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.h = np.diag([L,L,L])
-    cell.gs = np.array([100,100,100])
+    cell.gs = np.array([80,80,80])
     cell.nimgs = [0,0,0]
 
     cell.atom = mol.atom
@@ -65,9 +66,9 @@ def test_components(pseudo=None):
     print np.dot(np.ravel(dm), np.ravel(vne))   # -6.68702326551
 
     print "Normalization" 
-    coords = tools.setup_uniform_grids(cell)
-    aoR = tools.get_aoR(cell, coords)
-    rhoR = tools.get_rhoR(cell, aoR, dm)
+    coords = gen_uniform_grids(cell)
+    aoR = eval_ao(cell, coords)
+    rhoR = eval_rho(cell, aoR, dm)
     print cell.vol/len(rhoR)*np.sum(rhoR) # 1.99981725342 (should be 2.0)
     
     print "(Hartree + vne) * DM"
@@ -80,7 +81,7 @@ def test_components(pseudo=None):
     ew_cut = (40,40,40)
     ew_eta = 0.05
     for ew_eta in [0.1, 0.5, 1.]:
-        ew = tools.ewald(cell, ew_eta, ew_cut)
+        ew = pbchf.ewald(cell, ew_eta, ew_cut)
         print "Ewald (eta, energy)", ew_eta, ew # should be same for all eta
 
     print "Ewald divergent terms summation", ew

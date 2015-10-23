@@ -11,7 +11,9 @@ import pyscf.scf
 import pyscf.scf.hf
 import pyscf.dft
 import pyscf.pbc.dft
+import pyscf.pbc.dft.numint
 from pyscf.pbc import tools
+from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
 
 from pyscf.lib import logger
@@ -45,11 +47,10 @@ def get_nuc(cell, kpt=None):
         kpt = np.zeros([3,1])
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.get_ao(cell, coords, kpt)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
 
     chargs = [cell.atom_charge(i) for i in range(cell.natm)]
-    Gv = tools.get_Gv(cell)
-    SI = tools.get_SI(cell, Gv)
+    SI = cell.get_SI()
     coulG = tools.get_coulG(cell)
     vneG = -np.dot(chargs,SI) * coulG
     vneR = tools.ifft(vneG, cell.gs)
@@ -65,11 +66,10 @@ def get_pp(cell, kpt=None):
         kpt = np.zeros([3,1])
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.get_ao(cell, coords, kpt)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     nao = aoR.shape[1]
 
-    Gv = tools.get_Gv(cell)
-    SI = tools.get_SI(cell, Gv)
+    SI = cell.get_SI()
     vlocG = pseudo.get_vlocG(cell)
     vpplocG = -np.sum(SI * vlocG, axis=0)
     
@@ -111,7 +111,7 @@ def get_t(cell, kpt=None):
         kpt = np.zeros([3,1])
     
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.get_ao(cell, coords, kpt, isgga=True)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
     ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
 
     t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]).real +
@@ -128,7 +128,7 @@ def get_ovlp(cell, kpt=None):
         kpt = np.zeros([3,1])
     
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.get_ao(cell, coords, kpt)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     ngs = aoR.shape[0]
 
     s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR).real
@@ -142,12 +142,12 @@ def get_j(cell, dm, kpt=None):
         kpt = np.zeros([3,1])
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.get_ao(cell, coords, kpt)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     ngs, nao = aoR.shape
 
     coulG = tools.get_coulG(cell)
 
-    rhoR = pyscf.pbc.dft.numint.get_rho(cell, aoR, dm)
+    rhoR = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
     rhoG = tools.fft(rhoR, cell.gs)
 
     vG = coulG*rhoG
@@ -155,6 +155,134 @@ def get_j(cell, dm, kpt=None):
 
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
     return vj
+
+def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
+    '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
+
+    Formulation of Martin, App. F2.
+
+    Args:
+        cell : instance of :class:`Cell`
+
+        ew_eta, ew_cut : float
+            The Ewald 'eta' and 'cut' parameters.
+
+    Returns:
+        float
+            The Ewald energy consisting of overlap, self, and G-space sum.
+
+    See Also:
+        ewald_params
+        
+    '''
+    log = logger.Logger
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(cell.stdout, verbose)
+
+    chargs = [cell.atom_charge(i) for i in range(len(cell._atm))]
+    coords = [cell.atom_coord(i) for i in range(len(cell._atm))]
+
+    ewovrl = 0.
+
+    # set up real-space lattice indices [-ewcut ... ewcut]
+    ewxrange = range(-ew_cut[0],ew_cut[0]+1)
+    ewyrange = range(-ew_cut[1],ew_cut[1]+1)
+    ewzrange = range(-ew_cut[2],ew_cut[2]+1)
+    ewxyz = tools.span3(ewxrange,ewyrange,ewzrange)
+
+    # SLOW = True
+    # if SLOW == True:
+    #     ewxyz = ewxyz.T
+    #     for ic, (ix, iy, iz) in enumerate(ewxyz):
+    #         L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
+
+    #         # prime in summation to avoid self-interaction in unit cell
+    #         if (ix == 0 and iy == 0 and iz == 0):
+    #             print "L is", L
+    #             for ia in range(cell.natm):
+    #                 qi = chargs[ia]
+    #                 ri = coords[ia]
+    #                 #for ja in range(ia):
+    #                 for ja in range(cell.natm):
+    #                     if ja != ia:
+    #                         qj = chargs[ja]
+    #                         rj = coords[ja]
+    #                         r = np.linalg.norm(ri-rj)
+    #                         ewovrl += qi * qj / r * scipy.special.erfc(ew_eta * r)
+    #         else:
+    #             for ia in range(cell.natm):
+    #                 qi = chargs[ia]
+    #                 ri = coords[ia]
+    #                 for ja in range(cell.natm):
+    #                     qj=chargs[ja]
+    #                     rj=coords[ja]
+    #                     r=np.linalg.norm(ri-rj+L)
+    #                     ewovrl += qi * qj / r * scipy.special.erfc(ew_eta * r)
+
+    # # else:
+    nx = len(ewxrange)
+    ny = len(ewyrange)
+    nz = len(ewzrange)
+    Lall = np.einsum('ij,jk->ik', cell.h, ewxyz).reshape(3,nx,ny,nz)
+    #exclude the point where Lall == 0
+    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
+    Lall = Lall.reshape(3,nx*ny*nz)
+    Lall = Lall.T
+
+    for ia in range(cell.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(ia):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r = np.linalg.norm(ri-rj)
+            ewovrl += 2 * qi * qj / r * scipy.special.erfc(ew_eta * r)
+
+    for ia in range(cell.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(cell.natm):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r1 = ri-rj + Lall
+            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+            ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
+
+    ewovrl *= 0.5
+
+    # last line of Eq. (F.5) in Martin 
+    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
+    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
+    
+    # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
+    Gv = cell.Gv
+    SI = cell.get_SI()
+    ZSI = np.einsum("i,ij->j", chargs, SI)
+
+    # Eq. (F.6) in Martin is off by a factor of 2, the
+    # exponent is wrong (8->4) and the square is in the wrong place
+    #
+    # Formula should be
+    #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
+    # where
+    #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
+    # See also Eq. (32) of ewald.pdf at 
+    #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
+
+    coulG = tools.get_coulG(cell)
+    absG2 = np.einsum('ij,ij->j',np.conj(Gv),Gv)
+
+    ZSIG2 = np.abs(ZSI)**2
+    expG2 = np.exp(-absG2/(4*ew_eta**2))
+    JexpG2 = coulG*expG2
+    ewgI = np.dot(ZSIG2,JexpG2)
+    ewg = .5*np.sum(ewgI)
+    ewg /= cell.vol
+
+    log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
+    return ewovrl + ewself + ewg
 
 
 class RHF(pyscf.scf.hf.RHF):
@@ -226,7 +354,7 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self._eri is None:
             log.debug('Building PBC AO integrals')
-            self._eri = np.real(tools.get_ao_eri(cell))
+            self._eri = np.real(ao2mo.get_ao_eri(cell))
 
         vj, vk = pyscf.scf.hf.RHF.get_jk_(self, cell, dm, hermi) 
         
@@ -241,6 +369,6 @@ class RHF(pyscf.scf.hf.RHF):
         return self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
     
     def ewald_nuc(self):
-        return tools.ewald(self.cell, self.ew_eta, self.ew_cut)
+        return ewald(self.cell, self.ew_eta, self.ew_cut)
         
 

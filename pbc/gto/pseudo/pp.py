@@ -2,8 +2,6 @@ import numpy as np
 import scipy.linalg
 import scipy.special
 
-from pyscf.pbc import tools as pbc 
-
 '''PP module.
     
 For GTH/HGH PPs, see: 
@@ -41,7 +39,7 @@ def get_vlocG(cell):
     Returns:
         (natm, ngs) ndarray
     '''
-    Gvnorm = np.linalg.norm(pbc.get_Gv(cell),axis=0)
+    Gvnorm = np.linalg.norm(cell.Gv,axis=0)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
@@ -86,8 +84,7 @@ def get_projG(cell):
         projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
-    Gv = pbc.get_Gv(cell)
-    return get_gth_projG(cell, Gv) 
+    return get_gth_projG(cell, cell.Gv) 
 
 def get_gth_projG(cell, Gvs):
     '''

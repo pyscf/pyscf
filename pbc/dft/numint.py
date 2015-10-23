@@ -5,11 +5,6 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
-    With the optional kpt arguments, returns the pair of 
-    sin, cos crystal orbitals at that kpt. 
-
-    (kpt==0 denotes Gamma pt, returns values of only one set)
-
     Args:
         cell : instance of :class:`Cell`
 

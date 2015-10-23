@@ -1,6 +1,6 @@
 import sys
 from pyscf.dft import vxc
-from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import gen_grid
 #from pyscf.df import density_fit
 
 # register the XC keywords in module
@@ -10,4 +10,5 @@ for k,v in vxc.XC_CODES.items():
 
 
 def RKS(mol, *args):
+    from pyscf.pbc.dft import rks
     return rks.RKS(mol, *args)
