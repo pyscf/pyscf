@@ -603,53 +603,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False, verbose=None):
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, verbose=logger.NOTE):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mc.stdout, mc.verbose)
-    if mo_coeff is None: mo_coeff = mc.mo_coeff
-    if ci is None: ci = mc.ci
-    if eris is None: eris = mc.ao2mo(mo_coeff)
-    ncore = mc.ncore
-    nocc = ncore + mc.ncas
-    nmo = mo_coeff.shape[1]
-    fock = mc.get_fock(mo_coeff, ci, eris)
-    if cas_natorb:
-        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort=sort,
-                                           verbose=verbose)
-    else:
-# Keep the active space unchanged by default.  The rotation in active space
-# may cause problem for external CI solver eg DMRG.
-        mo_coeff1 = numpy.empty_like(mo_coeff)
-        mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
-    if ncore > 0:
-        # note the last two args of ._eig for mc1step_symm
-        w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
-        if sort:
-            idx = numpy.argsort(w)
-            w = w[idx]
-            c1 = c1[:,idx]
-            if hasattr(mc, 'orbsym'): # for mc1step_symm
-                mc.orbsym[:ncore] = mc.orbsym[:ncore][idx]
-        mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
-        if log.verbose >= logger.DEBUG:
-            for i in range(ncore):
-                log.debug('i = %d  <i|F|i> = %12.8f', i+1, w[i])
-    if nmo-nocc > 0:
-        w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
-        if sort:
-            idx = numpy.argsort(w)
-            w = w[idx]
-            c1 = c1[:,idx]
-            if hasattr(mc, 'orbsym'): # for mc1step_symm
-                mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
-        mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-        if log.verbose >= logger.DEBUG:
-            for i in range(nmo-nocc):
-                log.debug('i = %d  <i|F|i> = %12.8f', nocc+i+1, w[i])
-# still return ci coefficients, in case the canonicalization funciton changed
-# cas orbitals, the ci coefficients should also be updated.
-    return mo_coeff1, ci
+    return casci.canonicalize(mc, mo_coeff, ci, eris, sort, cas_natorb, verbose)
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
