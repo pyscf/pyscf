@@ -406,16 +406,15 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         nprim, nctr = cs.shape
         cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
 # normalize contracted AO
-        if nprim > 1:
-            #ee = numpy.empty((nprim,nprim))
-            #for i in range(nprim):
-            #    for j in range(i+1):
-            #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
-            #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-            ee = es.reshape(-1,1) + es.reshape(1,-1)
-            ee = _gaussian_int(angl*2+2, ee)
-            s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-            cs = numpy.einsum('pi,i->pi', cs, s1)
+        #ee = numpy.empty((nprim,nprim))
+        #for i in range(nprim):
+        #    for j in range(i+1):
+        #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
+        #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+        ee = es.reshape(-1,1) + es.reshape(1,-1)
+        ee = _gaussian_int(angl*2+2, ee)
+        s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+        cs = numpy.einsum('pi,i->pi', cs, s1)
 
         _env.append(es)
         _env.append(cs.T.reshape(-1))

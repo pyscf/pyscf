@@ -262,7 +262,7 @@ def init_guess_by_minao(mol):
             ndocc, nfrac = atom_hf.frac_occ(symb, l)
             if coreshl[l] > 0:
                 occ.extend([0]*coreshl[l]*(2*l+1))
-            if ndocc-coreshl[l] > 0:
+            if ndocc > coreshl[l]:
                 occ.extend([2]*(ndocc-coreshl[l])*(2*l+1))
             if nfrac > 1e-15:
                 occ.extend([nfrac]*(2*l+1))

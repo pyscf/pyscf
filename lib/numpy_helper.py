@@ -398,7 +398,7 @@ def norm(x, ord=None, axis=None):
         xx = numpy.einsum('ij,ij->i', x, x)
         return numpy.sqrt(xx)
     else:
-        raise RuntimeError('Not support for axis = %d' % axis)
+        return numpy.linalg.norm(x, ord, axis)
 
 
 if __name__ == '__main__':
