@@ -8,7 +8,7 @@
 import sys
 import numpy as np
 
-def parse_str(string):
+def parse(string):
     '''Parse the pseudo text *string* which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Cell.pseudo`
     Lines started with # are ignored.
@@ -17,7 +17,7 @@ def parse_str(string):
                  if x.strip() and 'END' not in x and '#PSEUDOPOTENTIAL' not in x]
     return _parse(pseudotxt)
 
-def parse(pseudofile, symb):
+def load(pseudofile, symb):
     '''Parse the *pseudofile's entry* for atom 'symb', return an internal
     pseudo format which can be assigned to :attr:`Cell.pseudo`
     '''
@@ -76,17 +76,17 @@ if __name__ == '__main__':
         ppfile = args[0]
         atom = args[1]
     else:
-        print 'usage: ppfile atomlabel '
+        print('usage: ppfile atomlabel ')
         sys.exit(1)
-    
-    print "Testing search_seg():"
-    print search_seg(ppfile,atom)
 
-    print "Testing parse() [[from file]]:"
-    parse(ppfile,atom)
+    print("Testing search_seg():")
+    print(search_seg(ppfile,atom))
 
-    print "Testing parse_str():"
-    parse_str("""
+    print("Testing load() [[from file]]:")
+    load(ppfile,atom)
+
+    print("Testing parse():")
+    parse("""
     #PSEUDOPOTENTIAL
     C GTH-BLYP-q4
         2    2

@@ -4,9 +4,23 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com> 
 
 import os
-import imp
 import pyscf.gto.basis
 from pyscf.pbc.gto.basis import parse_cp2k
+
+ALIAS = {
+    'gthaugdzvp'  : 'gth-aug-dzvp.dat',
+    'gthaugqzv2p' : 'gth-aug-qzv2p.dat',
+    'gthaugqzv3p' : 'gth-aug-qzv3p.dat',
+    'gthaugtzv2p' : 'gth-aug-tzv2p.dat',
+    'gthaugtzvp'  : 'gth-aug-tzvp.dat',
+    'gthdzv'      : 'gth-dzv.dat',
+    'gthdzvp'     : 'gth-dzvp.dat',
+    'gthqzv2p'    : 'gth-qzv2p.dat',
+    'gthqzv3p'    : 'gth-qzv3p.dat',
+    'gthszv'      : 'gth-szv.dat',
+    'gthtzv2p'    : 'gth-tzv2p.dat',
+    'gthtzvp'     : 'gth-tzvp.dat',
+}
 
 def parse(string):
     '''Parse the basis text which is in CP2K format, return an internal
@@ -31,13 +45,13 @@ def parse(string):
     ... #
     ... """)}
     '''
-    return parse_cp2k.parse_str(string)
+    return parse_cp2k.parse(string)
 
-def load(basis_name, symb):
+def load(file_or_basis_name, symb):
     '''Convert the basis of the given symbol to internal format
 
     Args:
-        basis_name : str
+        file_or_basis_name : str
             Case insensitive basis set name. Special characters will be removed.
         symb : str
             Atomic symbol, Special characters will be removed.
@@ -48,26 +62,14 @@ def load(basis_name, symb):
     >>> cell = gto.Cell()
     >>> cell.basis = {'C': load('gth-dzvp', 'C')}
     '''
-    alias = {
-        'gthaugdzvp'  : 'gth-aug-dzvp.dat',
-        'gthaugqzv2p' : 'gth-aug-qzv2p.dat',
-        'gthaugqzv3p' : 'gth-aug-qzv3p.dat',
-        'gthaugtzv2p' : 'gth-aug-tzv2p.dat',
-        'gthaugtzvp'  : 'gth-aug-tzvp.dat',
-        'gthdzv'      : 'gth-dzv.dat',      
-        'gthdzvp'     : 'gth-dzvp.dat',     
-        'gthqzv2p'    : 'gth-qzv2p.dat',    
-        'gthqzv3p'    : 'gth-qzv3p.dat',    
-        'gthszv'      : 'gth-szv.dat',      
-        'gthtzv2p'    : 'gth-tzv2p.dat',    
-        'gthtzvp'     : 'gth-tzvp.dat',     
-    }
+    if os.path.isfile(file_or_basis_name):
+        return parse_cp2k.load(file_or_basis_name, symb)
 
-    name = basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
-    if 'gth' not in basis_name:
-        return pyscf.gto.basis.load(basis_name, symb)
-    basmod = alias[name]
+    name = file_or_basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    if file_or_basis_name not in ALIAS:
+        return pyscf.gto.basis.load(file_or_basis_name, symb)
+    basmod = ALIAS[name]
     symb = ''.join(i for i in symb if i.isalpha())
-    b = parse_cp2k.parse(os.path.join(os.path.dirname(__file__), basmod), symb)
+    b = parse_cp2k.load(os.path.join(os.path.dirname(__file__), basmod), symb)
     return b
 

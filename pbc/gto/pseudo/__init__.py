@@ -4,9 +4,20 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 
 import os
-import imp
 from pyscf.pbc.gto.pseudo import parse_cp2k
 from pp import *
+
+ALIAS = {
+    'gthblyp'    : 'gth-blyp.dat'   ,
+    'gthbp'      : 'gth-bp.dat'     ,
+    'gthhcth120' : 'gth-hcth120.dat',
+    'gthhcth407' : 'gth-hcth407.dat',
+    'gtholyp'    : 'gth-olyp.dat'   ,
+    'gthlda'     : 'gth-pade.dat'   ,
+    'gthpade'    : 'gth-pade.dat'   ,
+    'gthpbe'     : 'gth-pbe.dat'    ,
+    'gthpbesol'  : 'gth-pbesol.dat' ,
+}
 
 def parse(string):
     '''Parse the pseudo text which is in CP2K format, return an internal
@@ -28,7 +39,7 @@ def parse(string):
     ...      0.28637912    0
     ... """)}
     '''
-    return parse_cp2k.parse_str(string)
+    return parse_cp2k.parse(string)
 
 def load(pseudo_name, symb):
     '''Convert the pseudopotential of the given symbol to internal format
@@ -45,20 +56,12 @@ def load(pseudo_name, symb):
     >>> cell = gto.Cell()
     >>> cell.pseudo = {'C': load('gth-blyp', 'C')}
     '''
-    alias = {
-        'gthblyp'    : 'gth-blyp.dat'   ,
-        'gthbp'      : 'gth-bp.dat'     ,
-        'gthhcth120' : 'gth-hcth120.dat',
-        'gthhcth407' : 'gth-hcth407.dat',
-        'gtholyp'    : 'gth-olyp.dat'   ,
-        'gthlda'     : 'gth-pade.dat'   ,
-        'gthpade'    : 'gth-pade.dat'   ,
-        'gthpbe'     : 'gth-pbe.dat'    ,
-        'gthpbesol'  : 'gth-pbesol.dat' ,
-    }
+    if os.path.isfile(file_or_basis_name):
+        return parse_cp2k.load(file_or_basis_name, symb)
+
     name = pseudo_name.lower().replace(' ', '').replace('-', '').replace('_', '')
-    pseudomod = alias[name]
+    pseudomod = ALIAS[name]
     symb = ''.join(i for i in symb if i.isalpha())
-    p = parse_cp2k.parse(os.path.join(os.path.dirname(__file__), pseudomod), symb)
+    p = parse_cp2k.load(os.path.join(os.path.dirname(__file__), pseudomod), symb)
     return p
 

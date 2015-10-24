@@ -8,16 +8,20 @@
 
 MAXL = 8
 
-def parse_str(string):
+def parse(string):
     '''Parse the basis text which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
     '''
-    bastxt = [x.strip() for x in string.split('\n')
-              if x.strip() and 'END' not in x and '#BASIS SET' not in x]
+    bastxt = []
+    for dat in string.split('\n'):
+        x = dat.strip()
+        if (x and not x.startswith('#') and not x.startswith('END') and
+            not x.startswith('BASIS')):
+            bastxt.append(dat)
     return _parse(bastxt)
 
-def parse(basisfile, symb):
+def load(basisfile, symb):
     return _parse(search_seg(basisfile, symb))
 
 def _parse(blines):
