@@ -60,17 +60,17 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         f1 = numpy.random.random(mcr.mo_coeff.shape)
         u1 = numpy.linalg.svd(f1)[0]
-        mo, ci = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1))
+        mo, ci, mo_e = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1))
         e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
         self.assertAlmostEqual(e1, 44.2658681077, 7)
-        mo, ci = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1), eris=mcr.ao2mo(mcr.mo_coeff))
+        mo, ci, mo_e = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1), eris=mcr.ao2mo(mcr.mo_coeff))
         e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
         self.assertAlmostEqual(e1, 44.2658681077, 7)
 
     def test_canonicalize(self):
-        mo, ci = mcr.canonicalize()
+        mo, ci, mo_e = mcr.canonicalize()
         self.assertAlmostEqual(numpy.linalg.norm(mo), 9.9260608594977242, 7)
-        mo, ci = mcr.canonicalize(eris=mcr.ao2mo(mcr.mo_coeff))
+        mo, ci, mo_e = mcr.canonicalize(eris=mcr.ao2mo(mcr.mo_coeff))
         self.assertAlmostEqual(numpy.linalg.norm(mo), 9.9260608594977242, 7)
 
     def test_make_rdm12(self):

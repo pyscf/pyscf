@@ -227,7 +227,8 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             else:
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
-            rad, rad_weight = radi_method(n_rad)
+            rad, dr = radi_method(n_rad)
+            rad_weight = 4*numpy.pi * rad*rad * dr
             # atomic_scale = 1
             # rad *= atomic_scale
             # rad_weight *= atomic_scale

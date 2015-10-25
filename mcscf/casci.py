@@ -117,7 +117,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
     return dm1a, dm1b
 
-def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
+def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
     '''Generalized Fock matrix
     '''
     from pyscf.mcscf import mc_ao2mo
@@ -129,7 +129,8 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     nocc = ncore + ncas
     nelecas = mc.nelecas
 
-    casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    if casdm1 is None:
+        casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
     h1 = reduce(numpy.dot, (mo_coeff.T, mc.get_hcore(), mo_coeff))
     if eris is not None and hasattr(eris, 'ppaa'):
         vj = numpy.empty((nmo,nmo))
@@ -147,7 +148,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
     return fock
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-               verbose=None):
+               casdm1=None, verbose=None):
     '''Transform active orbitals to natrual orbitals, and update the CI wfn
 
     Args:
@@ -176,7 +177,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     ncas = mc.ncas
     nocc = ncore + ncas
     nelecas = mc.nelecas
-    casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    if casdm1 is None:
+        casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
     occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
         idx = numpy.argsort(occ)
@@ -252,7 +254,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, fcivec, occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-                 cas_natorb=False, verbose=logger.NOTE):
+                 cas_natorb=False, casdm1=None, verbose=logger.NOTE):
     '''Canonicalize CASCI/CASSCF orbitals
 
     Args:
@@ -271,10 +273,10 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
-    fock = mc.get_fock(mo_coeff, ci, eris)
+    fock = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
     if cas_natorb:
-        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort=sort,
-                                           verbose=verbose)
+        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
+                                           verbose)
     else:
 # Keep the active space unchanged by default.  The rotation in active space
 # may cause problem for external CI solver eg DMRG.
@@ -307,7 +309,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                 log.debug('i = %d  <i|F|i> = %12.8f', nocc+i+1, w[i])
 # still return ci coefficients, in case the canonicalization funciton changed
 # cas orbitals, the ci coefficients should also be updated.
-    return mo_coeff1, ci
+    mo_energy = numpy.einsum('ji,ji->i', mo_coeff1, fock.dot(mo_coeff1))
+    return mo_coeff1, ci, mo_energy
 
 
 def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
@@ -523,25 +526,28 @@ class CASCI(object):
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                   verbose=None):
-        return cas_natorb(self, mo_coeff, ci, eris, sort, verbose)
+                   casdm1=None, verbose=None):
+        return cas_natorb(self, mo_coeff, ci, eris, sort, casdm1, verbose)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                    verbose=None):
+                    casdm1=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
-                                                 sort, verbose)
+                                                 sort, casdm1, verbose)
         return self.mo_coeff, self.ci, occ
 
-    def get_fock(self, mo_coeff=None, ci=None, eris=None, verbose=None):
-        return get_fock(self, mo_coeff, ci, eris, verbose)
+    def get_fock(self, mo_coeff=None, ci=None, eris=None, casdm1=None,
+                 verbose=None):
+        return get_fock(self, mo_coeff, ci, eris, casdm1, verbose)
 
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     cas_natorb=False, verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
+                     cas_natorb=False, casdm1=None, verbose=None):
+        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb,
+                            casdm1, verbose)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      cas_natorb=False, verbose=None):
-        self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              sort, cas_natorb, verbose)
-        return self.mo_coeff, self.ci
+                      cas_natorb=False, casdm1=None, verbose=None):
+        self.mo_coeff, self.ci, mo_energy = \
+                canonicalize(self, mo_coeff, ci, eris,
+                             sort, cas_natorb, casdm1, verbose)
+        return self.mo_coeff, self.ci, mo_energy
 
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
         return analyze(self, mo_coeff, ci, verbose)

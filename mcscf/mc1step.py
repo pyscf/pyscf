@@ -14,6 +14,7 @@ import pyscf.gto
 import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
+from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 
@@ -479,8 +480,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
-        mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
-                                         cas_natorb=casscf.natorb, verbose=log)
+        mo, fcivec, mo_energy = \
+                casscf.canonicalize(mo, fcivec, eris,
+                                    cas_natorb=casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
@@ -590,23 +592,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
-                                     cas_natorb=casscf.natorb, verbose=log)
+    mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                casscf.natorb, casdm1, log)
     if dump_chk:
         casscf.dump_chk(locals())
 
     log.timer('1-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
-
-def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
-    return casci.get_fock(mc, mo_coeff, ci, eris, verbose)
-
-def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False, verbose=None):
-    return casci.cas_natorb(mc, mo_coeff, ci, eris, sort, verbose)
-
-def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-                 cas_natorb=False, verbose=logger.NOTE):
-    return casci.canonicalize(mc, mo_coeff, ci, eris, sort, cas_natorb, verbose)
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
@@ -1129,21 +1121,18 @@ class CASSCF(casci.CASCI):
         mo_occ = numpy.zeros(mo.shape[1])
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = -occ
+        if 'mo_energy' in envs:
+            mo_energy = envs['mo_energy']
+        else:
+            mo_energy = None
         chkfile.dump_mcscf(self.mol, self.chkfile, mo,
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
                            ci_vector=civec,
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
-                           converged=envs['conv'], mo_occ=mo_occ)
+                           converged=envs['conv'],
+                           mo_occ=mo_occ, mo_energy=mo_energy)
 
-    def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     cas_natorb=False, verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
-    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      cas_natorb=False, verbose=None):
-        self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              sort, cas_natorb, verbose)
-        return self.mo_coeff, self.ci
 
 
 # to avoid calculating AO integrals
