@@ -12,6 +12,7 @@ import pyscf.scf.hf
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.dft.numint
+from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc import tools
 from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
@@ -190,7 +191,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewxrange = range(-ew_cut[0],ew_cut[0]+1)
     ewyrange = range(-ew_cut[1],ew_cut[1]+1)
     ewzrange = range(-ew_cut[2],ew_cut[2]+1)
-    ewxyz = tools.span3(ewxrange,ewyrange,ewzrange)
+    ewxyz = cartesian_prod((ewxrange,ewyrange,ewzrange)).T
 
     # SLOW = True
     # if SLOW == True:

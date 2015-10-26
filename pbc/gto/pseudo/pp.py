@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.linalg
 import scipy.special
+from pyscf import lib
 
 '''PP module.
     
@@ -160,7 +161,7 @@ def cart2polar(rvec):
     # The columns of rvec are the 3-component vectors
     # i.e. rvec is 3 x N
     x,y,z = rvec
-    r = np.linalg.norm(rvec,axis=0)
+    r = lib.norm(rvec,axis=0)
     theta = np.arctan2(z,np.sqrt(x**2+y**2))
     phi = np.arctan2(y,x)
     return r, theta, phi

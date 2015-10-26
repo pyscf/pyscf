@@ -11,10 +11,10 @@ import scipy.linalg
 import scipy.optimize
 import pyscf
 import pyscf.lib.parameters as param
+from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
-from pyscf.pbc.tools import span3
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -276,7 +276,7 @@ class Cell(pyscf.gto.Mole):
         gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
         gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)
         gzrange = range(self.gs[2]+1)+range(-self.gs[2],0)
-        gxyz = span3(gxrange, gyrange, gzrange)
+        gxyz = cartesian_prod((gxrange, gyrange, gzrange)).T
 
         Gv = 2*np.pi*np.dot(invhT,gxyz)
         return Gv

@@ -389,6 +389,8 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def norm(x, ord=None, axis=None):
+    '''numpy.linalg.norm for numpy 1.6.*
+    '''
     if axis is None:
         return numpy.linalg.norm(x, ord)
     elif axis == 0:
@@ -398,7 +400,7 @@ def norm(x, ord=None, axis=None):
         xx = numpy.einsum('ij,ij->i', x, x)
         return numpy.sqrt(xx)
     else:
-        raise RuntimeError('Not support for axis = %d' % axis)
+        return numpy.linalg.norm(x, ord, axis)
 
 # numpy.linalg.cond has a bug, where it
 # does not correctly generalize
@@ -413,6 +415,56 @@ def cond(x, p=None):
         return c
     else:
         return numpy.linalg.cond(x, p)
+
+def cartesian_prod(arrays, out=None):
+    '''
+    Generate a cartesian product of input arrays.
+    http://stackoverflow.com/questions/1208118/using-numpy-to-build-an-array-of-all-combinations-of-two-arrays
+
+    Parameters
+    ----------
+    arrays : list of array-like
+        1-D arrays to form the cartesian product of.
+    out : ndarray
+        Array to place the cartesian product in.
+
+    Returns
+    -------
+    out : ndarray
+        2-D array of shape (M, len(arrays)) containing cartesian products
+        formed of input arrays.
+
+    Examples
+    --------
+    >>> cartesian(([1, 2, 3], [4, 5], [6, 7]))
+    array([[1, 4, 6],
+           [1, 4, 7],
+           [1, 5, 6],
+           [1, 5, 7],
+           [2, 4, 6],
+           [2, 4, 7],
+           [2, 5, 6],
+           [2, 5, 7],
+           [3, 4, 6],
+           [3, 4, 7],
+           [3, 5, 6],
+           [3, 5, 7]])
+
+    '''
+    arrays = [numpy.asarray(x) for x in arrays]
+    dtype = arrays[0].dtype
+    nd = len(arrays)
+    dims = [nd] + [len(x) for x in arrays]
+
+    if out is None:
+        out = numpy.empty(dims, dtype)
+    tout = out.reshape(dims)
+
+    shape = [-1] + [1] * nd
+    for i, arr in enumerate(arrays):
+        tout[i] = arr.reshape(shape[:nd-i])
+
+    return tout.reshape(nd,-1).T
 
 
 if __name__ == '__main__':
@@ -462,3 +514,9 @@ if __name__ == '__main__':
     c = numpy.random.random((400,400))
     d = numpy.random.random((400,400))
     print(numpy.allclose(numpy.dot(a+b*1j, c+d*1j), zdot(a+b*1j, c+d*1j)))
+
+    import itertools
+    arrs = (range(3,9), range(4))
+    cp = cartesian_prod(arrs)
+    for i,x in enumerate(itertools.product(*arrs)):
+        assert(numpy.allclose(x,cp[i]))

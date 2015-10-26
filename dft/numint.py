@@ -59,7 +59,7 @@ def eval_ao(mol, coords, isgga=False, relativity=0, bastart=0, bascount=None,
     >>> print(ao_value.shape)
     (4, 100, 7)
     '''
-    assert(coords.flags.c_contiguous)
+    coords = numpy.asarray(coords, order='C')
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)

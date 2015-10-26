@@ -22,7 +22,6 @@ x Streamline cell construction
     df/df.py
 
 - Decide on best place for remaining tools/pbc.py functions:
-    span3
     fft/ifft
     get_coulG
 

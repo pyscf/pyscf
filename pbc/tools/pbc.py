@@ -1,30 +1,5 @@
 import numpy as np
 
-def span3(*xs):
-    '''Generate integer coordinates for each three-dimensional grid point.
-
-    Args:
-        *xs : length-3 tuple of np.arange() arrays
-            The integer coordinates along each direction.
-
-    Returns:
-         (3, ngx*ngy*ngz) ndarray
-            The integer coordinates for each grid point.
-
-    Examples:
-
-    >>> span3(np.array([2,3,2]))
-    array([[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-           [0, 0, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2],
-           [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]])
-
-    '''
-    c = np.empty([3]+[len(x) for x in xs])
-    c[0,:,:,:] = np.asarray(xs[0]).reshape(-1,1,1)
-    c[1,:,:,:] = np.asarray(xs[1]).reshape(1,-1,1)
-    c[2,:,:,:] = np.asarray(xs[2]).reshape(1,1,-1)
-    return c.reshape(3,-1)
-
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
 
@@ -38,7 +13,7 @@ def fft(f, gs):
     Args:
         f : (nx*ny*nz,) ndarray
             The function to be FFT'd, flattened to a 1D array corresponding
-            to the index order of `span3`.
+            to the index order of :func:`cartesian_prod`.
         gs : (3,) ndarray of ints
             The number of *positive* G-vectors along each direction.
     
