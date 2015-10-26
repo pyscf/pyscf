@@ -14,6 +14,7 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
+symmetry = 1
 )
 mfr = scf.RHF(mol)
 mfr.scf()
@@ -99,8 +100,18 @@ class KnowValues(unittest.TestCase):
                 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]]
         self.assertTrue(numpy.allclose(mo2, (ref,ref1)))
 
+    def test_sort_mo_by_irrep(self):
+        mc1 = mcscf.CASSCF(mfr, 8, 4)
+        mo0 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, {'E1ux':2, 'E1uy':2, 'E1gx':2, 'E1gy':2})
+        mo1 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, {2:2, 3:2, 6:2, 7:2}, {2:0, 3:0, 6:0, 7:0})
+        mo2 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, (0,0,2,2,0,0,2,2))
+        mo3 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, {'E1ux':2, 'E1uy':2, 2:2, 3:2})
+        self.assertTrue(numpy.allclose(mo0, mo1))
+        self.assertTrue(numpy.allclose(mo0, mo2))
+        self.assertTrue(numpy.allclose(mo0, mo3))
+
     def test_project_init_guess(self):
-        print('todo')
+        print('todo test_project_init_guess')
 
 
 if __name__ == "__main__":
