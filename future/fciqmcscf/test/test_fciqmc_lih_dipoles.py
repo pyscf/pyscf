@@ -11,7 +11,7 @@ b = 1.4
 mol = gto.Mole()
 
 mol.build(
-        verbose = 5,
+        verbose = 0,
 #output = 'casscf.out',
 output = None,
 atom = [['Li',(  0.000000,  0.000000, 1.005436697)],
