@@ -56,8 +56,8 @@ def load(pseudo_name, symb):
     >>> cell = gto.Cell()
     >>> cell.pseudo = {'C': load('gth-blyp', 'C')}
     '''
-    if os.path.isfile(file_or_basis_name):
-        return parse_cp2k.load(file_or_basis_name, symb)
+    if os.path.isfile(pseudo_name):
+        return parse_cp2k.load(pseudo_name, symb)
 
     name = pseudo_name.lower().replace(' ', '').replace('-', '').replace('_', '')
     pseudomod = ALIAS[name]

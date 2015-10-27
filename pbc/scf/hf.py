@@ -133,13 +133,6 @@ def get_ovlp(cell, kpt=None):
     ngs = aoR.shape[0]
 
     s = (cell.vol()/ngs) * np.dot(aoR.T.conj(), aoR).real
-    import numpy
-    from pyscf import lib, gto, dft
-    #coords = lib.cartesian_prod([numpy.arange(-3,3.01,.05)]*3)
-    weights = cell.vol()/ngs
-    ao = dft.numint.eval_ao(cell, coords)
-    s1 = numpy.dot(ao.T, ao) * weights
-    print s1, s, weights
     return s
     
 def get_j(cell, dm, kpt=None):

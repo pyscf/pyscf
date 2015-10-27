@@ -329,10 +329,10 @@ class Cell(pyscf.gto.Mole):
     def lattice_vectors(self):
         if self.unit.startswith(('B','b','au','AU')):
             return self.h
-        elif unit.startswith(('A','a')):
+        elif self.unit.startswith(('A','a')):
             return self.h * (1./param.BOHR)
         else:
-            return self.h * (1./unit)
+            return self.h * (1./self.unit)
 
     def vol(self):
         return scipy.linalg.det(self.lattice_vectors())
