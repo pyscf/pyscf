@@ -15,7 +15,7 @@ def gen_uniform_grids(cell):
     ngs = 2*cell.gs+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
     invN = np.diag(1./ngs)
-    coords = np.dot(qv, np.dot(cell.h, invN).T)
+    coords = np.dot(qv, np.dot(cell.lattice_vectors(), invN).T)
     return coords
 
 class UniformGrids(object):

@@ -246,7 +246,8 @@ class Cell(pyscf.gto.Mole):
         
         rcut = np.sqrt(-(np.log(precision)/min_exp)) # guess
         rcut = scipy.optimize.fsolve(fn, rcut)[0]
-        rlengths = np.sqrt(np.diag(np.dot(self.h, self.h.T)))
+        rlengths = np.sqrt(np.diag(np.dot(self.lattice_vectors(),
+                                          self.lattice_vectors().T)))
         nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
         return nimgs+1 # additional lattice vector to take into account
@@ -269,14 +270,15 @@ class Cell(pyscf.gto.Mole):
                 The Ewald 'eta' and 'cut' parameters.
 
         '''
-        invhT = scipy.linalg.inv(self.h.T)
+        invhT = scipy.linalg.inv(self.lattice_vectors().T)
         Gmax = 2*np.pi*np.dot(invhT, self.gs)
         Gmax = np.min(Gmax)
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
         rcut = np.sqrt(-log_precision)/ew_eta
-        rlengths = np.sqrt(np.diag(np.dot(self.h, self.h.T)))
+        rlengths = np.sqrt(np.diag(np.dot(self.lattice_vectors(),
+                                          self.lattice_vectors().T)))
         #print "rlengths", rcut, rlengths
         ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
@@ -296,7 +298,7 @@ class Cell(pyscf.gto.Mole):
                 The array of G-vectors.
 
         '''
-        invhT = scipy.linalg.inv(self.h.T)
+        invhT = scipy.linalg.inv(self.lattice_vectors().T)
 
         gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
         gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)

@@ -37,7 +37,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         aoR = np.zeros([coords.shape[0], nao], np.complex128)
 
     for T in Ts:
-        L = np.dot(cell.h, T)
+        L = np.dot(cell.lattice_vectors(), T)
         aoR += (np.exp(1j*np.dot(kpt.T,L)) *
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 

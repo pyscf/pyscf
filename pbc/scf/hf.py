@@ -197,7 +197,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     # if SLOW == True:
     #     ewxyz = ewxyz.T
     #     for ic, (ix, iy, iz) in enumerate(ewxyz):
-    #         L = np.einsum('ij,j->i', cell.h, ewxyz[ic])
+    #         L = np.einsum('ij,j->i', cell.lattice_vectors(), ewxyz[ic])
 
     #         # prime in summation to avoid self-interaction in unit cell
     #         if (ix == 0 and iy == 0 and iz == 0):
@@ -226,7 +226,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     nx = len(ewxrange)
     ny = len(ewyrange)
     nz = len(ewzrange)
-    Lall = np.einsum('ij,jk->ik', cell.h, ewxyz).reshape(3,nx,ny,nz)
+    Lall = np.einsum('ij,jk->ik', cell.lattice_vectors(), ewxyz).reshape(3,nx,ny,nz)
     #exclude the point where Lall == 0
     Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
     Lall = Lall.reshape(3,nx*ny*nz)
