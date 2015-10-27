@@ -26,7 +26,7 @@ Installation
     - Cmake 2.8 or higher
     - Python 2.6, 2.7, 3.2, 3.3, 3.4
     - Numpy 1.6.2 or higher (1.6.1 has bug in einsum)
-    - Scipy 0.10 or higher
+    - Scipy 0.10 or higher (0.12.0 or higher for python 3.3, 3.4)
     - h5py 1.3.0 or higher (requires HDF5 1.8.4 or higher)
 
 * Compile core module

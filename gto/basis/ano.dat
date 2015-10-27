@@ -1,12 +1,12 @@
 #  ANO-RCC  EMSL  Basis Set Exchange Library  9/15/14 7:07 AM
 # Elements                             References
 # --------                             ----------
-# H He: P.-O. Widmark, P.-Å. Malmqvist, and B. O. Roos, Density-matrix averaged atomic natural orbital (ANO) basis-sets for correlated molecular wave-functions 1: 1st row atoms., Theor. Chim. Acta 77, 291-306 (1990).
+# H He: P.-O. Widmark, P.-A. Malmqvist, and B. O. Roos, Density-matrix averaged atomic natural orbital (ANO) basis-sets for correlated molecular wave-functions 1: 1st row atoms., Theor. Chim. Acta 77, 291-306 (1990).
 # Li Be Na Mg K Ca Rb Sr Cs Ba Fr Ra: O. Roos, V. Veryazov and P.-O. Widmark, Relativistic atomic natural orbital type basis sets for the alkaline and alkaline-earth atoms applied to the ground-state potentials for the corresponding dimers., Theor. Chem. Acc. 111, 345-351 (2003).
-# B C N O F Ne Al Si P S Cl Ar Ga Ge As Se Br Kr In Sn Sb Te I Xe Tl Pb Bi Po At Rn: B. O. Roos, R. Lindh, P.-Å. Malmqvist, V. Veryazov, and P.-O. Widmark, Main group atoms and dimers studied with a new relativistic ANO basis set, J. Phys. Chem. A 108, 2851 (2005).
-# Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg: . O. Roos, R. Lindh and P.-Å. Malmqvist, V. Veryazov and P.-O. Widmark, New relativistic ANO basis sets for transition metal atoms, J. Phys. Chem. A 109, 6575-6579 (2005).
-# Ac Th Pa U Np Pu Am Cm: B.O. Roos, R. Lindh, P.-Å. Malmqvist, V. Veryazov, and P.-O. Widmark, New relativistic ANO basis sets for actinide atoms, Chem. Phys. Letters 409, 295-299 (2005).
-# La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu: B. O. Roos, R. Lindh, P.-Å. Malmqvist, V. Veryazov, and P.-O. Widmark, New Relativistic atomic natural orbital basis sets for lanthanide atoms with applications to the Ce diatomic abd LuF3, Phys. Chem. A 112, 11431-11435 (2008).
+# B C N O F Ne Al Si P S Cl Ar Ga Ge As Se Br Kr In Sn Sb Te I Xe Tl Pb Bi Po At Rn: B. O. Roos, R. Lindh, P.-A. Malmqvist, V. Veryazov, and P.-O. Widmark, Main group atoms and dimers studied with a new relativistic ANO basis set, J. Phys. Chem. A 108, 2851 (2005).
+# Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg: . O. Roos, R. Lindh and P.-A. Malmqvist, V. Veryazov and P.-O. Widmark, New relativistic ANO basis sets for transition metal atoms, J. Phys. Chem. A 109, 6575-6579 (2005).
+# Ac Th Pa U Np Pu Am Cm: B.O. Roos, R. Lindh, P.-A. Malmqvist, V. Veryazov, and P.-O. Widmark, New relativistic ANO basis sets for actinide atoms, Chem. Phys. Letters 409, 295-299 (2005).
+# La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu: B. O. Roos, R. Lindh, P.-A. Malmqvist, V. Veryazov, and P.-O. Widmark, New Relativistic atomic natural orbital basis sets for lanthanide atoms with applications to the Ce diatomic abd LuF3, Phys. Chem. A 112, 11431-11435 (2008).
 # 
 
 
