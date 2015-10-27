@@ -110,7 +110,8 @@ class Cell(pyscf.gto.Mole):
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
 
-    def build_(self, h=None, gs=None, Gv=None, precision=None, nimgs=None, 
+    def build_(self, dump_input=True, parse_arg=True,
+               h=None, gs=None, Gv=None, precision=None, nimgs=None,
                ew_eta=None, ew_cut=None, pseudo=None,
                *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.  
@@ -178,7 +179,7 @@ class Cell(pyscf.gto.Mole):
             # be parsed appropriately by Mole.build
 
         # Do regular Mole.build_ with usual kwargs
-        pyscf.gto.Mole.build_(self,*args,**kwargs)
+        pyscf.gto.Mole.build_(self, dump_input, parse_arg, *args, **kwargs)
 
         if self.nimgs is None:
             self.nimgs = self.get_nimgs(self.precision)
