@@ -173,9 +173,9 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     if unit.startswith(('B','b','au','AU')):
         convert = 1
     elif unit.startswith(('A','a')):
-        convert = 1/param.BOHR
+        convert = 1./param.BOHR
     else:
-        convert = 1/unit
+        convert = 1./unit
     fmt_atoms = []
     def str2atm(line):
         dat = line.split()

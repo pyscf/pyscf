@@ -33,7 +33,7 @@ class UniformGrids(object):
 
         self.coords = gen_uniform_grids(self.cell)
         self.weights = np.ones(self.coords.shape[0]) 
-        self.weights *= 1.*cell.vol/self.weights.shape[0]
+        self.weights *= cell.vol()/self.weights.shape[0]
 
         return self.coords, self.weights
 

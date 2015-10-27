@@ -53,13 +53,13 @@ def get_j(mf, cell, dm_kpts, kpts):
     #:vj=numpy.zeros([nao,nao])
     #:for i in range(nao):
     #:    for j in range(nao):
-    #:        vj[i,j]=cell.vol/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
+    #:        vj[i,j]=cell.vol()/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
     # TODO: REPLACE by eval_mat here (with non0tab)
     vj_kpts=numpy.zeros([nkpts,nao,nao],numpy.complex128)
 
     mf._ecoul=0.
     for k in range(nkpts):
-        vj_kpts[k,:,:] = cell.vol/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(), 
+        vj_kpts[k,:,:] = cell.vol()/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(), 
                                                   vR.reshape(-1,1)*aoR_kpts[k,:,:])
 
         mf._ecoul+=1./nkpts*numpy.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:]) * .5
@@ -152,7 +152,7 @@ class KRHF(scf.RHF):
  
     # this function should look the same as scf.hf.SCF.get_fock_
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
-              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
 
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
@@ -447,7 +447,7 @@ def test_kscf_gamma(atom, ncells):
     cell=cl.Cell()
     cell.__dict__=mol.__dict__ # hacky way to make a cell
     cell.h=h
-    cell.vol=scipy.linalg.det(cell.h)
+    #cell.vol=scipy.linalg.det(cell.h)
     cell.nimgs = [2,2,2]
     #cell.nimgs = [0,0,0]
     cell.pseudo=None
@@ -499,7 +499,7 @@ def test_kscf_kpoints(atom, ncells):
     cell=cl.Cell()
     cell.__dict__=mol.__dict__ # hacky way to make a cell
     cell.h=h
-    cell.vol=scipy.linalg.det(cell.h)
+    #cell.vol=scipy.linalg.det(cell.h)
     cell.nimgs = [2,2,2]
     #cell.nimgs = [0,0,0]
     cell.pseudo=None

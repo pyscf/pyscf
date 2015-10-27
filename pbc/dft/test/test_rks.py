@@ -30,7 +30,7 @@ def make_cell(n):
     cell.unit = 'B'
     cell.h = np.diag([L,L,L])
     cell.gs = np.array([n,n,n])
-    cell.nimgs = [0,0,0]
+    #cell.nimgs = [0,0,0]
 
     cell.atom = mol.atom
     cell.basis = mol.basis

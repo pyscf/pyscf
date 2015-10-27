@@ -14,9 +14,7 @@ import pyscf.scf.hf
 import pyscf.dft
 import pyscf.gto
 import pyscf.lib.parameters as param
-import cell as cl
-import pbc
-import pp
+from pyscf.pbc import gto
 
 from pyscf.lib import logger
 
@@ -48,20 +46,14 @@ def get_int1e(intor, cell, kpt=None):
     if kpt is None:
         kpt = np.zeros([3,1])
 
+#FIXME: is int1e complex or float
     int1e = np.zeros((cell.nao_nr(),cell.nao_nr()))
     
     Ls = get_lattice_Ls(cell, cell.nimgs)
 
-    if cell.unit.startswith(('B','b','au','AU')):
-        convert = 1
-    elif cell.unit.startswith(('A','a')):
-        convert = param.BOHR
-    else:
-        convert = cell.unit
-
-    print "ATOMS"
-    print cell.atom
-    print cell._atom
+#    print "ATOMS"
+#    print cell.atom
+#    print cell._atom
 
     for L in Ls:
         cellL = cell.copy()
@@ -69,8 +61,9 @@ def get_int1e(intor, cell, kpt=None):
         # Use internal format ._atom; convert internal format to
         # units used by .atom (which reconverts to ._atom after build() call)
         for atom, coord in cell._atom: 
-            atomL.append([atom, tuple((list(coord) + L)*convert)]) 
+            atomL.append([atom, coord + L])
         cellL.atom = atomL
+        cellL.unit = 'Bohr'
         cellL.build(False,False)
         int1e += (np.exp(1j*np.dot(kpt.T,L)) *
                   pyscf.gto.intor_cross(intor, cell, cellL))
@@ -96,7 +89,7 @@ def get_t(cell, kpt=None):
 def test_periodic_ints():
     from pyscf import gto
     from pyscf.lib.parameters import BOHR
-    import cell as cl
+    import pyscf.pbc.gto as pgto
     import scf
 
     B = BOHR
@@ -133,11 +126,11 @@ def test_periodic_ints():
     #mol.unit='A'
     #mol.build()
 
-    cell = cl.Cell()
+    cell = pgto.Cell()
     cell.__dict__ = mol.__dict__ # hacky way to make a cell
     cell.h = h
-    cell.vol = scipy.linalg.det(cell.h)
-    cell.nimgs = pbc.get_nimgs(cell, 1.e-6)
+    #cell.vol = scipy.linalg.det(cell.h)
+    cell.nimgs = gto.get_nimgs(cell, 1.e-6)
     # print "NIMG",  
     print "NIMGS", cell.nimgs
     cell.pseudo = None

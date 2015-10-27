@@ -3,8 +3,10 @@ import numpy
 import pyscf.df.incore
 import pyscf.lib.parameters as param
 import pyscf.gto.mole
-import pbc
-import scfint
+from pyscf.pbc.dft import gen_grid
+from pyscf.pbc.dft import numint
+from pyscf.pbc import gto
+from pyscf.pbc.scf import scfint
 
 def format_aux_basis(cell, auxbasis='weigend'):
     '''
@@ -15,7 +17,7 @@ def format_aux_basis(cell, auxbasis='weigend'):
     auxcell.basis=auxbasis
     precision=1.e-9 # FIXME
     auxcell.build(False,False)
-    auxcell.nimgs=pbc.get_nimgs(auxcell, precision)
+    #auxcell.nimgs=gto.get_nimgs(auxcell, precision)
 
     # auxcell.__dict__.update(auxmol.__dict__)
     # print "MOL"
@@ -40,19 +42,12 @@ def aux_e2(cell, auxcell, intor):
     Ls = scfint.get_lattice_Ls(cell, nimgs)
     Ms = Ls
 
-    if cell.unit.startswith(('B','b','au','AU')):
-        convert = 1
-    elif cell.unit.startswith(('A','a')):
-        convert = param.BOHR
-    else:
-        convert = cell.unit
-    
     # cell with *all* images
     rep_cell = cell.copy()
     rep_cell.atom = []
     for L in Ls:
         for atom, coord in cell._atom:
-            rep_cell.atom.append([atom, tuple((list(coord) + L)*convert)])
+            rep_cell.atom.append([atom, coord + L])
 
     rep_cell.build(False,False)
 
@@ -77,13 +72,13 @@ def aux_e2(cell, auxcell, intor):
 
 def aux_e2_grid(cell, auxcell, gs):
 
-    coords=pbc.setup_uniform_grids(cell, gs)
+    coords=gen_grid.gen_uniform_grids(cell, gs)
     nao=cell.nao_nr()
-    ao=pbc.get_aoR(cell, coords)
-    auxao=pbc.get_aoR(auxcell, coords)
+    ao=numint.eval_ao(cell, coords)
+    auxao=numint.eval_ao(auxcell, coords)
     naoaux=auxcell.nao_nr()
 
-    aux_e2=numpy.einsum('ri,rj,rk',ao,ao,auxao)*cell.vol/coords.shape[0]
+    aux_e2=numpy.einsum('ri,rj,rk',ao,ao,auxao)*cell.vol()/coords.shape[0]
 
     aux_e2.reshape([nao*nao,naoaux])
     return aux_e2
@@ -92,8 +87,8 @@ def aux_e2_grid(cell, auxcell, gs):
 def test_df():
     from pyscf import gto
     from pyscf.lib.parameters import BOHR
-    import cell as cl
-    import scf
+    import pyscf.pbc.gto as pgto
+    import pyscf.pbc.scf as pscf
     import numpy as np
     import scipy
 
@@ -116,17 +111,17 @@ def test_df():
     # not hard to integrate
     mol.basis = { 'He': [[0, (1.0, 1.0)]] }
     mol.unit='A'
-    mol.build()
+    mol.build(0, 0)
 
-    cell = cl.Cell()
+    cell = pgto.Cell()
     cell.__dict__ = mol.__dict__ # hacky way to make a cell
     cell.h = h
-    cell.vol = scipy.linalg.det(cell.h)
+    #cell.vol = scipy.linalg.det(cell.h)
     cell.nimgs = [3,3,3]
     cell.pseudo = None
     cell.output = None
     cell.verbose = 0
-    cell.build()
+    cell.build(0, 0)
 
     gs = np.array([40,40,40])
 
@@ -172,8 +167,8 @@ def genbas(rho_exp, beta, bound0=(1e11,1e-8), l=0):
 def test_poisson():
     from pyscf import gto
     from pyscf.lib.parameters import BOHR
-    import cell as cl
-    import scf
+    import pyscf.pbc.gto as pgto
+    import pyscf.pbc.scf as pscf
     import numpy as np
     import scipy
 
@@ -183,7 +178,7 @@ def test_poisson():
     mol.verbose = 0
     mol.output = None
 
-    Lunit = 4
+    Lunit = 4.
     Ly = Lz = Lunit
     Lx = Lunit
 
@@ -194,11 +189,11 @@ def test_poisson():
     mol.build(
         verbose = 0,
         atom = '''He     0    0.       0.
-        He     1    0.       0.
-        He     0    1.       0.
-        He     0    0.       1.
-        He     1    1.       0.
-        He     1    0.       1.
+        #He     1    0.       0.
+        #He     0    1.       0.
+        #He     0    0.       1.
+        #He     1    1.       0.
+        #He     1    0.       1.
         ''',
         basis={'He': [[0, (1.0, 1.0)]]})
     #basis={'He':'sto-3g'})
@@ -210,11 +205,13 @@ def test_poisson():
     #mol.unit='A'
     #mol.build()
 
-    cell = cl.Cell()
-    cell.__dict__ = mol.__dict__ # hacky way to make a cell
+    cell = pgto.Cell()
+    cell.__dict__.update(mol.__dict__) # hacky way to make a cell
     cell.h = h
-    cell.vol = scipy.linalg.det(cell.h)
-    cell.nimgs = pbc.get_nimgs(cell, 1.e-7)
+    #cell.vol = scipy.linalg.det(cell.h)
+    #cell.nimgs = cell.get_nimgs(cell, 1.e-7)
+    n = 30
+    cell.gs = np.array([n,n,n])
     cell.pseudo = None
     cell.output = None
     cell.verbose = 0
@@ -224,10 +221,10 @@ def test_poisson():
     bas=genbas(2., 1.8,(10.,1.0), 0)+genbas(1., 1.8,(10.,1.0), 1)+genbas(2., 1.8,(10.,1.0), 2)
     #bas="weigend"
     #bas=[[0, (1.0, 1.0)], [0, (2.0, 1.0)]]
-    print "basis", bas
+    #print "basis", bas
     auxcell=format_aux_basis(cell, {'He': bas })
 
-    print "NIMGS", auxcell.nimgs, cell.nimgs
+    #print "NIMGS", auxcell.nimgs, cell.nimgs
 
     gs = np.array([40,40,40])
     #ew_eta, ew_cut = pbc.ewald_params(cell, gs, 1.e-7)
@@ -236,17 +233,18 @@ def test_poisson():
 
     #dm=mf.make_rdm1()
     # DF overlap
-    ovlp1=scf.get_ovlp(cell, gs)
-    print ovlp1
+    ovlp1=pscf.hf.get_ovlp(cell)#, gs)
+    print ovlp1, 'o'
     ovlp=scfint.get_ovlp(cell)
-    print ovlp
+    print ovlp, 'o'
     dm=2*scipy.linalg.inv(ovlp) 
+    exit()
 
     print "DM", dm
     nelec=np.einsum('ij,ij',dm,ovlp)
     print "nelec", nelec
 
-    j=scf.get_j(cell, dm, gs)
+    j=pscf.hf.get_j(cell, dm, gs)
     ref_j=np.einsum('ij,ij',j,dm)
     print "Coulomb", ref_j
 
@@ -256,7 +254,7 @@ def test_poisson():
 
     print "rho is", rho
     norm=auxnorm(auxcell)
-    rho1=rho-nelec*norm/cell.vol
+    rho1=rho-nelec*norm/cell.vol()
 
     print "norm is", norm
 
@@ -270,3 +268,5 @@ def test_poisson():
                              # should agree with the k-space Coulomb
                              # sum which omits K=0
     print numpy.dot(v1,rho)-ref_j # should be close to zero
+
+test_poisson()

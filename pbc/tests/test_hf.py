@@ -26,7 +26,7 @@ def test_hf(pseudo=None):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.h = np.diag([L,L,L])
-    cell.gs = np.array([80,80,80])
+    cell.gs = np.array([120,120,120])
     cell.nimgs = [0,0,0]
 
     cell.atom = mol.atom

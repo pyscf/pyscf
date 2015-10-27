@@ -12,6 +12,7 @@ import scipy.optimize
 import pyscf
 import pyscf.lib.parameters as param
 from pyscf.lib.numpy_helper import cartesian_prod
+import pyscf.gto.mole
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
@@ -93,11 +94,35 @@ def format_basis(basis_tab):
             fmt_basis[symb] = basis_tab[atom]
     return fmt_basis
 
+def copy(cell):
+    import copy
+    newcell = pyscf.gto.mole.copy(cell)
+    newcell._pseudo = copy.deepcopy(cell._pseudo)
+    return newcell
+
+def pack(cell):
+    cldic = pyscf.gto.mole.pack(cell)
+    cldic['h'] = cell.h
+    cldic['gs'] = cell.gs
+    cldic['precision'] = cell.precision
+#FIXME: Distinguish the input arg and the internal format of the following, so
+# that we can save the input arg in the cell-dic
+#    cldic['Gv'] = cell.Gv
+#    cldic['nimgs'] = cell.nimgs
+#    cldic['ew_eta'] = cell.ew_eta
+#    cldic['ew_cut'] = cell.ew_cut
+    return cldic
+
+def unpack(celldic):
+    cl = Cell()
+    cl.__dict__.update(celldic)
+    return cl
+
+
 class Cell(pyscf.gto.Mole):
     def __init__(self, **kwargs):
         pyscf.gto.Mole.__init__(self, **kwargs)
-        self.h = None
-        self.vol = None
+        self.h = None  # lattice vectors, three rows, array((a1,a2,a3))
         self.gs = None
         self.Gv = None
         self.precision = 1.e-8
@@ -105,14 +130,20 @@ class Cell(pyscf.gto.Mole):
         self.ew_eta = None
         self.ew_cut = None
         self.pseudo = None
-        self.__dict__.update(kwargs)
+
+##################################################
+# don't modify the following variables, they are not input arguments
+        self._pseudo = None
+        self._keys = set(self.__dict__.keys())
+
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
 
+#Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build_(self, dump_input=True, parse_arg=True,
                h=None, gs=None, Gv=None, precision=None, nimgs=None,
-               ew_eta=None, ew_cut=None, pseudo=None,
+               ew_eta=None, ew_cut=None, pseudo=None, basis=None,
                *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.  
         Whenever you change the value of the attributes of :class:`Cell`, 
@@ -133,14 +164,12 @@ class Cell(pyscf.gto.Mole):
         if ew_eta is not None: self.ew_eta = ew_eta
         if ew_cut is not None: self.ew_cut = ew_cut
         if pseudo is not None: self.pseudo = pseudo
+        if basis is not None: self.basis = basis
 
-        if 'unit' in kwargs.keys():
+        if 'unit' in kwargs:
             self.unit = kwargs['unit']
-        if self.unit.startswith(('A','a')):
-            self.h *= (1./param.BOHR)
-        self.vol = scipy.linalg.det(self.h)
 
-        if 'atom' in kwargs.keys():
+        if 'atom' in kwargs:
             self.atom = kwargs['atom']
         _atom = format_atom(self.atom, unit=self.unit)
 
@@ -148,10 +177,6 @@ class Cell(pyscf.gto.Mole):
         # This must happen before build() because it affects
         # tot_electrons() via atom_charge()
         if self.pseudo is not None:
-            # release circular referred objs
-            # Note obj.x = obj.member_function causes circular referrence
-            gc.collect()
-        
             if isinstance(self.pseudo, str):
                 # specify global pseudo for whole molecule
                 uniq_atoms = set([a[0] for a in _atom])
@@ -164,10 +189,9 @@ class Cell(pyscf.gto.Mole):
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
                                    (self.nelectron, self.spin))
 
+#FIXME: move the basis checking in to format_basis, then we don't have to overwrite the input arg?
         # Check if we're using a GTH basis
         # This must happen before build() because it prepares self.basis
-        if 'basis' in kwargs.keys():
-            self.basis = kwargs['basis']
         if isinstance(self.basis, str):
             basis_name = self.basis.lower().replace(' ', '').replace('-', '').replace('_', '')
             if 'gth' in basis_name: 
@@ -301,4 +325,24 @@ class Cell(pyscf.gto.Mole):
         for ia in range(self.natm):
             SI[ia,:] = np.exp(-1j*np.dot(self.Gv.T, self.atom_coord(ia)))
         return SI
+
+    def lattice_vectors(self):
+        if self.unit.startswith(('B','b','au','AU')):
+            return self.h
+        elif unit.startswith(('A','a')):
+            return self.h * (1./param.BOHR)
+        else:
+            return self.h * (1./unit)
+
+    def vol(self):
+        return scipy.linalg.det(self.lattice_vectors())
+
+    def copy(self):
+        return copy(self)
+
+    def pack(self):
+        return pack(self)
+
+    def unpack(self):
+        return unpack(self)
 

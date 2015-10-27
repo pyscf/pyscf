@@ -36,7 +36,7 @@ def get_hcore(cell, kpt=None):
 def get_jvloc_G0(cell, kpt=None):
     '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
 
-    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
+    return 1./cell.vol() * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 def get_nuc(cell, kpt=None):
     '''Get the bare periodic nuc-el AO matrix, with G=0 removed.
@@ -118,7 +118,7 @@ def get_t(cell, kpt=None):
     t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]).real +
              np.dot(aoR[2].T.conj(), aoR[2]).real +
              np.dot(aoR[3].T.conj(), aoR[3]).real)
-    t *= (cell.vol/ngs)
+    t *= (cell.vol()/ngs)
     return t
 
 def get_ovlp(cell, kpt=None):
@@ -132,7 +132,14 @@ def get_ovlp(cell, kpt=None):
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     ngs = aoR.shape[0]
 
-    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR).real
+    s = (cell.vol()/ngs) * np.dot(aoR.T.conj(), aoR).real
+    import numpy
+    from pyscf import lib, gto, dft
+    #coords = lib.cartesian_prod([numpy.arange(-3,3.01,.05)]*3)
+    weights = cell.vol()/ngs
+    ao = dft.numint.eval_ao(cell, coords)
+    s1 = numpy.dot(ao.T, ao) * weights
+    print s1, s, weights
     return s
     
 def get_j(cell, dm, kpt=None):
@@ -154,7 +161,7 @@ def get_j(cell, dm, kpt=None):
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
 
-    vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
+    vj = (cell.vol()/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
     return vj
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
@@ -255,7 +262,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
 
     # last line of Eq. (F.5) in Martin 
     ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
-    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
+    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol())
     
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
     Gv = cell.Gv
@@ -280,7 +287,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     JexpG2 = coulG*expG2
     ewgI = np.dot(ZSIG2,JexpG2)
     ewg = .5*np.sum(ewgI)
-    ewg /= cell.vol
+    ewg /= cell.vol()
 
     log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
