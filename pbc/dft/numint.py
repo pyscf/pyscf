@@ -207,7 +207,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         mat = mat_re + 1j*mat_im
 
         # print "MATRIX", mat.dtype
-        return mat + mat.T.conj()
+        return (mat + mat.T.conj()).real
         
     else:
         return pyscf.dft.numint.eval_mat(mol, ao, 
