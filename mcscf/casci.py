@@ -276,7 +276,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     nmo = mo_coeff.shape[1]
     fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
     fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
-    mo_energy = fock.diagonal()
+    mo_energy = fock.diagonal().copy()
     if cas_natorb:
         mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                            verbose)
