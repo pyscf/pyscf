@@ -26,6 +26,7 @@ from pyscf.fci import direct_spin1
 libfci = pyscf.lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
+    assert(fcivec.flags.c_contiguous)
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
             neleca = nelec//2
@@ -55,6 +56,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 # Please refer to the treatment in direct_spin1.absorb_h1e
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
+    assert(fcivec.flags.c_contiguous)
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):

@@ -82,8 +82,7 @@ def delley(n, **kwargs):
         r[i-1] = xi
         dri = rfac * (-2.0*i*(step)**2) / ((1-(i*step)**2)) # d xi / dr
         dr[i-1] = dri
-    w = r*r * dr * 4 * numpy.pi
-    return r, w
+    return r, dr
 
 # Mura-Knowles log3 quadrature (JCP,104,9848)
 def mura_knowles(n, charge=None, **kwargs):
@@ -99,9 +98,10 @@ def mura_knowles(n, charge=None, **kwargs):
         x = (i+.5) / n
         r[i] = -far * numpy.log(1-x**3)
         dr[i] = far * 3*x*x/((1-x**3)*n)
-    w = r*r * dr * 4 * numpy.pi
-    return r, w
+    return r, dr
 
+# Gauss-Chebyshev of the second kind,  and the transformed interval [0,\infty)
+# Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
 def gauss_chebyshev(n, **kwargs):
     '''Gauss-Chebyshev'''
     r = numpy.empty(n)
@@ -109,15 +109,16 @@ def gauss_chebyshev(n, **kwargs):
     step = 1. / (n+1)
     ln2 = 1 / numpy.log(2)
     fac = 16*step / 3
-    for i in range(1, n+1):
-        x1 = i * numpy.pi * step
-        xi = (n+1-2*i) * step \
+    xinc = numpy.pi * step
+    x1 = 0
+    for i in range(n):
+        x1 += xinc
+        xi = (n-2*i-1) * step \
                 + 1/numpy.pi * (1+2./3*numpy.sin(x1)**2) * numpy.sin(2*x1)
-        r[i-1] = numpy.log(2/(1-xi)) * ln2
+        r[i] = 1 - numpy.log(1+xi) * ln2
         wi = fac * numpy.sin(x1)**4
-        dr[i-1] = wi * ln2/(1-xi)
-    w = r*r * dr * 4 * numpy.pi
-    return r[::-1], w[::-1]
+        dr[i] = wi * ln2/(1+xi)
+    return r, dr
 
 
 # O. Treutler, R. Ahlrichs, JCP 102, 346.  (M4)
@@ -132,8 +133,7 @@ def treutler(n, **kwargs):
         r [i] = -ln2*(1+x)**.6 * numpy.log((1-x)/2)
         dr[i] = step * numpy.sin((i+1)*step) \
                 * ln2*(1+x)**.6 *(-.6/(1+x)*numpy.log((1-x)/2)+1/(1-x))
-    w = r*r * dr * 4 * numpy.pi
-    return r[::-1], w[::-1]
+    return r[::-1], dr[::-1]
 
 
 

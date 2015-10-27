@@ -14,6 +14,7 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
+symmetry = 1
 )
 mfr = scf.RHF(mol)
 mfr.scf()
@@ -56,6 +57,23 @@ class KnowValues(unittest.TestCase):
 #TODO:        self.assertTrue(numpy.allclose(f1[1], f1[1].T))
 #TODO:        self.assertAlmostEqual(numpy.linalg.norm(f1), 23.597476504476919*numpy.sqrt(2), 6)
 
+    def test_canonicalize1(self):
+        numpy.random.seed(1)
+        f1 = numpy.random.random(mcr.mo_coeff.shape)
+        u1 = numpy.linalg.svd(f1)[0]
+        mo, ci, mo_e = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1))
+        e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
+        self.assertAlmostEqual(e1, 44.2658681077, 7)
+        mo, ci, mo_e = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1), eris=mcr.ao2mo(mcr.mo_coeff))
+        e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
+        self.assertAlmostEqual(e1, 44.2658681077, 7)
+
+    def test_canonicalize(self):
+        mo, ci, mo_e = mcr.canonicalize()
+        self.assertAlmostEqual(numpy.linalg.norm(mo), 9.9260608594977242, 7)
+        mo, ci, mo_e = mcr.canonicalize(eris=mcr.ao2mo(mcr.mo_coeff))
+        self.assertAlmostEqual(numpy.linalg.norm(mo), 9.9260608594977242, 7)
+
     def test_make_rdm12(self):
         dmr = mcscf.addons.make_rdm1(mcr)
         dm1, dm2 = mcscf.addons.make_rdm12(mcr)
@@ -82,8 +100,18 @@ class KnowValues(unittest.TestCase):
                 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]]
         self.assertTrue(numpy.allclose(mo2, (ref,ref1)))
 
+    def test_sort_mo_by_irrep(self):
+        mc1 = mcscf.CASSCF(mfr, 8, 4)
+        mo0 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, {'E1ux':2, 'E1uy':2, 'E1gx':2, 'E1gy':2})
+        mo1 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, {2:2, 3:2, 6:2, 7:2}, {2:0, 3:0, 6:0, 7:0})
+        mo2 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, (0,0,2,2,0,0,2,2))
+        mo3 = mcscf.sort_mo_by_irrep(mc1, mfr.mo_coeff, {'E1ux':2, 'E1uy':2, 2:2, 3:2})
+        self.assertTrue(numpy.allclose(mo0, mo1))
+        self.assertTrue(numpy.allclose(mo0, mo2))
+        self.assertTrue(numpy.allclose(mo0, mo3))
+
     def test_project_init_guess(self):
-        print('todo')
+        print('todo test_project_init_guess')
 
 
 if __name__ == "__main__":

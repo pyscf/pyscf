@@ -93,8 +93,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/e2buflen)) * comp
-    ao_loc = numpy.array(mol.ao_loc_2c(), dtype=numpy.int32)
-    tao = numpy.array(mol.tmap(), dtype=numpy.int32)
+    ao_loc = numpy.asarray(mol.ao_loc_2c(), dtype=numpy.int32)
+    tao = numpy.asarray(mol.tmap(), dtype=numpy.int32)
     ti0 = time_1pass
     buf = numpy.empty((e2buflen, nao_pair), dtype=numpy.complex)
     istep = 0
@@ -190,7 +190,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     for icomp in range(comp):
         g = fswap.create_group(str(icomp))  # for h5py old version
 
-    tao = numpy.array(mol.tmap(), dtype=numpy.int32)
+    tao = numpy.asarray(mol.tmap(), dtype=numpy.int32)
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
@@ -230,7 +230,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e', aosym='s4', comp=1,
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose)
     with h5py.File(erifile.name, 'r') as feri:
-        return numpy.array(feri['eri_mo'])
+        return numpy.asarray(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='cint2e', aosym='s4', comp=1,
                    verbose=logger.WARN):
@@ -239,7 +239,7 @@ def general_iofree(mol, mo_coeffs, intor='cint2e', aosym='s4', comp=1,
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose)
     with h5py.File(erifile.name, 'r') as feri:
-        return numpy.array(feri['eri_mo'])
+        return numpy.asarray(feri['eri_mo'])
 
 
 def iden_coeffs(mo1, mo2):

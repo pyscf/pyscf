@@ -26,7 +26,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
     c_atm = numpy.array(atm, dtype=numpy.int32)
     c_bas = numpy.array(bas, dtype=numpy.int32)
     c_env = numpy.array(env)
-    natm = ctypes.c_int(mol.natm)
+    natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
 
     nao = mol.nao_2c()

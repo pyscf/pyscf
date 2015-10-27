@@ -43,6 +43,16 @@ class KnowValues(unittest.TestCase):
         g = grad.hf.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_nuc()), 8.2887823210941249, 9)
 
+    def test_ccsd(self):
+        from pyscf import cc
+        rhf = scf.RHF(mol)
+        rhf.scf()
+        mycc = cc.CCSD(rhf)
+        mycc.kernel()
+        mycc.solve_lambda()
+        g1 = grad.ccsd.kernel(mycc)
+        self.assertAlmostEqual(finger(g1), 7.8557320937879354, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for HF")

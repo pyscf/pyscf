@@ -4,101 +4,162 @@
 
 #include <string.h>
 #include <assert.h>
+//#include <omp.h>
+#include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
 
-void CCunpack_tril(int count, int n, double *tril, double *mat)
+void CCunpack_tril(double *tril, double *mat, int count, int n)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat)
 {
         int ic, i, j, ij;
-        double *pmat;
-
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+        double *pmat, *ptril;
+#pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
+                ptril = tril + n2 * ic;
+                pmat = mat + nn * ic;
                 for (ij = 0, i = 0; i < n; i++) {
-                        pmat = mat + i * n;
                         for (j = 0; j <= i; j++, ij++) {
-                                pmat[j] = tril[ij];
+                                pmat[i*n+j] = ptril[ij];
+                                pmat[j*n+i] = ptril[ij];
                         }
                 }
-                NPdsymm_triu(n, mat, 1);
-                tril += n * (n+1) / 2;
-                mat += n * n;
         }
+}
+}
+
+void CCpack_tril(double *tril, double *mat, int count, int n)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat)
+{
+        int ic, i, j, ij;
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+        double *pmat, *ptril;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                ptril = tril + n2 * ic;
+                pmat = mat + nn * ic;
+                for (ij = 0, i = 0; i < n; i++) {
+                        for (j = 0; j <= i; j++, ij++) {
+                                ptril[ij] = pmat[i*n+j];
+                        }
+                }
+        }
+}
 }
 
 /*
- * g2[p,q,r,s] = a * v1 + b * v2.transpose(0,2,1,3)
+ * a * v1 + b * v2.transpose(0,2,1,3)
  */
-void CCmake_g0213(double *g2, double *v1, double *v2, int *shape,
-                  double a, double b)
+void CCmake_0213(double *out, double *v1, double *v2, int count, int m,
+                 double a, double b)
 {
-        int i, j, k, l;
-        int d1 = shape[1] * shape[2] * shape[3];
-        int d2 = shape[2] * shape[3];
-        int dv2 = shape[1] * shape[3];
-        int d3 = shape[3];
-        double *pv1, *pv2, *pg2;
-        for (i = 0; i < shape[0]; i++) {
-                for (j = 0; j < shape[1]; j++) {
-                        pg2 = g2 + d2 * j;
-                        pv1 = v1 + d2 * j;
-                        pv2 = v2 + d3 * j;
-                        for (k = 0; k < shape[2]; k++) {
-                                for (l = 0; l < shape[3]; l++) {
-                                        pg2[l] = pv1[l] * a + pv2[l] * b;
-                                }
-                                pg2 += d3;
-                                pv1 += d3;
-                                pv2 += dv2;
+#pragma omp parallel default(none) \
+        shared(count, m, out, v1, v2, a, b)
+{
+        int i, j, k, l, n;
+        size_t d2 = m * m;
+        size_t d1 = m * m * m;
+        double *pv1, *pv2, *pout;
+#pragma omp for schedule (static)
+        for (i = 0; i < count; i++) {
+                for (n = 0, j = 0; j < m; j++) {
+                for (k = 0; k < m; k++) {
+                        pout = out + d1*i + d2*j + m*k;
+                        pv1  = v1  + d1*i + d2*j + m*k;
+                        pv2  = v2  + d1*i + d2*k + m*j;
+                        for (l = 0; l < m; l++, n++) {
+                                pout[l] = pv1[l] * a + pv2[l] * b;
                         }
-                }
-                v1 += d1;
-                v2 += d1;
-                g2 += d1;
-        }
+        } } }
 }
-/*
- * g2[p,q,r,s] = a * v1 + b * v2.transpose(0,1,3,2)
- */
-void CCmake_g0132(double *g2, double *v1, double *v2, int *shape,
-                  double a, double b)
-{
-        int i, j, k, l;
-        int d1 = shape[1] * shape[2] * shape[3];
-        int d2 = shape[2] * shape[3];
-        int d3 = shape[3];
-        double *pv1, *pv2, *pg2;
-        for (i = 0; i < shape[0]; i++) {
-                for (j = 0; j < shape[1]; j++) {
-                        pg2 = g2 + d2 * j;
-                        pv1 = v1 + d2 * j;
-                        pv2 = v2 + d2 * j;
-                        for (k = 0; k < shape[2]; k++) {
-                                for (l = 0; l < shape[3]; l++) {
-                                        pg2[l] = pv1[l] * a + pv2[l*shape[2]] * b;
-                                }
-                                pg2 += d3;
-                                pv1 += d3;
-                                pv2 += 1;
-                        }
-                }
-                v1 += d1;
-                v2 += d1;
-                g2 += d1;
-        }
 }
 
 /*
- * tau[p,q,r,s] += t1a[p,s] * t1b[q,r]
+ * out = v1 + v2.transpose(0,2,1)
  */
-void CCset_tau(double *tau, double *t1a, int *shapea, double *t1b, int *shapeb)
+void CCsum021(double *out, double *v1, double *v2, int count, int m)
 {
-        const int INC1 = 1;
-        const double D1 = 1;
-        int i;
-        int sizeb = shapeb[0] * shapeb[1];
-        int d1 = sizeb * shapea[1];
-        for (i = 0; i < shapea[0]; i++) {
-                dger_(shapea+1, &sizeb, &D1, t1a+i*shapea[1], &INC1,
-                      t1b, &INC1, tau+i*d1, shapea+1);
+#pragma omp parallel default(none) \
+        shared(count, m, out, v1, v2)
+{
+        int i, j, k, n;
+        size_t mm = m * m;
+        double *pout, *pv1, *pv2;
+#pragma omp for schedule (static)
+        for (i = 0; i < count; i++) {
+                pout = out + mm * i;
+                pv1  = v1  + mm * i;
+                pv2  = v2  + mm * i;
+                for (n = 0, j = 0; j < m; j++) {
+                for (k = 0; k < m; k++, n++) {
+                        pout[n] = pv1[n] + pv2[k*m+j];
+                } }
         }
 }
+}
+
+/*
+ * g2 = a * v1 + b * v2.transpose(0,2,1)
+ */
+void CCmake_021(double *out, double *v1, double *v2, int count, int m,
+                double a, double b)
+{
+        if (a == 1 && b == 1) {
+                return CCsum021(out, v1, v2, count, m);
+        }
+
+#pragma omp parallel default(none) \
+        shared(count, m, out, v1, v2, a, b)
+{
+        int i, j, k, n;
+        size_t mm = m * m;
+        double *pout, *pv1, *pv2;
+#pragma omp for schedule (static)
+        for (i = 0; i < count; i++) {
+                pout = out + mm * i;
+                pv1  = v1  + mm * i;
+                pv2  = v2  + mm * i;
+                for (n = 0, j = 0; j < m; j++) {
+                for (k = 0; k < m; k++, n++) {
+                        pout[n] = pv1[n] * a + pv2[k*m+j] * b;
+                } }
+        }
+}
+}
+
+/*
+ * if matrix B is symmetric for the contraction A_ij B_ij,
+ * Tr(AB) ~ A_ii B_ii + (A_ij + A_ji) B_ij where i > j
+ * This function extract the A_ii and the lower triangluar part of A_ij + A_ji
+ */
+void CCprecontract(double *out, double *in, int count, int m, double diagfac)
+{
+#pragma omp parallel default(none) \
+        shared(count, m, in, out, diagfac)
+{
+        int i, j, k, n;
+        size_t mm = m * m;
+        size_t m2 = m * (m+1) / 2;
+        double *pout, *pin;
+#pragma omp for schedule (static)
+        for (i = 0; i < count; i++) {
+                pout = out + m2 * i;
+                pin  = in  + mm * i;
+                for (n = 0, j = 0; j < m; j++) {
+                        for (k = 0; k < j; k++, n++) {
+                                pout[n] = pin[j*m+k] + pin[k*m+j];
+                        }
+                        pout[n] = pin[j*m+j] * diagfac;
+                        n++;
+                }
+        }
+}
+}
+

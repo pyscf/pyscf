@@ -241,18 +241,8 @@ class RHF(hf.RHF):
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
         return mo_occ
 
-    def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
-        mol = self.mol
-        self.build(mol)
-        self.dump_flags()
-        self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
-                            dm0=dm0, callback=self.callback)
-
-        logger.timer(self, 'SCF', *cput0)
-        self.dump_energy(self.hf_energy, self.converged)
+    def _finalize_(self):
+        hf.RHF._finalize_(self)
 
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
@@ -268,11 +258,6 @@ class RHF(hf.RHF):
             chkfile.dump_scf(self.mol, self.chkfile,
                              self.hf_energy, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
-
-# analyze at last, in terms of the ordered orbital energies
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(self.verbose)
-        return self.hf_energy
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
@@ -563,18 +548,8 @@ class ROHF(rohf.ROHF):
         dm_b = numpy.dot(mo_b, mo_b.T)
         return numpy.array((dm_a, dm_b))
 
-    def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
-        mol = self.mol
-        self.build(mol)
-        self.dump_flags()
-        self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
-                            dm0=dm0, callback=self.callback)
-
-        logger.timer(self, 'SCF', *cput0)
-        self.dump_energy(self.hf_energy, self.converged)
+    def _finalize_(self):
+        rohf.ROHF._finalize_(self)
 
         # sort MOs wrt orbital energies, it should be done last.
         c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2])
@@ -595,10 +570,6 @@ class ROHF(rohf.ROHF):
             chkfile.dump_scf(self.mol, self.chkfile,
                              self.hf_energy, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
-
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(self.verbose)
-        return self.hf_energy
 
     def analyze(self, verbose=logger.DEBUG):
         from pyscf.tools import dump_mat

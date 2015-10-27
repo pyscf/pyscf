@@ -14,6 +14,8 @@ struct _VHFEnvs {
         int nao;
         int *ao_loc; // size of nbas+1, last element = nao
         int *tao; // time reversal mappings, index start from 1
+        CVHFOpt *vhfopt;
+        CINTOpt *cintopt;
 };
 
 void CVHFdot_nrs1(int (*intor)(), void (**fjk)(), double **dms, double *vjk,

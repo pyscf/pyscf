@@ -562,7 +562,7 @@ def kernel(mc, *args, **kwargs):
 
 def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
     '''Strongly contracted NEVPT2'''
-    if ci==None:
+    if ci is None:
         ci=mc.ci
     #mc.cas_natorb(ci=ci)
 

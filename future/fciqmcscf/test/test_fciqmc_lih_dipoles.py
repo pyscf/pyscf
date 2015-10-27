@@ -11,7 +11,7 @@ b = 1.4
 mol = gto.Mole()
 
 mol.build(
-        verbose = 5,
+        verbose = 0,
 #output = 'casscf.out',
 output = None,
 atom = [['Li',(  0.000000,  0.000000, 1.005436697)],
@@ -33,7 +33,7 @@ class KnowValues(unittest.TestCase):
 
         norb = m.mo_coeff.shape[1]
         energy = run_standalone(fciqmcci, m.mo_coeff)
-        two_pdm = read_neci_two_pdm('spinfree_TwoRDM.1', norb)
+        two_pdm = read_neci_two_pdm(fciqmcci, 'spinfree_TwoRDM.1', norb)
         one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
         dips, elec, nuc = calc_dipole(mol, m.mo_coeff, one_pdm)
 
@@ -58,7 +58,7 @@ class KnowValues(unittest.TestCase):
         norb = mc.mo_coeff.shape[1]
         # Run from CASSCF natural orbitals
         energy = run_standalone(fciqmcci, casscf_mo)
-        two_pdm = read_neci_two_pdm('spinfree_TwoRDM.1', norb)
+        two_pdm = read_neci_two_pdm(fciqmcci, 'spinfree_TwoRDM.1', norb)
         one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
         dips, elec, nuc = calc_dipole(mol, mc.mo_coeff, one_pdm)
 

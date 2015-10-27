@@ -46,17 +46,17 @@ def density_fit(casscf, auxbasis='weigend'):
             self._keys = self._keys.union(['auxbasis'])
 
         def ao2mo(self, mo):
-            ncore = self.ncore
-            #self._cderi = None # FIXME? leave as much memory as possible for mc_ao2mo
-            eris = mc_ao2mo._ERIS(self, mo, 'incore', level=2)
-
             t0 = (time.clock(), time.time())
+            ncore = self.ncore
             log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
             # using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
             self.get_jk(self.mol, [])
             if log.verbose >= pyscf.lib.logger.DEBUG1:
                 t1 = log.timer('Generate density fitting integrals', *t0)
 
+            eris = mc_ao2mo._ERIS(self, mo, 'incore', level=2)
+
+            t0 = (time.clock(), time.time())
             mo = numpy.asarray(mo, order='F')
             nao, nmo = mo.shape
             eris.j_pc = numpy.zeros((nmo,ncore))
@@ -64,10 +64,11 @@ def density_fit(casscf, auxbasis='weigend'):
             fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
+            bufs1 = numpy.empty((dfhf.BLOCKDIM,nmo,nmo))
             with df.load(self._cderi) as feri:
                 for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
                     eri1 = numpy.array(feri[b0:b1], copy=False)
-                    buf = numpy.empty((b1-b0,nmo,nmo))
+                    buf = bufs1[:b1-b0]
                     if log.verbose >= pyscf.lib.logger.DEBUG1:
                         t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
                     fdrv(ftrans, fmmm,
@@ -87,6 +88,7 @@ def density_fit(casscf, auxbasis='weigend'):
                     k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
                     if log.verbose >= pyscf.lib.logger.DEBUG1:
                         t1 = log.timer('j_pc and k_pc', *t1)
+                    eri1 = None
             eris.k_pc = k_cp.T.copy()
             log.timer('ao2mo density fit part', *t0)
             return eris

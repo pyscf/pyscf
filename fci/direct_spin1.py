@@ -30,6 +30,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
     vector.
     '''
+    assert(fcivec.flags.c_contiguous)
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
@@ -88,6 +89,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     Please refer to the treatment in :func:`direct_spin1.absorb_h1e`
     '''
+    assert(fcivec.flags.c_contiguous)
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
@@ -158,7 +160,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     eri = eri.copy()
     h2e = pyscf.ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
-    f1e = f1e * (1./nelec)
+    f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
         h2e[k,k,:,:] += f1e
         h2e[:,:,k,k] += f1e

@@ -160,6 +160,33 @@ def solve_lineq_by_SVD(a, b):
         x = numpy.zeros_like(b)
     return x
 
+def take_2d(a, idx, idy, out=None):
+    '''a(idx,idy)
+
+    Examples:
+
+    >>> out = numpy.arange(9.).reshape(3,3)
+    >>> take_2d(a, [0,2], [0,2])
+    [[ 0.  2.]
+     [ 6.  8.]]
+    '''
+    if out is None:
+        out = numpy.zeros((len(idx),len(idy)))
+    if numpy.iscomplexobj(a):
+        out += a.take(idx, axis=0).take(idy, axis=1)
+    else:
+        idx = numpy.asarray(idx, dtype=numpy.int32)
+        idy = numpy.asarray(idy, dtype=numpy.int32)
+        _np_helper.NPdtake_2d(out.ctypes.data_as(ctypes.c_void_p),
+                              a.ctypes.data_as(ctypes.c_void_p),
+                              idx.ctypes.data_as(ctypes.c_void_p),
+                              idy.ctypes.data_as(ctypes.c_void_p),
+                              ctypes.c_int(out.shape[1]),
+                              ctypes.c_int(a.shape[1]),
+                              ctypes.c_int(idx.size),
+                              ctypes.c_int(idy.size))
+    return out
+
 def takebak_2d(out, a, idx, idy):
     return takebak_2d_(out, a, idx, idy)
 def takebak_2d_(out, a, idx, idy):
@@ -179,16 +206,16 @@ def takebak_2d_(out, a, idx, idy):
         idx = numpy.asarray(idx, dtype=numpy.int32)
         idy = numpy.asarray(idy, dtype=numpy.int32)
         _np_helper.NPdtakebak_2d(out.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(out.shape[0]),
-                                 ctypes.c_int(out.shape[1]),
                                  a.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(a.shape[0]),
-                                 ctypes.c_int(a.shape[1]),
                                  idx.ctypes.data_as(ctypes.c_void_p),
-                                 idy.ctypes.data_as(ctypes.c_void_p))
+                                 idy.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(out.shape[1]),
+                                 ctypes.c_int(a.shape[1]),
+                                 ctypes.c_int(idx.size),
+                                 ctypes.c_int(idy.size))
     return out
 
-def transpose(a, inplace=False):
+def transpose(a, inplace=False, out=None):
     '''Transpose array for better memory efficiency
 
     Examples:
@@ -200,31 +227,17 @@ def transpose(a, inplace=False):
     arow, acol = a.shape
     if inplace:
         assert(arow == acol)
-        #nrblk = (arow-1) // BLOCK_DIM + 1
-        ncblk = (acol-1) // BLOCK_DIM + 1
-        tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM), a.dtype)
-        for j in range(ncblk):
-            c0 = j * BLOCK_DIM
-            c1 = c0 + BLOCK_DIM
-            if c1 > acol:
-                c1 = acol
-            for i in range(j):
-                r0 = i * BLOCK_DIM
-                r1 = r0 + BLOCK_DIM
-                if r1 > arow:
-                    r1 = arow
-                tmp[:c1-c0,:r1-r0] = a[c0:c1,r0:r1]
+        for c0, c1 in prange(0, acol, BLOCK_DIM):
+            for r0, r1 in prange(0, c0, BLOCK_DIM):
+                tmp = a[c0:c1,r0:r1].copy()
                 a[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
-                a[r0:r1,c0:c1] = tmp[:c1-c0,:r1-r0].T
+                a[r0:r1,c0:c1] = tmp.T
             # diagonal blocks
-            r0 = j * BLOCK_DIM
-            r1 = r0 + BLOCK_DIM
-            if r1 > arow:
-                r1 = arow
-            a[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
+            a[c0:c1,c0:c1] = a[c0:c1,c0:c1].T
         return a
     else:
-        anew = numpy.empty((acol,arow), a.dtype)
+        if out is None:
+            out = numpy.empty((acol,arow), a.dtype)
 # C code is ~5% faster for acol=arow=10000
 # Note: when the input a is a submatrix of another array, cannot call NPd(z)transpose
 # since NPd(z)transpose assumes data continuity
@@ -236,7 +249,7 @@ def transpose(a, inplace=False):
             fn.restype = ctypes.c_void_p
             fn(ctypes.c_int(arow), ctypes.c_int(acol),
                a.ctypes.data_as(ctypes.c_void_p),
-               anew.ctypes.data_as(ctypes.c_void_p),
+               out.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(BLOCK_DIM))
         else:
             r1 = c1 = 0
@@ -244,15 +257,15 @@ def transpose(a, inplace=False):
                 c1 = c0 + BLOCK_DIM
                 for r0 in range(0, arow-BLOCK_DIM, BLOCK_DIM):
                     r1 = r0 + BLOCK_DIM
-                    anew[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
-                anew[c0:c1,r1:arow] = a[r1:arow,c0:c1].T
+                    out[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
+                out[c0:c1,r1:arow] = a[r1:arow,c0:c1].T
             for r0 in range(0, arow-BLOCK_DIM, BLOCK_DIM):
                 r1 = r0 + BLOCK_DIM
-                anew[c1:acol,r0:r1] = a[r0:r1,c1:acol].T
-            anew[c1:acol,r1:arow] = a[r1:arow,c1:acol].T
-        return anew
+                out[c1:acol,r0:r1] = a[r0:r1,c1:acol].T
+            out[c1:acol,r1:arow] = a[r1:arow,c1:acol].T
+        return out
 
-def transpose_sum(a, inplace=False):
+def transpose_sum(a, inplace=False, out=None):
     '''a + a.T for better memory efficiency
 
     Examples:
@@ -262,26 +275,20 @@ def transpose_sum(a, inplace=False):
      [ 3.  6.]]
     '''
     assert(a.shape[0] == a.shape[1])
-    if inplace:
-        anew = a
-    else:
-        anew = numpy.empty_like(a)
     na = a.shape[0]
-    nblk = (na-1) // BLOCK_DIM + 1
-    for i in range(nblk):
-        i0 = i*BLOCK_DIM
-        i1 = i0 + BLOCK_DIM
-        if i1 > na:
-            i1 = na
-        for j in range(i):
-            j0 = j*BLOCK_DIM
-            j1 = j0 + BLOCK_DIM
-            tmp = a[i0:i1,j0:j1] + a[j0:j1,i0:i1].T
-            anew[i0:i1,j0:j1] = tmp
-            anew[j0:j1,i0:i1] = tmp.T
-        tmp = a[i0:i1,i0:i1] + a[i0:i1,i0:i1].T
-        anew[i0:i1,i0:i1] = tmp
-    return anew
+    if inplace:
+        out = a
+    elif out is None:
+        out = numpy.empty_like(a)
+    for c0, c1 in prange(0, na, BLOCK_DIM):
+        for r0, r1 in prange(0, c0, BLOCK_DIM):
+            tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].T
+            out[c0:c1,r0:r1] = tmp.T
+            out[r0:r1,c0:c1] = tmp
+        # diagonal blocks
+        tmp = a[c0:c1,c0:c1] + a[c0:c1,c0:c1].T
+        out[c0:c1,c0:c1] = tmp
+    return out
 
 # NOTE: NOT assume array a, b to be C-contiguous, since a and b are two
 # pointers we want to pass in.
@@ -377,7 +384,21 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        ctypes.c_double(alpha), ctypes.c_double(beta))
     return c
 
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
+def norm(x, ord=None, axis=None):
+    if axis is None:
+        return numpy.linalg.norm(x, ord)
+    elif axis == 0:
+        xx = numpy.einsum('ij,ij->j', x, x)
+        return numpy.sqrt(xx)
+    elif axis == 1:
+        xx = numpy.einsum('ij,ij->i', x, x)
+        return numpy.sqrt(xx)
+    else:
+        return numpy.linalg.norm(x, ord, axis)
 
 
 if __name__ == '__main__':

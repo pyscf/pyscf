@@ -49,9 +49,10 @@ class KnowValues(unittest.TestCase):
 
     def test_ccsd_frozen(self):
         mcc = cc.ccsd.CC(mf, frozen=range(1))
+        mcc.conv_tol = 1e-10
         mcc.kernel()
-        self.assertAlmostEqual(mcc.ecc, -0.2112488542258705, 7)
-        self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996478165484417, 5)
+        self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 8)
+        self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996425901189347, 6)
 
     def test_h2o_non_hf_orbital(self):
         nmo = mf.mo_energy.size
@@ -86,7 +87,27 @@ class KnowValues(unittest.TestCase):
 #        mycc.max_cycle = 1000
 #        mycc.conv_tol = 1e-12
 #        self.assertAlmostEqual(mf.energy_tot(dm1)+mycc.kernel(mo_coeff=mo1)[0],
-#                               ehf-0.21334323320620596, 7)
+#                               ehf-0.21334323320620596, 8)
+
+    def test_ccsd_lambda(self):
+        mcc = cc.ccsd.CC(mf)
+        mcc.conv_tol = 1e-9
+        mcc.conv_tol_normt = 1e-7
+        mcc.kernel()
+        mcc.solve_lambda()
+        self.assertAlmostEqual(numpy.linalg.norm(mcc.l1), 0.01326267012100099, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(mcc.l2), 0.21257560224233527, 9)
+
+    def test_ccsd_rdm(self):
+        mcc = cc.ccsd.CC(mf)
+        mcc.conv_tol = 1e-9
+        mcc.conv_tol_normt = 1e-7
+        mcc.kernel()
+        mcc.solve_lambda()
+        dm1 = mcc.make_rdm1()
+        dm2 = mcc.make_rdm2()
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4225909673029618, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.072866588576396, 9)
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

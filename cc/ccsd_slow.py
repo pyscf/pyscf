@@ -15,16 +15,14 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     else:
         log = logger.Logger(cc.stdout, verbose)
 
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
-
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
         t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
+
+    nocc, nvir = t1.shape
 
     eold = 0
     eccsd = 0
@@ -45,7 +43,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, energy(cc, t1, t2, eris)
-        log.info('istep = %d, E(CCSD) = %.15g, dE = %.9g, norm(t1,t2) = %.6g',
+        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
@@ -54,9 +52,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
 
 def make_inter_F(cc, t1, t2, eris):
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
+    nocc, nvir = t1.shape
     fock = eris.fock
 
     tau = t2 + numpy.einsum('ia,jb->iajb', t1, t1*.5)
@@ -83,8 +79,7 @@ def make_inter_F(cc, t1, t2, eris):
     return foo, fov, fvv
 
 def update_amp_t1(cc, t1, t2, eris, foo, fov, fvv):
-    nocc = cc.nocc
-    nmo = cc.nmo
+    nocc, nvir = t1.shape
     fock = eris.fock
 
     g2 = 2 * eris.ovov - eris.oovv.transpose(1,2,0,3)
@@ -102,9 +97,7 @@ def update_amp_t1(cc, t1, t2, eris, foo, fov, fvv):
     return t1new
 
 def update_amp_t2(cc, t1, t2, eris, foo, fov, fvv):
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
+    nocc, nvir = t1.shape
     fock = eris.fock
     t2new = eris.ovov.copy()
 
@@ -163,7 +156,7 @@ def update_amp_t2(cc, t1, t2, eris, foo, fov, fvv):
 
 
 def energy(cc, t1, t2, eris):
-    nocc = cc.nocc
+    nocc, nvir = t1.shape
     tau = t2 + numpy.einsum('ia,jb->iajb', t1, t1)
     theta = tau * 2 - tau.transpose(2,1,0,3)
     fock = eris.fock
@@ -173,7 +166,11 @@ def energy(cc, t1, t2, eris):
 
 
 class CCSD(object):
-    def __init__(self, mf, frozen=[]):
+    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+        if mo_energy is None: mo_energy = mf.mo_energy
+        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
+        if mo_occ    is None: mo_occ    = mf.mo_occ
+
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -189,19 +186,31 @@ class CCSD(object):
         self.diis_start_energy_diff = 1e-2
 
         self.frozen = frozen
-        self.nocc = self.mol.nelectron // 2 - len(frozen)
-        self.nmo = len(mf.mo_energy) - len(frozen)
 
+##################################################
+# don't modify the following attributes, they are not input options
+        self.mo_energy = mo_energy
+        self.mo_coeff = mo_coeff
+        self.mo_occ = mo_occ
         self._conv = False
         self.emp2 = None
         self.ecc = None
         self.t1 = None
         self.t2 = None
+        self.l1 = None
+        self.l2 = None
+
+    def nocc(self):
+        self._nocc = int(self.mo_occ.sum()) // 2
+        return self._nocc
+
+    def nmo(self):
+        self._nmo = len(self.mo_energy)
+        return self._nmo
 
     def init_amps(self, eris):
-        nocc = self.nocc
-        nmo = self.nmo
-        nvir = nmo - nocc
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
         mo_e = eris.fock.diagonal()
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         t2 = numpy.empty((nocc,nvir,nocc,nvir))
@@ -227,23 +236,7 @@ class CCSD(object):
         return self.ecc, self.t1, self.t2
 
     def ao2mo(self):
-        nocc = self.nocc
-        nmo = self.nmo
-        moidx = numpy.ones(self.nmo+len(self.frozen), dtype=numpy.bool)
-        moidx[self.frozen] = False
-        mo_coeff = self._scf.mo_coeff[:,moidx]
-        eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
-        eri1 = ao2mo.restore(1, eri1, nmo)
-        class _ERIS: pass
-        eris = _ERIS()
-        eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-        eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-        eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-        eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
-        eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-        eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
-        eris.fock = numpy.diag(self._scf.mo_energy[moidx])
-        return eris
+        return _ERIS(self)
 
     def add_wvVvV(self, t1, t2, eris):
         tau = t2 + numpy.einsum('ia,jb->iajb', t1, t1)
@@ -261,6 +254,21 @@ class CCSD(object):
 
 CC = CCSD
 
+class _ERIS:
+    def __init__(self, cc):
+        nocc = cc.nocc()
+        nmo = cc.nmo()
+        mo_coeff = cc.mo_coeff
+        eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
+        eri1 = ao2mo.restore(1, eri1, nmo)
+        self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+        self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+        self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+        self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+        self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+        self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+        self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
+        self.fock = numpy.diag(cc.mo_energy)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -299,3 +307,4 @@ if __name__ == '__main__':
     print(mcc.ecc - -0.21334318254)
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2-mcc.t2.transpose(2,3,0,1)).sum())
+

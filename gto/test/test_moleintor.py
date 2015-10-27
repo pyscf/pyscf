@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
+import numpy
 from pyscf import gto
 
 mol = gto.Mole()
@@ -86,6 +87,65 @@ class KnowValues(unittest.TestCase):
     def test_intor_r_comp(self):
         s = mol.intor('cint1e_ipkin', comp=3)
         self.assertAlmostEqual(finger(s), 4409.86758420756, 11)
+
+    def test_intor_nr2e(self):
+        mol1 = gto.M(atom=[["O" , (0. , 0.     , 0.)],
+                           [1   , (0. , -0.757 , 0.587)],
+                           [1   , (0. , 0.757  , 0.587)]],
+                     basis = '631g')
+        nao = mol1.nao_nr()
+        eri0 = numpy.empty((3,nao,nao,nao,nao))
+        ip = 0
+        for i in range(mol1.nbas):
+            jp = 0
+            for j in range(mol1.nbas):
+                kp = 0
+                for k in range(mol1.nbas):
+                    lp = 0
+                    for l in range(mol1.nbas):
+                        buf = mol1.intor_by_shell('cint2e_ip1_sph', (i,j,k,l), 3)
+                        di,dj,dk,dl = buf.shape[1:]
+                        eri0[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
+                        lp += dl
+                    kp += dk
+                jp += dj
+            ip += di
+
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3).reshape(3,13,13,13,13)
+        self.assertTrue(numpy.allclose(eri0, eri1))
+
+        idx = numpy.tril_indices(13)
+        naopair = nao * (nao+1) // 2
+        ref = eri0[:,idx[0],idx[1]].reshape(3,naopair,-1)
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2ij')
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+        idx = numpy.tril_indices(13)
+        ref = eri0[:,:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2kl')
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+        idx = numpy.tril_indices(13)
+        ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s4')
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+    def test_rinv_with_zeta(self):
+        mol.set_rinv_orig_((.2,.3,.4))
+        mol.set_rinv_zeta_(2.2)
+        v1 = mol.intor('cint1e_rinv_sph')
+        mol.set_rinv_zeta_(0)
+        pmol = gto.M(atom='Ghost .2 .3 .4', unit='b', basis={'Ghost':[[0,(2.2*.5, 1)]]})
+        pmol._atm, pmol._bas, pmol._env = \
+            gto.conc_env(mol._atm, mol._bas, mol._env,
+                         pmol._atm, pmol._bas, pmol._env)
+        pmol.natm = len(pmol._atm)
+        pmol.nbas = len(pmol._bas)
+        v0 = pmol.intor('cint2e_sph', bras=[pmol.nbas-1], kets=[pmol.nbas-1])
+        nao = pmol.nao_nr()
+        v0 = v0.reshape(nao,nao)[:-1,:-1]
+        self.assertTrue(numpy.allclose(v0, v1))
+
 
 
 if __name__ == "__main__":

@@ -402,7 +402,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
     old_det_idxa = numpy.argsort(guide_stringsa)
     old_det_idxb = numpy.argsort(guide_stringsb)
-    return ci.take(old_det_idxa, axis=0).take(old_det_idxb, axis=1)
+    return pyscf.lib.take_2d(ci, old_det_idxa, old_det_idxb)
 
 def overlap(string1, string2, norb, s=None):
     '''Determinants overlap on non-orthogonal one-particle basis'''
@@ -421,7 +421,7 @@ def overlap(string1, string2, norb, s=None):
             assert(bin(string2).count('1') == nelec)
         idx1 = [i for i in range(norb) if (1<<i & string1)]
         idx2 = [i for i in range(norb) if (1<<i & string2)]
-        s1 = numpy.take(numpy.take(s, idx1, axis=0), idx2, axis=1)
+        s1 = pyscf.lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
 def fix_spin_(fciobj, shift=.1):
@@ -495,6 +495,10 @@ if __name__ == '__main__':
                                      irrep_nelec={1:[0,1],3:[1,0]})!=0), [5], [0])
     print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3,
                                      irrep_nelec={5:[0,1],3:[1,0]})!=0), [4,7], [2,0])
+    try:
+        symm_initguess(6, (3,2), [3,3,3,3,3,3], wfnsym=2)
+    except RuntimeError:
+        pass
 
     def finger(ci1):
         numpy.random.seed(1)

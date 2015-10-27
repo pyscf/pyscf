@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import time
 import ctypes
@@ -101,6 +104,8 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 #                with df.load(mf._cderi) as feri:
 #                    cderi = numpy.asarray(feri)
 #                mf._cderi = cderi
+    elif isinstance(mf._cderi, numpy.ndarray):
+        mf._naoaux = mf._cderi[0].shape[0]
 
     if len(dms) == 0:
         return [], []
@@ -243,6 +248,8 @@ def r_get_jk_(mf, mol, dms, hermi=1):
             mf._cderi = df.r_outcore.cholesky_eri(mol, mf._cderi,
                                                   auxbasis=mf.auxbasis,
                                                   verbose=log)
+    elif isinstance(mf._cderi, numpy.ndarray):
+        mf._naoaux = mf._cderi[0].shape[0]
     n2c = mol.nao_2c()
     c1 = .5 / mol.light_speed
 

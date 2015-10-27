@@ -117,34 +117,44 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
         casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
     return dm1a, dm1b
 
-def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
+def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
     '''Generalized Fock matrix
     '''
     from pyscf.mcscf import mc_ao2mo
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
-    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
     nmo = mo_coeff.shape[1]
+    ncore = mc.ncore
     ncas = mc.ncas
+    nocc = ncore + ncas
     nelecas = mc.nelecas
 
-    casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
-    vj = numpy.empty((nmo,nmo))
-    vk = numpy.empty((nmo,nmo))
-    for i in range(nmo):
-        vj[i] = numpy.einsum('ij,qij->q', casdm1, eris.ppaa[i])
-        vk[i] = numpy.einsum('ij,iqj->q', casdm1, eris.papa[i])
+    if casdm1 is None:
+        casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
     h1 = reduce(numpy.dot, (mo_coeff.T, mc.get_hcore(), mo_coeff))
-    fock = h1 + eris.vhf_c + vj - vk * .5
+    if eris is not None and hasattr(eris, 'ppaa'):
+        vj = numpy.empty((nmo,nmo))
+        vk = numpy.empty((nmo,nmo))
+        for i in range(nmo):
+            vj[i] = numpy.einsum('ij,qij->q', casdm1, eris.ppaa[i])
+            vk[i] = numpy.einsum('ij,iqj->q', casdm1, eris.papa[i])
+        fock = h1 + eris.vhf_c + vj - vk * .5
+    else:
+        dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
+        mocas = mo_coeff[:,ncore:nocc]
+        dm = dm_core + reduce(numpy.dot, (mocas, casdm1, mocas.T))
+        vj, vk = mc._scf.get_jk(mc.mol, dm)
+        fock = h1 + reduce(numpy.dot, (mo_coeff.T, vj-vk*.5, mo_coeff))
     return fock
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-               verbose=None):
+               casdm1=None, verbose=None):
     '''Transform active orbitals to natrual orbitals, and update the CI wfn
 
     Args:
         mc : a CASSCF/CASCI object or RHF object
 
+    Kwargs:
         sort : bool
             Sort natural orbitals wrt the occupancy.  Be careful with this
             option since the resultant natural orbitals might have the
@@ -163,12 +173,12 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
-    if eris is None: eris = mc_ao2mo._ERIS(mc, mo_coeff, level=2)
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas
     nelecas = mc.nelecas
-    casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    if casdm1 is None:
+        casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
     occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
         idx = numpy.argsort(occ)
@@ -228,21 +238,79 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                 log.info('<CAS-nat-orb|mo-hf>  %d  %d  %12.8f',
                          ncore+i+1, j+1, s[i,j])
 
-    h1eff =(reduce(numpy.dot, (mo_coeff[:,ncore:nocc].T, mc.get_hcore(),
-                               mo_coeff[:,ncore:nocc]))
-          + eris.vhf_c[ncore:nocc,ncore:nocc])
-    h1eff = reduce(numpy.dot, (ucas.T, h1eff, ucas))
-    aaaa = numpy.asarray(eris.ppaa[ncore:nocc,ncore:nocc,:,:], order='C')
-    aaaa = ao2mo.incore.full(ao2mo.restore(8, aaaa, ncas), ucas)
+    mocas = mo_coeff1[:,ncore:nocc]
+    h1eff = reduce(numpy.dot, (mocas.T, mc.get_hcore(), mocas))
+    if eris is not None and hasattr(eris, 'ppaa'):
+        h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))
+        aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
+        aaaa = ao2mo.incore.full(aaaa, ucas)
+    else:
+        dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
+        vj, vk = mc._scf.get_jk(mc.mol, dm_core)
+        h1eff += reduce(numpy.dot, (mocas.T, vj-vk*.5, mocas))
+        aaaa = ao2mo.kernel(mc.mol, mocas)
     e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0)
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
     return mo_coeff1, fcivec, occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-                 cas_natorb=False, verbose=None):
+                 cas_natorb=False, casdm1=None, verbose=logger.NOTE):
+    '''Canonicalize CASCI/CASSCF orbitals
+
+    Args:
+        mc : a CASSCF/CASCI object or RHF object
+
+    Returns:
+        A tuple, the first item is natural orbitals, the second is updated CI
+        coefficients.
+    '''
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mc.stdout, mc.verbose)
+    if mo_coeff is None: mo_coeff = mc.mo_coeff
+    if ci is None: ci = mc.ci
+    ncore = mc.ncore
+    nocc = ncore + mc.ncas
+    nmo = mo_coeff.shape[1]
+    fock = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
     if cas_natorb:
-        mo_coeff, ci = cas_natorb(mc, mo_coeff, ci, eris, sort, verbose=verbose)[:2]
-    return mo_coeff, ci
+        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
+                                           verbose)
+    else:
+# Keep the active space unchanged by default.  The rotation in active space
+# may cause problem for external CI solver eg DMRG.
+        mo_coeff1 = numpy.empty_like(mo_coeff)
+        mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+    if ncore > 0:
+        # note the last two args of ._eig for mc1step_symm
+        w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
+        if sort:
+            idx = numpy.argsort(w)
+            w = w[idx]
+            c1 = c1[:,idx]
+            if hasattr(mc, 'orbsym'): # for mc1step_symm
+                mc.orbsym[:ncore] = mc.orbsym[:ncore][idx]
+        mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
+        if log.verbose >= logger.DEBUG:
+            for i in range(ncore):
+                log.debug('i = %d  <i|F|i> = %12.8f', i+1, w[i])
+    if nmo-nocc > 0:
+        w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
+        if sort:
+            idx = numpy.argsort(w)
+            w = w[idx]
+            c1 = c1[:,idx]
+            if hasattr(mc, 'orbsym'): # for mc1step_symm
+                mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
+        mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
+        if log.verbose >= logger.DEBUG:
+            for i in range(nmo-nocc):
+                log.debug('i = %d  <i|F|i> = %12.8f', nocc+i+1, w[i])
+# still return ci coefficients, in case the canonicalization funciton changed
+# cas orbitals, the ci coefficients should also be updated.
+    mo_energy = numpy.einsum('ji,ji->i', mo_coeff1, fock.dot(mo_coeff1))
+    return mo_coeff1, ci, mo_energy
 
 
 def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
@@ -458,25 +526,28 @@ class CASCI(object):
         return self.e_tot, e_cas, self.ci
 
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                   verbose=None):
-        return cas_natorb(self, mo_coeff, ci, eris, sort, verbose)
+                   casdm1=None, verbose=None):
+        return cas_natorb(self, mo_coeff, ci, eris, sort, casdm1, verbose)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                    verbose=None):
+                    casdm1=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
-                                                 sort, verbose)
+                                                 sort, casdm1, verbose)
         return self.mo_coeff, self.ci, occ
 
-    def get_fock(self, mo_coeff=None, ci=None, eris=None, verbose=None):
-        return get_fock(self, mo_coeff, ci, eris, verbose)
+    def get_fock(self, mo_coeff=None, ci=None, eris=None, casdm1=None,
+                 verbose=None):
+        return get_fock(self, mo_coeff, ci, eris, casdm1, verbose)
 
     def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     cas_natorb=False, verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
+                     cas_natorb=False, casdm1=None, verbose=None):
+        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb,
+                            casdm1, verbose)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      cas_natorb=False, verbose=None):
-        self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              sort, cas_natorb, verbose)
-        return self.mo_coeff, self.ci
+                      cas_natorb=False, casdm1=None, verbose=None):
+        self.mo_coeff, self.ci, mo_energy = \
+                canonicalize(self, mo_coeff, ci, eris,
+                             sort, cas_natorb, casdm1, verbose)
+        return self.mo_coeff, self.ci, mo_energy
 
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
         return analyze(self, mo_coeff, ci, verbose)

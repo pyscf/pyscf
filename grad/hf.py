@@ -9,67 +9,73 @@ Non-relativistic
 
 import time
 import numpy
-import pyscf.lib
-import pyscf.lib.logger as log
-import pyscf.lib.parameters as param
+from pyscf.lib import logger
 from pyscf.scf import _vhf
 
 
-def grad_elec(mfg, mo_energy=None, mo_coeff=None, mo_occ=None):
-    t0 = (time.clock(), time.time())
-    mf = mfg._scf
-    mol = mfg.mol
+def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    mf = grad_mf._scf
+    mol = grad_mf.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
-    h1 = mfg.get_hcore(mol)
-    s1 = mfg.get_ovlp(mol)
-    dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
-    vhf = mfg.get_veff(mol, dm0)
-    log.timer(mfg, 'gradients of 2e part', *t0)
-    f1 = h1 + vhf
-    dme0 = mfg.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
-    gs = numpy.empty((mol.natm,3))
-    for ia in range(mol.natm):
-# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
-        f =-(mfg.matblock_by_atom(mol, ia, f1) + mfg._grad_rinv(mol, ia))
-        s = -mfg.matblock_by_atom(mol, ia, s1)
-        v = numpy.einsum('ij,kji->k', dm0, f) \
-          - numpy.einsum('ij,kji->k', dme0, s)
-        gs[ia] = 2 * v.real
-    log.debug(mfg, 'gradients of electronic part')
-    log.debug(mfg, str(gs))
-    return gs
+    log = logger.Logger(grad_mf.stdout, grad_mf.verbose)
 
-def grad_nuc(mol):
-    gs = numpy.empty((mol.natm,3))
+    h1 = grad_mf.get_hcore(mol)
+    s1 = grad_mf.get_ovlp(mol)
+    dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
+
+    t0 = (time.clock(), time.time())
+    log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
+    vhf = grad_mf.get_veff(mol, dm0)
+    log.timer('gradients of 2e part', *t0)
+
+    f1 = h1 + vhf
+    dme0 = grad_mf.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
+
+    if atmlst is None:
+        atmlst = range(mol.natm)
+    offsetdic = grad_mf.aorange_by_atom()
+    de = numpy.zeros((len(atmlst),3))
+    for k, ia in enumerate(atmlst):
+        shl0, shl1, p0, p1 = offsetdic[ia]
+# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
+        vrinv = grad_mf._grad_rinv(mol, ia)
+        de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
+        de[k] += numpy.einsum('xij,ij->x', vrinv, dm0) * 2
+        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
+    log.debug('gradients of electronic part')
+    log.debug(str(de))
+    return de
+
+def grad_nuc(mol, atmlst=None):
+    gs = numpy.zeros((mol.natm,3))
     for j in range(mol.natm):
         q2 = mol.atom_charge(j)
         r2 = mol.atom_coord(j)
-        f = numpy.zeros(3)
         for i in range(mol.natm):
             if i != j:
                 q1 = mol.atom_charge(i)
                 r1 = mol.atom_coord(i)
                 r = numpy.sqrt(numpy.dot(r1-r2,r1-r2))
-                f += q1 * q2 * (r2-r1) / r**3
-        gs[j] = -f
+                gs[j] -= q1 * q2 * (r2-r1) / r**3
+    if atmlst is not None:
+        gs = gs[atmlst]
     return gs
 
 
 def get_hcore(mol):
     h =(mol.intor('cint1e_ipkin_sph', comp=3)
       + mol.intor('cint1e_ipnuc_sph', comp=3))
-    return h
+    return -h
 
 def get_ovlp(mol):
-    return mol.intor('cint1e_ipovlp_sph', comp=3)
+    return -mol.intor('cint1e_ipovlp_sph', comp=3)
 
 def get_veff(mol, dm):
     return get_coulomb_hf(mol, dm)
 def get_coulomb_hf(mol, dm):
     '''NR Hartree-Fock Coulomb repulsion'''
-    log.info(mol, 'Compute Gradients of NR Hartree-Fock Coulomb repulsion')
     #vj, vk = pyscf.scf.hf.get_vj_vk(pycint.nr_vhf_grad_o1, mol, dm)
     #return vj - vk*.5
     vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
@@ -77,21 +83,28 @@ def get_coulomb_hf(mol, dm):
                                ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
-    return vj - vk*.5
+    return -(vj - vk*.5)
 
 def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''
     mo0 = mo_coeff[:,mo_occ>0]
-    mo0e = mo0 * mo_energy[mo_occ>0] * mo_occ[mo_occ>0]
+    mo0e = mo0 * (mo_energy[mo_occ>0] * mo_occ[mo_occ>0])
     return numpy.dot(mo0e, mo0.T.conj())
 
-def matblock_by_atom(mol, atm_id, mat):
-    '''extract row band for each atom'''
-    shells = mol.atom_shell_ids(atm_id)
-    b0, b1 = mol.nao_nr_range(shells[0], shells[-1]+1)
-    v = numpy.zeros_like(mat)
-    v[:,b0:b1,:] = mat[:,b0:b1,:]
-    return v
+def aorange_by_atom(mol):
+    aorange = []
+    p0 = p1 = 0
+    b0 = b1 = 0
+    ia0 = 0
+    for ib in range(mol.nbas):
+        if ia0 != mol.bas_atom(ib):
+            aorange.append((b0, ib, p0, p1))
+            ia0 = mol.bas_atom(ib)
+            p0 = p1
+            b0 = ib
+        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
+    aorange.append((b0, mol.nbas, p0, p1))
+    return aorange
 
 
 class RHF(object):
@@ -111,12 +124,10 @@ class RHF(object):
 #            log.warn(self, 'underneath SCF of gradients not converged')
 #        log.info(self, '\n')
 
-    @pyscf.lib.omnimethod
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return get_hcore(mol)
 
-    @pyscf.lib.omnimethod
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
@@ -135,39 +146,43 @@ class RHF(object):
     def _grad_rinv(self, mol, ia):
         r''' for given atom, <|\nabla r^{-1}|> '''
         mol.set_rinv_origin_(mol.atom_coord(ia))
-        return mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
+        return -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
 
-    def matblock_by_atom(self, mol, atm_id, mat):
-        return matblock_by_atom(mol, atm_id, mat)
-
-    def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+    def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None,
+                  atmlst=None):
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
-        return grad_elec(self, mo_energy, mo_coeff, mo_occ)
+        return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
 
-    def grad_nuc(self, mol=None):
+    def grad_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
-        gs = grad_nuc(mol)
-        log.debug(self, 'gradients of nuclear part')
-        log.debug(self, str(gs))
-        return gs
+        return grad_nuc(mol, atmlst)
 
-    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None):
-        return self.grad(mo_energy, mo_coeff, mo_occ)
-    def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+        return self.grad(mo_energy, mo_coeff, mo_occ, atmlst)
+    def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
-        if self.verbose >= param.VERBOSE_INFO:
+        if self.verbose >= logger.INFO:
             self.dump_flags()
-        grads = self.grad_elec(mo_energy, mo_coeff, mo_occ) + self.grad_nuc()
-        for ia in range(self.mol.natm):
-            log.note(self, 'atom %d %s, force = (%.14g, %.14g, %.14g)',
-                     ia, self.mol.atom_symbol(ia), *grads[ia])
-        log.timer(self, 'HF gradients', *cput0)
-        return grads
+        de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
+           + self.grad_nuc(atmlst))
+        logger.note(self, 'HF gradinets')
+        logger.note(self, '==============')
+        logger.note(self, '           x                y                z')
+        if atmlst is None:
+            atmlst = range(self.mol.natm)
+        for k, ia in enumerate(atmlst):
+            logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
+                        self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
+        logger.timer(self, 'HF gradients', *cput0)
+        return de
+
+    def aorange_by_atom(self):
+        return aorange_by_atom(self.mol)
 
 
 if __name__ == '__main__':

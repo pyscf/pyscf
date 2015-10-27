@@ -237,7 +237,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     imicro = 0
     norm_gorb = norm_gci = 0
     elast = e_tot
-    de = 1e9
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -251,6 +250,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                                           conv_tol_grad, log)
         if casscf.dynamic_micro_step:
             max_cycle_micro = max(micro, int(micro-2-numpy.log(norm_ddm)))
+<<<<<<< HEAD
         for imicro in range(max_cycle_micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
@@ -259,6 +259,20 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                 u, g_orb, njk = micro_iter.send((casdm1,casdm2))
                 norm_gorb = numpy.linalg.norm(g_orb)
             casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+=======
+        imicro = 0
+        rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                    eris, r0, conv_tol_grad, log)
+        for u, g_orb, njk in rota:
+            imicro += 1
+            norm_gorb = numpy.linalg.norm(g_orb)
+            if imicro == 1:
+                norm_gorb0 = norm_gorb
+            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
+            if imicro == max_cycle_micro:
+                log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ',
+                          imicro, norm_t, norm_gorb)
+                break
 
             if isinstance(gci, numpy.ndarray):
                 norm_gci = numpy.linalg.norm(gci)
@@ -270,19 +284,17 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             t3m = log.timer('update CAS DM', *t3m)
             log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
-                      imicro+1, norm_t, norm_gorb, norm_gci, norm_ddm)
+                      imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
-            t3m = log.timer('micro iter %d'%(imicro+1), *t3m)
-            if (norm_t < conv_tol_grad or
-                (norm_gorb < conv_tol_grad and norm_ddm < conv_tol_grad*.8)):
+            t3m = log.timer('micro iter %d'%imicro, *t3m)
+            if (norm_t < 1e-4 or
+                (norm_gorb < conv_tol_grad*.8 and norm_ddm < conv_tol_ddm)):
                 break
 
-        micro_iter.close()
-        micro_iter = None
-        log.debug1('current memory %d MB', pyscf.lib.current_memory()[0])
+        rota.close()
 
         totmicro += imicro + 1
         totinner += njk
@@ -582,7 +594,7 @@ class CASSCF(casci_uhf.CASCI):
 
         ci1, g = self.solve_approx_ci(h1cas, h2cas, fcivec, ecore, e_ci)
         casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, self.ncas, self.nelecas)
-        return casdm1, casdm2, g
+        return casdm1, casdm2, g, ci1
 
     def approx_cas_integral(self, mo, u, eris):
         ncas = self.ncas

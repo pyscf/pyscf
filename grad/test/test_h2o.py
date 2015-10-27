@@ -46,6 +46,16 @@ class KnowValues(unittest.TestCase):
         g = grad.hf.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_nuc()), 10.086972893020102, 9)
 
+    def test_ccsd(self):
+        from pyscf import cc
+        rhf = scf.RHF(h2o)
+        rhf.scf()
+        mycc = cc.CCSD(rhf)
+        mycc.kernel()
+        mycc.solve_lambda()
+        g1 = grad.ccsd.kernel(mycc)
+        self.assertAlmostEqual(finger(g1), 10.021170039808055, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

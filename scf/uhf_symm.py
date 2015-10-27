@@ -37,7 +37,7 @@ def analyze(mf, verbose=logger.DEBUG):
     for ir in range(nirrep):
         if (noccsa[ir]+noccsb[ir]) % 2:
             tot_sym ^= mol.irrep_id[ir]
-    if mol.groupname in ('Dooh', 'Coov'):
+    if mol.groupname in ('Dooh', 'Coov', 'SO3'):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
         log.info('total symmetry = %s', \
@@ -320,18 +320,8 @@ class UHF(uhf.UHF):
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
         return mo_occ
 
-    def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
-        mol = self.mol
-        self.build(mol)
-        self.dump_flags()
-        self.converged, self.hf_energy, \
-                self.mo_energy, self.mo_coeff, self.mo_occ \
-                = hf.kernel(self, self.conv_tol, self.conv_tol_grad,
-                            dm0=dm0, callback=self.callback)
-
-        logger.timer(self, 'SCF', *cput0)
-        self.dump_energy(self.hf_energy, self.converged)
+    def _finalize_(self):
+        uhf.UHF._finalize_(self)
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[0])
@@ -339,15 +329,15 @@ class UHF(uhf.UHF):
         va_sort = numpy.argsort(ea[self.mo_occ[0]==0])
         ob_sort = numpy.argsort(eb[self.mo_occ[1]>0])
         vb_sort = numpy.argsort(eb[self.mo_occ[1]==0])
-        self.mo_energy = (numpy.hstack((ea[self.mo_occ[0]>0 ][oa_sort], \
-                                        ea[self.mo_occ[0]==0][va_sort])), \
-                          numpy.hstack((eb[self.mo_occ[1]>0 ][ob_sort], \
+        self.mo_energy = (numpy.hstack((ea[self.mo_occ[0]>0 ][oa_sort],
+                                        ea[self.mo_occ[0]==0][va_sort])),
+                          numpy.hstack((eb[self.mo_occ[1]>0 ][ob_sort],
                                         eb[self.mo_occ[1]==0][vb_sort])))
         ca = self.mo_coeff[0]
         cb = self.mo_coeff[1]
-        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ][:,oa_sort], \
-                                       ca[:,self.mo_occ[0]==0][:,va_sort])), \
-                         numpy.hstack((cb[:,self.mo_occ[1]>0 ][:,ob_sort], \
+        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ][:,oa_sort],
+                                       ca[:,self.mo_occ[0]==0][:,va_sort])),
+                         numpy.hstack((cb[:,self.mo_occ[1]>0 ][:,ob_sort],
                                        cb[:,self.mo_occ[1]==0][:,vb_sort])))
         nocc_a = int(self.mo_occ[0].sum())
         nocc_b = int(self.mo_occ[1].sum())
@@ -359,10 +349,6 @@ class UHF(uhf.UHF):
             chkfile.dump_scf(self.mol, self.chkfile,
                              self.hf_energy, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
-
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(self.verbose)
-        return self.hf_energy
 
     def analyze(self, mo_verbose=logger.DEBUG):
         return analyze(self, mo_verbose)
