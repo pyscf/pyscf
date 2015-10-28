@@ -40,7 +40,7 @@ def get_vlocG(cell):
     Returns:
         (natm, ngs) ndarray
     '''
-    Gvnorm = np.linalg.norm(cell.Gv,axis=0)
+    Gvnorm = lib.norm(cell.Gv,axis=0)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
