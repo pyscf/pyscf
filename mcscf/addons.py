@@ -345,7 +345,7 @@ def make_rdm12(casscf, mo_coeff=None, ci=None):
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
 def get_fock(casscf, mo_coeff=None, ci=None):
-    '''Generalized Fock matrix
+    '''Generalized Fock matrix in AO representation
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):

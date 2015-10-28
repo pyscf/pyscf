@@ -867,7 +867,7 @@ if __name__ == '__main__':
     print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    print(sc_nevpt(mc), -0.16978579267520275)
+    print(sc_nevpt(mc), -0.16978546152699392)
 
 
     mol = gto.Mole()
@@ -899,4 +899,4 @@ if __name__ == '__main__':
     mc.fcisolver.conv_tol = 1e-14
     mc.kernel()
     mc.verbose = 4
-    print(sc_nevpt(mc), -0.094164462034941498)
+    print(sc_nevpt(mc), -0.094164472700469196)
