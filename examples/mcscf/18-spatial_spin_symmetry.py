@@ -74,6 +74,6 @@ scf.fast_newton(m)
 mc = mcscf.CASSCF(m, 10, 10)
 idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
 mo = dmet_cas.dmet_cas(mc, m.make_rdm1(), idx3d, base=0)
-fci.addons.force_spin_(mc.fcisolver)
+fci.addons.fix_spin_(mc.fcisolver)
 mc.kernel(mo)
 
