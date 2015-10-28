@@ -586,7 +586,11 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
                                            ci, ci, mc.ncas, mc.nelecas)
     dm4 = None
-    mc.mo_coeff, mc.ci, orbe = mc.canonicalize(casdm1=dm1)
+    if not useMPS:
+        mc.mo_coeff, _, orbe = mc.canonicalize(casdm1=dm1)
+    else:
+        orbe = reduce(numpy.dot, (mc.mo_coeff.T, mc.get_fock(), mc.mo_coeff)).diagonal()
+
 
     #hdm1 = make_hdm1(dm1)
     #hdm2 = make_hdm2(dm1,dm2)
