@@ -126,27 +126,30 @@ def projG_li(G, l, i, rl):
     return _qli(G_red,l,i)*np.pi**(5/4.)*G**l*np.sqrt(rl**(2*l+3))/np.exp(0.5*G_red**2)
 
 def _qli(x,l,i):
-    # MH Eqs. (4.82)-(4.93)
-    # x vs. sqrt(2)x -- check this
+    # MH Eqs. (4.82)-(4.93) :: beware typos!
     sqrt = np.sqrt
     if l==0 and i==0:
         return 4*sqrt(2.)
     elif l==0 and i==1:
-        return 8*sqrt(2/15.)*(3-x**2) # check the 8 in this one
+        return 8*sqrt(2/15.)*(3-x**2) # MH & GTH (right)
+        #return sqrt(8*2/15.)*(3-x**2) # HGH (wrong)
     elif l==0 and i==2:
-        return 16/3.*sqrt(2/105.)*(15-20*x**2+4*x**4) # check the 20,4 in this one
+        #return 16/3.*sqrt(2/105.)*(15-20*x**2+4*x**4) # MH (wrong)
+        return 16/3.*sqrt(2/105.)*(15-10*x**2+x**4) # HGH (right)
     elif l==1 and i==0:
         return 8*sqrt(1/3.)
     elif l==1 and i==1:
         return 16*sqrt(1/105.)*(5-x**2)
     elif l==1 and i==2:
-        return 32/3.*sqrt(1/1155.)*(35-28*x**2+4*x**4) # check  28,4 in this one
+        #return 32/3.*sqrt(1/1155.)*(35-28*x**2+4*x**4) # MH (wrong)
+        return 32/3.*sqrt(1/1155.)*(35-14*x**2+x**4) # HGH (right)
     elif l==2 and i==0:
         return 8*sqrt(2/15.)
     elif l==2 and i==1:
         return 16/3.*sqrt(2/105.)*(7-x**2)
     elif l==2 and i==2:
-        return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4)
+        #return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4) # MH (wrong I think)
+        return 32/3.*sqrt(2/15015.)*(63-18*x**2+x**4) # TCB
     else:
         print "*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!"
         return 0.
