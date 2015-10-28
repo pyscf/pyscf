@@ -424,7 +424,7 @@ def overlap(string1, string2, norb, s=None):
         s1 = pyscf.lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
-def fix_spin_(fciobj, shift=.1):
+def fix_spin_(fciobj, shift=.1, ss_value=None):
     r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
     adding a shift on spin square operator
 
@@ -446,15 +446,30 @@ def fix_spin_(fciobj, shift=.1):
     from pyscf.fci import direct_spin0
     fciobj.davidson_only = True
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
-        ci1 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
-        if isinstance(nelec, (int, numpy.integer)):
-            sz = (nelec % 2) * .5
+        if ss_value is None:
+# (S^2-ss_value)|Psi> to shift state other than the lowest state
+            if isinstance(nelec, (int, numpy.integer)):
+                sz = (nelec % 2) * .5
+            else:
+                sz = abs(nelec[0]-nelec[1]) * .5
+            ss = sz*(sz+1)
+            ci1 = spin_op.contract_ss(fcivec, norb, nelec)
+            ci1 -= ss * fcivec.reshape(ci1.shape)
         else:
-            sz = abs(nelec[0]-nelec[1]) * .5
-        ci1 += shift * spin_op.contract_ss(fcivec, norb, nelec)
-        ci1 -= sz*(sz+1)*shift * fcivec.reshape(ci1.shape)
-        if isinstance(fciobj, direct_spin0.FCISolver):
+# (S^2-ss_value)^2|Psi> to shift states except the given spin.
+# It still relies on the quality of initial guess
+            ss = ss_value
+            tmp = spin_op.contract_ss(fcivec, norb, nelec)
+            tmp -= ss * fcivec.reshape(tmp.shape)
+            ci1 = -ss * tmp
+            ci1 += spin_op.contract_ss(tmp, norb, nelec)
+            tmp = None
+
+        if ss == 0:
             ci1 = pyscf.lib.transpose_sum(ci1, inplace=True) * .5
+
+        ci1 *= shift
+        ci1 += old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         return ci1
     fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
     return fciobj
