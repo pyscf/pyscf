@@ -586,6 +586,7 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
                                            ci, ci, mc.ncas, mc.nelecas)
     dm4 = None
+    mc.mo_coeff, mc.ci, orbe = mc.canonicalize(casdm1=dm1)
 
     #hdm1 = make_hdm1(dm1)
     #hdm2 = make_hdm2(dm1,dm2)
@@ -613,11 +614,6 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         dms['f3ca'] = f3ca
         dms['f3ac'] = f3ac
     time1 = log.timer('eri-4pdm contraction', *time1)
-
-    fake_eris = lambda: None
-    fake_eris.__dict__.update(eris.items())
-    orbe = mc.get_fock(ci=ci,eris=fake_eris).diagonal()
-    fake_eris = None
 
     if useMPS:
         fh5 = h5py.File('Perturbation_%d'%ci,'r')

@@ -118,7 +118,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     return dm1a, dm1b
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
-    '''Generalized Fock matrix
+    '''Generalized Fock matrix in AO representation
     '''
     from pyscf.mcscf import mc_ao2mo
     if ci is None: ci = mc.ci
@@ -131,20 +131,21 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
 
     if casdm1 is None:
         casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
-    h1 = reduce(numpy.dot, (mo_coeff.T, mc.get_hcore(), mo_coeff))
     if eris is not None and hasattr(eris, 'ppaa'):
         vj = numpy.empty((nmo,nmo))
         vk = numpy.empty((nmo,nmo))
         for i in range(nmo):
             vj[i] = numpy.einsum('ij,qij->q', casdm1, eris.ppaa[i])
             vk[i] = numpy.einsum('ij,iqj->q', casdm1, eris.papa[i])
-        fock = h1 + eris.vhf_c + vj - vk * .5
+        mo_inv = numpy.dot(mo_coeff.T, mc._scf.get_ovlp())
+        fock =(mc.get_hcore()
+             + reduce(numpy.dot, (mo_inv.T, eris.vhf_c+vj-vk*.5, mo_inv)))
     else:
         dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
         mocas = mo_coeff[:,ncore:nocc]
         dm = dm_core + reduce(numpy.dot, (mocas, casdm1, mocas.T))
         vj, vk = mc._scf.get_jk(mc.mol, dm)
-        fock = h1 + reduce(numpy.dot, (mo_coeff.T, vj-vk*.5, mo_coeff))
+        fock = mc.get_hcore() + vj-vk*.5
     return fock
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
@@ -273,10 +274,14 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
-    fock = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
+    fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
+    fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+    mo_energy = fock.diagonal().copy()
     if cas_natorb:
         mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                            verbose)
+        ma = mo_coeff1[:,ncore:nocc]
+        mo_energy[ncore:nocc] = numpy.einsum('ji,ji->i', ma, fock.dot(ma))
     else:
 # Keep the active space unchanged by default.  The rotation in active space
 # may cause problem for external CI solver eg DMRG.
@@ -292,9 +297,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             if hasattr(mc, 'orbsym'): # for mc1step_symm
                 mc.orbsym[:ncore] = mc.orbsym[:ncore][idx]
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
-        if log.verbose >= logger.DEBUG:
-            for i in range(ncore):
-                log.debug('i = %d  <i|F|i> = %12.8f', i+1, w[i])
+        mo_energy[:ncore] = w
     if nmo-nocc > 0:
         w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         if sort:
@@ -304,12 +307,12 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             if hasattr(mc, 'orbsym'): # for mc1step_symm
                 mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-        if log.verbose >= logger.DEBUG:
-            for i in range(nmo-nocc):
-                log.debug('i = %d  <i|F|i> = %12.8f', nocc+i+1, w[i])
+        mo_energy[nocc:] = w
+    if log.verbose >= logger.DEBUG:
+        for i in range(nmo):
+            log.debug('i = %d  <i|F|i> = %12.8f', i+1, mo_energy[i])
 # still return ci coefficients, in case the canonicalization funciton changed
 # cas orbitals, the ci coefficients should also be updated.
-    mo_energy = numpy.einsum('ji,ji->i', mo_coeff1, fock.dot(mo_coeff1))
     return mo_coeff1, ci, mo_energy
 
 
