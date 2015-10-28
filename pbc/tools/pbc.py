@@ -23,7 +23,7 @@ def fft(f, gs):
             numpy.fft).
 
     '''
-    ngs = 2*gs+1
+    ngs = 2*np.asarray(gs)+1
     f3d = np.reshape(f, ngs)
     g3d = np.fft.fftn(f3d)
     return np.ravel(g3d)
@@ -47,7 +47,7 @@ def ifft(g, gs):
             of numpy.fft).
 
     '''
-    ngs = 2*gs+1
+    ngs = 2*np.asarray(gs)+1
     g3d = np.reshape(g, ngs)
     f3d = np.fft.ifftn(g3d)
     return np.ravel(f3d)

@@ -11,7 +11,7 @@ import scipy.linalg
 import scipy.optimize
 import pyscf
 import pyscf.lib.parameters as param
-from pyscf.lib.numpy_helper import cartesian_prod
+from pyscf import lib
 import pyscf.gto.mole
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
 from pyscf.pbc.gto import basis
@@ -246,8 +246,7 @@ class Cell(pyscf.gto.Mole):
         
         rcut = np.sqrt(-(np.log(precision)/min_exp)) # guess
         rcut = scipy.optimize.fsolve(fn, rcut)[0]
-        rlengths = np.sqrt(np.diag(np.dot(self.lattice_vectors(),
-                                          self.lattice_vectors().T)))
+        rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
         nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
         return nimgs+1 # additional lattice vector to take into account
@@ -277,8 +276,7 @@ class Cell(pyscf.gto.Mole):
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
         rcut = np.sqrt(-log_precision)/ew_eta
-        rlengths = np.sqrt(np.diag(np.dot(self.lattice_vectors(),
-                                          self.lattice_vectors().T)))
+        rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
         #print "rlengths", rcut, rlengths
         ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
@@ -303,7 +301,7 @@ class Cell(pyscf.gto.Mole):
         gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
         gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)
         gzrange = range(self.gs[2]+1)+range(-self.gs[2],0)
-        gxyz = cartesian_prod((gxrange, gyrange, gzrange)).T
+        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange)).T
 
         Gv = 2*np.pi*np.dot(invhT,gxyz)
         return Gv
@@ -330,11 +328,11 @@ class Cell(pyscf.gto.Mole):
 
     def lattice_vectors(self):
         if self.unit.startswith(('B','b','au','AU')):
-            return self.h
+            return np.asarray(self.h)
         elif self.unit.startswith(('A','a')):
-            return self.h * (1./param.BOHR)
+            return np.asarray(self.h) * (1./param.BOHR)
         else:
-            return self.h * (1./self.unit)
+            return np.asarray(self.h) * (1./self.unit)
 
     def vol(self):
         return scipy.linalg.det(self.lattice_vectors())

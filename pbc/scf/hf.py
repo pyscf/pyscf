@@ -305,6 +305,8 @@ class RHF(pyscf.scf.hf.RHF):
             kpt = np.array([0,0,0])
 
         self.kpt = np.array([0,0,0])
+        self._keys = self._keys.union(['cell', 'grids', 'ew_eta', 'ew_cut',
+                                       'mol_ex', 'kpt'])
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)

@@ -5,7 +5,6 @@ from pyscf import gto
 from pyscf.dft import rks
 
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc.dft import rks as pbcrks
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 
@@ -18,8 +17,7 @@ mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
 mol.basis = { 'He': [[0, (0.8, 1.0)],
                      [0, (1.0, 1.0)],
                      [0, (1.2, 1.0)]] }
-mol.verbose = 5
-mol.output = '/dev/null'
+mol.verbose = 0
 mol.build()
 
 m = rks.RKS(mol)
@@ -30,8 +28,8 @@ def make_grids(n):
     pseudo = None
     cell = pbcgto.Cell()
     cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
-    cell.gs = np.array([n,n,n])
+    cell.h = ((L,0,0),(0,L,0),(0,0,L))
+    cell.gs = [n,n,n]
     cell.nimgs = [0,0,0]
 
     cell.atom = mol.atom
@@ -72,6 +70,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print("Full Tests for pbc.dft.rks")
+    print("Full Tests for pbc.dft.numint")
     unittest.main()
 

@@ -12,7 +12,7 @@ def gen_uniform_grids(cell):
             The real-space grid point coordinates.
         
     '''
-    ngs = 2*cell.gs+1
+    ngs = 2*np.asarray(cell.gs)+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
     invN = np.diag(1./ngs)
     coords = np.dot(qv, np.dot(cell.lattice_vectors(), invN).T)
