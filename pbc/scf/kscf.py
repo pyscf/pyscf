@@ -13,7 +13,6 @@ import pyscf.pbc.gto.cell as cl
 import pyscf.pbc.gto
 import pbc
 import pyscf.pbc.scf as pbcscf
-import cell as cl
 import pyscf
 import pyscf.scf.hf
 
