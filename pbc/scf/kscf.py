@@ -53,13 +53,13 @@ def get_j(mf, cell, dm_kpts, kpts):
     #:vj=numpy.zeros([nao,nao])
     #:for i in range(nao):
     #:    for j in range(nao):
-    #:        vj[i,j]=cell.vol()/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
+    #:        vj[i,j]=cell.vol/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
     # TODO: REPLACE by eval_mat here (with non0tab)
     vj_kpts=numpy.zeros([nkpts,nao,nao],numpy.complex128)
 
     mf._ecoul=0.
     for k in range(nkpts):
-        vj_kpts[k,:,:] = cell.vol()/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(), 
+        vj_kpts[k,:,:] = cell.vol/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(), 
                                                   vR.reshape(-1,1)*aoR_kpts[k,:,:])
 
         mf._ecoul+=1./nkpts*numpy.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:]) * .5

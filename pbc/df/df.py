@@ -78,7 +78,7 @@ def aux_e2_grid(cell, auxcell, gs):
     auxao=numint.eval_ao(auxcell, coords)
     naoaux=auxcell.nao_nr()
 
-    aux_e2=numpy.einsum('ri,rj,rk',ao,ao,auxao)*cell.vol()/coords.shape[0]
+    aux_e2=numpy.einsum('ri,rj,rk',ao,ao,auxao)*cell.vol/coords.shape[0]
 
     aux_e2.reshape([nao*nao,naoaux])
     return aux_e2
@@ -254,7 +254,7 @@ def test_poisson():
 
     print "rho is", rho
     norm=auxnorm(auxcell)
-    rho1=rho-nelec*norm/cell.vol()
+    rho1=rho-nelec*norm/cell.vol
 
     print "norm is", norm
 

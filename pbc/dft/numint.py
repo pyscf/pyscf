@@ -39,7 +39,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         aoR = np.zeros([coords.shape[0], nao], np.complex128)
 
     for T in Ts:
-        L = np.dot(cell.lattice_vectors(), T)
+        L = np.dot(cell._h, T)
         aoR += (np.exp(1j*np.dot(kpt.T,L)) *
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 
@@ -48,7 +48,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
 
     if cell.ke_cutoff is not None:
 
-        ke = .5* np.einsum('ri,ri->i', cell._Gv, cell._Gv)
+        ke = .5* np.einsum('ri,ri->i', cell.Gv, cell.Gv)
         ke_mask = ke < cell.ke_cutoff
 
         aoG = np.zeros_like(aoR)

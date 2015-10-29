@@ -25,3 +25,4 @@ x Streamline cell construction
     fft/ifft
     get_coulG
 
+- Store coords/aoR?

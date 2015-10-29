@@ -134,7 +134,9 @@ class Cell(pyscf.gto.Mole):
 
 ##################################################
 # don't modify the following variables, they are not input arguments
-        self._Gv = None
+        self.Gv = None
+        self.vol = None
+        self._h = None
         self._pseudo = None
         self._keys = set(self.__dict__.keys())
 
@@ -212,7 +214,9 @@ class Cell(pyscf.gto.Mole):
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
 
-        self._Gv = self.get_Gv()
+        self.Gv = self.get_Gv()
+        self.vol = scipy.linalg.det(self.lattice_vectors())
+        self._h = self.lattice_vectors()
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
@@ -322,10 +326,10 @@ class Cell(pyscf.gto.Mole):
                 The structure factor for each atom at each G-vector.
 
         '''
-        ngs = self._Gv.shape[1]
+        ngs = self.Gv.shape[1]
         SI = np.empty([self.natm, ngs], np.complex128)
         for ia in range(self.natm):
-            SI[ia,:] = np.exp(-1j*np.dot(self._Gv.T, self.atom_coord(ia)))
+            SI[ia,:] = np.exp(-1j*np.dot(self.Gv.T, self.atom_coord(ia)))
         return SI
 
     def lattice_vectors(self):
@@ -335,9 +339,6 @@ class Cell(pyscf.gto.Mole):
             return np.asarray(self.h) * (1./param.BOHR)
         else:
             return np.asarray(self.h) * (1./self.unit)
-
-    def vol(self):
-        return scipy.linalg.det(self.lattice_vectors())
 
     def copy(self):
         return copy(self)

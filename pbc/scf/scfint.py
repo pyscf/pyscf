@@ -26,7 +26,7 @@ def get_lattice_Ls(cell, nimgs):
                   for k in range(-nimgs[2],nimgs[2]+1)
                   if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
     Ts = np.array(Ts)
-    Ls = np.dot(cell.lattice_vectors(), Ts.T).T
+    Ls = np.dot(cell._h, Ts.T).T
     return Ls
 
 def get_hcore(mf, cell, kpt=None):

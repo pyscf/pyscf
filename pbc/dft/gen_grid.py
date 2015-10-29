@@ -15,7 +15,7 @@ def gen_uniform_grids(cell):
     ngs = 2*np.asarray(cell.gs)+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
     invN = np.diag(1./ngs)
-    coords = np.dot(qv, np.dot(cell.lattice_vectors(), invN).T)
+    coords = np.dot(qv, np.dot(cell._h, invN).T)
     return coords
 
 class UniformGrids(object):
@@ -33,7 +33,7 @@ class UniformGrids(object):
 
         self.coords = gen_uniform_grids(self.cell)
         self.weights = np.ones(self.coords.shape[0]) 
-        self.weights *= cell.vol()/self.weights.shape[0]
+        self.weights *= cell.vol/self.weights.shape[0]
 
         return self.coords, self.weights
 
