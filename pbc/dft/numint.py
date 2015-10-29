@@ -88,6 +88,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
     import numpy
     from pyscf.dft.numint import _dot_ao_dm, BLKSIZE
 
+    assert(ao.flags.c_contiguous)
     if isgga:
         ngrids, nao = ao[0].shape
     else:
@@ -97,43 +98,90 @@ def eval_rho(mol, ao, dm, non0tab=None,
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.int8)
 
-    #if ao[0].dtype==numpy.complex128: # complex orbitals
-    if True:
+    # if isgga:
+    #     rho = numpy.empty((4,ngrids))
+    #     c0 = _dot_ao_dm(mol, ao[0], dm, nao, ngrids, non0tab)
+    #     rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
+    #     for i in range(1, 4):
+    #         c1 = _dot_ao_dm(mol, ao[i], dm, nao, ngrids, non0tab)
+    #         rho[i] = numpy.einsum('pi,pi->p', ao[0], c1) * 2 # *2 for +c.c.
+    # else:
+    #     c0 = _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab)
+    #     rho = numpy.einsum('pi,pi->p', ao, c0)
+    # return rho
+
+    # if isgga:
+    #     ngrids, nao = ao[0].shape
+    # else:
+    #     ngrids, nao = ao.shape
+
+    # if non0tab is None:
+    #     print "this PATH"
+    #     non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+    #                          dtype=numpy.int8)
+
+    # #if ao[0].dtype==numpy.complex128: # complex orbitals
+    # if True:
+    #     #dm_re = numpy.ascontiguousarray(dm.real)
+    #     dm_re = dm
+    #     rho = numpy.empty((4,ngrids))
+    #     #ao_re = numpy.ascontiguousarray(ao[0].real)
+    #     ao_re = ao[0]
+    #     c0_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
+
+    #     rho[0] = (numpy.einsum('pi,pi->p', ao_re, c0_rr))
+
+    #     for i in range(1, 4):
+    #         c1 = _dot_ao_dm(mol, ao[i], dm, nao, ngrids, non0tab)
+    #         rho[i] = numpy.einsum('pi,pi->p', ao[0], c1) * 2 # *2 for +c.c.
+
+    #     for i in range(1, 4):
+    #     #     #ao_re = numpy.ascontiguousarray(ao[i].real)
+    #         ao_re = ao[i]
+
+    #         c1_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
+
+    #         rho[i] = (numpy.einsum('pi,pi->p', ao_re, c1_rr)) *2
+    #     return rho
+                          
+    # complex orbitals or density matrix
+    if ao[0].dtype==numpy.complex128 or dm.dtype==numpy.complex128: 
+
         dm_re = numpy.ascontiguousarray(dm.real)
         dm_im = numpy.ascontiguousarray(dm.imag)
 
         if isgga:
             rho = numpy.empty((4,ngrids))
-            ao_re = numpy.ascontiguousarray(ao[0].real)
-            ao_im = numpy.ascontiguousarray(ao[0].imag)
-            ao_re = numpy.ascontiguousarray(ao[0].real)
-            ao_im = numpy.ascontiguousarray(ao[0].imag)
+            ao0_re = numpy.ascontiguousarray(ao[0].real)
+            ao0_im = numpy.ascontiguousarray(ao[0].imag)
 
             # DM * ket: e.g. ir denotes dm_im | ao_re >
-            c0_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
-            c0_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
-            c0_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
-            c0_ii = _dot_ao_dm(mol, ao_im, dm_im, nao, ngrids, non0tab)
+            c0_rr = _dot_ao_dm(mol, ao0_re, dm_re, nao, ngrids, non0tab)
+            c0_ri = _dot_ao_dm(mol, ao0_im, dm_re, nao, ngrids, non0tab)
+            c0_ir = _dot_ao_dm(mol, ao0_re, dm_im, nao, ngrids, non0tab)
+            c0_ii = _dot_ao_dm(mol, ao0_im, dm_im, nao, ngrids, non0tab)
 
             # bra * DM
-            rho[0] = (numpy.einsum('pi,pi->p', ao_im, c0_ri) +
-                      numpy.einsum('pi,pi->p', ao_re, c0_rr) +
-                      numpy.einsum('pi,pi->p', ao_im, c0_ir) -
-                      numpy.einsum('pi,pi->p', ao_re, c0_ii))
+            rho[0] = (numpy.einsum('pi,pi->p', ao0_im, c0_ri) +
+                      numpy.einsum('pi,pi->p', ao0_re, c0_rr) +
+                      numpy.einsum('pi,pi->p', ao0_im, c0_ir) -
+                      numpy.einsum('pi,pi->p', ao0_re, c0_ii))
 
             for i in range(1, 4):
+                # ao_re = numpy.ascontiguousarray(ao[i].real)
+                # ao_im = numpy.ascontiguousarray(ao[i].imag)
                 ao_re = numpy.ascontiguousarray(ao[i].real)
                 ao_im = numpy.ascontiguousarray(ao[i].imag)
-
+    
                 c1_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
                 c1_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
                 c1_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
                 c1_ii = _dot_ao_dm(mol, ao_im, dm_im, nao, ngrids, non0tab)
 
-                rho[i] = (numpy.einsum('pi,pi->p', ao_im, c1_ri) +
-                          numpy.einsum('pi,pi->p', ao_re, c1_rr) +
-                          numpy.einsum('pi,pi->p', ao_im, c1_ir) -
-                          numpy.einsum('pi,pi->p', ao_re, c1_ii)) * 2 # *2 for +c.c.       
+                rho[i] = (numpy.einsum('pi,pi->p', ao0_im, c1_ri) +
+                          numpy.einsum('pi,pi->p', ao0_re, c1_rr) +
+                          numpy.einsum('pi,pi->p', ao0_im, c1_ir) -
+                          numpy.einsum('pi,pi->p', ao0_re, c1_ii)) * 2 # *2 for +c.c.       
         else:
             ao_re = numpy.ascontiguousarray(ao.real)
             ao_im = numpy.ascontiguousarray(ao.imag)
@@ -148,7 +196,8 @@ def eval_rho(mol, ao, dm, non0tab=None,
                    numpy.einsum('pi,pi->p', ao_re, c0_rr) +
                    numpy.einsum('pi,pi->p', ao_im, c0_ir) -
                    numpy.einsum('pi,pi->p', ao_re, c0_ii))
-                                    
+            
+    # real orbitals and real DM
     else:
         rho = pyscf.dft.numint.eval_rho(mol, ao, dm, non0tab, isgga, verbose)
     

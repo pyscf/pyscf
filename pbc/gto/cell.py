@@ -307,29 +307,6 @@ class Cell(pyscf.gto.Mole):
 
         Gv = 2*np.pi*np.dot(invhT,gxyz)
         return Gv
-
-    # def get_spheric_gs_mask(self):
-    #     '''Mask of gs within a spherical gs cutoff
-
-    #     Args:
-    #         self : instance of :class:`Cell`
-    #     Returns:
-    #         spheric_gs_mask : (ngs,) ndarray of bool
-    #     '''
-    #     ke = np.einsum('ri,ri->i', self.Gv, self.Gv)
-    #     return ke < self.ke_cutoff
-
-    #     invhT = scipy.linalg.inv(self.lattice_vectors().T)
-    #     ptr=0
-    #     for x, gx in enumerate(gxrange):
-    #         for y, gy in enumerate(gyrange):
-    #             for z, gz in enumerate(gzrange):
-    #                 G = 2*np.pi*np.dot(invhT, 
-    #                 if gx*gx+gy*gy+gz*gz <= 1./3. * np.dot(self.spheric_gs_cut, self.spheric_gs_cut):
-    #                     spheric_gs_mask[ptr] = True
-    #                 ptr+=1
-    #     return spheric_gs_mask
-
         
     def get_SI(self):
         '''Calculate the structure factor for all atoms; see MH (3.34).
