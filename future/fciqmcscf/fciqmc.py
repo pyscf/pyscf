@@ -66,6 +66,7 @@ class FCIQMCCI(object):
         # Shouldn't need scratch dir settings.BLOCKSCRATCHDIR
         self.scratchDirectory = ''
 
+        self.generate_neci_input = True
         self.integralFile = "FCIDUMP"
         self.configFile = "neci.inp"
         self.outputFileRoot = "neci.out"
@@ -86,14 +87,14 @@ class FCIQMCCI(object):
         # the active space.
         self.nfreezecore = 0
         self.nfreezevirt = 0
+        self.system_options = ''
+        self.calc_options = ''
+        self.logging_options = ''
+
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
             self.groupname = None
-
-        self.system_options = ''
-        self.calc_options = ''
-        self.logging_options = ''
 
         self._keys = set(self.__dict__.keys())
 
@@ -141,7 +142,8 @@ class FCIQMCCI(object):
             neleca, nelecb = nelec
 
         write_integrals_file(h1e, eri, norb, neleca, nelecb, self)
-        write_fciqmc_config_file(self, neleca, nelecb, fci_restart)
+        if self.generate_neci_input:
+            write_fciqmc_config_file(self, neleca, nelecb, fci_restart)
         if self.verbose >= logger.DEBUG1:
             # os.path.join(self.scratchDirectory,self.configFile)
             in_file = self.configFile
@@ -247,7 +249,8 @@ def run_standalone(fciqmcci, mo_coeff, restart=None):
     else:
         neleca, nelecb = nelec
 
-    write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart)
+    if self.generate_neci_input:
+        write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart)
 
     if fciqmcci.verbose >= logger.DEBUG1:
         # os.path.join(self.scratchDirectory,self.configFile)
