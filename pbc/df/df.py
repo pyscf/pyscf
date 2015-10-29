@@ -38,7 +38,7 @@ def aux_e2(cell, auxcell, intor):
         ai = auxcell.nimgs[i]
         nimgs[i] = ci if ci > ai else ai
 
-    print "AUX NIMGS", nimgs
+    print "Images summed over in DFT", nimgs
     Ls = scfint.get_lattice_Ls(cell, nimgs)
     Ms = Ls
 
@@ -47,9 +47,11 @@ def aux_e2(cell, auxcell, intor):
     rep_cell.atom = []
     for L in Ls:
         for atom, coord in cell._atom:
+            #print "Lattice L", L
             rep_cell.atom.append([atom, coord + L])
-
+    rep_cell.unit = 'B'
     rep_cell.build(False,False)
+    #print "ATOMS", rep_cell.atom
 
     rep_aux_e2 = pyscf.df.incore.aux_e2(rep_cell, auxcell, intor, aosym='s1')
 
@@ -60,6 +62,10 @@ def aux_e2(cell, auxcell, intor):
     rep_aux_e2=rep_aux_e2.reshape(nao*nL,nao*nL,-1)
     
     aux_e2=numpy.zeros([nao,nao,naoaux])
+
+    # print rep_aux_e2.shape
+    # for (i, j, k), val in numpy.ndenumerate(rep_aux_e2):
+    #     print (i,j,k), val
 
     # double lattice sum
     for l in range(len(Ls)):
@@ -72,15 +78,15 @@ def aux_e2(cell, auxcell, intor):
 
 def aux_e2_grid(cell, auxcell, gs):
 
-    coords=gen_grid.gen_uniform_grids(cell, gs)
+    coords=gen_grid.gen_uniform_grids(cell)
     nao=cell.nao_nr()
     ao=numint.eval_ao(cell, coords)
     auxao=numint.eval_ao(auxcell, coords)
     naoaux=auxcell.nao_nr()
 
     aux_e2=numpy.einsum('ri,rj,rk',ao,ao,auxao)*cell.vol/coords.shape[0]
-
     aux_e2.reshape([nao*nao,naoaux])
+
     return aux_e2
 
 
@@ -94,42 +100,42 @@ def test_df():
 
     B = BOHR
 
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    Lunit = 2
+    Lunit = 4
     Ly = Lz = Lunit
     Lx = Lunit
 
     h = np.diag([Lx,Ly,Lz])
     
-    mol.atom.extend([['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
-                     ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]])
-
     # these are some exponents which are 
     # not hard to integrate
-    mol.basis = { 'He': [[0, (1.0, 1.0)]] }
-    mol.unit='A'
-    mol.build(0, 0)
-
     cell = pgto.Cell()
-    cell.__dict__ = mol.__dict__ # hacky way to make a cell
+    #cell.atom = [['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
+    #             ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]]
+    cell.atom = [['He', (0,0,0)], ['He', (1,1,1)]]
+    cell.basis = { 'He': [[0, (1.0, 1.0)]] }
+
+    #cell.unit='A'
+    cell.unit='B'
+    
     cell.h = h
-    #cell.vol = scipy.linalg.det(cell.h)
     cell.nimgs = [3,3,3]
     cell.pseudo = None
     cell.output = None
     cell.verbose = 0
-    cell.build(0, 0)
+    cell.gs = np.array([40,40,40])
 
-    gs = np.array([40,40,40])
+    cell.build(0, 0)
 
     # DF overlap
     auxcell=format_aux_basis(cell, auxbasis=cell.basis)
     c3=aux_e2(cell, auxcell, 'cint3c1e_sph')
-    c3grid=aux_e2_grid(cell, auxcell, gs)
+    c3grid=aux_e2_grid(cell, auxcell, cell.gs)
 
+    for i in range(cell.nao_nr()):
+        for j in range(cell.nao_nr()):
+            for k in range(cell.nao_nr()):
+                print 'i,j,k', i,j,k, c3[i,j,k], c3grid[i,j,k]
+    
     print np.linalg.norm(c3-c3grid) # should be zero within integration error
 
 def auxnorm(cell):
@@ -174,42 +180,16 @@ def test_poisson():
 
     B = BOHR
 
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    Lunit = 4.
-    Ly = Lz = Lunit
-    Lx = Lunit
+    Lunit = 4.*B
+    Ly = Lz = Lunit*B
+    Lx = Lunit*B
 
     h = np.diag([Lx,Ly,Lz])
     
-    #mol.atom.extend([['He', (0.5*Lx*B, 0.5*Ly*B, 0.5*Lz*B)]])
-
-    mol.build(
-        verbose = 0,
-        atom = '''He     0    0.       0.
-        #He     1    0.       0.
-        #He     0    1.       0.
-        #He     0    0.       1.
-        #He     1    1.       0.
-        #He     1    0.       1.
-        ''',
-        basis={'He': [[0, (1.0, 1.0)]]})
-    #basis={'He':'sto-3g'})
-
-
-    # these are some exponents which are 
-    # not hard to integrate
-    #mol.basis = { 'He': [[0, (1.0, 1.0)]] }
-    #mol.unit='A'
-    #mol.build()
-
     cell = pgto.Cell()
-    cell.__dict__.update(mol.__dict__) # hacky way to make a cell
+    cell.atom = '''He     1.    1.       1.'''
+    cell.basis = {'He': [[0, (1.0, 1.0)]]}
     cell.h = h
-    #cell.vol = scipy.linalg.det(cell.h)
-    #cell.nimgs = cell.get_nimgs(cell, 1.e-7)
     n = 30
     cell.gs = np.array([n,n,n])
     cell.pseudo = None
@@ -217,56 +197,49 @@ def test_poisson():
     cell.verbose = 0
     cell.build()
 
-    #bas=genbas(2., 1.8,(1000.,0.3), 0)+
-    bas=genbas(2., 1.8,(10.,1.0), 0)+genbas(1., 1.8,(10.,1.0), 1)+genbas(2., 1.8,(10.,1.0), 2)
-    #bas="weigend"
-    #bas=[[0, (1.0, 1.0)], [0, (2.0, 1.0)]]
-    #print "basis", bas
+    bas=genbas(2., 1.8,(1000.,0.3), 0)
     auxcell=format_aux_basis(cell, {'He': bas })
 
-    #print "NIMGS", auxcell.nimgs, cell.nimgs
-
     gs = np.array([40,40,40])
-    #ew_eta, ew_cut = pbc.ewald_params(cell, gs, 1.e-7)
-    #mf=scf.RKS(cell, gs, ew_eta, ew_cut)
-    #mf.scf()
 
-    #dm=mf.make_rdm1()
-    # DF overlap
-    ovlp1=pscf.hf.get_ovlp(cell)#, gs)
-    print ovlp1, 'o'
     ovlp=scfint.get_ovlp(cell)
-    print ovlp, 'o'
     dm=2*scipy.linalg.inv(ovlp) 
-    exit()
 
     print "DM", dm
     nelec=np.einsum('ij,ij',dm,ovlp)
     print "nelec", nelec
 
-    j=pscf.hf.get_j(cell, dm, gs)
+    j=pscf.hf.get_j(cell, dm)
     ref_j=np.einsum('ij,ij',j,dm)
-    print "Coulomb", ref_j
+    print "Reference chargeless Coulomb", ref_j
 
     nao=dm.shape[0]
     c3=aux_e2(cell, auxcell, 'cint3c1e_sph').reshape(nao,nao,-1)
     rho=numpy.einsum('ijk,ij->k', c3, dm)
 
-    print "rho is", rho
     norm=auxnorm(auxcell)
     rho1=rho-nelec*norm/cell.vol
 
-    print "norm is", norm
-
     c2 = scfint.get_t(auxcell) * 2
-    print "C2", c2
-    v1 = numpy.linalg.solve(c2, rho1*4*numpy.pi)
-    #v2 = numpy.einsum('ijk,k->ij', c3, v1)
-    
-    print numpy.dot(v1,rho)  
-    print numpy.dot(v1,rho1) # Integral with the chargeless density. This
+
+    v1 = numpy.linalg.solve(c2, rho1*4*numpy.pi) # computed this way
+                                                 # v1 still has some constant
+                                                 # This doesn't matter
+                                                 # when integrating with the 
+                                                 # chargeless density
+                                                 # but this constant can also
+                                                 # be set to zero by fitting the
+                                                 # potential
+                                                 # chargeless Gaussians
+        
+    print "Charged Coulomb energy", numpy.dot(v1,rho)  # Integral with charged density. This gives
+                             # a contribution from the constant in v, 
+                             # = nelec * \int v
+
+    print "DF Chargeless Coulomb energy", numpy.dot(v1,rho1) # Integral with the chargeless density. This
                              # should agree with the k-space Coulomb
                              # sum which omits K=0
-    print numpy.dot(v1,rho)-ref_j # should be close to zero
 
-test_poisson()
+    print "Error of DF from reference", numpy.dot(v1,rho1)-ref_j # should be close to zero
+
+#test_poisson()
