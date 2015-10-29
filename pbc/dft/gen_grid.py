@@ -1,4 +1,5 @@
 import numpy as np
+from pyscf.lib import logger
 from pyscf.lib.numpy_helper import cartesian_prod
 
 def gen_uniform_grids(cell):
@@ -10,7 +11,7 @@ def gen_uniform_grids(cell):
     Returns:
         coords : (ngx*ngy*ngz, 3) ndarray
             The real-space grid point coordinates.
-        
+
     '''
     ngs = 2*np.asarray(cell.gs)+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
@@ -32,7 +33,7 @@ class UniformGrids(object):
         if cell == None: cell = self.cell
 
         self.coords = gen_uniform_grids(self.cell)
-        self.weights = np.ones(self.coords.shape[0]) 
+        self.weights = np.ones(self.coords.shape[0])
         self.weights *= cell.vol()/self.weights.shape[0]
 
         return self.coords, self.weights

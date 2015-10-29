@@ -33,7 +33,7 @@ def format_pseudo(pseudo_tab):
         ... }``
 
     Args:
-        pseudo_tab : dict 
+        pseudo_tab : dict
             Similar to :attr:`Cell.pseudo` (a dict), it **cannot** be a str
 
     Returns:
@@ -42,9 +42,9 @@ def format_pseudo(pseudo_tab):
     Examples:
 
     >>> pbc.format_pseudo({'H':'gth-blyp', 'He': 'gth-pade'})
-    {'H': [[1], 
-        0.2, 2, [-4.19596147, 0.73049821], 0], 
-     'He': [[2], 
+    {'H': [[1],
+        0.2, 2, [-4.19596147, 0.73049821], 0],
+     'He': [[2],
         0.2, 2, [-9.1120234, 1.69836797], 0]}
     '''
     fmt_pseudo = {}
@@ -145,8 +145,8 @@ class Cell(pyscf.gto.Mole):
                h=None, gs=None, Gv=None, precision=None, nimgs=None,
                ew_eta=None, ew_cut=None, pseudo=None, basis=None,
                *args, **kwargs):
-        '''Setup Mole molecule and Cell and initialize some control parameters.  
-        Whenever you change the value of the attributes of :class:`Cell`, 
+        '''Setup Mole molecule and Cell and initialize some control parameters.
+        Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
 
         Kwargs:
@@ -157,6 +157,7 @@ class Cell(pyscf.gto.Mole):
             pseudo : dict or str
                 To define pseudopotential.  If given, overwrite :attr:`Cell.pseudo`
         '''
+        print self.ew_eta
         if h is not None: self.h = h
         if gs is not None: self.gs = gs
         if Gv is not None: self.Gv = Gv
@@ -194,7 +195,7 @@ class Cell(pyscf.gto.Mole):
         # This must happen before build() because it prepares self.basis
         if isinstance(self.basis, str):
             basis_name = self.basis.lower().replace(' ', '').replace('-', '').replace('_', '')
-            if 'gth' in basis_name: 
+            if 'gth' in basis_name:
                 # specify global basis for whole molecule
                 uniq_atoms = set([a[0] for a in _atom])
                 self.basis = self.format_basis(dict([(a, basis_name)
@@ -243,7 +244,7 @@ class Cell(pyscf.gto.Mole):
 
         def fn(r):
             return (np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision))**2
-        
+
         rcut = np.sqrt(-(np.log(precision)/min_exp)) # guess
         rcut = scipy.optimize.fsolve(fn, rcut)[0]
         rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
@@ -259,7 +260,7 @@ class Cell(pyscf.gto.Mole):
 
         The relative error in the G-space sum is given by (keeping only exponential
         factors)
-            precision ~ e^{(-Gmax^2)/(4 \eta^2)} 
+            precision ~ e^{(-Gmax^2)/(4 \eta^2)}
         which determines alpha. Then, real-space cutoff is determined by (exp.
         factors only)
             precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
