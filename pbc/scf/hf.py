@@ -36,7 +36,7 @@ def get_hcore(cell, kpt=None):
 def get_jvloc_G0(cell, kpt=None):
     '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
 
-    return 1./cell.vol() * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
+    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 def get_nuc(cell, kpt=None):
     '''Get the bare periodic nuc-el AO matrix, with G=0 removed.
@@ -94,9 +94,9 @@ def get_pp(cell, kpt=None):
                     SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
                     SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aoG)
                     for j in range(nl):
-                        SPG_lmj= SI[ia,:] * projG_ia[l][m][j]
+                        SPG_lmj = SI[ia,:] * projG_ia[l][m][j]
                         SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
-                        vppnl += -h[i,j]*np.einsum('p,q->pq', 
+                        vppnl += h[i,j]*np.einsum('p,q->pq', 
                                                    SPG_lmi_aoG.conj(), 
                                                    SPG_lmj_aoG).real
     vppnl *= (1./ngs**2)
@@ -118,7 +118,8 @@ def get_t(cell, kpt=None):
     t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]).real +
              np.dot(aoR[2].T.conj(), aoR[2]).real +
              np.dot(aoR[3].T.conj(), aoR[3]).real)
-    t *= (cell.vol()/ngs)
+    t *= (cell.vol/ngs)
+    
     return t
 
 def get_ovlp(cell, kpt=None):
@@ -132,7 +133,7 @@ def get_ovlp(cell, kpt=None):
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     ngs = aoR.shape[0]
 
-    s = (cell.vol()/ngs) * np.dot(aoR.T.conj(), aoR).real
+    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR).real
     return s
     
 def get_j(cell, dm, kpt=None):
@@ -154,7 +155,7 @@ def get_j(cell, dm, kpt=None):
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
 
-    vj = (cell.vol()/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
+    vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
     return vj
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
@@ -197,7 +198,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     # if SLOW == True:
     #     ewxyz = ewxyz.T
     #     for ic, (ix, iy, iz) in enumerate(ewxyz):
-    #         L = np.einsum('ij,j->i', cell.lattice_vectors(), ewxyz[ic])
+    #         L = np.einsum('ij,j->i', cell._h, ewxyz[ic])
 
     #         # prime in summation to avoid self-interaction in unit cell
     #         if (ix == 0 and iy == 0 and iz == 0):
@@ -226,7 +227,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     nx = len(ewxrange)
     ny = len(ewyrange)
     nz = len(ewzrange)
-    Lall = np.einsum('ij,jk->ik', cell.lattice_vectors(), ewxyz).reshape(3,nx,ny,nz)
+    Lall = np.einsum('ij,jk->ik', cell._h, ewxyz).reshape(3,nx,ny,nz)
     #exclude the point where Lall == 0
     Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
     Lall = Lall.reshape(3,nx*ny*nz)
@@ -255,10 +256,9 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
 
     # last line of Eq. (F.5) in Martin 
     ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
-    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol())
+    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
     
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
-    Gv = cell.Gv
     SI = cell.get_SI()
     ZSI = np.einsum("i,ij->j", chargs, SI)
 
@@ -273,14 +273,14 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
     coulG = tools.get_coulG(cell)
-    absG2 = np.einsum('ij,ij->j',np.conj(Gv),Gv)
+    absG2 = np.einsum('ij,ij->j',np.conj(cell.Gv),cell.Gv)
 
     ZSIG2 = np.abs(ZSI)**2
     expG2 = np.exp(-absG2/(4*ew_eta**2))
     JexpG2 = coulG*expG2
     ewgI = np.dot(ZSIG2,JexpG2)
     ewg = .5*np.sum(ewgI)
-    ewg /= cell.vol()
+    ewg /= cell.vol
 
     log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg

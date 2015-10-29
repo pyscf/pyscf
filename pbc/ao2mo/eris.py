@@ -89,7 +89,7 @@ def assemble_eri(cell, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
               orb_pair_G1.shape[1], orb_pair_invG2.shape[1])
     coulG = tools.get_coulG(cell)
     ngs = orb_pair_invG2.shape[0]
-    Jorb_pair_invG2 = np.einsum('g,gn->gn',coulG,orb_pair_invG2)*(cell.vol()/ngs)
+    Jorb_pair_invG2 = np.einsum('g,gn->gn',coulG,orb_pair_invG2)*(cell.vol/ngs)
     eri = np.einsum('gm,gn->mn',orb_pair_G1, Jorb_pair_invG2)
     return eri
 

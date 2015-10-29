@@ -69,7 +69,7 @@ def test_components(pseudo=None):
     coords = gen_uniform_grids(cell)
     aoR = eval_ao(cell, coords)
     rhoR = eval_rho(cell, aoR, dm)
-    print cell.vol()/len(rhoR)*np.sum(rhoR) # 1.99981725342 (should be 2.0)
+    print cell.vol/len(rhoR)*np.sum(rhoR) # 1.99981725342 (should be 2.0)
     
     print "(Hartree + vne) * DM"
     print np.dot(np.ravel(dm),np.ravel(m.get_j(dm)))+np.dot(np.ravel(dm), np.ravel(vne))

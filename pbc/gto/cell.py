@@ -124,15 +124,19 @@ class Cell(pyscf.gto.Mole):
         pyscf.gto.Mole.__init__(self, **kwargs)
         self.h = None  # lattice vectors, three rows, array((a1,a2,a3))
         self.gs = None
-        self.Gv = None
         self.precision = 1.e-8
         self.nimgs = None
         self.ew_eta = None
         self.ew_cut = None
         self.pseudo = None
+        self.ke_cutoff = None # if set, defines a spherical cutoff
+                              # of fourier components, with .5 * G**2 < ke_cutoff
 
 ##################################################
 # don't modify the following variables, they are not input arguments
+        self.Gv = None
+        self.vol = None
+        self._h = None
         self._pseudo = None
         self._keys = set(self.__dict__.keys())
 
@@ -142,7 +146,7 @@ class Cell(pyscf.gto.Mole):
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build_(self, dump_input=True, parse_arg=True,
-               h=None, gs=None, Gv=None, precision=None, nimgs=None,
+               h=None, gs=None, precision=None, nimgs=None,
                ew_eta=None, ew_cut=None, pseudo=None, basis=None,
                *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
@@ -160,7 +164,6 @@ class Cell(pyscf.gto.Mole):
         print self.ew_eta
         if h is not None: self.h = h
         if gs is not None: self.gs = gs
-        if Gv is not None: self.Gv = Gv
         if nimgs is not None: self.nimgs = nimgs
         if ew_eta is not None: self.ew_eta = ew_eta
         if ew_cut is not None: self.ew_cut = ew_cut
@@ -208,10 +211,13 @@ class Cell(pyscf.gto.Mole):
 
         if self.nimgs is None:
             self.nimgs = self.get_nimgs(self.precision)
+
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
-        if self.Gv is None:
-            self.Gv = self.get_Gv()
+
+        self.Gv = self.get_Gv()
+        self.vol = scipy.linalg.det(self.lattice_vectors())
+        self._h = self.lattice_vectors()
 
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
@@ -306,7 +312,7 @@ class Cell(pyscf.gto.Mole):
 
         Gv = 2*np.pi*np.dot(invhT,gxyz)
         return Gv
-
+        
     def get_SI(self):
         '''Calculate the structure factor for all atoms; see MH (3.34).
 
@@ -334,9 +340,6 @@ class Cell(pyscf.gto.Mole):
             return np.asarray(self.h) * (1./param.BOHR)
         else:
             return np.asarray(self.h) * (1./self.unit)
-
-    def vol(self):
-        return scipy.linalg.det(self.lattice_vectors())
 
     def copy(self):
         return copy(self)

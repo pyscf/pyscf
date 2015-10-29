@@ -1,9 +1,10 @@
+import sys
 import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 
-def main(): 
+def main(n): 
     cell = pbcgto.Cell()
 
     cell.unit = 'A'
@@ -20,11 +21,11 @@ def main():
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
 
-    Lx = Ly = Lz = 5.430697500 
-    cell.h = np.diag([Lx,Ly,Lz])
-    cell.gs = np.array([8,8,8])
+    L = 5.430697500 
+    cell.h = np.diag([L,L,L])
+    cell.gs = np.array([n,n,n])
 
-    cell.verbose = 4
+    #cell.verbose = 4
     cell.build()
 
     print "Cell nimgs =", cell.nimgs
@@ -33,8 +34,14 @@ def main():
     print "Cell nelectron =", cell.nelectron
 
     kmf = pbcdft.RKS(cell)
-    kmf.xc = 'b88, lyp'
+    kmf.xc = 'lda,vwn'
     return kmf.scf()
 
 if __name__ == '__main__':
-    main()
+    args = sys.argv[1:]
+    if len(args) != 1:
+        print 'usage: n' 
+        sys.exit(1)
+    n = int(args[0])
+    
+    main(n)

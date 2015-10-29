@@ -12,6 +12,8 @@ from pyscf.pbc import gto as pbcgto
 import pyscf.pbc.gto.cell as cl
 import pyscf.pbc.gto
 import pbc
+import pyscf.pbc.scf as pbcscf
+import cell as cl
 import pyscf
 import pyscf.scf.hf
 
@@ -61,13 +63,13 @@ def get_j(mf, cell, dm_kpts, kpts):
     #:vj=numpy.zeros([nao,nao])
     #:for i in range(nao):
     #:    for j in range(nao):
-    #:        vj[i,j]=cell.vol()/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
+    #:        vj[i,j]=cell.vol/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
     # TODO: REPLACE by eval_mat here (with non0tab)
     vj_kpts=numpy.zeros([nkpts,nao,nao],numpy.complex128)
 
     mf._ecoul=0.
     for k in range(nkpts):
-        vj_kpts[k,:,:] = cell.vol()/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(),
+        vj_kpts[k,:,:] = cell.vol/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(),
                                                   vR.reshape(-1,1)*aoR_kpts[k,:,:])
 
         mf._ecoul+=1./nkpts*numpy.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:]) * .5
@@ -515,10 +517,11 @@ def test_kscf_kpoints(atom, ncells):
     cell.h = h
     cell.gs = [n,n,n]
     cell.nimgs = [2,2,2]
+    cell.pseudo=None
+    cell.output=None
+    cell.verbose=7
 
-    cell.atom = mol.atom
-    cell.basis = mol.basis
-    cell.pseudo = pseudo
+    cell.ke_cutoff=10
     cell.build()
     #cell=cl.Cell()
     #cell.__dict__=mol.__dict__ # hacky way to make a cell

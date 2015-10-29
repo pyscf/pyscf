@@ -63,8 +63,7 @@ def get_coulG(cell):
             The Coulomb kernel.
 
     '''
-    Gv = cell.Gv
-    absG2 = np.einsum('ij,ij->j',np.conj(Gv),Gv)
+    absG2 = np.einsum('ij,ij->j',np.conj(cell.Gv),cell.Gv)
     with np.errstate(divide='ignore'):
         coulG = 4*np.pi/absG2
     coulG[0] = 0.
