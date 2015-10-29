@@ -79,15 +79,21 @@ class FCIQMCCI(object):
         self.seed = 7
         self.AddtoInit = 3
         self.orbsym = []
+        self.pg_symmetry = 1
         self.state_weights = [1.0]
-        # This is the number of spinorbitals to freeze in the neci calculation.
-        # Note that if you do this for a CASSCF calculation, it will freeze in the active space.
+        # This is the number of spin orbitals to freeze in the neci calculation.
+        # Note that if you do this for a CASSCF calculation, it will freeze in
+        # the active space.
         self.nfreezecore = 0
         self.nfreezevirt = 0
         if mol.symmetry:
             self.groupname = mol.groupname
         else:
             self.groupname = None
+
+        self.system_options = ''
+        self.calc_options = ''
+        self.logging_options = ''
 
         self._keys = set(self.__dict__.keys())
 
@@ -287,13 +293,16 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('symignoreenergies\n')
     f.write('freeformat\n')
     f.write('electrons %d\n' % (neleca+nelecb))
+    # fci-core requires these two options.
     f.write('spin-restrict 0\n')
-    f.write('sym 0 0 0 0\n')    # fci-core requires these two options
+    f.write('sym %d 0 0 0\n' % (fciqmcci.pg_symmetry-1))
     f.write('nonuniformrandexcits 4ind-weighted\n')
     f.write('hphf 0\n')
     f.write('nobrillouintheorem\n')
     if nstates > 1:
         f.write('system-replicas %d\n' % (2*nstates))
+    if fciqmcci.system_options:
+        f.write(fciqmcci.system_options + '\n')
     f.write('endsys\n')
     f.write('\n')
 
@@ -334,6 +343,8 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
         f.write('doubles-init\n')
         #f.write('fci-init\n')
         f.write('multi-ref-shift\n')
+    if fciqmcci.calc_options:
+        f.write(fciqmcci.calc_options + '\n')
     f.write('endcalc\n')
     f.write('\n')
 
@@ -348,6 +359,8 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('calcrdmonfly 3 200 500\n')
     f.write('write-spin-free-rdm\n') 
     f.write('printonerdm\n')
+    if fciqmcci.logging_options:
+        f.write(fciqmcci.logging_options + '\n')
     f.write('endlog\n')
     f.write('end\n')
 
