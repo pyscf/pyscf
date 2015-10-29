@@ -70,3 +70,27 @@ def get_coulG(cell):
 
     return coulG
 
+def get_KLMN(kpts, Gv):
+    '''Given array KLMN where for gs indices, K, L, M, 
+    KLMN[K,L,M] gives index of N that satifies
+    momentum conservation
+
+       G(K) - G(L) = G(M) - G(N)
+
+    This is used for symmetry e.g. in integrals of the form
+
+    [\phi*[K](1) \phi[L](1) | \phi*[M](2) \phi[N](2)]
+
+    is zero unless N satisfies the above.
+    '''
+    nkpts = kpts.shape[0]
+    KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
+
+    for K, GvK in enumerate(Gv):
+        for L, GvL in enumerate(Gv):
+            for M, GvM in enumerate(Gv):
+                GvN = GvM + GvL - GvK
+                KLMN[K, L, M] = np.where(np.logical_and(Gv < GvN + 1.e-12,
+                                                        Gv > GvN - 1.e-12))[0][0]
+
+    return KLMN
