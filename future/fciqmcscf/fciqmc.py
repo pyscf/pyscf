@@ -282,6 +282,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
 
     f.write('title\n')
     f.write('\n')
+
     f.write('system read noorder\n')
     f.write('symignoreenergies\n')
     f.write('freeformat\n')
@@ -295,6 +296,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
         f.write('system-replicas %d\n' % (2*nstates))
     f.write('endsys\n')
     f.write('\n')
+
     f.write('calc\n')
     f.write('methods\n')
     f.write('method vertex fcimc\n')
@@ -334,10 +336,12 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
         f.write('multi-ref-shift\n')
     f.write('endcalc\n')
     f.write('\n')
+
     f.write('integral\n')
-    f.write('freeze {},{}\n'.format(fciqmcci.nfreezecore, fciqmcci.nfreezevirt))
+    f.write('freeze %d %d\n' % (fciqmcci.nfreezecore, fciqmcci.nfreezevirt))
     f.write('endint\n')
     f.write('\n')
+
     f.write('logging\n')
     f.write('popsfiletimer 60.0\n')
     f.write('binarypops\n')
@@ -397,7 +401,7 @@ def execute_fciqmc(fciqmcci):
     # Search for an unused output file.
     i = 1
     while outfiletmp in files:
-        outfiletmp = fciqmcci.outputFileRoot + '_{}'.format(i)
+        outfiletmp = fciqmcci.outputFileRoot + '_' + str(i)
         i += 1
     logger.info(fciqmcci, 'FCIQMC output file: %s', outfiletmp)
     fciqmcci.outputFileCurrent = outfiletmp
