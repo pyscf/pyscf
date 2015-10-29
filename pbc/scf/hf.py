@@ -119,6 +119,7 @@ def get_t(cell, kpt=None):
              np.dot(aoR[2].T.conj(), aoR[2]).real +
              np.dot(aoR[3].T.conj(), aoR[3]).real)
     t *= (cell.vol()/ngs)
+    
     return t
 
 def get_ovlp(cell, kpt=None):
@@ -258,7 +259,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol())
     
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
-    Gv = cell.Gv
+    Gv = cell._Gv
     SI = cell.get_SI()
     ZSI = np.einsum("i,ij->j", chargs, SI)
 

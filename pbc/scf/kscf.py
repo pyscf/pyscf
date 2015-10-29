@@ -1,8 +1,8 @@
 import numpy
 import scipy
 import scipy.linalg
-import pbc
-import scf
+import pyscf.pbc
+import pyscf.pbc.scf as pbcscf
 import cell as cl
 import pyscf
 import pyscf.scf.hf
@@ -505,6 +505,9 @@ def test_kscf_kpoints(atom, ncells):
     cell.pseudo=None
     cell.output=None
     cell.verbose=7
+
+    cell.ke_cutoff=10
+
     cell.build()
     
     # points in grid (x,y,z)

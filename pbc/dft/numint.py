@@ -1,6 +1,8 @@
 import numpy as np
 import pyscf.dft
 
+from pyscf.pbc import tools
+
 def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
@@ -43,6 +45,22 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
                                          isgga, relativity, 
                                          bastart, bascount, 
                                          non0tab, verbose))
+
+    if cell.ke_cutoff is not None:
+
+        ke = .5* np.einsum('ri,ri->i', cell._Gv, cell._Gv)
+        ke_mask = ke < cell.ke_cutoff
+
+        aoG = np.zeros_like(aoR)
+        for i in range(nao):
+            if isgga:
+                for c in range(4):
+                    aoG[c][ke_mask, i] = tools.fft(aoR[c][:,i], cell.gs)[ke_mask]
+                    aoR[c][:,i] = tools.ifft(aoG[c][:,i], cell.gs)
+            else:
+                aoG[ke_mask, i] = tools.fft(aoR[:,i], cell.gs)[ke_mask]
+                aoR[:,i] = tools.ifft(aoG[:,i], cell.gs)
+                    
     return aoR
 
 def eval_rho(mol, ao, dm, non0tab=None, 
