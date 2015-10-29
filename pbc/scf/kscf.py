@@ -8,7 +8,7 @@ from pyscf.pbc import tools
 from pyscf.pbc import gto as pbcgto
 
 from pyscf.lib import logger
-pi=numpy.pi
+pi = numpy.pi
 
 def get_ovlp(mf, cell, kpts):
     '''Get overlap AO matrices at sampled k-points.
