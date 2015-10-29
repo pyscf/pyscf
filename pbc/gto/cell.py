@@ -161,7 +161,6 @@ class Cell(pyscf.gto.Mole):
             pseudo : dict or str
                 To define pseudopotential.  If given, overwrite :attr:`Cell.pseudo`
         '''
-        print self.ew_eta
         if h is not None: self.h = h
         if gs is not None: self.gs = gs
         if nimgs is not None: self.nimgs = nimgs
