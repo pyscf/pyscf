@@ -108,6 +108,7 @@ def get_gth_projG(cell, Gvs):
                 projG_ang = Ylm(l,m,thetas,phis).conj()
                 proj_ia_lm = []
                 for i in range(nl):
+                    #print "I am using l = %d, m = %d, i = %d"%(l,m,i)
                     projG_radial = projG_li(Gs,l,i,rl)
                     proj_ia_lm.append( projG_radial*projG_ang )
 
