@@ -42,6 +42,7 @@ def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
 def write_chk(mc,root,chkfile):
 
     fh5 = h5py.File(chkfile,'w')
+    mc.mo_coeff, _, orbe = mc.canonicalize(ci=root)
 
     fh5['mol']        =       format(mc.mol.pack())
     fh5['mc/mo']      =       mc.mo_coeff 
@@ -51,9 +52,6 @@ def write_chk(mc,root,chkfile):
     fh5['mc/nvirt']   =       nvirt    
     fh5['mc/nelecas'] =       mc.nelecas 
     fh5['mc/root']    =       root
-
-
-    orbe = mc.get_fock(ci=root).diagonal()
     fh5['mc/orbe']    =       orbe     
     #fh5['mc/orbsym']  =       mc.orbsym
     if hasattr(mc, 'orbsym'):
@@ -213,10 +211,11 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
             partial_core = num_of_orb_end -num_of_orb_begin
             partial_virt = 0
 
-    if not os.path.exists('%d'%rank):
-        os.makedirs('%d'%rank)
-    check_call('cp %s %d/%s'%(dmrginp,rank,dmrginp), shell=True)
-    f = open('%d/%s'%(rank,dmrginp), 'a')
+    newscratch = os.path.join('%s/'%scratch,'%d'%(rank))
+    if not os.path.exists('%s'%newscratch):
+        os.makedirs('%s'%newscratch)
+    check_call('cp %s %s/%s'%(dmrginp,newscratch,dmrginp), shell=True)
+    f = open('%s/%s'%(newscratch,dmrginp), 'a')
     f.write('restart_mps_nevpt %d %d %d \n'%(ncas,partial_core, partial_virt))
     f.close()
 
@@ -234,9 +233,9 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     #import os
     #call('cp %s/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
     #call('cp %s/node0/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
-    call('cp %s/* %d/'%(scratch,rank),shell = True)
-    call('cp %s/node0/* %d/'%(scratch,rank),shell = True)
-    f = open('%d/FCIDUMP'%rank,'w')
+    call('cp %s/* %s/'%(scratch,newscratch),shell = True)
+    call('cp %s/node0/* %s/'%(scratch,newscratch),shell = True)
+    f = open('%s/FCIDUMP'%newscratch,'w')
 
     pyscf.tools.fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)
     #h2e in active space
@@ -267,7 +266,8 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     f.close()
 
 
-    os.chdir('./%d'%rank)
+    current_path = os.getcwd()
+    os.chdir('%s'%newscratch)
 
     check_call('%s %s > %s'%(blockfile,dmrginp,dmrgout), shell=True)
     f = open('Va_%d'%root,'r')
@@ -286,7 +286,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     Vr_total_e = comm.gather(Vr_energy,root=0)
     Vr_total_norm = comm.gather(Vr_norm,root=0)
     #comm.Reduce(Vi_energy,Vi_total,op=MPI.SUM, root=0)
-    os.chdir('..')
+    os.chdir('%s'%current_path)
     if rank == 0:
 
         fh5 = h5py.File('Perturbation_%d'%root,'w')
