@@ -434,8 +434,11 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
         def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
             e, c = fcibase_class.kernel(self, h1, h2, ncas, nelecas, ci0,
                                         nroots=self.nroots, **kwargs)
-            for i, ei in enumerate(e):
-                logger.debug(casscf, 'Energy for state %d = %.15g', i, ei)
+            if casscf.verbose >= logger.DEBUG:
+                ss = fcibase_class.spin_square(self, c, ncas, nelecas)
+                for i, ei in enumerate(e):
+                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                 i, ei, ss[0][i])
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
@@ -506,6 +509,7 @@ if __name__ == '__main__':
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
     mol.basis = '6-31g'
+    mol.symmetry = 1
     mol.build()
 
     m = scf.RHF(mol)
