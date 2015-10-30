@@ -51,20 +51,14 @@ def get_int1e(intor, cell, kpt=None):
     
     Ls = get_lattice_Ls(cell, cell.nimgs)
 
-#    print "ATOMS"
-#    print cell.atom
-#    print cell._atom
-
+# Just change the basis position, keep all other envrionments
+    cellL = cell.copy()
+    ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
+    _envL = cellL._env
     for L in Ls:
-        cellL = cell.copy()
-        atomL = list()
-        # Use internal format ._atom; convert internal format to
-        # units used by .atom (which reconverts to ._atom after build() call)
-        for atom, coord in cell._atom: 
-            atomL.append([atom, coord + L])
-        cellL.atom = atomL
-        cellL.unit = 'Bohr'
-        cellL.build(False,False)
+        _envL[ptr_coord+0] = cell._env[ptr_coord+0] + L[0]
+        _envL[ptr_coord+1] = cell._env[ptr_coord+1] + L[1]
+        _envL[ptr_coord+2] = cell._env[ptr_coord+2] + L[2]
         int1e += (np.exp(1j*np.dot(kpt.T,L)) *
                   pyscf.gto.intor_cross(intor, cell, cellL))
 

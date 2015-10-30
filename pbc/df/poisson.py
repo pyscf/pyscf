@@ -7,25 +7,27 @@ from pyscf.pbc.df import df
 
 
 def get_j(cell, dm, auxcell):
-    nao = dm.shape[0]
-    c3 = df.aux_e2(cell, auxcell, 'cint3c1e_sph').reshape(nao,nao,-1)
-    rho = np.einsum('ijk,ij->k', c3, dm)
-
-    norm = np.zeros_like(rho)
+    idx = []
     ip = 0
+# normalization
     for ib in range(auxcell.nbas):
         l = auxcell.bas_angular(ib)
-        e = auxcell.bas_exp(ib)[0]
-        c = auxcell.bas_ctr_coeff(ib)[0,0]
         if l == 0:
-            norm[ip] = gto.mole._gaussian_int(2, e) * c * np.sqrt(np.pi*4)
+            e = auxcell.bas_exp(ib)[0]
+            ptr = auxcell._bas[ib,gto.PTR_COEFF]
+            auxcell._env[ptr] = 1/np.sqrt(4*np.pi)/gto.mole._gaussian_int(2,e)
+            idx.append(ip)
             ip += 1
         else:
             ip += 2*l+1
 
+    nao = dm.shape[0]
+    c3 = df.aux_e2(cell, auxcell, 'cint3c1e_sph').reshape(nao,nao,-1)
+    rho = np.einsum('ijk,ij->k', c3, dm)
+
     ovlp = pscf.scfint.get_ovlp(cell)
     nelec = np.einsum('ij,ij', ovlp, dm)
-    rho -= nelec/cell.vol * norm
+    rho[idx] -= nelec/cell.vol
 
     c2 = pscf.scfint.get_t(auxcell)
 
@@ -37,7 +39,13 @@ def get_j(cell, dm, auxcell):
 
     return vj
 
-# define get_nuc
+def genbas(beta, bound0=(1e11,1e-8), l=0):
+    basis = []
+    e = bound0[0]
+    while e > bound0[1]:
+        basis.append([l, [e,1]])
+        e /= beta
+    return basis
 
 
 if __name__ == '__main__':
@@ -57,9 +65,12 @@ if __name__ == '__main__':
     cell.build()
     mf = pdft.RKS(cell)
     mf.xc = 'LDA,VWN'
-    auxbasis = {'He': df.genbas(2., 1.8, (100.,0.1), 0)
-                     +df.genbas(2., 2. , (10.,0.1), 1)
-                     +df.genbas(2., 2. , (10.,0.1), 2)}
+    auxbasis = {'He': genbas(1.8, (100.,0.1), 0)
+                     +genbas(2. , (10.,0.3), 1)
+                     +genbas(2. , (10.,0.3), 2)}
+    #auxbasis = {'He': df.genbas(2., 1.8, (100.,0.1), 0)
+    #                 +df.genbas(2., 2. , (10.,0.1), 1)
+    #                 +df.genbas(2., 2. , (10.,0.1), 2)}
     auxcell = df.format_aux_basis(cell, auxbasis)
     mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
     e1 = mf.scf()
