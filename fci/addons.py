@@ -438,6 +438,8 @@ def fix_spin_(fciobj, shift=.1, ss_value=None):
     Kwargs:
         shift : float
             Level shift for states which have different spin
+        ss_value : number
+            S^2 expection value == s*(s+1)
 
     Returns
             A modified FCI object based on fciobj.

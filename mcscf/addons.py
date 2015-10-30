@@ -426,35 +426,37 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-10)
     fcibase = casscf.fcisolver
-    class FakeCISolver(casscf.fcisolver.__class__):
+    fcibase_class = casscf.fcisolver.__class__
+    class FakeCISolver(fcibase_class):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
+            self.nroots = len(weights)
         def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
-            e, c = fcibase.kernel(h1, h2, ncas, nelecas, ci0,
-                                  nroots=self.nroots, **kwargs)
+            e, c = fcibase_class.kernel(self, h1, h2, ncas, nelecas, ci0,
+                                        nroots=self.nroots, **kwargs)
             for i, ei in enumerate(e):
                 logger.debug(casscf, 'Energy for state %d = %.15g', i, ei)
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = fcibase.kernel(h1, h2, norb, nelec, ci0,
-                                  max_cycle=casscf.ci_response_space,
-                                  nroots=self.nroots, **kwargs)
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                        max_cycle=casscf.ci_response_space,
+                                        nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
             for i, wi in enumerate(weights):
-                dm1 += wi*fcibase.make_rdm1(ci0[i], norb, nelec)
+                dm1 += wi*fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
             return dm1
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
             for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase.make_rdm12(ci0[i], norb, nelec)
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss = fcibase.spin_square(ci0, norb, nelec)[0]
+            ss = fcibase_class.spin_square(self, ci0, norb, nelec)[0]
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip

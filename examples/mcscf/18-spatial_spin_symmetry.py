@@ -65,6 +65,7 @@ mol.basis = 'ccpvdz'
 mol.verbose = 5
 mol.output = 'fepor3.out'
 mol.spin = 2
+mol.symmetry = True
 mol.build()
 
 m = scf.ROHF(mol)
@@ -74,6 +75,7 @@ scf.fast_newton(m)
 mc = mcscf.CASSCF(m, 10, 10)
 idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
 mo = dmet_cas.dmet_cas(mc, m.make_rdm1(), idx3d, base=0)
-fci.addons.force_spin_(mc.fcisolver)
+fci.addons.fix_spin_(mc.fcisolver, ss_value=2)  # Triplet, ss_value = S*(S+1)
+mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)
 
