@@ -5,6 +5,7 @@ See Also:
     kscf.py : SCF tools for periodic systems with k-point *sampling*.
 '''
 
+import copy
 import numpy as np
 import scipy.linalg
 import pyscf.scf
@@ -30,6 +31,7 @@ def get_hcore(cell, kpt=None):
         hcore = get_pp(cell, kpt) + get_jvloc_G0(cell, kpt)
     else:
         hcore = get_nuc(cell, kpt)
+
     hcore += get_t(cell, kpt)
     return hcore
 
@@ -374,4 +376,17 @@ class RHF(pyscf.scf.hf.RHF):
     def ewald_nuc(self):
         return ewald(self.cell, self.ew_eta, self.ew_cut)
         
+def get_eig_kpt(mf, kpt):
+    '''Eigenvalues at a given k-pt, after SCF has converged,
+    as used for band-structure computation.
 
+    Returns:
+        eigs : (nao) ndarray
+    '''
+    mfk= copy.copy(mf)
+    mfk.kpt = kpt
+
+    fock = mfk.get_hcore() + mfk.get_veff()
+    ovlp = mfk.get_ovlp()
+
+    return mfk.eig(fock, ovlp)
