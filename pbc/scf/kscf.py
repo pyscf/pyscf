@@ -490,4 +490,4 @@ def test_kscf_kgamma():
     print "ALL ENERGIES, GAMMA", emf_gamma
     print "ALL ENERGIES, KPT", emf_kpt
 
-test_kscf_kgamma()
+#test_kscf_kgamma()

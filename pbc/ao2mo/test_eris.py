@@ -2,10 +2,9 @@ import numpy as np
 import pyscf.gto
 import pyscf.pbc as pbc
 import pyscf.pbc.gto as pbcgto
-import eris
-import pyscf.scf.hf as hf
 import pyscf.pbc.scf.hf as pbchf
 import pyscf.ao2mo
+import eris
 
 def test_eris():
     L=10
