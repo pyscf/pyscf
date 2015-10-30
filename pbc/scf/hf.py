@@ -84,7 +84,7 @@ def get_pp(cell, kpt=None):
         aoG[:,i] = tools.fft(aoR[:,i], cell.gs)
     ngs = aoG.shape[0]
 
-    vppnl = np.zeros((nao,nao))
+    vppnl = np.zeros((nao,nao), dtype=np.complex128)
     hs, projGs = pseudo.get_projG(cell)
     for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
         for l, h in enumerate(h_ia):
@@ -96,11 +96,11 @@ def get_pp(cell, kpt=None):
                     for j in range(nl):
                         SPG_lmj = SI[ia,:] * projG_ia[l][m][j]
                         SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
-                        vppnl += h[i,j]*np.einsum('p,q->pq', 
+                        vppnl += (-1)**l * h[i,j]*np.einsum('p,q->pq', 
                                                    SPG_lmi_aoG.conj(), 
-                                                   SPG_lmj_aoG).real
+                                                   SPG_lmj_aoG)
     vppnl *= (1./ngs**2)
-    return vpploc + vppnl
+    return vpploc + vppnl.real
 
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.

@@ -102,16 +102,17 @@ def get_gth_projG(cell, Gvs):
         proj_ia = []
         for l,proj in enumerate(pp[5:]):
             rl, nl, hl = proj
-            h_ia.append( (-1)**l * np.array(hl) )
+            h_ia.append( np.array(hl) )
             proj_ia_l = []
             for m in range(-l,l+1):
                 projG_ang = Ylm(l,m,thetas,phis).conj()
                 proj_ia_lm = []
                 for i in range(nl):
-                    #print "I am using l = %d, m = %d, i = %d"%(l,m,i)
                     projG_radial = projG_li(Gs,l,i,rl)
+                    #if l == 1:
+                    #    for g, p in zip(Gs, projG_radial):
+                    #        print g, p
                     proj_ia_lm.append( projG_radial*projG_ang )
-
                 proj_ia_l.append(proj_ia_lm)
             proj_ia.append(proj_ia_l)
         hs.append(h_ia)
@@ -158,15 +159,39 @@ def _qli(x,l,i):
 def Ylm(l,m,theta,phi):
     '''
     Spherical harmonics; returns a complex number
+
+    Note the "convention" for theta and phi:
+    http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.special.sph_harm.html
     '''
-    return scipy.special.sph_harm(m,l,theta,phi)
+    return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
 
 def cart2polar(rvec):
     # The columns of rvec are the 3-component vectors
     # i.e. rvec is 3 x N
     x,y,z = rvec
     r = lib.norm(rvec,axis=0)
-    theta = np.arctan2(z,np.sqrt(x**2+y**2))
+    # theta is the polar angle, 0 < theta < pi
+    # catch possible 0/0
+    theta = np.arccos(z/(r+1e-8))
+    # phi is the azimuthal angle, 0 < phi < 2pi (or -pi < phi < pi)
     phi = np.arctan2(y,x)
     return r, theta, phi
 
+"""
+    rs = []
+    thetas = []
+    phis = []
+    for rv in rvec.T:
+        x,y,z = rv
+        r = scipy.linalg.norm(rv)
+        if r < 1e-12:
+            theta = 0.
+        else:
+            theta = np.arccos(z/r)
+        phi = np.arctan2(y,x)
+        rs.append(r)
+        thetas.append(theta)
+        phis.append(phi)
+
+    return rs, thetas, phis
+"""
