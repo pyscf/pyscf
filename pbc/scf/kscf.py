@@ -117,6 +117,9 @@ class KRHF(pbchf.RHF):
         self.mo_occ = []
         self.mo_coeff_kpts = []
 
+        if cell.ke_cutoff is not None:
+            raise RuntimeError("ke_cutoff not supported with K pts yet")
+
     # TODO: arglist must use "mol" because of KW args used in kernel fn in hf.py
     def get_init_guess(self, mol=None, key='minao'):
         dm = pyscf.scf.hf.get_init_guess(mol, key)
@@ -427,7 +430,6 @@ def test_kscf_gamma(atom, ncells):
     n = 40 
     cell.gs = np.array([n*ncells,n,n])
     cell.nimgs = [2,2,2]
-
     cell.verbose = 7
     cell.build()
 
@@ -445,17 +447,15 @@ def test_kscf_kpoints(atom, ncells):
     cell.unit = 'B'
     Lunit = 2
     Ly = Lz = 2
-    Lx = ncells*Lunit
+    Lx = Lunit
     cell.h = np.diag([Lx,Ly,Lz])
     # place atom in middle of big box
     cell.atom.extend([[atom, (0.5*Lunit, 0.5*Ly, 0.5*Lz)]])
     cell.basis = { atom: [[0, (1.0, 1.0)]] }
 
-    n = 40 
-    cell.gs = np.array([n*ncells,n,n])
+    n = 40
+    cell.gs = np.array([n,n,n])
     cell.nimgs = [2,2,2]
-    cell.ke_cutoff = 10
-
     cell.verbose = 7
     cell.build()
 
@@ -481,7 +481,7 @@ def test_kscf_kgamma():
     # *only* reason is that Mole checks this against spin,
     # all other parts of the code
     # works so long as cell * nelectron is even, e.g. 4 unit cells of H atoms
-    for ncell in range(1,6):
+    for ncell in range(1,3):
         emf_gamma.append(test_kscf_gamma("He", ncell)/ncell)
         emf_kpt.append(test_kscf_kpoints("He", ncell))
         print "COMPARISON", emf_gamma[-1], emf_kpt[-1] # should be the same up to integration error
@@ -490,4 +490,4 @@ def test_kscf_kgamma():
     print "ALL ENERGIES, GAMMA", emf_gamma
     print "ALL ENERGIES, KPT", emf_kpt
 
-test_kscf_kgamma()
+#test_kscf_kgamma()
