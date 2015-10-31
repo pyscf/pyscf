@@ -349,3 +349,26 @@ class Cell(pyscf.gto.Mole):
     def unpack(self):
         return unpack(self)
 
+def get_Gv(lattice_vectors, gs):
+    '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
+
+    Indices along each direction go as [0...self.gs, -self.gs...-1]
+    to follow FFT convention. Note that, for each direction, ngs = 2*self.gs+1.
+
+    Args:
+        self : instance of :class:`Cell`
+
+    Returns:
+        Gv : (3, ngs) ndarray of floats
+            The array of G-vectors.
+
+    '''
+    invhT = scipy.linalg.inv(lattice_vectors.T)
+
+    gxrange = range(gs[0]+1)+range(gs[0],0)
+    gyrange = range(gs[1]+1)+range(gs[1],0)
+    gzrange = range(gs[2]+1)+range(gs[2],0)
+    gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange)).T
+
+    Gv = 2*np.pi*np.dot(invhT,gxyz)
+    return Gv
