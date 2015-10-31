@@ -48,7 +48,8 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
 
     if cell.ke_cutoff is not None:
 
-        ke = .5* np.einsum('ri,ri->i', cell.Gv, cell.Gv)
+        Gv=cell.Gv
+        ke = .5* np.einsum('ri,ri->i', Gv, Gv)
         ke_mask = ke < cell.ke_cutoff
 
         aoG = np.zeros_like(aoR)
