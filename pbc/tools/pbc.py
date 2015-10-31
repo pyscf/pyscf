@@ -16,7 +16,7 @@ def fft(f, gs):
             to the index order of :func:`cartesian_prod`.
         gs : (3,) ndarray of ints
             The number of *positive* G-vectors along each direction.
-    
+
     Returns:
         (nx*ny*nz,) ndarray
             The FFT 1D array in same index order as Gv (natural order of
@@ -40,7 +40,7 @@ def ifft(g, gs):
             corresponding to the index order of `span3`.
         gs : (3,) ndarray of ints
             The number of *positive* G-vectors along each direction.
-    
+
     Returns:
         (nx*ny*nz,) ndarray
             The inverse FFT 1D array in same index order as Gv (natural order
@@ -51,7 +51,7 @@ def ifft(g, gs):
     g3d = np.reshape(g, ngs)
     f3d = np.fft.ifftn(g3d)
     return np.ravel(f3d)
-    
+
 def get_coulG(cell):
     '''Calculate the Coulomb kernel 4*pi/G^2 for all G-vectors (0 for G=0).
 
@@ -70,8 +70,9 @@ def get_coulG(cell):
 
     return coulG
 
-def get_KLMN(kpts, Gv):
-    '''Given array KLMN where for gs indices, K, L, M, 
+def get_KLMN(kpts):
+    import sys
+    '''Given array KLMN where for gs indices, K, L, M,
     KLMN[K,L,M] gives index of N that satifies
     momentum conservation
 
@@ -86,11 +87,11 @@ def get_KLMN(kpts, Gv):
     nkpts = kpts.shape[0]
     KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
 
-    for K, GvK in enumerate(Gv):
-        for L, GvL in enumerate(Gv):
-            for M, GvM in enumerate(Gv):
-                GvN = GvM + GvL - GvK
-                KLMN[K, L, M] = np.where(np.logical_and(Gv < GvN + 1.e-12,
-                                                        Gv > GvN - 1.e-12))[0][0]
+    for K, kvK in enumerate(kpts):
+        for L, kvL in enumerate(kpts):
+            for M, kvM in enumerate(kpts):
+                kvN = kvM + kvL - kvK
+                KLMN[K, L, M] = np.where(np.logical_and(kpts < kvN + 1.e-12,
+                                              kpts > kvN - 1.e-12))[0][0]
 
     return KLMN
