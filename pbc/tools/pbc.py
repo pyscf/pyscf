@@ -122,3 +122,31 @@ def get_KLMN(kpts):
 
     return KLMN
 
+def cutoff_to_gs(h, cutoff):
+    '''
+    Convert KE cutoff to #grid points (gs variable)
+
+        uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
+
+    Args: 
+        h : lattice vectors in *Bohr*
+        cutoff : KE energy cutoff in a.u.
+
+    Returns: 
+        gs : (3, ) array
+    '''
+    grid_spacing = np.pi / np.sqrt(2 * cutoff)
+
+    print grid_spacing
+    print h
+
+    h0=np.linalg.norm(h[:,0])
+    h1=np.linalg.norm(h[:,1])
+    h2=np.linalg.norm(h[:,2])
+
+    print h0, h1, h2
+    # number of grid points is 2gs+1 (~ 2 gs) along each direction 
+    gs=np.ceil([h0 / (2*grid_spacing), 
+                h1 / (2*grid_spacing), 
+                h2 / (2*grid_spacing)])
+    return gs
