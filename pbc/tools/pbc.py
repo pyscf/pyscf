@@ -70,6 +70,34 @@ def get_coulG(cell):
 
     return coulG
 
+
+def replicate_cell(cell, ncopy):
+    '''Create an ncopy[0] x ncopy[1] x ncopy[2] repeat
+    of the input cell
+    Args:
+        cell : instance of :class: 'Cell'
+        ncopy : (3, ) array
+
+    Returns:
+        repcell : :class: 'Cell'
+    '''
+
+    repcell = cell.copy()
+    repatom = []
+    for Lx in range(ncopy[0]):
+        for Ly in range(ncopy[1]):
+            for Lz in range(ncopy[2]):
+                for atom, coord in cell._atom:
+                    L = np.dot(cell._h, [Lx, Ly, Lz])
+                    repatom.append([atom, coord + L])
+
+    repcell.atom = repatom
+    repcell.unit = 'B'
+    repcell.h = np.dot(cell._h, np.diag(ncopy))
+    repcell.build(False, False)
+
+    return repcell
+
 def get_KLMN(kpts, Gv):
     '''Given array KLMN where for gs indices, K, L, M, 
     KLMN[K,L,M] gives index of N that satifies
@@ -94,3 +122,4 @@ def get_KLMN(kpts, Gv):
                                                         Gv > GvN - 1.e-12))[0][0]
 
     return KLMN
+

@@ -25,6 +25,9 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     '''  
     if kpt is None:
         kpt = np.zeros([3,1])
+        dtype = np.float64
+    else:
+        dtype = np.complex128
 
     nimgs = cell.nimgs
     Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
@@ -34,13 +37,15 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     
     nao = cell.nao_nr()
     if isgga:
-        aoR = np.zeros([4,coords.shape[0], nao], np.complex128)
+        aoR = np.zeros([4,coords.shape[0], nao], dtype=dtype)
     else:
-        aoR = np.zeros([coords.shape[0], nao], np.complex128)
+        aoR = np.zeros([coords.shape[0], nao], dtype=dtype)
 
+
+    # TODO: this is 1j, not -1j; check for band_ovlp convention
     for T in Ts:
         L = np.dot(cell._h, T)
-        aoR += (np.exp(1j*np.dot(kpt.T,L)) *
+        aoR += (np.exp(1j*np.dot(kpt.T,L)) * 
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 
                                          bastart, bascount, 
