@@ -11,4 +11,5 @@ from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.cell import *
 
 parse = basis.parse
+parsepp = pseudo.parse
 #import pyscf.pbc.gto.cell.cmd_args
