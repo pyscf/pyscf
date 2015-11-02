@@ -3,25 +3,21 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
+from pyscf.pbc.scf import hf
 
 def main(n): 
     cell = pbcgto.Cell()
 
     cell.unit = 'A'
     cell.atom = '''
-      C    0.           0.           0.        ;
-      C    0.           1.78339997   1.78339997;
-      C    1.78339997   1.78339997   0.        ;
-      C    1.78339997   0.           1.78339997;
-      C    2.67509998   0.89170002   2.67509998;
-      C    0.89170002   0.89170002   0.89170002;
-      C    0.89170002   2.67509998   2.67509998;
-      C    2.67509998   2.67509998   0.89170002
+      H    0.0000    0.0000    0.0000;
+      H    0.7414    0.0000    0.0000;
     '''
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
 
-    L = 3.5668 
+    # Slightly greater than 2*(bond length)
+    L = 1.5 
     cell.h = np.diag([L,L,L])
     cell.gs = np.array([n,n,n])
 
@@ -35,7 +31,19 @@ def main(n):
 
     kmf = pbcdft.RKS(cell)
     kmf.xc = 'lda,vwn'
-    return kmf.scf()
+    print kmf.scf()
+    """
+    dm = kmf.make_rdm1()
+
+    tao = hf.get_t(cell) 
+    print "Kinetic energy ::", np.trace(np.dot(tao,dm))
+
+    vpp = hf.get_pp(cell)
+    print "Pseudopotential energy ::", np.trace(np.dot(vpp,dm))
+
+    kmf.get_veff()
+    print "XC energy ::", kmf._exc
+    """
 
 if __name__ == '__main__':
     args = sys.argv[1:]
@@ -47,6 +55,6 @@ if __name__ == '__main__':
     main(n)
 
 '''
->>> python c8.py 10
-converged SCF energy = -44.8811199403019
+>>> python h2.py 8
+converged SCF energy = -1.93426844243467
 '''
