@@ -13,8 +13,10 @@ import pyscf.scf
 import pyscf.scf.hf
 import pyscf.dft
 import pyscf.gto
+import pyscf.lib
 import pyscf.lib.parameters as param
 from pyscf.pbc import gto
+from pyscf.pbc.gto import pseudo
 
 from pyscf.lib import logger
 
@@ -29,45 +31,50 @@ def get_lattice_Ls(cell, nimgs):
     Ls = np.dot(cell._h, Ts.T).T
     return Ls
 
-def get_hcore(mf, cell, kpt=None):
+def get_hcore(cell, kpt=None):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.'''
     if kpt is None:
         kpt = np.zeros([3,1])
 
+    # TODO: these are still on grid
     if cell.pseudo is None:
-        hcore = get_nuc(cell, kpt)
+        hcore = pyscf.pbc.scf.hf.get_nuc(cell, kpt)
     else:
-        hcore = get_pp(cell, kpt)
+        hcore = (pyscf.pbc.scf.hf.get_pp(cell, kpt) + 
+                 get_jvloc_G0(cell, kpt))
+
     hcore += get_t(cell, kpt)
     return hcore
+
+def get_jvloc_G0(cell, kpt=None):
+    '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
+
+    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 def get_int1e(intor, cell, kpt=None):
     '''Get the one-electron integral defined by `intor` using lattice sums.'''
     if kpt is None:
         kpt = np.zeros([3,1])
 
-#FIXME: is int1e complex or float
-    int1e = np.zeros((cell.nao_nr(),cell.nao_nr()))
-    
+    # if pyscf.lib.norm(kpt) == 0.:
+    #     dtype = np.float64
+    # else:
+    dtype = np.complex128
+
+    int1e = np.zeros((cell.nao_nr(),cell.nao_nr()), dtype=dtype)
+
     Ls = get_lattice_Ls(cell, cell.nimgs)
 
-#    print "ATOMS"
-#    print cell.atom
-#    print cell._atom
-
+# Just change the basis position, keep all other envrionments
+    cellL = cell.copy()
+    ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
+    _envL = cellL._env
     for L in Ls:
-        cellL = cell.copy()
-        atomL = list()
-        # Use internal format ._atom; convert internal format to
-        # units used by .atom (which reconverts to ._atom after build() call)
-        for atom, coord in cell._atom: 
-            atomL.append([atom, coord + L])
-        cellL.atom = atomL
-        cellL.unit = 'Bohr'
-        cellL.build(False,False)
+        _envL[ptr_coord+0] = cell._env[ptr_coord+0] + L[0]
+        _envL[ptr_coord+1] = cell._env[ptr_coord+1] + L[1]
+        _envL[ptr_coord+2] = cell._env[ptr_coord+2] + L[2]
         int1e += (np.exp(1j*np.dot(kpt.T,L)) *
                   pyscf.gto.intor_cross(intor, cell, cellL))
-
     return int1e
 
 def get_ovlp(cell, kpt=None):

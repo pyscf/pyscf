@@ -1,4 +1,7 @@
 - spherical cutoff in G space for Gaussians
+  [partially done. Does not work with k-points, figure out how to do.
+   Simple cutoff for (G+K)^2 does not seem right, but check]
+
 - exchange part of Fock matrix for k-points
 - FIX numpy.ComplexWarning for SCF if kpt != 0; SCF may not work
   for kpt shifted away from Gamma point

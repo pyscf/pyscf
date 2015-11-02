@@ -17,8 +17,8 @@ from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc import tools
 from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
-
 from pyscf.lib import logger
+import scfint
 
 def get_hcore(cell, kpt=None):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.
@@ -33,6 +33,7 @@ def get_hcore(cell, kpt=None):
         hcore = get_nuc(cell, kpt)
 
     hcore += get_t(cell, kpt)
+
     return hcore
 
 def get_jvloc_G0(cell, kpt=None):
@@ -103,6 +104,8 @@ def get_pp(cell, kpt=None):
                                                    SPG_lmi_aoG.conj(), 
                                                    SPG_lmj_aoG)
     vppnl *= (1./ngs**2)
+
+    #return vpploc
     return vpploc + vppnl.real
 
 def get_t(cell, kpt=None):
@@ -296,28 +299,28 @@ class RHF(pyscf.scf.hf.RHF):
           inherit from that.
 
     '''
-    def __init__(self, cell, kpt=None):
+    def __init__(self, cell, kpt=None, analytic_int=None):
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
         self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
-        #TODO(TCB): Does RHF class need its own ewald params?
-        self.ew_eta = cell.ew_eta
-        self.ew_cut = cell.ew_cut
         self.mol_ex = False
+
         if kpt is None:
             kpt = np.array([0,0,0])
 
         self.kpt = np.array([0,0,0])
-        self._keys = self._keys.union(['cell', 'grids', 'ew_eta', 'ew_cut',
-                                       'mol_ex', 'kpt'])
+
+        if analytic_int == None:
+            self.analytic_int = False
+        else:
+            self.analytic_int = True
+
+        self._keys = self._keys.union(['cell', 'grids', 'mol_ex', 'kpt', 'analytic_int'])
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'Ewald eta = %g', self.ew_eta)
-        logger.info(self, 'Ewald real-space cutoff = (%d, %d, %d)', 
-                    self.ew_cut[0], self.ew_cut[1], self.ew_cut[2])
         logger.info(self, 'Grid size = (%d, %d, %d)', 
                     self.cell.gs[0], self.cell.gs[1], self.cell.gs[2])
         logger.info(self, 'Use molecule exchange = %s', self.mol_ex)
@@ -325,12 +328,22 @@ class RHF(pyscf.scf.hf.RHF):
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        return get_hcore(cell, np.reshape(kpt, (3,1)))
+
+        if self.analytic_int:
+            print "USING ANALYTIC INTS"
+            return scfint.get_hcore(cell, np.reshape(kpt, (3,1)))
+        else:
+            return get_hcore(cell, np.reshape(kpt, (3,1)))
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        return get_ovlp(cell, np.reshape(kpt, (3,1)))
+        
+        if self.analytic_int:
+            print "USING ANALYTIC INTS"
+            return scfint.get_ovlp(cell, np.reshape(kpt, (3,1)))
+        else:
+            return get_ovlp(cell, np.reshape(kpt, (3,1)))
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None):
         if cell is None: cell = self.cell
@@ -372,22 +385,30 @@ class RHF(pyscf.scf.hf.RHF):
         return vj, vk
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
+        e_elec=self.energy_elec(dm, h1e, vhf)[0]
+        print "ELEC ENERGY", e_elec
         return self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
     
     def ewald_nuc(self):
-        return ewald(self.cell, self.ew_eta, self.ew_cut)
+        return ewald(self.cell, self.cell.ew_eta, self.cell.ew_cut)
         
-def get_eig_kpt(mf, kpt):
-    '''Eigenvalues at a given k-pt, after SCF has converged,
-    as used for band-structure computation.
+    def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
+        '''Reconstruct Fock operator at a given band kpt 
+           (not necessarily in list of k pts)
 
-    Returns:
-        eigs : (nao) ndarray
-    '''
-    mfk= copy.copy(mf)
-    mfk.kpt = kpt
+        Returns:
+            fock : (nao, nao) ndarray
+            ovlp : (nao, nao) ndarray
+        '''
+        iS = scipy.linalg.inv(ovlp)
+        iSfockiS = np.dot(np.conj(iovlp.T), np.dot(fock, iovlp))
 
-    fock = mfk.get_hcore() + mfk.get_veff()
-    ovlp = mfk.get_ovlp()
+        # band_ovlp[p,q] = <p(0)|q(k)>
+        band_ovlp = mf.get_ovlp(band_kpt)
+        # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k>
+        Fb = np.dot(np.conj(band_ovlp.T), np.dot(isFockiS, band_ovlp))
+        # Sb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|s(0)> <_s(0)|q(k>
+        Sb = np.dot(np.conj(band_ovlp.T), np.dot(iovlp, band_ovlp))
 
-    return mfk.eig(fock, ovlp)
+        return Fb, Sb
+

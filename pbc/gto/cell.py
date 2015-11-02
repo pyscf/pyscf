@@ -122,7 +122,10 @@ def unpack(celldic):
 class Cell(pyscf.gto.Mole):
     def __init__(self, **kwargs):
         pyscf.gto.Mole.__init__(self, **kwargs)
-        self.h = None  # lattice vectors, three rows, array((a1,a2,a3))
+        self.h = None  # lattice vectors, three *columns*: array((a1,a2,a3))
+                       # See defs. in MH 3.1
+                       # scaled coordinates r = numpy.dot(h, s)
+                       # reciprocal lattice array((b1,b2,b3)) = inv(h).T
         self.gs = None
         self.precision = 1.e-8
         self.nimgs = None
@@ -277,7 +280,9 @@ class Cell(pyscf.gto.Mole):
         '''
         invhT = scipy.linalg.inv(self.lattice_vectors().T)
         Gmax = 2*np.pi*np.dot(invhT, self.gs)
-        Gmax = np.min(Gmax)
+        # TODO: more rigorous bound for cells that have one
+        # very different dimension
+        Gmax = lib.norm(Gmax) 
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
@@ -285,7 +290,6 @@ class Cell(pyscf.gto.Mole):
         rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
         #print "rlengths", rcut, rlengths
         ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
-
         return ew_eta, ew_cut
 
     def get_Gv(self):
@@ -340,6 +344,20 @@ class Cell(pyscf.gto.Mole):
         else:
             return np.asarray(self.h) * (1./self.unit)
 
+    def get_abs_kpts(self, scaled_kpts):
+        '''Given "scaled" kpts in fractions of lattice vectors, return
+        absolute kpts (in inverse Bohr)
+
+        Args:
+            rel_kpts: (nkpts, 3) ndararray of floats
+                      *rows* are the kpts
+
+        Returns:
+           abs_kpts: (nkpts, 3) *rows* are the scaled kpts
+        '''
+        # inv_h has reciprocal vectors as rows
+        return 2*np.pi*np.dot(scaled_kpts, scipy.linalg.inv(self._h))
+        
     def copy(self):
         return copy(self)
 
