@@ -282,7 +282,7 @@ class Cell(pyscf.gto.Mole):
         Gmax = 2*np.pi*np.dot(invhT, self.gs)
         # TODO: more rigorous bound for cells that have one
         # very different dimension
-        Gmax = lib.norm(Gmax) 
+        Gmax = lib.norm(Gmax)/np.sqrt(3.)
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 

@@ -88,8 +88,12 @@ def get_projG(cell):
     return get_gth_projG(cell, cell.Gv) 
 
 def get_gth_projG(cell, Gvs):
-    '''
-    MH Eq.(4.80)
+    '''G space projectors from the FT of the real-space projectors.
+
+    \int e^{iGr} p_j^l(r) Y_{lm}^*(theta,phi)
+    = i^l p_j^l(G) Y_{lm}^*(thetaG, phiG)
+
+    See MH Eq.(4.80)
     '''
     Gs,thetas,phis = cart2polar(Gvs)
         
@@ -109,7 +113,7 @@ def get_gth_projG(cell, Gvs):
                 proj_ia_lm = []
                 for i in range(nl):
                     projG_radial = projG_li(Gs,l,i,rl)
-                    proj_ia_lm.append( projG_radial*projG_ang )
+                    proj_ia_lm.append( (1j)**l * projG_radial*projG_ang )
                 proj_ia_l.append(proj_ia_lm)
             proj_ia.append(proj_ia_l)
         hs.append(h_ia)
