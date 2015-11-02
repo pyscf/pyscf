@@ -41,16 +41,15 @@ def get_j(cell, dm, auxcell):
     vj = np.einsum('ijk,k->ij', c3, v1)
     vj = vj.real
 
-# remove a constant in potential
+#CHECK: shoule I remove a constant potential?
 #    vj += (np.dot(v1, rho) - (vj*dm).sum())/nelec * ovlp
-#    print (np.dot(v1, rho) - (vj*dm).sum())
 
 # model potential
     idxb = []
     for ib in range(auxcell.nbas):
         l = auxcell.bas_angular(ib)
         e = auxcell.bas_exp(ib)[0]
-        if l == 0 and abs(e-2.) < .1:
+        if l == 0 and abs(e-9.3) < .1:
             idxb.append(ib)
     modcell = auxcell.copy()
     modcell._bas = auxcell._bas[idxb].copy()
@@ -58,41 +57,22 @@ def get_j(cell, dm, auxcell):
     rhok = eval_rhok(chg, modcell)
     coulG = tools.get_coulG(auxcell)
     v2 = rhok * coulG
-    v2 = tools.ifft(v2, cell.gs)# / cell.vol
+    v2 = tools.ifft(v2, cell.gs) # ifft(fft(a)) = a
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     kpt = None
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     v3 = np.dot(aoR.T.conj(), v2.reshape(-1,1)*aoR).real
-    #print vj
     vj += v3
-    #print v3
     return vj
-
-#def eval_rhok(rho, cell):
-#    kcell = cell.copy()
-#    _env = []
-#    ptr = len(cell._env)
-#    for ib in range(kcell.nbas):
-#        e = cell.bas_exp(ib)[0]
-#        _env.append(1/(4*e))
-#        _env.append(np.sqrt(4*np.pi)*(np.pi/e)**1.5)
-#        kcell._bas[ib,gto.PTR_EXP] = ptr
-#        kcell._bas[ib,gto.PTR_COEFF] = ptr + 1
-#        ptr += 2
-#    kcell._env = numpy.hstack((cell._env, _env))
-#    SI = kcell.get_SI()
-#    aoR = pyscf.dft.numint.eval_ao(kcell, kcell.Gv.T.copy())
-#    rhok = np.einsum('ij,ji,j->i', aoR, SI, rho)
-#    return rhok.real
 
 def eval_rhok(rho, cell):
     rhok = numpy.zeros(cell.Gv.T.shape[0], dtype=numpy.complex)
+    k2 = numpy.einsum('ij,ij->i', cell.Gv.T, cell.Gv.T)
     for ib in range(cell.nbas):
         e = cell.bas_exp(ib)[0]
         r = cell.bas_coord(ib)
         si = numpy.exp(-1j*numpy.einsum('ij,j->i', cell.Gv.T, r))
-        k2 = numpy.einsum('ij,ij->i', cell.Gv.T, cell.Gv.T)
         rhok += rho[ib] * si * numpy.exp(-k2/(4*e))
     return rhok
 
@@ -103,7 +83,7 @@ def where2(auxcell):
         l = auxcell.bas_angular(ib)
         e = auxcell.bas_exp(ib)[0]
         if l == 0:
-            if abs(e-2)<.1:
+            if abs(e-9.3)<.1:
                 idx.append(ip)
             ip += 1
         else:
@@ -128,11 +108,11 @@ if __name__ == '__main__':
     cell.build()
     mf = pdft.RKS(cell)
     mf.xc = 'LDA,VWN'
-    auxbasis = {'He': df.genbas(2., 2.8, (10.,0.1), 0)+df.genbas(2., 2. , (10.,0.4), 1)}
-    #auxbasis = {'He': df.genbas(2., 1.8, (100.,0.1), 0)
-    #                 +df.genbas(2., 2. , (10.,0.1), 1)
-    #                 +df.genbas(2., 2. , (10.,0.1), 2)}
+    #auxbasis = {'He': df.genbas(3., 2.8, (10.,0.1), 0)+df.genbas(3., 2. , (10.,0.4), 1)}
+    auxbasis = {'He': df.genbas(9.3, 1.8, (100.,0.3), 0)
+                     +df.genbas(9.3, 2. , (10.,0.3), 1)
+                     +df.genbas(9.3, 2. , (10.,0.3), 2)}
     auxcell = df.format_aux_basis(cell, auxbasis)
     mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
     e1 = mf.scf()
-    print e1
+    print e1 # ~ -4.32022187118
