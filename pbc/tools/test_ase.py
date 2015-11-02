@@ -5,27 +5,29 @@ import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.dft as pbcdft
 
 import ase.lattice
-from ase.structure import molecule
 from ase.lattice.cubic import Diamond
 from ase.units import kJ
 from ase.utils.eos import EquationOfState
 
 def test_pyscf():
     """
-    Take ASE structure, input into PySCF and run
+    Take ASE Diamond structure, input into PySCF and run
     """
     ase_atom=Diamond(symbol='C', latticeconstant=3.5668)
+    print ase_atom.get_volume()
 
     cell = pbcgto.Cell()
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(ase_atom)
     cell.h=ase_atom.cell
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs=np.array([6,6,6])
+    #cell.gs=np.array([10,10,10])
+    cell.gs=np.array([20,20,20])
     cell.verbose=7
 
     cell.build(None,None)
-    
+    print cell._atom
+
     print "Cell nimgs =", cell.nimgs
     print "Cell _basis =", cell._basis
     print "Cell _pseudo =", cell._pseudo
@@ -33,7 +35,9 @@ def test_pyscf():
 
     mf=pbcdft.RKS(cell)
     mf.xc='lda,vwn'
-    print mf.scf()
+    mf.analytic_int=False
+    print mf.scf() # [10,10,10]: -44.8811199336
+                   # [20,20,20]: -44.8804853049
     
 def test_calculator():
     """

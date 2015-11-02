@@ -61,6 +61,7 @@ def get_j(mf, cell, dm_kpts, kpts):
         mf._ecoul += 1./nkpts*numpy.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:]) * .5
     # TODO: energy is normally evaluated in dft.rks.get_veff
     mf._ecoul = mf._ecoul.real
+
     return vj_kpts
 
 def get_hcore(mf, cell, kpts):
@@ -73,15 +74,13 @@ def get_hcore(mf, cell, kpts):
         Core Hamiltonian at each kpt
         ndarray[nao, nao, nkpts]
     '''
-    vne = pbchf.get_nuc(cell)
-    nao = vne.shape[0]
+    nao = cell.nao_nr()
     nkpts = kpts.shape[0]
     hcore = numpy.zeros([nkpts, nao, nao],numpy.complex128)
     for k in range(nkpts):
         # below reshape is a bit of a hack
         kpt = numpy.reshape(kpts[k,:], (3,1))
-        hcore[k,:,:] = (pbchf.get_nuc(cell, kpt)+
-                        pbchf.get_t(cell, kpt))
+        hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
     return hcore
 
 def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
@@ -97,9 +96,8 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
     for k in range(nkpts):
         fock[k,:,:] = pbchf.RHF.get_fock_(mf, h1e_kpts[k,:,:], s1e_kpts[k,:,:],
                                           vhf_kpts[k,:,:], dm_kpts[k,:,:],
-                                          cycle=-1, adiis=None,
-                                          diis_start_cycle=0, level_shift_factor=0,
-                                          damp_factor=0)
+                                          cycle, adiis, diis_start_cycle, 
+                                          level_shift_factor, damp_factor)
     return fock
 
 
@@ -159,6 +157,7 @@ class KRHF(pbchf.RHF):
             level_shift_factor = self.level_shift_factor
         if damp_factor is None:
             damp_factor = self.damp_factor
+
         return get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
 
@@ -212,6 +211,7 @@ class KRHF(pbchf.RHF):
 
         nkpts = mo_coeff_kpts.shape[0]
         nocc = (self.cell.nelectron * nkpts) // 2
+
         # have to sort eigs in each kpt
         # TODO: implement Fermi smearing
 
@@ -221,12 +221,12 @@ class KRHF(pbchf.RHF):
         # TODO: store mo_coeff correctly (for later analysis)
         #self.mo_coeff = numpy.reshape(mo_coeff_kpts, [nao, nao*nkpts])
 
+
         mo_idx = numpy.argsort(mo_energy)
-        print mo_energy_kpts
+        mo_energy = mo_energy[mo_idx]
         for ix in mo_idx[:nocc]:
             k, ikx = divmod(ix, nao)
             mo_occ_kpts[k, ikx] = 2
-            print "occupying", k, ikx, mo_energy_kpts[k,ikx]
 
         if nocc < mo_energy.size:
             logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
@@ -258,7 +258,6 @@ class KRHF(pbchf.RHF):
         if mo_occ_kpts is None:
             mo_occ_kpts = self.mo_occ # Note: this is actually "self.mo_occ_kpts"
                                     # which is stored in self.mo_occ of the scf.hf.RHF superclass
-        print "MO OCC", self.mo_occ
 
         nkpts = mo_occ_kpts.shape[0]
         # dm = numpy.zeros_like(mo_coeff_kpts[:,:,0])
@@ -267,6 +266,7 @@ class KRHF(pbchf.RHF):
         #     # should this call pbc.scf version?
         #     dm += pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:])
         dm_kpts = numpy.zeros_like(mo_coeff_kpts)
+
         for k in range(nkpts):
             dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:])
         return dm_kpts
@@ -275,14 +275,13 @@ class KRHF(pbchf.RHF):
         raise NotImplementedError
 
 class KRKS(KRHF):
-    def __init__(self, cell, gs, ew_eta, ew_cut, kpts):
+    def __init__(self, cell, kpts):
         KRHF.__init__(self, cell, kpts)
         self._numint = _KNumInt(kpts) # use periodic images of AO in
                                       # numerical integration
         self.xc = 'LDA,VWN'
         self._ecoul = 0
         self._exc = 0
-        #self._keys = self._keys.union(['xc', 'grids'])
 
     def dump_flags(self):
         KRHF.dump_flags(self)
@@ -300,8 +299,13 @@ class KRKS(KRHF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
 
+        dm=numpy.array(dm, numpy.complex128) # e.g. if passed initial DM
+
         vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
                                       hermi)
+
+        # for k in range(vhf.shape[0]):
+        #     print "CHECK SYMMETRY", numpy.linalg.norm(vhf[k,:,:]-numpy.conj(vhf[k,:,:].T))
 
         return vhf
 
@@ -368,9 +372,11 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
+        # TODO: fix spin, relativity
+        spin=0; relativity=0
         return pyscf.dft.numint.nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
-                                           spin=0, relativity=0, hermi=1,
-                                           max_memory=2000, verbose=None)
+                                           spin, relativity, hermi,
+                                           max_memory, verbose)
 
     def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
                max_memory=2000, verbose=None):
@@ -382,112 +388,37 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nkpts = self.kpts.shape[0]
         nao = ao.shape[2]
 
-        mat = numpy.zeros([nkpts, nao, nao], numpy.complex128)
+        mat = numpy.zeros([nkpts, nao, nao], dtype=ao.dtype)
         for k in range(nkpts):
             mat[k,:,:] = pyscf.pbc.dft.numint.eval_mat(mol, ao[k,:,:], weight,
-                                    rho, vrho, vsigma=None, non0tab=None,
-                                    isgga=False, verbose=None)
+                                    rho, vrho, vsigma, non0tab,
+                                    isgga, verbose)
         return mat
 
 
+    def get_band_fock_ovlp(mf, band_kpt):
+        '''Reconstruct Fock operator at a given band kpt 
+           (not necessarily in list of k pts)
 
-def test_kscf_components():
-    pass
+        Returns:
+            fock : (nao, nao) ndarray
+            ovlp : (nao, nao) ndarray
+        '''
+        fock_kpts = mf.get_hcore() + mfk.get_veff()
+        ovlp_kpts = mf.get_ovlp()
+        Fb_kpts = numpy.zeros_like(fock_kpts)
+        Sb_kpts = numpy.zeros_like(ovlp_kpts)
+        for k in range(nkpts):
+            Fb_kpts[k,:,:], Sb_kpts[k,:,:] \
+                = pbchf.get_band_fock_ovlp(self, fock_kpts[k,:,:], 
+                                           ovlp_kpts[k,:,:],
+                                           band_kpt-mf.kpts[k,:])
 
-    #t = scf.get_t(cell, gs)
-    #dm = kmf.make_rdm1()
-    # print t
-    # print dm
-    # print np.einsum('ij,ij',t,dm)
-    # s = scf.get_ovlp(cell, gs)
-    # print kmf.eig(t, s)[0]
-    # print kmf.get_init_guess()
-    # print "overlap eigs", scipy.linalg.eigh(s)
-    t = [scf.get_t(cell, gs, kpt) for kpt in kpts]
-    s = [scf.get_ovlp(cell, gs, kpt) for kpt in kpts]
-    # print t
-    # print s
-    print t[0]/s[0], t[1]/s[1]
+        Fb = np.einsum("ipq->pq", Fb_kpts)
+        Sb = np.einsum("ipq->pq", Sb_kpts)
+
+        return Fb, Sb
 
 
-def test_kscf_gamma(atom, ncells):
-    import numpy as np
-   # import warnings
-
-    cell = pbcgto.Cell()
-    cell.unit = 'B'
-    # As this is increased, we can see convergence between the molecule
-    # and cell calculation
-    Lunit = 2
-    Ly = Lz = 2
-    Lx = ncells*Lunit
-    cell.h = np.diag([Lx,Ly,Lz])
-    # place atom in middle of big box
-    for i in range(ncells):
-        cell.atom.extend([[atom, ((.5+i)*Lunit, 0.5*Ly, 0.5*Lz)]])
-    cell.basis = { atom: [[0, (1.0, 1.0)]] }
-
-    n = 40 
-    cell.gs = np.array([n*ncells,n,n])
-    cell.nimgs = [2,2,2]
-    cell.verbose = 7
-    cell.build()
-
-    #warnings.simplefilter("error", np.ComplexWarning)
-
-    kmf = pbcrks.RKS(cell)
-    kmf.init_guess = "atom"
-    return kmf.scf()
-
-def test_kscf_kpoints(atom, ncells):
-    import numpy as np
-   # import warnings
-
-    cell = pbcgto.Cell()
-    cell.unit = 'B'
-    Lunit = 2
-    Ly = Lz = 2
-    Lx = Lunit
-    cell.h = np.diag([Lx,Ly,Lz])
-    # place atom in middle of big box
-    cell.atom.extend([[atom, (0.5*Lunit, 0.5*Ly, 0.5*Lz)]])
-    cell.basis = { atom: [[0, (1.0, 1.0)]] }
-
-    n = 40
-    cell.gs = np.array([n,n,n])
-    cell.nimgs = [2,2,2]
-    cell.verbose = 7
-    cell.build()
-
-    # make Monkhorst-Pack (equally spaced k points along x direction)
-    invhT = scipy.linalg.inv(numpy.asarray(cell._h).T)
-    #invhT = scipy.linalg.inv(numpy.asarray(cell.h).T)
-    kGvs = []
-    for i in range(ncells):
-        kGvs.append(i*1./ncells*2*pi*np.dot(invhT,(1,0,0)))
-    kpts = numpy.vstack(kGvs)
-
-    kmf = KRKS(cell, cell.gs, cell.ew_eta, cell.ew_cut, kpts)
-    kmf.init_guess = "atom"
-    return kmf.scf()
-
-def test_kscf_kgamma():
-    # tests equivalence of gamma supercell and kpoints calculations
-
-    emf_gamma = []
-    emf_kpt = []
-
-    # TODO: currently works only if atom has an even #of electrons
-    # *only* reason is that Mole checks this against spin,
-    # all other parts of the code
-    # works so long as cell * nelectron is even, e.g. 4 unit cells of H atoms
-    for ncell in range(1,3):
-        emf_gamma.append(test_kscf_gamma("He", ncell)/ncell)
-        emf_kpt.append(test_kscf_kpoints("He", ncell))
-        print "COMPARISON", emf_gamma[-1], emf_kpt[-1] # should be the same up to integration error
-
-    # each entry should be the same up to integration error (abt 5 d.p.)
-    print "ALL ENERGIES, GAMMA", emf_gamma
-    print "ALL ENERGIES, KPT", emf_kpt
 
 #test_kscf_kgamma()
