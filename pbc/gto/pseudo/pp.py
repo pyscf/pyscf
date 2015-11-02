@@ -76,7 +76,7 @@ def get_gth_vlocG(cell, G):
                                 np.dot(cexp, cfacs[:nexp])) )
     return vlocG
 
-def get_projG(cell):
+def get_projG(cell, kpt=None):
     '''PP weight and projector for the nonlocal PP in G space.
 
     Returns:
@@ -85,7 +85,9 @@ def get_projG(cell):
         projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
-    return get_gth_projG(cell, cell.Gv) 
+    if kpt is None:
+        kpt = np.zeros([3,1])
+    return get_gth_projG(cell, cell.Gv+kpt) 
 
 def get_gth_projG(cell, Gvs):
     '''G space projectors from the FT of the real-space projectors.
