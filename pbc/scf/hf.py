@@ -98,7 +98,8 @@ def get_pp(cell, kpt=None):
                     for j in range(nl):
                         SPG_lmj = SI[ia,:] * projG_ia[l][m][j]
                         SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
-                        vppnl += (-1)**l * h[i,j]*np.einsum('p,q->pq', 
+                        # Note: There is no (-1)^l here.
+                        vppnl += h[i,j]*np.einsum('p,q->pq', 
                                                    SPG_lmi_aoG.conj(), 
                                                    SPG_lmj_aoG)
     vppnl *= (1./ngs**2)

@@ -25,7 +25,7 @@ def main(n):
     cell.h = np.diag([L,L,L])
     cell.gs = np.array([n,n,n])
 
-    #cell.verbose = 4
+    #cell.verbose = 7
     cell.build()
 
     print "Cell nimgs =", cell.nimgs
@@ -45,3 +45,8 @@ if __name__ == '__main__':
     n = int(args[0])
     
     main(n)
+
+'''
+>>> python si8.py 10
+converged SCF energy = -31.0816167240468
+'''

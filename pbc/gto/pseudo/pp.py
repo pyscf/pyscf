@@ -76,7 +76,7 @@ def get_gth_vlocG(cell, G):
                                 np.dot(cexp, cfacs[:nexp])) )
     return vlocG
 
-def get_projG(cell):
+def get_projG(cell, kpt=None):
     '''PP weight and projector for the nonlocal PP in G space.
 
     Returns:
@@ -85,11 +85,17 @@ def get_projG(cell):
         projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
-    return get_gth_projG(cell, cell.Gv) 
+    if kpt is None:
+        kpt = np.zeros([3,1])
+    return get_gth_projG(cell, cell.Gv+kpt) 
 
 def get_gth_projG(cell, Gvs):
-    '''
-    MH Eq.(4.80)
+    '''G space projectors from the FT of the real-space projectors.
+
+    \int e^{iGr} p_j^l(r) Y_{lm}^*(theta,phi)
+    = i^l p_j^l(G) Y_{lm}^*(thetaG, phiG)
+
+    See MH Eq.(4.80)
     '''
     Gs,thetas,phis = cart2polar(Gvs)
         
@@ -109,10 +115,7 @@ def get_gth_projG(cell, Gvs):
                 proj_ia_lm = []
                 for i in range(nl):
                     projG_radial = projG_li(Gs,l,i,rl)
-                    #if l == 1:
-                    #    for g, p in zip(Gs, projG_radial):
-                    #        print g, p
-                    proj_ia_lm.append( projG_radial*projG_ang )
+                    proj_ia_lm.append( (1j)**l * projG_radial*projG_ang )
                 proj_ia_l.append(proj_ia_lm)
             proj_ia.append(proj_ia_l)
         hs.append(h_ia)
@@ -125,7 +128,8 @@ def projG_li(G, l, i, rl):
     G_red = G*rl
 
     # MH Eq. (4.81)
-    return _qli(G_red,l,i)*np.pi**(5/4.)*G**l*np.sqrt(rl**(2*l+3))/np.exp(0.5*G_red**2)
+    return ( _qli(G_red,l,i) * np.pi**(5/4.) * G**l * np.sqrt(rl**(2*l+3))
+            / np.exp(0.5*G_red**2) )
 
 def _qli(x,l,i):
     # MH Eqs. (4.82)-(4.93) :: beware typos!
@@ -156,6 +160,16 @@ def _qli(x,l,i):
         print "*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!"
         return 0.
 
+def Ylm_real(l,m,theta,phi):
+    '''Real spherical harmonics, if desired.'''
+    Ylabsm = Ylm(l,np.abs(m),theta,phi)
+    if m < 0:
+        return np.sqrt(2.) * Ylabsm.imag
+    elif m > 0:
+        return np.sqrt(2.) * Ylabsm.real
+    else: # m == 0
+        return Ylabsm.real
+
 def Ylm(l,m,theta,phi):
     '''
     Spherical harmonics; returns a complex number
@@ -177,21 +191,3 @@ def cart2polar(rvec):
     phi = np.arctan2(y,x)
     return r, theta, phi
 
-"""
-    rs = []
-    thetas = []
-    phis = []
-    for rv in rvec.T:
-        x,y,z = rv
-        r = scipy.linalg.norm(rv)
-        if r < 1e-12:
-            theta = 0.
-        else:
-            theta = np.arccos(z/r)
-        phi = np.arctan2(y,x)
-        rs.append(r)
-        thetas.append(theta)
-        phis.append(phi)
-
-    return rs, thetas, phis
-"""

@@ -243,3 +243,95 @@ def test_poisson():
     print "Error of DF from reference", numpy.dot(v1,rho1)-ref_j # should be close to zero
 
 #test_poisson()
+
+def test_poisson2():
+    from pyscf import gto
+    from pyscf.lib.parameters import BOHR
+    import pyscf.pbc.gto as pgto
+    import pyscf.pbc.scf as pscf
+    import numpy as np
+    import scipy
+
+    B = BOHR
+
+    Lunit = 4.*B
+    Ly = Lz = Lunit*B
+    Lx = Lunit*B
+
+    h = np.diag([Lx,Ly,Lz])
+    
+    cell = pgto.Cell()
+    cell.atom = '''He     1.    1.       1.'''
+    cell.basis = {'He': [[0, (1.0, 1.0)]]}
+    cell.h = h
+    n = 30
+    cell.gs = np.array([n,n,n])
+    cell.pseudo = None
+    cell.output = None
+    cell.verbose = 0
+    cell.build()
+
+    bas=genbas(2., 1.8,(10.,0.3), 0)
+    auxcell=format_aux_basis(cell, {'He': bas })
+
+    idx = []
+    ip = 0
+# normalize aux basis
+    for ib in range(auxcell.nbas):
+        l = auxcell.bas_angular(ib)
+        if l == 0:
+            e = auxcell.bas_exp(ib)[0]
+            ptr = auxcell._bas[ib,gto.PTR_COEFF]
+            auxcell._env[ptr] = 1/np.sqrt(4*np.pi)/gto.mole._gaussian_int(2,e)
+            idx.append(ip)
+            ip += 1
+        else:
+            ip += 2*l+1
+
+    gs = np.array([40,40,40])
+
+    ovlp=scfint.get_ovlp(cell)
+    dm=2*scipy.linalg.inv(ovlp) 
+
+    print "DM", dm
+    nelec=np.einsum('ij,ij',dm,ovlp)
+    print "nelec", nelec
+
+    j=pscf.hf.get_j(cell, dm)
+    ref_j=np.einsum('ij,ij',j,dm)
+    print "Reference chargeless Coulomb", ref_j
+
+    nao = dm.shape[0]
+    c3 = aux_e2(cell, auxcell, 'cint3c1e_sph').reshape(nao,nao,-1)
+    rho = np.einsum('ijk,ij->k', c3, dm)
+
+    ovlp = pscf.scfint.get_ovlp(cell)
+    nelec = np.einsum('ij,ij', ovlp, dm)
+
+    idx = where2(auxcell)
+    chg = numpy.ones(2)*nelec/2
+    s1 = pscf.scfint.get_ovlp(auxcell)
+    rho -= numpy.einsum('ij,j->i', s1[:,idx], chg)
+    c2 = pscf.scfint.get_t(auxcell)
+    v1 = np.linalg.solve(c2, 2*np.pi*rho)
+    vj = np.einsum('ijk,k->ij', c3, v1)
+
+    print np.dot(v1, rho), (vj*dm).sum(), ref_j
+
+
+def where2(auxcell):
+    import numpy as np
+    ip = 0
+    idx = []
+    for ib in range(auxcell.nbas):
+        l = auxcell.bas_angular(ib)
+        e = auxcell.bas_exp(ib)[0]
+        if l == 0:
+            if abs(e-2)<.1:
+                idx.append(ip)
+            ip += 1
+        else:
+            ip += 2*l+1
+    return np.array(idx)
+
+test_poisson2()
