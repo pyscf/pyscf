@@ -8,6 +8,7 @@ from pyscf.pbc import tools
 from pyscf.pbc import gto as pbcgto
 
 from pyscf.lib import logger
+import pyscf.pbc.scf.scfint as scfint
 pi = numpy.pi
 
 def get_ovlp(mf, cell, kpts):
@@ -18,7 +19,10 @@ def get_ovlp(mf, cell, kpts):
     ovlp_kpts = numpy.zeros([nkpts,nao,nao], numpy.complex128)
     for k in range(nkpts):
         kpt = numpy.reshape(kpts[k,:], (3,1))
-        ovlp_kpts[k,:,:] = pbchf.get_ovlp(cell, kpt)
+        if mf.analytic_int:
+            ovlp_kpts[k,:,:] = scfint.get_ovlp(cell, kpt)
+        else:
+            ovlp_kpts[k,:,:] = pbchf.get_ovlp(cell, kpt)
     return ovlp_kpts
 
 def get_j(mf, cell, dm_kpts, kpts):
@@ -60,6 +64,9 @@ def get_j(mf, cell, dm_kpts, kpts):
 
         mf._ecoul += 1./nkpts*numpy.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:]) * .5
     # TODO: energy is normally evaluated in dft.rks.get_veff
+    if abs(mf._ecoul.imag > 1.e-12):
+        raise RuntimeError("Coulomb energy has imaginary part, sth is wrong!", mf._ecoul.imag)
+
     mf._ecoul = mf._ecoul.real
 
     return vj_kpts
@@ -80,7 +87,10 @@ def get_hcore(mf, cell, kpts):
     for k in range(nkpts):
         # below reshape is a bit of a hack
         kpt = numpy.reshape(kpts[k,:], (3,1))
-        hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
+        if mf.analytic_int:
+            hcore[k,:,:] = scfint.get_hcore(cell, kpt)
+        else:
+            hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
     return hcore
 
 def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
@@ -119,14 +129,19 @@ class KRHF(pbchf.RHF):
             raise RuntimeError("ke_cutoff not supported with K pts yet")
 
     # TODO: arglist must use "mol" because of KW args used in kernel fn in hf.py
-    def get_init_guess(self, mol=None, key='minao'):
-        dm = pyscf.scf.hf.get_init_guess(mol, key)
-        nao = dm.shape[0]
-        nkpts = self.kpts.shape[0]
-        dm_kpts = numpy.zeros([nkpts,nao,nao])
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
 
-        for k in range(nkpts):
-            dm_kpts[k,:,:] = dm
+        if key.lower() == '1e':
+            return self.init_guess_by_1e(cell)
+        else:
+            dm = pyscf.scf.hf.get_init_guess(cell, key)
+            nao = dm.shape[0]
+            nkpts = self.kpts.shape[0]
+            dm_kpts = numpy.zeros([nkpts,nao,nao])
+
+            for k in range(nkpts):
+                dm_kpts[k,:,:] = dm
 
         return dm_kpts
 
@@ -140,6 +155,8 @@ class KRHF(pbchf.RHF):
         if kpts is None: kpts=self.kpts
         if dm_kpts is None: dm_kpts=self.make_rdm1()
 
+        # print "HACK GET_J KPTS"
+        #return numpy.zeros_like(dm_kpts)
         return get_j(self, cell, dm_kpts, kpts)
 
     def get_hcore(self, cell=None, kpts=None):
@@ -197,6 +214,8 @@ class KRHF(pbchf.RHF):
         eig_kpts = numpy.zeros([nkpts,nao])
         mo_coeff_kpts = numpy.zeros_like(h_kpts)
 
+        # print "HACK EIG KPTS"
+        # print "DIFF", numpy.linalg.norm(h_kpts - self.get_hcore())
         # TODO: should use superclass eig fn here?
         for k in range(nkpts):
             eig_kpts[k,:], mo_coeff_kpts[k,:,:] = pyscf.scf.hf.eig(h_kpts[k,:,:], s_kpts[k,:,:])
@@ -268,7 +287,7 @@ class KRHF(pbchf.RHF):
         dm_kpts = numpy.zeros_like(mo_coeff_kpts)
 
         for k in range(nkpts):
-            dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:])
+            dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:]).T.conj()
         return dm_kpts
 
     def energy_elec(self,dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
@@ -303,10 +322,8 @@ class KRKS(KRHF):
 
         vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
                                       hermi)
-
-        # for k in range(vhf.shape[0]):
-        #     print "CHECK SYMMETRY", numpy.linalg.norm(vhf[k,:,:]-numpy.conj(vhf[k,:,:].T))
-
+        # print "HACK VEFF KPTS"
+        # return numpy.zeros_like(dm)
         return vhf
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):

@@ -42,8 +42,9 @@ def get_hcore(cell, kpt=None):
     else:
         hcore = (pyscf.pbc.scf.hf.get_pp(cell, kpt) + 
                  get_jvloc_G0(cell, kpt))
-
     hcore += get_t(cell, kpt)
+
+    # hcore = get_t(cell, kpt)
     return hcore
 
 def get_jvloc_G0(cell, kpt=None):

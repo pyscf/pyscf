@@ -31,7 +31,6 @@ def get_hcore(cell, kpt=None):
         hcore = get_pp(cell, kpt) + get_jvloc_G0(cell, kpt)
     else:
         hcore = get_nuc(cell, kpt)
-
     hcore += get_t(cell, kpt)
 
     return hcore
@@ -59,7 +58,7 @@ def get_nuc(cell, kpt=None):
     vneG = -np.dot(chargs,SI) * coulG
     vneR = tools.ifft(vneG, cell.gs)
 
-    vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR).real
+    vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
     return vne
 
 def get_pp(cell, kpt=None):
@@ -79,7 +78,7 @@ def get_pp(cell, kpt=None):
     
     # vpploc in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs)
-    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR).real
+    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc in reciprocal space
     aoG = np.empty(aoR.shape, np.complex128)
@@ -105,7 +104,43 @@ def get_pp(cell, kpt=None):
     vppnl *= (1./ngs**2)
 
     #return vpploc
-    return vpploc + vppnl.real
+    return vpploc + vppnl
+
+# def get_t2(cell, kpt=None):
+#     '''Get the kinetic energy AO matrix.
+    
+#     Due to `kpt`, this is evaluated in real space using orbital gradients.
+
+#     '''
+#     if kpt is None:
+#         kpt = np.zeros([3,1])
+    
+#     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+#     # aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
+#     # ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
+#     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=False)
+#     ngs = aoR.shape[0]  # because we requested isgga, aoR.shape[0] = 4
+
+#     Gv=cell.Gv
+#     G2=np.einsum('ji,ji->i', Gv+kpt, Gv+kpt)
+
+#     aoG=np.empty(aoR.shape, np.complex128)
+#     TaoG=np.empty(aoR.shape, np.complex128)
+#     nao = cell.nao_nr()
+#     for i in range(nao):
+#         aoG[:,i]=pyscf.pbc.tools.fft(aoR[:,i], cell.gs)
+#         TaoG[:,i]=0.5*G2*aoG[:,i]
+
+#     t = np.dot(aoG.T.conj(), TaoG)
+#     t *= (cell.vol/ngs**2)
+
+
+#     # t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
+#     #          np.dot(aoR[2].T.conj(), aoR[2]) +
+#     #          np.dot(aoR[3].T.conj(), aoR[3]))
+#     # t *= (cell.vol/ngs)
+    
+#     return t
 
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.
@@ -120,9 +155,9 @@ def get_t(cell, kpt=None):
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
     ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
 
-    t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]).real +
-             np.dot(aoR[2].T.conj(), aoR[2]).real +
-             np.dot(aoR[3].T.conj(), aoR[3]).real)
+    t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
+             np.dot(aoR[2].T.conj(), aoR[2]) +
+             np.dot(aoR[3].T.conj(), aoR[3]))
     t *= (cell.vol/ngs)
     
     return t
@@ -136,9 +171,15 @@ def get_ovlp(cell, kpt=None):
     
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+    # print "aoR"
+    # print aoR
+    # for i in range(aoR.shape[1]):
+    #     print "AO", i, list(kpt.flat)
+    #     print aoR[:,i]
     ngs = aoR.shape[0]
 
-    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR).real
+    #s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR).real
+    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
     return s
     
 def get_j(cell, dm, kpt=None):
@@ -160,7 +201,10 @@ def get_j(cell, dm, kpt=None):
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
 
-    vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR).real
+    vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
+    # print "dtype", aoR.dtype, vj.dtype
+    # print "HACK HACK J"
+    # return np.zeros_like(vj)
     return vj
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
@@ -372,6 +416,8 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self._eri is None:
             log.debug('Building PBC AO integrals')
+            if lib.norm(kpt) > 1.e-15:
+                raise RuntimeError("Non-zero k points not implemented for exchange")
             self._eri = np.real(ao2mo.get_ao_eri(cell))
 
         vj, vk = pyscf.scf.hf.RHF.get_jk_(self, cell, dm, hermi) 
@@ -385,7 +431,7 @@ class RHF(pyscf.scf.hf.RHF):
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
         e_elec=self.energy_elec(dm, h1e, vhf)[0]
-        print "ELEC ENERGY", e_elec
+        #print "ELEC ENERGY", e_elec, np.dot(dm.ravel(),h1e.ravel())
         return self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
     
     def ewald_nuc(self):

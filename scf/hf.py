@@ -103,9 +103,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     s1e = mf.get_ovlp(mol)
 
     cond = pyscf.lib.cond(s1e)
-    if numpy.linalg.norm(cond)*1e-17 > conv_tol:
+    if numpy.max(cond)*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
-                    'SCF may be inaccurate and hard to converge.', cond)
+                    'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     if mf.diis and mf.DIIS:
         adiis = mf.DIIS(mf, mf.diis_file)
@@ -931,6 +931,7 @@ class SCF(object):
 
 
     def eig(self, h, s):
+        import numpy.linalg
         return eig(h, s)
 
     def get_hcore(self, mol=None):
@@ -1016,7 +1017,7 @@ class SCF(object):
             dm = self.init_guess_by_minao(mol)
         if self.verbose >= logger.DEBUG1:
             logger.debug1(self, 'Nelec from initial guess = %g',
-                          (dm*self.get_ovlp()).sum())
+                          (dm*self.get_ovlp()).sum().real)
         return dm
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
