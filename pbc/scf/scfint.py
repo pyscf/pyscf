@@ -47,7 +47,7 @@ def get_int1e(intor, cell, kpt=None):
         kpt = np.zeros([3,1])
 
 #FIXME: is int1e complex or float
-    int1e = np.zeros((cell.nao_nr(),cell.nao_nr()))
+    int1e = np.zeros((cell.nao_nr(),cell.nao_nr()), np.complex)
     
     Ls = get_lattice_Ls(cell, cell.nimgs)
 

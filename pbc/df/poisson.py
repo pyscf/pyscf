@@ -9,7 +9,7 @@ from pyscf.pbc.df import df
 def get_j(cell, dm, auxcell):
     idx = []
     ip = 0
-# normalization
+# normalize aux basis
     for ib in range(auxcell.nbas):
         l = auxcell.bas_angular(ib)
         if l == 0:
@@ -34,7 +34,8 @@ def get_j(cell, dm, auxcell):
     v1 = np.linalg.solve(c2, 2*np.pi*rho)
     vj = np.einsum('ijk,k->ij', c3, v1)
 
-# remove a constant in potential
+# remove the contribution to Coulomb energy from a constant C in potential
+# E_coul = \int vj(rho-rho0) = \int (vj+C)(rho-rho0)
     vj += (np.dot(v1, rho) - (vj*dm).sum())/nelec * ovlp
 
     return vj
@@ -74,4 +75,4 @@ if __name__ == '__main__':
     auxcell = df.format_aux_basis(cell, auxbasis)
     mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
     e1 = mf.scf()
-    print e1 # -4.31976039944 slightly different to -4.32022187118
+    print e1 # ~ -4.32022187118
