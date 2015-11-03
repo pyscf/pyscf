@@ -26,21 +26,16 @@ def test_cubic_diamond_C():
     cell.basis = "gth-szv"
     cell.pseudo = "gth-pade"
 
-    cell.gs = np.array([6,6,6])
+    cell.gs = np.array([14,14,14])
     # cell.verbose = 7
     cell.build(None, None)
     mf = pbcdft.RKS(cell)
     mf.analytic_int=False
     mf.xc = 'lda,vwn'
     print mf.scf()
-    # Diamond cubic: -45.0015722647692
 
-    # mf = pbcdft.RKS(cell)
-    # mf.analytic_int=True
-    # mf.xc = 'lda,vwn'
-    # print mf.scf()
-    # Diamond cubic (analytic): -44.9501094353535
-
+    # Gamma point gs: 10x10x10: -11.220279983393
+    #             gs: 14x14x14: -11.220122248175
     # K pt calc
     scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
     abs_kpts=cell.get_abs_kpts(scaled_kpts)
@@ -50,9 +45,9 @@ def test_cubic_diamond_C():
     kmf.xc = 'lda,vwn'
     kmf.verbose = 7
     print kmf.scf()
-    # Diamond cubic (2x2x2): -18.1970946252
-    #                      = -4.5492736563 / cell
-
+    # Diamond cubic (Kpt 2x2x2) gs: 10x10x10: -11.354164575875
+    #                           gs: 14x14x14: -11.354043318198075
+    
 def test_diamond_C():
     from ase.lattice import bulk
     from ase.dft.kpoints import ibz_points, get_bandpath
@@ -62,43 +57,47 @@ def test_diamond_C():
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(C)
     cell.h=C.cell
 
-    #cell.basis = 'gth-szv'
+    cell.basis = 'gth-szv'
     # cell.basis = {'C': [[0, (4.3362376436, 0.1490797872), (1.2881838513, -0.0292640031), (0.4037767149, -0.688204051), (0.1187877657, -0.3964426906)], [1, (4.3362376436, -0.0878123619), (1.2881838513, -0.27755603), (0.4037767149, -0.4712295093), (0.1187877657, -0.4058039291)]]}
     # Easier basis for quick testing
-    cell.basis = {'C': [[0, (1.2881838513, -0.0292640031), (0.4037767149, -0.688204051)], [1, (1.2881838513, -0.27755603), (0.4037767149, -0.4712295093) ]]}
+    #cell.basis = {'C': [[0, (1.2881838513, -0.0292640031), (0.4037767149, -0.688204051)], [1, (1.2881838513, -0.27755603), (0.4037767149, -0.4712295093) ]]}
 
     # Cell used for K-points
     cell.pseudo = 'gth-pade'
     # cell.pseudo = 'gth-pade'
-    cell.gs=np.array([1,1,1])
-    cell.nimgs = [4,4,4]
+    cell.gs=np.array([14,14,14])
+    #cell.nimgs = [4,4,4]
     cell.verbose=7
     cell.build(None,None)
 
     # Replicate cell NxNxN for comparison
-    repcell = pyscf.pbc.tools.replicate_cell(cell, (3,1,1))
-    repcell.gs = np.array([4,1,1]) # for 3 replicated cells, then
-                                   # ngs must be of the form [3gs0 + 1, gs1, gs2]
-
-    repcell.nimgs = [4,2,2]
-    repcell.build()
-
-    # Replicated MF calc
-    mf = pbcdft.RKS(repcell)
-    mf.analytic_int=True
-    mf.xc = 'lda,vwn'
-    mf.max_cycle = 3
-    mf.init_guess = '1e'
-    mf.diis = True # when turned off, this agrees with k-pt calc below precisely
-    mf.scf()
+    # repcell = pyscf.pbc.tools.replicate_cell(cell, (3,1,1))
+    # repcell.gs = np.array([4,1,1]) # for 3 replicated cells, then
+    #                                # ngs must be of the form [3gs0 + 1, gs1, gs2]
+    # repcell.nimgs = [4,2,2]
+    # repcell.build()
+    # # Replicated MF calc
+    # mf = pbcdft.RKS(repcell)
+    # mf.analytic_int=True
+    # mf.xc = 'lda,vwn'
+    # mf.max_cycle = 3
+    # mf.init_guess = '1e'
+    # mf.diis = True # when turned off, this agrees with k-pt calc below precisely
+    # mf.scf()
     
     # K-pt calc
-    scaled_kpts=ase.dft.kpoints.monkhorst_pack((3,1,1))
+    scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
     abs_kpts=cell.get_abs_kpts(scaled_kpts)
     kmf = pyscf.pbc.scf.kscf.KRKS(cell, abs_kpts)
     kmf.analytic_int=True
     kmf.diis=True # when turned off, this agrees with above replicated cell precisely
     kmf.init_guess = '1e'
     kmf.xc = 'lda,vwn'
-    kmf.max_cycle = 3
+    #kmf.max_cycle = 3
     kmf.scf() 
+
+    # 2x2x2 Kpt, 8x8x8 gs: -11.3536437382296 (16 atoms)
+    # 2x2x2 Kpt, 14x14x14 gs: -11.353612722046 (16 atoms)
+    # 
+    # 3x3x3 Kpt, 8x8x8 gs: -11.337727688022  (54 atoms) 
+    # 4x4x4 Kpt, 8x8x8 gs: -11.3565363884127 (128 atoms)
