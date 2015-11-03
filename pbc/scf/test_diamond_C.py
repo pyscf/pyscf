@@ -72,22 +72,24 @@ def test_diamond_C():
     cell.build(None,None)
 
     # Replicate cell NxNxN for comparison
-    # repcell = pyscf.pbc.tools.replicate_cell(cell, (3,1,1))
-    # repcell.gs = np.array([4,1,1]) # for 3 replicated cells, then
-    #                                # ngs must be of the form [3gs0 + 1, gs1, gs2]
-    # repcell.nimgs = [4,2,2]
+    # repcell = pyscf.pbc.tools.replicate_cell(cell, (2,2,2))
+    # repcell.gs = np.array([12,12,12]) # for 3 replicated cells, then
+    # #                                 # ngs must be of the form [3gs0 + 1, gs1, gs2]
     # repcell.build()
-    # # Replicated MF calc
+    # # # Replicated MF calc
     # mf = pbcdft.RKS(repcell)
-    # mf.analytic_int=True
+    # # mf.analytic_int=True
     # mf.xc = 'lda,vwn'
-    # mf.max_cycle = 3
     # mf.init_guess = '1e'
     # mf.diis = True # when turned off, this agrees with k-pt calc below precisely
     # mf.scf()
     
     # K-pt calc
-    scaled_kpts=ase.dft.kpoints.monkhorst_pack((1,1,1))
+    scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
+
+    # shift for 2x2x2 to include Gamma point
+    shift = np.array([1./4., 1./4., 1./4.])
+    scaled_kpts += shift
     abs_kpts=cell.get_abs_kpts(scaled_kpts)
     #cell.nimgs = [7,7,7]
     kmf = pyscf.pbc.scf.kscf.KRKS(cell, abs_kpts)
@@ -102,6 +104,9 @@ def test_diamond_C():
     kmf.scf() 
 
     # Default sets nimg = [5,5,5] for this cell
+    #
+    # 2x2x2 replicated 12x12x12 gs, szv: -11.241426956044675
+    #
     # 1x1x1 Kpt  8x8x8 gs, szv  : -10.2214263103132
     #            8x8x8 gs, dzvp : -10.3171863686858
     #            analytic       : -10.3171890900077
@@ -110,6 +115,6 @@ def test_diamond_C():
     # 2x2x2 Kpt, 8x8x8 gs, szv : -11.3536437382296 (16 atoms)
     #            8x8x8 gs dzvp : -11.4183859541816
     #         14x14x14 gs, szv: -11.353612722046 (16 atoms)
-    # 
+    # 2x2x2 shift Kpt (includes Gamma) : -11.240852789145 (agrees with rep. cell) 
     # 3x3x3 Kpt, 8x8x8 gs, szv: -11.337727688022  (54 atoms) 
     # 4x4x4 Kpt, 8x8x8 gs, szv: -11.3565363884127 (128 atoms)

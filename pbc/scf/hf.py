@@ -447,14 +447,13 @@ class RHF(pyscf.scf.hf.RHF):
             ovlp : (nao, nao) ndarray
         '''
         iS = scipy.linalg.inv(ovlp)
-        iSfockiS = np.dot(np.conj(iovlp.T), np.dot(fock, iovlp))
+        iSFockiS = np.dot(np.conj(iS.T), np.dot(fock, iS))
 
         # band_ovlp[p,q] = <p(0)|q(k)>
-        band_ovlp = mf.get_ovlp(band_kpt)
+        band_ovlp = self.get_ovlp(self.cell, band_kpt)
         # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k>
-        Fb = np.dot(np.conj(band_ovlp.T), np.dot(isFockiS, band_ovlp))
-        # Sb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|s(0)> <_s(0)|q(k>
-        Sb = np.dot(np.conj(band_ovlp.T), np.dot(iovlp, band_ovlp))
+        Fb = np.dot(np.conj(band_ovlp.T), np.dot(iSFockiS, band_ovlp))
+        Sb = band_ovlp
 
         return Fb, Sb
 

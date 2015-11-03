@@ -292,6 +292,26 @@ class KRHF(pbchf.RHF):
     def energy_elec(self,dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         raise NotImplementedError
 
+    def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
+        '''Reconstruct Fock operator at a given band kpt 
+           (not necessarily in list of k pts)
+
+        Returns:
+            fock : (nao, nao) ndarray
+            ovlp : (nao, nao) ndarray
+        '''
+        Fb_kpts = numpy.zeros_like(fock)
+
+        for k in range(nkpts):
+            Fb_kpts[k,:,:], Sb \
+                = pbchf.get_band_fock_ovlp(self, fock[k,:,:], 
+                                           ovlp[k,:,:],
+                                           band_kpt-self.kpts[k,:])
+
+        Fb = np.einsum("ipq->pq", Fb_kpts)
+        return Fb, Sb
+
+
 class KRKS(KRHF):
     def __init__(self, cell, kpts):
         KRHF.__init__(self, cell, kpts)
@@ -412,28 +432,6 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         return mat
 
 
-    def get_band_fock_ovlp(mf, band_kpt):
-        '''Reconstruct Fock operator at a given band kpt 
-           (not necessarily in list of k pts)
-
-        Returns:
-            fock : (nao, nao) ndarray
-            ovlp : (nao, nao) ndarray
-        '''
-        fock_kpts = mf.get_hcore() + mfk.get_veff()
-        ovlp_kpts = mf.get_ovlp()
-        Fb_kpts = numpy.zeros_like(fock_kpts)
-        Sb_kpts = numpy.zeros_like(ovlp_kpts)
-        for k in range(nkpts):
-            Fb_kpts[k,:,:], Sb_kpts[k,:,:] \
-                = pbchf.get_band_fock_ovlp(self, fock_kpts[k,:,:], 
-                                           ovlp_kpts[k,:,:],
-                                           band_kpt-mf.kpts[k,:])
-
-        Fb = np.einsum("ipq->pq", Fb_kpts)
-        Sb = np.einsum("ipq->pq", Sb_kpts)
-
-        return Fb, Sb
 
 
 
