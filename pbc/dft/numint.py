@@ -42,10 +42,11 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     else:
         aoR = np.zeros([coords.shape[0], nao], dtype=dtype)
 
-
+    
     # TODO: this is 1j, not -1j; check for band_ovlp convention
     for T in Ts:
         L = np.dot(cell._h, T)
+        #print "factor", np.exp(1j*np.dot(kpt.T,L))
         aoR += (np.exp(1j*np.dot(kpt.T,L)) * 
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 
@@ -281,7 +282,11 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         mat = mat_re + 1j*mat_im
 
         # print "MATRIX", mat.dtype
-        return (mat + mat.T.conj()).real
+        #return (mat + mat.T.conj()).real
+        # print "MAT DTYPE", mat.dtype
+        # print "HACK MAT"
+        return (mat + mat.T.conj())
+        #return 2 * mat
         
     else:
         return pyscf.dft.numint.eval_mat(mol, ao, 
