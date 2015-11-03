@@ -93,19 +93,18 @@ def get_pp(cell, kpt=None):
         for l, h in enumerate(h_ia):
             nl = h.shape[0]
             for m in range(-l,l+1):
+                SPG_lm_aoG = np.zeros((nl,nao), dtype=np.complex128)
                 for i in range(nl):
                     SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
-                    SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aokplusG)
+                    SPG_lm_aoG[i,:] = np.einsum('g,gp->p', SPG_lmi.conj(), aokplusG)
+                for i in range(nl):
                     for j in range(nl):
-                        SPG_lmj = SI[ia,:] * projG_ia[l][m][j]
-                        SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aokplusG)
                         # Note: There is no (-1)^l here.
                         vppnl += h[i,j]*np.einsum('p,q->pq', 
-                                                   SPG_lmi_aoG.conj(), 
-                                                   SPG_lmj_aoG)
+                                                   SPG_lm_aoG[i,:].conj(), 
+                                                   SPG_lm_aoG[j,:])
     vppnl *= (1./ngs**2)
 
-    #return vpploc
     return vpploc + vppnl
 
 # def get_t2(cell, kpt=None):
