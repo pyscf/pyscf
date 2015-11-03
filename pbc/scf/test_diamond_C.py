@@ -87,9 +87,9 @@ def test_diamond_C():
     # K-pt calc
     scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
 
-    # shift for 2x2x2 to include Gamma point
-    shift = np.array([1./4., 1./4., 1./4.])
-    scaled_kpts += shift
+    # shift if 2x2x2 includes Gamma point
+    # shift = np.array([1./4., 1./4., 1./4.])
+    # scaled_kpts += shift
     abs_kpts=cell.get_abs_kpts(scaled_kpts)
     #cell.nimgs = [7,7,7]
     kmf = pyscf.pbc.scf.kscf.KRKS(cell, abs_kpts)
@@ -105,7 +105,7 @@ def test_diamond_C():
 
     # Default sets nimg = [5,5,5] for this cell
     #
-    # 2x2x2 replicated 12x12x12 gs, szv: -11.241426956044675
+    # 2x2x2 replicated 12x12x12 gs, szv: -11.241426956044675 (*8)
     #
     # 1x1x1 Kpt  8x8x8 gs, szv  : -10.2214263103132
     #            8x8x8 gs, dzvp : -10.3171863686858

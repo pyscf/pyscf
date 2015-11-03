@@ -453,7 +453,6 @@ class RHF(pyscf.scf.hf.RHF):
         band_ovlp = self.get_ovlp(self.cell, band_kpt)
         # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k>
         Fb = np.dot(np.conj(band_ovlp.T), np.dot(iSFockiS, band_ovlp))
-        Sb = band_ovlp
 
-        return Fb, Sb
+        return Fb, band_ovlp
 
