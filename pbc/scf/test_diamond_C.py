@@ -57,6 +57,7 @@ def test_diamond_C():
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(C)
     cell.h=C.cell
 
+    # cell.basis = 'gth-tzvp'
     cell.basis = 'gth-szv'
     # cell.basis = {'C': [[0, (4.3362376436, 0.1490797872), (1.2881838513, -0.0292640031), (0.4037767149, -0.688204051), (0.1187877657, -0.3964426906)], [1, (4.3362376436, -0.0878123619), (1.2881838513, -0.27755603), (0.4037767149, -0.4712295093), (0.1187877657, -0.4058039291)]]}
     # Easier basis for quick testing
@@ -65,7 +66,7 @@ def test_diamond_C():
     # Cell used for K-points
     cell.pseudo = 'gth-pade'
     # cell.pseudo = 'gth-pade'
-    cell.gs=np.array([14,14,14])
+    cell.gs=np.array([8,8,8])
     #cell.nimgs = [4,4,4]
     cell.verbose=7
     cell.build(None,None)
@@ -86,18 +87,29 @@ def test_diamond_C():
     # mf.scf()
     
     # K-pt calc
-    scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
+    scaled_kpts=ase.dft.kpoints.monkhorst_pack((1,1,1))
     abs_kpts=cell.get_abs_kpts(scaled_kpts)
+    #cell.nimgs = [7,7,7]
     kmf = pyscf.pbc.scf.kscf.KRKS(cell, abs_kpts)
-    kmf.analytic_int=True
+    kmf.analytic_int=False
     kmf.diis=True # when turned off, this agrees with above replicated cell precisely
     kmf.init_guess = '1e'
     kmf.xc = 'lda,vwn'
+    print "N imgs", cell.nimgs
+    print "Cutoff for 400 eV", pyscf.pbc.tools.cutoff_to_gs(cell.lattice_vectors(), 400/27.2)
+
     #kmf.max_cycle = 3
     kmf.scf() 
 
-    # 2x2x2 Kpt, 8x8x8 gs: -11.3536437382296 (16 atoms)
-    # 2x2x2 Kpt, 14x14x14 gs: -11.353612722046 (16 atoms)
+    # Default sets nimg = [5,5,5] for this cell
+    # 1x1x1 Kpt  8x8x8 gs, szv  : -10.2214263103132
+    #            8x8x8 gs, dzvp : -10.3171863686858
+    #            analytic       : -10.3171890900077
+    #            8x8x8 gs, tzvp : -10.3310789041567 (ovlp singular warning)
+    #            analytic       :  ovlp not positive definite
+    # 2x2x2 Kpt, 8x8x8 gs, szv : -11.3536437382296 (16 atoms)
+    #            8x8x8 gs dzvp : -11.4183859541816
+    #         14x14x14 gs, szv: -11.353612722046 (16 atoms)
     # 
-    # 3x3x3 Kpt, 8x8x8 gs: -11.337727688022  (54 atoms) 
-    # 4x4x4 Kpt, 8x8x8 gs: -11.3565363884127 (128 atoms)
+    # 3x3x3 Kpt, 8x8x8 gs, szv: -11.337727688022  (54 atoms) 
+    # 4x4x4 Kpt, 8x8x8 gs, szv: -11.3565363884127 (128 atoms)
