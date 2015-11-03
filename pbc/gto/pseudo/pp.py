@@ -177,7 +177,8 @@ def Ylm(l,m,theta,phi):
     Note the "convention" for theta and phi:
     http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.special.sph_harm.html
     '''
-    return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
+    #return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
+    return scipy.special.sph_harm(m,l,phi,theta)
 
 def cart2polar(rvec):
     # The columns of rvec are the 3-component vectors

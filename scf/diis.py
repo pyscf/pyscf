@@ -31,9 +31,11 @@ class DIIS(pyscf.lib.diis.DIIS):
             errvec = sdf.T.conj() - sdf
 
         elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
-            sdf = reduce(numpy.dot, ((si, di, fi) for (si, di, fi) in 
-                                     zip(s, d, f)))
-            errvec = numpy.hstack((sdfi.T.conj() - sdfi for sdfi in sdf))
+            errvec = []
+            for i in range(f.shape[0]):
+                sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
+                errvec.append(sdf.ravel())
+            errvec = numpy.hstack(errvec)
 
         else:
             sdf_a = reduce(numpy.dot, (s, d[0], f[0]))

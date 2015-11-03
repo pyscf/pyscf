@@ -408,11 +408,14 @@ def norm(x, ord=None, axis=None):
 def cond(x, p=None):
     '''Compute the condition number'''
     if p is None:
-        sigma = numpy.linalg.svd(numpy.asarray(x), compute_uv=False)
-        c = sigma.T[0]/sigma.T[-1] # values are along last dimension, so
-                                   # so must transpose. This transpose
-                                   # is omitted in numpy.linalg
-        return c
+        if x.ndim == 3:
+            c = []
+            for xi in x:
+                sigma = numpy.linalg.svd(numpy.asarray(xi), compute_uv=False)
+                c.append(sigma[0]/sigma[-1])
+            return numpy.asarray(c)
+        else:
+            return numpy.linalg.cond(x)
     else:
         return numpy.linalg.cond(x, p)
 
