@@ -34,7 +34,7 @@ class DIIS(pyscf.lib.diis.DIIS):
             errvec = []
             for i in range(f.shape[0]):
                 sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
-                errvec.append(sdf.ravel())
+                errvec.append((sdf.T.conj() - sdf))
             errvec = numpy.hstack(errvec)
 
         else:
