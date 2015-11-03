@@ -1,13 +1,69 @@
-- spherical cutoff in G space for Gaussians
-  [partially done. Does not work with k-points, figure out how to do.
-   Simple cutoff for (G+K)^2 does not seem right, but check]
+Currently working:
+- Gamma point and super cell: HFX and DFT
+- K points: DFT
 
-- exchange part of Fock matrix for k-points
-- FIX numpy.ComplexWarning for SCF if kpt != 0; SCF may not work
-  for kpt shifted away from Gamma point
-- Change Mole class check, so that can run KRKS calculations so long
-  as nelec * ncell is even (e.g. 4 H atoms) (may need to shift kpts to cell)
+Needs testing:
+- Band structure (from Gamma pt) 
+- Shifted Gamma pt calc (e.g. at Baldereschi pt)
 
+Long list of things to do!                                       
+ 
+Code doc and cleaning:
+- Clean mf.grad() [Q]
+- PP and ECP unification (e.g. init guess routines check nelec_ecp)
+- Cell pack fn [T]
+- Check "checkpt" works
+- Doc KSCF class
+- Test infrastructure and examples for
+  - K pt calcs
+  - band structure
+  - Gamma pt HFX
+- Initial guess: check which ones are correct for PBC / PP / KSCF
+- Change kpt shape so that it does not always get reshaped? [G]
+
+Ease of calc:
+- Test energy_cutoff -> gs fn in tools/pbc.py
+- Better cutoff fn for lattice sums (from integral Schwartz condition)
+- ASE DFT calculator interface
+
+SCF convergence:
+- Near linear dependencies in ovlp should be projected out
+  (canonical orthogonalization) in HF routine.                 [Q] 
+- Finite temperature smearing
+
+Other Functionality:
+- q->0 term for (ia|jb) integral, by finite difference q calc [J]
+- Band structure for K pt calc [T]
+- Poisson equation [Q]
+  - use compensating charge (uniform)
+  - use compensating charge (Gaussian)
+    - compensating dipole (Gaussian)
+  - Molecular XC grids
+- Exchange part of Fock matrix with k-points [J]
+- Gamma pt MP2
+  - check q->0, compare against VASP / CP2K 
+- Gamma pt CCSD
+- IP/EA/EE-EOM-CCSD 
+  - Gamma pt
+  - General spin-orb -> spin-orb -> restricted
+  - Kpt
+
+Efficiency:
+- K pt MPI loop
+- GTH ECP analytic integrals
+- Time-reversal symmetry
+  - K pts in Brillouin zone
+  - Grid in FFT
+- Abelian cell symmetry (See symmetry class in GPAW)
+  - Lattice sums
+  - Grids
+- Profile code
+  - Store AO's on grid
+  - Store (i|j) AO integrals, then fourier transform
+    to generate lattice sums
+  - Integral screening
+
+---
 DONE(TCB):
 x Streamline cell construction 
   x add 'precision' to cell, use to set nimgs, ewald parameters in build()
