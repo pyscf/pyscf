@@ -14,7 +14,7 @@ import pyscf.gto
 import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
-from pyscf.mcscf.casci import get_fock, cas_natorb
+from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 
@@ -480,8 +480,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
-        mo, _, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                               casscf.natorb, verbose=log)
+        mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                    casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
@@ -591,8 +591,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, _, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                           casscf.natorb, casdm1, log)
+    mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                casscf.natorb, casdm1, log)
     if dump_chk:
         casscf.dump_chk(locals())
 

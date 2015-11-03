@@ -284,7 +284,6 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 # may cause problem for external CI solver eg DMRG.
         mo_coeff1 = numpy.empty_like(mo_coeff)
         mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
-        ci = mc.ci # active space is not changed, mc.ci is the solution
     if ncore > 0:
         # note the last two args of ._eig for mc1step_symm
         # mc._eig function is called to handle symmetry adapated fock
