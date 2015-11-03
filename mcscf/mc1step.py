@@ -14,7 +14,7 @@ import pyscf.gto
 import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
-from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
+from pyscf.mcscf.casci import get_fock, cas_natorb
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 
@@ -480,9 +480,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
-        mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                                    casscf.natorb, verbose=log)
-        return True, e_tot, e_ci, fcivec, mo
+        mo, _, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                               casscf.natorb, verbose=log)
+        return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol*.1)
@@ -591,13 +591,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                                casscf.natorb, casdm1, log)
+    mo, _, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                           casscf.natorb, casdm1, log)
     if dump_chk:
         casscf.dump_chk(locals())
 
     log.timer('1-step CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo
+    return conv, e_tot, e_ci, fcivec, mo, mo_energy
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
@@ -764,8 +764,10 @@ class CASSCF(casci.CASCI):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.e_tot = None
+        self.e_cas = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
+        self.mo_energy = mf.mo_energy
         self.converged = False
 
         self._keys = set(self.__dict__.keys())
@@ -829,7 +831,8 @@ class CASSCF(casci.CASCI):
         self.mol.check_sanity(self)
         self.dump_flags()
 
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, self.e_cas, self.ci, \
+                self.mo_coeff, self.mo_energy = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
@@ -837,7 +840,7 @@ class CASSCF(casci.CASCI):
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                 callback=None):

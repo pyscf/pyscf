@@ -45,13 +45,14 @@ class CASSCF(mc1step.CASSCF):
         self.dump_flags()
 
         casci_symm.label_symmetry_(self, self.mo_coeff)
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, self.e_cas, self.ci, \
+                self.mo_coeff, self.mo_energy = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def gen_g_hop(self, mo, u, casdm1, casdm2, eris):
         casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
@@ -94,10 +95,12 @@ class CASSCF(mc1step.CASSCF):
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None):
         self.mo_coeff, self.ci, mo_energy = \
-                self.canonicalize(self, mo_coeff, ci, eris,
+                self.canonicalize(mo_coeff, ci, eris,
                                   sort, cas_natorb, casdm1, verbose)
         if sort:
             casci_symm.label_symmetry_(self, self.mo_coeff)
+        if cas_natorb:  # When active space is changed, the ci solution needs to be updated
+            self.ci = ci
         return self.mo_coeff, self.ci, mo_energy
 
 def _symmetrize(mat, orbsym, groupname):
