@@ -60,3 +60,6 @@ def test():
     kmf.max_cycle = 1
     kmf.init_guess = '1e'
     kmf.scf()
+
+if __name__ == '__main__':
+    test()

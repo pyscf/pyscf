@@ -81,23 +81,24 @@ def get_pp(cell, kpt=None):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc in reciprocal space
-    aoG = np.empty(aoR.shape, np.complex128)
+    aokplusG = np.empty(aoR.shape, np.complex128)
     for i in range(nao):
-        aoG[:,i] = tools.fft(aoR[:,i], cell.gs)
-    ngs = aoG.shape[0]
+        aokplusG[:,i] = tools.fft(aoR[:,i]*np.exp(-1j*np.dot(coords,kpt)[:,0]), 
+                                  cell.gs)
+    ngs = aokplusG.shape[0]
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
-    hs, projGs = pseudo.get_projG(cell)
+    hs, projGs = pseudo.get_projG(cell, kpt)
     for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
         for l, h in enumerate(h_ia):
             nl = h.shape[0]
             for m in range(-l,l+1):
                 for i in range(nl):
                     SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
-                    SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aoG)
+                    SPG_lmi_aoG = np.einsum('g,gp->p', SPG_lmi.conj(), aokplusG)
                     for j in range(nl):
                         SPG_lmj = SI[ia,:] * projG_ia[l][m][j]
-                        SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aoG)
+                        SPG_lmj_aoG = np.einsum('g,gp->p', SPG_lmj.conj(), aokplusG)
                         # Note: There is no (-1)^l here.
                         vppnl += h[i,j]*np.einsum('p,q->pq', 
                                                    SPG_lmi_aoG.conj(), 
