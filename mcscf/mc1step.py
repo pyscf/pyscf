@@ -480,9 +480,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
-        mo, fcivec, mo_energy = \
-                casscf.canonicalize(mo, fcivec, eris,
-                                    cas_natorb=casscf.natorb, verbose=log)
+        mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                    casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:

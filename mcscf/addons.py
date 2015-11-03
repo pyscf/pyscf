@@ -414,7 +414,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         return ss, s*2+1
 
 
-def state_average_e_(casscf, weights=(0.5,0.5)):
+def state_average_(casscf, weights=(0.5,0.5)):
     ''' State average over the energy.  The energy funcitonal is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
@@ -463,11 +463,11 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
-    casscf.fcisolver = FakeCISolver()
-    return casscf
+    return FakeCISolver()
 
 def state_average_(casscf, weights=(0.5,0.5)):
-    return state_average_e_(casscf, weights)
+    casscf.fcisolver = state_average(casscf, weights)
+    return casscf
 
 
 
