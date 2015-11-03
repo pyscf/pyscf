@@ -1,4 +1,5 @@
 import numpy as np
+import pyscf.lib
 import pyscf.dft
 
 from pyscf.pbc import tools
@@ -34,17 +35,18 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
                   for j in range(-nimgs[1],nimgs[1]+1)
                   for k in range(-nimgs[2],nimgs[2]+1)
                   if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
-    
+
     nao = cell.nao_nr()
     if isgga:
         aoR = np.zeros([4,coords.shape[0], nao], dtype=dtype)
     else:
         aoR = np.zeros([coords.shape[0], nao], dtype=dtype)
 
-
+    
     # TODO: this is 1j, not -1j; check for band_ovlp convention
     for T in Ts:
         L = np.dot(cell._h, T)
+        #print "factor", np.exp(1j*np.dot(kpt.T,L))
         aoR += (np.exp(1j*np.dot(kpt.T,L)) * 
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 
@@ -280,7 +282,11 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         mat = mat_re + 1j*mat_im
 
         # print "MATRIX", mat.dtype
-        return (mat + mat.T.conj()).real
+        #return (mat + mat.T.conj()).real
+        # print "MAT DTYPE", mat.dtype
+        # print "HACK MAT"
+        return (mat + mat.T.conj())
+        #return 2 * mat
         
     else:
         return pyscf.dft.numint.eval_mat(mol, ao, 
@@ -328,3 +334,41 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
                         isgga, verbose)
 
+
+###################################################
+#
+# Numerical integration over becke grids
+#
+###################################################
+def get_ovlp(cell, kpt=None, grids=None):
+    from pyscf.pbc.dft import gen_grid
+    if kpt is None:
+        kpt = np.zeros([3,1])
+    if grids is None:
+        grids = gen_grid.BeckeGrids(cell)
+        grids.build_()
+
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, grids.coords, kpt)
+    return np.dot(aoR.T.conj(), grids.weights.reshape(-1,1)*aoR).real
+
+if __name__ == '__main__':
+    import pyscf
+    import pyscf.pbc.gto as pgto
+    import pyscf.pbc.scf as pscf
+    import pyscf.pbc.dft as pdft
+
+    L = 12.
+    n = 30
+    cell = pgto.Cell()
+    cell.h = np.diag([L,L,L])
+    cell.gs = np.array([n,n,n])
+
+    cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
+                ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]
+    cell.basis = {'He': [[0, (1.0, 1.0)]]}
+    cell.build()
+    #cell.nimgs = [1,1,1]
+    kpt = None
+    s1 = get_ovlp(cell, kpt)
+    s2 = pscf.scfint.get_ovlp(cell, kpt)
+    print abs(s1-s2).sum()

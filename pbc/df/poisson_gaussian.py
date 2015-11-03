@@ -38,8 +38,7 @@ def get_j(cell, dm, auxcell):
     rho -= numpy.einsum('ij,j->i', s1[:,idx], chg)
     c2 = pscf.scfint.get_t(auxcell)
     v1 = np.linalg.solve(c2, 2*np.pi*rho)
-    vj = np.einsum('ijk,k->ij', c3, v1)
-    vj = vj.real
+    vj = np.einsum('ijk,k->ij', c3, v1)#.real
 
 #CHECK: shoule I remove a constant potential?
 #    vj += (np.dot(v1, rho) - (vj*dm).sum())/nelec * ovlp
@@ -49,7 +48,7 @@ def get_j(cell, dm, auxcell):
     for ib in range(auxcell.nbas):
         l = auxcell.bas_angular(ib)
         e = auxcell.bas_exp(ib)[0]
-        if l == 0 and abs(e-9.3) < .1:
+        if l == 0 and abs(e-3.3) < .1:
             idxb.append(ib)
     modcell = auxcell.copy()
     modcell._bas = auxcell._bas[idxb].copy()
@@ -57,13 +56,16 @@ def get_j(cell, dm, auxcell):
     rhok = eval_rhok(chg, modcell)
     coulG = tools.get_coulG(auxcell)
     v2 = rhok * coulG
-    v2 = tools.ifft(v2, cell.gs) # ifft(fft(a)) = a
+    # weight = vol/N,  1/vol * weight = 1/N
+    # ifft has 1/N
+    vw = tools.ifft(v2, cell.gs)
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     kpt = None
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    v3 = np.dot(aoR.T.conj(), v2.reshape(-1,1)*aoR).real
+    v3 = np.dot(aoR.T.conj(), vw.reshape(-1,1)*aoR)#.real
     vj += v3
+    print v3
     return vj
 
 def eval_rhok(rho, cell):
@@ -83,7 +85,7 @@ def where2(auxcell):
         l = auxcell.bas_angular(ib)
         e = auxcell.bas_exp(ib)[0]
         if l == 0:
-            if abs(e-9.3)<.1:
+            if abs(e-3.3)<.1:
                 idx.append(ip)
             ip += 1
         else:
@@ -102,16 +104,16 @@ if __name__ == '__main__':
     cell.h = np.diag([L,L,L])
     cell.gs = np.array([n,n,n])
 
-    cell.atom = '''He     0.    0.       1.
-                   He     1.    0.       1.'''
+    cell.atom = [['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
+                 ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]
     cell.basis = {'He': [[0, (1.0, 1.0)]]}
     cell.build()
     mf = pdft.RKS(cell)
     mf.xc = 'LDA,VWN'
     #auxbasis = {'He': df.genbas(3., 2.8, (10.,0.1), 0)+df.genbas(3., 2. , (10.,0.4), 1)}
-    auxbasis = {'He': df.genbas(9.3, 1.8, (100.,0.3), 0)
-                     +df.genbas(9.3, 2. , (10.,0.3), 1)
-                     +df.genbas(9.3, 2. , (10.,0.3), 2)}
+    auxbasis = {'He': df.genbas(3.3, 1.8, (100.,0.3), 0)
+                     +df.genbas(3.3, 2. , (10.,0.3), 1)
+                     +df.genbas(3.3, 2. , (10.,0.3), 2)}
     auxcell = df.format_aux_basis(cell, auxbasis)
     mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
     e1 = mf.scf()

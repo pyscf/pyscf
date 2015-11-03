@@ -76,7 +76,7 @@ def get_gth_vlocG(cell, G):
                                 np.dot(cexp, cfacs[:nexp])) )
     return vlocG
 
-def get_projG(cell):
+def get_projG(cell, kpt=None):
     '''PP weight and projector for the nonlocal PP in G space.
 
     Returns:
@@ -85,11 +85,17 @@ def get_projG(cell):
         projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
-    return get_gth_projG(cell, cell.Gv) 
+    if kpt is None:
+        kpt = np.zeros([3,1])
+    return get_gth_projG(cell, cell.Gv+kpt) 
 
 def get_gth_projG(cell, Gvs):
-    '''
-    MH Eq.(4.80)
+    '''G space projectors from the FT of the real-space projectors.
+
+    \int e^{iGr} p_j^l(r) Y_{lm}^*(theta,phi)
+    = i^l p_j^l(G) Y_{lm}^*(thetaG, phiG)
+
+    See MH Eq.(4.80)
     '''
     Gs,thetas,phis = cart2polar(Gvs)
         
@@ -109,7 +115,7 @@ def get_gth_projG(cell, Gvs):
                 proj_ia_lm = []
                 for i in range(nl):
                     projG_radial = projG_li(Gs,l,i,rl)
-                    proj_ia_lm.append( projG_radial*projG_ang )
+                    proj_ia_lm.append( (1j)**l * projG_radial*projG_ang )
                 proj_ia_l.append(proj_ia_lm)
             proj_ia.append(proj_ia_l)
         hs.append(h_ia)
@@ -171,7 +177,8 @@ def Ylm(l,m,theta,phi):
     Note the "convention" for theta and phi:
     http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.special.sph_harm.html
     '''
-    return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
+    #return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
+    return scipy.special.sph_harm(m,l,phi,theta)
 
 def cart2polar(rvec):
     # The columns of rvec are the 3-component vectors
