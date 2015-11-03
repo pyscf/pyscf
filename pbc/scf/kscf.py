@@ -103,11 +103,10 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
     '''
     fock = numpy.zeros_like(h1e_kpts)
     nkpts = mf.kpts.shape[0]
-    for k in range(nkpts):
-        fock[k,:,:] = pbchf.RHF.get_fock_(mf, h1e_kpts[k,:,:], s1e_kpts[k,:,:],
-                                          vhf_kpts[k,:,:], dm_kpts[k,:,:],
-                                          cycle, adiis, diis_start_cycle, 
-                                          level_shift_factor, damp_factor)
+    fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
+                                      vhf_kpts, dm_kpts,
+                                      cycle, adiis, diis_start_cycle, 
+                                      level_shift_factor, damp_factor)
     return fock
 
 
