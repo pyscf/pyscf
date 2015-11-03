@@ -45,14 +45,14 @@ class CASCI(casci.CASCI):
 
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None):
-        self.mo_coeff, self.ci, mo_energy = \
+        self.mo_coeff, ci, self.mo_energy = \
                 self.canonicalize(mo_coeff, ci, eris,
                                   sort, cas_natorb, casdm1, verbose)
         if sort:
             casci_symm.label_symmetry_(self, self.mo_coeff)
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
-        return self.mo_coeff, self.ci, mo_energy
+        return self.mo_coeff, ci, self.mo_energy
 
 def eig(mat, orbsym):
     orbsym = numpy.asarray(orbsym)
