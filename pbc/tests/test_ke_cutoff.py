@@ -33,7 +33,7 @@ def test_ke_cutoff(pseudo=None):
         cell.build()
         mf = pbcrks.RKS(cell)
 
-        max_ke.append(np.max(.5*np.einsum('ri,ri->i', cell.Gv, cell.Gv)))
+        max_ke.append(np.max(0.5*np.einsum('gi,gi->g', cell.Gv, cell.Gv)))
 
         eke_cut.append(mf.scf())
 

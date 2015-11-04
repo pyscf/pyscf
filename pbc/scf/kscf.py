@@ -18,7 +18,7 @@ def get_ovlp(mf, cell, kpts):
     nao = cell.nao_nr()
     ovlp_kpts = numpy.zeros([nkpts,nao,nao], numpy.complex128)
     for k in range(nkpts):
-        kpt = numpy.reshape(kpts[k,:], (3,1))
+        kpt = kpts[k,:]
         if mf.analytic_int:
             ovlp_kpts[k,:,:] = scfint.get_ovlp(cell, kpt)
         else:
@@ -42,7 +42,7 @@ def get_j(mf, cell, dm_kpts, kpts):
     rhoR = numpy.zeros([ngs])
 
     for k in range(nkpts):
-        kpt = numpy.reshape(kpts[k,:], (3,1))
+        kpt = kpts[k,:]
         aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
         rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(cell, aoR_kpts[k,:,:], dm_kpts[k,:,:])
 
@@ -85,8 +85,7 @@ def get_hcore(mf, cell, kpts):
     nkpts = kpts.shape[0]
     hcore = numpy.zeros([nkpts, nao, nao],numpy.complex128)
     for k in range(nkpts):
-        # below reshape is a bit of a hack
-        kpt = numpy.reshape(kpts[k,:], (3,1))
+        kpt = kpts[k,:]
         if mf.analytic_int:
             hcore[k,:,:] = scfint.get_hcore(cell, kpt)
         else:
@@ -153,9 +152,6 @@ class KRHF(pbchf.RHF):
         if cell is None: cell=self.cell
         if kpts is None: kpts=self.kpts
         if dm_kpts is None: dm_kpts=self.make_rdm1()
-
-        # print "HACK GET_J KPTS"
-        #return numpy.zeros_like(dm_kpts)
         return get_j(self, cell, dm_kpts, kpts)
 
     def get_hcore(self, cell=None, kpts=None):
@@ -213,8 +209,6 @@ class KRHF(pbchf.RHF):
         eig_kpts = numpy.zeros([nkpts,nao])
         mo_coeff_kpts = numpy.zeros_like(h_kpts)
 
-        # print "HACK EIG KPTS"
-        # print "DIFF", numpy.linalg.norm(h_kpts - self.get_hcore())
         # TODO: should use superclass eig fn here?
         for k in range(nkpts):
             eig_kpts[k,:], mo_coeff_kpts[k,:,:] = pyscf.scf.hf.eig(h_kpts[k,:,:], s_kpts[k,:,:])
@@ -349,8 +343,6 @@ class KRKS(KRHF):
 
         vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
                                       hermi)
-        # print "HACK VEFF KPTS"
-        # return numpy.zeros_like(dm)
         return vhf
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
@@ -388,7 +380,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
 
         ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
         for k in range(nkpts):
-            kpt = numpy.reshape(self.kpts[k,:], (3,1))
+            kpt = self.kpts[k,:]
             ao_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(mol, coords, kpt, isgga,
                                   relativity, bastart, bascount,
                                   non0tab, verbose)

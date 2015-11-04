@@ -1,6 +1,6 @@
 import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.dft.rks as pbcrks
-import pyscf.pbc.kscf as kscf
+import pyscf.pbc.scf.kscf as kscf
 import scipy.linalg
 
 def test_kscf_gamma(atom, ncells):
@@ -56,10 +56,10 @@ def test_kscf_kpoints(atom, ncells):
     invhT = scipy.linalg.inv(np.asarray(cell._h).T)
     kGvs = []
     for i in range(ncells):
-        kGvs.append(i*1./ncells*2*pi*np.dot(invhT,(1,0,0)))
+        kGvs.append(i*1./ncells*2*np.pi*np.dot(invhT,(1,0,0)))
     kpts = np.vstack(kGvs)
 
-    kmf = kscf.KRKS(cell, cell.gs, cell.ew_eta, cell.ew_cut, kpts)
+    kmf = kscf.KRKS(cell, kpts)
     kmf.init_guess = "atom"
     return kmf.scf()
 
@@ -81,3 +81,6 @@ def test_kscf_kgamma():
     # each entry should be the same up to integration error (abt 5 d.p.)
     print "ALL ENERGIES, GAMMA", emf_gamma
     print "ALL ENERGIES, KPT", emf_kpt
+
+if __name__ == '__main__':
+    test_kscf_kgamma()

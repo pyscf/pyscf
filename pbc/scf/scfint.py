@@ -34,7 +34,7 @@ def get_lattice_Ls(cell, nimgs):
 def get_hcore(cell, kpt=None):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.'''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     # TODO: these are still on grid
     if cell.pseudo is None:
@@ -55,7 +55,7 @@ def get_jvloc_G0(cell, kpt=None):
 def get_int1e(intor, cell, kpt=None):
     '''Get the one-electron integral defined by `intor` using lattice sums.'''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     # if pyscf.lib.norm(kpt) == 0.:
     #     dtype = np.float64
@@ -74,14 +74,14 @@ def get_int1e(intor, cell, kpt=None):
         _envL[ptr_coord+0] = cell._env[ptr_coord+0] + L[0]
         _envL[ptr_coord+1] = cell._env[ptr_coord+1] + L[1]
         _envL[ptr_coord+2] = cell._env[ptr_coord+2] + L[2]
-        int1e += (np.exp(1j*np.dot(kpt.T,L)) *
+        int1e += (np.exp(1j*np.dot(kpt,L)) *
                   pyscf.gto.intor_cross(intor, cell, cellL))
     return int1e
 
 def get_ovlp(cell, kpt=None):
     '''Get the overlap AO matrix.'''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     s = get_int1e('cint1e_ovlp_sph', cell, kpt) 
     return s
@@ -89,7 +89,7 @@ def get_ovlp(cell, kpt=None):
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.'''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
     
     t = get_int1e('cint1e_kin_sph', cell, kpt) 
     return t

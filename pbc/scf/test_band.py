@@ -27,7 +27,7 @@ def test_band():
     auxcell.build()
 
     for i in range(1,10):
-        kpt = 1./i * auxcell.Gv[:,-1]
+        kpt = 1./i * auxcell.Gv[-1,:]
         print pbchf.get_eig_kpt(mf, kpt)[0]
 
 def test_band_kscf():
@@ -62,6 +62,6 @@ def test_band_kscf():
     print kmf.scf()
 
     for i in range(1,10):
-        band_kpt = 1./i * auxcell.Gv[:,-1]
+        band_kpt = 1./i * auxcell.Gv[-1,:]
         print pbchf.get_eig_kpt(kmf, band_kpt)[0]
 
