@@ -42,7 +42,10 @@ def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
 def write_chk(mc,root,chkfile):
 
     fh5 = h5py.File(chkfile,'w')
-    mc.mo_coeff, _, orbe = mc.canonicalize(ci=root)
+
+    if mc.fcisolver.nroots > 1:
+        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=root)
+
 
     fh5['mol']        =       format(mc.mol.pack())
     fh5['mc/mo']      =       mc.mo_coeff 
@@ -52,8 +55,7 @@ def write_chk(mc,root,chkfile):
     fh5['mc/nvirt']   =       nvirt    
     fh5['mc/nelecas'] =       mc.nelecas 
     fh5['mc/root']    =       root
-    fh5['mc/orbe']    =       orbe     
-    #fh5['mc/orbsym']  =       mc.orbsym
+    fh5['mc/orbe']    =       mc.mo_energy
     if hasattr(mc, 'orbsym'):
         fh5.create_dataset('mc/orbsym',data=mc.orbsym)
     else :
@@ -72,6 +74,7 @@ def write_chk(mc,root,chkfile):
     fh5['h1e']       =       h1e[0]
 
     if mc._scf._eri is None:
+        from pyscf.scf import _vhf
         eri = _vhf.int2e_sph(mc.mol._atm, mol._bas, mol._env)
     else:
         eri = mc._scf._eri
