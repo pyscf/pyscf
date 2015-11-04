@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 from functools import reduce
 import numpy
@@ -86,6 +89,88 @@ def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=1):
         orb_irrep = [ casscf.ncore + base + i for i in range(len(orbsym)) if orbsym[i]== symm.irrep_name2id(casscf.mol.groupname,k) ]
         caslst.extend(orb_irrep[:v])
     return caslst
+
+def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
+                     cas_irrep_ncore=None, s=None):
+    '''Given number of active orbitals for each irrep, form the active space
+    wrt the indices of MOs
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+        cas_irrep_nocc : list or dict
+            Number of active orbitals for each irrep.  It can be a dict, eg
+            {'A1': 2, 'B2': 4} to indicate the active space size based on
+            irrep names, or {0: 2, 3: 4} for irrep Id,  or a list [2, 0, 0, 4]
+            (identical to {0: 2, 3: 4}) in which the list index is served as
+            the irrep Id.
+
+    Kwargs:
+        cas_irrep_ncore : list or dict
+            Number of closed shells for each irrep.  It can be a dict, eg
+            {'A1': 6, 'B2': 4} to indicate the closed shells based on
+            irrep names, or {0: 6, 3: 4} for irrep Id,  or a list [6, 0, 0, 4]
+            (identical to {0: 6, 3: 4}) in which the list index is served as
+            the irrep Id.  If cas_irrep_ncore is not given, the program
+            will generate a guess based on the lowest :attr:`CASCI.ncore`
+            orbitals.
+        s : ndarray
+            overlap matrix
+
+    Returns:
+        sorted orbitals, ordered as [c,..,c,a,..,a,v,..,v]
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvtz', verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.kernel()
+    >>> mc = mcscf.CASSCF(mf, 12, 4)
+    >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
+    >>> mc.kernel(mo)[0]
+    -109.058040031
+    '''
+    if s is None:
+        s = casscf._scf.get_ovlp()
+    orbsym = pyscf.symm.label_orb_symm(casscf.mol, casscf.mol.irrep_id,
+                                       casscf.mol.symm_orb, mo_coeff, s)
+    if cas_irrep_ncore is None:
+        ncore = casscf.ncore
+        nocc = ncore + casscf.ncas
+        cas_irrep_ncore = {}
+        for x in orbsym[:ncore]:
+            if x in cas_irrep_ncore:
+                cas_irrep_ncore[x] += 1
+            else:
+                cas_irrep_ncore[x] = 0
+
+    orbidx_by_irrep = {}
+    for i,x in enumerate(orbsym):
+        if x in orbidx_by_irrep:
+            orbidx_by_irrep[x].append(i)
+        else:
+            orbidx_by_irrep[x] = [i]
+
+    # list => dict
+    if not isinstance(cas_irrep_nocc, dict):
+        cas_irrep_nocc = dict([(ir, n) for ir,n in enumerate(cas_irrep_nocc)
+                               if n > 0])
+
+    caslst = []
+    for k, ncas in cas_irrep_nocc.iteritems():
+        if isinstance(k, str):
+            irid = symm.irrep_name2id(casscf.mol.groupname, k)
+        else:
+            irid = k
+        idx = orbidx_by_irrep[irid]
+        if irid in cas_irrep_ncore:
+            ncore = cas_irrep_ncore[irid]
+        else:
+            ncore = 0
+        caslst.extend(idx[ncore:ncore+ncas])
+
+    return sort_mo(casscf, mo_coeff, sorted(caslst), 0)
 
 
 def project_init_guess(casscf, init_mo, prev_mol=None):
@@ -260,7 +345,7 @@ def make_rdm12(casscf, mo_coeff=None, ci=None):
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
 def get_fock(casscf, mo_coeff=None, ci=None):
-    '''Generalized Fock matrix
+    '''Generalized Fock matrix in AO representation
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
@@ -329,7 +414,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         return ss, s*2+1
 
 
-def state_average_e_(casscf, weights=(0.5,0.5)):
+def state_average(casscf, weights=(0.5,0.5)):
     ''' State average over the energy.  The energy funcitonal is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
@@ -341,43 +426,48 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-10)
     fcibase = casscf.fcisolver
-    class FakeCISolver(casscf.fcisolver.__class__):
+    fcibase_class = casscf.fcisolver.__class__
+    class FakeCISolver(fcibase_class):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
+            self.nroots = len(weights)
         def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
-            e, c = fcibase.kernel(h1, h2, ncas, nelecas, ci0,
-                                  nroots=self.nroots, **kwargs)
-            for i, ei in enumerate(e):
-                logger.debug(casscf, 'Energy for state %d = %.15g', i, ei)
+            e, c = fcibase_class.kernel(self, h1, h2, ncas, nelecas, ci0,
+                                        nroots=self.nroots, **kwargs)
+            if casscf.verbose >= logger.DEBUG:
+                ss = fcibase_class.spin_square(self, c, ncas, nelecas)
+                for i, ei in enumerate(e):
+                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                 i, ei, ss[0][i])
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = fcibase.kernel(h1, h2, norb, nelec, ci0,
-                                  max_cycle=casscf.ci_response_space,
-                                  nroots=self.nroots, **kwargs)
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                        max_cycle=casscf.ci_response_space,
+                                        nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
             for i, wi in enumerate(weights):
-                dm1 += wi*fcibase.make_rdm1(ci0[i], norb, nelec)
+                dm1 += wi*fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
             return dm1
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
             for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase.make_rdm12(ci0[i], norb, nelec)
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss = fcibase.spin_square(ci0, norb, nelec)[0]
+            ss = fcibase_class.spin_square(self, ci0, norb, nelec)[0]
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
-    casscf.fcisolver = FakeCISolver()
-    return casscf
+    return FakeCISolver()
 
 def state_average_(casscf, weights=(0.5,0.5)):
-    return state_average_e_(casscf, weights)
+    casscf.fcisolver = state_average(casscf, weights)
+    return casscf
 
 
 
@@ -419,6 +509,7 @@ if __name__ == '__main__':
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
     mol.basis = '6-31g'
+    mol.symmetry = 1
     mol.build()
 
     m = scf.RHF(mol)

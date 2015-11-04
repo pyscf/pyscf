@@ -11,7 +11,7 @@ b = 1.4
 mol = gto.Mole()
 
 mol.build(
-        verbose = 5,
+        verbose = 0,
 output = None,
 atom = [['He',(  0.000000,  0.000000, -b/2)],
         ['He',(  0.000000,  0.000000,  b)]],

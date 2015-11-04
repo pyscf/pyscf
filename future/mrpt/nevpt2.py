@@ -269,7 +269,7 @@ def make_a13(h1e,h2e,dm1,dm2,dm3):
     return a13
 
 
-def Sr(mc,ci,orbe, dms, eris=None, verbose=None):
+def Sr(mc,ci,dms, eris=None, verbose=None):
     #The subspace S_r^{(-1)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -310,9 +310,9 @@ def Sr(mc,ci,orbe, dms, eris=None, verbose=None):
         +  numpy.einsum('ipqr,rpqa,ia->i',h2e_v,dm2,h1e_v)*2.0\
         +  numpy.einsum('ip,pa,ia->i',h1e_v,dm1,h1e_v)
 
-    return _norm_to_energy(norm, ener, orbe[mc.ncore+mc.ncas:])
+    return _norm_to_energy(norm, ener, mc.mo_energy[mc.ncore+mc.ncas:])
 
-def Si(mc, ci, orbe, dms, eris=None, verbose=None):
+def Si(mc, ci, dms, eris=None, verbose=None):
     #Subspace S_i^{(1)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -358,10 +358,10 @@ def Si(mc, ci, orbe, dms, eris=None, verbose=None):
         +  numpy.einsum('qpir,rpqa,ai->i',h2e_v,dm2_h,h1e_v)*2.0\
         +  numpy.einsum('pi,pa,ai->i',h1e_v,dm1_h,h1e_v)
 
-    return _norm_to_energy(norm, ener, -orbe[:mc.ncore])
+    return _norm_to_energy(norm, ener, -mc.mo_energy[:mc.ncore])
 
 
-def Sijrs(mc,orbe, eris, verbose=None):
+def Sijrs(mc, eris, verbose=None):
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     ncore = mo_core.shape[1]
     nvirt = mo_virt.shape[1]
@@ -373,7 +373,7 @@ def Sijrs(mc,orbe, eris, verbose=None):
     else:
         feri = eris['cvcv']
 
-    eia = orbe[:ncore,None] - orbe[None,nocc:]
+    eia = mc.mo_energy[:ncore,None] -mc.mo_energy[None,nocc:]
     norm = 0
     e = 0
     with ao2mo.load(feri) as cvcv:
@@ -388,7 +388,7 @@ def Sijrs(mc,orbe, eris, verbose=None):
             e += numpy.einsum('jab,jab', t2i, theta)
     return norm, e
 
-def Sijr(mc,orbe, dms, eris, verbose=None):
+def Sijr(mc, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -415,11 +415,11 @@ def Sijr(mc,orbe, dms, eris, verbose=None):
     h = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,a3)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,a3)
 
-    diff = orbe[mc.ncore+mc.ncas:,None,None] - orbe[None,:mc.ncore,None] - orbe[None,None,:mc.ncore]
+    diff = mc.mo_energy[mc.ncore+mc.ncas:,None,None] - mc.mo_energy[None,:mc.ncore,None] - mc.mo_energy[None,None,:mc.ncore]
 
     return _norm_to_energy(norm, h, diff)
 
-def Srsi(mc,orbe, dms, eris, verbose=None):
+def Srsi(mc, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -441,10 +441,10 @@ def Srsi(mc,orbe, dms, eris, verbose=None):
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,dm1)
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
-    diff = orbe[mc.ncore+mc.ncas:,None,None] + orbe[None,mc.ncore+mc.ncas:,None] - orbe[None,None,:mc.ncore]
+    diff = mc.mo_energy[mc.ncore+mc.ncas:,None,None] + mc.mo_energy[None,mc.ncore+mc.ncas:,None] - mc.mo_energy[None,None,:mc.ncore]
     return _norm_to_energy(norm, h, diff)
 
-def Srs(mc,orbe, dms, eris=None, verbose=None):
+def Srs(mc, dms, eris=None, verbose=None):
     #Subspace S_rs^{(-2)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -468,10 +468,10 @@ def Srs(mc,orbe, dms, eris=None, verbose=None):
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
     norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
     h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
-    diff = orbe[mc.ncore+mc.ncas:,None] + orbe[None,mc.ncore+mc.ncas:]
+    diff = mc.mo_energy[mc.ncore+mc.ncas:,None] + mc.mo_energy[None,mc.ncore+mc.ncas:]
     return _norm_to_energy(norm, h, diff)
 
-def Sij(mc,orbe, dms, eris, verbose=None):
+def Sij(mc, dms, eris, verbose=None):
     #Subspace S_ij^{(-2)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -508,11 +508,11 @@ def Sij(mc,orbe, dms, eris, verbose=None):
     a9 = make_a9(h1e,h2e,hdm1,hdm2,hdm3)
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
-    diff = orbe[:mc.ncore,None] + orbe[None,:mc.ncore]
+    diff = mc.mo_energy[:mc.ncore,None] + mc.mo_energy[None,:mc.ncore]
     return _norm_to_energy(norm, h, -diff)
 
 
-def Sir(mc,orbe, dms, eris, verbose=None):
+def Sir(mc, dms, eris, verbose=None):
     #Subspace S_il^{(0)}
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
@@ -552,7 +552,7 @@ def Sir(mc,orbe, dms, eris, verbose=None):
          - numpy.einsum('rpiq,rabi,pqab->ir',h2e_v1,h2e_v2,a12)\
          - numpy.einsum('rpqi,raib,pqab->ir',h2e_v2,h2e_v1,a12)\
          + numpy.einsum('rpqi,rabi,pqab->ir',h2e_v2,h2e_v2,a13)
-    diff = orbe[:mc.ncore,None] - orbe[None,mc.ncore+mc.ncas:]
+    diff = mc.mo_energy[:mc.ncore,None] - mc.mo_energy[None,mc.ncore+mc.ncas:]
     return _norm_to_energy(norm, h, -diff)
 
 
@@ -572,9 +572,16 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         log = logger.Logger(mc.stdout, mc.verbose)
 
     time0 = (time.clock(), time.time())
-    #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
-    #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    logger.debug(mc, 'mc.fcisolver = %s', type(mc.fcisolver))
+
+    #By defaut, mc is canonicalized for the first root.
+    if mc.fcisolver.nroots > 1:
+        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=ci,verbose=log)
+
+    #if not useMPS:
+    #    mc.mo_coeff, _, orbe = mc.canonicalize(casdm1=dm1)
+    #else:
+    #    orbe = reduce(numpy.dot, (mc.mo_coeff.T, mc.get_fock(ci=ci), mc.mo_coeff)).diagonal()
+
 
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
         logger.info(mc, 'DMRG-NEVPT')
@@ -586,10 +593,6 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
                                            ci, ci, mc.ncas, mc.nelecas)
     dm4 = None
-
-    #hdm1 = make_hdm1(dm1)
-    #hdm2 = make_hdm2(dm1,dm2)
-    #hdm3 = make_hdm3(dm1,dm2,dm3,hdm1,hdm2)
 
     dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
            #'h1': hdm1, 'h2': hdm2, 'h3': hdm3
@@ -614,11 +617,6 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         dms['f3ac'] = f3ac
     time1 = log.timer('eri-4pdm contraction', *time1)
 
-    fake_eris = lambda: None
-    fake_eris.__dict__.update(eris.items())
-    orbe = mc.get_fock(ci=ci,eris=fake_eris).diagonal()
-    fake_eris = None
-
     if useMPS:
         fh5 = h5py.File('Perturbation_%d'%ci,'r')
         e_Si     =   fh5['Vi/energy'].value    
@@ -630,28 +628,28 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
 
     else:
-        norm_Sr   , e_Sr    = Sr(mc,ci,orbe, dms, eris)
+        norm_Sr   , e_Sr    = Sr(mc,ci, dms, eris)
         logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
         time1 = log.timer("space Sr (-1)'", *time1)
-        norm_Si   , e_Si    = Si(mc,ci,orbe, dms, eris)
+        norm_Si   , e_Si    = Si(mc,ci, dms, eris)
         logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
         time1 = log.timer("space Si (+1)'", *time1)
-    norm_Sijrs, e_Sijrs = Sijrs(mc,orbe, eris)
+    norm_Sijrs, e_Sijrs = Sijrs(mc, eris)
     logger.note(mc, "Sijrs (0)  , Norm = %.14f  E = %.14f", norm_Sijrs,e_Sijrs)
     time1 = log.timer('space Sijrs (0)', *time1)
-    norm_Sijr , e_Sijr  = Sijr(mc,orbe, dms, eris)
+    norm_Sijr , e_Sijr  = Sijr(mc, dms, eris)
     logger.note(mc, "Sijr  (+1) , Norm = %.14f  E = %.14f", norm_Sijr, e_Sijr)
     time1 = log.timer('space Sijr (+1)', *time1)
-    norm_Srsi , e_Srsi  = Srsi(mc,orbe, dms, eris)
+    norm_Srsi , e_Srsi  = Srsi(mc, dms, eris)
     logger.note(mc, "Srsi  (-1) , Norm = %.14f  E = %.14f", norm_Srsi, e_Srsi)
     time1 = log.timer('space Srsi (-1)', *time1)
-    norm_Srs  , e_Srs   = Srs(mc,orbe, dms, eris)
+    norm_Srs  , e_Srs   = Srs(mc, dms, eris)
     logger.note(mc, "Srs   (-2) , Norm = %.14f  E = %.14f", norm_Srs , e_Srs )
     time1 = log.timer('space Srs (-2)', *time1)
-    norm_Sij  , e_Sij   = Sij(mc,orbe, dms, eris)
+    norm_Sij  , e_Sij   = Sij(mc, dms, eris)
     logger.note(mc, "Sij   (+2) , Norm = %.14f  E = %.14f", norm_Sij , e_Sij )
     time1 = log.timer('space Sij (+2)', *time1)
-    norm_Sir  , e_Sir   = Sir(mc,orbe, dms, eris)
+    norm_Sir  , e_Sir   = Sir(mc, dms, eris)
     logger.note(mc, "Sir   (0)' , Norm = %.14f  E = %.14f", norm_Sir , e_Sir )
     time1 = log.timer("space Sir (0)'", *time1)
 
@@ -871,7 +869,7 @@ if __name__ == '__main__':
     print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    print(sc_nevpt(mc), -0.16978579267520275)
+    print(sc_nevpt(mc), -0.16978546152699392)
 
 
     mol = gto.Mole()
@@ -903,4 +901,4 @@ if __name__ == '__main__':
     mc.fcisolver.conv_tol = 1e-14
     mc.kernel()
     mc.verbose = 4
-    print(sc_nevpt(mc), -0.094164462034941498)
+    print(sc_nevpt(mc), -0.094164472700469196)

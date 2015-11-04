@@ -34,7 +34,7 @@ def format_aux_basis(mol, auxbasis='weigend'):
             pmol.make_env(mol._atom, pmol._basis, pmol._env)
     pmol.natm = len(pmol._atm)
     pmol.nbas = len(pmol._bas)
-    pmol._build = True
+    pmol._built = True
     logger.debug(mol, 'aux basis %s, num shells = %d, num cGTO = %d',
                  auxbasis, pmol.nbas, pmol.nao_nr())
     return pmol
