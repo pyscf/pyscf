@@ -41,6 +41,7 @@ Other Functionality:
   - use compensating charge (Gaussian)
     - compensating dipole (Gaussian)
   - Molecular XC grids
+- UHF code and UHF initial guess (specify mag. moment for AFM)
 - 1D and 2D Coulomb and Ewald
 - Exchange part of Fock matrix with k-points [J]
 - Gamma pt MP2
@@ -53,6 +54,7 @@ Other Functionality:
 - Ewald cutoff esp. for non-cubic cells
 
 Efficiency:
+- DFT KNumInt uses inefficient nr_vxc
 - K pt MPI loop
 - GTH ECP analytic integrals
 - Time-reversal symmetry
