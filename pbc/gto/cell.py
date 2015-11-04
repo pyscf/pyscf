@@ -278,19 +278,40 @@ class Cell(pyscf.gto.Mole):
                 The Ewald 'eta' and 'cut' parameters.
 
         '''
+        #  The following is taken from RM's Electronic Structure and Practical Methods
+        #  pg. 85, computing max from 2 * pi * N_x / |a_x|. Note we take the min to find the
+        #  maximum precision in a given direction
+        Gmax = min([2.*np.pi*self.gs[i]/lib.norm(self.lattice_vectors()[i,:]) for i in xrange(3)])
         invhT = scipy.linalg.inv(self.lattice_vectors().T)
-        Gmax = 2*np.pi*np.dot(invhT, self.gs)
-        # TODO: more rigorous bound for cells that have one
-        # very different dimension
-        Gmax = lib.norm(Gmax)/np.sqrt(3.)
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
         rcut = np.sqrt(-log_precision)/ew_eta
-        rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
-        #print "rlengths", rcut, rlengths
-        ew_cut = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+        ew_cut = self.get_Rbounding_sphere(rcut)
         return ew_eta, ew_cut
+
+    def get_Rbounding_sphere(self, rcut):
+        '''Finds all the lattice points within a sphere of rcut.  Useful when
+        needing to determine how far you need to sum real space lattice vectors
+        out given some cut-off distance rcut. See Richard Martin's Electronic
+        Structure Theory pg 85
+
+        Defines a parallelipiped given by -N_x <= n_x <= N_x, with x in [1,3]
+
+        Args:
+            self : instance of :class:`Cell`
+            rcut : real space cut-off for interaction
+
+        Returns:
+            cut  : ndarray of 3 ints defining N_x
+        '''
+        invhT = scipy.linalg.inv(self.lattice_vectors().T)
+        Gmat = invhT.T
+        n1   = np.ceil(lib.norm(Gmat[0,:])*rcut).astype(int)
+        n2   = np.ceil(lib.norm(Gmat[1,:])*rcut).astype(int)
+        n3   = np.ceil(lib.norm(Gmat[2,:])*rcut).astype(int)
+        cut  = np.array([n1, n2, n3])
+        return cut
 
     def get_Gv(self):
         '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
@@ -315,7 +336,7 @@ class Cell(pyscf.gto.Mole):
 
         Gv = 2*np.pi*np.dot(invhT,gxyz)
         return Gv.T
-        
+
     def get_SI(self):
         '''Calculate the structure factor for all atoms; see MH (3.34).
 
@@ -354,7 +375,7 @@ class Cell(pyscf.gto.Mole):
         '''
         # inv_h has reciprocal vectors as rows
         return 2*np.pi*np.dot(scaled_kpts, scipy.linalg.inv(self._h))
-        
+
     def copy(self):
         return copy(self)
 
