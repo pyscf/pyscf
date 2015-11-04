@@ -13,6 +13,14 @@ pi = numpy.pi
 
 def get_ovlp(mf, cell, kpts):
     '''Get overlap AO matrices at sampled k-points.
+
+    Args:
+        mf : KRHF or KRKS object
+        cell : Cell object
+        kpts : (nkpts, 3) ndarray
+
+    Returns:
+        ovlp_kpts : (nkpts, nao, nao) ndarray                    
     '''
     nkpts = kpts.shape[0]
     nao = cell.nao_nr()
@@ -28,9 +36,18 @@ def get_ovlp(mf, cell, kpts):
 def get_j(mf, cell, dm_kpts, kpts):
     '''Get Coulomb (J) AO matrices at sampled k-points.
 
-    kpts: ndarray [nkpts, 3]
+    Args:
+        mf : KRHF or KRKS object
+        cell : Cell object
+        dm_kpts : (nkpts, nao, nao) ndarray
+                  DM at each kpt
+        kpts : (nkpts, 3) ndarray
 
-    TODO: Note - changes mf object (mf._ecoul)
+    Returns: 
+        vj : (nkpts, nao, nao) ndarray
+        Coulomb matrix
+
+    Note: *changes mf object* (mf._ecoul)
     '''
     coulG = tools.get_coulG(cell)
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
@@ -75,11 +92,14 @@ def get_hcore(mf, cell, kpts):
     '''
     K pt version of get_hcore
 
-    kpts: ndarray [3, nkpts]
+    Args:
+        mf : KRKS or KRHF object
+        cell: Cell object
+        kpts: (nkpts, 3) ndarray
 
-    Returns
-        Core Hamiltonian at each kpt
-        ndarray[nao, nao, nkpts]
+    Returns:
+        hcore : (nkpts, nao, nao) ndarray
+                Core Hamiltonian at each kpt
     '''
     nao = cell.nao_nr()
     nkpts = kpts.shape[0]
@@ -95,10 +115,10 @@ def get_hcore(mf, cell, kpts):
 def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
               diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
     '''
-    K pt version of scf.hf.get_fock_
+    K pt version of pyscf.scf.hf.get_fock_
 
-    Main difference is that h1e_kpts is now dim [nao, nao, nkpts]
-    and the returned fock is dim [nao, nao, nkpts]
+    Returns:
+       fock : (nkpts, nao, nao) ndarray
     '''
     fock = numpy.zeros_like(h1e_kpts)
     nkpts = mf.kpts.shape[0]
@@ -114,8 +134,8 @@ class KRHF(pbchf.RHF):
     RHF class with k points
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
-    now have an additional last dimension for the k pts, e.g.
-    mo_coeff is dim [nao, nao, nkpts]
+    now have an additional first dimension for the k pts, e.g.
+    mo_coeff is dim [nkpts, nao, nao]
     '''
     def __init__(self, cell, kpts):
         pbchf.RHF.__init__(self, cell,kpts)
@@ -126,7 +146,6 @@ class KRHF(pbchf.RHF):
         if cell.ke_cutoff is not None:
             raise RuntimeError("ke_cutoff not supported with K pts yet")
 
-    # TODO: arglist must use "mol" because of KW args used in kernel fn in hf.py
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
 
@@ -159,7 +178,6 @@ class KRHF(pbchf.RHF):
         if kpts is None: kpts=self.kpts
         return get_hcore(self, cell, kpts)
 
-    # this function should look the same as scf.hf.SCF.get_fock_
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
               diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
 
@@ -176,9 +194,20 @@ class KRHF(pbchf.RHF):
     def get_veff(self, cell=None, dm=None, dm_last=None,
                  vhf_last=0, hermi=1):
         '''
-        Note: get_veff is often called with kwargs, we have to use here
-         the same names as in pyscf.scf.hf. Note, however, that
-         the input dm, dm_last should more accurately be dm_kpts, dm_last_kpts
+        Args:
+            cell : Cell object
+
+            dm : (nkpts, nao, nao) ndarray
+                dm *at each k-point*
+                *Note* because get_veff is often called in pyscf.scf.hf
+                with kwargs, we have to use the same argument name as in
+                pyscf.scf.hf. 
+
+            dm_last : (nkpts, nao, nao) ndarray
+                previous dm *at each k-point*
+
+            vhf_last: (nkpts, nao, nao) ndarray
+                previous vhf *at each k-point*
         '''
         raise NotImplementedError
 
@@ -260,9 +289,10 @@ class KRHF(pbchf.RHF):
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
         '''
-        One-particle DM
+        DM at each kpt.
 
-        TODO: check complex conjugation in scf.hf
+        Returns:
+            dm_kpts : (nkpts, nao, nao) ndarray
         '''
         if mo_coeff_kpts is None:
             mo_coeff_kpts = self.mo_coeff # Note: this is actually "self.mo_coeff_kpts"
@@ -330,11 +360,13 @@ class KRKS(KRHF):
 
     def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=0, hermi=1):
         '''
-        Returns:
-             effective potential corresponding
-             to an input DM at each kpt.
+        Args:
+             See kscf.KRHF.get_veff
 
-        See also: kscf.RHF.get_veff
+        Returns:
+             vhf : (nkpts, nao, nao) ndarray
+
+             Effective potential corresponding to input DM at each kpt.
         '''
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
@@ -362,8 +394,10 @@ class KRKS(KRHF):
 
 class _KNumInt(pyscf.dft.numint._NumInt):
     '''
-    DFT KNumInt class: generalization for a multiple k-pts, and
-    periodic images
+    DFT KNumInt class: 
+
+    Generalization of standard NumInt class for a multiple k-pts, 
+    and periodic images.
     '''
     def __init__(self, kpts=None):
         pyscf.dft.numint._NumInt.__init__(self)
@@ -372,7 +406,9 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     def eval_ao(self, mol, coords, isgga=False, relativity=0, bastart=0,
                 bascount=None, non0tab=None, verbose=None):
         '''
-        Returns shape (k, N, nao) (ao at each k point)
+        Returns:
+            ao_kpts: (k, N, nao) ndarray 
+                     AO values at each k pt
         '''
         nkpts = self.kpts.shape[0]
         ngs = coords.shape[0]
@@ -389,7 +425,15 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     def eval_rho(self, mol, ao_kpts, dm_kpts, non0tab=None,
              isgga=False, verbose=None):
         '''
-        Modified to take in (k, N, nao) ao vector, and dm at each kpt
+        Args:
+           mol : Mole or Cell object
+           ao_kpts : (k, N, nao) ndarray
+                     AO values at each kpoint
+           dm_kpts: (k, nao, nao) ndarray
+                     DM at each kpt
+
+        Returns:
+           rhoR : (N, ) ndarray
         '''
         nkpts = self.kpts.shape[0]
         ngs = ao_kpts.shape[1]
@@ -430,8 +474,6 @@ class _KNumInt(pyscf.dft.numint._NumInt):
                                     rho, vrho, vsigma, non0tab,
                                     isgga, verbose)
         return mat
-
-
 
 
 
