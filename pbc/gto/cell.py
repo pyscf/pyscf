@@ -279,10 +279,10 @@ class Cell(pyscf.gto.Mole):
 
         '''
         #  The following is taken from RM's Electronic Structure and Practical Methods
-        #  pg. 85, computing max from 2 * pi * N_x / |a_x|. Note we take the min to find the
-        #  maximum precision in a given direction
+        #  pg. 85, computing max G in each direction from 2 * pi * N_x / |a_x|.
+        #  The least precision is found when Gmax is lowest, so we set our eta based on
+        #  the min to get the desired precision in *all* directions
         Gmax = min([2.*np.pi*self.gs[i]/lib.norm(self.lattice_vectors()[i,:]) for i in xrange(3)])
-        invhT = scipy.linalg.inv(self.lattice_vectors().T)
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
