@@ -3,15 +3,16 @@ Currently working:
 - K points: DFT
 
 Needs testing:
-- Band structure (from Gamma pt) - compare to QE
-- Shifted Gamma pt calc (e.g. at Baldereschi pt)
+- Band structure (from Gamma pt) - compare to QE [TCB]
+- Shifted Gamma pt calc (e.g. at Baldereschi pt) [TCB]
+- l=2 PP projectors (i.e. 3rd row) [TCB]
 
 Long list of things to do!                                       
  
 Code doc and cleaning:
 - Clean mf.grad() [Q]
 - PP and ECP unification (e.g. init guess routines check nelec_ecp)
-- Cell pack fn [T]
+- Cell pack fn [Q]
 - Check "checkpt" works
 - Doc KSCF class
 - Test infrastructure and examples for
@@ -19,10 +20,12 @@ Code doc and cleaning:
   - band structure
   - Gamma pt HFX
 - Initial guess: check which ones are correct for PBC / PP / KSCF
-- Change kpt shape so that it does not always get reshaped? [G]
+X Change kpt shape so that it does not always get reshaped? [TCB]
 
 Ease of calc:
 - Test energy_cutoff -> gs fn in tools/pbc.py
+- Add dtype member variable, complex128 default, can be set to real64 for 
+  gamma pt, special kpts, etc. [TCB]
 - Better cutoff fn for lattice sums (from integral Schwartz condition)
 - ASE DFT calculator interface
 
