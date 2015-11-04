@@ -3,7 +3,7 @@ Currently working:
 - K points: DFT
 
 Needs testing:
-- Band structure (from Gamma pt) 
+- Band structure (from Gamma pt) - compare to QE
 - Shifted Gamma pt calc (e.g. at Baldereschi pt)
 
 Long list of things to do!                                       
@@ -34,11 +34,15 @@ SCF convergence:
 Other Functionality:
 - q->0 term for (ia|jb) integral, by finite difference q calc [J]
 - Band structure for K pt calc [T]
+  - Grid based veff or
+  - Grid based general <p(k)|q(k')> ovlp 
 - Poisson equation [Q]
   - use compensating charge (uniform)
   - use compensating charge (Gaussian)
     - compensating dipole (Gaussian)
   - Molecular XC grids
+- UHF code and UHF initial guess (specify mag. moment for AFM)
+- 1D and 2D Coulomb and Ewald
 - Exchange part of Fock matrix with k-points [J]
 - Gamma pt MP2
   - check q->0, compare against VASP / CP2K 
@@ -47,8 +51,10 @@ Other Functionality:
   - Gamma pt
   - General spin-orb -> spin-orb -> restricted
   - Kpt
+- Ewald cutoff esp. for non-cubic cells
 
 Efficiency:
+- DFT KNumInt uses inefficient nr_vxc
 - K pt MPI loop
 - GTH ECP analytic integrals
 - Time-reversal symmetry

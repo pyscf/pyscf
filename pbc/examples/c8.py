@@ -47,6 +47,6 @@ if __name__ == '__main__':
     main(n)
 
 '''
->>> python c8.py 10
-converged SCF energy = -44.8811199403019
+>>> python c8.py 12
+converged SCF energy = -44.8805127845637
 '''

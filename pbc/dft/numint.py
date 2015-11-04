@@ -14,6 +14,9 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         coords : (nx*ny*nz, 3) ndarray
             The real-space grid point coordinates.
 
+        kpt : (3,) ndarray
+            The k-point corresponding to the crystal AO.
+
     Returns:
         aoR : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
             The value of the AO crystal orbitals on the real-space grid. If
@@ -25,7 +28,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
 
     '''  
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
         dtype = np.float64
     else:
         dtype = np.complex128
@@ -46,17 +49,15 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     # TODO: this is 1j, not -1j; check for band_ovlp convention
     for T in Ts:
         L = np.dot(cell._h, T)
-        #print "factor", np.exp(1j*np.dot(kpt.T,L))
-        aoR += (np.exp(1j*np.dot(kpt.T,L)) * 
+        #print "factor", np.exp(1j*np.dot(kpt,L))
+        aoR += (np.exp(1j*np.dot(kpt,L)) * 
                 pyscf.dft.numint.eval_ao(cell, coords-L,
                                          isgga, relativity, 
                                          bastart, bascount, 
                                          non0tab, verbose))
 
     if cell.ke_cutoff is not None:
-
-        Gv=cell.Gv
-        ke = .5* np.einsum('ri,ri->i', Gv, Gv)
+        ke = 0.5*np.einsum('gi,gi->g', cell.Gv, cell.Gv)
         ke_mask = ke < cell.ke_cutoff
 
         aoG = np.zeros_like(aoR)
@@ -343,7 +344,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
 def get_ovlp(cell, kpt=None, grids=None):
     from pyscf.pbc.dft import gen_grid
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
     if grids is None:
         grids = gen_grid.BeckeGrids(cell)
         grids.build_()

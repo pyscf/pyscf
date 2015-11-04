@@ -44,21 +44,6 @@ class KnowValues(unittest.TestCase):
         e1 = run_lda(atom, L, 8)
         self.assertAlmostEqual(e1, -1.93426844243467, 8)
 
-    def test_si8(self):
-        atom = '''
-            Si    0.000000000    0.000000000    0.000000000;
-            Si    0.000000000    2.715348700    2.715348700;
-            Si    2.715348700    2.715348700    0.000000000;
-            Si    2.715348700    0.000000000    2.715348700;
-            Si    4.073023100    1.357674400    4.073023100;
-            Si    1.357674400    1.357674400    1.357674400;
-            Si    1.357674400    4.073023100    4.073023100;
-            Si    4.073023100    4.073023100    1.357674400
-        '''
-        L = 5.430697500 
-        e1 = run_lda(atom, L, 10)
-        self.assertAlmostEqual(e1, -31.0816167311604, 8)
-
     def test_c8(self):
         atom = '''
             C    0.           0.           0.        ;
@@ -75,5 +60,5 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -44.8811199403019, 8)
 
 if __name__ == '__main__':
-    print("Full Tests for pbc.gto.pseudo.pp")
+    print("Full Tests for pbc.gto.pseudo")
     unittest.main()

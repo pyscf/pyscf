@@ -40,7 +40,7 @@ def get_vlocG(cell):
     Returns:
         (natm, ngs) ndarray
     '''
-    Gvnorm = lib.norm(cell.Gv,axis=0)
+    Gvnorm = lib.norm(cell.Gv, axis=1)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
@@ -86,7 +86,7 @@ def get_projG(cell, kpt=None):
          - projs[atm][l][m][i][ngs]
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
     return get_gth_projG(cell, cell.Gv+kpt) 
 
 def get_gth_projG(cell, Gvs):
@@ -181,10 +181,10 @@ def Ylm(l,m,theta,phi):
     return scipy.special.sph_harm(m,l,phi,theta)
 
 def cart2polar(rvec):
-    # The columns of rvec are the 3-component vectors
-    # i.e. rvec is 3 x N
-    x,y,z = rvec
-    r = lib.norm(rvec,axis=0)
+    # The rows of rvec are the 3-component vectors
+    # i.e. rvec is N x 3
+    x,y,z = rvec.T
+    r = lib.norm(rvec, axis=1)
     # theta is the polar angle, 0 < theta < pi
     # catch possible 0/0
     theta = np.arccos(z/(r+1e-8))

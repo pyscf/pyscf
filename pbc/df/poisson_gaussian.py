@@ -69,12 +69,12 @@ def get_j(cell, dm, auxcell):
     return vj
 
 def eval_rhok(rho, cell):
-    rhok = numpy.zeros(cell.Gv.T.shape[0], dtype=numpy.complex)
-    k2 = numpy.einsum('ij,ij->i', cell.Gv.T, cell.Gv.T)
+    rhok = numpy.zeros(cell.Gv.shape[0], dtype=numpy.complex)
+    k2 = numpy.einsum('ij,ij->i', cell.Gv, cell.Gv)
     for ib in range(cell.nbas):
         e = cell.bas_exp(ib)[0]
         r = cell.bas_coord(ib)
-        si = numpy.exp(-1j*numpy.einsum('ij,j->i', cell.Gv.T, r))
+        si = numpy.exp(-1j*numpy.einsum('ij,j->i', cell.Gv, r))
         rhok += rho[ib] * si * numpy.exp(-k2/(4*e))
     return rhok
 

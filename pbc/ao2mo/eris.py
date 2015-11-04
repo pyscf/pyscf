@@ -109,7 +109,7 @@ def get_mo_eri(cell, mo_coeff12, mo_coeff34):
 
 def get_mo_pairs_G_kpts(cell, mo_coeff_kpts):
     nkpts = mo_coeff_kpts.shape[0]
-    ngs = cell.Gv.shape[1]
+    ngs = cell.Gv.shape[0]
     nmo = mo_coeff_kpts.shape[2]
 
     mo_pairs_G_kpts = np.zeros([nkpts, nkpts, ngs, nmo*nmo], np.complex128)

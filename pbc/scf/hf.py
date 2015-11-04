@@ -25,7 +25,7 @@ def get_hcore(cell, kpt=None):
 
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     if cell.pseudo:
         hcore = get_pp(cell, kpt) + get_jvloc_G0(cell, kpt)
@@ -47,7 +47,7 @@ def get_nuc(cell, kpt=None):
 
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
@@ -66,7 +66,7 @@ def get_pp(cell, kpt=None):
 
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
@@ -83,7 +83,7 @@ def get_pp(cell, kpt=None):
     # vppnonloc in reciprocal space
     aokplusG = np.empty(aoR.shape, np.complex128)
     for i in range(nao):
-        aokplusG[:,i] = tools.fft(aoR[:,i]*np.exp(-1j*np.dot(coords,kpt)[:,0]), 
+        aokplusG[:,i] = tools.fft(aoR[:,i]*np.exp(-1j*np.dot(kpt,coords.T)), 
                                   cell.gs)
     ngs = aokplusG.shape[0]
 
@@ -114,7 +114,7 @@ def get_pp(cell, kpt=None):
 
 #     '''
 #     if kpt is None:
-#         kpt = np.zeros([3,1])
+#         kpt = np.zeros(3)
     
 #     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
 #     # aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
@@ -123,7 +123,7 @@ def get_pp(cell, kpt=None):
 #     ngs = aoR.shape[0]  # because we requested isgga, aoR.shape[0] = 4
 
 #     Gv=cell.Gv
-#     G2=np.einsum('ji,ji->i', Gv+kpt, Gv+kpt)
+#     G2=np.einsum('gi,gi->g', Gv+kpt, Gv+kpt)
 
 #     aoG=np.empty(aoR.shape, np.complex128)
 #     TaoG=np.empty(aoR.shape, np.complex128)
@@ -150,7 +150,7 @@ def get_t(cell, kpt=None):
 
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
     
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
@@ -168,18 +168,12 @@ def get_ovlp(cell, kpt=None):
 
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
     
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    # print "aoR"
-    # print aoR
-    # for i in range(aoR.shape[1]):
-    #     print "AO", i, list(kpt.flat)
-    #     print aoR[:,i]
     ngs = aoR.shape[0]
 
-    #s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR).real
     s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
     return s
     
@@ -188,7 +182,7 @@ def get_j(cell, dm, kpt=None):
 
     '''
     if kpt is None:
-        kpt = np.zeros([3,1])
+        kpt = np.zeros(3)
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
@@ -203,9 +197,6 @@ def get_j(cell, dm, kpt=None):
     vR = tools.ifft(vG, cell.gs)
 
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
-    # print "dtype", aoR.dtype, vj.dtype
-    # print "HACK HACK J"
-    # return np.zeros_like(vj)
     return vj
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
@@ -323,7 +314,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
     coulG = tools.get_coulG(cell)
-    absG2 = np.einsum('ij,ij->j',np.conj(cell.Gv),cell.Gv)
+    absG2 = np.einsum('gi,gi->g', cell.Gv, cell.Gv)
 
     ZSIG2 = np.abs(ZSI)**2
     expG2 = np.exp(-absG2/(4*ew_eta**2))
@@ -350,9 +341,11 @@ class RHF(pyscf.scf.hf.RHF):
         self.mol_ex = False
 
         if kpt is None:
-            kpt = np.array([0,0,0])
-
-        self.kpt = np.array([0,0,0])
+            kpt = np.zeros(3)
+        #TODO: Garnet, check this change?
+        # i.e. self.kpt should be the passed kpt and not always gamma.
+        #self.kpt = np.array([0,0,0])
+        self.kpt = kpt 
 
         if analytic_int == None:
             self.analytic_int = False
@@ -375,9 +368,9 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self.analytic_int:
             print "USING ANALYTIC INTS"
-            return scfint.get_hcore(cell, np.reshape(kpt, (3,1)))
+            return scfint.get_hcore(cell, kpt)
         else:
-            return get_hcore(cell, np.reshape(kpt, (3,1)))
+            return get_hcore(cell, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -385,15 +378,15 @@ class RHF(pyscf.scf.hf.RHF):
         
         if self.analytic_int:
             print "USING ANALYTIC INTS"
-            return scfint.get_ovlp(cell, np.reshape(kpt, (3,1)))
+            return scfint.get_ovlp(cell, kpt)
         else:
-            return get_ovlp(cell, np.reshape(kpt, (3,1)))
+            return get_ovlp(cell, kpt)
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        return get_j(cell, dm, np.reshape(kpt, (3,1)))
+        return get_j(cell, dm, kpt)
 
     def get_jk_(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
@@ -431,9 +424,8 @@ class RHF(pyscf.scf.hf.RHF):
         return vj, vk
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
-        e_elec=self.energy_elec(dm, h1e, vhf)[0]
-        #print "ELEC ENERGY", e_elec, np.dot(dm.ravel(),h1e.ravel())
-        return self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
+        etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
+        return etot.real
     
     def ewald_nuc(self):
         return ewald(self.cell, self.cell.ew_eta, self.cell.ew_cut)

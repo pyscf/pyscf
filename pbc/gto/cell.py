@@ -302,7 +302,7 @@ class Cell(pyscf.gto.Mole):
             self : instance of :class:`Cell`
 
         Returns:
-            Gv : (3, ngs) ndarray of floats
+            Gv : (ngs, 3) ndarray of floats
                 The array of G-vectors.
 
         '''
@@ -314,7 +314,7 @@ class Cell(pyscf.gto.Mole):
         gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange)).T
 
         Gv = 2*np.pi*np.dot(invhT,gxyz)
-        return Gv
+        return Gv.T
         
     def get_SI(self):
         '''Calculate the structure factor for all atoms; see MH (3.34).
@@ -322,18 +322,15 @@ class Cell(pyscf.gto.Mole):
         Args:
             self : instance of :class:`Cell`
 
-            Gv : (3, ngs) ndarray of floats
-                The array of G-vectors.
-
         Returns:
             SI : (natm, ngs) ndarray, dtype=np.complex128
                 The structure factor for each atom at each G-vector.
 
         '''
-        ngs = self.Gv.shape[1]
+        ngs = self.Gv.shape[0]
         SI = np.empty([self.natm, ngs], np.complex128)
         for ia in range(self.natm):
-            SI[ia,:] = np.exp(-1j*np.dot(self.Gv.T, self.atom_coord(ia)))
+            SI[ia,:] = np.exp(-1j*np.dot(self.Gv, self.atom_coord(ia)))
         return SI
 
     def lattice_vectors(self):
