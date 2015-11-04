@@ -3,6 +3,7 @@ import scipy
 from pyscf import gto
 import pyscf.pbc.gto as pgto
 import pyscf.pbc.scf as pscf
+import pyscf.pbc.dft as pdft
 from pyscf.pbc.df import df
 
 
@@ -35,7 +36,6 @@ def get_j(cell, dm, auxcell):
     vj = np.einsum('ijk,k->ij', c3, v1)
 
 # remove the contribution to Coulomb energy from a constant C in potential
-# E_coul = \int vj(rho-rho0) = \int (vj+C)(rho-rho0)
     vj += (np.dot(v1, rho) - (vj*dm).sum())/nelec * ovlp
 
     return vj
@@ -47,6 +47,47 @@ def genbas(beta, bound0=(1e11,1e-8), l=0):
         basis.append([l, [e,1]])
         e /= beta
     return basis
+
+def get_nuc(cell, auxcell):
+    r'''Solving Poisson equation for Nuclear attraction
+
+    \nabla^2|g>V_g = rho_nuc - C
+    V_pq = \sum_g <pq|g> V_g
+    '''
+
+    idx = []
+    ip = 0
+# normalize aux basis
+    for ib in range(auxcell.nbas):
+        l = auxcell.bas_angular(ib)
+        if l == 0:
+            e = auxcell.bas_exp(ib)[0]
+            ptr = auxcell._bas[ib,gto.PTR_COEFF]
+            auxcell._env[ptr] = 1/np.sqrt(4*np.pi)/gto.mole._gaussian_int(2,e)
+            idx.append(ip)
+            ip += 1
+        else:
+            ip += 2*l+1
+
+    # \sum_A \int ao Z_A delta(r_A)
+    coords = np.asarray([cell.atom_coord(ia) for ia in range(cell.natm)])
+    chargs =-np.asarray([cell.atom_charge(ia) for ia in range(cell.natm)])
+    rho = np.dot(chargs, pdft.numint.eval_ao(auxcell, coords))
+    rho[idx] += cell.nelectron/cell.vol
+
+    c2 = pscf.scfint.get_t(auxcell)
+    v1 = np.linalg.solve(c2, 2*np.pi*rho)
+
+    nao = cell.nao_nr()
+    c3 = df.aux_e2(cell, auxcell, 'cint3c1e_sph').reshape(nao,nao,-1)
+    vnuc = np.einsum('ijk,k->ij', c3, v1)
+
+# remove constant from potential. The constant contributes to V(G=0)
+    ovlp = pscf.scfint.get_ovlp(cell)
+    vnuc -= v1[idx].sum()/cell.vol * ovlp
+
+    return vnuc
+
 
 
 if __name__ == '__main__':
@@ -66,13 +107,11 @@ if __name__ == '__main__':
     cell.build()
     mf = pdft.RKS(cell)
     mf.xc = 'LDA,VWN'
-    auxbasis = {'He': genbas(1.8, (100.,0.1), 0)
+    auxbasis = {'He': genbas(1.8, (100.,.05), 0)
                      +genbas(2. , (10.,0.3), 1)
                      +genbas(2. , (10.,0.3), 2)}
-    #auxbasis = {'He': df.genbas(2., 1.8, (100.,0.1), 0)
-    #                 +df.genbas(2., 2. , (10.,0.1), 1)
-    #                 +df.genbas(2., 2. , (10.,0.1), 2)}
     auxcell = df.format_aux_basis(cell, auxbasis)
     mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
+    mf.get_hcore = lambda cell, *args: get_nuc(cell, auxcell) + pscf.hf.get_t(cell)
     e1 = mf.scf()
     print e1 # ~ -4.32022187118
