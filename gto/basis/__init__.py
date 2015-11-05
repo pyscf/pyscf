@@ -148,7 +148,11 @@ def load(filename_or_basisname, symb):
 
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
-        return parse_nwchem.load(filename_or_basisname, symb)
+        try:
+            return parse_nwchem.load(filename_or_basisname, symb)
+        except RuntimeError:
+            with open(filename_or_basisname, 'r') as fin:
+                return parse_nwchem.parse(fin.read())
 
     name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
     basmod = ALIAS[name]
@@ -169,7 +173,11 @@ def load_ecp(filename_or_basisname, symb):
 
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
-        return parse_nwchem.load_ecp(filename_or_basisname, symb)
+        try:
+            return parse_nwchem.load_ecp(filename_or_basisname, symb)
+        except RuntimeError:
+            with open(filename_or_basisname, 'r') as fin:
+                return parse_nwchem.parse_ecp(fin.read())
 
     name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
     basmod = ALIAS[name]
