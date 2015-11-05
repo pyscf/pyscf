@@ -13,8 +13,7 @@ def test_ewald():
     cell.h = np.array([[Lx,0.5,0.5],
                        [0.5,Ly,0.5],
                        [0.5,0.5,Lz]])
-    #  Note here we use a much larger gs than in the earlier test
-    cell.gs = np.array([10,10,10])
+    cell.gs = np.array([20,20,20])
     cell.nimgs = [1,1,1]
 
     cell.atom.extend([['He', (1, 0.5*Ly, 0.5*Lz)],
@@ -30,12 +29,16 @@ def test_ewald():
 
     ew_cut = (20,20,20)
     for ew_eta in [0.05, 0.07, 0.1, 0.3]:
-        print pbchf.ewald(cell, ew_eta, ew_cut) # 4.53091146254
+        print pbchf.ewald(cell, ew_eta, ew_cut) # 4.53091146255
 
     for precision in [1.e-3, 1.e-5, 1.e-7, 1.e-9]:
         ew_eta0, ew_cut0 = cell.get_ewald_params(precision)
         print "precision", precision, ew_eta0, ew_cut0
         print pbchf.ewald(cell, ew_eta0, ew_cut0)
+        # for 1e-3 precision : 4.5308693917
+        # for 1e-5 precision : 4.53091132442
+        # for 1e-7 precision : 4.53091146197
+        # for 1e-9 precision : 4.53091146254
 
 if __name__ == '__main__':
     test_ewald()
