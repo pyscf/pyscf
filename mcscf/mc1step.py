@@ -672,8 +672,6 @@ class CASSCF(casci.CASCI):
         chkfile : str
             Checkpoint file to save the intermediate orbitals during the CASSCF optimization.
             Default is the checkpoint file of mean field object.
-        natorb : bool
-            Whether to restore the natural orbital in CAS space.  Default is not.
         ci_response_space : int
             subspace size to solve the CI vector response.  Default is 3.
         callback : function(envs_dict) => None
@@ -756,7 +754,6 @@ class CASSCF(casci.CASCI):
         self.keyframe_trust_region = 0.25
         self.chkfile = mf.chkfile
         self.ci_response_space = 4
-        self.natorb = False
         self.callback = None
 
         self.fcisolver.max_cycle = 50
@@ -798,7 +795,6 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
         log.info('chkfile = %s', self.chkfile)
-        log.info('natorb = %s', self.natorb)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, pyscf.lib.current_memory()[0])
         log.debug('grad_update_dep %d', self.grad_update_dep)

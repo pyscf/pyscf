@@ -17,3 +17,6 @@
 * Geometry optimizer
 
 * Periodic boundary condition
+
+------------------------------------------------
+* Fix fci.direct_uhf.make_rdm12s if there is no beta electron

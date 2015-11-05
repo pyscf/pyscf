@@ -350,6 +350,11 @@ def parse_xc_name(xc_name='LDA,VWN'):
     else:
         x_name, c_name = xc_name.upper(), ''
 
+    if x_name.isdigit():
+        x_name = int(x_name)
+    if c_name.isdigit():
+        c_name = int(c_name)
+
     if _is_hybrid_xc(x_name):
         return XC_CODES['XC_HYB_GGA_XC_'+x_name], 0
     if x_name in ('TETER93',):
@@ -365,7 +370,9 @@ def parse_xc_name(xc_name='LDA,VWN'):
 
     else:
 
-        if x_name == 'LDA':
+        if isinstance(x_name, int):
+            x_code = x_name
+        elif x_name == 'LDA':
             x_code = XC_CODES['XC_LDA_X']
         elif x_name in ('2D', '1D'):
             x_code = XC_CODES['XC_LDA_X_'+x_name]
@@ -390,7 +397,9 @@ def parse_xc_name(xc_name='LDA,VWN'):
         else:
             raise KeyError('Unknown exchange functional %s' % x_name)
 
-        if c_name in ('WIGNER' , 'RPA'     , 'HL'      , 'GL'      , 'XALPHA' ,
+        if isinstance(c_name, int):
+            c_code = c_name
+        elif c_name in ('WIGNER' , 'RPA'     , 'HL'      , 'GL'      , 'XALPHA' ,
                       'VWN'    , 'VWN_RPA' , 'PZ'      , 'PZ_MOD'  , 'OB_PZ'  ,
                       'PW'     , 'PW_MOD'  , 'OB_PW'   , '2D_AMGB' , '2D_PRM' ,
                       'vBH'    , '1D_CSC'  , 'ML1'     , 'ML2'     , 'GOMBAS' ,
