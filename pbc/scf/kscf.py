@@ -15,14 +15,12 @@ def get_ovlp(mf, cell, kpts):
     '''Get the overlap AO matrices at sampled k-points.
 
     Args:
-        mf : instance of :class:`KRHF` or `KRKS`
-        cell : instance of :class:`Cell`
         kpts : (nkpts, 3) ndarray
 
     Returns:
         ovlp_kpts : (nkpts, nao, nao) ndarray                    
     '''
-    nkpts = kpts.shape[0]
+    nkpts = len(kpts)
     nao = cell.nao_nr()
     ovlp_kpts = np.zeros((nkpts,nao,nao), np.complex128)
     for k in range(nkpts):
@@ -37,15 +35,13 @@ def get_hcore(mf, cell, kpts):
     '''Get the core Hamiltonian AO matrices at sampled k-points.
 
     Args:
-        mf : instance of :class:`KRHF` or `KRKS`
-        cell : instance of :class:`Cell`
         kpts : (nkpts, 3) ndarray
 
     Returns:
         hcore : (nkpts, nao, nao) ndarray
     '''
     nao = cell.nao_nr()
-    nkpts = kpts.shape[0]
+    nkpts = len(kpts)
     hcore = np.zeros((nkpts, nao, nao), np.complex128)
     for k in range(nkpts):
         kpt = kpts[k,:]
@@ -59,8 +55,6 @@ def get_j(mf, cell, dm_kpts, kpts):
     '''Get the Coulomb (J) AO matrices at sampled k-points.
 
     Args:
-        mf : instance of :class:`KRHF` or `KRKS`
-        cell : instance of :class:`Cell`
         dm_kpts : (nkpts, nao, nao) ndarray
             Density matrix at each k-point
         kpts : (nkpts, 3) ndarray
@@ -70,21 +64,21 @@ def get_j(mf, cell, dm_kpts, kpts):
 
     Note: This changes the mf object (mf._ecoul)
     '''
-    coulG = tools.get_coulG(cell)
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    nkpts = kpts.shape[0]
-
-    ngs = coords.shape[0]
+    nkpts = len(kpts)
+    ngs = len(coords)
     nao = cell.nao_nr()
+
+    coulG = tools.get_coulG(cell)
+
     aoR_kpts = np.zeros((nkpts, ngs, nao), np.complex128)
     rhoR = np.zeros(ngs)
-
     for k in range(nkpts):
         kpt = kpts[k,:]
         aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
         rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(cell, aoR_kpts[k,:,:], dm_kpts[k,:,:])
-
     rhoG = tools.fft(rhoR, cell.gs)
+
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
 
@@ -97,8 +91,8 @@ def get_j(mf, cell, dm_kpts, kpts):
         # TODO: energy is normally evaluated in dft.rks.get_veff
         ecoul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:])
     if abs(ecoul.imag > 1.e-12):
-        raise RuntimeError("Coulomb energy has imaginary part, 
-                            something is wrong!", ecoul.imag)
+        raise RuntimeError("Coulomb energy has imaginary part, " 
+                           "something is wrong!", ecoul.imag)
     mf._ecoul = ecoul.real
     return vj_kpts
 
@@ -112,7 +106,7 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
        fock : (nkpts, nao, nao) ndarray
     '''
     fock = np.zeros_like(h1e_kpts)
-    nkpts = mf.kpts.shape[0]
+    nkpts = len(mf.kpts)
     fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
                                vhf_kpts, dm_kpts,
                                cycle, adiis, diis_start_cycle, 
@@ -143,10 +137,11 @@ class KRHF(pbchf.RHF):
             return self.init_guess_by_1e(cell)
         else:
             dm = pyscf.scf.hf.get_init_guess(cell, key)
-            nao = dm.shape[0]
-            nkpts = self.kpts.shape[0]
+            nao = cell.nao_nr()
+            nkpts = len(self.kpts)
             dm_kpts = np.zeros((nkpts,nao,nao))
 
+            # Use the molecular "unit cell" dm for each k-point
             for k in range(nkpts):
                 dm_kpts[k,:,:] = dm
 
@@ -208,7 +203,7 @@ class KRHF(pbchf.RHF):
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
-        nkpts = self.kpts.shape[0]
+        nkpts = len(self.kpts)
 
         # make this closer to the non-kpt one
         grad_kpts = np.empty(0,)
@@ -220,7 +215,7 @@ class KRHF(pbchf.RHF):
         return grad_kpts
 
     def eig(self, h_kpts, s_kpts):
-        nkpts = h_kpts.shape[0]
+        nkpts = len(h_kpts)
         nao = h_kpts.shape[1]
         eig_kpts = np.zeros((nkpts,nao))
         mo_coeff_kpts = np.zeros_like(h_kpts)
@@ -238,7 +233,7 @@ class KRHF(pbchf.RHF):
         if mo_energy_kpts is None: mo_energy_kpts = self.mo_energy_kpts
         mo_occ_kpts = np.zeros_like(mo_energy_kpts)
 
-        nkpts, nao = mo_coeff_kpts.shape
+        nkpts, nao = mo_coeff_kpts.shape[:2]
         nocc = (self.cell.nelectron * nkpts) // 2
 
         # Sort eigs in each kpt
@@ -285,7 +280,7 @@ class KRHF(pbchf.RHF):
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
             mo_occ_kpts = self.mo_occ 
 
-        nkpts = mo_occ_kpts.shape[0]
+        nkpts = len(mo_occ_kpts)
         dm_kpts = np.zeros_like(mo_coeff_kpts)
         for k in range(nkpts):
             dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:]).T.conj()
@@ -343,8 +338,8 @@ class KRKS(KRHF):
 
         Returns:
              vhf : (nkpts, nao, nao) ndarray
-
-             Effective potential corresponding to input DM at each kpt.
+                Effective potential corresponding to input density matrix at
+                each k-point
         '''
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
@@ -360,7 +355,7 @@ class KRKS(KRHF):
         if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
         if dm_kpts is None: dm_kpts = self.make_rdm1()
 
-        nkpts = dm_kpts.shape[0]
+        nkpts = len(dm_kpts)
         e1 = 0.
         for k in range(nkpts):
             e1 += 1./nkpts*np.einsum('ij,ji', h1e_kpts[k,:,:], dm_kpts[k,:,:]).real
@@ -372,10 +367,10 @@ class KRKS(KRHF):
 
 class _KNumInt(pyscf.dft.numint._NumInt):
     '''
-    DFT KNumInt class: 
+    DFT KNumInt class
 
-    Generalization of standard NumInt class for a multiple k-pts, 
-    and periodic images.
+    Generalization of standard NumInt class for multiple k-points and 
+    periodic images.
     '''
     def __init__(self, kpts=None):
         pyscf.dft.numint._NumInt.__init__(self)
@@ -385,11 +380,11 @@ class _KNumInt(pyscf.dft.numint._NumInt):
                 bascount=None, non0tab=None, verbose=None):
         '''
         Returns:
-            ao_kpts: (k, N, nao) ndarray 
-                     AO values at each k pt
+            ao_kpts: (nkpts, ngs, nao) ndarray 
+                AO values at each k-point
         '''
-        nkpts = self.kpts.shape[0]
-        ngs = coords.shape[0]
+        nkpts = len(self.kpts)
+        ngs = len(coords)
         nao = mol.nao_nr()
 
         ao_kpts = np.empty([nkpts, ngs, nao],np.complex128)
@@ -404,17 +399,16 @@ class _KNumInt(pyscf.dft.numint._NumInt):
              isgga=False, verbose=None):
         '''
         Args:
-           mol : Mole or Cell object
-           ao_kpts : (k, N, nao) ndarray
-                     AO values at each kpoint
-           dm_kpts: (k, nao, nao) ndarray
-                     DM at each kpt
+            mol : Mole or Cell object
+            ao_kpts : (nkpts, ngs, nao) ndarray
+                AO values at each k-point
+            dm_kpts: (nkpts, nao, nao) ndarray
+                Density matrix at each k-point
 
         Returns:
-           rhoR : (N, ) ndarray
+           rhoR : (ngs,) ndarray
         '''
-        nkpts = self.kpts.shape[0]
-        ngs = ao_kpts.shape[1]
+        nkpts, ngs, nao = ao_kpts.shape
         rhoR = np.zeros(ngs)
         for k in range(nkpts):
             rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
@@ -443,7 +437,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                  isgga=False, verbose=None):
         # use local function for complex eval_mat
-        nkpts = self.kpts.shape[0]
+        nkpts = len(self.kpts)
         nao = ao.shape[2]
 
         mat = np.zeros((nkpts, nao, nao), dtype=ao.dtype)
@@ -452,7 +446,5 @@ class _KNumInt(pyscf.dft.numint._NumInt):
                                     rho, vrho, vsigma, non0tab,
                                     isgga, verbose)
         return mat
-
-
 
 #test_kscf_kgamma()

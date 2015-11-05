@@ -316,52 +316,47 @@ class Cell(pyscf.gto.Mole):
 
         Choice is based on largest G vector and desired relative precision.
 
-        The relative error in the G-space sum is given by (keeping only exponential
-        factors)
+        The relative error in the G-space sum is given by (keeping only
+        exponential factors)
             precision ~ e^{(-Gmax^2)/(4 \eta^2)}
-        which determines alpha. Then, real-space cutoff is determined by (exp.
+        which determines eta. Then, real-space cutoff is determined by (exp.
         factors only)
             precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
 
         Returns:
             ew_eta, ew_cut : float
                 The Ewald 'eta' and 'cut' parameters.
-
         '''
-        #  The following is taken from RM's Electronic Structure and Practical Methods
-        #  pg. 85, computing max G in each direction from 2 * pi * N_x / |a_x|.
-        #  The least precision is found when Gmax is lowest, so we set our eta based on
-        #  the min to get the desired precision in *all* directions
+        #  See Martin, p. 85 
         _h = self.lattice_vectors()
-        Gmax = min([2.*np.pi*self.gs[i]/lib.norm(_h[i,:]) for i in xrange(3)])
+        Gmax = min([ 2.*np.pi*self.gs[i]/lib.norm(_h[i,:]) for i in range(3) ])
+
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
         rcut = np.sqrt(-log_precision)/ew_eta
-        ew_cut = self.get_Rbounding_sphere(rcut)
+        ew_cut = self.get_bounding_sphere(rcut)
         return ew_eta, ew_cut
 
-    def get_Rbounding_sphere(self, rcut):
-        '''Finds all the lattice points within a sphere of rcut.  Useful when
-        needing to determine how far you need to sum real space lattice vectors
-        out given some cut-off distance rcut. See Richard Martin's Electronic
-        Structure Theory pg 85
+    def get_bounding_sphere(self, rcut):
+        '''Finds all the lattice points within a sphere of radius rcut.  
 
         Defines a parallelipiped given by -N_x <= n_x <= N_x, with x in [1,3]
+        See Martin p. 85
 
         Args:
             rcut : number
                 real space cut-off for interaction
 
         Returns:
-            cut  : ndarray of 3 ints defining N_x
+            cut : ndarray of 3 ints defining N_x
         '''
         invhT = scipy.linalg.inv(self.lattice_vectors().T)
         Gmat = invhT.T
-        n1   = np.ceil(lib.norm(Gmat[0,:])*rcut).astype(int)
-        n2   = np.ceil(lib.norm(Gmat[1,:])*rcut).astype(int)
-        n3   = np.ceil(lib.norm(Gmat[2,:])*rcut).astype(int)
-        cut  = np.array([n1, n2, n3])
+        n1 = np.ceil(lib.norm(Gmat[0,:])*rcut).astype(int)
+        n2 = np.ceil(lib.norm(Gmat[1,:])*rcut).astype(int)
+        n3 = np.ceil(lib.norm(Gmat[2,:])*rcut).astype(int)
+        cut = np.array([n1, n2, n3])
         return cut
 
     def get_Gv(self):
@@ -376,7 +371,6 @@ class Cell(pyscf.gto.Mole):
         Returns:
             Gv : (ngs, 3) ndarray of floats
                 The array of G-vectors.
-
         '''
         invh = scipy.linalg.inv(self.lattice_vectors())
 
@@ -397,7 +391,6 @@ class Cell(pyscf.gto.Mole):
         Returns:
             SI : (natm, ngs) ndarray, dtype=np.complex128
                 The structure factor for each atom at each G-vector.
-
         '''
         coords = [self.atom_coord(ia) for ia in range(self.natm)]
         SI = np.exp(-1j*np.dot(coords, self.Gv.T))
@@ -417,15 +410,14 @@ class Cell(pyscf.gto.Mole):
             return h * (1./self.unit)
 
     def get_abs_kpts(self, scaled_kpts):
-        '''Given "scaled" kpts in fractions of lattice vectors, return
-        absolute kpts (in inverse Bohr)
+        '''Get absolute kpts (in inverse Bohr), given "scaled" kpts in fractions 
+        of lattice vectors.
 
         Args:
-            rel_kpts: (nkpts, 3) ndararray of floats
-                      *rows* are the kpts
+            scaled_kpts : (nkpts, 3) ndarray of floats
 
         Returns:
-           abs_kpts: (nkpts, 3) *rows* are the scaled kpts
+            abs_kpts : (nkpts, 3) ndarray of floats 
         '''
         # inv_h has reciprocal vectors as rows
         return 2*np.pi*np.dot(scaled_kpts, scipy.linalg.inv(self._h))

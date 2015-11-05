@@ -33,6 +33,8 @@ There are some parameters to control the CASSCF/CASCI method.
         Active (nelec_alpha, nelec_beta)
     ncore : int or tuple of int
         Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+    natorb : bool
+        Whether to restore the natural orbital during CASSCF optimization. Default is not.
     fcisolver : an instance of :class:`FCISolver`
         The pyscf.fci module provides several FCISolver for different scenario.  Generally,
         fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -134,8 +136,6 @@ The Following attributes are used for CASSCF
     chkfile : str
         Checkpoint file to save the intermediate orbitals during the CASSCF optimization.
         Default is the checkpoint file of mean field object.
-    natorb : bool
-        Whether to restore the natural orbital during CASSCF optimization. Default is not.
 
 
 Saved results
