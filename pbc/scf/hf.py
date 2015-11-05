@@ -20,19 +20,21 @@ from pyscf.lib import logger
 import scfint
 
 def get_ovlp(cell, kpt=None):
-    '''Get the overlap AO matrix.'''
+    '''Get the overlap AO matrix.
+    '''
     if kpt is None:
         kpt = np.zeros(3)
     
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    ngs = aoR.shape[0]
+    ngs = len(aoR)
 
     s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
     return s
 
 def get_hcore(cell, kpt=None):
-    '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.'''
+    '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.
+    '''
     if kpt is None:
         kpt = np.zeros(3)
 
@@ -48,7 +50,6 @@ def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.
     
     Due to `kpt`, this is evaluated in real space using orbital gradients.
-
     '''
     if kpt is None:
         kpt = np.zeros(3)
@@ -104,7 +105,6 @@ def get_nuc(cell, kpt=None):
     '''Get the bare periodic nuc-el AO matrix, with G=0 removed.
 
     See Martin (12.16)-(12.21).
-
     '''
     if kpt is None:
         kpt = np.zeros(3)
@@ -122,13 +122,14 @@ def get_nuc(cell, kpt=None):
     return vne
 
 def get_pp(cell, kpt=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.'''
+    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''
     if kpt is None:
         kpt = np.zeros(3)
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    nao = aoR.shape[1]
+    nao = cell.nao_nr() 
 
     SI = cell.get_SI()
     vlocG = pseudo.get_vlocG(cell)
@@ -143,7 +144,7 @@ def get_pp(cell, kpt=None):
     for i in range(nao):
         aokplusG[:,i] = tools.fft(aoR[:,i]*np.exp(-1j*np.dot(kpt,coords.T)), 
                                   cell.gs)
-    ngs = aokplusG.shape[0]
+    ngs = len(aokplusG)
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
     hs, projGs = pseudo.get_projG(cell, kpt)
@@ -166,13 +167,12 @@ def get_pp(cell, kpt=None):
     return vpploc + vppnl
 
 def get_jvloc_G0(cell, kpt=None):
-    '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
-
+    '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
+    '''
     return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 def get_j(cell, dm, kpt=None):
     '''Get the Coulomb (J) AO matrix.
-
     '''
     if kpt is None:
         kpt = np.zeros(3)
@@ -197,19 +197,12 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
 
     Formulation of Martin, App. F2.
 
-    Args:
-        cell : instance of :class:`Cell`
-
-        ew_eta, ew_cut : float
-            The Ewald 'eta' and 'cut' parameters.
-
     Returns:
         float
             The Ewald energy consisting of overlap, self, and G-space sum.
 
     See Also:
-        ewald_params
-        
+        pyscf.pbc.gto.get_ewald_params
     '''
     log = logger.Logger
     if isinstance(verbose, logger.Logger):
@@ -320,12 +313,11 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     return ewovrl + ewself + ewg
 
 
+
+# TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
+# inherit from that.
 class RHF(pyscf.scf.hf.RHF):
     '''RHF class adapted for PBCs.
-
-    TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
-          inherit from that.
-
     '''
     def __init__(self, cell, kpt=None, analytic_int=None):
         self.cell = cell
@@ -385,10 +377,8 @@ class RHF(pyscf.scf.hf.RHF):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.
-        
         Currently RHF always uses PBC AO integrals (unlike RKS), since
         exchange is currently computed by building PBC AO integrals.
-
         '''
         if cell is None:
             cell = self.cell
@@ -424,20 +414,20 @@ class RHF(pyscf.scf.hf.RHF):
         return ewald(self.cell, self.cell.ew_eta, self.cell.ew_cut)
         
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
-        '''Reconstruct Fock operator at a given band kpt 
-           (not necessarily in list of k pts)
+        '''Reconstruct Fock operator at a given 'band' k-point, not necessarily 
+        in list of k-points.
 
         Returns:
             fock : (nao, nao) ndarray
             ovlp : (nao, nao) ndarray
         '''
-        iS = scipy.linalg.inv(ovlp)
-        iSFockiS = np.dot(np.conj(iS.T), np.dot(fock, iS))
+        sinv = scipy.linalg.inv(ovlp)
+        sinvFocksinv = np.dot(np.conj(sinv.T), np.dot(fock, sinv))
 
         # band_ovlp[p,q] = <p(0)|q(k)>
         band_ovlp = self.get_ovlp(self.cell, band_kpt)
         # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k>
-        Fb = np.dot(np.conj(band_ovlp.T), np.dot(iSFockiS, band_ovlp))
+        Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
 
         return Fb, band_ovlp
 

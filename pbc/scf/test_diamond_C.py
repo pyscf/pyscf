@@ -11,37 +11,35 @@ import ase.lattice
 from ase.lattice.cubic import Diamond
 import ase.dft.kpoints
 
-pi=np.pi
-
 def test_cubic_diamond_C():
     """
     Take ASE Diamond structure, input into PySCF and run
     """
-    ase_atom=Diamond(symbol='C', latticeconstant=3.5668)
-    print ase_atom.get_volume()
+    ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
+    print "Cell volume =", ase_atom.get_volume()
 
     cell = pbcgto.Cell()
-    cell.atom=pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h=ase_atom.cell
+    cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
+    cell.h = ase_atom.cell
     cell.basis = "gth-szv"
     cell.pseudo = "gth-pade"
 
-    cell.gs = np.array([14,14,14])
+    cell.gs = np.array([10,10,10])
     # cell.verbose = 7
     cell.build(None, None)
     mf = pbcdft.RKS(cell)
-    mf.analytic_int=False
+    mf.analytic_int = False
     mf.xc = 'lda,vwn'
     print mf.scf()
 
     # Gamma point gs: 10x10x10: -11.220279983393
     #             gs: 14x14x14: -11.220122248175
     # K pt calc
-    scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
-    abs_kpts=cell.get_abs_kpts(scaled_kpts)
+    scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
+    abs_kpts = cell.get_abs_kpts(scaled_kpts)
 
     kmf = pyscf.pbc.scf.kscf.KRKS(cell, abs_kpts)
-    kmf.analytic_int=False
+    kmf.analytic_int = False
     kmf.xc = 'lda,vwn'
     kmf.verbose = 7
     print kmf.scf()
@@ -54,8 +52,8 @@ def test_diamond_C():
     C = bulk('C', 'diamond', a=3.5668)
 
     cell = pbcgto.Cell()
-    cell.atom=pyscf_ase.ase_atoms_to_pyscf(C)
-    cell.h=C.cell
+    cell.atom = pyscf_ase.ase_atoms_to_pyscf(C)
+    cell.h = C.cell
 
     # cell.basis = 'gth-tzvp'
     cell.basis = 'gth-szv'
@@ -65,10 +63,8 @@ def test_diamond_C():
 
     # Cell used for K-points
     cell.pseudo = 'gth-pade'
-    # cell.pseudo = 'gth-pade'
-    cell.gs=np.array([8,8,8])
-    #cell.nimgs = [4,4,4]
-    cell.verbose=7
+    cell.gs = np.array([8,8,8])
+    cell.verbose = 7
     cell.build(None,None)
 
     # Replicate cell NxNxN for comparison
@@ -78,23 +74,22 @@ def test_diamond_C():
     # repcell.build()
     # # # Replicated MF calc
     # mf = pbcdft.RKS(repcell)
-    # # mf.analytic_int=True
+    # # mf.analytic_int = True
     # mf.xc = 'lda,vwn'
     # mf.init_guess = '1e'
-    # mf.diis = True # when turned off, this agrees with k-pt calc below precisely
+    # mf.diis = True
     # mf.scf()
     
     # K-pt calc
-    scaled_kpts=ase.dft.kpoints.monkhorst_pack((2,2,2))
+    scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
 
     # shift if 2x2x2 includes Gamma point
     # shift = np.array([1./4., 1./4., 1./4.])
     # scaled_kpts += shift
-    abs_kpts=cell.get_abs_kpts(scaled_kpts)
-    #cell.nimgs = [7,7,7]
+    abs_kpts = cell.get_abs_kpts(scaled_kpts)
     kmf = pyscf.pbc.scf.kscf.KRKS(cell, abs_kpts)
-    kmf.analytic_int=False
-    kmf.diis=True # when turned off, this agrees with above replicated cell precisely
+    kmf.analytic_int = False
+    kmf.diis = True
     kmf.init_guess = '1e'
     kmf.xc = 'lda,vwn'
     print "N imgs", cell.nimgs
