@@ -22,13 +22,11 @@ from pyscf.lib import logger
 
 def get_lattice_Ls(cell, nimgs):
     '''Get the (unitful) lattice translation vectors for nearby images.'''
-    #nimgs = cell.nimgs
     Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
                   for j in range(-nimgs[1],nimgs[1]+1)
                   for k in range(-nimgs[2],nimgs[2]+1)
                   if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
-    Ts = np.array(Ts)
-    Ls = np.dot(cell._h, Ts.T).T
+    Ls = np.dot(Ts, cell._h.T)
     return Ls
 
 def get_hcore(cell, kpt=None):
@@ -52,46 +50,43 @@ def get_jvloc_G0(cell, kpt=None):
 
     return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
-def get_int1e(intor, cell, kpt=None):
-    '''Get the one-electron integral defined by `intor` using lattice sums.'''
-    if kpt is None:
-        kpt = np.zeros(3)
+def get_int1e_cross(intor, cell1, cell2, kpt=None, comp=1):
+    r'''1-electron integrals from two molecules like
 
-    # if pyscf.lib.norm(kpt) == 0.:
-    #     dtype = np.float64
-    # else:
-    dtype = np.complex128
+    .. math::
 
-    int1e = np.zeros((cell.nao_nr(),cell.nao_nr()), dtype=dtype)
-
-    Ls = get_lattice_Ls(cell, cell.nimgs)
-
-# Just change the basis position, keep all other envrionments
-    cellL = cell.copy()
+        \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
+    '''
+    nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
+    Ls = get_lattice_Ls(cell1, nimgs)
+# Change the basis position only, keep all other envrionments
+    cellL = cell2.copy()
     ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
     _envL = cellL._env
+    int1e = 0
     for L in Ls:
-        _envL[ptr_coord+0] = cell._env[ptr_coord+0] + L[0]
-        _envL[ptr_coord+1] = cell._env[ptr_coord+1] + L[1]
-        _envL[ptr_coord+2] = cell._env[ptr_coord+2] + L[2]
-        int1e += (np.exp(1j*np.dot(kpt,L)) *
-                  pyscf.gto.intor_cross(intor, cell, cellL))
+        _envL[ptr_coord+0] = cell2._env[ptr_coord+0] + L[0]
+        _envL[ptr_coord+1] = cell2._env[ptr_coord+1] + L[1]
+        _envL[ptr_coord+2] = cell2._env[ptr_coord+2] + L[2]
+        if kpt is None:
+            int1e += pyscf.gto.intor_cross(intor, cell1, cellL, comp)
+        else:
+            factor = np.exp(1j*np.dot(kpt, L))
+            int1e += pyscf.gto.intor_cross(intor, cell1, cellL, comp) * factor
     return int1e
+
+def get_int1e(intor, cell, kpt=None):
+    '''Get the one-electron integral defined by `intor` using lattice sums.'''
+    return get_int1e_cross(intor, cell, cell, kpt, 1)
 
 def get_ovlp(cell, kpt=None):
     '''Get the overlap AO matrix.'''
-    if kpt is None:
-        kpt = np.zeros(3)
-
-    s = get_int1e('cint1e_ovlp_sph', cell, kpt) 
+    s = get_int1e('cint1e_ovlp_sph', cell, kpt)
     return s
 
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.'''
-    if kpt is None:
-        kpt = np.zeros(3)
-    
-    t = get_int1e('cint1e_kin_sph', cell, kpt) 
+    t = get_int1e('cint1e_kin_sph', cell, kpt)
     return t
 
 def test_periodic_ints():

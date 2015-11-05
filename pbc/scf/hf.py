@@ -192,7 +192,7 @@ def get_j(cell, dm, kpt=None):
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
     return vj
 
-def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
+def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
 
     Formulation of Martin, App. F2.
@@ -211,7 +211,6 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
         ewald_params
         
     '''
-    log = logger.Logger
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -333,11 +332,10 @@ class RHF(pyscf.scf.hf.RHF):
         self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
         self.mol_ex = False
 
-        if kpt is None:
-            kpt = np.zeros(3)
         # TODO: Garnet, check this change?
         # i.e. self.kpt should be the passed kpt and not always gamma.
-        #self.kpt = np.array([0,0,0])
+        #if kpt is None:
+        #    kpt = np.zeros(3)
         self.kpt = kpt 
 
         if analytic_int == None:
@@ -420,8 +418,9 @@ class RHF(pyscf.scf.hf.RHF):
         etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
         return etot.real
     
-    def ewald_nuc(self):
-        return ewald(self.cell, self.cell.ew_eta, self.cell.ew_cut)
+    def ewald_nuc(self, cell=None):
+        if cell is None: cell = self.cell
+        return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
         
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
         '''Reconstruct Fock operator at a given band kpt 
