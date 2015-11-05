@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+import time
 import numpy
 from pyscf.mrpt.nevpt2 import sc_nevpt
 from pyscf.dmrgscf.dmrg_sym import *
+import pyscf.lib.logger as logger
 import pyscf.tools
 from pyscf import ao2mo
 from pyscf import mcscf
@@ -41,6 +43,7 @@ def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
 
 def write_chk(mc,root,chkfile):
 
+    t0 = (time.clock(), time.time())
     fh5 = h5py.File(chkfile,'w')
 
     if mc.fcisolver.nroots > 1:
@@ -93,12 +96,9 @@ def write_chk(mc,root,chkfile):
     h2e_Si = h2e_Si.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
     fh5['h2e_Si'] = h2e_Si
 
-
-
-
-
-
     fh5.close()
+
+    logger.timer(mc,'Write MPS NEVPT integral', *t0)
 
 def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
 
