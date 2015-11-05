@@ -1,5 +1,5 @@
 import numpy
-from pyscf.dft.numint import _dot_ao_dm, BLKSIZE
+from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 import pyscf.lib
 import pyscf.dft
 from pyscf.pbc import tools
@@ -230,7 +230,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.int8)
 
-    if ao[0].dtype==numpy.complex128:
+    if numpy.iscomplexobj(ao):
         if isgga:
             assert(vsigma is not None and rho.ndim==2)
             #wv = weight * vsigma * 2

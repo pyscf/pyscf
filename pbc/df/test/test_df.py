@@ -39,14 +39,16 @@ def make_cell(n):
     return cell
 
 class KnowValues(unittest.TestCase):
-    def test_lda_grid30(self):
-        cell = make_cell(30)
-        mf = pbcrks.RKS(cell)
-        mf.xc = 'LDA,VWN_RPA'
-        mf.kpt = np.ones((3,1))
-        e1 = mf.scf()
-        self.assertAlmostEqual(e1, -2.3464949914151378, 8)
+#    def test_aux_e2(self):
+#        cell = make_cell(30)
+#        mf = pbcrks.RKS(cell)
+#        mf.xc = 'LDA,VWN_RPA'
+#        mf.kpt = np.ones((3,1))
+#        e1 = mf.scf()
+#        self.assertAlmostEqual(e1, -2.3464949914151378, 8)
 
+    def test_poisson(self):
+        pass
 #    def test_lda_grid80(self):
 #        cell = make_cell(80)
 #        mf = pbcrks.RKS(cell)

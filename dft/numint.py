@@ -610,7 +610,7 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
             nelec += den.sum()
             excsum += (den*exc).sum()
         vmat += ni.eval_mat(mol, ao, weight, rho, vrho, vsigma, isgga=isgga,
-                         verbose=verbose)
+                            verbose=verbose)
     return nelec, excsum, vmat
 
 def nr_uks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
@@ -689,7 +689,7 @@ class _NumInt(object):
         nset = len(natocc)
         nelec = numpy.zeros(nset)
         excsum = numpy.zeros(nset)
-        vmat = numpy.zeros((nset,nao,nao))
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms.dtype)
         for ip0, ip1 in prange(0, ngrids, blksize):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
@@ -723,7 +723,7 @@ class _NumInt(object):
                                             non0tab)
             wv = aow = None
         for i in range(nset):
-            vmat[i] = vmat[i] + vmat[i].T
+            vmat[i] = vmat[i] + vmat[i].T.conj()
         if nset == 1:
             nelec = nelec[0]
             excsum = excsum[0]
@@ -786,7 +786,7 @@ class _NumInt(object):
                 natorb.append((c_a,c_b))
         nelec = numpy.zeros((2,nset))
         excsum = numpy.zeros(nset)
-        vmat = numpy.zeros((2,nset,nao,nao))
+        vmat = numpy.zeros((2,nset,nao,nao), dtype=dms.dtype)
         for ip0, ip1 in prange(0, ngrids, blksize):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
@@ -846,8 +846,8 @@ class _NumInt(object):
                                               non0tab)
             wv = aow = None
         for i in range(nset):
-            vmat[0,i] = vmat[0,i] + vmat[0,i].T
-            vmat[1,i] = vmat[1,i] + vmat[1,i].T
+            vmat[0,i] = vmat[0,i] + vmat[0,i].T.conj()
+            vmat[1,i] = vmat[1,i] + vmat[1,i].T.conj()
         if nset == 1:
             nelec = nelec.reshape(2)
             excsum = excsum[0]

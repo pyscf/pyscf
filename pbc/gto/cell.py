@@ -152,7 +152,7 @@ class Cell(pyscf.gto.Mole):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.  See :func:`get_ewald_params`
 
-    (More attributes are defined in :class:`Mole`)
+    (See other attributes in :class:`Mole`)
 
     Examples:
 
