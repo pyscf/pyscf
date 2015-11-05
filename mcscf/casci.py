@@ -361,6 +361,8 @@ class CASCI(object):
             Active (nelec_alpha, nelec_beta)
         ncore : int or tuple of int
             Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+        natorb : bool
+            Whether to restore the natural orbital in CAS space.  Default is not.
         fcisolver : an instance of :class:`FCISolver`
             The pyscf.fci module provides several FCISolver for different scenario.  Generally,
             fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -424,6 +426,7 @@ class CASCI(object):
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 50
         self.fcisolver.conv_tol = 1e-8
+        self.natorb = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -442,6 +445,7 @@ class CASCI(object):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
+        log.info('natorb = %s', self.natorb)
         log.info('max_memory %d (MB)', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
