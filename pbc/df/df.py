@@ -334,4 +334,3 @@ def where2(auxcell):
             ip += 2*l+1
     return np.array(idx)
 
-test_poisson2()
