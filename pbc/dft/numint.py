@@ -1,8 +1,9 @@
-import numpy as np
+import numpy
+from pyscf.dft.numint import _dot_ao_dm, BLKSIZE
 import pyscf.lib
 import pyscf.dft
-
 from pyscf.pbc import tools
+from pyscf.pbc.scf import scfint
 
 def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
@@ -14,6 +15,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         coords : (nx*ny*nz, 3) ndarray
             The real-space grid point coordinates.
 
+    Kwargs:
         kpt : (3,) ndarray
             The k-point corresponding to the crystal AO.
 
@@ -21,46 +23,32 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         aoR : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the orbitals gradient in the
-            x, y, and z directions.
+            x, y, and z directions.  It can be either complex or float array,
+            depending on the kpt argument.  If kpt is not given (gamma point),
+            aoR is a float array.
 
     See Also:
         pyscf.dft.numint.eval_ao
 
-    '''  
-    if kpt is None:
-        kpt = np.zeros(3)
-        dtype = np.float64
-    else:
-        dtype = np.complex128
-
-    nimgs = cell.nimgs
-    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
-                  for j in range(-nimgs[1],nimgs[1]+1)
-                  for k in range(-nimgs[2],nimgs[2]+1)
-                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
-
-    nao = cell.nao_nr()
-    if isgga:
-        aoR = np.zeros([4,coords.shape[0], nao], dtype=dtype)
-    else:
-        aoR = np.zeros([coords.shape[0], nao], dtype=dtype)
-
-    
+    '''
+    aoR = 0
     # TODO: this is 1j, not -1j; check for band_ovlp convention
-    for T in Ts:
-        L = np.dot(cell._h, T)
-        #print "factor", np.exp(1j*np.dot(kpt,L))
-        aoR += (np.exp(1j*np.dot(kpt,L)) * 
-                pyscf.dft.numint.eval_ao(cell, coords-L,
-                                         isgga, relativity, 
-                                         bastart, bascount, 
-                                         non0tab, verbose))
+    for L in scfint.get_lattice_Ls(cell, cell.nimgs):
+        if kpt is None:
+            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,
+                                            bastart, bascount,
+                                            non0tab, verbose)
+        else:
+            factor = numpy.exp(1j*numpy.dot(kpt,L))
+            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,
+                                            bastart, bascount,
+                                            non0tab, verbose) * factor
 
     if cell.ke_cutoff is not None:
-        ke = 0.5*np.einsum('gi,gi->g', cell.Gv, cell.Gv)
+        ke = 0.5*numpy.einsum('gi,gi->g', cell.Gv, cell.Gv)
         ke_mask = ke < cell.ke_cutoff
 
-        aoG = np.zeros_like(aoR)
+        aoG = numpy.zeros_like(aoR)
         for i in range(nao):
             if isgga:
                 for c in range(4):
@@ -69,7 +57,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             else:
                 aoG[ke_mask, i] = tools.fft(aoR[:,i], cell.gs)[ke_mask]
                 aoR[:,i] = tools.ifft(aoG[:,i], cell.gs)
-                    
+
     return aoR
 
 def eval_rho(mol, ao, dm, non0tab=None, 
@@ -93,9 +81,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
     See Also:
         pyscf.dft.numint.eval_rho
 
-    '''  
-    import numpy
-    from pyscf.dft.numint import _dot_ao_dm, BLKSIZE
+    '''
 
     assert(ao.flags.c_contiguous)
     if isgga:
@@ -152,9 +138,9 @@ def eval_rho(mol, ao, dm, non0tab=None,
 
     #         rho[i] = (numpy.einsum('pi,pi->p', ao_re, c1_rr)) *2
     #     return rho
-                          
+
     # complex orbitals or density matrix
-    if ao[0].dtype==numpy.complex128 or dm.dtype==numpy.complex128: 
+    if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
 
         dm_re = numpy.ascontiguousarray(dm.real)
         dm_im = numpy.ascontiguousarray(dm.imag)
@@ -205,11 +191,11 @@ def eval_rho(mol, ao, dm, non0tab=None,
                    numpy.einsum('pi,pi->p', ao_re, c0_rr) +
                    numpy.einsum('pi,pi->p', ao_im, c0_ir) -
                    numpy.einsum('pi,pi->p', ao_re, c0_ii))
-            
+
     # real orbitals and real DM
     else:
         rho = pyscf.dft.numint.eval_rho(mol, ao, dm, non0tab, isgga, verbose)
-    
+
     return rho
 
 def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
@@ -234,8 +220,6 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         pyscf.dft.numint.eval_mat
 
     '''
-    from pyscf.dft.numint import BLKSIZE, _dot_ao_ao
-    import numpy
 
     if isgga:
         ngrids, nao = ao[0].shape
@@ -335,41 +319,3 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
                         isgga, verbose)
 
-
-###################################################
-#
-# Numerical integration over becke grids
-#
-###################################################
-def get_ovlp(cell, kpt=None, grids=None):
-    from pyscf.pbc.dft import gen_grid
-    if kpt is None:
-        kpt = np.zeros(3)
-    if grids is None:
-        grids = gen_grid.BeckeGrids(cell)
-        grids.build_()
-
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, grids.coords, kpt)
-    return np.dot(aoR.T.conj(), grids.weights.reshape(-1,1)*aoR).real
-
-if __name__ == '__main__':
-    import pyscf
-    import pyscf.pbc.gto as pgto
-    import pyscf.pbc.scf as pscf
-    import pyscf.pbc.dft as pdft
-
-    L = 12.
-    n = 30
-    cell = pgto.Cell()
-    cell.h = np.diag([L,L,L])
-    cell.gs = np.array([n,n,n])
-
-    cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
-                ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]
-    cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    cell.build()
-    #cell.nimgs = [1,1,1]
-    kpt = None
-    s1 = get_ovlp(cell, kpt)
-    s2 = pscf.scfint.get_ovlp(cell, kpt)
-    print abs(s1-s2).sum()

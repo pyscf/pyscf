@@ -35,13 +35,10 @@ class RKS(pyscf.pbc.scf.hf.RHF):
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
-        
-        # print "HACK VEFF"
-        # return numpy.zeros_like(dm)
-        return pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last, 
+        return pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
                                        hermi)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
         if h1e is None: h1e = get_hcore(self, self.cell)
         return pyscf.dft.rks.energy_elec(self, dm, h1e)
-    
+

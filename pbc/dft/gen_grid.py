@@ -58,7 +58,7 @@ def super_cell(cell, nimgs):
             atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
         scell.atom.extend(atom1)
     scell.unit = 'B'
-    scell.build(False, False, verbose=0)
+    scell.build(False, False)
     return scell
 
 def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
@@ -73,7 +73,14 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             The real-space grid point coordinates.
         weights : (ngx*ngy*ngz) ndarray
     '''
-    scell = super_cell(cell, cell.nimgs)
+    def fshrink(n):
+        if n > 2:
+            return 2
+        elif n == 2:
+            return 1
+        else:
+            return n
+    scell = super_cell(cell, [fshrink(i) for i in cell.nimgs])
     atom_grids_tab = dft.gen_grid.gen_atomic_grids(scell, atom_grid, radi_method,
                                                    level, prune_scheme)
     coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)
@@ -96,10 +103,15 @@ class BeckeGrids(pyscf.dft.gen_grid.Grids):
     def __init__(self, cell):
         self.cell = cell
         pyscf.dft.gen_grid.Grids.__init__(self, cell)
+        #self.level = 2
 
     def setup_grids_(self, cell=None):
         if cell is None: cell = self.cell
-        self.coords, self.weights = gen_becke_grids(self.cell, self.atom_grid)
+        self.coords, self.weights = gen_becke_grids(self.cell, self.atom_grid,
+                                                    radi_method=self.radi_method,
+                                                    level=self.level,
+                                                    prune_scheme=self.prune_scheme)
+        logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
 
 if __name__ == '__main__':
