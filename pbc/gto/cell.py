@@ -60,7 +60,7 @@ def format_pseudo(pseudo_tab):
             fmt_pseudo[symb] = pseudo_tab[atom]
     return fmt_pseudo
 
-def make_pseudo_env(cell, atm, _pseudo, pre_env=[]):
+def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
     for ia, atom in enumerate(cell._atom):
         symb = atom[0]
         _atm[ia,0] = sum(_pseudo[symb][0])
