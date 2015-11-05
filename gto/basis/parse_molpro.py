@@ -20,12 +20,12 @@ COMMENT_KEYWORDS = '!*#'
 
 # parse the basis text which is in Molpro format, return an internal basis
 # format which can be assigned to gto.mole.basis
-def parse_str(string):
+def parse(string):
     bastxt = [x.strip() for x in string.split('\n')
               if x.strip() and x.lstrip()[0] not in COMMENT_KEYWORDS]
     return _parse(bastxt)
 
-def parse(basisfile, symb):
+def load(basisfile, symb):
     return _parse(search_seg(basisfile, symb))
 
 def search_seg(basisfile, symb):
@@ -94,4 +94,4 @@ def _parse(raw_basis):
 
 if __name__ == '__main__':
     #print(search_seg('minao.libmol', 'C'))
-    print(parse('cc_pvdz.libmol', 'C'))
+    print(load('cc_pvdz.libmol', 'C'))

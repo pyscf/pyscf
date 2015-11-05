@@ -14,6 +14,7 @@ import pyscf.gto
 import pyscf.lib.logger as logger
 import pyscf.scf
 from pyscf.mcscf import casci
+from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 
@@ -479,9 +480,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
-        mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
-                                         cas_natorb=casscf.natorb, verbose=log)
-        return True, e_tot, e_ci, fcivec, mo
+        mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                    casscf.natorb, verbose=log)
+        return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol*.1)
@@ -590,69 +591,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                  imacro+1, totinner, totmicro)
 
     log.debug('CASSCF canonicalization')
-    mo, fcivec = casscf.canonicalize(mo, fcivec, eris,
-                                     cas_natorb=casscf.natorb, verbose=log)
+    mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                casscf.natorb, casdm1, log)
     if dump_chk:
         casscf.dump_chk(locals())
 
     log.timer('1-step CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo
-
-def get_fock(mc, mo_coeff=None, ci=None, eris=None, verbose=None):
-    return casci.get_fock(mc, mo_coeff, ci, eris, verbose)
-
-def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False, verbose=None):
-    return casci.cas_natorb(mc, mo_coeff, ci, eris, sort, verbose)
-
-def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-                 cas_natorb=False, verbose=logger.NOTE):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mc.stdout, mc.verbose)
-    if mo_coeff is None: mo_coeff = mc.mo_coeff
-    if ci is None: ci = mc.ci
-    if eris is None: eris = mc.ao2mo(mo_coeff)
-    ncore = mc.ncore
-    nocc = ncore + mc.ncas
-    nmo = mo_coeff.shape[1]
-    fock = mc.get_fock(mo_coeff, ci, eris)
-    if cas_natorb:
-        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort=sort,
-                                           verbose=verbose)
-    else:
-# Keep the active space unchanged by default.  The rotation in active space
-# may cause problem for external CI solver eg DMRG.
-        mo_coeff1 = numpy.empty_like(mo_coeff)
-        mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
-    if ncore > 0:
-        # note the last two args of ._eig for mc1step_symm
-        w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
-        if sort:
-            idx = numpy.argsort(w)
-            w = w[idx]
-            c1 = c1[:,idx]
-            if hasattr(mc, 'orbsym'): # for mc1step_symm
-                mc.orbsym[:ncore] = mc.orbsym[:ncore][idx]
-        mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
-        if log.verbose >= logger.DEBUG:
-            for i in range(ncore):
-                log.debug('i = %d  <i|F|i> = %12.8f', i+1, w[i])
-    if nmo-nocc > 0:
-        w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
-        if sort:
-            idx = numpy.argsort(w)
-            w = w[idx]
-            c1 = c1[:,idx]
-            if hasattr(mc, 'orbsym'): # for mc1step_symm
-                mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
-        mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-        if log.verbose >= logger.DEBUG:
-            for i in range(nmo-nocc):
-                log.debug('i = %d  <i|F|i> = %12.8f', nocc+i+1, w[i])
-# still return ci coefficients, in case the canonicalization funciton changed
-# cas orbitals, the ci coefficients should also be updated.
-    return mo_coeff1, ci
+    return conv, e_tot, e_ci, fcivec, mo, mo_energy
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
@@ -819,8 +764,10 @@ class CASSCF(casci.CASCI):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.e_tot = None
+        self.e_cas = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
+        self.mo_energy = mf.mo_energy
         self.converged = False
 
         self._keys = set(self.__dict__.keys())
@@ -884,7 +831,8 @@ class CASSCF(casci.CASCI):
         self.mol.check_sanity(self)
         self.dump_flags()
 
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, self.e_cas, self.ci, \
+                self.mo_coeff, self.mo_energy = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
@@ -892,7 +840,7 @@ class CASSCF(casci.CASCI):
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                 callback=None):
@@ -1175,21 +1123,18 @@ class CASSCF(casci.CASCI):
         mo_occ = numpy.zeros(mo.shape[1])
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = -occ
+        if 'mo_energy' in envs:
+            mo_energy = envs['mo_energy']
+        else:
+            mo_energy = None
         chkfile.dump_mcscf(self.mol, self.chkfile, mo,
                            mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
                            ci_vector=civec,
                            iter_macro=(envs['imacro']+1),
                            iter_micro_tot=(envs['totmicro']),
-                           converged=envs['conv'], mo_occ=mo_occ)
+                           converged=envs['conv'],
+                           mo_occ=mo_occ, mo_energy=mo_energy)
 
-    def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     cas_natorb=False, verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb, verbose)
-    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      cas_natorb=False, verbose=None):
-        self.mo_coeff, self.ci = canonicalize(self, mo_coeff, ci, eris,
-                                              sort, cas_natorb, verbose)
-        return self.mo_coeff, self.ci
 
 
 # to avoid calculating AO integrals

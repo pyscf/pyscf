@@ -394,7 +394,8 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
                                  DMRGCI.scheduleTols,
                                  DMRGCI.scheduleNoises)
         f.write('%s\n' % schedule)
-        f.write('twodot_to_onedot %i\n'%DMRGCI.twodot_to_onedot)
+        if (DMRGCI.twodot_to_onedot != 0):
+            f.write('twodot_to_onedot %i\n'%DMRGCI.twodot_to_onedot)
     else :
         f.write('schedule\n')
         #if approx == True :
@@ -522,7 +523,7 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     return mc
 
 
-def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None,maxm = 500, tol =1e-6, parallel= True):
+def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None, maxm = 500, tol =1e-6, parallel= True):
     
     if (isinstance(mc, basestring)):
         fh5 = h5py.File(mc,'r')
@@ -573,6 +574,16 @@ def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None,maxm = 500, tol =1e-6, parallel= T
     import os
     full_path = os.path.realpath(__file__)
     check_call('%s %s/nevpt_mpi.py %s %s %s %s %s'%(fcisolver.mpiprefix, os.path.dirname(full_path), mc_chk, fcisolver.executable, fcisolver.configFile,fcisolver.outputFile, fcisolver.scratchDirectory), shell=True)
+    import h5py
+    fh5 = h5py.File('Perturbation_%d'%root,'r')
+    Vi_e  =  fh5['Vi/energy'].value      
+    Vi_n  =  fh5['Vi/norm'].value        
+    Vr_e  =  fh5['Vr/energy'].value      
+    Vr_n  =  fh5['Vr/norm'].value        
+    fh5.close()
+    logger.note(fcisolver,'Nevpt Energy:')
+    logger.note(fcisolver,'Sr Subspace: Norm = %s, E = %s'%(Vr_n, Vr_e))
+    logger.note(fcisolver,'Si Subspace: Norm = %s, E = %s'%(Vi_n, Vi_e))
 
     #if (parallel):
     #    from subprocess import check_call

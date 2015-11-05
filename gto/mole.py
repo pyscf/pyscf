@@ -406,16 +406,15 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         nprim, nctr = cs.shape
         cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
 # normalize contracted AO
-        if nprim > 1:
-            #ee = numpy.empty((nprim,nprim))
-            #for i in range(nprim):
-            #    for j in range(i+1):
-            #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
-            #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-            ee = es.reshape(-1,1) + es.reshape(1,-1)
-            ee = _gaussian_int(angl*2+2, ee)
-            s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-            cs = numpy.einsum('pi,i->pi', cs, s1)
+        #ee = numpy.empty((nprim,nprim))
+        #for i in range(nprim):
+        #    for j in range(i+1):
+        #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
+        #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+        ee = es.reshape(-1,1) + es.reshape(1,-1)
+        ee = _gaussian_int(angl*2+2, ee)
+        s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+        cs = numpy.einsum('pi,i->pi', cs, s1)
 
         _env.append(es)
         _env.append(cs.T.reshape(-1))
@@ -785,13 +784,6 @@ def spheric_labels(mol, fmt=True):
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
-    if mol._ecp:
-        ecpcore_dic = {}
-        for symb in mol._ecp.keys():
-            nelec_ecp = mol._ecp[symb][0]
-            coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
-            ecpcore_dic[symb] = coreshl
-
     label = []
     for ib in range(len(mol._bas)):
         ia = mol.bas_atom(ib)
@@ -799,10 +791,12 @@ def spheric_labels(mol, fmt=True):
         strl = param.ANGULAR[l]
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        if mol._ecp and symb in ecpcore_dic:
-            shl_start = ecpcore_dic[symb][l]+count[ia,l]+l+1
-        else:
+        nelec_ecp = mol.atom_nelec_core(ia)
+        if nelec_ecp == 0:
             shl_start = count[ia,l]+l+1
+        else:
+            coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+            shl_start = coreshl[l]+count[ia,l]+l+1
         for n in range(shl_start, shl_start+nc):
             for m in range(-l, l+1):
                 label.append((ia, symb, '%d%s' % (n, strl), \
@@ -1307,9 +1301,8 @@ class Mole(object):
         self._env[PTR_LIGHT_SPEED] = self.light_speed
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
-        if self._ecp:
-            self._atm, self._ecpbas, self._env = \
-                    self.make_ecp_env(self._atm, self._ecp, self._env)
+        self._atm, self._ecpbas, self._env = \
+                self.make_ecp_env(self._atm, self._ecp, self._env)
         self.natm = len(self._atm) # == len(self._atom)
         self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
@@ -1365,8 +1358,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def make_bas_env(self, basis_add, atom_id=0, ptr=0):
         return make_bas_env(basis_add, atom_id, ptr)
 
-    def make_ecp_env(self, atm, ecp, pre_env=[]):
-        return make_ecp_env(self, atm, ecp, pre_env)
+    def make_ecp_env(self, _atm, _ecp, pre_env=[]):
+        if _ecp:
+            _atm, _ecpbas, _env = make_ecp_env(self, _atm, _ecp, pre_env)
+        else:
+            _atm, _ecpbas, _env = _atm, None, pre_env
+        return _atm, _ecpbas, _env
 
     def tot_electrons(self):
         return tot_electrons(self)
@@ -1546,7 +1543,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return _std_symbol(self._atom[atm_id][0])
 
     def atom_charge(self, atm_id):
-        r'''Nuclear charge of the given atom id
+        r'''Nuclear effective charge of the given atom id
         Note "atom_charge /= _charge(atom_symbol)" when ECP is enabled.
         Number of electrons screened by ECP can be obtained by _charge(atom_symbol)-atom_charge
 
@@ -1561,6 +1558,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         17
         '''
         return self._atm[atm_id,CHARGE_OF]
+
+    def atom_nelec_core(self, atm_id):
+        '''Number of core electrons for pseudo potential.
+        '''
+        return _charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
 
     def atom_coord(self, atm_id):
         r'''Coordinates (ndarray) of the given atom id

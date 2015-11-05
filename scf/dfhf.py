@@ -104,6 +104,8 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 #                with df.load(mf._cderi) as feri:
 #                    cderi = numpy.asarray(feri)
 #                mf._cderi = cderi
+    elif isinstance(mf._cderi, numpy.ndarray):
+        mf._naoaux = mf._cderi[0].shape[0]
 
     if len(dms) == 0:
         return [], []

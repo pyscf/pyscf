@@ -94,10 +94,7 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         ks._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
 
-    # print "HACK HACK HACK DFT"
-    # print "vhf dtype", vhf.dtype
     return vhf + vx
-    #return vx
 
 
 def energy_elec(ks, dm, h1e):

@@ -6,13 +6,9 @@
 import numpy
 import pyscf.lib.logger as logger
 import pyscf.gto
-from pyscf import symm
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
-from pyscf import scf
-from pyscf import ao2mo
-from pyscf import fci
-from pyscf.tools.mo_mapping import mo_1to1map
+from pyscf.mcscf import casci_symm
 
 
 class CASSCF(mc1step.CASSCF):
@@ -48,35 +44,15 @@ class CASSCF(mc1step.CASSCF):
         self.mol.check_sanity(self)
         self.dump_flags()
 
-        #irrep_name = self.mol.irrep_name
-        irrep_name = self.mol.irrep_id
-        try:
-            self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
-                                              self.mol.symm_orb, mo_coeff,
-                                              s=self._scf.get_ovlp())
-        except ValueError:
-            logger.warn(self, 'mc1step_symm symmetrizes input orbitals')
-            s = self._scf.get_ovlp()
-            mo_coeff = symm.symmetrize_orb(self.mol, mo_coeff, s=s)
-            diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
-            mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
-            self.orbsym = symm.label_orb_symm(self.mol, irrep_name,
-                                              self.mol.symm_orb, mo_coeff, s=s)
-
-        if not hasattr(self.fcisolver, 'orbsym') or \
-           not self.fcisolver.orbsym:
-            ncore = self.ncore
-            nocc = self.ncore + self.ncas
-            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
-        logger.debug(self, 'Active space irreps %s', str(self.fcisolver.orbsym))
-
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        casci_symm.label_symmetry_(self, self.mo_coeff)
+        self.converged, self.e_tot, self.e_cas, self.ci, \
+                self.mo_coeff, self.mo_energy = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def gen_g_hop(self, mo, u, casdm1, casdm2, eris):
         casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
@@ -106,17 +82,26 @@ class CASSCF(mc1step.CASSCF):
         return numpy.dot(u0, mc1step.expmat(dr))
 
     def _eig(self, mat, b0, b1):
-        orbsym = numpy.array(self.orbsym[b0:b1])
-        norb = mat.shape[0]
-        e = numpy.zeros(norb)
-        c = numpy.zeros((norb,norb))
-        for i0 in set(orbsym):
-            lst = numpy.where(orbsym == i0)[0]
-            if len(lst) > 0:
-                w, v = scf.hf.eig(mat[lst[:,None],lst], None)
-                e[lst] = w
-                c[lst[:,None],lst] = v
-        return e, c
+        return casci_symm.eig(mat, numpy.array(self.orbsym[b0:b1]))
+
+    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                    casdm1=None, verbose=None):
+        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
+                                                 sort, casdm1, verbose)
+        if sort:
+            casci_symm.label_symmetry_(self, self.mo_coeff)
+        return self.mo_coeff, self.ci, occ
+
+    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                      cas_natorb=False, casdm1=None, verbose=None):
+        self.mo_coeff, ci, self.mo_energy = \
+                self.canonicalize(mo_coeff, ci, eris,
+                                  sort, cas_natorb, casdm1, verbose)
+        if sort:
+            casci_symm.label_symmetry_(self, self.mo_coeff)
+        if cas_natorb:  # When active space is changed, the ci solution needs to be updated
+            self.ci = ci
+        return self.mo_coeff, ci, self.mo_energy
 
 def _symmetrize(mat, orbsym, groupname):
     mat1 = numpy.zeros_like(mat)
