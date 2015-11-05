@@ -13,7 +13,6 @@ Long list of things to do!
 Code doc and cleaning:
 - Clean mf.grad() [Q]
 - PP and ECP unification (e.g. init guess routines check nelec_ecp)
-- Cell pack fn [Q]
 - Check "checkpt" works
 - Doc KSCF class
 - Test infrastructure and examples for
