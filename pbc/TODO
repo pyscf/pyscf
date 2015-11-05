@@ -6,6 +6,7 @@ Needs testing:
 - Band structure (from Gamma pt) - compare to QE [TCB]
 - Shifted Gamma pt calc (e.g. at Baldereschi pt) [TCB]
 - l=2 PP projectors (i.e. 3rd row) [TCB]
+- Divergent J+Vloc G=0 contribution [TCB]
 
 Long list of things to do!                                       
  

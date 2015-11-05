@@ -13,7 +13,7 @@ import pyscf
 import pyscf.lib.parameters as param
 from pyscf import lib
 import pyscf.gto.mole
-from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol
+from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol, _charge
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 
@@ -59,6 +59,13 @@ def format_pseudo(pseudo_tab):
         else:
             fmt_pseudo[symb] = pseudo_tab[atom]
     return fmt_pseudo
+
+def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
+    for ia, atom in enumerate(cell._atom):
+        symb = atom[0]
+        _atm[ia,0] = sum(_pseudo[symb][0])
+    _pseudobas = None
+    return _atm, _pseudobas, pre_env
 
 def format_basis(basis_tab):
     '''Convert the input :attr:`Cell.basis` to the internal data format.
@@ -190,12 +197,11 @@ class Cell(pyscf.gto.Mole):
                                                       for a in uniq_atoms]))
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
-            self.nelectron = self.tot_electrons()
-            if (self.nelectron+self.spin) % 2 != 0:
-                raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
-                                   (self.nelectron, self.spin))
+#            self.nelectron = self.tot_electrons()
+#            if (self.nelectron+self.spin) % 2 != 0:
+#                raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
+#                                   (self.nelectron, self.spin))
 
-#FIXME: move the basis checking in to format_basis, then we don't have to overwrite the input arg?
         # Check if we're using a GTH basis
         # This must happen before build() because it prepares self.basis
         if isinstance(self.basis, str):
@@ -227,16 +233,23 @@ class Cell(pyscf.gto.Mole):
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
 
-    def atom_charge(self, atm_id):
-        '''Return the atom charge, accounting for pseudopotential.'''
-        if self.pseudo is None:
-            # This is what the original Mole.atom_charge() returns
-            CHARGE_OF  = 0
-            return self._atm[atm_id,CHARGE_OF]
+    def make_ecp_env(self, _atm, xxx, pre_env=[]):
+        if self._pseudo:
+            _atm, _ecpbas, _env = make_pseudo_env(self, _atm, self._pseudo, pre_env)
         else:
-            # Remember, _pseudo is a dict
-            nelecs = self._pseudo[ self.atom_symbol(atm_id) ][0]
-            return sum(nelecs)
+            _atm, _ecpbas, _env = _atm, None, pre_env
+        return _atm, _ecpbas, _env
+
+#    def atom_charge(self, atm_id):
+#        '''Return the atom charge, accounting for pseudopotential.'''
+#        if self.pseudo is None:
+#            # This is what the original Mole.atom_charge() returns
+#            CHARGE_OF  = 0
+#            return self._atm[atm_id,CHARGE_OF]
+#        else:
+#            # Remember, _pseudo is a dict
+#            nelecs = self._pseudo[ self.atom_symbol(atm_id) ][0]
+#            return sum(nelecs)
 
     def get_nimgs(self, precision):
         '''Choose number of basis function images in lattice sums

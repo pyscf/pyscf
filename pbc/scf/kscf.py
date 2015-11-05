@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import scipy.linalg
 import pyscf.dft
 import pyscf.pbc.dft
@@ -9,14 +9,14 @@ from pyscf.pbc import gto as pbcgto
 
 from pyscf.lib import logger
 import pyscf.pbc.scf.scfint as scfint
-pi = numpy.pi
+pi = np.pi
 
 def get_ovlp(mf, cell, kpts):
-    '''Get overlap AO matrices at sampled k-points.
+    '''Get the overlap AO matrices at sampled k-points.
 
     Args:
-        mf : KRHF or KRKS object
-        cell : Cell object
+        mf : instance of :class:`KRHF` or `KRKS`
+        cell : instance of :class:`Cell`
         kpts : (nkpts, 3) ndarray
 
     Returns:
@@ -24,7 +24,7 @@ def get_ovlp(mf, cell, kpts):
     '''
     nkpts = kpts.shape[0]
     nao = cell.nao_nr()
-    ovlp_kpts = numpy.zeros([nkpts,nao,nao], numpy.complex128)
+    ovlp_kpts = np.zeros((nkpts,nao,nao), np.complex128)
     for k in range(nkpts):
         kpt = kpts[k,:]
         if mf.analytic_int:
@@ -33,21 +33,42 @@ def get_ovlp(mf, cell, kpts):
             ovlp_kpts[k,:,:] = pbchf.get_ovlp(cell, kpt)
     return ovlp_kpts
 
-def get_j(mf, cell, dm_kpts, kpts):
-    '''Get Coulomb (J) AO matrices at sampled k-points.
+def get_hcore(mf, cell, kpts):
+    '''Get the core Hamiltonian AO matrices at sampled k-points.
 
     Args:
-        mf : KRHF or KRKS object
-        cell : Cell object
+        mf : instance of :class:`KRHF` or `KRKS`
+        cell : instance of :class:`Cell`
+        kpts : (nkpts, 3) ndarray
+
+    Returns:
+        hcore : (nkpts, nao, nao) ndarray
+    '''
+    nao = cell.nao_nr()
+    nkpts = kpts.shape[0]
+    hcore = np.zeros((nkpts, nao, nao), np.complex128)
+    for k in range(nkpts):
+        kpt = kpts[k,:]
+        if mf.analytic_int:
+            hcore[k,:,:] = scfint.get_hcore(cell, kpt)
+        else:
+            hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
+    return hcore
+
+def get_j(mf, cell, dm_kpts, kpts):
+    '''Get the Coulomb (J) AO matrices at sampled k-points.
+
+    Args:
+        mf : instance of :class:`KRHF` or `KRKS`
+        cell : instance of :class:`Cell`
         dm_kpts : (nkpts, nao, nao) ndarray
-                  DM at each kpt
+            Density matrix at each k-point
         kpts : (nkpts, 3) ndarray
 
     Returns: 
         vj : (nkpts, nao, nao) ndarray
-        Coulomb matrix
 
-    Note: *changes mf object* (mf._ecoul)
+    Note: This changes the mf object (mf._ecoul)
     '''
     coulG = tools.get_coulG(cell)
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
@@ -55,8 +76,8 @@ def get_j(mf, cell, dm_kpts, kpts):
 
     ngs = coords.shape[0]
     nao = cell.nao_nr()
-    aoR_kpts = numpy.zeros((nkpts, ngs, nao),numpy.complex128)
-    rhoR = numpy.zeros([ngs])
+    aoR_kpts = np.zeros((nkpts, ngs, nao), np.complex128)
+    rhoR = np.zeros(ngs)
 
     for k in range(nkpts):
         kpt = kpts[k,:]
@@ -67,75 +88,44 @@ def get_j(mf, cell, dm_kpts, kpts):
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
 
-    #:vj = numpy.zeros([nao,nao])
-    #:for i in range(nao):
-    #:    for j in range(nao):
-    #:        vj[i,j] = cell.vol/ngs*numpy.dot(aoR[:,i],vR*aoR[:,j])
     # TODO: REPLACE by eval_mat here (with non0tab)
-    vj_kpts = numpy.zeros([nkpts,nao,nao],numpy.complex128)
-
-    mf._ecoul = 0.
+    vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+    ecoul = 0.
     for k in range(nkpts):
-        vj_kpts[k,:,:] = cell.vol/ngs * numpy.dot(aoR_kpts[k,:,:].T.conj(),
-                                                  vR.reshape(-1,1)*aoR_kpts[k,:,:])
-
-        mf._ecoul += 1./nkpts*numpy.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:]) * .5
-    # TODO: energy is normally evaluated in dft.rks.get_veff
-    if abs(mf._ecoul.imag > 1.e-12):
-        raise RuntimeError("Coulomb energy has imaginary part, sth is wrong!", mf._ecoul.imag)
-
-    mf._ecoul = mf._ecoul.real
-
+        vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
+                                               vR.reshape(-1,1)*aoR_kpts[k,:,:])
+        # TODO: energy is normally evaluated in dft.rks.get_veff
+        ecoul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:])
+    if abs(ecoul.imag > 1.e-12):
+        raise RuntimeError("Coulomb energy has imaginary part, 
+                            something is wrong!", ecoul.imag)
+    mf._ecoul = ecoul.real
     return vj_kpts
-
-def get_hcore(mf, cell, kpts):
-    '''
-    K pt version of get_hcore
-
-    Args:
-        mf : KRKS or KRHF object
-        cell: Cell object
-        kpts: (nkpts, 3) ndarray
-
-    Returns:
-        hcore : (nkpts, nao, nao) ndarray
-                Core Hamiltonian at each kpt
-    '''
-    nao = cell.nao_nr()
-    nkpts = kpts.shape[0]
-    hcore = numpy.zeros([nkpts, nao, nao],numpy.complex128)
-    for k in range(nkpts):
-        kpt = kpts[k,:]
-        if mf.analytic_int:
-            hcore[k,:,:] = scfint.get_hcore(cell, kpt)
-        else:
-            hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
-    return hcore
 
 def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
               diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
-    '''
-    K pt version of pyscf.scf.hf.get_fock_
+    '''Get the Fock matrices at sampled k-points.
+
+    This is a k-point version of pyscf.scf.hf.get_fock_
 
     Returns:
        fock : (nkpts, nao, nao) ndarray
     '''
-    fock = numpy.zeros_like(h1e_kpts)
+    fock = np.zeros_like(h1e_kpts)
     nkpts = mf.kpts.shape[0]
     fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
-                                      vhf_kpts, dm_kpts,
-                                      cycle, adiis, diis_start_cycle, 
-                                      level_shift_factor, damp_factor)
+                               vhf_kpts, dm_kpts,
+                               cycle, adiis, diis_start_cycle, 
+                               level_shift_factor, damp_factor)
     return fock
 
 
 class KRHF(pbchf.RHF):
-    '''
-    RHF class with k points
+    '''RHF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
-    now have an additional first dimension for the k pts, e.g.
-    mo_coeff is dim [nkpts, nao, nao]
+    now have an additional first dimension for the k-points, 
+    e.g. mo_coeff is (nkpts, nao, nao) ndarray
     '''
     def __init__(self, cell, kpts):
         pbchf.RHF.__init__(self, cell,kpts)
@@ -155,12 +145,17 @@ class KRHF(pbchf.RHF):
             dm = pyscf.scf.hf.get_init_guess(cell, key)
             nao = dm.shape[0]
             nkpts = self.kpts.shape[0]
-            dm_kpts = numpy.zeros([nkpts,nao,nao])
+            dm_kpts = np.zeros((nkpts,nao,nao))
 
             for k in range(nkpts):
                 dm_kpts[k,:,:] = dm
 
         return dm_kpts
+
+    def get_hcore(self, cell=None, kpts=None):
+        if cell is None: cell = self.cell
+        if kpts is None: kpts = self.kpts
+        return get_hcore(self, cell, kpts)
 
     def get_ovlp(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
@@ -168,15 +163,10 @@ class KRHF(pbchf.RHF):
         return get_ovlp(self, cell, kpts)
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None):
-        if cell is None: cell=self.cell
-        if kpts is None: kpts=self.kpts
-        if dm_kpts is None: dm_kpts=self.make_rdm1()
+        if cell is None: cell = self.cell
+        if kpts is None: kpts = self.kpts
+        if dm_kpts is None: dm_kpts = self.make_rdm1()
         return get_j(self, cell, dm_kpts, kpts)
-
-    def get_hcore(self, cell=None, kpts=None):
-        if cell is None: cell=self.cell
-        if kpts is None: kpts=self.kpts
-        return get_hcore(self, cell, kpts)
 
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
               diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -195,19 +185,16 @@ class KRHF(pbchf.RHF):
                  vhf_last=0, hermi=1):
         '''
         Args:
-            cell : Cell object
-
+            cell : instance of :class:`Cell`
             dm : (nkpts, nao, nao) ndarray
-                dm *at each k-point*
-                *Note* because get_veff is often called in pyscf.scf.hf
-                with kwargs, we have to use the same argument name as in
+                Density matrix at each k-point
+                Note: Because get_veff is often called in pyscf.scf.hf with
+                kwargs, we have to use the same argument name, 'dm', as in
                 pyscf.scf.hf. 
-
             dm_last : (nkpts, nao, nao) ndarray
-                previous dm *at each k-point*
-
+                Previous density matrix at each k-point
             vhf_last: (nkpts, nao, nao) ndarray
-                previous vhf *at each k-point*
+                Previous vhf at each k-point
         '''
         raise NotImplementedError
 
@@ -224,19 +211,19 @@ class KRHF(pbchf.RHF):
         nkpts = self.kpts.shape[0]
 
         # make this closer to the non-kpt one
-        grad_kpts = numpy.empty(0,)
+        grad_kpts = np.empty(0,)
 
         for k in range(nkpts):
             grad = pyscf.scf.hf.RHF.get_grad(self, 
                         mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:], fock[k,:,:])
-            grad_kpts = numpy.hstack((grad_kpts, grad))
+            grad_kpts = np.hstack((grad_kpts, grad))
         return grad_kpts
 
     def eig(self, h_kpts, s_kpts):
         nkpts = h_kpts.shape[0]
         nao = h_kpts.shape[1]
-        eig_kpts = numpy.zeros([nkpts,nao])
-        mo_coeff_kpts = numpy.zeros_like(h_kpts)
+        eig_kpts = np.zeros((nkpts,nao))
+        mo_coeff_kpts = np.zeros_like(h_kpts)
 
         # TODO: should use superclass eig fn here?
         for k in range(nkpts):
@@ -244,29 +231,25 @@ class KRHF(pbchf.RHF):
         return eig_kpts, mo_coeff_kpts
 
     def get_occ(self, mo_energy_kpts, mo_coeff_kpts):
-        '''
-        K pt version of scf.hf.SCF.get_occ.
+        '''Label the occupancies for each orbital for sampled k-points.
+
+        This is a k-point version of scf.hf.SCF.get_occ
         '''
         if mo_energy_kpts is None: mo_energy_kpts = self.mo_energy_kpts
-        mo_occ_kpts = numpy.zeros_like(mo_energy_kpts)
+        mo_occ_kpts = np.zeros_like(mo_energy_kpts)
 
-        nkpts = mo_coeff_kpts.shape[0]
+        nkpts, nao = mo_coeff_kpts.shape
         nocc = (self.cell.nelectron * nkpts) // 2
 
-        # have to sort eigs in each kpt
-        # TODO: implement Fermi smearing
-
-        nao = mo_coeff_kpts.shape[1]
-
-        mo_energy = numpy.reshape(mo_energy_kpts, [nkpts*nao])
+        # Sort eigs in each kpt
+        mo_energy = np.reshape(mo_energy_kpts, [nkpts*nao])
         # TODO: store mo_coeff correctly (for later analysis)
-        #self.mo_coeff = numpy.reshape(mo_coeff_kpts, [nao, nao*nkpts])
-
-
-        mo_idx = numpy.argsort(mo_energy)
+        #self.mo_coeff = np.reshape(mo_coeff_kpts, [nao, nao*nkpts])
+        mo_idx = np.argsort(mo_energy)
         mo_energy = mo_energy[mo_idx]
         for ix in mo_idx[:nocc]:
             k, ikx = divmod(ix, nao)
+            # TODO: implement Fermi smearing
             mo_occ_kpts[k, ikx] = 2
 
         if nocc < mo_energy.size:
@@ -278,9 +261,9 @@ class KRHF(pbchf.RHF):
         else:
             logger.info(self, 'HOMO = %.12g', mo_energy[nocc-1])
         if self.verbose >= logger.DEBUG:
-            numpy.set_printoptions(threshold=len(mo_energy))
+            np.set_printoptions(threshold=len(mo_energy))
             logger.debug(self, '  mo_energy = %s', mo_energy)
-            numpy.set_printoptions()
+            np.set_printoptions()
 
         self.mo_energy = mo_energy_kpts
         self.mo_occ = mo_occ_kpts
@@ -288,27 +271,22 @@ class KRHF(pbchf.RHF):
         return mo_occ_kpts
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
-        '''
-        DM at each kpt.
+        '''One particle density matrix at each k-point.
 
         Returns:
             dm_kpts : (nkpts, nao, nao) ndarray
         '''
         if mo_coeff_kpts is None:
-            mo_coeff_kpts = self.mo_coeff # Note: this is actually "self.mo_coeff_kpts"
-                                        # which is stored in self.mo_coeff of the scf.hf.RHF superclass
+            # Note: this is actually "self.mo_coeff_kpts"
+            # which is stored in self.mo_coeff of the scf.hf.RHF superclass
+            mo_coeff_kpts = self.mo_coeff 
         if mo_occ_kpts is None:
-            mo_occ_kpts = self.mo_occ # Note: this is actually "self.mo_occ_kpts"
-                                    # which is stored in self.mo_occ of the scf.hf.RHF superclass
+            # Note: this is actually "self.mo_occ_kpts"
+            # which is stored in self.mo_occ of the scf.hf.RHF superclass
+            mo_occ_kpts = self.mo_occ 
 
         nkpts = mo_occ_kpts.shape[0]
-        # dm = numpy.zeros_like(mo_coeff_kpts[:,:,0])
-
-        # for k in range(nkpts):
-        #     # should this call pbc.scf version?
-        #     dm += pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:])
-        dm_kpts = numpy.zeros_like(mo_coeff_kpts)
-
+        dm_kpts = np.zeros_like(mo_coeff_kpts)
         for k in range(nkpts):
             dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:]).T.conj()
         return dm_kpts
@@ -317,8 +295,8 @@ class KRHF(pbchf.RHF):
         raise NotImplementedError
 
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
-        '''Reconstruct Fock operator at a given band kpt 
-           (not necessarily in list of k pts)
+        '''Reconstruct Fock operator at a given 'band' k-point, not necessarily 
+        in list of k-points.
 
         Returns:
             fock : (nao, nao) ndarray
@@ -371,7 +349,7 @@ class KRKS(KRHF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
 
-        dm=numpy.array(dm, numpy.complex128) # e.g. if passed initial DM
+        dm = np.array(dm, np.complex128) # e.g. if passed initial DM
 
         vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
                                       hermi)
@@ -385,7 +363,7 @@ class KRKS(KRHF):
         nkpts = dm_kpts.shape[0]
         e1 = 0.
         for k in range(nkpts):
-            e1 += 1./nkpts*numpy.einsum('ij,ji', h1e_kpts[k,:,:], dm_kpts[k,:,:]).real
+            e1 += 1./nkpts*np.einsum('ij,ji', h1e_kpts[k,:,:], dm_kpts[k,:,:]).real
 
         tot_e = e1 + self._ecoul + self._exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, self._ecoul, self._exc)
@@ -414,7 +392,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         ngs = coords.shape[0]
         nao = mol.nao_nr()
 
-        ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
+        ao_kpts = np.empty([nkpts, ngs, nao],np.complex128)
         for k in range(nkpts):
             kpt = self.kpts[k,:]
             ao_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(mol, coords, kpt, isgga,
@@ -437,7 +415,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         '''
         nkpts = self.kpts.shape[0]
         ngs = ao_kpts.shape[1]
-        rhoR = numpy.zeros([ngs])
+        rhoR = np.zeros(ngs)
         for k in range(nkpts):
             rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
         return rhoR
@@ -468,7 +446,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nkpts = self.kpts.shape[0]
         nao = ao.shape[2]
 
-        mat = numpy.zeros([nkpts, nao, nao], dtype=ao.dtype)
+        mat = np.zeros((nkpts, nao, nao), dtype=ao.dtype)
         for k in range(nkpts):
             mat[k,:,:] = pyscf.pbc.dft.numint.eval_mat(mol, ao[k,:,:], weight,
                                     rho, vrho, vsigma, non0tab,
