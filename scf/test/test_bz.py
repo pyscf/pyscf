@@ -5,7 +5,6 @@
 import unittest
 from pyscf import gto
 from pyscf import scf
-from pyscf.scf import dhf
 
 mol = gto.Mole()
 mol.verbose = 0

@@ -256,13 +256,14 @@ def init_guess_by_minao(mol):
         basis_add = pyscf.gto.basis.load('ano', symb)
         occ = []
         basis_new = []
+# coreshl defines the core shells to be removed in the initial guess
         coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
-        #coreshl = (0,0,0,0)
+        #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, nfrac = atom_hf.frac_occ(symb, l)
             if coreshl[l] > 0:
                 occ.extend([0]*coreshl[l]*(2*l+1))
-            if ndocc-coreshl[l] > 0:
+            if ndocc > coreshl[l]:
                 occ.extend([2]*(ndocc-coreshl[l])*(2*l+1))
             if nfrac > 1e-15:
                 occ.extend([nfrac]*(2*l+1))
@@ -271,23 +272,27 @@ def init_guess_by_minao(mol):
                 basis_new.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
         return occ, basis_new
 
-    atmlst = set([pyscf.gto.mole._rm_digit(pyscf.gto.mole._symbol(k))
-                  for k in mol._basis.keys()])
+    atmlst = set([mol.atom_symbol(ia) for ia in range(mol.natm)])
+
+    nelec_ecp_dic = {}
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb not in nelec_ecp_dic:
+            nelec_ecp_dic[symb] = mol.atom_nelec_core(ia)
+
     basis = {}
     occdic = {}
     for symb in atmlst:
         if symb != 'GHOST':
-            if mol._ecp and symb in mol._ecp:
-                nelec_ecp = mol._ecp[symb][0]
-            else:
-                nelec_ecp = 0
-            occ_add, basis_add = minao_basis(symb, nelec_ecp)
+            nelec_ecp = nelec_ecp_dic[symb]
+            stdsymb = pyscf.gto.mole._std_symbol(symb)
+            occ_add, basis_add = minao_basis(stdsymb, nelec_ecp)
             occdic[symb] = occ_add
             basis[symb] = basis_add
     occ = []
     new_atom = []
     for ia in range(mol.natm):
-        symb = mol.atom_pure_symbol(ia)
+        symb = mol.atom_symbol(ia)
         if symb != 'GHOST':
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])

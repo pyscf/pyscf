@@ -227,7 +227,8 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             else:
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
-            rad, rad_weight = radi_method(n_rad)
+            rad, dr = radi_method(n_rad)
+            rad_weight = 4*numpy.pi * rad*rad * dr
             # atomic_scale = 1
             # rad *= atomic_scale
             # rad_weight *= atomic_scale
@@ -368,7 +369,7 @@ class Grids(object):
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
-        logger.info(self, 'pruning grids: %s', self.prune_scheme.__doc__)
+        logger.info(self, 'pruning grids: %s', str(self.prune_scheme))
         logger.info(self, 'grids dens level: %d', self.level)
         logger.info(self, 'symmetrized grids: %d', self.symmetry)
         if self.atomic_radii is not None:

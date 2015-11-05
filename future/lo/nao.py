@@ -238,11 +238,8 @@ def _core_val_ryd_list(mol):
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        if mol._ecp and symb in mol._ecp:
-            nelec_ecp = mol._ecp[symb][0]
-            ecpcore = pyscf.gto.ecp.core_configuration(nelec_ecp)
-        else:
-            ecpcore = (0,0,0,0)
+        nelec_ecp = mol.atom_nelec_core(ia)
+        ecpcore = pyscf.gto.ecp.core_configuration(nelec_ecp)
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
         cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
         for n in range(nc):
