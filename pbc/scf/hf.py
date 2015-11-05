@@ -5,7 +5,6 @@ See Also:
     kscf.py : SCF tools for periodic systems with k-point *sampling*.
 '''
 
-import copy
 import numpy as np
 import scipy.linalg
 import pyscf.scf
@@ -20,25 +19,86 @@ from pyscf.pbc.gto import pseudo
 from pyscf.lib import logger
 import scfint
 
+def get_ovlp(cell, kpt=None):
+    '''Get the overlap AO matrix.'''
+    if kpt is None:
+        kpt = np.zeros(3)
+    
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+    ngs = aoR.shape[0]
+
+    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
+    return s
+
 def get_hcore(cell, kpt=None):
-    '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.
+    '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.'''
+    if kpt is None:
+        kpt = np.zeros(3)
+
+    hcore = get_t(cell, kpt)
+    if cell.pseudo:
+        hcore += ( get_pp(cell, kpt) + get_jvloc_G0(cell, kpt) )
+    else:
+        hcore += get_nuc(cell, kpt)
+
+    return hcore
+
+def get_t(cell, kpt=None):
+    '''Get the kinetic energy AO matrix.
+    
+    Due to `kpt`, this is evaluated in real space using orbital gradients.
 
     '''
     if kpt is None:
         kpt = np.zeros(3)
+    
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
+    ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
 
-    if cell.pseudo:
-        hcore = get_pp(cell, kpt) + get_jvloc_G0(cell, kpt)
-    else:
-        hcore = get_nuc(cell, kpt)
-    hcore += get_t(cell, kpt)
+    t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
+             np.dot(aoR[2].T.conj(), aoR[2]) +
+             np.dot(aoR[3].T.conj(), aoR[3]))
+    t *= (cell.vol/ngs)
+    
+    return t
 
-    return hcore
+# def get_t2(cell, kpt=None):
+#     '''Get the kinetic energy AO matrix.
+    
+#     Due to `kpt`, this is evaluated in real space using orbital gradients.
 
-def get_jvloc_G0(cell, kpt=None):
-    '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
+#     '''
+#     if kpt is None:
+#         kpt = np.zeros(3)
+    
+#     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+#     # aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
+#     # ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
+#     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=False)
+#     ngs = aoR.shape[0]  # because we requested isgga, aoR.shape[0] = 4
 
-    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
+#     Gv = cell.Gv
+#     G2 = np.einsum('gi,gi->g', Gv+kpt, Gv+kpt)
+
+#     aoG = np.empty(aoR.shape, np.complex128)
+#     TaoG = np.empty(aoR.shape, np.complex128)
+#     nao = cell.nao_nr()
+#     for i in range(nao):
+#         aoG[:,i] = pyscf.pbc.tools.fft(aoR[:,i], cell.gs)
+#         TaoG[:,i] = 0.5*G2*aoG[:,i]
+
+#     t = np.dot(aoG.T.conj(), TaoG)
+#     t *= (cell.vol/ngs**2)
+
+
+#     # t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
+#     #          np.dot(aoR[2].T.conj(), aoR[2]) +
+#     #          np.dot(aoR[3].T.conj(), aoR[3]))
+#     # t *= (cell.vol/ngs)
+    
+#     return t
 
 def get_nuc(cell, kpt=None):
     '''Get the bare periodic nuc-el AO matrix, with G=0 removed.
@@ -62,9 +122,7 @@ def get_nuc(cell, kpt=None):
     return vne
 
 def get_pp(cell, kpt=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
-
-    '''
+    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.'''
     if kpt is None:
         kpt = np.zeros(3)
 
@@ -76,11 +134,11 @@ def get_pp(cell, kpt=None):
     vlocG = pseudo.get_vlocG(cell)
     vpplocG = -np.sum(SI * vlocG, axis=0)
     
-    # vpploc in real-space
+    # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs)
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
-    # vppnonloc in reciprocal space
+    # vppnonloc evaluated in reciprocal space
     aokplusG = np.empty(aoR.shape, np.complex128)
     for i in range(nao):
         aokplusG[:,i] = tools.fft(aoR[:,i]*np.exp(-1j*np.dot(kpt,coords.T)), 
@@ -107,76 +165,11 @@ def get_pp(cell, kpt=None):
 
     return vpploc + vppnl
 
-# def get_t2(cell, kpt=None):
-#     '''Get the kinetic energy AO matrix.
-    
-#     Due to `kpt`, this is evaluated in real space using orbital gradients.
+def get_jvloc_G0(cell, kpt=None):
+    '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
 
-#     '''
-#     if kpt is None:
-#         kpt = np.zeros(3)
-    
-#     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-#     # aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
-#     # ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
-#     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=False)
-#     ngs = aoR.shape[0]  # because we requested isgga, aoR.shape[0] = 4
+    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
-#     Gv=cell.Gv
-#     G2=np.einsum('gi,gi->g', Gv+kpt, Gv+kpt)
-
-#     aoG=np.empty(aoR.shape, np.complex128)
-#     TaoG=np.empty(aoR.shape, np.complex128)
-#     nao = cell.nao_nr()
-#     for i in range(nao):
-#         aoG[:,i]=pyscf.pbc.tools.fft(aoR[:,i], cell.gs)
-#         TaoG[:,i]=0.5*G2*aoG[:,i]
-
-#     t = np.dot(aoG.T.conj(), TaoG)
-#     t *= (cell.vol/ngs**2)
-
-
-#     # t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
-#     #          np.dot(aoR[2].T.conj(), aoR[2]) +
-#     #          np.dot(aoR[3].T.conj(), aoR[3]))
-#     # t *= (cell.vol/ngs)
-    
-#     return t
-
-def get_t(cell, kpt=None):
-    '''Get the kinetic energy AO matrix.
-    
-    Due to `kpt`, this is evaluated in real space using orbital gradients.
-
-    '''
-    if kpt is None:
-        kpt = np.zeros(3)
-    
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
-    ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
-
-    t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
-             np.dot(aoR[2].T.conj(), aoR[2]) +
-             np.dot(aoR[3].T.conj(), aoR[3]))
-    t *= (cell.vol/ngs)
-    
-    return t
-
-def get_ovlp(cell, kpt=None):
-    '''Get the overlap AO matrix.
-
-    '''
-    if kpt is None:
-        kpt = np.zeros(3)
-    
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    ngs = aoR.shape[0]
-
-    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
-    return s
-    
 def get_j(cell, dm, kpt=None):
     '''Get the Coulomb (J) AO matrix.
 
@@ -342,7 +335,7 @@ class RHF(pyscf.scf.hf.RHF):
 
         if kpt is None:
             kpt = np.zeros(3)
-        #TODO: Garnet, check this change?
+        # TODO: Garnet, check this change?
         # i.e. self.kpt should be the passed kpt and not always gamma.
         #self.kpt = np.array([0,0,0])
         self.kpt = kpt 
