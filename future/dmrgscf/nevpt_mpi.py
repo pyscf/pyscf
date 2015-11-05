@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+import time
 import numpy
 from pyscf.mrpt.nevpt2 import sc_nevpt
 from pyscf.dmrgscf.dmrg_sym import *
+import pyscf.lib.logger as logger
 import pyscf.tools
 from pyscf import ao2mo
 from pyscf import mcscf
@@ -15,14 +17,14 @@ def writeh2e(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
                     if (abs(h2e[i,j,k,l]) > tol):
                         #if ( j==k or j == l) :
                         #if (j==k and k==l) :
-                            print >>f, '{0:.12e}'.format(h2e[i,j,k,l]), i+shift0, j+shift1, k+shift2, l+shift3
+                        f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h2e[i,j,k,l], i+shift0, j+shift1, k+shift2, l+shift3))
 
 
 def writeh1e(h1e,f,tol,shift0 =1,shift1 =1):
     for i in xrange(0,h1e.shape[0]):
         for j in xrange(0,h1e.shape[1]):
             if (abs(h1e[i,j]) > tol):
-                print >>f, '{0:.12e}'.format(h1e[i,j]), i+shift0, j+shift1, 0, 0
+                f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h1e[i,j], i+shift0, j+shift1, 0, 0))
 
 def writeh2e_sym(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
     for i in xrange(0,h2e.shape[0]):
@@ -30,17 +32,18 @@ def writeh2e_sym(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
             for k in xrange(0,h2e.shape[2]):
                 for l in xrange(0,k+1):
                     if (abs(h2e[i,j,k,l]) > tol and i*h2e.shape[0]+j >= k*h2e.shape[2]+l ):
-                        print >>f, '{0:.12e}'.format(h2e[i,j,k,l]), i+shift0, j+shift1, k+shift2, l+shift3
+                        f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h2e[i,j,k,l], i+shift0, j+shift1, k+shift2, l+shift3))
 
 def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
     for i in xrange(0,h1e.shape[0]):
         for j in xrange(0,i+1):
             if (abs(h1e[i,j]) > tol):
-                print >>f, '{0:.12e}'.format(h1e[i,j]), i+shift0, j+shift1, 0, 0
+                f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h1e[i,j], i+shift0, j+shift1, 0, 0))
 
 
 def write_chk(mc,root,chkfile):
 
+    t0 = (time.clock(), time.time())
     fh5 = h5py.File(chkfile,'w')
 
     if mc.fcisolver.nroots > 1:
@@ -93,12 +96,9 @@ def write_chk(mc,root,chkfile):
     h2e_Si = h2e_Si.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
     fh5['h2e_Si'] = h2e_Si
 
-
-
-
-
-
     fh5.close()
+
+    logger.timer(mc,'Write MPS NEVPT integral', *t0)
 
 def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
 
@@ -250,22 +250,21 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     orbe =list(orbe[:ncore]) + list(orbe[ncore+ncas:])
     orbe = orbe[num_of_orb_begin:num_of_orb_end]
     for i in xrange(len(orbe)):
-        print >>f, orbe[i],i+1+ncas,i+1+ncas,0,0
-    print >> f,0,0,0,0,0
-    #print >> f, energy_core,0,0,0,0
+        f.write('% .16f  %4d  %4d  %4d  %4d\n'%(orbe[i],i+1+ncas,i+1+ncas,0,0))
+    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     if (len(h2e_Sr)):
         writeh2e(h2e_Sr,f,tol, shift0 = ncas + partial_core+1)
-    print >>f, 0, 0,0,0,0
+    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     if (len(h2e_Si)):
         writeh2e(h2e_Si,f,tol, shift1 = ncas+1)
-    print >>f, 0, 0,0,0,0
+    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     if (len(h1e_Sr)):
         writeh1e(h1e_Sr,f,tol, shift0 = ncas + partial_core+1)
-    print >>f, 0, 0,0,0,0
+    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     if (len(h1e_Si)):
         writeh1e(h1e_Si,f,tol, shift1 = ncas+1)
-    print >>f, 0, 0,0,0,0
-    print >>f, 0, 0,0,0,0
+    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
+    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     f.close()
 
 
