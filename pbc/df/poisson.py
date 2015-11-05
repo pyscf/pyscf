@@ -35,8 +35,10 @@ def get_j(cell, dm, auxcell):
     v1 = np.linalg.solve(c2, 2*np.pi*rho)
     vj = np.einsum('ijk,k->ij', c3, v1)
 
-# remove the contribution to Coulomb energy from a constant C in potential
-    vj += (np.dot(v1, rho) - (vj*dm).sum())/nelec * ovlp
+# remove the constant in potential
+#    vj += (np.dot(v1, rho) - (vj*dm).sum())/nelec * ovlp
+#    v1[idx].sum()/cell.vol == (np.dot(v1, rho) - (vj*dm).sum())/nelec
+    vj -= v1[idx].sum()/cell.vol * ovlp
 
     return vj
 
@@ -111,7 +113,17 @@ if __name__ == '__main__':
                      +genbas(2. , (10.,0.3), 1)
                      +genbas(2. , (10.,0.3), 2)}
     auxcell = df.format_aux_basis(cell, auxbasis)
-    mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
-    mf.get_hcore = lambda cell, *args: get_nuc(cell, auxcell) + pscf.hf.get_t(cell)
-    e1 = mf.scf()
-    print e1 # ~ -4.32022187118
+#    mf.get_j = lambda cell, dm, *args: get_j(cell, dm, auxcell)
+#    mf.get_hcore = lambda cell, *args: get_nuc(cell, auxcell) + pscf.hf.get_t(cell)
+#    e1 = mf.scf()
+#    print e1 # ~ -4.32022187118
+
+    import pyscf.dft
+    mf = pyscf.dft.RKS(cell)
+    mf.kernel()
+    dm = mf.make_rdm1()
+    vj1 = get_j(cell, dm, auxcell)
+    v1 = get_nuc(cell, auxcell)
+    print vj1
+    print v1
+    print vj1+v1
