@@ -1328,7 +1328,8 @@ class Mole(object):
         self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                               'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
                                (self.nelectron, self.spin))
 
         if self.symmetry:

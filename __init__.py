@@ -67,7 +67,7 @@ fci
 cc
     Coupled Cluster
 dmrgscf
-    2-step DMRG-CASSCF
+    DMRGCI, 1-step and 2-step DMRG-CASSCF
 fciqmcscf
     2-step FCIQMC-CASSCF
 grad

@@ -125,14 +125,14 @@ def make_hdiag(h1e, eri, norb, nelec):
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
 
-    occslista = link_indexa[:,:neleca,0].copy('C')
-    occslistb = link_indexb[:,:nelecb,0].copy('C')
+    occslista = numpy.asarray(link_indexa[:,:neleca,0], order='C')
+    occslistb = numpy.asarray(link_indexb[:,:nelecb,0], order='C')
     hdiag = numpy.empty(na*nb)
-    jdiag_aa = numpy.einsum('iijj->ij',g2e_aa).copy('C')
-    jdiag_ab = numpy.einsum('iijj->ij',g2e_ab).copy('C')
-    jdiag_bb = numpy.einsum('iijj->ij',g2e_bb).copy('C')
-    kdiag_aa = numpy.einsum('ijji->ij',g2e_aa).copy('C')
-    kdiag_bb = numpy.einsum('ijji->ij',g2e_bb).copy('C')
+    jdiag_aa = numpy.asarray(numpy.einsum('iijj->ij',g2e_aa), order='C')
+    jdiag_ab = numpy.asarray(numpy.einsum('iijj->ij',g2e_ab), order='C')
+    jdiag_bb = numpy.asarray(numpy.einsum('iijj->ij',g2e_bb), order='C')
+    kdiag_aa = numpy.asarray(numpy.einsum('ijji->ij',g2e_aa), order='C')
+    kdiag_bb = numpy.asarray(numpy.einsum('ijji->ij',g2e_bb), order='C')
     libfci.FCImake_hdiag_uhf(hdiag.ctypes.data_as(ctypes.c_void_p),
                              h1e_a.ctypes.data_as(ctypes.c_void_p),
                              h1e_b.ctypes.data_as(ctypes.c_void_p),

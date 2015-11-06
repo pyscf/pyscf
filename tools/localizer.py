@@ -240,7 +240,7 @@ class localizer:
     def __hessian_matvec( self, vecin ):
     
         vector_out = np.zeros( [ self.numVars ], dtype=ctypes.c_double )
-        vector_inp = np.array( vecin, copy=True, dtype=ctypes.c_double )
+        vector_inp = np.asarray( vecin, order='C', dtype=ctypes.c_double )
         
         if ( self.__which == 'boys' ):
         

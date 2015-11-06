@@ -22,7 +22,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
     Args:
         intor_name : str
             Name of the 1-electron integral.  The list of 1e integrals in
-            current version of libcint (v2.5.5)
+            current version of libcint (v2.6.4)
 
             ==========================  =========  =============
             Function                    type       Expression

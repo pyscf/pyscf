@@ -501,6 +501,8 @@ def _dot_ao_ao(mol, ao1, ao2, nao, ngrids, non0tab):
     '''return pyscf.lib.dot(ao1.T, ao2)'''
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
+    ao1 = numpy.asarray(ao1, order='C')
+    ao2 = numpy.asarray(ao2, order='C')
     vv = numpy.empty((nao,nao))
     libdft.VXCdot_ao_ao(vv.ctypes.data_as(ctypes.c_void_p),
                         ao1.ctypes.data_as(ctypes.c_void_p),
@@ -518,6 +520,8 @@ def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     vm = numpy.empty((ngrids,dm.shape[1]))
+    ao = numpy.asarray(ao, order='C')
+    dm = numpy.asarray(dm, order='C')
     libdft.VXCdot_ao_dm(vm.ctypes.data_as(ctypes.c_void_p),
                         ao.ctypes.data_as(ctypes.c_void_p),
                         dm.ctypes.data_as(ctypes.c_void_p),

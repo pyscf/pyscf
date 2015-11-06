@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import copy
 import numpy
 import pyscf.lib
 from pyscf.fci import cistring
@@ -475,6 +476,8 @@ def fix_spin_(fciobj, shift=.1, ss_value=None):
         return ci1
     fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
     return fciobj
+def fix_spin(fciobj, shift=.1, ss_value=None):
+    return fix_spin_(copy.copy(fciobj), shift, ss_value)
 
 
 if __name__ == '__main__':

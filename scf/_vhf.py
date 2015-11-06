@@ -162,10 +162,11 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
-        dms = (dms,)
+        dms = (numpy.asarray(dms, order='C'),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
+        dms = numpy.asarray(dms, order='C')
 
     if vhfopt is None:
         cintor = _fpointer('cint2e_sph')
@@ -231,10 +232,11 @@ def direct_mapdm(intor, intsymm, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
-        dms = (dms,)
+        dms = (numpy.asarray(dms, order='C'),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
+        dms = numpy.asarray(dms, order='C')
     if isinstance(jkdescript, str):
         njk = 1
         jkdescript = (jkdescript,)
@@ -303,9 +305,11 @@ def direct_bindm(intor, intsymm, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
+        dms = (numpy.asarray(dms, order='C'),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
+        dms = numpy.asarray(dms, order='C')
     if isinstance(jkdescript, str):
         njk = 1
         jkdescript = (jkdescript,)
@@ -335,7 +339,6 @@ def direct_bindm(intor, intsymm, jkdescript,
             f1 = _fpointer('CVHFnr%s_%s_%s'%(intsymm, dmsym[::-1], vsym))
         else:
             f1 = _fpointer('CVHFnr%s_%s_%s'%(intsymm, dmsym, vsym))
-        assert(dms[i].flags.c_contiguous)
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
     vjk = numpy.empty((njk,ncomp,nao,nao))
@@ -391,10 +394,11 @@ def rdirect_mapdm(intor, intsymm, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
-        dms = (dms,)
+        dms = (numpy.asarray(dms, order='C'),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
+        dms = numpy.asarray(dms, order='C')
     if isinstance(jkdescript, str):
         njk = 1
         jkdescript = (jkdescript,)
@@ -422,7 +426,6 @@ def rdirect_mapdm(intor, intsymm, jkdescript,
     for i, (dmsym, vsym) in enumerate(descr_sym):
         f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         for j in range(n_dm):
-            assert(dms[j].flags.c_contiguous)
             dm1[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
     vjk = numpy.empty((njk,n_dm*ncomp,nao,nao), dtype=numpy.complex)
@@ -458,9 +461,11 @@ def rdirect_bindm(intor, intsymm, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
+        dms = (numpy.asarray(dms, order='C'),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
+        dms = numpy.asarray(dms, order='C')
     if isinstance(jkdescript, str):
         njk = 1
         jkdescript = (jkdescript,)
@@ -488,7 +493,6 @@ def rdirect_bindm(intor, intsymm, jkdescript,
     dm1 = (ctypes.c_void_p*(n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
         f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
-        assert(dms[i].flags.c_contiguous)
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
     vjk = numpy.empty((njk,ncomp,nao,nao), dtype=numpy.complex)

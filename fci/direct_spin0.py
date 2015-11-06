@@ -90,10 +90,10 @@ def make_hdiag(h1e, eri, norb, nelec):
     eri = pyscf.ao2mo.restore(1, eri, norb)
     link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na = link_index.shape[0]
-    occslist = link_index[:,:neleca,0].copy('C')
+    occslist = numpy.asarray(link_index[:,:neleca,0], order='C')
     hdiag = numpy.empty((na,na))
-    jdiag = numpy.einsum('iijj->ij',eri).copy('C')
-    kdiag = numpy.einsum('ijji->ij',eri).copy('C')
+    jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
+    kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')
     libfci.FCImake_hdiag(hdiag.ctypes.data_as(ctypes.c_void_p),
                          h1e.ctypes.data_as(ctypes.c_void_p),
                          jdiag.ctypes.data_as(ctypes.c_void_p),
