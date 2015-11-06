@@ -3,6 +3,7 @@ import numpy
 import pyscf.df.incore
 import pyscf.lib.parameters as param
 import pyscf.gto.mole
+from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc import gto
@@ -12,17 +13,11 @@ def format_aux_basis(cell, auxbasis='weigend'):
     '''
     See df.incore.format_aux_basis
     '''
-    #auxmol=pyscf.df.incore.format_aux_basis(cell, auxbasis)
-    auxcell=cell.copy()
-    auxcell.basis=auxbasis
-    precision=1.e-9 # FIXME
+    auxcell = cell.copy()
+    auxcell.basis = auxbasis
+    auxcell.precision = 1.e-9
     auxcell.build(False,False)
-    #auxcell.nimgs=gto.get_nimgs(auxcell, precision)
-
-    # auxcell.__dict__.update(auxmol.__dict__)
-    # print "MOL"
-    # print auxmol._basis
-    # print auxcell._basis
+    auxcell.nimgs = auxcell.get_nimgs(auxcell.precision)
 
     return auxcell
 
@@ -31,41 +26,31 @@ def aux_e2(cell, auxcell, intor):
 
     Implements double summation over lattice vectors: \sum_{lm} (i[l]j[m]|L[0]).
     '''
-    nimgs=[0,0,0]
     # sum over largest number of images in either cell or auxcell
-    for i in range(3):
-        ci = cell.nimgs[i]
-        ai = auxcell.nimgs[i]
-        nimgs[i] = ci if ci > ai else ai
-
-    print "Images summed over in DFT", nimgs
+    nimgs = numpy.max((cell.nimgs, auxcell.nimgs),axis=0)
     Ls = scfint.get_lattice_Ls(cell, nimgs)
-    Ms = Ls
+    logger.debug1(cell, "Images summed over in DFT %s", nimgs)
+    logger.debug2(cell, "Ls = %s", Ls)
 
     # cell with *all* images
     rep_cell = cell.copy()
     rep_cell.atom = []
     for L in Ls:
         for atom, coord in cell._atom:
-            #print "Lattice L", L
             rep_cell.atom.append([atom, coord + L])
     rep_cell.unit = 'B'
     rep_cell.build(False,False)
-    #print "ATOMS", rep_cell.atom
+    rep_cell.nimgs = rep_cell.get_nimgs(rep_cell.precision)
 
     rep_aux_e2 = pyscf.df.incore.aux_e2(rep_cell, auxcell, intor, aosym='s1')
 
     nao = cell.nao_nr()
     naoaux = auxcell.nao_nr()
     nL = len(Ls)
-    
-    rep_aux_e2=rep_aux_e2.reshape(nao*nL,nao*nL,-1)
-    
-    aux_e2=numpy.zeros([nao,nao,naoaux])
 
-    # print rep_aux_e2.shape
-    # for (i, j, k), val in numpy.ndenumerate(rep_aux_e2):
-    #     print (i,j,k), val
+    rep_aux_e2=rep_aux_e2.reshape(nao*nL,nao*nL,-1)
+
+    aux_e2=numpy.zeros([nao,nao,naoaux])
 
     # double lattice sum
     for l in range(len(Ls)):
@@ -73,7 +58,7 @@ def aux_e2(cell, auxcell, intor):
             aux_e2+=rep_aux_e2[l*nao:(l+1)*nao,m*nao:(m+1)*nao,:]
 
     aux_e2.reshape([nao*nao,naoaux])
-    
+
     return aux_e2
 
 def aux_e2_grid(cell, auxcell, gs):
@@ -139,8 +124,10 @@ def test_df():
     print np.linalg.norm(c3-c3grid) # should be zero within integration error
 
 def auxnorm(cell):
-    norm=numpy.zeros([cell.nao_nr()])
-    ip=0
+    ''' \int gto dr
+    '''
+    norm = numpy.zeros(cell.nao_nr())
+    ip = 0
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         e = cell.bas_exp(ib)[0]
@@ -241,96 +228,4 @@ def test_poisson():
                              # sum which omits K=0
 
     print "Error of DF from reference", numpy.dot(v1,rho1)-ref_j # should be close to zero
-
-#test_poisson()
-
-def test_poisson2():
-    from pyscf import gto
-    from pyscf.lib.parameters import BOHR
-    import pyscf.pbc.gto as pgto
-    import pyscf.pbc.scf as pscf
-    import numpy as np
-    import scipy
-
-    B = BOHR
-
-    Lunit = 4.*B
-    Ly = Lz = Lunit*B
-    Lx = Lunit*B
-
-    h = np.diag([Lx,Ly,Lz])
-    
-    cell = pgto.Cell()
-    cell.atom = '''He     1.    1.       1.'''
-    cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    cell.h = h
-    n = 30
-    cell.gs = np.array([n,n,n])
-    cell.pseudo = None
-    cell.output = None
-    cell.verbose = 0
-    cell.build()
-
-    bas=genbas(2., 1.8,(10.,0.3), 0)
-    auxcell=format_aux_basis(cell, {'He': bas })
-
-    idx = []
-    ip = 0
-# normalize aux basis
-    for ib in range(auxcell.nbas):
-        l = auxcell.bas_angular(ib)
-        if l == 0:
-            e = auxcell.bas_exp(ib)[0]
-            ptr = auxcell._bas[ib,gto.PTR_COEFF]
-            auxcell._env[ptr] = 1/np.sqrt(4*np.pi)/gto.mole._gaussian_int(2,e)
-            idx.append(ip)
-            ip += 1
-        else:
-            ip += 2*l+1
-
-    gs = np.array([40,40,40])
-
-    ovlp=scfint.get_ovlp(cell)
-    dm=2*scipy.linalg.inv(ovlp) 
-
-    print "DM", dm
-    nelec=np.einsum('ij,ij',dm,ovlp)
-    print "nelec", nelec
-
-    j=pscf.hf.get_j(cell, dm)
-    ref_j=np.einsum('ij,ij',j,dm)
-    print "Reference chargeless Coulomb", ref_j
-
-    nao = dm.shape[0]
-    c3 = aux_e2(cell, auxcell, 'cint3c1e_sph').reshape(nao,nao,-1)
-    rho = np.einsum('ijk,ij->k', c3, dm)
-
-    ovlp = pscf.scfint.get_ovlp(cell)
-    nelec = np.einsum('ij,ij', ovlp, dm)
-
-    idx = where2(auxcell)
-    chg = numpy.ones(2)*nelec/2
-    s1 = pscf.scfint.get_ovlp(auxcell)
-    rho -= numpy.einsum('ij,j->i', s1[:,idx], chg)
-    c2 = pscf.scfint.get_t(auxcell)
-    v1 = np.linalg.solve(c2, 2*np.pi*rho)
-    vj = np.einsum('ijk,k->ij', c3, v1)
-
-    print np.dot(v1, rho), (vj*dm).sum(), ref_j
-
-
-def where2(auxcell):
-    import numpy as np
-    ip = 0
-    idx = []
-    for ib in range(auxcell.nbas):
-        l = auxcell.bas_angular(ib)
-        e = auxcell.bas_exp(ib)[0]
-        if l == 0:
-            if abs(e-2)<.1:
-                idx.append(ip)
-            ip += 1
-        else:
-            ip += 2*l+1
-    return np.array(idx)
 

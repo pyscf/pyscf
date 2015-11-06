@@ -1087,7 +1087,8 @@ class Mole(object):
 
     Examples:
 
-    >>> mol = Mole(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
+    >>> mol = Mole()
+    >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
     >>> print(mol.atom_symbol(0))
     H^2
     >>> print(mol.atom_pure_symbol(0))
@@ -1097,7 +1098,7 @@ class Mole(object):
     >>> print(mol.intor('cint1e_ovlp_sph'))
     [[ 0.99999999  0.43958641]
      [ 0.43958641  0.99999999]]
-    >>> mol.charge = 1
+    >>> mol.Charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
 

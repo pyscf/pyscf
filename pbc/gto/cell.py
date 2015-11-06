@@ -102,37 +102,71 @@ def format_basis(basis_tab):
     return fmt_basis
 
 def copy(cell):
+    '''Deepcopy of the given :class:`Cell` object
+    '''
     import copy
     newcell = pyscf.gto.mole.copy(cell)
     newcell._pseudo = copy.deepcopy(cell._pseudo)
     return newcell
 
 def pack(cell):
+    '''Pack the given :class:`Cell` to a dict, which can be serialized with :mod:`pickle`
+    '''
     cldic = pyscf.gto.mole.pack(cell)
     cldic['h'] = cell.h
     cldic['gs'] = cell.gs
     cldic['precision'] = cell.precision
-#FIXME: Distinguish the input arg and the internal format of the following, so
-# that we can save the input arg in the cell-dic
-#    cldic['Gv'] = cell.Gv
-#    cldic['nimgs'] = cell.nimgs
-#    cldic['ew_eta'] = cell.ew_eta
-#    cldic['ew_cut'] = cell.ew_cut
+    cldic['nimgs'] = cell.nimgs
+    cldic['ew_eta'] = cell.ew_eta
+    cldic['ew_cut'] = cell.ew_cut
     return cldic
 
 def unpack(celldic):
+    '''Convert the packed dict to a :class:`Cell` object.
+    '''
     cl = Cell()
     cl.__dict__.update(celldic)
     return cl
 
 
 class Cell(pyscf.gto.Mole):
+    '''A Cell object holds the basic information of a crystal.
+
+    Attributes:
+        h : (3,3) ndarray
+            The real-space unit cell lattice vector, three *columns*: array((a1,a2,a3))
+        gs : (3,) ndarray of ints
+            The number of *positive* G-vectors along each direction.
+        pseudo : dict or str
+            To define pseudopotential.
+        precision : float
+            To control Ewald sums and lattice sums accuracy
+        ke_cutoff : float
+            If set, defines a spherical cutoff of fourier components, with .5 * G**2 < ke_cutoff
+
+        ** Following attributes (for experts) are automatically generated. **
+
+        nimgs : (3,) ndarray of ints
+            Number of basis function images in lattice sums, It affects the
+            accuracy of integrals.  See :func:`get_nimgs`.
+        ew_eta, ew_cut : float
+            The Ewald 'eta' and 'cut' parameters.  See :func:`get_ewald_params`
+
+    (See other attributes in :class:`Mole`)
+
+    Examples:
+
+    >>> mol = Mole(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
+    >>> cl = Cell()
+    >>> cl.build(h='3 0 0; 0 3 0; 0 0 3', gs=[8,8,8], atom='C 1 1 1', basis='sto3g')
+    >>> print(cl.atom_symbol(0))
+    C
+    >>> print(cl.get_nimgs(1e-9))
+    [3,3,3]
+    '''
     def __init__(self, **kwargs):
         pyscf.gto.Mole.__init__(self, **kwargs)
-        self.h = None  # lattice vectors, three *columns*: array((a1,a2,a3))
-                       # See defs. in MH 3.1
-                       # scaled coordinates r = numpy.dot(h, s)
-                       # reciprocal lattice array((b1,b2,b3)) = inv(h).T
+        self.h = None # lattice vectors, three *columns*: array((a1,a2,a3))
         self.gs = None
         self.precision = 1.e-8
         self.nimgs = None
@@ -146,7 +180,10 @@ class Cell(pyscf.gto.Mole):
 # don't modify the following variables, they are not input arguments
         self.Gv = None
         self.vol = None
-        self._h = None
+        self._h = None # lattice vectors, three *columns*: array((a1,a2,a3))
+                       # See defs. in MH 3.1
+                       # scaled coordinates r = numpy.dot(_h, [x,y,z])
+                       # reciprocal lattice array((b1,b2,b3)) = inv(_h).T
         self._pseudo = None
         self._keys = set(self.__dict__.keys())
 
@@ -178,6 +215,9 @@ class Cell(pyscf.gto.Mole):
         if ew_cut is not None: self.ew_cut = ew_cut
         if pseudo is not None: self.pseudo = pseudo
         if basis is not None: self.basis = basis
+
+        assert(self.h is not None)
+        assert(self.gs is not None)
 
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
@@ -252,7 +292,7 @@ class Cell(pyscf.gto.Mole):
 #            return sum(nelecs)
 
     def get_nimgs(self, precision):
-        '''Choose number of basis function images in lattice sums
+        r'''Choose number of basis function images in lattice sums
         to include for given precision in overlap, using
 
         precision ~ 4 * pi * r^2 * e^{-\alpha r^2}
@@ -275,7 +315,7 @@ class Cell(pyscf.gto.Mole):
                        # case where there are functions on the edges of the box.
 
     def get_ewald_params(self, precision):
-        '''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+        r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
 
         Choice is based on largest G vector and desired relative precision.
 
@@ -291,8 +331,9 @@ class Cell(pyscf.gto.Mole):
                 The Ewald 'eta' and 'cut' parameters.
         '''
         #  See Martin, p. 85 
-        Gmax = min([ 2.*np.pi*self.gs[i]/lib.norm(self.lattice_vectors()[i,:]) 
-                     for i in range(3) ])
+        _h = self.lattice_vectors()
+        Gmax = min([ 2.*np.pi*self.gs[i]/lib.norm(_h[i,:]) for i in range(3) ])
+
         log_precision = np.log(precision)
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
 
@@ -307,8 +348,8 @@ class Cell(pyscf.gto.Mole):
         See Martin p. 85
 
         Args:
-            self : instance of :class:`Cell`
-            rcut : real space cut-off for interaction
+            rcut : number
+                real space cut-off for interaction
 
         Returns:
             cut : ndarray of 3 ints defining N_x
@@ -334,15 +375,15 @@ class Cell(pyscf.gto.Mole):
             Gv : (ngs, 3) ndarray of floats
                 The array of G-vectors.
         '''
-        invhT = scipy.linalg.inv(self.lattice_vectors().T)
+        invh = scipy.linalg.inv(self.lattice_vectors())
 
         gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
         gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)
         gzrange = range(self.gs[2]+1)+range(-self.gs[2],0)
-        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange)).T
+        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
 
-        Gv = 2*np.pi*np.dot(invhT,gxyz)
-        return Gv.T
+        Gv = 2*np.pi* np.dot(gxyz, invh)
+        return Gv
 
     def get_SI(self):
         '''Calculate the structure factor for all atoms; see MH (3.34).
@@ -354,19 +395,22 @@ class Cell(pyscf.gto.Mole):
             SI : (natm, ngs) ndarray, dtype=np.complex128
                 The structure factor for each atom at each G-vector.
         '''
-        ngs = self.Gv.shape[0]
-        SI = np.empty([self.natm, ngs], np.complex128)
-        for ia in range(self.natm):
-            SI[ia,:] = np.exp(-1j*np.dot(self.Gv, self.atom_coord(ia)))
+        coords = [self.atom_coord(ia) for ia in range(self.natm)]
+        SI = np.exp(-1j*np.dot(coords, self.Gv.T))
         return SI
 
     def lattice_vectors(self):
-        if self.unit.startswith(('B','b','au','AU')):
-            return np.asarray(self.h)
-        elif self.unit.startswith(('A','a')):
-            return np.asarray(self.h) * (1./param.BOHR)
+        if isinstance(self.h, str):
+            h = self.h.replace(';',' ').replace(',',' ').replace('\n',' ')
+            h = np.asarray([float(x) for x in h.split()]).reshape(3,3)
         else:
-            return np.asarray(self.h) * (1./self.unit)
+            h = np.asarray(self.h)
+        if self.unit.startswith(('B','b','au','AU')):
+            return h
+        elif self.unit.startswith(('A','a')):
+            return h * (1./param.BOHR)
+        else:
+            return h * (1./self.unit)
 
     def get_abs_kpts(self, scaled_kpts):
         '''Get absolute kpts (in inverse Bohr), given "scaled" kpts in fractions 

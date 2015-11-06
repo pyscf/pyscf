@@ -9,33 +9,22 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 
 
-mol = gto.Mole()
-mol.unit = 'B'
-L = 60
-mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
-# these are some exponents which are not hard to integrate
-mol.basis = { 'He': [[0, (0.8, 1.0)],
-                     [0, (1.0, 1.0)],
-                     [0, (1.2, 1.0)]] }
-mol.verbose = 0
-mol.build()
-
-m = rks.RKS(mol)
-m.xc = 'LDA,VWN_RPA'
-e0 =  (m.scf()) # -2.64096172441
-
 def make_grids(n):
-    pseudo = None
+    L = 60
     cell = pbcgto.Cell()
+    cell.verbose = 0
+    cell.output = '/dev/null'
     cell.unit = 'B'
     cell.h = ((L,0,0),(0,L,0),(0,0,L))
     cell.gs = [n,n,n]
     cell.nimgs = [0,0,0]
 
-    cell.atom = mol.atom
-    cell.basis = mol.basis
-    cell.pseudo = pseudo
-    cell.build()
+    cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
+    cell.basis = {'He': [[0, (0.8, 1.0)],
+                         [0, (1.0, 1.0)],
+                         [0, (1.2, 1.0)]] }
+    cell.pseudo = None
+    cell.build(False, False)
     grids = gen_grid.UniformGrids(cell)
     grids.setup_grids_()
     return cell, grids
@@ -64,7 +53,7 @@ class KnowValues(unittest.TestCase):
         rho *= 1/np.linalg.norm(rho)
         vrho = np.random.random(ng)
         ao1 = numint.eval_ao(cell, grids.coords)
-        mat1 = numint.eval_mat(mol, ao1, grids.weights, rho, vrho)
+        mat1 = numint.eval_mat(cell, ao1, grids.weights, rho, vrho)
         w = np.arange(mat1.size) * .01
         self.assertAlmostEqual(np.dot(w,mat1.ravel()), (.14777107967912118+0j), 8)
 

@@ -2,6 +2,7 @@
 
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf.gto import mole
 from pyscf.gto import moleintor
 from pyscf.lib import logger
@@ -152,7 +153,8 @@ def project_mo_nr2nr(mol1, mo1, mol2):
     '''
     s22 = mol2.intor_symmetric('cint1e_ovlp_sph')
     s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
-    return numpy.linalg.solve(s22, numpy.dot(s21, mo1))
+    mo2 = numpy.dot(s21, mo1)
+    return scipy.linalg.cho_solve(scipy.linalg.cho_factor(s22), mo2)
 
 def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('cint1e_ovlp')
@@ -163,7 +165,7 @@ def project_mo_nr2r(mol1, mo1, mol2):
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
     mo2 = numpy.dot(s21, mo1)
-    return numpy.linalg.solve(s22, mo2)
+    return scipy.linalg.cho_solve(scipy.linalg.cho_factor(s22), mo2)
 
 def project_mo_r2r(mol1, mo1, mol2):
     nbas1 = len(mol1._bas)
@@ -182,8 +184,8 @@ def project_mo_r2r(mol1, mo1, mol2):
     t21 = moleintor.getints('cint1e_spsp', atm, bas, env,
                             bras, kets, comp=1, hermi=0)
     n2c = s21.shape[1]
-    pl = numpy.linalg.solve(s22, s21)
-    ps = numpy.linalg.solve(t22, t21)
+    pl = scipy.linalg.cho_solve(scipy.linalg.cho_factor(s22), s21)
+    ps = scipy.linalg.cho_solve(scipy.linalg.cho_factor(t22), t21)
     return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
                          numpy.dot(ps, mo1[n2c:])))
 

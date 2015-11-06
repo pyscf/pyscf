@@ -6,6 +6,8 @@
 import h5py
 import pyscf.gto
 
+from numpy import array  # for eval() function
+
 def load_chkfile_key(chkfile, key):
     return load(chkfile, key)
 def load(chkfile, key):
@@ -108,7 +110,7 @@ def load_mol(chkfile):
             Name of chkfile.
 
     Returns:
-        A Mole object
+        A (initialized/built) Mole object
 
     Examples:
 
@@ -119,13 +121,9 @@ def load_mol(chkfile):
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
     with h5py.File(chkfile) as fh5:
-        mol = pyscf.gto.Mole()
-        mol.verbose = 0
-        mol.output = '/dev/null'
         moldic = eval(fh5['mol'].value)
-        if 'grids' in moldic:
-            del(moldic['grids'])
-        mol.build(False, False, **moldic)
+        mol = pyscf.gto.mole.unpack(moldic)
+        mol.build(False, False)
     return mol
 
 def save_mol(mol, chkfile):

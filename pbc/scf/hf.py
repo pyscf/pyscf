@@ -21,7 +21,8 @@ from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.scf import scfint
 #import pyscf.pbc.scf.scfint as scfint
-
+from pyscf.lib import logger
+import pyscf.pbc.scf.chkfile
 
 def get_ovlp(cell, kpt=None):
     '''Get the overlap AO matrix.
@@ -203,8 +204,7 @@ def get_j(cell, dm, kpt=None):
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
     return vj
 
-
-def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
+def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
 
     Formulation of Martin, App. F2.
@@ -216,7 +216,6 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     See Also:
         pyscf.pbc.gto.get_ewald_params
     '''
-    log = logger.Logger
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -324,6 +323,32 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     #log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
 
+#FIXME: project initial guess for k-point
+def init_guess_by_chkfile(cell, chkfile_name, project=True):
+    '''Read the HF results from checkpoint file, then project it to the
+    basis defined by ``cell``
+
+    Returns:
+        Density matrix, 2D ndarray
+    '''
+    from pyscf.pbc.scf import addons
+    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+
+    def fproj(mo):
+        if project:
+            return addons.project_mo_nr2nr(chk_cell, mo, cell)
+        else:
+            return mo
+    if scf_rec['mo_coeff'].ndim == 2:
+        mo = scf_rec['mo_coeff']
+        mo_occ = scf_rec['mo_occ']
+        dm = pyscf.scf.hf.make_rdm1(fproj(mo), mo_occ)
+    else:  # UHF
+        mo = scf_rec['mo_coeff']
+        mo_occ = scf_rec['mo_occ']
+        dm = pyscf.scf.hf.make_rdm1(fproj(mo[0]), mo_occ[0]) \
+           + pyscf.scf.hf.make_rdm1(fproj(mo[1]), mo_occ[1])
+    return dm
 
 # TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
 # inherit from that.
@@ -336,11 +361,10 @@ class RHF(pyscf.scf.hf.RHF):
         self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
         self.mol_ex = False
 
-        if kpt is None:
-            kpt = np.zeros(3)
         # TODO: Garnet, check this change?
         # i.e. self.kpt should be the passed kpt and not always gamma.
-        #self.kpt = np.array([0,0,0])
+        #if kpt is None:
+        #    kpt = np.zeros(3)
         self.kpt = kpt 
 
         if analytic_int == None:
@@ -422,8 +446,9 @@ class RHF(pyscf.scf.hf.RHF):
         etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
         return etot.real
     
-    def ewald_nuc(self):
-        return ewald(self.cell, self.cell.ew_eta, self.cell.ew_cut)
+    def ewald_nuc(self, cell=None):
+        if cell is None: cell = self.cell
+        return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
         
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
         '''Reconstruct Fock operator at a given 'band' k-point, not necessarily 
@@ -442,4 +467,9 @@ class RHF(pyscf.scf.hf.RHF):
         Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
 
         return Fb, band_ovlp
+
+    def init_guess_by_chkfile(self, chk=None, project=True):
+        return init_guess_by_chkfile(self.cell, chk, project)
+    def from_chk(self, chk=None, project=True):
+        return self.init_guess_by_chkfile(chk, project)
 

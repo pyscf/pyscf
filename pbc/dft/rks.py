@@ -24,6 +24,7 @@ class RKS(pyscf.pbc.scf.hf.RHF):
         self.xc = 'LDA,VWN'
         self._ecoul = 0
         self._exc = 0
+# CHECK (Q): lazy create self._numint, since self.kpt might be changed
         self._numint = numint._NumInt(self.kpt) # use periodic images of AO in 
                                                 # numerical integration
         self._keys = self._keys.union(['xc', 'grids'])
@@ -40,4 +41,4 @@ class RKS(pyscf.pbc.scf.hf.RHF):
     def energy_elec(self, dm, h1e=None, vhf=None):
         if h1e is None: h1e = pyscf.pbc.scf.hf.get_hcore(self, self.cell)
         return pyscf.dft.rks.energy_elec(self, dm, h1e)
-    
+

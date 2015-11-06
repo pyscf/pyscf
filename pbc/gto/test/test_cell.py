@@ -12,6 +12,20 @@ cl.build(
     atom = 'He %f %f %f' % ((L/2.,)*3),
     basis = 'ccpvdz')
 
+numpy.random.seed(1)
+cl1 = pgto.Cell()
+cl1.build(h = numpy.random.random((3,3)),
+          gs = [n,n,n],
+          atom ='''He .1 .0 .0
+                   He .5 .1 .0
+                   He .0 .5 .0
+                   He .1 .3 .2''',
+          basis = 'ccpvdz')
+
+def finger(a):
+    w = numpy.cos(numpy.arange(a.size))
+    return numpy.dot(a.ravel(), w)
+
 class KnowValues(unittest.TestCase):
     def test_nimgs(self):
         self.assertTrue(numpy.all(cl.get_nimgs(9e-1)==[2,2,2]))
@@ -19,6 +33,18 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.all(cl.get_nimgs(1e-4)==[4,4,4]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-6)==[4,4,4]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-9)==[5,5,5]))
+
+    def test_Gv(self):
+        a = cl1.get_Gv()
+        self.assertAlmostEqual(finger(a), -99.791927068519939, 10)
+
+    def test_SI(self):
+        a = cl1.get_SI()
+        self.assertAlmostEqual(finger(a), (16.506917823339265+1.6393578329869585j), 10)
+
+    def test_Rbounding_sphere(self):
+        self.assertTrue(numpy.all(cl1.get_Rbounding_sphere(4.5)==[12,8,7]))
+
 
 
 if __name__ == '__main__':
