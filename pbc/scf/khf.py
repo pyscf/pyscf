@@ -1,15 +1,18 @@
+'''
+Hartree-Fock for periodic systems with k-point sampling
+
+See Also:
+    hf.py : Hartree-Fock for periodic systems at a single k-point
+'''
+
 import numpy as np
-import scipy.linalg
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.scf.hf as pbchf
-import pyscf.pbc.dft.rks as pbcrks
-from pyscf.pbc import tools
-from pyscf.pbc import gto as pbcgto
-
 from pyscf.lib import logger
-import pyscf.pbc.scf.scfint as scfint
-pi = np.pi
+from pyscf.pbc import tools
+from pyscf.pbc.scf import scfint
+
 
 def get_ovlp(mf, cell, kpts):
     '''Get the overlap AO matrices at sampled k-points.
@@ -18,7 +21,7 @@ def get_ovlp(mf, cell, kpts):
         kpts : (nkpts, 3) ndarray
 
     Returns:
-        ovlp_kpts : (nkpts, nao, nao) ndarray                    
+        ovlp_kpts : (nkpts, nao, nao) ndarray
     '''
     nkpts = len(kpts)
     nao = cell.nao_nr()
@@ -30,6 +33,7 @@ def get_ovlp(mf, cell, kpts):
         else:
             ovlp_kpts[k,:,:] = pbchf.get_ovlp(cell, kpt)
     return ovlp_kpts
+
 
 def get_hcore(mf, cell, kpts):
     '''Get the core Hamiltonian AO matrices at sampled k-points.
@@ -51,6 +55,7 @@ def get_hcore(mf, cell, kpts):
             hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
     return hcore
 
+
 def get_j(mf, cell, dm_kpts, kpts):
     '''Get the Coulomb (J) AO matrices at sampled k-points.
 
@@ -59,7 +64,7 @@ def get_j(mf, cell, dm_kpts, kpts):
             Density matrix at each k-point
         kpts : (nkpts, 3) ndarray
 
-    Returns: 
+    Returns:
         vj : (nkpts, nao, nao) ndarray
 
     Note: This changes the mf object (mf._ecoul)
@@ -91,10 +96,11 @@ def get_j(mf, cell, dm_kpts, kpts):
         # TODO: energy is normally evaluated in dft.rks.get_veff
         ecoul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:])
     if abs(ecoul.imag > 1.e-12):
-        raise RuntimeError("Coulomb energy has imaginary part, " 
+        raise RuntimeError("Coulomb energy has imaginary part, "
                            "something is wrong!", ecoul.imag)
     mf._ecoul = ecoul.real
     return vj_kpts
+
 
 def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
               diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
@@ -106,10 +112,9 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
        fock : (nkpts, nao, nao) ndarray
     '''
     fock = np.zeros_like(h1e_kpts)
-    nkpts = len(mf.kpts)
     fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
                                vhf_kpts, dm_kpts,
-                               cycle, adiis, diis_start_cycle, 
+                               cycle, adiis, diis_start_cycle,
                                level_shift_factor, damp_factor)
     return fock
 
@@ -122,7 +127,7 @@ class KRHF(pbchf.RHF):
     e.g. mo_coeff is (nkpts, nao, nao) ndarray
     '''
     def __init__(self, cell, kpts):
-        pbchf.RHF.__init__(self, cell,kpts)
+        pbchf.RHF.__init__(self, cell, kpts)
         self.kpts = kpts
         self.mo_occ = []
         self.mo_coeff_kpts = []
@@ -164,7 +169,7 @@ class KRHF(pbchf.RHF):
         return get_j(self, cell, dm_kpts, kpts)
 
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
 
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
@@ -185,7 +190,7 @@ class KRHF(pbchf.RHF):
                 Density matrix at each k-point
                 Note: Because get_veff is often called in pyscf.scf.hf with
                 kwargs, we have to use the same argument name, 'dm', as in
-                pyscf.scf.hf. 
+                pyscf.scf.hf.
             dm_last : (nkpts, nao, nao) ndarray
                 Previous density matrix at each k-point
             vhf_last: (nkpts, nao, nao) ndarray
@@ -274,19 +279,20 @@ class KRHF(pbchf.RHF):
         if mo_coeff_kpts is None:
             # Note: this is actually "self.mo_coeff_kpts"
             # which is stored in self.mo_coeff of the scf.hf.RHF superclass
-            mo_coeff_kpts = self.mo_coeff 
+            mo_coeff_kpts = self.mo_coeff
         if mo_occ_kpts is None:
             # Note: this is actually "self.mo_occ_kpts"
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
-            mo_occ_kpts = self.mo_occ 
+            mo_occ_kpts = self.mo_occ
 
         nkpts = len(mo_occ_kpts)
         dm_kpts = np.zeros_like(mo_coeff_kpts)
         for k in range(nkpts):
-            dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:]).T.conj()
+            dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], 
+                                                    mo_occ_kpts[k,:]).T.conj()
         return dm_kpts
 
-    def energy_elec(self,dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
+    def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         raise NotImplementedError
 
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
@@ -313,138 +319,5 @@ class KRHF(pbchf.RHF):
         # 
         # This can only reasonably be done for DFT, and using the 
         # real-space grid
-        
+
         raise NotImplementedError
-
-
-class KRKS(KRHF):
-    def __init__(self, cell, kpts):
-        KRHF.__init__(self, cell, kpts)
-        self._numint = _KNumInt(kpts) # use periodic images of AO in
-                                      # numerical integration
-        self.xc = 'LDA,VWN'
-        self._ecoul = 0
-        self._exc = 0
-
-    def dump_flags(self):
-        KRHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
-
-    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=0, hermi=1):
-        '''
-        Args:
-             See kscf.KRHF.get_veff
-
-        Returns:
-             vhf : (nkpts, nao, nao) ndarray
-                Effective potential corresponding to input density matrix at
-                each k-point
-        '''
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-
-        dm = np.array(dm, np.complex128) # e.g. if passed initial DM
-
-        vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
-                                      hermi)
-        return vhf
-
-    def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
-
-        if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-
-        nkpts = len(dm_kpts)
-        e1 = 0.
-        for k in range(nkpts):
-            e1 += 1./nkpts*np.einsum('ij,ji', h1e_kpts[k,:,:], dm_kpts[k,:,:]).real
-
-        tot_e = e1 + self._ecoul + self._exc
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, self._ecoul, self._exc)
-        return tot_e, self._ecoul + self._exc
-
-
-class _KNumInt(pyscf.dft.numint._NumInt):
-    '''
-    DFT KNumInt class
-
-    Generalization of standard NumInt class for multiple k-points and 
-    periodic images.
-    '''
-    def __init__(self, kpts=None):
-        pyscf.dft.numint._NumInt.__init__(self)
-        self.kpts = kpts
-
-    def eval_ao(self, mol, coords, isgga=False, relativity=0, bastart=0,
-                bascount=None, non0tab=None, verbose=None):
-        '''
-        Returns:
-            ao_kpts: (nkpts, ngs, nao) ndarray 
-                AO values at each k-point
-        '''
-        nkpts = len(self.kpts)
-        ngs = len(coords)
-        nao = mol.nao_nr()
-
-        ao_kpts = np.empty([nkpts, ngs, nao],np.complex128)
-        for k in range(nkpts):
-            kpt = self.kpts[k,:]
-            ao_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(mol, coords, kpt, isgga,
-                                  relativity, bastart, bascount,
-                                  non0tab, verbose)
-        return ao_kpts
-
-    def eval_rho(self, mol, ao_kpts, dm_kpts, non0tab=None,
-             isgga=False, verbose=None):
-        '''
-        Args:
-            mol : Mole or Cell object
-            ao_kpts : (nkpts, ngs, nao) ndarray
-                AO values at each k-point
-            dm_kpts: (nkpts, nao, nao) ndarray
-                Density matrix at each k-point
-
-        Returns:
-           rhoR : (ngs,) ndarray
-        '''
-        nkpts, ngs, nao = ao_kpts.shape
-        rhoR = np.zeros(ngs)
-        for k in range(nkpts):
-            rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
-        return rhoR
-
-    def eval_rho2(self, mol, ao, dm, non0tab=None, isgga=False,
-                  verbose=None):
-        raise NotImplementedError
-
-    def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
-               max_memory=2000, verbose=None):
-        '''
-        Use slow function in numint, which only calls eval_rho, eval_mat.
-        Faster function uses eval_rho2 which is not yet implemented.
-        '''
-        # TODO: fix spin, relativity
-        spin=0; relativity=0
-        return pyscf.dft.numint.nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
-                                           spin, relativity, hermi,
-                                           max_memory, verbose)
-
-    def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
-               max_memory=2000, verbose=None):
-        raise NotImplementedError
-
-    def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-                 isgga=False, verbose=None):
-        # use local function for complex eval_mat
-        nkpts = len(self.kpts)
-        nao = ao.shape[2]
-
-        mat = np.zeros((nkpts, nao, nao), dtype=ao.dtype)
-        for k in range(nkpts):
-            mat[k,:,:] = pyscf.pbc.dft.numint.eval_mat(mol, ao[k,:,:], weight,
-                                    rho, vrho, vsigma, non0tab,
-                                    isgga, verbose)
-        return mat
-
-#test_kscf_kgamma()

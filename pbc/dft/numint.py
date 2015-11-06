@@ -3,7 +3,7 @@ from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 import pyscf.lib
 import pyscf.dft
 from pyscf.pbc import tools
-from pyscf.pbc.scf import scfint
+#from pyscf.pbc.scf import scfint
 
 def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
@@ -33,7 +33,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     '''
     aoR = 0
     # TODO: this is 1j, not -1j; check for band_ovlp convention
-    for L in scfint.get_lattice_Ls(cell, cell.nimgs):
+    for L in tools.get_lattice_Ls(cell, cell.nimgs):
         if kpt is None:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,
                                             bastart, bascount,
@@ -49,7 +49,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         ke_mask = ke < cell.ke_cutoff
 
         aoG = numpy.zeros_like(aoR)
-        for i in range(nao):
+        for i in range(cell.nao_nr()):
             if isgga:
                 for c in range(4):
                     aoG[c][ke_mask, i] = tools.fft(aoR[c][:,i], cell.gs)[ke_mask]
@@ -281,9 +281,9 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
 
 
 class _NumInt(pyscf.dft.numint._NumInt):
-    '''Generalization of pyscf's _NumInt class for a single k-pt shift and
-    periodic images.'''
-
+    '''Generalization of pyscf's _NumInt class for a single k-point shift and
+    periodic images.
+    '''
     def __init__(self, kpt=None):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
@@ -318,4 +318,84 @@ class _NumInt(pyscf.dft.numint._NumInt):
         # use local function for complex eval_mat
         return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
                         isgga, verbose)
+
+
+class _KNumInt(pyscf.dft.numint._NumInt):
+    '''Generalization of pyscf's _NumInt class for k-point sampling and 
+    periodic images.
+    '''
+    def __init__(self, kpts=None):
+        pyscf.dft.numint._NumInt.__init__(self)
+        self.kpts = kpts
+
+    def eval_ao(self, mol, coords, isgga=False, relativity=0, bastart=0,
+                bascount=None, non0tab=None, verbose=None):
+        '''
+        Returns:
+            ao_kpts: (nkpts, ngs, nao) ndarray 
+                AO values at each k-point
+        '''
+        nkpts = len(self.kpts)
+        ngs = len(coords)
+        nao = mol.nao_nr()
+
+        ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
+        for k in range(nkpts):
+            kpt = self.kpts[k,:]
+            ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, isgga,
+                                  relativity, bastart, bascount,
+                                  non0tab, verbose)
+        return ao_kpts
+
+    def eval_rho(self, mol, ao_kpts, dm_kpts, non0tab=None,
+             isgga=False, verbose=None):
+        '''
+        Args:
+            mol : Mole or Cell object
+            ao_kpts : (nkpts, ngs, nao) ndarray
+                AO values at each k-point
+            dm_kpts: (nkpts, nao, nao) ndarray
+                Density matrix at each k-point
+
+        Returns:
+           rhoR : (ngs,) ndarray
+        '''
+        nkpts, ngs, nao = ao_kpts.shape
+        rhoR = numpy.zeros(ngs)
+        for k in range(nkpts):
+            rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
+        return rhoR
+
+    def eval_rho2(self, mol, ao, dm, non0tab=None, isgga=False,
+                  verbose=None):
+        raise NotImplementedError
+
+    def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
+               max_memory=2000, verbose=None):
+        '''
+        Use slow function in numint, which only calls eval_rho, eval_mat.
+        Faster function uses eval_rho2 which is not yet implemented.
+        '''
+        # TODO: fix spin, relativity
+        spin=0; relativity=0
+        return pyscf.dft.numint.nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
+                                           spin, relativity, hermi,
+                                           max_memory, verbose)
+
+    def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
+               max_memory=2000, verbose=None):
+        raise NotImplementedError
+
+    def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+                 isgga=False, verbose=None):
+        # use local function for complex eval_mat
+        nkpts = len(self.kpts)
+        nao = ao.shape[2]
+
+        mat = numpy.zeros((nkpts, nao, nao), dtype=ao.dtype)
+        for k in range(nkpts):
+            mat[k,:,:] = eval_mat(mol, ao[k,:,:], weight,
+                                    rho, vrho, vsigma, non0tab,
+                                    isgga, verbose)
+        return mat
 

@@ -1,8 +1,9 @@
 import numpy as np
 from pyscf import dft
-import pyscf.pbc.scf.scfint
 from pyscf.lib import logger
 from pyscf.lib.numpy_helper import cartesian_prod
+import pyscf.dft
+from pyscf.pbc import tools
 
 def gen_uniform_grids(cell):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
@@ -48,19 +49,6 @@ class UniformGrids(object):
         return self.setup_grids()
 
 
-def super_cell(cell, nimgs):
-    Ls = pyscf.pbc.scf.scfint.get_lattice_Ls(cell, nimgs)
-    scell = cell.copy()
-    scell.atom = []
-    for L in Ls:
-        atom1 = []
-        for ia in range(cell.natm):
-            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
-        scell.atom.extend(atom1)
-    scell.unit = 'B'
-    scell.build(False, False)
-    return scell
-
 def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
                     level=3, prune_scheme=dft.gen_grid.treutler_prune):
     '''real-space grids using Becke scheme
@@ -80,7 +68,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             return 1
         else:
             return n
-    scell = super_cell(cell, [fshrink(i) for i in cell.nimgs])
+    scell = tools.super_cell(cell, [fshrink(i) for i in cell.nimgs])
     atom_grids_tab = dft.gen_grid.gen_atomic_grids(scell, atom_grid, radi_method,
                                                    level, prune_scheme)
     coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)

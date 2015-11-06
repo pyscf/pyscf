@@ -8,26 +8,14 @@ See Also:
 '''
 
 import numpy as np
-import scipy.linalg
 import pyscf.scf
 import pyscf.scf.hf
 import pyscf.dft
 import pyscf.gto
 import pyscf.lib
-import pyscf.lib.parameters as param
-from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc import tools
 
-from pyscf.lib import logger
-
-def get_lattice_Ls(cell, nimgs):
-    '''Get the (unitful) lattice translation vectors for nearby images.'''
-    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
-                  for j in range(-nimgs[1],nimgs[1]+1)
-                  for k in range(-nimgs[2],nimgs[2]+1)
-                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
-    Ls = np.dot(Ts, cell._h.T)
-    return Ls
 
 def get_hcore(cell, kpt=None):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.'''
@@ -58,7 +46,7 @@ def get_int1e_cross(intor, cell1, cell2, kpt=None, comp=1):
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    Ls = get_lattice_Ls(cell1, nimgs)
+    Ls = tools.get_lattice_Ls(cell1, nimgs)
 # Change the basis position only, keep all other envrionments
     cellL = cell2.copy()
     ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
@@ -91,11 +79,8 @@ def get_t(cell, kpt=None):
 
 def test_periodic_ints():
     from pyscf import gto
-    from pyscf.lib.parameters import BOHR
     import pyscf.pbc.gto as pgto
     import scf
-
-    B = BOHR
 
     mol = gto.Mole()
     mol.verbose = 7
@@ -107,17 +92,11 @@ def test_periodic_ints():
 
     h = np.diag([Lx,Ly,Lz])
     
-    # mol.atom.extend([['He', (2*B, 0.5*Ly*B, 0.5*Lz*B)],
-    #                  ['He', (3*B, 0.5*Ly*B, 0.5*Lz*B)]])
-    #mol.atom.extend([['H', (0, 0, 0)],
-    #                  ['H', (1, 0, 0)]])
-
-
-    #mol.atom
     mol.build(
         verbose = 0,
-        atom = '''H     0    0.       0.
-        H     1    0.       0.
+        atom = '''
+            H     0    0.       0.
+            H     1    0.       0.
         ''',
         basis={'H':'sto-3g'})
     #    basis={'H':[[0,(1.0,1.0)]]})
@@ -132,7 +111,6 @@ def test_periodic_ints():
     cell = pgto.Cell()
     cell.__dict__ = mol.__dict__ # hacky way to make a cell
     cell.h = h
-    #cell.vol = scipy.linalg.det(cell.h)
     cell.nimgs = gto.get_nimgs(cell, 1.e-6)
     # print "NIMG",  
     print "NIMGS", cell.nimgs
