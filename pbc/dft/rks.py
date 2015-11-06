@@ -24,7 +24,7 @@ class RKS(pyscf.pbc.scf.hf.RHF):
         self.xc = 'LDA,VWN'
         self._ecoul = 0
         self._exc = 0
-# CHECK (Q): lazy create self._numint, since self.kpt might be changed
+#FIXME (Q): lazy create self._numint, since self.kpt might be changed
         self._numint = numint._NumInt(self.kpt) # use periodic images of AO in 
                                                 # numerical integration
         self._keys = self._keys.union(['xc', 'grids'])

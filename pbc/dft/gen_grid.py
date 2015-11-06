@@ -76,13 +76,9 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     # search for grids in unit cell
     #b1,b2,b3 = np.linalg.inv(h).T  # reciprocal lattice
     #np.einsum('kj,ij->ki', coords, (b1,b2,b3))
-    c111 = cell._h[:,0] + cell._h[:,1] + cell._h[:,2]
-    d1 = np.dot(coords, np.linalg.inv(cell._h))
-    d2 = np.dot(coords-c111, np.linalg.inv(cell._h))
-    # d1[:,0]>0 and d1[:,1] > 0 and d1[:,2] > 0 and
-    # d2[:,0]<0 and d2[:,1] < 0 and d2[:,2] < 0
-    mask = np.logical_and(reduce(np.logical_and, (d1>=0).T),
-                          reduce(np.logical_and, (d2< 0).T))
+    c = np.dot(coords, np.linalg.inv(cell._h))
+    mask = np.logical_and(reduce(np.logical_and, (c>=0).T),
+                          reduce(np.logical_and, (c< 1).T))
     return coords[mask], weights[mask]
 
 
