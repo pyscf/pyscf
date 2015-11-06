@@ -144,6 +144,7 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_baab(fcivec, norb, nelec):
+    assert(fcivec.flags.c_contiguous)
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -169,6 +170,7 @@ def _make_rdm2_baab(fcivec, norb, nelec):
                            bcre_index.ctypes.data_as(ctypes.c_void_p))
     return dm2
 def make_rdm2_baab(fcivec, norb, nelec):
+    assert(fcivec.flags.c_contiguous)
     dm2 = _make_rdm2_baab(fcivec, norb, nelec)
     dm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', fcivec, fcivec, norb, nelec)
     dm1b, dm2 = rdm.reorder_rdm(dm1b, dm2, inplace=True)
