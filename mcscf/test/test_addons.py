@@ -49,7 +49,7 @@ class KnowValues(unittest.TestCase):
 #TODO:        self.assertAlmostEqual(numpy.linalg.norm(mocc2), 2.59144951056707/numpy.sqrt(2), 7)
 
     def test_get_fock(self):
-        f1 = mcscf.addons.get_fock(mcr)
+        f1 = reduce(numpy.dot, (mcr.mo_coeff.T, mcscf.addons.get_fock(mcr), mcr.mo_coeff))
         self.assertTrue(numpy.allclose(f1, f1.T))
         self.assertAlmostEqual(numpy.linalg.norm(f1), 23.597476504476919, 7)
 #TODO:        f1 = mcscf.addons.get_fock(mcu)

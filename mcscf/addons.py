@@ -345,7 +345,7 @@ def make_rdm12(casscf, mo_coeff=None, ci=None):
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
 def get_fock(casscf, mo_coeff=None, ci=None):
-    '''Generalized Fock matrix
+    '''Generalized Fock matrix in AO representation
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
@@ -414,7 +414,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         return ss, s*2+1
 
 
-def state_average_e_(casscf, weights=(0.5,0.5)):
+def state_average(casscf, weights=(0.5,0.5)):
     ''' State average over the energy.  The energy funcitonal is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
@@ -426,43 +426,48 @@ def state_average_e_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-10)
     fcibase = casscf.fcisolver
-    class FakeCISolver(casscf.fcisolver.__class__):
+    fcibase_class = casscf.fcisolver.__class__
+    class FakeCISolver(fcibase_class):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
+            self.nroots = len(weights)
         def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
-            e, c = fcibase.kernel(h1, h2, ncas, nelecas, ci0,
-                                  nroots=self.nroots, **kwargs)
-            for i, ei in enumerate(e):
-                logger.debug(casscf, 'Energy for state %d = %.15g', i, ei)
+            e, c = fcibase_class.kernel(self, h1, h2, ncas, nelecas, ci0,
+                                        nroots=self.nroots, **kwargs)
+            if casscf.verbose >= logger.DEBUG:
+                ss = fcibase_class.spin_square(self, c, ncas, nelecas)
+                for i, ei in enumerate(e):
+                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                 i, ei, ss[0][i])
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = fcibase.kernel(h1, h2, norb, nelec, ci0,
-                                  max_cycle=casscf.ci_response_space,
-                                  nroots=self.nroots, **kwargs)
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                        max_cycle=casscf.ci_response_space,
+                                        nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
             for i, wi in enumerate(weights):
-                dm1 += wi*fcibase.make_rdm1(ci0[i], norb, nelec)
+                dm1 += wi*fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
             return dm1
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
             for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase.make_rdm12(ci0[i], norb, nelec)
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss = fcibase.spin_square(ci0, norb, nelec)[0]
+            ss = fcibase_class.spin_square(self, ci0, norb, nelec)[0]
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
-    casscf.fcisolver = FakeCISolver()
-    return casscf
+    return FakeCISolver()
 
 def state_average_(casscf, weights=(0.5,0.5)):
-    return state_average_e_(casscf, weights)
+    casscf.fcisolver = state_average(casscf, weights)
+    return casscf
 
 
 
@@ -504,6 +509,7 @@ if __name__ == '__main__':
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
     mol.basis = '6-31g'
+    mol.symmetry = 1
     mol.build()
 
     m = scf.RHF(mol)

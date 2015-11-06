@@ -185,9 +185,6 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         idx = numpy.argsort(occ)
         occ = occ[idx]
         ucas = ucas[:,idx]
-        if hasattr(mc, 'orbsym'): # for casci_symm
-            mc.orbsym[ncore:nocc] = mc.orbsym[ncore:nocc][idx]
-            mc.fcisolver.orbsym = mc.orbsym[ncore:nocc]
 
     occ = -occ
 
@@ -289,13 +286,12 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
     if ncore > 0:
         # note the last two args of ._eig for mc1step_symm
+        # mc._eig function is called to handle symmetry adapated fock
         w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
         if sort:
             idx = numpy.argsort(w)
             w = w[idx]
             c1 = c1[:,idx]
-            if hasattr(mc, 'orbsym'): # for mc1step_symm
-                mc.orbsym[:ncore] = mc.orbsym[:ncore][idx]
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
         mo_energy[:ncore] = w
     if nmo-nocc > 0:
@@ -304,8 +300,6 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             idx = numpy.argsort(w)
             w = w[idx]
             c1 = c1[:,idx]
-            if hasattr(mc, 'orbsym'): # for mc1step_symm
-                mc.orbsym[nocc:] = mc.orbsym[nocc:][idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
         mo_energy[nocc:] = w
     if log.verbose >= logger.DEBUG:
@@ -367,6 +361,8 @@ class CASCI(object):
             Active (nelec_alpha, nelec_beta)
         ncore : int or tuple of int
             Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+        natorb : bool
+            Whether to restore the natural orbital in CAS space.  Default is not.
         fcisolver : an instance of :class:`FCISolver`
             The pyscf.fci module provides several FCISolver for different scenario.  Generally,
             fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -430,12 +426,15 @@ class CASCI(object):
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 50
         self.fcisolver.conv_tol = 1e-8
+        self.natorb = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.mo_coeff = mf.mo_coeff
-        self.ci = None
         self.e_tot = 0
+        self.e_cas = None
+        self.ci = None
+        self.mo_coeff = mf.mo_coeff
+        self.mo_energy = mf.mo_energy
 
         self._keys = set(self.__dict__.keys())
 
@@ -446,6 +445,7 @@ class CASCI(object):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
+        log.info('natorb = %s', self.natorb)
         log.info('max_memory %d (MB)', self.max_memory)
         try:
             self.fcisolver.dump_flags(self.verbose)
@@ -506,27 +506,34 @@ class CASCI(object):
 
         self.dump_flags()
 
-        self.e_tot, e_cas, self.ci = \
+        self.e_tot, self.e_cas, self.ci = \
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
 
         log = logger.Logger(self.stdout, self.verbose)
+        if not isinstance(self.e_cas, (float, numpy.number)):
+            self.mo_coeff, _, self.mo_energy = \
+                    self.canonicalize(mo_coeff, self.ci[0], verbose=log)
+        else:
+            self.mo_coeff, _, self.mo_energy = \
+                    self.canonicalize(mo_coeff, self.ci, verbose=log)
+
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
             ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
-            if isinstance(e_cas, (float, numpy.number)):
+            if isinstance(self.e_cas, (float, numpy.number)):
                 log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                         self.e_tot, e_cas, ss[0])
+                         self.e_tot, self.e_cas, ss[0])
             else:
-                for i, e in enumerate(e_cas):
+                for i, e in enumerate(self.e_cas):
                     log.note('CASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                              i, self.e_tot[i], e, ss[0][i])
         else:
-            if isinstance(e_cas, (float, numpy.number)):
-                log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, e_cas)
+            if isinstance(self.e_cas, (float, numpy.number)):
+                log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
             else:
-                for i, e in enumerate(e_cas):
+                for i, e in enumerate(self.e_cas):
                     log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
                              i, self.e_tot[i], e)
-        return self.e_tot, e_cas, self.ci
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
                    casdm1=None, verbose=None):
@@ -547,10 +554,12 @@ class CASCI(object):
                             casdm1, verbose)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None):
-        self.mo_coeff, self.ci, mo_energy = \
+        self.mo_coeff, ci, self.mo_energy = \
                 canonicalize(self, mo_coeff, ci, eris,
                              sort, cas_natorb, casdm1, verbose)
-        return self.mo_coeff, self.ci, mo_energy
+        if cas_natorb:  # When active space is changed, the ci solution needs to be updated
+            self.ci = ci
+        return self.mo_coeff, ci, self.mo_energy
 
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
         return analyze(self, mo_coeff, ci, verbose)

@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import numpy
 import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
@@ -28,21 +29,64 @@ class CASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        #irrep_name = self.mol.irrep_name
-        irrep_name = self.mol.irrep_id
-        self.orbsym = pyscf.symm.label_orb_symm(self.mol, irrep_name,
-                                                self.mol.symm_orb,
-                                                self.mo_coeff,
-                                                s=self._scf.get_ovlp())
-        if not hasattr(self.fcisolver, 'orbsym') or \
-           not self.fcisolver.orbsym:
-            ncore = self.ncore
-            nocc = self.ncore + self.ncas
-            self.fcisolver.orbsym = self.orbsym[ncore:nocc]
+        label_symmetry_(self, self.mo_coeff)
+        return self.kernel(mo_coeff, ci0)
 
-        self.e_tot, e_cas, self.ci = self.kernel(mo_coeff, ci0)
+    def _eig(self, mat, b0, b1):
+        return eig(mat, numpy.array(self.orbsym[b0:b1]))
 
-        return self.e_tot, e_cas, self.ci
+    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                    casdm1=None, verbose=None):
+        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
+                                                 sort, casdm1, verbose)
+        if sort:
+            casci_symm.label_symmetry_(self, self.mo_coeff)
+        return self.mo_coeff, self.ci, occ
+
+    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                      cas_natorb=False, casdm1=None, verbose=None):
+        self.mo_coeff, ci, self.mo_energy = \
+                self.canonicalize(mo_coeff, ci, eris,
+                                  sort, cas_natorb, casdm1, verbose)
+        if sort:
+            casci_symm.label_symmetry_(self, self.mo_coeff)
+        if cas_natorb:  # When active space is changed, the ci solution needs to be updated
+            self.ci = ci
+        return self.mo_coeff, ci, self.mo_energy
+
+def eig(mat, orbsym):
+    orbsym = numpy.asarray(orbsym)
+    norb = mat.shape[0]
+    e = numpy.zeros(norb)
+    c = numpy.zeros((norb,norb))
+    for i0 in set(orbsym):
+        lst = numpy.where(orbsym == i0)[0]
+        if len(lst) > 0:
+            w, v = pyscf.scf.hf.eig(mat[lst[:,None],lst], None)
+            e[lst] = w
+            c[lst[:,None],lst] = v
+    return e, c
+
+def label_symmetry_(mc, mo_coeff):
+    #irrep_name = mc.mol.irrep_name
+    irrep_name = mc.mol.irrep_id
+    s = mc._scf.get_ovlp()
+    try:
+        mc.orbsym = pyscf.symm.label_orb_symm(mc.mol, irrep_name,
+                                              mc.mol.symm_orb, mo_coeff, s=s)
+    except ValueError:
+        logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
+        mo_coeff = pyscf.symm.symmetrize_orb(mc.mol, mo_coeff, s=s)
+        diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
+        mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
+        mc.orbsym = pyscf.symm.label_orb_symm(mc.mol, irrep_name,
+                                              mc.mol.symm_orb, mo_coeff, s=s)
+
+    if not hasattr(mc.fcisolver, 'orbsym') or not mc.fcisolver.orbsym:
+        ncore = mc.ncore
+        nocc = mc.ncore + mc.ncas
+        mc.fcisolver.orbsym = mc.orbsym[ncore:nocc]
+    logger.debug(mc, 'Active space irreps %s', str(mc.fcisolver.orbsym))
 
 
 
