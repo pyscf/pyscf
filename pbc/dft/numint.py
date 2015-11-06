@@ -3,7 +3,7 @@ from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 import pyscf.lib
 import pyscf.dft
 from pyscf.pbc import tools
-from pyscf.pbc.scf import scfint
+#from pyscf.pbc.scf import scfint
 
 def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
@@ -33,7 +33,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     '''
     aoR = 0
     # TODO: this is 1j, not -1j; check for band_ovlp convention
-    for L in scfint.get_lattice_Ls(cell, cell.nimgs):
+    for L in tools.get_lattice_Ls(cell, cell.nimgs):
         if kpt is None:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,
                                             bastart, bascount,
@@ -49,7 +49,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
         ke_mask = ke < cell.ke_cutoff
 
         aoG = numpy.zeros_like(aoR)
-        for i in range(nao):
+        for i in range(cell.nao_nr()):
             if isgga:
                 for c in range(4):
                     aoG[c][ke_mask, i] = tools.fft(aoR[c][:,i], cell.gs)[ke_mask]
@@ -339,7 +339,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         ngs = len(coords)
         nao = mol.nao_nr()
 
-        ao_kpts = np.empty([nkpts, ngs, nao],np.complex128)
+        ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
         for k in range(nkpts):
             kpt = self.kpts[k,:]
             ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, isgga,
@@ -361,7 +361,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
            rhoR : (ngs,) ndarray
         '''
         nkpts, ngs, nao = ao_kpts.shape
-        rhoR = np.zeros(ngs)
+        rhoR = numpy.zeros(ngs)
         for k in range(nkpts):
             rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
         return rhoR
@@ -392,48 +392,10 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nkpts = len(self.kpts)
         nao = ao.shape[2]
 
-        mat = np.zeros((nkpts, nao, nao), dtype=ao.dtype)
+        mat = numpy.zeros((nkpts, nao, nao), dtype=ao.dtype)
         for k in range(nkpts):
             mat[k,:,:] = eval_mat(mol, ao[k,:,:], weight,
                                     rho, vrho, vsigma, non0tab,
                                     isgga, verbose)
         return mat
 
-
-
-###################################################
-#
-# Numerical integration over becke grids
-#
-###################################################
-def get_ovlp(cell, kpt=None, grids=None):
-    from pyscf.pbc.dft import gen_grid
-    if kpt is None:
-        kpt = np.zeros(3)
-    if grids is None:
-        grids = gen_grid.BeckeGrids(cell)
-        grids.build_()
-
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, grids.coords, kpt)
-    return np.dot(aoR.T.conj(), grids.weights.reshape(-1,1)*aoR).real
-
-if __name__ == '__main__':
-    import pyscf
-    import pyscf.pbc.gto as pgto
-    import pyscf.pbc.scf as pscf
-
-    L = 12.
-    n = 30
-    cell = pgto.Cell()
-    cell.h = np.diag([L,L,L])
-    cell.gs = np.array([n,n,n])
-
-    cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
-                ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]
-    cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    cell.build()
-    #cell.nimgs = [1,1,1]
-    kpt = None
-    s1 = get_ovlp(cell, kpt)
-    s2 = pscf.scfint.get_ovlp(cell, kpt)
-    print abs(s1-s2).sum()
