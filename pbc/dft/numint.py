@@ -67,7 +67,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=2*cell.nao_nr()) ndarray 
+        ao : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
             The value of the AO crystal orbitals on the real-space grid. If
             isgga=True, also contains the value of the gradient in the x, y,
             and z directions.
