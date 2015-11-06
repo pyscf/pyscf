@@ -12,3 +12,8 @@ for k,v in vxc.XC_CODES.items():
 def RKS(mol, *args):
     from pyscf.pbc.dft import rks
     return rks.RKS(mol, *args)
+
+
+def KRKS(mol, *args):
+    from pyscf.pbc.dft import krks
+    return krks.KRKS(mol, *args)

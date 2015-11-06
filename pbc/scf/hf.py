@@ -1,23 +1,27 @@
 '''
-Hartree-Fock for periodic systems at a *single* k-point.
+Hartree-Fock for periodic systems at a single k-point
 
 See Also:
-    kscf.py : SCF tools for periodic systems with k-point *sampling*.
+    pyscf.pbc.scf.khf.py : Hartree-Fock for periodic systems with k-point sampling
 '''
 
 import numpy as np
 import scipy.linalg
+import pyscf.lib
 import pyscf.scf
 import pyscf.scf.hf
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.dft.numint
+import pyscf.pbc.scf
+from pyscf.lib import logger
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc import tools
 from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
-from pyscf.lib import logger
-import scfint
+from pyscf.pbc.scf import scfint
+#import pyscf.pbc.scf.scfint as scfint
+
 
 def get_ovlp(cell, kpt=None):
     '''Get the overlap AO matrix.
@@ -32,6 +36,7 @@ def get_ovlp(cell, kpt=None):
     s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
     return s
 
+
 def get_hcore(cell, kpt=None):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.
     '''
@@ -45,6 +50,7 @@ def get_hcore(cell, kpt=None):
         hcore += get_nuc(cell, kpt)
 
     return hcore
+
 
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.
@@ -64,6 +70,7 @@ def get_t(cell, kpt=None):
     t *= (cell.vol/ngs)
     
     return t
+
 
 # def get_t2(cell, kpt=None):
 #     '''Get the kinetic energy AO matrix.
@@ -101,6 +108,7 @@ def get_t(cell, kpt=None):
     
 #     return t
 
+
 def get_nuc(cell, kpt=None):
     '''Get the bare periodic nuc-el AO matrix, with G=0 removed.
 
@@ -120,6 +128,7 @@ def get_nuc(cell, kpt=None):
 
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
     return vne
+
 
 def get_pp(cell, kpt=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
@@ -166,10 +175,12 @@ def get_pp(cell, kpt=None):
 
     return vpploc + vppnl
 
+
 def get_jvloc_G0(cell, kpt=None):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
     return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
+
 
 def get_j(cell, dm, kpt=None):
     '''Get the Coulomb (J) AO matrix.
@@ -191,6 +202,7 @@ def get_j(cell, dm, kpt=None):
 
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
     return vj
+
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -309,9 +321,8 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.DEBUG):
     ewg = .5*np.sum(ewgI)
     ewg /= cell.vol
 
-    log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
+    #log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
-
 
 
 # TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
@@ -352,7 +363,7 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
 
         if self.analytic_int:
-            print "USING ANALYTIC INTS"
+            logger.info(self, "Using analytic integrals")
             return scfint.get_hcore(cell, kpt)
         else:
             return get_hcore(cell, kpt)
@@ -362,7 +373,7 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
         
         if self.analytic_int:
-            print "USING ANALYTIC INTS"
+            logger.info(self, "Using analytic integrals")
             return scfint.get_ovlp(cell, kpt)
         else:
             return get_ovlp(cell, kpt)
@@ -380,8 +391,9 @@ class RHF(pyscf.scf.hf.RHF):
         Currently RHF always uses PBC AO integrals (unlike RKS), since
         exchange is currently computed by building PBC AO integrals.
         '''
-        if cell is None:
-            cell = self.cell
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpt is None: kpt = self.kpt
         
         log = logger.Logger
         if isinstance(verbose, logger.Logger):
@@ -393,7 +405,7 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self._eri is None:
             log.debug('Building PBC AO integrals')
-            if lib.norm(kpt) > 1.e-15:
+            if pyscf.lib.norm(kpt) > 1.e-15:
                 raise RuntimeError("Non-zero k points not implemented for exchange")
             self._eri = np.real(ao2mo.get_ao_eri(cell))
 

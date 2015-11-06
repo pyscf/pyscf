@@ -21,7 +21,7 @@ def make_cell1(L, n):
 
     pseudo = None
     cell = pbcgto.Cell()
-    cell.output = '/dev/null'
+    # cell.output = '/dev/null'
     cell.verbose = 5
     cell.unit = mol.unit
     cell.h = ((L,0,0),(0,L,0),(0,0,L))
@@ -43,8 +43,8 @@ def make_cell2(L, n):
                 verbose = 0)
 
     cell = pbcgto.Cell()
+               #output = '/dev/null',
     cell.build(unit = mol.unit,
-               output = '/dev/null',
                h = ((L,0,0),(0,L,0),(0,0,L)),
                gs = [n,n,n],
                atom = mol.atom,
@@ -86,22 +86,22 @@ class KnowValues(unittest.TestCase):
         tao = pbchf.get_t(cell)
         self.assertAlmostEqual(finger(tao), -2.0092386485871367, 9)
 
-    def test_kinetic80(self):
-        mol, cell = make_cell2(20, 80)
-        tao = pbchf.get_t(cell)
-        tao2 = mol.intor_symmetric('cint1e_kin_sph')
-        self.assertTrue(np.allclose(tao, tao2))
+#    def test_kinetic80(self):
+#        mol, cell = make_cell2(20, 80)
+#        tao = pbchf.get_t(cell)
+#        tao2 = mol.intor_symmetric('cint1e_kin_sph')
+#        self.assertTrue(np.allclose(tao, tao2))
 
     def test_overlap20(self):
         mol, cell = make_cell2(20, 20)
         sao = pbchf.get_ovlp(cell)
         self.assertAlmostEqual(finger(sao), -0.8503588722723614, 9)
 
-    def test_overlap80(self):
-        mol, cell = make_cell2(20, 80)
-        sao = pbchf.get_ovlp(cell)
-        sao2 = mol.intor_symmetric('cint1e_ovlp_sph')
-        self.assertTrue(np.allclose(sao, sao2))
+#    def test_overlap80(self):
+#        mol, cell = make_cell2(20, 80)
+#        sao = pbchf.get_ovlp(cell)
+#        sao2 = mol.intor_symmetric('cint1e_ovlp_sph')
+#        self.assertTrue(np.allclose(sao, sao2))
 
     def test_j20(self):
         mol, cell = make_cell2(20, 20)

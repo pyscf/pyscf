@@ -70,32 +70,39 @@ def get_coulG(cell):
 
     return coulG
 
-def replicate_cell(cell, ncopy):
-    '''Create an ncopy[0] x ncopy[1] x ncopy[2] repeat
-    of the input cell
+def get_lattice_Ls(cell, nimgs):
+    '''Get the (unitful) lattice translation vectors for nearby images.'''
+    #nimgs = cell.nimgs
+    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
+                  for j in range(-nimgs[1],nimgs[1]+1)
+                  for k in range(-nimgs[2],nimgs[2]+1)
+                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
+    Ts = np.array(Ts)
+    Ls = np.dot(cell._h, Ts.T).T
+    return Ls
+
+def super_cell(cell, nimgs):
+    '''Create an nimgs[0] x nimgs[1] x nimgs[2] supercell of the input cell
+
     Args:
-        cell : instance of :class: 'Cell'
-        ncopy : (3, ) array
+        cell : instance of :class:`Cell`
+        nimgs : (3,) array
 
     Returns:
-        repcell : :class: 'Cell'
+        supcell : instance of :class:`Cell`
     '''
-
-    repcell = cell.copy()
-    repatom = []
-    for Lx in range(ncopy[0]):
-        for Ly in range(ncopy[1]):
-            for Lz in range(ncopy[2]):
-                for atom, coord in cell._atom:
-                    L = np.dot(cell._h, [Lx, Ly, Lz])
-                    repatom.append([atom, coord + L])
-
-    repcell.atom = repatom
-    repcell.unit = 'B'
-    repcell.h = np.dot(cell._h, np.diag(ncopy))
-    repcell.build(False, False)
-
-    return repcell
+    Ls = get_lattice_Ls(cell, nimgs)
+    supcell = cell.copy()
+    supcell.atom = []
+    for L in Ls:
+        atom1 = []
+        for ia in range(cell.natm):
+            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
+        supcell.atom.extend(atom1)
+    supcell.unit = 'B'
+    supcell.h = np.dot(cell._h, np.diag(nimgs))
+    supcell.build(False, False, verbose=0)
+    return supcell
 
 def get_KLMN(kpts):
     '''Get array KLMN where for gs indices, K, L, M,

@@ -4,12 +4,9 @@ import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 import pyscf.scf.hf as hf
 import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.dft as pbcdft
-import pyscf.pbc.scf.hf as pbchf
 import pyscf.pbc.scf.kscf as pbckscf
-import pyscf.pbc.scf.scfint as scfint
 
 import ase.lattice
-from ase.lattice.cubic import Diamond
 import ase.dft.kpoints
 
 import matplotlib.pyplot as plt
