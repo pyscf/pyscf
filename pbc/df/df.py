@@ -124,8 +124,10 @@ def test_df():
     print np.linalg.norm(c3-c3grid) # should be zero within integration error
 
 def auxnorm(cell):
-    norm=numpy.zeros([cell.nao_nr()])
-    ip=0
+    ''' \int gto dr
+    '''
+    norm = numpy.zeros(cell.nao_nr())
+    ip = 0
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         e = cell.bas_exp(ib)[0]

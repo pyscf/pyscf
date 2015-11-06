@@ -5,9 +5,10 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com
 #
 
-from pyscf.pbc.gto import cell 
+from pyscf.pbc.gto import cell
 from pyscf.pbc.gto import basis
-from pyscf.pbc.gto import pseudo 
+from pyscf.pbc.gto.basis import parse, load
+from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.cell import *
 
 parse = basis.parse

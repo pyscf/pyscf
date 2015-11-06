@@ -216,6 +216,9 @@ class Cell(pyscf.gto.Mole):
         if pseudo is not None: self.pseudo = pseudo
         if basis is not None: self.basis = basis
 
+        assert(self.h is not None)
+        assert(self.gs is not None)
+
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
 
