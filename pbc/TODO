@@ -40,13 +40,14 @@ Other Functionality:
   - Grid based veff or
   - Grid based general <p(k)|q(k')> ovlp 
 - Poisson equation [Q]
-  - use compensating charge (uniform)
-  - use compensating charge (Gaussian)
+  - use compensating charge (uniform)  [Done]
+  - use compensating charge (Gaussian)   Done]
     - compensating dipole (Gaussian)
-  - Molecular XC grids
+  - Molecular XC grids  [Done]
 - UHF code and UHF initial guess (specify mag. moment for AFM)
 - 1D and 2D Coulomb and Ewald
 - Exchange part of Fock matrix with k-points [J]
+- Exact HF exchange
 - Gamma pt MP2
   - check q->0, compare against VASP / CP2K 
 - Gamma pt CCSD
