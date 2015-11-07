@@ -21,7 +21,6 @@ from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.scf import scfint
 #import pyscf.pbc.scf.scfint as scfint
-from pyscf.lib import logger
 import pyscf.pbc.scf.chkfile
 
 def get_ovlp(cell, kpt=None):
@@ -429,7 +428,7 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self._eri is None:
             log.debug('Building PBC AO integrals')
-            if pyscf.lib.norm(kpt) > 1.e-15:
+            if kpt is not None and pyscf.lib.norm(kpt) > 1.e-15:
                 raise RuntimeError("Non-zero k points not implemented for exchange")
             self._eri = np.real(ao2mo.get_ao_eri(cell))
 
