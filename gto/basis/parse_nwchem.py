@@ -46,40 +46,44 @@ def load_ecp(basisfile, symb):
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         # ignore head
-        dat = fin.readline().lstrip()
-        while not dat.startswith('#BASIS SET:'):
-            dat = fin.readline().lstrip()
+        dat = fin.readline().lstrip(' ')
+        while dat and not dat.startswith('#BASIS SET'):
+            dat = fin.readline().lstrip(' ')
         # searching
-        dat = fin.readline().lstrip()
-        while not dat.startswith('END'):
+        dat = fin.readline().lstrip(' ')
+        while dat and not dat.startswith('END'):
             if symb+' ' in dat:
                 seg = []
-                while '#BASIS SET:' not in dat:
+                while (dat and
+                       not dat.startswith('#BASIS SET') and
+                       not dat.startswith('END')):
                     x = dat[:-1].strip()
-                    if x and 'END' not in x: # remove blank lines
+                    if x:  # remove blank lines
                         seg.append(x)
-                        dat = fin.readline().lstrip()
+                    dat = fin.readline().lstrip(' ')
                 return seg
             else:
-                while '#BASIS SET:' not in dat:
-                    dat = fin.readline().lstrip()
-            dat = fin.readline().lstrip()
+                while dat and not dat.startswith('#BASIS SET'):
+                    dat = fin.readline().lstrip(' ')
+            dat = fin.readline().lstrip(' ')
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
 def search_ecp(basisfile, symb):
     with open(basisfile, 'r') as fin:
         # ignore head
-        dat = fin.readline().lstrip()
-        while not dat.startswith('ECP'):
-            dat = fin.readline().lstrip()
+        dat = fin.readline().lstrip(' ')
+        while dat and not dat.startswith('ECP'):
+            dat = fin.readline().lstrip(' ')
 
-        dat = fin.readline().lstrip()
+        dat = fin.readline().lstrip(' ')
         # searching
-        while not dat.startswith(symb+' ') and not dat.startswith('END'):
+        while (dat and
+               not dat.startswith(symb+' ') and
+               not dat.startswith('END')):
             dat = fin.readline()
 
         seg = []
-        while not dat.startswith('END'):
+        while dat and not dat.startswith('END'):
             if dat[0].isalpha() and symb+' ' not in dat:
                 return seg
             if dat: # remove blank lines

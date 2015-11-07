@@ -250,6 +250,27 @@ def format_basis(basis_tab):
             fmt_basis[symb] = basis_tab[atom]
     return fmt_basis
 
+def uncontract_basis(_basis):
+    '''Uncontract internal format _basis
+
+    Examples:
+
+    >>> gto.uncontract_basis(gto.load('sto3g', 'He'))
+    [[0, [6.3624213899999997, 1]], [0, [1.1589229999999999, 1]], [0, [0.31364978999999998, 1]]]
+    '''
+    ubasis = []
+    for b in _basis:
+        angl = b[0]
+        if isinstance(b[1], int):
+            kappa = b[1]
+            for p in b[2:]:
+                ubasis.append([angl, kappa, [p[0], 1]])
+        else:
+            for p in b[1:]:
+                ubasis.append([angl, [p[0], 1]])
+    return ubasis
+uncontract = uncontract_basis
+
 def format_ecp(ecp_tab):
     fmt_ecp = {}
     for atom in ecp_tab.keys():
@@ -1308,7 +1329,8 @@ class Mole(object):
         self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                               'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
                                (self.nelectron, self.spin))
 
         if self.symmetry:

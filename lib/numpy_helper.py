@@ -170,6 +170,7 @@ def take_2d(a, idx, idy, out=None):
     [[ 0.  2.]
      [ 6.  8.]]
     '''
+    a = numpy.asarray(a, order='C')
     if out is None:
         out = numpy.zeros((len(idx),len(idy)))
     if numpy.iscomplexobj(a):
@@ -200,6 +201,8 @@ def takebak_2d_(out, a, idx, idy):
      [ 0.  0.  0.]
      [ 1.  0.  1.]]
     '''
+    assert(out.flags.c_contiguous)
+    a = numpy.asarray(a, order='C')
     if numpy.iscomplexobj(a):
         out[idx[:,None],idy] += a
     else:

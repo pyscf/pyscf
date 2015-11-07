@@ -132,11 +132,11 @@ def make_hdiag(h1e, eri, norb, nelec):
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
 
-    occslista = link_indexa[:,:neleca,0].copy('C')
-    occslistb = link_indexb[:,:nelecb,0].copy('C')
+    occslista = numpy.asarray(link_indexa[:,:neleca,0], order='C')
+    occslistb = numpy.asarray(link_indexb[:,:nelecb,0], order='C')
     hdiag = numpy.empty(na*nb)
-    jdiag = numpy.einsum('iijj->ij',eri).copy('C')
-    kdiag = numpy.einsum('ijji->ij',eri).copy('C')
+    jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
+    kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')
     libfci.FCImake_hdiag_uhf(hdiag.ctypes.data_as(ctypes.c_void_p),
                              h1e.ctypes.data_as(ctypes.c_void_p),
                              h1e.ctypes.data_as(ctypes.c_void_p),
