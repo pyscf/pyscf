@@ -32,7 +32,8 @@ def test_hf(pseudo=None):
     cell.atom = mol.atom
     cell.basis = mol.basis
     cell.pseudo = pseudo
-    cell.build()
+    # cell.verbose = 4
+    cell.build(None, None)
 
     mf = pbchf.RHF(cell)
 
@@ -40,11 +41,6 @@ def test_hf(pseudo=None):
                      # to interaction of the exchange hole with its periodic
                      # image, which can only be removed with *very* large boxes.
 
-    # Now try molecular type integrals for the exchange operator, 
-    # and periodic integrals for Coulomb. This effectively
-    # truncates the exchange operator. 
-    mf.mol_ex = True 
-    print (mf.scf()) # -2.63493445685: much better!
 
 if __name__ == '__main__':
     test_hf()

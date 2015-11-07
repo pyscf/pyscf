@@ -359,7 +359,6 @@ class RHF(pyscf.scf.hf.RHF):
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
         self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
-        self.mol_ex = False
 
         # TODO: Garnet, check this change?
         # i.e. self.kpt should be the passed kpt and not always gamma.
@@ -372,7 +371,7 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             self.analytic_int = True
 
-        self._keys = self._keys.union(['cell', 'grids', 'mol_ex', 'kpt', 'analytic_int'])
+        self._keys = self._keys.union(['cell', 'grids', 'kpt', 'analytic_int'])
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
@@ -380,7 +379,6 @@ class RHF(pyscf.scf.hf.RHF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'Grid size = (%d, %d, %d)', 
                     self.cell.gs[0], self.cell.gs[1], self.cell.gs[2])
-        logger.info(self, 'Use molecule exchange = %s', self.mol_ex)
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -429,17 +427,29 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self._eri is None:
             log.debug('Building PBC AO integrals')
-            if pyscf.lib.norm(kpt) > 1.e-15:
+            if kpt is not None and pyscf.lib.norm(kpt) > 1.e-15:
                 raise RuntimeError("Non-zero k points not implemented for exchange")
-            self._eri = np.real(ao2mo.get_ao_eri(cell))
+            self._eri = ao2mo.get_ao_eri(cell)
 
-        vj, vk = pyscf.scf.hf.RHF.get_jk_(self, cell, dm, hermi) 
+        if np.iscomplexobj(dm) or np.iscomplexobj(self._eri):
+
+            eri_re = np.ascontiguousarray(self._eri.real)
+            eri_im = np.ascontiguousarray(self._eri.imag)
+            
+            dm_re = np.ascontiguousarray(dm.real)
+            dm_im = np.ascontiguousarray(dm.imag)
+
+            vj_rr, vk_rr = pyscf.scf.hf.dot_eri_dm(eri_re, dm_re, hermi)
+            vj_ir, vk_ir = pyscf.scf.hf.dot_eri_dm(eri_im, dm_re, hermi)
+            vj_ri, vk_ri = pyscf.scf.hf.dot_eri_dm(eri_re, dm_im, hermi)
+            vj_ii, vk_ii = pyscf.scf.hf.dot_eri_dm(eri_im, dm_im, hermi)
+            
+            vj = np.array(vj_rr - vj_ii + 1j*(vj_ir + vj_ri))
+            vk = np.array(vk_rr - vk_ii + 1j*(vk_ir + vk_ri))
+            
+        else:
+            vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
         
-        if self.mol_ex: # use molecular exchange, but periodic J
-            log.debug('K PBC build: using molecular integrals')
-            mol_eri = pyscf.scf._vhf.int2e_sph(cell._atm, cell._bas, cell._env)
-            mol_vj, vk = pyscf.scf.hf.dot_eri_dm(mol_eri, dm, hermi)
-
         return vj, vk
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
