@@ -21,7 +21,6 @@ from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.scf import scfint
 #import pyscf.pbc.scf.scfint as scfint
-from pyscf.lib import logger
 import pyscf.pbc.scf.chkfile
 
 def get_ovlp(cell, kpt=None):
@@ -444,8 +443,8 @@ class RHF(pyscf.scf.hf.RHF):
             vj_ri, vk_ri = pyscf.scf.hf.dot_eri_dm(eri_re, dm_im, hermi)
             vj_ii, vk_ii = pyscf.scf.hf.dot_eri_dm(eri_im, dm_im, hermi)
             
-            vj = np.array(vj_rr - vj_ii + 1j*(vj_ir + vj_ri))
-            vk = np.array(vk_rr - vk_ii + 1j*(vk_ir + vk_ri))
+            vj = vj_rr - vj_ii + 1j*(vj_ir + vj_ri)
+            vk = vk_rr - vk_ii + 1j*(vk_ir + vk_ri)
             
         else:
             vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
