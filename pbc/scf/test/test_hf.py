@@ -61,25 +61,11 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         self.assertAlmostEqual(mf.scf(), -2.4607103378280013, 8)
 
-    def test_mole_int20(self):
-        mol, cell = make_cell1(20, 20)
-        mf = pbchf.RHF(cell)
-        mf.mol_ex = True
-        self.assertAlmostEqual(mf.scf(), -2.6023559969743499, 8)
-
 #    def test_numint(self):
 #        mol, cell = make_cell1(60, 120)
 #        mf = pbchf.RHF(cell)
 ## python 2.6, numpy 1.6.2, mkl 10.3 got -2.5877571064424578
 #        self.assertAlmostEqual(mf.scf(), -2.58766850182551, 8)
-#
-#    def test_mole_int(self):
-#        mol, cell = make_cell1(60, 120)
-#        mf = pbchf.RHF(cell)
-#        mf.mol_ex = True
-## python 2.6, numpy 1.6.2, mkl 10.3 got -2.6350239901935644
-#        self.assertAlmostEqual(mf.scf(), -2.63493445685, 8)
-
 
     def test_kinetic20(self):
         mol, cell = make_cell2(20, 20)
