@@ -3,29 +3,29 @@ Currently working:
 - K points: DFT
 
 Needs testing:
-- Band structure (from Gamma pt) - compare to QE [TCB]
-- Shifted Gamma pt calc (e.g. at Baldereschi pt) [TCB]
-- l=2 PP projectors (i.e. 3rd row) [TCB]
-- Divergent J+Vloc G=0 contribution [TCB]
+- Band structure (from Gamma pt) - compare to QE [T]
+- Shifted Gamma pt calc (e.g. at Baldereschi pt) [T]
+- l=2 PP projectors (i.e. 3rd row) [T]
+X Divergent J+Vloc G=0 contribution [T]
 
 Long list of things to do!                                       
  
 Code doc and cleaning:
 - Clean mf.grad() [Q]
-- PP and ECP unification (e.g. init guess routines check nelec_ecp)
+X PP and ECP unification (e.g. init guess routines check nelec_ecp) [T&Q]
 - Check "checkpt" works
-- Doc KSCF class
+X Doc KSCF class [T]
 - Test infrastructure and examples for
   - K pt calcs
   - band structure
   - Gamma pt HFX
 - Initial guess: check which ones are correct for PBC / PP / KSCF
-X Change kpt shape so that it does not always get reshaped? [TCB]
+X Change kpt shape so that it does not always get reshaped? [T]
 
 Ease of calc:
 - Test energy_cutoff -> gs fn in tools/pbc.py
 - Add dtype member variable, complex128 default, can be set to real64 for 
-  gamma pt, special kpts, etc. [TCB]
+  gamma pt, special kpts, etc. [T]
 - Better cutoff fn for lattice sums (from integral Schwartz condition)
 - ASE DFT calculator interface
 
@@ -40,10 +40,10 @@ Other Functionality:
   - Grid based veff or
   - Grid based general <p(k)|q(k')> ovlp 
 - Poisson equation [Q]
-  - use compensating charge (uniform)  [Done]
-  - use compensating charge (Gaussian)   Done]
+  X use compensating charge (uniform)  [Done]
+  X use compensating charge (Gaussian)   [Done]
     - compensating dipole (Gaussian)
-  - Molecular XC grids  [Done]
+  X Molecular XC grids  [Done]
 - UHF code and UHF initial guess (specify mag. moment for AFM)
 - 1D and 2D Coulomb and Ewald
 - Exchange part of Fock matrix with k-points [J]
@@ -74,7 +74,7 @@ Efficiency:
   - Integral screening
 
 ---
-DONE(TCB):
+DONE(T):
 x Streamline cell construction 
   x add 'precision' to cell, use to set nimgs, ewald parameters in build()
 

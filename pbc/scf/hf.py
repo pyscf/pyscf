@@ -23,12 +23,10 @@ from pyscf.pbc.scf import scfint
 #import pyscf.pbc.scf.scfint as scfint
 import pyscf.pbc.scf.chkfile
 
-def get_ovlp(cell, kpt=None):
+
+def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    if kpt is None:
-        kpt = np.zeros(3)
-    
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     ngs = len(aoR)
@@ -37,12 +35,9 @@ def get_ovlp(cell, kpt=None):
     return s
 
 
-def get_hcore(cell, kpt=None):
+def get_hcore(cell, kpt=np.zeros(3)):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.
     '''
-    if kpt is None:
-        kpt = np.zeros(3)
-
     hcore = get_t(cell, kpt)
     if cell.pseudo:
         hcore += ( get_pp(cell, kpt) + get_jvloc_G0(cell, kpt) )
@@ -52,14 +47,11 @@ def get_hcore(cell, kpt=None):
     return hcore
 
 
-def get_t(cell, kpt=None):
+def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
     
     Due to `kpt`, this is evaluated in real space using orbital gradients.
     '''
-    if kpt is None:
-        kpt = np.zeros(3)
-    
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
     ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
@@ -72,15 +64,12 @@ def get_t(cell, kpt=None):
     return t
 
 
-# def get_t2(cell, kpt=None):
+# def get_t2(cell, kpt=np.zeros(3)):
 #     '''Get the kinetic energy AO matrix.
     
 #     Due to `kpt`, this is evaluated in real space using orbital gradients.
 
 #     '''
-#     if kpt is None:
-#         kpt = np.zeros(3)
-    
 #     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
 #     # aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
 #     # ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
@@ -109,14 +98,11 @@ def get_t(cell, kpt=None):
 #     return t
 
 
-def get_nuc(cell, kpt=None):
+def get_nuc(cell, kpt=np.zeros(3)):
     '''Get the bare periodic nuc-el AO matrix, with G=0 removed.
 
     See Martin (12.16)-(12.21).
     '''
-    if kpt is None:
-        kpt = np.zeros(3)
-
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
 
@@ -130,12 +116,9 @@ def get_nuc(cell, kpt=None):
     return vne
 
 
-def get_pp(cell, kpt=None):
+def get_pp(cell, kpt=np.zeros(3)):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    if kpt is None:
-        kpt = np.zeros(3)
-
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     nao = cell.nao_nr() 
@@ -176,18 +159,15 @@ def get_pp(cell, kpt=None):
     return vpploc + vppnl
 
 
-def get_jvloc_G0(cell, kpt=None):
+def get_jvloc_G0(cell, kpt=np.zeros(3)):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
     return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 
-def get_j(cell, dm, kpt=None):
+def get_j(cell, dm, kpt=np.zeros(3)):
     '''Get the Coulomb (J) AO matrix.
     '''
-    if kpt is None:
-        kpt = np.zeros(3)
-
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
     ngs, nao = aoR.shape
@@ -202,6 +182,7 @@ def get_j(cell, dm, kpt=None):
 
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
     return vj
+
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -322,6 +303,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
     #log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
 
+
 #FIXME: project initial guess for k-point
 def init_guess_by_chkfile(cell, chkfile_name, project=True):
     '''Read the HF results from checkpoint file, then project it to the
@@ -349,6 +331,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True):
            + pyscf.scf.hf.make_rdm1(fproj(mo[1]), mo_occ[1])
     return dm
 
+
 # TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
 # inherit from that.
 class RHF(pyscf.scf.hf.RHF):
@@ -359,13 +342,12 @@ class RHF(pyscf.scf.hf.RHF):
         pyscf.scf.hf.RHF.__init__(self, cell)
         self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
 
-        # TODO: Garnet, check this change?
-        # i.e. self.kpt should be the passed kpt and not always gamma.
-        #if kpt is None:
-        #    kpt = np.zeros(3)
-        self.kpt = kpt 
+        if kpt is None:
+            self.kpt = np.zeros(3)
+        else:
+            self.kpt = kpt
 
-        if analytic_int == None:
+        if analytic_int is None:
             self.analytic_int = False
         else:
             self.analytic_int = True

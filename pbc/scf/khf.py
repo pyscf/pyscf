@@ -303,21 +303,20 @@ class KRHF(pbchf.RHF):
             fock : (nao, nao) ndarray
             ovlp : (nao, nao) ndarray
         '''
-        # To implement this analogously to
-        # get_band_fock_ovlp for a single cell, one needs
-        # the ovlp between basis functions at the kpts used in
-        # the KSCF calculation, and the band_kpt at which one is 
-        # evaluating, i.e. one needs 
+        # To implement this analogously to get_band_fock_ovlp for a single
+        # cell, one needs the ovlp between basis functions at the kpts used in
+        # the KSCF calculation, and the band_kpt at which one is evaluating,
+        # i.e. one needs 
         #      
         #      < p(k_pt) | q (band_kpt) >
         #
         # This involves two lattice sums.
         #
-        # The other way, is to take the converged real-space
-        # density on the grid from the KSCF calculation, and compute
-        # hcore (band_kpt) and veff (band_kpt)
+        # The other way, is to take the converged real-space density on the
+        # grid from the KSCF calculation, and compute hcore (band_kpt) and veff
+        # (band_kpt).
         # 
-        # This can only reasonably be done for DFT, and using the 
-        # real-space grid
+        # This can only reasonably be done for DFT, and using the real-space
+        # grid.
 
         raise NotImplementedError
