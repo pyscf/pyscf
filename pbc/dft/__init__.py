@@ -9,11 +9,11 @@ for k,v in vxc.XC_CODES.items():
     setattr(curmod, k, v)
 
 
-def RKS(mol, *args):
+def RKS(mol, *args, **kwargs):
     from pyscf.pbc.dft import rks
-    return rks.RKS(mol, *args)
+    return rks.RKS(mol, *args, **kwargs)
 
 
-def KRKS(mol, *args):
+def KRKS(mol, *args, **kwargs):
     from pyscf.pbc.dft import krks
-    return krks.KRKS(mol, *args)
+    return krks.KRKS(mol, *args, **kwargs)

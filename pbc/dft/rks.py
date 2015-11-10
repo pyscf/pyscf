@@ -25,6 +25,7 @@ class RKS(pyscf.pbc.scf.hf.RHF):
         self._ecoul = 0
         self._exc = 0
 #FIXME (Q): lazy create self._numint, since self.kpt might be changed
+        # self.kpt is set in RHF.__init__()
         self._numint = numint._NumInt(self.kpt)
         self._keys = self._keys.union(['xc', 'grids'])
 

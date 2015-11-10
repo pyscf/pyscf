@@ -10,14 +10,14 @@
 from pyscf.pbc.scf import hf
 from pyscf.pbc.scf import hf as rhf
 
-def RHF(mol, *args):
+def RHF(mol, *args, **kwargs):
     '''This is a wrap function to mimic pyscf 
     '''
-    return rhf.RHF(mol, *args)
+    return rhf.RHF(mol, *args, **kwargs)
 
-def KRHF(mol, *args):
+def KRHF(mol, *args, **kwargs):
     '''This is a wrap function to mimic pyscf 
     '''
     from pyscf.pbc.scf import khf
     from pyscf.pbc.scf import khf as krhf
-    return krhf.KRHF(mol, *args)
+    return krhf.KRHF(mol, *args, **kwargs)

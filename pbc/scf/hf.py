@@ -452,8 +452,7 @@ class RHF(pyscf.scf.hf.RHF):
         return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
         
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
-        '''Reconstruct Fock operator at a given 'band' k-point, not necessarily 
-        in list of k-points.
+        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
 
         Returns:
             fock : (nao, nao) ndarray
