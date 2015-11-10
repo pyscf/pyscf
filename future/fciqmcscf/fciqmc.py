@@ -337,6 +337,10 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('proje-changeref 1.5\n')
     f.write('stepsshift 10\n')
     f.write('maxwalkerbloom 3\n')
+# Dynamic load-balancing is incompatible with semi-stochastic. 
+# Ok if restarting from a semi-stochastic popsfile,
+# (where it will do one redistribution) but not otherwise.
+    f.write('load-balance-blocks off\n')
     if nstates > 1:
         f.write('orthogonalise-replicas\n')
         f.write('doubles-init\n')
