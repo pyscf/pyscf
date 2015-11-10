@@ -134,7 +134,11 @@ class Cell(pyscf.gto.Mole):
 
     Attributes:
         h : (3,3) ndarray
-            The real-space unit cell lattice vector, three *columns*: array((a1,a2,a3))
+            The real-space unit cell lattice vectors, a "three-column" array [a1|a2|a3]
+            See defs. in MH Sec. 3.1
+            Convert from relative or "scaled" coordinates `s` to "absolute"
+            cartesian coordinates `r` via `r = np.dot(_h, s)`.
+            Reciprocal lattice vectors are given by [b1|b2|b3] = 2 pi inv(_h.T).
         gs : (3,) ndarray of ints
             The number of *positive* G-vectors along each direction.
         pseudo : dict or str
@@ -180,13 +184,9 @@ class Cell(pyscf.gto.Mole):
 # don't modify the following variables, they are not input arguments
         self.Gv = None
         self.vol = None
-        self._h = None # lattice vectors, three *columns*: array((a1,a2,a3))
-                       # See defs. in MH 3.1
-                       # scaled coordinates r = numpy.dot(_h, [x,y,z])
-                       # reciprocal lattice array((b1,b2,b3)) = inv(_h).T
+        self._h = None 
         self._pseudo = None
         self._keys = set(self.__dict__.keys())
-
 
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
@@ -202,7 +202,7 @@ class Cell(pyscf.gto.Mole):
 
         Kwargs:
             h : (3,3) ndarray
-                The real-space unit cell lattice vectors.
+                The real-space unit cell lattice vectors, a "three-column" array [a1|a2|a3]
             gs : (3,) ndarray of ints
                 The number of *positive* G-vectors along each direction.
             pseudo : dict or str
@@ -237,10 +237,6 @@ class Cell(pyscf.gto.Mole):
                                                       for a in uniq_atoms]))
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
-#            self.nelectron = self.tot_electrons()
-#            if (self.nelectron+self.spin) % 2 != 0:
-#                raise RuntimeError('Electron number %d and spin %d are not consistent\n' %
-#                                   (self.nelectron, self.spin))
 
         # Check if we're using a GTH basis
         # This must happen before build() because it prepares self.basis
@@ -279,17 +275,6 @@ class Cell(pyscf.gto.Mole):
         else:
             _atm, _ecpbas, _env = _atm, None, pre_env
         return _atm, _ecpbas, _env
-
-#    def atom_charge(self, atm_id):
-#        '''Return the atom charge, accounting for pseudopotential.'''
-#        if self.pseudo is None:
-#            # This is what the original Mole.atom_charge() returns
-#            CHARGE_OF  = 0
-#            return self._atm[atm_id,CHARGE_OF]
-#        else:
-#            # Remember, _pseudo is a dict
-#            nelecs = self._pseudo[ self.atom_symbol(atm_id) ][0]
-#            return sum(nelecs)
 
     def get_nimgs(self, precision):
         r'''Choose number of basis function images in lattice sums
@@ -413,8 +398,8 @@ class Cell(pyscf.gto.Mole):
             return h * (1./self.unit)
 
     def get_abs_kpts(self, scaled_kpts):
-        '''Get absolute kpts (in inverse Bohr), given "scaled" kpts in fractions 
-        of lattice vectors.
+        '''Get absolute k-points (in 1/Bohr), given "scaled" k-points in
+        fractions of lattice vectors.
 
         Args:
             scaled_kpts : (nkpts, 3) ndarray of floats

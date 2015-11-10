@@ -5,6 +5,7 @@ See Also:
     pyscf.pbc.scf.khf.py : Hartree-Fock for periodic systems with k-point sampling
 '''
 
+import sys
 import numpy as np
 import scipy.linalg
 import pyscf.lib
@@ -336,8 +337,17 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True):
 # inherit from that.
 class RHF(pyscf.scf.hf.RHF):
     '''RHF class adapted for PBCs.
+
+    Attributes:
+        kpt : (3,) ndarray
+            The AO k-point in Cartesian coordinates, in units of 1/Bohr.
+        analytic_int : bool
+            Whether to use analytic (libcint) integrals instead of grid-based. 
     '''
     def __init__(self, cell, kpt=None, analytic_int=None):
+        if not cell._built:
+            sys.stderr.write('Warning: cell.build() is not called in input\n')
+            cell.build()
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
         self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
@@ -454,7 +464,7 @@ class RHF(pyscf.scf.hf.RHF):
 
         # band_ovlp[p,q] = <p(0)|q(k)>
         band_ovlp = self.get_ovlp(self.cell, band_kpt)
-        # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k>
+        # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k)>
         Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
 
         return Fb, band_ovlp

@@ -71,8 +71,7 @@ def get_coulG(cell):
     return coulG
 
 def get_lattice_Ls(cell, nimgs):
-    '''Get the (unitful) lattice translation vectors for nearby images.'''
-    #nimgs = cell.nimgs
+    '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
     Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
                   for j in range(-nimgs[1],nimgs[1]+1)
                   for k in range(-nimgs[2],nimgs[2]+1)
@@ -136,24 +135,26 @@ def cutoff_to_gs(h, cutoff):
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
 
     Args: 
-        h : lattice vectors in *Bohr*
-        cutoff : KE energy cutoff in a.u.
+        h : (3,3) ndarray
+            The unit cell lattice vectors, a "three-column" array [a1|a2|a3], in Bohr
+        cutoff : float
+            KE energy cutoff in a.u.
 
     Returns: 
-        gs : (3, ) array
+        gs : (3,) array
     '''
     grid_spacing = np.pi / np.sqrt(2 * cutoff)
 
     print grid_spacing
     print h
 
-    h0=np.linalg.norm(h[:,0])
-    h1=np.linalg.norm(h[:,1])
-    h2=np.linalg.norm(h[:,2])
+    h0 = np.linalg.norm(h[:,0])
+    h1 = np.linalg.norm(h[:,1])
+    h2 = np.linalg.norm(h[:,2])
 
     print h0, h1, h2
     # number of grid points is 2gs+1 (~ 2 gs) along each direction 
-    gs=np.ceil([h0 / (2*grid_spacing), 
-                h1 / (2*grid_spacing), 
-                h2 / (2*grid_spacing)])
+    gs = np.ceil([h0 / (2*grid_spacing), 
+                  h1 / (2*grid_spacing), 
+                  h2 / (2*grid_spacing)])
     return gs

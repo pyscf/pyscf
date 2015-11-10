@@ -125,6 +125,10 @@ class KRHF(pbchf.RHF):
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
     now have an additional first dimension for the k-points, 
     e.g. mo_coeff is (nkpts, nao, nao) ndarray
+
+    Attributes:
+        kpts : (nks,3) ndarray
+            The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     def __init__(self, cell, kpts):
         pbchf.RHF.__init__(self, cell, kpts)

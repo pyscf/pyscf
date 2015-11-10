@@ -44,6 +44,7 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -2.3464949914151378, 8)
 
+'''
     def test_lda_grid80(self):
         cell = make_cell(80)
         mf = pbcrks.RKS(cell)
@@ -52,7 +53,6 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -2.63907898485, 8)
 
-"""
     def test_lda_grid90(self):
         cell = make_cell(90)
         mf = pbcrks.RKS(cell)
@@ -69,7 +69,7 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
 # python 2.6, numpy 1.6.2, mkl 10.3 got -2.6409238455955433
         self.assertAlmostEqual(e1, -2.64086844062, 8)
-"""
+'''
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")
