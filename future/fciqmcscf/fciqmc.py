@@ -248,7 +248,7 @@ def run_standalone(fciqmcci, mo_coeff, restart=None):
     else:
         neleca, nelecb = nelec
 
-    if self.generate_neci_input:
+    if fciqmcci.generate_neci_input:
         write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart)
 
     if fciqmcci.verbose >= logger.DEBUG1:
@@ -331,6 +331,8 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('realspawncutoff 0.4\n')
     f.write('semi-stochastic\n')
     f.write('mp1-core 2000\n')
+#    f.write('fci-core\n')
+#    f.write('trial-wavefunction 5\n')
     f.write('jump-shift\n')
     f.write('proje-changeref 1.5\n')
     f.write('stepsshift 10\n')
@@ -339,6 +341,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
         f.write('orthogonalise-replicas\n')
         f.write('doubles-init\n')
         f.write('multi-ref-shift\n')
+#        f.write('fci-init\n')
     if fciqmcci.calc_options:
         f.write(fciqmcci.calc_options + '\n')
     f.write('endcalc\n')
