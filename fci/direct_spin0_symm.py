@@ -180,7 +180,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 
 
 class FCISolver(direct_spin0.FCISolver):
-    def __init__(self, mol, **kwargs):
+    def __init__(self, mol=None, **kwargs):
         self.orbsym = []
         self.wfnsym = None
         direct_spin0.FCISolver.__init__(self, mol, **kwargs)
@@ -209,8 +209,15 @@ class FCISolver(direct_spin0.FCISolver):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               orbsym=None, wfnsym=None, **kwargs):
         if nroots is None: nroots = self.nroots
+        if orbsym is not None:
+            self.orbsym, orbsym_bak = orbsym, self.orbsym
+        if wfnsym is not None:
+            self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
+        else:
+            wfnsym_bak = None
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
@@ -232,6 +239,10 @@ class FCISolver(direct_spin0.FCISolver):
                      for ci in c]
             else:
                 c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
+        if orbsym is not None:
+            self.orbsym = orbsym_bak
+        if wfnsym_bak is not None:
+            self.wfnsym = wfnsym_bak
         return e, c
 
 
