@@ -6,10 +6,12 @@ See Also:
                             systems with k-point sampling
 '''
 
+import numpy
 import pyscf.dft
 import pyscf.pbc.scf
 from pyscf.lib import logger
 from pyscf.pbc.dft import numint
+import pyscf.pbc.tools as tools
 
 
 class RKS(pyscf.pbc.scf.hf.RHF):
@@ -42,3 +44,53 @@ class RKS(pyscf.pbc.scf.hf.RHF):
         if h1e is None: h1e = pyscf.pbc.scf.hf.get_hcore(self, self.cell)
         return pyscf.dft.rks.energy_elec(self, dm, h1e)
 
+    def get_veff_band(self, cell=None, dm=None, kpt=None):
+        '''Get veff at a given (arbitrary) 'band' k-point.
+
+        Returns:
+            veff : (nao, nao) ndarray
+        '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        # This would just return regular get_veff():
+        if kpt is None: kpt = self.kpt
+
+        coords, weights = self.grids.setup_grids_()
+        ngs = len(weights)
+        aoR = self._numint.eval_ao(cell, coords)
+        rho = self._numint.eval_rho(cell, aoR, dm)
+
+        # First we have to construct J using the density, not the dm
+        coulG = tools.get_coulG(cell)
+        rhoG = tools.fft(rho, cell.gs)
+        vG = coulG*rhoG
+        vR = tools.ifft(vG, cell.gs)
+
+        # Don't use self._numint's eval_ao, because the kpt is wrong 
+        aokR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt=kpt)
+        vj = (cell.vol/ngs) * numpy.dot(aokR.T.conj(), vR.reshape(-1,1)*aokR)
+
+        # TODO: Fix sigma for GGAs
+        sigma = numpy.zeros(ngs)
+        x_id, c_id = pyscf.dft.vxc.parse_xc_name(self.xc)
+        ec, vrho, vsigma = self._numint.eval_xc(x_id, c_id, rho, sigma)
+        vxc = self._numint.eval_mat(cell, aokR, weights, rho, vrho) 
+
+        return vj + vxc
+
+    def get_band_fock_ovlp(self, cell=None, dm=None, band_kpt=None):
+        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
+
+        Returns:
+            fock : (nao, nao) ndarray
+            ovlp : (nao, nao) ndarray
+        '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        # This would just return regular Fock and overlap matrices:
+        if band_kpt is None: band_kpt = self.kpt
+
+        fock = self.get_hcore(kpt=band_kpt) + self.get_veff_band(kpt=band_kpt)
+        ovlp = self.get_ovlp(kpt=band_kpt)
+
+        return fock, ovlp
