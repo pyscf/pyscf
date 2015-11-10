@@ -431,11 +431,13 @@ def state_average(casscf, weights=(0.5,0.5)):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
             self.nroots = len(weights)
-        def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
-            e, c = fcibase_class.kernel(self, h1, h2, ncas, nelecas, ci0,
+        def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
+# pass self to fcibase_class.kernel function because orbsym argument is stored in self 
+# but undefined in fcibase object
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
             if casscf.verbose >= logger.DEBUG:
-                ss = fcibase_class.spin_square(self, c, ncas, nelecas)
+                ss = fcibase_class.spin_square(self, c, norb, nelec)
                 for i, ei in enumerate(e):
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
                                  i, ei, ss[0][i])
@@ -490,7 +492,7 @@ if __name__ == '__main__':
 
     mc = mcscf.CASSCF(m, 6, 6)
     mc.verbose = 4
-    emc, e_ci, fcivec, mo = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
     print(ehf, emc, emc-ehf)
     print(emc - -3.272089958)
 
@@ -520,7 +522,7 @@ if __name__ == '__main__':
     mc.verbose = 4
     mc.fcisolver = pyscf.fci.solver(mol, False) # to mix the singlet and triplet
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
@@ -530,7 +532,7 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 4, 4)
     mc.verbose = 4
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)

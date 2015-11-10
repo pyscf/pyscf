@@ -26,7 +26,7 @@ nelec = mol.nelectron
 h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
 g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
 na = fci.cistring.num_strings(norb, nelec//2)
-e, ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec)
+e, ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec, tol=1e-15)
 
 class KnowValues(unittest.TestCase):
     def test_large_ci(self):
@@ -36,8 +36,8 @@ class KnowValues(unittest.TestCase):
                  ('0b1011' , '0b111'  ),
                  ('0b1011' , '0b1011' ),
                  ('0b10101', '0b10101')]
-        refci = [0.868485545310, 0.151306658009, 0.151306658009,
-                 -0.36620091020, -0.10306163008]
+        refci = [0.86848550920009038, 0.15130668599599939, 0.15130668599597297,
+                 -0.36620088911284837, -0.10306162063159749]
         self.assertTrue(numpy.allclose([x[0] for x in res], refci))
         self.assertEqual([x[1:] for x in res], refstr)
 

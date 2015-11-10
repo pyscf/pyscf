@@ -200,23 +200,34 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may diverge the
 # preconditioner when the eigvalue of first davidson iter equals to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
-           lindep=1e-14, max_cycle=50, nroots=1, **kwargs):
-    cis = FCISolver(None)
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
+           lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
+           davidson_only=False, pspace_size=400, **kwargs):
+    return _kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
+                     tol, lindep, max_cycle, max_space, nroots,
+                     davidson_only, pspace_size, **kwargs)
+def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
+              tol=1e-10, lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
+              davidson_only=False, pspace_size=400, **kwargs):
+    cis = Solver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
+    cis.max_space = max_space
     cis.nroots = nroots
-    unknown = []
+    cis.davidson_only = davidson_only
+    cis.pspace_size = pspace_size
+
+    unknown = {}
     for k, v in kwargs.items():
         setattr(cis, k, v)
         if not hasattr(cis, k):
-            unknown.append(k)
+            unknown[k] = v
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
-                         (str(unknown), __name__))
-    return kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+                         (str(unknown.keys()), __name__))
+    return cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.
@@ -355,7 +366,12 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 # direct-CI driver
 ###############################################################
 
-def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
+def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
+               tol=None, lindep=None, max_cycle=None, max_space=None,
+               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+    if nroots is None: nroots = fci.nroots
+    if davidson_only is None: davidson_only = fci.davidson_only
+    if pspace_size is None: pspace_size = fci.pspace_size
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -368,18 +384,18 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, fci.pspace_size)
+    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
     pw, pv = scipy.linalg.eigh(h0)
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-    if not fci.davidson_only:
+    if ci0 is not None and not davidson_only:
         if len(pw) == na*nb:
             if na*nb == 1:
                 return pw[0], pv[:,0]
-            elif fci.nroots > 1:
-                civec = numpy.empty((fci.nroots,na*nb))
-                civec[:,addr] = pv[:,:fci.nroots].T
-                return pw[:fci.nroots], civec.reshape(fci.nroots,na,nb)
+            elif nroots > 1:
+                civec = numpy.empty((nroots,na*nb))
+                civec[:,addr] = pv[:,:nroots].T
+                return pw[:nroots], civec.reshape(nroots,na,nb)
             elif abs(pw[0]-pw[1]) > 1e-12:
                 civec = numpy.empty((na*nb))
                 civec[addr] = pv[:,0]
@@ -394,10 +410,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
 
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, fci.nroots, hdiag)
+            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
             ci0 = []
-            for i in range(fci.nroots):
+            for i in range(nroots):
                 x = numpy.zeros(na*nb)
                 x[addr[i]] = 1
                 ci0.append(x)
@@ -408,8 +424,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, **kwargs):
             ci0 = [x.ravel() for x in ci0]
 
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
-    e, c = fci.eig(hop, ci0, precond, **kwargs)
-    if fci.nroots > 1:
+    e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
+                   max_cycle=max_cycle, max_space=max_space, nroots=nroots,
+                   **kwargs)
+    if nroots > 1:
         return e, [ci.reshape(na,nb) for ci in c]
     else:
         return e, c.reshape(na,nb)
@@ -459,7 +477,7 @@ class FCISolver(object):
         self.lindep = 1e-14
         self.max_memory = pyscf.lib.parameters.MEMORY_MAX
 # level shift in precond
-        self.level_shift = 1e-2
+        self.level_shift = 1e-3
         # force the diagonlization use davidson iteration.  When the CI space
         # is small, the solver exactly diagonlizes the Hamiltonian.  But this
         # solution will ignore the initial guess.  Setting davidson_only can
@@ -500,17 +518,20 @@ class FCISolver(object):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond, **kwargs):
-        opts = {'tol': self.conv_tol,
-                'max_cycle': self.max_cycle,
-                'max_space': self.max_space,
-                'lindep': self.lindep,
-                'max_memory': self.max_memory,
-                'nroots': self.nroots,
+    def eig(self, op, x0, precond, nroots=None, tol=None, **kwargs):
+        if nroots is None: nroots = self.nroots
+        if tol is None: tol = self.conv_tol
+        opts = {'max_memory': self.max_memory,
+                'nroots' : nroots,
+                'tol' : tol,
                 'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if self.nroots == 1 and x0[0].size > 6.5e7: # 500MB
+        if nroots == 1 and x0[0].size > 6.5e7: # 500MB
             opts['lessio'] = True
-        opts.update(kwargs)
+        for k, v in kwargs.iteritems():
+            if v is None:
+                opts[k] = getattr(self, k)
+            else:
+                opts[k] = v
         return pyscf.lib.davidson(op, x0, precond, **opts)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
@@ -522,10 +543,14 @@ class FCISolver(object):
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)
 
-    def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, ci0=None,
+               tol=None, lindep=None, max_cycle=None, max_space=None,
+               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
         if self.verbose > pyscf.lib.logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, **kwargs)
+        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, tol, lindep,
+                          max_cycle, max_space, nroots, davidson_only,
+                          pspace_size, **kwargs)
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
