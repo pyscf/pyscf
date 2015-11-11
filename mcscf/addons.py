@@ -144,6 +144,15 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                 cas_irrep_ncore[x] += 1
             else:
                 cas_irrep_ncore[x] = 1
+    else:
+        cas_irrep_ncore_ = {}
+        for k, ncore in cas_irrep_ncore.iteritems():
+            if isinstance(k, str):
+                irid = symm.irrep_name2id(casscf.mol.groupname, k)
+            else:
+                irid = k
+            cas_irrep_ncore_[irid] = ncore
+        cas_irrep_ncore = cas_irrep_ncore_
 
     orbidx_by_irrep = {}
     for i,x in enumerate(orbsym):
