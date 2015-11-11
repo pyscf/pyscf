@@ -123,13 +123,13 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvtz', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvtz', symmetry=True, verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.kernel()
     >>> mc = mcscf.CASSCF(mf, 12, 4)
     >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
     >>> mc.kernel(mo)[0]
-    -109.058040031
+    -108.187921313468
     '''
     if s is None:
         s = casscf._scf.get_ovlp()
@@ -143,7 +143,7 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             if x in cas_irrep_ncore:
                 cas_irrep_ncore[x] += 1
             else:
-                cas_irrep_ncore[x] = 0
+                cas_irrep_ncore[x] = 1
 
     orbidx_by_irrep = {}
     for i,x in enumerate(orbsym):

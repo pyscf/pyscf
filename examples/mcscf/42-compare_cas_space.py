@@ -15,6 +15,7 @@ mf = scf.RHF(mol1)
 mf.kernel()
 mc = mcscf.CASSCF(mf, 7, 4)
 mc.kernel()
+mo1core = mc.mo_coeff[:,:mc.ncore]
 mo1cas = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 
 mol2 = gto.M(atom='O 0 0 0; O 0 0 1', basis='ccpvdz', spin=2, symmetry=1)
@@ -22,9 +23,14 @@ mf = scf.RHF(mol2)
 mf.kernel()
 mc = mcscf.CASSCF(mf, 7, (2,2))
 mc.kernel()
+mo2core = mc.mo_coeff[:,:mc.ncore]
 mo2cas = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 
 s = gto.intor_cross('cint1e_ovlp_sph', mol1, mol2)
-s = reduce(numpy.dot, (mo1cas.T, s, mo2cas))
-print('<CAS1|CAS2> SVD eig = %s' % numpy.linalg.svd(s)[1])
-print('det(<CAS1|CAS2>)    = %s' % numpy.linalg.det(s))
+score = reduce(numpy.dot, (mo1core.T, s, mo2core))
+scas = reduce(numpy.dot, (mo1cas.T, s, mo2cas))
+numpy.set_printoptions(4)
+print('<core1|core2> SVD eig = %s' % numpy.linalg.svd(score)[1])
+print('det(<core1|core2>)    = %s' % numpy.linalg.det(score))
+print('<CAS1|CAS2> SVD eig = %s' % numpy.linalg.svd(scas)[1])
+print('det(<CAS1|CAS2>)    = %s' % numpy.linalg.det(scas))
