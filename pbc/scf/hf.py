@@ -37,7 +37,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 
 
 def get_hcore(cell, kpt=np.zeros(3)):
-    '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.
+    '''Get the core Hamiltonian AO matrix.
     '''
     hcore = get_t(cell, kpt)
     if cell.pseudo:
@@ -454,19 +454,24 @@ class RHF(pyscf.scf.hf.RHF):
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
         '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
 
+        Note: This does not work right now.
+
         Returns:
             fock : (nao, nao) ndarray
             ovlp : (nao, nao) ndarray
         '''
-        sinv = scipy.linalg.inv(ovlp)
-        sinvFocksinv = np.dot(np.conj(sinv.T), np.dot(fock, sinv))
 
-        # band_ovlp[p,q] = <p(0)|q(k)>
-        band_ovlp = self.get_ovlp(self.cell, band_kpt)
-        # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k)>
-        Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
+#        sinv = scipy.linalg.inv(ovlp)
+#        sinvFocksinv = np.dot(np.conj(sinv.T), np.dot(fock, sinv))
+#
+#        # band_ovlp[p,q] = <p(0)|q(k)>
+#        band_ovlp = self.get_ovlp(self.cell, band_kpt)
+#        # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k)>
+#        Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
+#
+#        return Fb, band_ovlp
 
-        return Fb, band_ovlp
+        raise NotImplementedError
 
     def init_guess_by_chkfile(self, chk=None, project=True):
         return init_guess_by_chkfile(self.cell, chk, project)
