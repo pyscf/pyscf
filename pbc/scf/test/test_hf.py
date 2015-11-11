@@ -6,6 +6,7 @@ from pyscf.scf import hf
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.scf import hf as pbchf
+import pyscf.pbc.scf as pscf
 
 
 def make_cell1(L, n):
@@ -135,6 +136,12 @@ class KnowValues(unittest.TestCase):
 #        neao = pbchf.get_nuc(cell)
 #        ecoul1 = np.einsum("ij,ij", dm, neao + .5*jao) + ew
 #        self.assertAlmostEqual(ecoul0, ecoul1, 9)
+
+    def test_ovlp_uniform(self):
+        mol, cell = make_cell2(4, 40)
+        sao = pbchf.get_ovlp(cell)
+        s0 = pscf.scfint.get_ovlp(cell)
+        self.assertAlmostEqual(np.linalg.norm(sao-s0), 0, 9)
 
 
 if __name__ == '__main__':

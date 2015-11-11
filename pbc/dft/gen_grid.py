@@ -1,7 +1,7 @@
 import numpy as np
 from pyscf import dft
 from pyscf.lib import logger
-from pyscf.lib.numpy_helper import cartesian_prod
+from pyscf.lib.numpy_helper import cartesian_prod, norm
 import pyscf.dft
 from pyscf.pbc import tools
 
@@ -32,6 +32,8 @@ class UniformGrids(object):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
 
+    def build_(self, cell=None):
+        return self.setup_grids_(cell)
     def setup_grids_(self, cell=None):
         if cell == None: cell = self.cell
 
@@ -46,7 +48,7 @@ class UniformGrids(object):
 
     def kernel(self, cell=None):
         self.dump_flags()
-        return self.setup_grids()
+        return self.setup_grids_(cell)
 
 
 def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
@@ -62,7 +64,8 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         weights : (ngx*ngy*ngz) ndarray
     '''
     def fshrink(n):
-        if n > 2:
+        return n
+        if n > 3:
             return 2
         elif n == 2:
             return 1
@@ -74,9 +77,9 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)
 
     # search for grids in unit cell
-    #b1,b2,b3 = np.linalg.inv(h).T  # reciprocal lattice
+    #b1,b2,b3 = np.linalg.inv(h)  # reciprocal lattice
     #np.einsum('kj,ij->ki', coords, (b1,b2,b3))
-    c = np.dot(coords, np.linalg.inv(cell._h))
+    c = np.dot(coords, np.linalg.inv(cell._h).T)
     mask = np.logical_and(reduce(np.logical_and, (c>=0).T),
                           reduce(np.logical_and, (c< 1).T))
     return coords[mask], weights[mask]

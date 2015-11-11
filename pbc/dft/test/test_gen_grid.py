@@ -4,13 +4,12 @@ from pyscf.pbc import gto as pgto
 from pyscf.pbc.scf import scfint
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
-import time
 
 
 def get_ovlp(cell, kpt=None, grids=None):
     if grids is None:
         grids = gen_grid.BeckeGrids(cell)
-        grids.level = 2
+        grids.level = 3
         grids.build_()
 
     aoR = numint.eval_ao(cell, grids.coords, kpt)
@@ -23,7 +22,8 @@ class KnowValues(unittest.TestCase):
         L = 4.
         n = 30
         cell = pgto.Cell()
-        cell.h = numpy.diag([L,L,L])
+        cell.h = numpy.eye(3)*L
+        cell.h[0,1] = cell.h[1,2] = L / 2
         cell.gs = numpy.array([n,n,n])
 
         cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
