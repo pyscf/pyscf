@@ -8,8 +8,8 @@ from pyscf.lib import logger
 def get_ao_pairs_G(cell):
     '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all AO pairs.
 
-    (G|ij) = \sum_r e^{-iGr} i(r) j(r)
-    (ij|G) = 1/N \sum_r e^{iGr} i*(r) j*(r) = 1/N (G|ij).conj()
+    (G|ij) = \sum_r e^{-iGr} i*(r) j(r)
+    (ij|G) = 1/N \sum_r e^{iGr} i(r) j*(r) = 1/N (G|ij).conj()
 
     Args:
         cell : instance of :class:`Cell`
@@ -73,7 +73,7 @@ def get_mo_pairs_G(cell, mo_coeff):
 def assemble_eri(cell, orb_pair_G1, orb_pair_invG2, verbose=logger.DEBUG):
     '''Assemble all 4-index electron repulsion integrals.
 
-    (ij|kl) = \sum_G (ij|G)(G|kl)
+    (ij|kl) = \sum_G (ij|G) v(G) (G|kl)
 
     Returns:
         (nmo1*nmo2, nmo3*nmo4) ndarray
