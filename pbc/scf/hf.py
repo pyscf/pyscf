@@ -450,17 +450,55 @@ class RHF(pyscf.scf.hf.RHF):
     def ewald_nuc(self, cell=None):
         if cell is None: cell = self.cell
         return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
-        
-    def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
-        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
 
-        Note: This does not work right now.
+    def get_jk_band(self, cell=None, dm=None, kpt=None):
+        '''Get J, K at a given (arbitrary) 'band' k-point.
 
         Returns:
-            fock : (nao, nao) ndarray
-            ovlp : (nao, nao) ndarray
+            vj, vk : each (nao, nao) ndarray
         '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        # This would just return regular get_veff():
+        if kpt is None: kpt = self.kpt
 
+        coords, weights = self.grids.setup_grids_()
+        ngs = len(weights)
+        aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords)
+        rho = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
+
+        # First we have to construct J using the density, not the dm
+        coulG = tools.get_coulG(cell)
+        rhoG = tools.fft(rho, cell.gs)
+        vG = coulG*rhoG
+        vR = tools.ifft(vG, cell.gs)
+
+        aokR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt=kpt)
+        vj = (cell.vol/ngs) * np.dot(aokR.T.conj(), vR.reshape(-1,1)*aokR)
+
+        # moR is (ngs, nmo)
+        moR = np.einsum('rp,pi->ri', aoR, self.mo_coeff)
+        nao = cell.nao_nr() 
+        vk = np.zeros((nao,nao), np.complex128)
+        for q in range(nao):
+            for i in range(cell.nelectron//2):
+                rho_iqR = np.conj(moR[:,i])*aokR[:,q]
+                rho_iqG = tools.fft(rho_iqR, cell.gs)
+                viqR = tools.ifft(coulG*rho_iqG, cell.gs)
+                vk[:,q] += (cell.vol/ngs) * np.dot(aokR.T.conj(), viqR*moR[:,i])
+        
+        return vj, vk
+
+#    def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
+#        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
+#
+#        Note: This does not work right now.
+#
+#        Returns:
+#            fock : (nao, nao) ndarray
+#            ovlp : (nao, nao) ndarray
+#        '''
+#
 #        sinv = scipy.linalg.inv(ovlp)
 #        sinvFocksinv = np.dot(np.conj(sinv.T), np.dot(fock, sinv))
 #
@@ -470,8 +508,26 @@ class RHF(pyscf.scf.hf.RHF):
 #        Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
 #
 #        return Fb, band_ovlp
+#
+#        raise NotImplementedError
 
-        raise NotImplementedError
+    def get_band_fock_ovlp(self, cell=None, dm=None, band_kpt=None):
+        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
+
+        Returns:
+            fock : (nao, nao) ndarray
+            ovlp : (nao, nao) ndarray
+        '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        # This would just return regular Fock and overlap matrices:
+        if band_kpt is None: band_kpt = self.kpt
+
+        j, k = self.get_jk_band(kpt=band_kpt)
+        fock = self.get_hcore(kpt=band_kpt) + j - k 
+        ovlp = self.get_ovlp(kpt=band_kpt)
+
+        return fock, ovlp
 
     def init_guess_by_chkfile(self, chk=None, project=True):
         return init_guess_by_chkfile(self.cell, chk, project)
