@@ -6,6 +6,10 @@ import pyscf.pbc.dft as pdft
 from pyscf.pbc.df import df
 
 
+def finger(a):
+    w = np.cos(np.arange(a.size))
+    return np.dot(w, a.ravel())
+
 class KnowValues(unittest.TestCase):
     def test_aux_e2_uniform(self):
         cell = pgto.Cell()
@@ -20,6 +24,7 @@ class KnowValues(unittest.TestCase):
         auxcell = df.format_aux_basis(cell)
         auxcell.nimgs = [3,3,3]
         a1 = df.aux_e2(cell, auxcell, 'cint3c1e_sph')
+        self.assertAlmostEqual(finger(a1), 0.1208944790152819, 9)
         #grids = pdft.gen_grid.BeckeGrids(cell)
         #grids.level = 3
         grids = pdft.gen_grid.UniformGrids(cell)
