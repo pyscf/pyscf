@@ -209,24 +209,12 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
-def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
-           lindep=1e-14, max_cycle=50, nroots=1, **kwargs):
-    cis = FCISolver(None)
-    cis.level_shift = level_shift
-    cis.conv_tol = tol
-    cis.lindep = lindep
-    cis.max_cycle = max_cycle
-    cis.nroots = nroots
-
-    unknown = []
-    for k, v in kwargs.items():
-        setattr(cis, k, v)
-        if not hasattr(cis, k):
-            unknown.append(k)
-    if unknown:
-        sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
-                         (str(unknown), __name__))
-    return direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
+           lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
+           davidson_only=False, pspace_size=400, **kwargs):
+    return direct_spin1._kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
+                                  tol, lindep, max_cycle, max_space, nroots,
+                                  davidson_only, pspace_size, **kwargs)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)

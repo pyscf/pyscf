@@ -19,4 +19,6 @@
 * Periodic boundary condition
 
 ------------------------------------------------
-* Fix fci.direct_uhf.make_rdm12s if there is no beta electron
+* FCI
+  - Fix fci.direct_uhf.make_rdm12s if there is no beta electron
+  - Better initial guess for triplet etc

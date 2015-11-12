@@ -1,6 +1,7 @@
 
 import numpy
 import pyscf.df.incore
+import pyscf.lib
 import pyscf.lib.parameters as param
 import pyscf.gto.mole
 from pyscf.lib import logger
@@ -27,39 +28,34 @@ def aux_e2(cell, auxcell, intor):
     Implements double summation over lattice vectors: \sum_{lm} (i[l]j[m]|L[0]).
     '''
     # sum over largest number of images in either cell or auxcell
-    nimgs = numpy.max((cell.nimgs, auxcell.nimgs),axis=0)
+    nimgs = numpy.max((cell.nimgs, auxcell.nimgs), axis=0)
     Ls = tools.pbc.get_lattice_Ls(cell, nimgs)
     logger.debug1(cell, "Images summed over in DFT %s", nimgs)
     logger.debug2(cell, "Ls = %s", Ls)
 
-    # cell with *all* images
-    rep_cell = cell.copy()
-    rep_cell.atom = []
-    for L in Ls:
-        for atom, coord in cell._atom:
-            rep_cell.atom.append([atom, coord + L])
-    rep_cell.unit = 'B'
-    rep_cell.build(False,False)
-    rep_cell.nimgs = rep_cell.get_nimgs(rep_cell.precision)
-
-    rep_aux_e2 = pyscf.df.incore.aux_e2(rep_cell, auxcell, intor, aosym='s1')
-
     nao = cell.nao_nr()
+    nao_pair = nao*(nao+1) // 2
+    nao_pair = nao*nao
     naoaux = auxcell.nao_nr()
-    nL = len(Ls)
+    cellL = cell.copy()
+    cellR = cell.copy()
+    _envL = cellL._env
+    _envR = cellR._env
+    ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
+    buf = numpy.zeros((nao_pair,naoaux))
+    for l, L1 in enumerate(Ls):
+        _envL[ptr_coord+0] = cell._env[ptr_coord+0] + L1[0]
+        _envL[ptr_coord+1] = cell._env[ptr_coord+1] + L1[1]
+        _envL[ptr_coord+2] = cell._env[ptr_coord+2] + L1[2]
+        for m in range(l):
+            _envR[ptr_coord+0] = cell._env[ptr_coord+0] + Ls[m][0]
+            _envR[ptr_coord+1] = cell._env[ptr_coord+1] + Ls[m][1]
+            _envR[ptr_coord+2] = cell._env[ptr_coord+2] + Ls[m][2]
 
-    rep_aux_e2=rep_aux_e2.reshape(nao*nL,nao*nL,-1)
-
-    aux_e2=numpy.zeros([nao,nao,naoaux])
-
-    # double lattice sum
-    for l in range(len(Ls)):
-        for m in range(len(Ls)):
-            aux_e2+=rep_aux_e2[l*nao:(l+1)*nao,m*nao:(m+1)*nao,:]
-
-    aux_e2.reshape([nao*nao,naoaux])
-
-    return aux_e2
+            buf += pyscf.df.incore.aux_e2(cellL, auxcell, intor, mol1=cellR)
+        buf += .5 * pyscf.df.incore.aux_e2(cellL, auxcell, intor, mol1=cellL)
+    eri = buf.reshape(nao,nao,-1)
+    return eri + eri.transpose(1,0,2)
 
 def aux_e2_grid(cell, auxcell, grids=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
@@ -78,11 +74,19 @@ def aux_e2_grid(cell, auxcell, grids=None):
         auxao *= grids.weights.reshape(-1,1)
     else:
         auxao *= grids.weights
-    aux_e2 = numpy.einsum('ri,rj,rk',ao,ao,auxao)
-    return aux_e2
+    ng, nao = ao.shape
+    naoaux = auxao.shape[1]
+    #aux_e2 = numpy.einsum('ri,rj,rk',ao,ao,auxao)
+    aux_e2 = numpy.zeros((nao*nao,naoaux))
+    for p0, p1 in prange(0, ng, 240):
+        tmp = numpy.einsum('ri,rj->rij', ao[p0:p1], ao[p0:p1])
+        pyscf.lib.dot(tmp.reshape(p1-p0,-1).T, auxao[p0:p1], 1, aux_e2, 1)
+    return aux_e2.reshape(nao,nao,-1)
 
 def aux_3c1e_grid(cell, auxcell, grids=None):
     return aux_e2_grid(cell, auxcell, gs, grids)
 
 
-
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)

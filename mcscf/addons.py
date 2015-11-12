@@ -123,13 +123,13 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvtz', verbose=0)
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvtz', symmetry=True, verbose=0)
     >>> mf = scf.RHF(mol)
     >>> mf.kernel()
     >>> mc = mcscf.CASSCF(mf, 12, 4)
     >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
     >>> mc.kernel(mo)[0]
-    -109.058040031
+    -108.187921313468
     '''
     if s is None:
         s = casscf._scf.get_ovlp()
@@ -143,7 +143,16 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             if x in cas_irrep_ncore:
                 cas_irrep_ncore[x] += 1
             else:
-                cas_irrep_ncore[x] = 0
+                cas_irrep_ncore[x] = 1
+    else:
+        cas_irrep_ncore_ = {}
+        for k, ncore in cas_irrep_ncore.iteritems():
+            if isinstance(k, str):
+                irid = symm.irrep_name2id(casscf.mol.groupname, k)
+            else:
+                irid = k
+            cas_irrep_ncore_[irid] = ncore
+        cas_irrep_ncore = cas_irrep_ncore_
 
     orbidx_by_irrep = {}
     for i,x in enumerate(orbsym):
@@ -431,11 +440,13 @@ def state_average(casscf, weights=(0.5,0.5)):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
             self.nroots = len(weights)
-        def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
-            e, c = fcibase_class.kernel(self, h1, h2, ncas, nelecas, ci0,
+        def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
+# pass self to fcibase_class.kernel function because orbsym argument is stored in self 
+# but undefined in fcibase object
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
             if casscf.verbose >= logger.DEBUG:
-                ss = fcibase_class.spin_square(self, c, ncas, nelecas)
+                ss = fcibase_class.spin_square(self, c, norb, nelec)
                 for i, ei in enumerate(e):
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
                                  i, ei, ss[0][i])
@@ -490,7 +501,7 @@ if __name__ == '__main__':
 
     mc = mcscf.CASSCF(m, 6, 6)
     mc.verbose = 4
-    emc, e_ci, fcivec, mo = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
     print(ehf, emc, emc-ehf)
     print(emc - -3.272089958)
 
@@ -520,7 +531,7 @@ if __name__ == '__main__':
     mc.verbose = 4
     mc.fcisolver = pyscf.fci.solver(mol, False) # to mix the singlet and triplet
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
@@ -530,7 +541,7 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 4, 4)
     mc.verbose = 4
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
