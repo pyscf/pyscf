@@ -99,33 +99,37 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return ci1
 
 
-def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=.001, tol=1e-10,
-           lindep=1e-14, max_cycle=50, nroots=1, orbsym=[], wfnsym=None,
+def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
+           lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
+           davidson_only=False, pspace_size=400, orbsym=[], wfnsym=None,
            **kwargs):
     assert(len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
-    cis.orbsym = orbsym
     cis.conv_tol = tol
     cis.lindep = lindep
     cis.max_cycle = max_cycle
-    cis.wfnsym = wfnsym
+    cis.max_space = max_space
     cis.nroots = nroots
+    cis.davidson_only = davidson_only
+    cis.pspace_size = pspace_size
+    cis.orbsym = orbsym
+    cis.wfnsym = wfnsym
 
-    unknown = []
+    unknown = {}
     for k, v in kwargs.items():
         setattr(cis, k, v)
         if not hasattr(cis, k):
-            unknown.append(k)
+            unknown[k] = v
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
-                         (str(unknown), __name__))
+                         (str(unknown.keys()), __name__))
 
     wfnsym = _id_wfnsym(cis, norb, nelec, cis.wfnsym)
     if cis.wfnsym is not None and ci0 is None:
         ci0 = addons.symm_initguess(norb, nelec, orbsym, wfnsym)
 
-    e, c = direct_spin1.kernel_ms1(cis, h1e, eri, norb, nelec, ci0=ci0)
+    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
     if cis.wfnsym is not None:
         if cis.nroots > 1:
             c = [addons.symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym)
@@ -211,7 +215,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 
 
 class FCISolver(direct_spin1.FCISolver):
-    def __init__(self, mol, **kwargs):
+    def __init__(self, mol=None, **kwargs):
         self.orbsym = []
         self.wfnsym = None
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
@@ -238,7 +242,17 @@ class FCISolver(direct_spin1.FCISolver):
         wfnsym = _id_wfnsym(self, norb, nelec, self.wfnsym)
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
-    def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, ci0=None,
+               tol=None, lindep=None, max_cycle=None, max_space=None,
+               nroots=None, davidson_only=None, pspace_size=None,
+               orbsym=None, wfnsym=None, **kwargs):
+        if nroots is None: nroots = self.nroots
+        if orbsym is not None:
+            self.orbsym, orbsym_bak = orbsym, self.orbsym
+        if wfnsym is not None:
+            self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
+        else:
+            wfnsym_bak = None
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
@@ -248,21 +262,24 @@ class FCISolver(direct_spin1.FCISolver):
                 log = kwargs['verbose']
             else:
                 log = logger.Logger(self.stdout, kwargs['verbose'])
-            log.debug('total symmetry = %s',
-                      symm.irrep_id2name(self.mol.groupname, wfnsym))
+            log.debug('total symmetry = %s', wfnsym)
         else:
-            logger.debug(self, 'total symmetry = %s',
-                         symm.irrep_id2name(self.mol.groupname, wfnsym))
+            logger.debug(self, 'total symmetry = %s', wfnsym)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
-                                       **kwargs)
+                                       tol, lindep, max_cycle, max_space, nroots,
+                                       davidson_only, pspace_size, **kwargs)
         if self.wfnsym is not None:
             # should I remove the non-symmetric contributions in each
             # call of contract_2e?
-            if self.nroots > 1:
+            if nroots > 1:
                 c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym)
                      for ci in c]
             else:
                 c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
+        if orbsym is not None:
+            self.orbsym = orbsym_bak
+        if wfnsym_bak is not None:
+            self.wfnsym = wfnsym_bak
         return e, c
 
 
