@@ -743,7 +743,7 @@ class CASSCF(casci.CASCI):
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
 # ah_grad_trust_region allow gradients increase for AH optimization
-        self.ah_grad_trust_region = 2.5
+        self.ah_grad_trust_region = 2.0
         self.ah_decay_rate = .8
         self.grad_update_dep = 1
         self.ci_update_dep = 2

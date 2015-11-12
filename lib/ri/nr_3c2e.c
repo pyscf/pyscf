@@ -19,18 +19,20 @@
 #define INPUT_IJ        2
 
 
-void RIfill_s1_auxe2(int (*intor)(), double *eri,
-                     int ish, int jsh, int bastart, int auxstart, int auxcount,
+void RIfill_s1_auxe2(int (*intor)(), double *eri, size_t ijkoff,
+                     int ish, int jsh, int naoaux,
+                     int *basrange, int *iloc, int *jloc, int *kloc,
                      CINTOpt *cintopt, struct _VHFEnvs *envs)
 {
+        const int brastart = basrange[0];
+        const int ketstart = basrange[2];
+        const int auxstart = basrange[4];
+        const int auxcount = basrange[5];
         const int nao = envs->nao;
-        const int *ao_loc = envs->ao_loc;
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        const int di = iloc[ish+1] - iloc[ish];
+        const int dj = jloc[jsh+1] - jloc[jsh];
         const int dij = di * dj;
-        const int nbasnaux = auxstart + auxcount;
-        const int naoaux = ao_loc[nbasnaux] - ao_loc[auxstart];
-        double *eribuf = (double *)malloc(sizeof(double)*di*dj*naoaux);
+        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux);
 
         int ksh, dk;
         int i, j, k, i0, j0, k0;
@@ -38,30 +40,29 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
         size_t ij0;
         double *peri, *pbuf;
 
-        shls[0] = ish;
-        shls[1] = jsh;
+        shls[0] = brastart + ish;
+        shls[1] = ketstart + jsh;
 
-        for (ksh = auxstart; ksh < nbasnaux; ksh++) {
-                shls[2] = ksh;
-                k0 = ao_loc[ksh] - ao_loc[auxstart];;
-                dk = ao_loc[ksh+1] - ao_loc[ksh];
-                i0 = ao_loc[ish] - ao_loc[bastart];
+        for (ksh = 0; ksh < auxcount; ksh++) {
+                shls[2] = auxstart + ksh;
+                k0 = kloc[ksh  ];
+                dk = kloc[ksh+1] - kloc[ksh];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
-                        for (i = 0; i < di; i++, i0++) {
-                        for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
+                        for (i0 = iloc[ish], i = 0; i < di; i++, i0++) {
+                        for (j0 = jloc[jsh], j = 0; j < dj; j++, j0++) {
                                 ij0 = i0 * nao + j0;
-                                peri = eri + ij0 * naoaux + k0;
+                                peri = eri + ij0 * naoaux + k0 - ijkoff;
                                 pbuf = eribuf + j * di + i;
                                 for (k = 0; k < dk; k++) {
                                         peri[k] = pbuf[k*dij];
                                 }
                         } }
                 } else {
-                        for (; i0 < ao_loc[ish+1]-ao_loc[bastart]; i0++) {
-                        for (j0 = ao_loc[jsh]; j0 < ao_loc[jsh+1]; j0++) {
+                        for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
+                        for (j0 = jloc[jsh]; j0 < jloc[jsh+1]; j0++) {
                                 ij0 = i0 * nao + j0;
-                                peri = eri + ij0 * naoaux + k0;
+                                peri = eri + ij0 * naoaux + k0 - ijkoff;
                                 for (k = 0; k < dk; k++) {
                                         peri[k] = 0;
                                 }
@@ -71,22 +72,31 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri,
         free(eribuf);
 }
 
-void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
-                       int ish, int jsh, int bastart, int auxstart, int auxcount,
+/*
+ * [ \      ]
+ * [  \     ]
+ * [ ...    ]
+ * [ ....   ]
+ * [ .....  ]
+ * [      \ ]
+ */
+void RIfill_s2ij_auxe2(int (*intor)(), double *eri, size_t ijkoff,
+                       int ish, int jsh, int naoaux,
+                       int *basrange, int *iloc, int *jloc, int *kloc,
                        CINTOpt *cintopt, struct _VHFEnvs *envs)
 {
-        if (ish < jsh) {
+        if (iloc[ish] < jloc[jsh]) {
                 return;
         }
 
-        const int *ao_loc = envs->ao_loc;
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        const int brastart = basrange[0];
+        const int ketstart = basrange[2];
+        const int auxstart = basrange[4];
+        const int auxcount = basrange[5];
+        const int di = iloc[ish+1] - iloc[ish];
+        const int dj = jloc[jsh+1] - jloc[jsh];
         const int dij = di * dj;
-        const int ijoff = ao_loc[bastart] * (ao_loc[bastart] + 1) / 2;
-        const int nbasnaux = auxstart + auxcount;
-        const int naoaux = ao_loc[nbasnaux] - ao_loc[auxstart];
-        double *eribuf = (double *)malloc(sizeof(double)*di*dj*naoaux);
+        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux);
 
         int ksh, dk;
         int i, j, k, i0, j0, k0;
@@ -94,30 +104,30 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
         size_t ij0;
         double *peri, *pbuf;
 
-        shls[0] = ish;
-        shls[1] = jsh;
+        shls[0] = brastart + ish;
+        shls[1] = ketstart + jsh;
 
-        for (ksh = auxstart; ksh < nbasnaux; ksh++) {
-                shls[2] = ksh;
-                k0 = ao_loc[ksh] - ao_loc[auxstart];
-                dk = ao_loc[ksh+1] - ao_loc[ksh];
+        for (ksh = 0; ksh < auxcount; ksh++) {
+                shls[2] = auxstart + ksh;
+                k0 = kloc[ksh  ];
+                dk = kloc[ksh+1] - kloc[ksh];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
-                        if (ish == jsh) {
-                                for (i0 = ao_loc[ish],i = 0; i < di; i++, i0++) {
-                                for (j0 = ao_loc[jsh],j = 0; j0 <= i0; j++, j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        peri = eri + ij0 * naoaux + k0;
+                        if (iloc[ish] != jloc[jsh]) {
+                                for (i0 = iloc[ish], i = 0; i < di; i++,i0++) {
+                                for (j0 = jloc[jsh], j = 0; j < dj; j++,j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0;
+                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = pbuf[k*dij];
                                         }
                                 } }
                         } else {
-                                for (i0 = ao_loc[ish], i = 0; i < di; i++,i0++) {
-                                for (j0 = ao_loc[jsh], j = 0; j < dj; j++,j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        peri = eri + ij0 * naoaux + k0;
+                                for (i0 = iloc[ish],i = 0; i < di; i++, i0++) {
+                                for (j0 = jloc[jsh],j = 0; j0 <= i0; j++, j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0;
+                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = pbuf[k*dij];
@@ -125,20 +135,20 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
                                 } }
                         }
                 } else {
-                        if (ish == jsh) {
-                                for (i0 = ao_loc[ish]; i0 < ao_loc[ish+1];i0++) {
-                                for (j0 = ao_loc[jsh]; j0 <= i0; j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        peri = eri + ij0 * naoaux + k0;
+                        if (iloc[ish] != jloc[jsh]) {
+                                for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
+                                for (j0 = jloc[jsh]; j0 < jloc[jsh+1]; j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0;
+                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = 0;
                                         }
                                 } }
                         } else {
-                                for (i0 = ao_loc[ish]; i0 < ao_loc[ish+1];i0++) {
-                                for (j0 = ao_loc[jsh]; j0 < ao_loc[jsh+1];j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0 - ijoff;
-                                        peri = eri + ij0 * naoaux + k0;
+                                for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
+                                for (j0 = jloc[jsh]; j0 <= i0; j0++) {
+                                        ij0 = i0*(i0+1)/2 + j0;
+                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = 0;
                                         }
@@ -152,63 +162,31 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri,
 
 /*
  * fill can be one of RIfill_s1_auxe2 and RIfill_s2ij_auxe2
- * NOTE nbas is the number of normal AO basis, the number of auxiliary
- * basis is given by auxcount;
- * bastart and bascount to fill a range of basis;
- * auxstart is the end of normal basis, so it equals to the number of
- * normal basis
  */
 void RInr_3c2e_auxe2_drv(int (*intor)(), void (*fill)(), double *eri,
-                         int bastart, int bascount, int auxstart, int auxcount,
+                         size_t ijkoff, int nao, int naoaux,
+                         int *basrange, int *iloc, int *jloc, int *kloc,
                          int ncomp, CINTOpt *cintopt,
                          int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nbasnaux = auxstart + auxcount;
-        int *ao_loc = malloc(sizeof(int)*(nbasnaux+1));
-        CINTshells_spheric_offset(ao_loc, bas, nbasnaux);
-        ao_loc[nbasnaux] = ao_loc[nbasnaux-1] + CINTcgto_spheric(nbasnaux-1, bas);
-        const int nao = ao_loc[auxstart];
-
-        struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao, ao_loc};
-
-        int i, j, ij;
-
+        assert(fill == &RIfill_s1_auxe2 || fill == &RIfill_s2ij_auxe2);
+        struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao};
 #pragma omp parallel default(none) \
-        shared(eri, intor, fill, bastart, bascount, auxstart, auxcount, \
-               nbas, envs, cintopt) \
-        private(ij, i, j)
-#pragma omp for nowait schedule(dynamic, 2)
-        for (ij = bastart*nbas; ij < (bastart+bascount)*nbas; ij++) {
-                i = ij / nbas;
-                j = ij - i * nbas;
-                (*fill)(intor, eri,
-                        i, j, bastart, auxstart, auxcount,
-                        cintopt, &envs);
-        }
-
-        free(ao_loc);
-}
-
-/*
-void RInr_int3c2e_auxe1(int (*intor)(), void (*fill)(), double *eri,
-                        int bastart, int bascount, int auxstart, int auxcount,
-                        int ncomp, CINTOpt *cintopt,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+        shared(eri, intor, fill, basrange, iloc, jloc, kloc, \
+               ijkoff, naoaux, envs, cintopt)
 {
-#pragma omp parallel default(none) \
-        shared(eri, intor, fill, bastart, bascount, auxstart, auxcount, \
-               envs, cintopt) \
-        private(ij, i, j)
+        int i, j, ij;
+        int bracount = basrange[1];
+        int ketcount = basrange[3];
 #pragma omp for nowait schedule(dynamic, 2)
-        for (ksh = 0; ksh < auxcount; ksh++) {
-                (*fill)(intor, eri,
-                        ksh, bastart, auxstart, auxcount,
-                        cintopt, &envs);
+        for (ij = 0; ij < bracount*ketcount; ij++) {
+                i = ij / ketcount;
+                j = ij - i * ketcount;
+                (*fill)(intor, eri, ijkoff, i, j, naoaux,
+                        basrange, iloc, jloc, kloc, cintopt, &envs);
         }
-
-        free(ao_loc);
 }
-*/
+}
 
 /*
  * transform bra, s1 to label AO symmetry
