@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import copy
 import time
 import ctypes
 import _ctypes
@@ -10,8 +11,8 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
-import pyscf.gto
-from pyscf.scf import _vhf
+from pyscf import gto
+from pyscf.df import _ri
 
 libri = pyscf.lib.load_library('libri')
 def _fpointer(name):
@@ -21,17 +22,15 @@ def format_aux_basis(mol, auxbasis='weigend'):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
     the basis sets
     '''
-    pmol = mol.copy()
-    pmol.verbose = mol.verbose
+    pmol = copy.copy(mol)  # just need shallow copy
     if isinstance(auxbasis, str):
         uniq_atoms = set([a[0] for a in mol._atom])
         pmol._basis = pmol.format_basis(dict([(a, auxbasis)
                                               for a in uniq_atoms]))
     else:
         pmol._basis = pmol.format_basis(auxbasis)
-    pmol._atom = mol._atom
     pmol._atm, pmol._bas, pmol._env = \
-            pmol.make_env(mol._atom, pmol._basis, pmol._env)
+            pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol.natm = len(pmol._atm)
     pmol.nbas = len(pmol._bas)
     pmol._built = True
@@ -41,38 +40,27 @@ def format_aux_basis(mol, auxbasis='weigend'):
 
 
 # (ij|L)
-def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
-    '''3-center 2-electron AO integrals (ij|L), where L is the auxiliary basis.
+def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
+           mol1=None):
+    '''3-center AO integrals (ij|L), where L is the auxiliary basis.
     '''
-    assert(aosym in ('s1', 's2ij'))
-    atm, bas, env = \
-            pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                    auxmol._atm, auxmol._bas, auxmol._env)
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
-    natm = ctypes.c_int(mol.natm+auxmol.natm)
-    nbas = ctypes.c_int(mol.nbas)
-
-    nao = mol.nao_nr()
-    naoaux = auxmol.nao_nr()
-    if aosym == 's1':
-        eri = numpy.empty((nao*nao,naoaux))
-        fill = _fpointer('RIfill_s1_auxe2')
+    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                      auxmol._atm, auxmol._bas, auxmol._env)
+    if 'cart' in intor:
+        iloc = jloc = _ri.make_loc(0, mol.nbas, _ri._cgto_cart(bas))
     else:
-        eri = numpy.empty((nao*(nao+1)//2,naoaux))
-        fill = _fpointer('RIfill_s2ij_auxe2')
-    fintor = _fpointer(intor)
-    cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
-    libri.RInr_3c2e_auxe2_drv(fintor, fill,
-                              eri.ctypes.data_as(ctypes.c_void_p),
-                              ctypes.c_int(0), ctypes.c_int(mol.nbas),
-                              ctypes.c_int(mol.nbas), ctypes.c_int(auxmol.nbas),
-                              ctypes.c_int(1), cintopt,
-                              c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                              c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                              c_env.ctypes.data_as(ctypes.c_void_p))
-    libri.CINTdel_optimizer(ctypes.byref(cintopt))
+        iloc = jloc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
+    if mol1 is None:
+        basrange = (0, mol.nbas, 0, mol.nbas, mol.nbas, auxmol.nbas)
+    else:
+# Append mol1 next to auxmol
+        atm, bas, env = gto.mole.conc_env(atm, bas, env,
+                                          mol1._atm, mol1._bas, mol1._env)
+        basrange = (0, mol.nbas, mol.nbas+auxmol.nbas, mol1.nbas,
+                    mol.nbas, auxmol.nbas)
+        jloc = None
+    eri = _ri.nr_auxe2(intor, basrange,
+                       atm, bas, env, aosym, comp, iloc=iloc, jloc=jloc)
     return eri
 
 
@@ -138,7 +126,7 @@ def cholesky_eri(mol, auxbasis='weigend', verbose=0):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import ao2mo
-    mol = pyscf.gto.Mole()
+    mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
 
@@ -156,8 +144,8 @@ if __name__ == '__main__':
     j3c = j3c.reshape(nao,nao,naoaux)
 
     atm, bas, env = \
-            pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                    auxmol._atm, auxmol._bas, auxmol._env)
+            gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                              auxmol._atm, auxmol._bas, auxmol._env)
     eri0 = numpy.empty((nao,nao,naoaux))
     pi = 0
     for i in range(mol.nbas):
@@ -166,8 +154,8 @@ if __name__ == '__main__':
             pk = 0
             for k in range(mol.nbas, mol.nbas+auxmol.nbas):
                 shls = (i, j, k)
-                buf = pyscf.gto.moleintor.getints_by_shell('cint3c2e_sph',
-                                                           shls, atm, bas, env)
+                buf = gto.moleintor.getints_by_shell('cint3c2e_sph',
+                                                     shls, atm, bas, env)
                 di, dj, dk = buf.shape
                 eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
                 pk += dk
@@ -182,8 +170,8 @@ if __name__ == '__main__':
         pj = 0
         for j in range(mol.nbas, len(bas)):
             shls = (i, j)
-            buf = pyscf.gto.moleintor.getints_by_shell('cint2c2e_sph',
-                                                       shls, atm, bas, env)
+            buf = gto.moleintor.getints_by_shell('cint2c2e_sph',
+                                                 shls, atm, bas, env)
             di, dj = buf.shape
             eri0[pi:pi+di,pj:pj+dj] = buf
             pj += dj

@@ -23,9 +23,8 @@ mol.build(
 
 libri = df.incore.libri
 auxmol = df.incore.format_aux_basis(mol)
-atm, bas, env = \
-        gto.conc_env(mol._atm, mol._bas, mol._env,
-                     auxmol._atm, auxmol._bas, auxmol._env)
+atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
+                             auxmol._atm, auxmol._bas, auxmol._env)
 
 class KnowValues(unittest.TestCase):
     def test_aux_e2(self):
@@ -44,6 +43,36 @@ class KnowValues(unittest.TestCase):
                     shls = (i, j, k)
                     buf = gto.moleintor.getints_by_shell('cint3c2e_sph',
                                                          shls, atm, bas, env)
+                    di, dj, dk = buf.shape
+                    eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
+                    pk += dk
+                pj += dj
+            pi += di
+        self.assertTrue(numpy.allclose(eri0, j3c))
+
+    def test_aux_e2_diff_bra_ket(self):
+        mol1 = mol.copy()
+        mol1.basis = 'sto3g'
+        mol1.build(0, 0, verbose=0)
+        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1',
+                               mol1=mol1)
+        nao = mol.nao_nr()
+        naoj = mol1.nao_nr()
+        naoaux = auxmol.nao_nr()
+        j3c = j3c.reshape(nao,naoj,naoaux)
+        atm1, bas1, env1 = gto.conc_env(atm, bas, env,
+                                        mol1._atm, mol1._bas, mol1._env)
+
+        eri0 = numpy.empty((nao,naoj,naoaux))
+        pi = 0
+        for i in range(mol.nbas):
+            pj = 0
+            for j in range(mol.nbas+auxmol.nbas, len(bas1)):
+                pk = 0
+                for k in range(mol.nbas, mol.nbas+auxmol.nbas):
+                    shls = (i, j, k)
+                    buf = gto.moleintor.getints_by_shell('cint3c2e_sph',
+                                                         shls, atm1, bas1, env1)
                     di, dj, dk = buf.shape
                     eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
                     pk += dk
