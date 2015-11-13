@@ -11,9 +11,9 @@ b = 1.4
 mol = gto.Mole()
 
 mol.build(
-        verbose = 0,
-#output = 'casscf.out',
-output = None,
+verbose = 5,
+output = 'tests.out',
+#output = None,
 atom = [['Li',(  0.000000,  0.000000, 1.005436697)],
         ['H',(  0.000000,  0.000000,  0.0)]],
 basis = {'H': 'sto-3g', 'Li': 'sto-3g'},
@@ -37,20 +37,21 @@ class KnowValues(unittest.TestCase):
         one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
         dips, elec, nuc = calc_dipole(mol, m.mo_coeff, one_pdm)
 
-        self.assertAlmostEqual(energy, -7.787146064428100, 5)
+        # This requires use of the dneci executable, running on 2 cores to be correct
+        self.assertAlmostEqual(energy, -7.7871453481816, 5)
         self.assertAlmostEqual(dips[0], 0.0, 7)
         self.assertAlmostEqual(dips[1], 0.0, 7)
-        self.assertAlmostEqual(dips[2], 1.85781390006, 4)
+        self.assertAlmostEqual(dips[2], 1.8578755475683275, 4)
 
     def test_dipoles_casscfbasis(self):
 
-        # There are only 6 orbitals and 4 electrons, so this is the full
-        # space, giving the exact NO basis.
-        mc = mcscf.CASSCF(m,6,4)
+        # There are only 6 orbitals and 4 electrons, so this is almost the full
+        # space, giving close-to-exact NO basis.
+        mc = mcscf.CASSCF(m,4,4)
         # Ensures that casscf_mo returns the natural orbital basis in the
         # active space.
         mc.natorb = True
-        emc, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
+        emc, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)[0:4]
 
         fciqmcci = FCIQMCCI(mol)
         fciqmcci.tau = 0.01
