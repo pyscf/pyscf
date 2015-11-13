@@ -10,13 +10,14 @@ import ase
 import ase.lattice
 import ase.dft.kpoints
 
-def run_hf(ase_atom, ngs, nmp=1):
+def run_hf(ase_atom, ngs):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
     cell.h = ase_atom.cell
 
-    cell.basis = 'gth-dzvp'
+    cell.basis = 'gth-szv'
+    #cell.basis = 'gth-dzvp'
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
 
@@ -27,6 +28,7 @@ def run_hf(ase_atom, ngs, nmp=1):
     mf = pbchf.RHF(cell)
     mf.verbose = 7
     print mf.scf()
+    print mf.mo_energy
 
 def run_lda(ase_atom, ngs, nmp=1):
     cell = pbcgto.Cell()
@@ -70,9 +72,12 @@ if __name__ == '__main__':
     # Gamma point
     # n = 8  : converged SCF energy = 
     # n = 10 : converged SCF energy = 
-    from ase.lattice import bulk
-    ase_atom = bulk('C', 'diamond', a=3.5668)
-    run_hf(ase_atom, n, 2)
+    from ase.lattice.cubic import Diamond
+    ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
+    run_hf(ase_atom, n)
+    #from ase.lattice import bulk
+    #ase_atom = bulk('C', 'diamond', a=3.5668)
+    #run_hf(ase_atom, n)
 
     xxxx
     

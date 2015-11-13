@@ -52,6 +52,20 @@ def ifft(g, gs):
     f3d = np.fft.ifftn(g3d)
     return np.ravel(f3d)
 
+def fftk(f, gs, r, k):
+    '''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
+
+    fk(k+G) = \sum_r fk(r) e^{-i(k+G)r} = \sum_r [f(k)e^{-ikr}] e^{-iGr}
+    '''
+    return fft(f*np.exp(-1j*np.dot(k,r.T)), gs)
+
+def ifftk(g, gs, r, k):
+    '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
+
+    fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = [(1/Ng) \sum_G fk(k+G)e^{-iGr}] e^{ikr}
+    '''
+    return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
+
 def get_coulG(cell):
     '''Calculate the Coulomb kernel 4*pi/G^2 for all G-vectors (0 for G=0).
 

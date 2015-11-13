@@ -10,7 +10,7 @@ import pyscf.pbc.dft as pbcdft
 
 ANG2BOHR = 1.889725989
 
-def plot_bands(scftype, ngs):
+def plot_bands(scftype, basis, ngs):
     # Set-up the unit cell
     from ase.lattice import bulk
     from ase.dft.kpoints import ibz_points, kpoint_convert, get_bandpath
@@ -32,8 +32,9 @@ def plot_bands(scftype, ngs):
     cell.unit = 'B'
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
     cell.h = ase_atom.cell
+    cell.basis = 'gth-%s'%(basis)
     #cell.basis = 'gth-szv'
-    cell.basis = 'gth-dzvp'
+    #cell.basis = 'gth-dzvp'
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
     cell.verbose = 7
@@ -47,6 +48,7 @@ def plot_bands(scftype, ngs):
         mf = pbchf.RHF(cell)
     mf.analytic_int = False
     mf.scf()
+    print "SCF evals =", mf.mo_energy
 
     # Proceed along k-point band-path
     e_kn = []
@@ -81,18 +83,22 @@ def plot_bands(scftype, ngs):
     plt.xticks(X, ['$%s$' % n for n in ['L', r'\Gamma', 'X', 'W', 'K', r'\Gamma']])
     plt.axis(xmin=0, xmax=X[-1], ymin=emin, ymax=emax)
     plt.xlabel('k-vector')
+    plt.ylabel('Energy [au]')
 
     #plt.show()
+    plt.savefig('bands_%s_%s_%d.png'%(scftype,basis,ngs))
     #plt.savefig('bands_%s_szv_%d.png'%(scftype,ngs))
-    plt.savefig('bands_%s_dzvp_%d.png'%(scftype,ngs))
+    #plt.savefig('bands_%s_dzvp_%d.png'%(scftype,ngs))
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if len(args) != 2:
-        print 'usage: diamond_bands.py dft/hf ngs' 
+    if len(args) != 3:
+        print 'usage: diamond_bands.py dft/hf basis ngs' 
         sys.exit(1)
     scftype = args[0]
     assert scftype in ['dft','hf']
-    ngs = int(args[1])
-    plot_bands(scftype, ngs)
+    basis = args[1]
+    assert basis in ['szv', 'dzvp']
+    ngs = int(args[2])
+    plot_bands(scftype, basis, ngs)
 

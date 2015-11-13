@@ -133,11 +133,10 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
-    aokplusG = np.empty(aoR.shape, np.complex128)
+    aokG = np.empty(aoR.shape, np.complex128)
     for i in range(nao):
-        aokplusG[:,i] = tools.fft(aoR[:,i]*np.exp(-1j*np.dot(kpt,coords.T)), 
-                                  cell.gs)
-    ngs = len(aokplusG)
+        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
+    ngs = len(aokG)
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
     hs, projGs = pseudo.get_projG(cell, kpt)
@@ -148,7 +147,7 @@ def get_pp(cell, kpt=np.zeros(3)):
                 SPG_lm_aoG = np.zeros((nl,nao), dtype=np.complex128)
                 for i in range(nl):
                     SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
-                    SPG_lm_aoG[i,:] = np.einsum('g,gp->p', SPG_lmi.conj(), aokplusG)
+                    SPG_lm_aoG[i,:] = np.einsum('g,gp->p', SPG_lmi.conj(), aokG)
                 for i in range(nl):
                     for j in range(nl):
                         # Note: There is no (-1)^l here.
@@ -467,7 +466,8 @@ class RHF(pyscf.scf.hf.RHF):
         aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords)
         rho = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
 
-        # First we have to construct J using the density, not the dm
+        # We have to construct J using the density, not the dm
+        # TODO: Re-write this to use orbitals instead of density
         coulG = tools.get_coulG(cell)
         rhoG = tools.fft(rho, cell.gs)
         vG = coulG*rhoG
@@ -476,40 +476,19 @@ class RHF(pyscf.scf.hf.RHF):
         aokR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt=kpt)
         vj = (cell.vol/ngs) * np.dot(aokR.T.conj(), vR.reshape(-1,1)*aokR)
 
-        # moR is (ngs, nmo)
+        # Construct K using the occupied orbitals from SCF
         moR = np.einsum('rp,pi->ri', aoR, self.mo_coeff)
         nao = cell.nao_nr() 
         vk = np.zeros((nao,nao), np.complex128)
         for q in range(nao):
             for i in range(cell.nelectron//2):
-                rho_iqR = np.conj(moR[:,i])*aokR[:,q]
-                rho_iqG = tools.fft(rho_iqR, cell.gs)
-                viqR = tools.ifft(coulG*rho_iqG, cell.gs)
+                rho_iqkR = np.conj(moR[:,i])*aokR[:,q]
+                # TODO: Check these next two lines w/ new fftk functions
+                rho_iqkG = tools.fftk(rho_iqkR, cell.gs, coords, kpt)
+                viqR = tools.ifftk(coulG*rho_iqkG, cell.gs, coords, kpt)
                 vk[:,q] += (cell.vol/ngs) * np.dot(aokR.T.conj(), viqR*moR[:,i])
         
         return vj, vk
-
-#    def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
-#        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
-#
-#        Note: This does not work right now.
-#
-#        Returns:
-#            fock : (nao, nao) ndarray
-#            ovlp : (nao, nao) ndarray
-#        '''
-#
-#        sinv = scipy.linalg.inv(ovlp)
-#        sinvFocksinv = np.dot(np.conj(sinv.T), np.dot(fock, sinv))
-#
-#        # band_ovlp[p,q] = <p(0)|q(k)>
-#        band_ovlp = self.get_ovlp(self.cell, band_kpt)
-#        # Fb[p,q] = \sum_{rs} <p(k)|_r(0)> <r(0)|F|s(0)> <_s(0)|q(k)>
-#        Fb = np.dot(np.conj(band_ovlp.T), np.dot(sinvFocksinv, band_ovlp))
-#
-#        return Fb, band_ovlp
-#
-#        raise NotImplementedError
 
     def get_band_fock_ovlp(self, cell=None, dm=None, band_kpt=None):
         '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
