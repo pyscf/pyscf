@@ -21,7 +21,7 @@ COMMENT_KEYWORDS = '!*#'
 # parse the basis text which is in Molpro format, return an internal basis
 # format which can be assigned to gto.mole.basis
 def parse(string):
-    bastxt = [x.strip() for x in string.split('\n')
+    bastxt = [x.strip() for x in string.splitlines()
               if x.strip() and x.lstrip()[0] not in COMMENT_KEYWORDS]
     return _parse(bastxt)
 
@@ -38,12 +38,12 @@ def search_seg(basisfile, symb):
                 continue
             elif dat[0].isalpha():
                 if dat.startswith(symb+' '):
-                    rawbas.append(dat[:-1])
+                    rawbas.append(dat.splitlines()[0])
                 elif rawbas:
                     return rawbas
                 fin.readline()  # line for references
             elif rawbas:
-                rawbas.append(dat[:-1])
+                rawbas.append(dat.splitlines()[0])
             dat = fin.readline()
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 

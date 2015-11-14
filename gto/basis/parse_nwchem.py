@@ -21,7 +21,7 @@ def parse(string):
     Lines started with # are ignored.
     '''
     bastxt = []
-    for dat in string.split('\n'):
+    for dat in string.splitlines():
         x = dat.strip()
         if (x and not x.startswith('#') and not x.startswith('END') and
             not x.startswith('BASIS')):
@@ -33,7 +33,7 @@ def load(basisfile, symb):
 
 def parse_ecp(string):
     ecptxt = []
-    for dat in string.split('\n'):
+    for dat in string.splitlines():
         x = dat.strip()
         if (x and not x.startswith('#') and not x.startswith('END') and
             not x.startswith('ECP')):
@@ -57,7 +57,7 @@ def search_seg(basisfile, symb):
                 while (dat and
                        not dat.startswith('#BASIS SET') and
                        not dat.startswith('END')):
-                    x = dat[:-1].strip()
+                    x = dat.splitlines()[0].strip()
                     if x:  # remove blank lines
                         seg.append(x)
                     dat = fin.readline().lstrip(' ')
@@ -88,7 +88,7 @@ def search_ecp(basisfile, symb):
                 return seg
             if dat: # remove blank lines
                 seg.append(dat)
-            dat = fin.readline()[:-1].strip()
+            dat = fin.readline().splitlines()[0].strip()
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
 def _parse(raw_basis):
