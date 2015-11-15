@@ -465,9 +465,16 @@ def cosmo_for_mcscf(mc, cosmo):
         def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
             if mo_coeff is None: mo_coeff = self.mo_coeff
             h1eff, ecore = mcscf.casci.h1e_for_cas(self, mo_coeff, ncas, ncore)
-            lib.logger.debug1(self, 'E_core without COSMO = %.15g  E_diel = %.15g',
+            ecore -= cosmo._edup  # Note the active space contribution was included
+            lib.logger.debug(self, 'E_core without COSMO = %.15g  E_diel = %.15g',
                               ecore, cosmo.ediel)
             return h1eff, ecore+cosmo.ediel
+
+        def dump_flags(self):
+            oldCAS.dump_flags(self)
+            if hasattr(self, 'conv_tol') and self.conv_tol < 1e-6:
+                lib.logger.warn(self, 'CASSCF+COSMO might not be able to'
+                                'converge to conv_tol %g', self.conv_tol)
 
         def update_casdm(self, mo, u, fcivec, e_ci, eris):
             casdm1, casdm2, gci, fcivec = \
@@ -478,6 +485,13 @@ def cosmo_for_mcscf(mc, cosmo):
             cosmo._dm += numpy.dot(mocore, mocore.T) * 2
             return casdm1, casdm2, gci, fcivec
 
+# We modify hcore to feed the potential of outlying charge into the orbital
+# gradients (see CASSCF function gen_h_op).  Note hcore is also used to
+# compute the Ecore.  The energy contribution from outlying charge needs to be
+# removed.
+# Note the approximation _edup = Tr(Vcosmo, DM_CASCI) = Tr(Vcosmo, DM_input)
+# When CASSCF converged, we assumed the input DM (computed in update_casdm) is
+# identical to the CASCI DM (from the macro iteration).
         def get_hcore(self, mol=None):
             if cosmo._dm is None:
                 dm = self._scf.make_rdm1()
@@ -485,8 +499,8 @@ def cosmo_for_mcscf(mc, cosmo):
                     dm = dm[0] + dm[1]
             else:
                 dm = cosmo._dm
-            cosmo._dm = dm
             vcosmo = cosmo.cosmo_fock(dm)
+            cosmo._edup = numpy.einsum('ij,ij', vcosmo, dm)
             return self._scf.get_hcore(mol) + vcosmo
 
     return CAS()
