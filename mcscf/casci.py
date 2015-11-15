@@ -327,7 +327,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
+    h1eff, energy_core = casci.get_h1eff(mo_coeff)
     log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
@@ -402,7 +402,10 @@ class CASCI(object):
     def __init__(self, mf, ncas, nelecas, ncore=None):
         mol = mf.mol
         self.mol = mol
-        self._scf = mf
+        if hasattr(mf, '_scf'):  # Support the fake mf which is an post-HF object
+            self._scf = mf._scf
+        else:
+            self._scf = mf
         self.verbose = mol.verbose
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
