@@ -21,7 +21,7 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 
-    def casci(self, mo_coeff=None, ci0=None):
+    def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
