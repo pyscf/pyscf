@@ -1413,13 +1413,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
-            dn = os.path.join(pyscfdir, '.git', 'refs', 'heads')
+            head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
+            branch = os.path.basename(open(head, 'r').read().splitlines()[0])
             # or command(git log -1 --pretty=%H)
-            version_msg = []
-            for branch in 'master', 'dev':
-                with open(os.path.join(dn, branch), 'r') as fin:
-                    self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
+            head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
+            with open(head, 'r') as fin:
+                self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
             self.stdout.write('\n')
         except IOError:
             pass
@@ -1432,7 +1432,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
 
         for ia,atom in enumerate(self._atom):
-            coorda = tuple(atom[1])
+            coorda = tuple([x * param.BOHR for x in atom[1]])
             coordb = tuple([x for x in atom[1]])
             self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '\
                               '%16.12f %16.12f %16.12f Bohr\n' \

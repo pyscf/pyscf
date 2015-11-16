@@ -50,7 +50,7 @@ class KnowValues(unittest.TestCase):
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 15.076640155228787, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 15.076640155228787, 8)
 
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
@@ -109,7 +109,9 @@ class KnowValues(unittest.TestCase):
         eri = ao2mo.incore.full(mf._eri, mf.mo_coeff[:,2:4])
         cis = fci.direct_spin0.FCISolver(mol)
         cis.davidson_only = True
-        e, c = cis.kernel(h1e, eri, 2, 2)
+        ci0 = numpy.zeros((2,2))
+        ci0[0,0] = 1
+        e, c = cis.kernel(h1e, eri, 2, 2, ci0)
         self.assertAlmostEqual(e, -0.80755526695538049, 10)
 
 

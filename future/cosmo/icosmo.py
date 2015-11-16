@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import numpy
 from pyscf import lib
-from pyscf import gto, scf
+from pyscf import gto, scf, mcscf
 from pyscf import df
 
 '''
@@ -36,6 +36,7 @@ class COSMO(object):
         base
     '''
     def __init__(self, mol):
+        self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.tmpdir = tempfile.mkdtemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR)
@@ -50,6 +51,8 @@ class COSMO(object):
         self.nppa    = 1082
         self.nspa    = 92
         self.nradii  = 0
+
+        self._dm = None
 
 ##################################################
 # don't modify the following private variables, they are not input options
@@ -93,7 +96,11 @@ class COSMO(object):
         print('asso_iatsp = %s' % self.asso_iatsp )
         print('asso_gcos  = %s' % self.asso_gcos  )
 
-    def initialization(self,mol):
+    def build(self, mol=None):
+        self.initialization(mol)
+
+    def initialization(self, mol=None):
+        if mol is None: mol = self.mol
         #
         # task-0
         #
@@ -246,10 +253,11 @@ class COSMO(object):
         exe_cosmo(self)
         return 0
 
-    def occ1(self, mol, escf):
+    def occ1(self):
+        mol = self.mol
         f1 = open(os.path.join(self.tmpdir, self.parfile),'w')
         f1.write('Task = 4\n')
-        f1.write('Escf = %24.15f'%escf+'\n')
+        #f1.write('Escf = %24.15f'%escf+'\n')
         f1.write('Natoms = '+str(mol.natm)+'\n')
         for i in range(mol.natm):
             coord = mol.atom_coord(i)
@@ -260,11 +268,11 @@ class COSMO(object):
         exe_cosmo(self)
         return 0
 
-    def cosmo_fock(self, mf, dm):
-        return cosmo_fock(mf, dm)
+    def cosmo_fock(self, dm):
+        return cosmo_fock(self, dm)
 
-    def cosmo_occ(self, mf, dm, escf):
-        return cosmo_occ(mf, dm, escf)
+    def cosmo_occ(self, dm):
+        return cosmo_occ(self, dm)
 
 def exe_cosmo(mycosmo):
     mycosmo.stdout.flush()
@@ -276,10 +284,9 @@ def exe_cosmo(mycosmo):
     except AttributeError:  # python 2.6 and older
         p = subprocess.check_call(cmd, cwd=mycosmo.tmpdir, shell=True)
 
-def cosmo_fock_o0(mf,dm):
+def cosmo_fock_o0(cosmo, dm):
+    mol = cosmo.mol
     debug = False
-    mol = mf.mol
-    cosmo = mf.mol.cosmo
     # phi
     cosmo.loadsegs()
     for i in range(cosmo.nps):
@@ -308,10 +315,9 @@ def cosmo_fock_o0(mf,dm):
         vpot = mol.intor('cint1e_rinv_sph')
         fock -= vpot*cosmo.qcos[i]
     return fock
-def cosmo_fock_o1(mf,dm):
-    mol = mf.mol
+def cosmo_fock_o1(cosmo, dm):
+    mol = cosmo.mol
     nao = dm.shape[0]
-    cosmo = mf.mol.cosmo
     # phi
     cosmo.loadsegs()
     coords = cosmo.cosurf[:cosmo.nps*3].reshape(-1,3)
@@ -333,12 +339,11 @@ def cosmo_fock_o1(mf,dm):
 #X    j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_sph', aosym='s2ij')
     fock = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -cosmo.qcos[:cosmo.nps]))
     return fock
-def cosmo_fock(mf, dm):
-    return cosmo_fock_o1(mf, dm)
+def cosmo_fock(cosmo, dm):
+    return cosmo_fock_o1(cosmo, dm)
 
-def cosmo_occ_o0(mf,dm,escf):
-    mol = mf.mol
-    cosmo = mf.mol.cosmo
+def cosmo_occ_o0(cosmo, dm):
+    mol = cosmo.mol
     #cosmo.check()
     cosmo.occ0()
     cosmo.loadsegs()
@@ -356,12 +361,11 @@ def cosmo_occ_o0(mf,dm,escf):
         phi -= numpy.einsum('ij,ij',dm,vpot)
         cosmo.phio[i] = phi
     cosmo.savesegs()
-    cosmo.occ1(mol, escf)
+    cosmo.occ1()
     return 0
-def cosmo_occ_o1(mf,dm,escf):
-    mol = mf.mol
+def cosmo_occ_o1(cosmo, dm):
+    mol = cosmo.mol
     nao = dm.shape[0]
-    cosmo = mf.mol.cosmo
     #cosmo.check()
     cosmo.occ0()
     cosmo.loadsegs()
@@ -378,10 +382,10 @@ def cosmo_occ_o1(mf,dm,escf):
     for ia in range(mol.natm):
         cosmo.phio += mol.atom_charge(ia)/lib.norm(mol.atom_coord(ia)-coords, axis=1)
     cosmo.savesegs()
-    cosmo.occ1(mol, escf)
+    cosmo.occ1()
     return 0
-def cosmo_occ(mf, dm, escf):
-    return cosmo_occ_o1(mf, dm, escf)
+def cosmo_occ(cosmo, dm):
+    return cosmo_occ_o1(cosmo, dm)
 
 def _make_fakemol(coords):
     nbas = coords.shape[0]
@@ -413,12 +417,11 @@ def _make_fakemol(coords):
 
 
 # NOTE: be careful with vhf (in scf kernel) when direct_scf is applied
-def cosmo_for_rhf(mf):
+def cosmo_for_scf(mf, cosmo):
     oldMF = mf.__class__
-    class RHF(oldMF):
+    class MF(oldMF):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
-            self.mol.cosmo = COSMO(self.mol)
 
         def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             if (self._eri is not None or self._is_mem_enough() or not self.direct_scf):
@@ -433,73 +436,95 @@ def cosmo_for_rhf(mf):
                 if self.direct_scf:
                     self._dm_last = dm
             self._vhf_last = vhf  # save JK for electronic energy
-            if not self.mol.cosmo._built:
-                self.mol.cosmo.initialization(mol)
-            return vhf + self.mol.cosmo.cosmo_fock(self, dm)
-
-        def energy_elec(self, dm=None, h1e=None, vhf=None):
-            hf_energy, e_coul = oldMF.energy_elec(self, dm, h1e, self._vhf_last)
-            hf_energy += self.mol.cosmo.ediel
-            lib.logger.debug(self, 'E_diel = %.15g', self.mol.cosmo.ediel)
-            return hf_energy, e_coul
-
-        def _finalize_(self):
-            dm = self.make_rdm1()
-            self.mol.cosmo.cosmo_occ(self,dm,self.hf_energy)
-            oldMF._finalize_(self)
-    return RHF()
-
-def cosmo_for_uhf(mf):
-    oldMF = mf.__class__
-    class UHF(oldMF):
-        def __init__(self):
-            self.__dict__.update(mf.__dict__)
-            self.mol.cosmo = COSMO(self.mol)
-
-        def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-            if (self._eri is not None or self._is_mem_enough() or not self.direct_scf):
-                vhf = oldMF.get_veff(self, mol, dm, hermi=hermi)
+            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+                return vhf + cosmo.cosmo_fock(dm)
             else:
-                if (self.direct_scf and isinstance(vhf_last, numpy.ndarray) and
-                    hasattr(self, '_dm_last')):
-                    vhf = oldMF.get_veff(self, mol, dm, self._dm_last,
-                                         self._vhf_last, hermi)
-                else:
-                    vhf = oldMF.get_veff(self, mol, dm, hermi=hermi)
-                if self.direct_scf:
-                    self._dm_last = dm
-            self._vhf_last = vhf  # save JK for electronic energy
-            if not self.mol.cosmo._built:
-                self.mol.cosmo.initialization(mol)
-            return vhf + self.mol.cosmo.cosmo_fock(self, dm[0]+dm[1])
+                return vhf + cosmo.cosmo_fock(dm[0]+dm[1])
 
         def energy_elec(self, dm=None, h1e=None, vhf=None):
             hf_energy, e_coul = oldMF.energy_elec(self, dm, h1e, self._vhf_last)
-            hf_energy += self.mol.cosmo.ediel
-            lib.logger.debug(self, 'E_diel = %.15g', self.mol.cosmo.ediel)
+            hf_energy += cosmo.ediel
+            lib.logger.debug(self, 'E_diel = %.15g', cosmo.ediel)
             return hf_energy, e_coul
 
         def _finalize_(self):
             dm = self.make_rdm1()
-            self.mol.cosmo.cosmo_occ(self, dm[0]+dm[1], self.hf_energy)
+            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+                cosmo.cosmo_occ(dm)
+            else:
+                cosmo.cosmo_occ(dm)
             oldMF._finalize_(self)
-    return UHF()
+    return MF()
 
-def comso_for_mcscf(mf):
-    raise NotImplementedError
+def cosmo_for_mcscf(mc, cosmo):
+    oldCAS = mc.__class__
+    class CAS(oldCAS):
+        def __init__(self):
+            self.__dict__.update(mc.__dict__)
+
+        def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
+            if mo_coeff is None: mo_coeff = self.mo_coeff
+            h1eff, ecore = mcscf.casci.h1e_for_cas(self, mo_coeff, ncas, ncore)
+            ecore -= cosmo._edup  # Note the active space contribution was included
+            lib.logger.debug(self, 'E_core without COSMO = %.15g  E_diel = %.15g',
+                              ecore, cosmo.ediel)
+            return h1eff, ecore+cosmo.ediel
+
+        def dump_flags(self):
+            oldCAS.dump_flags(self)
+            if hasattr(self, 'conv_tol') and self.conv_tol < 1e-6:
+                lib.logger.warn(self, 'CASSCF+COSMO might not be able to'
+                                'converge to conv_tol %g', self.conv_tol)
+
+        def update_casdm(self, mo, u, fcivec, e_ci, eris):
+            casdm1, casdm2, gci, fcivec = \
+                    oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris)
+            mocore = mo[:,:self.ncore]
+            mocas = mo[:,self.ncore:self.ncore+self.ncas]
+            cosmo._dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
+            cosmo._dm += numpy.dot(mocore, mocore.T) * 2
+            return casdm1, casdm2, gci, fcivec
+
+# We modify hcore to feed the potential of outlying charge into the orbital
+# gradients (see CASSCF function gen_h_op).  Note hcore is also used to
+# compute the Ecore.  The energy contribution from outlying charge needs to be
+# removed.
+# Note the approximation _edup = Tr(Vcosmo, DM_CASCI) = Tr(Vcosmo, DM_input)
+# When CASSCF converged, we assumed the input DM (computed in update_casdm) is
+# identical to the CASCI DM (from the macro iteration).
+        def get_hcore(self, mol=None):
+            if cosmo._dm is None:
+                dm = self._scf.make_rdm1()
+                if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                    dm = dm[0] + dm[1]
+            else:
+                dm = cosmo._dm
+            vcosmo = cosmo.cosmo_fock(dm)
+            cosmo._edup = numpy.einsum('ij,ij', vcosmo, dm)
+            return self._scf.get_hcore(mol) + vcosmo
+
+    return CAS()
 
 
 if __name__ == '__main__':
-    from pyscf import gto,scf
-    from pyscf import lib
-
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
                    H                 -0.00000000   -0.84695236    0.59109389
                    H                 -0.00000000    0.89830571    0.52404783 '''
     mol.basis = 'cc-pvdz'
-    mol.verbose = 5
+    mol.verbose = 4
     mol.build()
 
-    mf = cosmo_for_rhf(scf.RHF(mol))
+    sol = COSMO(mol)
+    sol.build()
+    mf = cosmo_for_scf(scf.RHF(mol), sol)
     mf.kernel()  # -76.0030469182364
+
+    mc = mcscf.CASSCF(mf, 4, 4)
+    mc = cosmo_for_mcscf(mc, sol)
+    mo = mc.sort_mo([3,4,6,7])
+    mc.kernel(mo)
+
+    mc = mcscf.CASCI(mc, 4, 4)
+    mc = cosmo_for_mcscf(mc, sol)
+    mc.kernel()

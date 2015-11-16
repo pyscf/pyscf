@@ -53,9 +53,9 @@ class KnowValues(unittest.TestCase):
         ci1ref = fci.direct_spin0.contract_2e(g2e, ci0, norb, mol.nelectron)
         ci1 = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1, ci1ref))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 195.61063639809828, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 195.61063639809828, 8)
         ci3 = fci.direct_spin1.contract_2e(g2e, ci2, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(ci3), 127.49780293866368, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci3), 127.49780293866368, 8)
 
     def test_kernel(self):
         eref, cref = fci.direct_spin0.kernel(h1e, g2e, norb, mol.nelectron)
@@ -71,9 +71,9 @@ class KnowValues(unittest.TestCase):
         hdiagref = fci.direct_spin0.make_hdiag(h1e, g2e, norb, mol.nelectron)
         hdiag = fci.direct_spin1.make_hdiag(h1e, g2e, norb, nelec)
         self.assertTrue(numpy.allclose(hdiag, hdiagref))
-        self.assertAlmostEqual(numpy.linalg.norm(hdiag), 133.95118651178, 10)
+        self.assertAlmostEqual(numpy.linalg.norm(hdiag), 133.95118651178, 9)
         hdiag = fci.direct_spin1.make_hdiag(h1e, g2e, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(hdiag), 113.85080162587, 10)
+        self.assertAlmostEqual(numpy.linalg.norm(hdiag), 113.85080162587, 9)
 
     def test_rdm1(self):
         dm1ref = fci.direct_spin0.make_rdm1(ci0, norb, mol.nelectron)
