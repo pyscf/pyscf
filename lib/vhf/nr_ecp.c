@@ -794,10 +794,15 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
         memset(rad_all, 0, sizeof(double)*lmax1*lmax1);
 
         kaij = k / (2*aij);
-        fac = exp(kaij*kaij*aij);
+        fac = kaij*kaij*aij;
         for (n = 0; n < nrs; n++) {
                 tmp = rs[n] - kaij;
-                rur[n] = ur[n] * exp(-aij*tmp*tmp) * fac;
+                tmp = fac - aij*tmp*tmp;
+                if (ur[n] == 0 || tmp < -750) { // exp(-750) = 0
+                        rur[n] = 0;
+                } else {
+                        rur[n] = ur[n] * exp(tmp);
+                }
                 ECPsph_ine(bval+n*lmax1, lmax, k*rs[n]);
         }
 
@@ -871,7 +876,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double rca[3];
         double rcb[3];
         double rij[3];
-        double r2ca, r2cb, dca, dcb, fac;
+        double r2ca, r2cb, fac;
         double *rc, *prad, *pifac, *pjfac, *pout;
 
         memset(gctr, 0, sizeof(double)*nci*ncj*nfi*nfj);
@@ -893,8 +898,6 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         rcb[2] = rc[2] - rj[2];
         r2ca = SQUARE(rca);
         r2cb = SQUARE(rcb);
-        dca = sqrt(r2ca);
-        dcb = sqrt(r2cb);
         scale_coeff(cei, ci, ai, r2ca, npi, nci, li);
         scale_coeff(cej, cj, aj, r2cb, npj, ncj, lj);
 
