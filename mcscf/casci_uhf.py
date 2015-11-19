@@ -219,7 +219,11 @@ class CASCI(object):
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         logger.note(self, 'CASCI E = %.15g', self.e_tot)
+        self._finalize_()
         return self.e_tot, e_cas, self.ci
+
+    def _finalize_(self):
+        pass
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
         return addons.cas_natorb(self, mo_coeff, ci0)
