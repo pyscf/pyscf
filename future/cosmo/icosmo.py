@@ -55,7 +55,7 @@ class COSMO(object):
         self.nspa    = 92
         self.nradii  = 0
 
-        self._dm = None  # system density
+        self._dm_guess = None  # system density
         self.dm = None   # given system density, avoid potential being updated SCFly
         #self.x2c_correction = False
         self.casci_conv_tol = 1e-7
@@ -146,7 +146,8 @@ class COSMO(object):
             f1.write('%20.15f %20.15f %20.15f\n' % tuple(coord.tolist()))
         f1.close()
         exe_cosmo(self)
-        lib.logger.info(self, '\nCOSMO tmpdir  %s', self.tmpdir)
+        lib.logger.info(self, '\nCOSMO tmpdir  %s',
+                        os.path.abspath(self.tmpdir))
         self._built = True
         return 0
 
@@ -274,8 +275,14 @@ class COSMO(object):
             coord = mol.atom_coord(i)
             f1.write('%20.15f %20.15f %20.15f\n' % tuple(coord.tolist()))
         f1.close()
+        lib.logger.info(self, 'COSMO outlying charge correction output %s/iface.cosmo.oc\n',
+                        os.path.abspath(self.tmpdir))
         lib.logger.info(self, 'Final outlying charge correction:')
-        lib.logger.info(self, '')
+
+        # backup COSMO temporary file, avoid Task 40 overide initial settings
+        #self.tmpdir, tmpdir_bak = tempfile.mkdtemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR), self.tmpdir
+        self.tmpdir, tmpdir_bak = tempfile.mktemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR), self.tmpdir
+        shutil.copytree(tmpdir_bak, self.tmpdir)
         exe_cosmo(self)
         with open(os.path.join(self.tmpdir, 'iface.cosmo'), 'r') as fin:
             dat = fin.readline()
@@ -291,8 +298,10 @@ class COSMO(object):
         lib.logger.info(self, ''.join(dat))
         e_tot = float(dat[1].split('=')[1])
         lib.logger.note(self, 'Total energy with COSMO corection %.15g', e_tot)
-
-        shutil.copy(os.path.join(self.tmpdir, 'iface.cosmo'), os.curdir)
+        shutil.copy(os.path.join(self.tmpdir, 'iface.cosmo'),
+                    os.path.join(tmpdir_bak, 'iface.cosmo.oc'))
+        shutil.rmtree(self.tmpdir)
+        self.tmpdir = tmpdir_bak
         return e_tot
 
     def cosmo_fock(self, dm):
@@ -457,34 +466,29 @@ def cosmo_for_scf(mf, cosmo):
     if cosmo.dm is not None:
         # static solvation environment.  The potential and dielectric energy
         # are not updated SCFly
-        vcosmo = cosmo.cosmo_fock(cosmo.dm)
-        cosmo._dm = cosmo.dm
+        csomo._v = cosmo.cosmo_fock(cosmo.dm)
 
     class MF(oldMF):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
 
-        def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-            if (self._eri is not None or self._is_mem_enough() or not self.direct_scf):
-                vhf = oldMF.get_veff(self, mol, dm, hermi=hermi)
-            else:
-                if (self.direct_scf and isinstance(vhf_last, numpy.ndarray) and
-                    hasattr(self, '_dm_last')):
-                    vhf = oldMF.get_veff(self, mol, dm, self._dm_last,
-                                         self._vhf_last, hermi)
-                else:
-                    vhf = oldMF.get_veff(self, mol, dm, hermi=hermi)
-                if self.direct_scf:
-                    self._dm_last = dm
-            self._vhf_last = vhf  # save JK for electronic energy
+        def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                     diis_start_cycle=None, level_shift_factor=None,
+                     damp_factor=None):
+            if cosmo.dm is None:
+                cosmo._v = cosmo.cosmo_fock(dm)
+            return self.get_fock_(h1e+cosmo._v, s1e, vhf, dm, cycle, adiis,
+                                  diis_start_cycle, level_shift_factor, damp_factor)
 
-            if cosmo.dm is not None:
-                return vhf + vcosmo
-            else:
-                return vhf + cosmo.cosmo_fock(dm)
+        def get_grad(self, mo_coeff, mo_occ, h1_vhf=None):
+            if h1_vhf is None:
+                dm1 = self.make_rdm1(mo_coeff, mo_occ)
+                h1_vhf = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
+            fock = h1_vhf + cosmo._v
+            return oldMF.get_grad(self, mo_coeff, mo_occ, fock)
 
         def energy_elec(self, dm=None, h1e=None, vhf=None):
-            e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, self._vhf_last)
+            e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf)
             e_tot += cosmo.ediel
             lib.logger.debug(self, 'E_diel = %.15g', cosmo.ediel)
             return e_tot, e_coul
@@ -500,7 +504,7 @@ def cosmo_for_mcscf(mc, cosmo):
     cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:  # A frozen COSMO potential
         vcosmo = cosmo.cosmo_fock(cosmo.dm)
-        cosmo._dm = cosmo.dm
+        cosmo._dm_guess = cosmo.dm
 
     class CAS(oldCAS):
         def __init__(self):
@@ -517,12 +521,12 @@ def cosmo_for_mcscf(mc, cosmo):
                     oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris)
             mocore = mo[:,:self.ncore]
             mocas = mo[:,self.ncore:self.ncore+self.ncas]
-# We save the density of micro iteration in cosmo._dm.  It's not the same to
-# the CASSCF density of macro iteration, which we used to measure convergence.
-# But when CASSCF converged, cosmo._dm should be almost the same to the
-# density of macro iteration .
-            cosmo._dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
-            cosmo._dm += numpy.dot(mocore, mocore.T) * 2
+# We save the density of micro iteration in cosmo._dm_guess.  It's not the
+# same to the CASSCF density of macro iteration, which we used to measure
+# convergence.  But when CASSCF converged, cosmo._dm_guess should be almost
+# the same to the density of macro iteration .
+            cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
+            cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
             return casdm1, casdm2, gci, fcivec
 
 # We modify hcore to feed the potential of outlying charge into the orbital
@@ -533,10 +537,10 @@ def cosmo_for_mcscf(mc, cosmo):
 # When CASSCF converged, we assumed the input DM (computed in update_casdm) is
 # identical to the CASCI DM (from the macro iteration).
         def get_hcore(self, mol=None):
-            if cosmo._dm is None:  # Initial guess
+            if cosmo._dm_guess is None:  # Initial guess
                 dm = self._scf.make_rdm1()
             else:
-                dm = cosmo._dm
+                dm = cosmo._dm_guess
             if cosmo.dm is not None:  # Initial guess
                 v1 = vcosmo
             else:
@@ -562,10 +566,10 @@ def cosmo_for_mcscf(mc, cosmo):
                 casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
             mocore = mo_coeff[:,:self.ncore]
             mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
-            cosmo._dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
-            cosmo._dm += numpy.dot(mocore, mocore.T) * 2
+            cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
+            cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
 
-            edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm)
+            edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm_guess)
             e_tot = e_tot - edup + cosmo.ediel
             return e_tot, e_cas, fcivec
 
@@ -580,7 +584,7 @@ def cosmo_for_casci(mc, cosmo):
     oldCAS = mc.__class__
     cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:
-        cosmo._dm = cosmo.dm
+        cosmo._dm_guess = cosmo.dm
         vcosmo = cosmo.cosmo_fock(cosmo.dm)
 
     class CAS(oldCAS):
@@ -588,10 +592,10 @@ def cosmo_for_casci(mc, cosmo):
             self.__dict__.update(mc.__dict__)
 
         def get_hcore(self, mol=None):
-            if cosmo._dm is None:  # Initial guess
+            if cosmo._dm_guess is None:  # Initial guess
                 dm = self._scf.make_rdm1()
             else:
-                dm = cosmo._dm
+                dm = cosmo._dm_guess
             if cosmo.dm is not None:  # Initial guess
                 v1 = vcosmo
             else:
@@ -621,9 +625,9 @@ def cosmo_for_casci(mc, cosmo):
                     casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
                 mocore = mo_coeff[:,:self.ncore]
                 mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
-                cosmo._dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
-                cosmo._dm += numpy.dot(mocore, mocore.T) * 2
-                edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm)
+                cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
+                cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
+                edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm_guess)
                 e_tot = e_tot - edup + cosmo.ediel
 
                 log.debug('COSMO E_diel = %.15g', cosmo.ediel)
@@ -690,8 +694,9 @@ if __name__ == '__main__':
 
     sol = COSMO(mol)
     sol.build()
+    #mf = scf.fast_newton(cosmo_for_scf(scf.RHF(mol), sol))
     mf = cosmo_for_scf(scf.RHF(mol), sol)
-    mf.kernel()  # -76.0030469182364
+    mf.kernel()  # -76.003067568
 
     mc = mcscf.CASSCF(mf, 4, 4)
     mc = cosmo_for_mcscf(mc, sol)
