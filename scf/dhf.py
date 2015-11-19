@@ -38,7 +38,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         dm = dm0
 
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
-        scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
+        scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
                             dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -46,7 +46,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
 
     if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' \
                          or mf._coulomb_now.upper() == 'LLSS'):
-        scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ \
+        scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-3, 1e-1,
                             dump_chk, dm0=dm, callback=callback)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -401,14 +401,14 @@ class UHF(hf.SCF):
 
         self.build()
         self.dump_flags()
-        self.converged, self.hf_energy, \
+        self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, self.conv_tol_grad,
                          dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize_()
-        return self.hf_energy
+        return self.e_tot
 
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
@@ -424,8 +424,8 @@ class HF1e(UHF):
         self.mo_occ = numpy.zeros_like(self.mo_energy)
         n2c = len(self.mo_occ) // 2
         self.mo_occ[n2c] = 1
-        self.hf_energy = self.mo_energy[n2c] + self.mol.energy_nuc()
-        return self.hf_energy
+        self.e_tot = self.mo_energy[n2c] + self.mol.energy_nuc()
+        return self.e_tot
 
 class RHF(UHF):
     '''Dirac-RHF'''

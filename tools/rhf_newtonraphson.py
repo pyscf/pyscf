@@ -193,7 +193,7 @@ def solve( myMF, dm_guess=None, safe_guess=True ):
     myMF.mo_occ    = np.zeros( [ OEI_ao.shape[0] ], dtype=int )
     myMF.mo_occ[:numPairs] = 2
     myMF.mo_energy = energies
-    myMF.hf_energy = energy
+    myMF.e_tot = energy
     myMF.converged = True
     
     return myMF

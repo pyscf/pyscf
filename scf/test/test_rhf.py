@@ -71,7 +71,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 9)
 
     def test_scf(self):
-        self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
     def test_nr_rohf(self):
         pmol = mol.copy()

@@ -61,11 +61,11 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
             envrionment.
 
     Returns:
-        A list :   scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
+        A list :   scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
         scf_conv : bool
             True means SCF converged
-        hf_energy : float
+        e_tot : float
             Hartree-Fock energy of last iteration
         mo_energy : 1D float array
             Orbital energies.  Depending the eig function provided by mf
@@ -115,8 +115,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         adiis = None
 
     vhf = mf.get_veff(mol, dm)
-    hf_energy = mf.energy_tot(dm, h1e, vhf)
-    logger.info(mf, 'init E= %.15g', hf_energy)
+    e_tot = mf.energy_tot(dm, h1e, vhf)
+    logger.info(mf, 'init E= %.15g', e_tot)
 
     if dump_chk:
         # dump mol after reading initialized DM
@@ -127,21 +127,21 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     cput1 = logger.timer(mf, 'initialize scf', *cput0)
     while not scf_conv and cycle < max(1, mf.max_cycle):
         dm_last = dm
-        last_hf_e = hf_energy
+        last_hf_e = e_tot
 
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, adiis)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
-        hf_energy = mf.energy_tot(dm, h1e, vhf)
+        e_tot = mf.energy_tot(dm, h1e, vhf)
 
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
         logger.info(mf, 'cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
-                    cycle+1, hf_energy, hf_energy-last_hf_e, norm_gorb, norm_ddm)
+                    cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
 
-        if (abs(hf_energy-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad):
+        if (abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad):
             scf_conv = True
 
         if dump_chk:
@@ -158,7 +158,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
     logger.timer(mf, 'scf_cycle', *cput0)
-    return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
+    return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 
 def energy_elec(mf, dm, h1e=None, vhf=None):
@@ -842,7 +842,7 @@ class SCF(object):
 
         converged : bool
             SCF converged or not
-        hf_energy : float
+        e_tot : float
             Total HF energy (electronic energy plus nuclear repulsion)
         mo_energy :
             Orbital energies
@@ -893,7 +893,7 @@ class SCF(object):
         self.mo_energy = None
         self.mo_coeff = None
         self.mo_occ = None
-        self.hf_energy = 0
+        self.e_tot = 0
         self.converged = False
         self.callback = None
 
@@ -972,7 +972,7 @@ class SCF(object):
     def dump_chk(self, envs):
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile,
-                             envs['hf_energy'], envs['mo_energy'],
+                             envs['e_tot'], envs['mo_energy'],
                              envs['mo_coeff'], envs['mo_occ'])
 
     def init_guess_by_minao(self, mol=None):
@@ -1098,22 +1098,22 @@ class SCF(object):
 
         self.build(self.mol)
         self.dump_flags()
-        self.converged, self.hf_energy, \
+        self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
                 kernel(self, self.conv_tol, self.conv_tol_grad,
                        dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize_()
-        return self.hf_energy
+        return self.e_tot
 
     def _finalize_(self):
         if self.converged:
-            logger.note(self, 'converged SCF energy = %.15g', self.hf_energy)
+            logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
             logger.note(self, 'SCF not converge.')
             logger.note(self, 'SCF energy = %.15g after %d cycles',
-                        self.hf_energy, self.max_cycle)
+                        self.e_tot, self.max_cycle)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
@@ -1191,6 +1191,12 @@ class SCF(object):
         import pyscf.scf.dfhf
         return pyscf.scf.dfhf.density_fit(self, auxbasis)
 
+    @property
+    def hf_energy(self):
+        sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
+                         'Please use .e_tot instead\n')
+        return self.e_tot
+
 
 ############
 
@@ -1204,8 +1210,8 @@ class HF1e(SCF):
         self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
         self.mo_occ = numpy.zeros_like(self.mo_energy)
         self.mo_occ[0] = 1
-        self.hf_energy = self.mo_energy[0] + self.mol.energy_nuc()
-        return self.hf_energy
+        self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
+        return self.e_tot
 
 
 class RHF(SCF):

@@ -74,7 +74,7 @@ Saved results
 
     converged : bool
         SCF converged or not
-    hf_energy : float
+    e_tot : float
         Total HF energy (electronic energy plus nuclear repulsion)
     mo_energy : 
         Orbital energies
@@ -183,7 +183,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
     mf.mo_occ = mf1.mo_occ
     mf.mo_energy = mf1.mo_energy
     mf.mo_coeff = mf1.mo_coeff
-    mf.hf_energy = mf1.hf_energy
+    mf.e_tot = mf1.e_tot
     mf.converged = mf1.converged
     return mf
 

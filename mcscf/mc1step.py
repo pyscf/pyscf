@@ -443,8 +443,7 @@ def _dgemv(v, m):
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
-           ci0=None, callback=None, verbose=logger.NOTE,
-           dump_chk=True, dump_chk_ci=False):
+           ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
     '''CASSCF solver
     '''
     if isinstance(verbose, logger.Logger):
@@ -740,6 +739,7 @@ class CASSCF(casci.CASCI):
         self.chkfile = mf.chkfile
         self.ci_response_space = 4
         self.callback = None
+        self.chk_ci = False
 
         self.fcisolver.max_cycle = 50
 
@@ -1092,7 +1092,7 @@ class CASSCF(casci.CASCI):
     def dump_chk(self, envs):
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             civec = None
-        elif envs['dump_chk_ci']:
+        elif self.chk_ci:
             civec = envs['fcivec']
         else:
             civec = None
@@ -1108,13 +1108,9 @@ class CASSCF(casci.CASCI):
             mo_energy = envs['mo_energy']
         else:
             mo_energy = None
-        chkfile.dump_mcscf(self.mol, self.chkfile, mo,
-                           mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
-                           ci_vector=civec,
-                           iter_macro=(envs['imacro']+1),
-                           iter_micro_tot=(envs['totmicro']),
-                           converged=envs['conv'],
-                           mo_occ=mo_occ, mo_energy=mo_energy)
+        chkfile.dump_mcscf(self.mol, self.chkfile, envs['e_tot'],
+                           mo, self.ncore, self.ncas, mo_occ, mo_energy,
+                           envs['e_ci'], civec)
 
 
 

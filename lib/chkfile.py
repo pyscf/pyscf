@@ -33,7 +33,7 @@ def load(chkfile, key):
     (1, 1)
     >>> scfdat = lib.chkfile.load('He.chk', 'scf')
     >>> scfdat.keys()
-    ['hf_energy', 'mo_occ', 'mo_energy', 'mo_coeff']
+    ['e_tot', 'mo_occ', 'mo_energy', 'mo_coeff']
     '''
     def loadasdic(key, group):
         if key in group:

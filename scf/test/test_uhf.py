@@ -55,7 +55,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(pop), 2.8318530352895759, 9)
 
     def test_scf(self):
-        self.assertAlmostEqual(mf.hf_energy, -76.026765673119627, 9)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
     def test_get_veff(self):
         nao = mol.nao_nr()

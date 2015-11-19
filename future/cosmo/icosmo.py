@@ -466,10 +466,10 @@ def cosmo_for_scf(mf, cosmo):
                 return vhf + cosmo.cosmo_fock(dm)
 
         def energy_elec(self, dm=None, h1e=None, vhf=None):
-            hf_energy, e_coul = oldMF.energy_elec(self, dm, h1e, self._vhf_last)
-            hf_energy += cosmo.ediel
+            e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, self._vhf_last)
+            e_tot += cosmo.ediel
             lib.logger.debug(self, 'E_diel = %.15g', cosmo.ediel)
-            return hf_energy, e_coul
+            return e_tot, e_coul
 
         def _finalize_(self):
             if cosmo.dm is not None:

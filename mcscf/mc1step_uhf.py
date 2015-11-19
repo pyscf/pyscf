@@ -214,8 +214,7 @@ def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
-           ci0=None, callback=None, verbose=None,
-           dump_chk=True, dump_chk_ci=False):
+           ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
@@ -359,6 +358,7 @@ class CASSCF(casci_uhf.CASCI):
         self.ci_response_space = 4
         self.natorb = False
         self.callback = None
+        self.chk_ci = False
 
         self.fcisolver.max_cycle = 50
 
@@ -697,6 +697,10 @@ class CASSCF(casci_uhf.CASCI):
         return ci1, g
 
     def dump_chk(self, envs):
+        if self.chk_ci:
+            civec = envs['fcivec']
+        else:
+            civec = None
         ncore = self.ncore
         nocca = self.ncore[0] + self.ncas
         noccb = self.ncore[1] + self.ncas
@@ -712,15 +716,11 @@ class CASSCF(casci_uhf.CASCI):
         mo_occ[1,:ncore[1]] = 1
         mo_occ[0,ncore[0]:nocca] = -occa
         mo_occ[1,ncore[1]:noccb] = -occb
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_coeff', mo)
-        pyscf.scf.chkfile.dump(self.chkfile, 'mcscf/mo_occ', mo_occ)
-        chkfile.dump_mcscf(self.mol, self.chkfile, mo,
-                           mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
-                           ci_vector=(envs['fcivec'] if envs['dump_chk_ci'] else None),
-                           iter_macro=(envs['imacro']+1),
-                           iter_micro_tot=(envs['totmicro']),
-                           converged=(envs['conv'] or (envs['imacro']+1 >= envs['macro'])),
-                           mo_occ=mo_occ)
+        mo_energy = None
+
+        chkfile.dump_mcscf(self.mol, self.chkfile, envs['e_tot'],
+                           mo, self.ncore, self.ncas, mo_occ, mo_energy,
+                           envs['e_ci'], civec)
 
 
 # to avoid calculating AO integrals

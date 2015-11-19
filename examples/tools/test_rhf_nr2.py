@@ -41,11 +41,11 @@ mol.build()
 mf = scf.RHF( mol )
 mf.verbose = 4
 mf.scf()
-Energy1 = mf.hf_energy
+Energy1 = mf.e_tot
 
 # Redo with Newton-Raphson --> start from 'minao' guess
 mf = rhf_newtonraphson.solve( mf, safe_guess=True )
-Energy2 = mf.hf_energy
+Energy2 = mf.e_tot
 
 assert( abs( Energy1 - Energy2 ) < 1e-9 )
 
