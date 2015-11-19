@@ -256,7 +256,7 @@ class RHF(hf.RHF):
         self.mo_occ[nocc:] = 0
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile,
-                             self.hf_energy, self.mo_energy,
+                             self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
     def analyze(self, verbose=logger.DEBUG):
@@ -292,8 +292,8 @@ class HF1e(hf.SCF):
         self.mo_coeff = so2ao_mo_coeff(self.mol.symm_orb, cs)[:,idx]
         self.mo_occ = numpy.zeros_like(self.mo_energy)
         self.mo_occ[0] = 1
-        self.hf_energy = self.mo_energy[0] + self.mol.energy_nuc()
-        return self.hf_energy
+        self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
+        return self.e_tot
 
 
 class ROHF(rohf.ROHF):
@@ -568,7 +568,7 @@ class ROHF(rohf.ROHF):
         self.mo_occ[nocc:] = 0
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile,
-                             self.hf_energy, self.mo_energy,
+                             self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
     def analyze(self, verbose=logger.DEBUG):

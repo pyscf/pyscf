@@ -224,7 +224,7 @@ class KnowValues(unittest.TestCase):
             f = mf0.get_fock(h, s, numpy.zeros_like(h), numpy.zeros_like(h))
             mo_energy, mo_coeff = mf0.eig(f, s)
             mo_occ = mf0.get_occ(mo_energy, mo_coeff)
-            hf_energy = 0
+            e_tot = 0
             mf0.dump_chk(locals())
         def check(HFclass, ref):
             mol1 = mol.copy()

@@ -29,7 +29,9 @@ def cosmo_(method, acosmo=None):
 
     if isinstance(method, pyscf.scf.hf.SCF):
         return icosmo.cosmo_for_scf(method, acosmo)
-    elif isinstance(method, pyscf.mcscf.casci.CASCI):
+    elif isinstance(method, pyscf.mcscf.mc1step.CASSCF):
         return icosmo.cosmo_for_mcscf(method, acosmo)
+    elif isinstance(method, pyscf.mcscf.casci.CASCI):
+        return icosmo.cosmo_for_casci(method, acosmo)
     else:
         raise RuntimeError('COSMO %s interface is not implemented.')

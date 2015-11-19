@@ -20,21 +20,6 @@ from pyscf.mcscf import chkfile
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
-def h1e_for_cas(casscf, mo, eris):
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    nocc = ncas + ncore
-    if ncore == 0:
-        vhf_c = 0
-    else:
-        vhf_c = eris.vhf_c[ncore:nocc,ncore:nocc]
-    mocc = mo[:,ncore:nocc]
-    h1eff = reduce(numpy.dot, (mocc.T, casscf.get_hcore(), mocc)) + vhf_c
-    return h1eff
-
-def expmat(a):
-    return scipy.linalg.expm(a)
-
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     ncas = casscf.ncas
@@ -458,8 +443,7 @@ def _dgemv(v, m):
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
-           ci0=None, callback=None, verbose=logger.NOTE,
-           dump_chk=True, dump_chk_ci=False):
+           ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
     '''CASSCF solver
     '''
     if isinstance(verbose, logger.Logger):
@@ -755,6 +739,7 @@ class CASSCF(casci.CASCI):
         self.chkfile = mf.chkfile
         self.ci_response_space = 4
         self.callback = None
+        self.chk_ci = False
 
         self.fcisolver.max_cycle = 50
 
@@ -1107,7 +1092,7 @@ class CASSCF(casci.CASCI):
     def dump_chk(self, envs):
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             civec = None
-        elif envs['dump_chk_ci']:
+        elif self.chk_ci:
             civec = envs['fcivec']
         else:
             civec = None
@@ -1123,13 +1108,9 @@ class CASSCF(casci.CASCI):
             mo_energy = envs['mo_energy']
         else:
             mo_energy = None
-        chkfile.dump_mcscf(self.mol, self.chkfile, mo,
-                           mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
-                           ci_vector=civec,
-                           iter_macro=(envs['imacro']+1),
-                           iter_micro_tot=(envs['totmicro']),
-                           converged=envs['conv'],
-                           mo_occ=mo_occ, mo_energy=mo_energy)
+        chkfile.dump_mcscf(self.mol, self.chkfile, envs['e_tot'],
+                           mo, self.ncore, self.ncas, mo_occ, mo_energy,
+                           envs['e_ci'], civec)
 
 
 
@@ -1147,6 +1128,9 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     eri_cas = eris.ppaa[ncore:nocc,ncore:nocc,:,:].copy()
     mc.ao2mo = lambda *args: eri_cas
     return mc
+
+def expmat(a):
+    return scipy.linalg.expm(a)
 
 
 if __name__ == '__main__':

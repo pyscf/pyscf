@@ -430,7 +430,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         conv_tol_grad = numpy.sqrt(conv_tol)
         logger.info(mf, 'Set conv_tol_grad to %g', conv_tol_grad)
     scf_conv = False
-    hf_energy = mf.hf_energy
+    e_tot = mf.e_tot
 
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
@@ -451,7 +451,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
     for imacro in range(max_cycle):
         dm_last = dm
-        last_hf_e = hf_energy
+        last_hf_e = e_tot
         norm_gorb = numpy.linalg.norm(g_orb)
         mo_coeff = mf.update_mo_coeff(mo_coeff, u)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -460,14 +460,14 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_energy = mf.get_mo_energy(fock, s1e, dm)[0]
         mf.get_occ(mo_energy, mo_coeff)
 # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
-        hf_energy = mf._scf.energy_tot(dm, h1e, vhf)
+        e_tot = mf._scf.energy_tot(dm, h1e, vhf)
 
         log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
-                 imacro, hf_energy, hf_energy-last_hf_e, norm_gorb,
+                 imacro, e_tot, e_tot-last_hf_e, norm_gorb,
                  jkcount)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
-        if (abs((hf_energy-last_hf_e)/hf_energy)*1e2 < conv_tol and
+        if (abs((e_tot-last_hf_e)/e_tot)*1e2 < conv_tol and
             norm_gorb < conv_tol_grad):
             scf_conv = True
 
@@ -487,8 +487,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     mo_energy, mo_coeff = mf.get_mo_energy(fock, s1e, dm)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
-             imacro+1, hf_energy, norm_gorb, jktot)
-    return scf_conv, hf_energy, mo_energy, mo_coeff, mo_occ
+             imacro+1, e_tot, norm_gorb, jktot)
+    return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 
 def newton(mf):
@@ -559,7 +559,7 @@ def newton(mf):
 
             self.build(self.mol)
             self.dump_flags()
-            self.converged, self.hf_energy, \
+            self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \
                     kernel(self, mo_coeff, mo_occ, conv_tol=self.conv_tol,
                            conv_tol_grad=self.conv_tol_grad,
@@ -568,7 +568,7 @@ def newton(mf):
 
             logger.timer(self, 'Second order SCF', *cput0)
             self._finalize_()
-            return self.hf_energy
+            return self.e_tot
 
         def from_dm(self, dm):
             '''Transform density matrix to the initial guess'''
