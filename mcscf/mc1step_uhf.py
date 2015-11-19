@@ -250,7 +250,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                                           conv_tol_grad, log)
         if casscf.dynamic_micro_step:
             max_cycle_micro = max(micro, int(micro-2-numpy.log(norm_ddm)))
-<<<<<<< HEAD
         for imicro in range(max_cycle_micro):
             if imicro == 0:
                 u, g_orb, njk = micro_iter.next()
@@ -259,7 +258,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                 u, g_orb, njk = micro_iter.send((casdm1,casdm2))
                 norm_gorb = numpy.linalg.norm(g_orb)
             casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
-=======
         imicro = 0
         rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
                                     eris, r0, conv_tol_grad, log)
