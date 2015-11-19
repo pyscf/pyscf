@@ -442,6 +442,7 @@ class CASSCF(casci_uhf.CASCI):
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
+        self._finalize_()
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
@@ -786,6 +787,7 @@ if __name__ == '__main__':
         ['H', ( 0., 0.757 , 0.587)],]
     mol.basis = {'H': 'cc-pvdz',
                  'O': 'cc-pvdz',}
+    mol.symmetry = 1
     mol.charge = 1
     mol.spin = 1
     mol.build()

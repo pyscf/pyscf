@@ -24,8 +24,6 @@ def cosmo_(method, acosmo=None):
     '''
     if acosmo is None:
         acosmo = COSMO(method.mol)
-    if not acosmo._built:
-        acosmo.initialization(method.mol)
 
     if isinstance(method, pyscf.scf.hf.SCF):
         return icosmo.cosmo_for_scf(method, acosmo)

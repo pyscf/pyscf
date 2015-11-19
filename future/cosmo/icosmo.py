@@ -57,7 +57,7 @@ class COSMO(object):
 
         self._dm = None  # system density
         self.dm = None   # given system density, avoid potential being updated SCFly
-        self.x2c_correction = False
+        #self.x2c_correction = False
         self.casci_conv_tol = 1e-7
         self.casci_state_id = None
         self.casci_max_cycle = 50
@@ -146,6 +146,7 @@ class COSMO(object):
             f1.write('%20.15f %20.15f %20.15f\n' % tuple(coord.tolist()))
         f1.close()
         exe_cosmo(self)
+        lib.logger.info(self, '\nCOSMO tmpdir  %s', self.tmpdir)
         self._built = True
         return 0
 
@@ -153,7 +154,9 @@ class COSMO(object):
         #
         # task-0
         #
-        f1 = open(os.path.join(self.tmpdir, self.segfile),'rw')
+        #with open(os.path.join(self.tmpdir, self.segfile), 'r') as f1:
+        #    print ''.join(f1.readlines()[:10])
+        f1 = open(os.path.join(self.tmpdir, self.segfile), 'r')
         line = f1.readline()
         self.nps = int(line)
         line = f1.readline()
@@ -265,7 +268,7 @@ class COSMO(object):
         mol = self.mol
         f1 = open(os.path.join(self.tmpdir, self.parfile),'w')
         f1.write('Task = 4\n')
-        #f1.write('Escf = %24.15f'%escf+'\n')
+        f1.write('Escf = %24.15f\n'%self.e_tot)
         f1.write('Natoms = '+str(mol.natm)+'\n')
         for i in range(mol.natm):
             coord = mol.atom_coord(i)
@@ -274,7 +277,23 @@ class COSMO(object):
         lib.logger.info(self, 'Final outlying charge correction:')
         lib.logger.info(self, '')
         exe_cosmo(self)
-        return 0
+        with open(os.path.join(self.tmpdir, 'iface.cosmo'), 'r') as fin:
+            dat = fin.readline()
+            while dat:
+                if dat.startswith('$cosmo_energy'):
+                    break
+                dat = fin.readline()
+            dat = []
+            for i in range(5):
+                dat.append(fin.readline())
+
+        dat.pop(2)
+        lib.logger.info(self, ''.join(dat))
+        e_tot = float(dat[1].split('=')[1])
+        lib.logger.note(self, 'Total energy with COSMO corection %.15g', e_tot)
+
+        shutil.copy(os.path.join(self.tmpdir, 'iface.cosmo'), os.curdir)
+        return e_tot
 
     def cosmo_fock(self, dm):
         return cosmo_fock(self, dm)
@@ -371,8 +390,7 @@ def cosmo_occ_o0(cosmo, dm):
         phi -= numpy.einsum('ij,ij',dm,vpot)
         cosmo.phio[i] = phi
     cosmo.savesegs()
-    cosmo.occ1()
-    return 0
+    return cosmo.occ1()
 def cosmo_occ_o1(cosmo, dm):
     mol = cosmo.mol
     nao = dm.shape[0]
@@ -392,8 +410,7 @@ def cosmo_occ_o1(cosmo, dm):
     for ia in range(mol.natm):
         cosmo.phio += mol.atom_charge(ia)/lib.norm(mol.atom_coord(ia)-coords, axis=1)
     cosmo.savesegs()
-    cosmo.occ1()
-    return 0
+    return cosmo.occ1()
 def cosmo_occ(cosmo, dm):
     if not isinstance(dm, numpy.ndarray) and dm.ndim != 2:
         dm = dm[0]+dm[1]
@@ -436,6 +453,7 @@ def _make_fakemol(coords):
 # NOTE: be careful with vhf/vhf_last (in scf kernel) when direct_scf is applied
 def cosmo_for_scf(mf, cosmo):
     oldMF = mf.__class__
+    cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:
         # static solvation environment.  The potential and dielectric energy
         # are not updated SCFly
@@ -472,13 +490,14 @@ def cosmo_for_scf(mf, cosmo):
             return e_tot, e_coul
 
         def _finalize_(self):
-            if cosmo.dm is not None:
-                cosmo.cosmo_occ(self.make_rdm1())
-            oldMF._finalize_(self)
+            cosmo.e_tot = self.e_tot
+            self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
+            return oldMF._finalize_(self)
     return MF()
 
 def cosmo_for_mcscf(mc, cosmo):
     oldCAS = mc.__class__
+    cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:  # A frozen COSMO potential
         vcosmo = cosmo.cosmo_fock(cosmo.dm)
         cosmo._dm = cosmo.dm
@@ -550,12 +569,16 @@ def cosmo_for_mcscf(mc, cosmo):
             e_tot = e_tot - edup + cosmo.ediel
             return e_tot, e_cas, fcivec
 
-        #TODOdef dump_chk
+        def _finalize_(self):
+            cosmo.e_tot = self.e_tot
+            self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
+            return oldCAS._finalize_(self)
 
     return CAS()
 
 def cosmo_for_casci(mc, cosmo):
     oldCAS = mc.__class__
+    cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:
         cosmo._dm = cosmo.dm
         vcosmo = cosmo.cosmo_fock(cosmo.dm)
@@ -645,7 +668,13 @@ def cosmo_for_casci(mc, cosmo):
             else:
                 self.mo_coeff, _, self.mo_energy = \
                         self.canonicalize(mo_coeff, self.ci, verbose=log)
+            self._finalize_()
             return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
+
+        def _finalize_(self):
+            cosmo.e_tot = self.e_tot
+            self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
+            return oldCAS._finalize_(self)
 
     return CAS()
 

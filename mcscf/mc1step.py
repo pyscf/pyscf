@@ -819,8 +819,7 @@ class CASSCF(casci.CASCI):
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
+        self._finalize_()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,

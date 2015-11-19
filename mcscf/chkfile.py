@@ -29,7 +29,7 @@ def dump_mcscf(mol, chkfile, e_tot, mo_coeff, ncore, ncas,
         if val is not None: fh5[key] = val
     store('mcscf/e_tot', e_tot)
     store('mcscf/e_cas', e_cas)
-    store('mcscf/ci', ci)
+    store('mcscf/ci', ci_vector)
     store('mcscf/ncore', ncore)
     store('mcscf/ncas', ncas)
     store('mcscf/mo_occ', mo_occ)
