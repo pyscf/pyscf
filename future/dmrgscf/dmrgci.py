@@ -28,6 +28,7 @@ except ImportError:
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
+    raise ImportError
 
 
 

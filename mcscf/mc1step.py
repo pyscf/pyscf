@@ -20,21 +20,6 @@ from pyscf.mcscf import chkfile
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
-def h1e_for_cas(casscf, mo, eris):
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    nocc = ncas + ncore
-    if ncore == 0:
-        vhf_c = 0
-    else:
-        vhf_c = eris.vhf_c[ncore:nocc,ncore:nocc]
-    mocc = mo[:,ncore:nocc]
-    h1eff = reduce(numpy.dot, (mocc.T, casscf.get_hcore(), mocc)) + vhf_c
-    return h1eff
-
-def expmat(a):
-    return scipy.linalg.expm(a)
-
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     ncas = casscf.ncas
@@ -1147,6 +1132,9 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     eri_cas = eris.ppaa[ncore:nocc,ncore:nocc,:,:].copy()
     mc.ao2mo = lambda *args: eri_cas
     return mc
+
+def expmat(a):
+    return scipy.linalg.expm(a)
 
 
 if __name__ == '__main__':
