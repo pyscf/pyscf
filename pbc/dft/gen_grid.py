@@ -1,9 +1,10 @@
 import numpy as np
 from pyscf import dft
 from pyscf.lib import logger
-from pyscf.lib.numpy_helper import cartesian_prod, norm
+from pyscf.lib.numpy_helper import cartesian_prod
 import pyscf.dft
 from pyscf.pbc import tools
+
 
 def gen_uniform_grids(cell):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
@@ -21,6 +22,7 @@ def gen_uniform_grids(cell):
     invN = np.diag(1./ngs)
     coords = np.dot(qv, np.dot(cell._h, invN).T)
     return coords
+
 
 class UniformGrids(object):
     '''Uniform Grid class.'''
@@ -71,7 +73,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             return 1
         else:
             return n
-    scell = tools.super_cell(cell, [fshrink(i) for i in cell.nimgs])
+    scell = cell_plus_imgs(cell, [fshrink(i) for i in cell.nimgs])
     atom_grids_tab = dft.gen_grid.gen_atomic_grids(scell, atom_grid, radi_method,
                                                    level, prune_scheme)
     coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)
@@ -83,6 +85,30 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     mask = np.logical_and(reduce(np.logical_and, (c>=0).T),
                           reduce(np.logical_and, (c< 1).T))
     return coords[mask], weights[mask]
+
+
+def cell_plus_imgs(cell, nimgs):
+    '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
+
+    Args:
+        cell : instance of :class:`Cell`
+        nimgs : (3,) array
+
+    Returns:
+        supcell : instance of :class:`Cell`
+    '''
+    Ls = tools.get_lattice_Ls(cell, nimgs)
+    supcell = cell.copy()
+    supcell.atom = []
+    for L in Ls:
+        atom1 = []
+        for ia in range(cell.natm):
+            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
+        supcell.atom.extend(atom1)
+    supcell.unit = 'B'
+    supcell.h = np.dot(cell._h, np.diag(nimgs))
+    supcell.build(False, False, verbose=0)
+    return supcell
 
 
 class BeckeGrids(pyscf.dft.gen_grid.Grids):
@@ -100,6 +126,7 @@ class BeckeGrids(pyscf.dft.gen_grid.Grids):
                                                     prune_scheme=self.prune_scheme)
         logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
+
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto

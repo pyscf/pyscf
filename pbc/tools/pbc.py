@@ -66,21 +66,24 @@ def ifftk(g, gs, r, k):
     '''
     return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
 
-def get_coulG(cell):
-    '''Calculate the Coulomb kernel 4*pi/G^2 for all G-vectors (0 for G=0).
+def get_coulG(cell, k=np.zeros(3)):
+    '''Calculate the Coulomb kernel 4*pi/|k+G|^2 for all G-vectors (0 for |k+G|=0).
 
     Args:
         cell : instance of :class:`Cell`
+        k : (3,) ndarray
 
     Returns:
         coulG : (ngs,) ndarray
             The Coulomb kernel.
 
     '''
-    absG2 = np.einsum('gi,gi->g', cell.Gv, cell.Gv)
+    kG = k + cell.Gv
+    absG2 = np.einsum('gi,gi->g', kG, kG)
     with np.errstate(divide='ignore'):
         coulG = 4*np.pi/absG2
-    coulG[0] = 0.
+    if np.linalg.norm(k) < 1e-12:
+        coulG[0] = 0.
 
     return coulG
 
@@ -94,27 +97,28 @@ def get_lattice_Ls(cell, nimgs):
     Ls = np.dot(cell._h, Ts.T).T
     return Ls
 
-def super_cell(cell, nimgs):
-    '''Create an nimgs[0] x nimgs[1] x nimgs[2] supercell of the input cell
+def super_cell(cell, ncopy):
+    '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
 
     Args:
         cell : instance of :class:`Cell`
-        nimgs : (3,) array
+        ncopy : (3,) array
 
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    Ls = get_lattice_Ls(cell, nimgs)
     supcell = cell.copy()
     supcell.atom = []
-    for L in Ls:
-        atom1 = []
-        for ia in range(cell.natm):
-            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
-        supcell.atom.extend(atom1)
+    for Lx in range(ncopy[0]):
+        for Ly in range(ncopy[1]):
+            for Lz in range(ncopy[2]):
+                # Using cell._atom guarantees coord is in Bohr
+                for atom, coord in cell._atom:
+                    L = np.dot(cell._h, [Lx, Ly, Lz])
+                    supcell.atom.append([atom, coord + L])
     supcell.unit = 'B'
-    supcell.h = np.dot(cell._h, np.diag(nimgs))
-    supcell.build(False, False, verbose=0)
+    supcell.h = np.dot(cell._h, np.diag(ncopy))
+    supcell.build(False, False)
     return supcell
 
 def get_KLMN(kpts):

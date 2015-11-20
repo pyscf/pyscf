@@ -51,7 +51,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
     
-    Due to `kpt`, this is evaluated in real space using orbital gradients.
+    Note: Evaluated in real space using orbital gradients, for improved accuracy.
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
@@ -65,38 +65,30 @@ def get_t(cell, kpt=np.zeros(3)):
     return t
 
 
-# def get_t2(cell, kpt=np.zeros(3)):
-#     '''Get the kinetic energy AO matrix.
-    
-#     Due to `kpt`, this is evaluated in real space using orbital gradients.
+def get_t_pw(cell, kpt=np.zeros(3)):
+    '''Get the kinetic energy AO matrix using the PW resolution.
 
-#     '''
-#     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-#     # aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
-#     # ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
-#     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=False)
-#     ngs = aoR.shape[0]  # because we requested isgga, aoR.shape[0] = 4
+    Note: Incurs error due to finite resolution of the gradient operator.
+    '''
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=False)
+    nao = cell.nao_nr()
 
-#     Gv = cell.Gv
-#     G2 = np.einsum('gi,gi->g', Gv+kpt, Gv+kpt)
+    kG = kpt + cell.Gv
+    abskG2 = np.einsum('gi,gi->g', kG, kG)
 
-#     aoG = np.empty(aoR.shape, np.complex128)
-#     TaoG = np.empty(aoR.shape, np.complex128)
-#     nao = cell.nao_nr()
-#     for i in range(nao):
-#         aoG[:,i] = pyscf.pbc.tools.fft(aoR[:,i], cell.gs)
-#         TaoG[:,i] = 0.5*G2*aoG[:,i]
+    aokG = np.empty(aoR.shape, np.complex128)
+    TaokG = np.empty(aoR.shape, np.complex128)
+    nao = cell.nao_nr()
+    for i in range(nao):
+        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
+        TaokG[:,i] = 0.5*abskG2*aokG[:,i]
 
-#     t = np.dot(aoG.T.conj(), TaoG)
-#     t *= (cell.vol/ngs**2)
+    ngs = len(aokG)
+    t = np.dot(aokG.T.conj(), TaokG)
+    t *= (cell.vol/ngs**2)
 
-
-#     # t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
-#     #          np.dot(aoR[2].T.conj(), aoR[2]) +
-#     #          np.dot(aoR[3].T.conj(), aoR[3]))
-#     # t *= (cell.vol/ngs)
-    
-#     return t
+    return t
 
 
 def get_nuc(cell, kpt=np.zeros(3)):
