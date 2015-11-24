@@ -42,7 +42,7 @@ class COSMO(object):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.tmpdir = tempfile.mkdtemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR)
+	self.tmpdir = tempfile.mkdtemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR)
         #shutil.rmtree(self.tmpdir) # Note the circular dependence in cosmo_fock function
         self.base = 'iface'
         self.suffix = 'out'
@@ -421,7 +421,7 @@ def cosmo_occ_o1(cosmo, dm):
     cosmo.savesegs()
     return cosmo.occ1()
 def cosmo_occ(cosmo, dm):
-    if not isinstance(dm, numpy.ndarray) and dm.ndim != 2:
+    if not isinstance(dm, numpy.ndarray) or dm.ndim != 2:
         dm = dm[0]+dm[1]
     return cosmo_occ_o1(cosmo, dm)
 
