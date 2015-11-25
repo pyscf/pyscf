@@ -42,7 +42,7 @@ class COSMO(object):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-	self.tmpdir = tempfile.mkdtemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR)
+        self.tmpdir = tempfile.mkdtemp(prefix='cosmotmp', dir=settings.COSMOSCRATCHDIR)
         #shutil.rmtree(self.tmpdir) # Note the circular dependence in cosmo_fock function
         self.base = 'iface'
         self.suffix = 'out'

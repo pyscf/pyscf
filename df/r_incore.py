@@ -23,9 +23,9 @@ def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
     atm, bas, env = \
             pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                     auxmol._atm, auxmol._bas, auxmol._env)
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
 

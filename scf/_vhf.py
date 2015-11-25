@@ -16,7 +16,7 @@ class VHFOpt(object):
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = _fpointer(intor)
-        self._cintopt = ctypes.c_void_p()
+        self._cintopt = pyscf.lib.c_null_ptr()
         self._dmcondname = dmcondname
         self.init_cvhf_direct(mol, intor, prescreen, qcondname)
 
@@ -25,9 +25,9 @@ class VHFOpt(object):
         libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
 
     def init_cvhf_direct(self, mol, intor, prescreen, qcondname):
-        c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-        c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-        c_env = numpy.array(mol._env)
+        c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
+        c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
+        c_env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
         natm = ctypes.c_int(c_atm.shape[0])
         nbas = ctypes.c_int(c_bas.shape[0])
         self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
@@ -58,9 +58,9 @@ class VHFOpt(object):
 
     def set_dm_(self, dm, atm, bas, env):
         if self._dmcondname is not None:
-            c_atm = numpy.array(atm, dtype=numpy.int32)
-            c_bas = numpy.array(bas, dtype=numpy.int32)
-            c_env = numpy.array(env)
+            c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+            c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+            c_env = numpy.asarray(env, dtype=numpy.double, order='C')
             natm = ctypes.c_int(c_atm.shape[0])
             nbas = ctypes.c_int(c_bas.shape[0])
             if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -85,12 +85,12 @@ class _CVHFOpt(ctypes.Structure):
                 ('r_vkscreen', ctypes.c_void_p)]
 
 def make_cintopt(atm, bas, env, intor):
-    c_atm = numpy.array(atm, dtype=numpy.int32, copy=False)
-    c_bas = numpy.array(bas, dtype=numpy.int32, copy=False)
-    c_env = numpy.array(env, copy=False)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
-    cintopt = ctypes.c_void_p()
+    cintopt = pyscf.lib.c_null_ptr()
     foptinit = getattr(libcvhf, intor+'_optimizer')
     foptinit(ctypes.byref(cintopt),
              c_atm.ctypes.data_as(ctypes.c_void_p), natm,
@@ -153,9 +153,9 @@ def incore(eri, dm, hermi=0):
 # use cint2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
 # direct_mapdm
 def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
@@ -171,7 +171,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
     if vhfopt is None:
         cintor = _fpointer('cint2e_sph')
         cintopt = make_cintopt(c_atm, c_bas, c_env, 'cint2e_sph')
-        cvhfopt = ctypes.c_void_p()
+        cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
@@ -223,9 +223,9 @@ def direct_mapdm(intor, intsymm, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None):
     assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
                        'a4ij', 'a4kl', 'a2ij', 'a2kl'))
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
@@ -246,7 +246,7 @@ def direct_mapdm(intor, intsymm, jkdescript,
     if vhfopt is None:
         cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-        cvhfopt = ctypes.c_void_p()
+        cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
@@ -296,9 +296,9 @@ def direct_bindm(intor, intsymm, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None):
     assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
                        'a4ij', 'a4kl', 'a2ij', 'a2kl'))
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
@@ -320,7 +320,7 @@ def direct_bindm(intor, intsymm, jkdescript,
     if vhfopt is None:
         cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-        cvhfopt = ctypes.c_void_p()
+        cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
@@ -363,9 +363,9 @@ def direct_bindm(intor, intsymm, jkdescript,
 
 # 8-fold permutation symmetry
 def int2e_sph(atm, bas, env):
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
     libcvhf.CINTtot_cgto_spheric.restype = ctypes.c_int
@@ -385,9 +385,9 @@ def rdirect_mapdm(intor, intsymm, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None):
     assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
                        'a4ij', 'a4kl', 'a2ij', 'a2kl'))
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
@@ -408,7 +408,7 @@ def rdirect_mapdm(intor, intsymm, jkdescript,
     if vhfopt is None:
         cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-        cvhfopt = ctypes.c_void_p()
+        cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this
@@ -452,9 +452,9 @@ def rdirect_bindm(intor, intsymm, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None):
     assert(intsymm in ('s8', 's4', 's2ij', 's2kl', 's1',
                        'a4ij', 'a4kl', 'a2ij', 'a2kl'))
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
@@ -476,7 +476,7 @@ def rdirect_bindm(intor, intsymm, jkdescript,
     if vhfopt is None:
         cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-        cvhfopt = ctypes.c_void_p()
+        cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm_(dms, atm, bas, env)
         cvhfopt = vhfopt._this

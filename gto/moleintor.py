@@ -177,6 +177,9 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         ketlst = numpy.asarray(kets, dtype=numpy.int32)
         assert(ketlst.max() < len(bas))
 
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
@@ -224,6 +227,9 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
               aosym='s1', vout=None):
     aosym = _stand_sym_code(aosym)
 
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
@@ -464,6 +470,9 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_bas = bas.ctypes.data_as(ctypes.c_void_p)
     natm = ctypes.c_int(atm.shape[0])
     nbas = ctypes.c_int(bas.shape[0])

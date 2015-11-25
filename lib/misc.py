@@ -17,6 +17,7 @@ Some hacky functions
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
+c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
 def load_library(libname):
 # numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py

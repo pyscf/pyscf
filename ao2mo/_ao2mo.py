@@ -17,9 +17,9 @@ class AO2MOpt(object):
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = _fpointer(intor)
 
-        c_atm = numpy.asarray(mol._atm, dtype=numpy.int32)
-        c_bas = numpy.asarray(mol._bas, dtype=numpy.int32)
-        c_env = numpy.asarray(mol._env)
+        c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
+        c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
+        c_env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
         natm = ctypes.c_int(c_atm.shape[0])
         nbas = ctypes.c_int(c_bas.shape[0])
         self._cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
@@ -48,9 +48,9 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
                aosym='s1', comp=1, ao2mopt=None, vout=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
 
-    c_atm = numpy.asarray(atm, dtype=numpy.int32)
-    c_bas = numpy.asarray(bas, dtype=numpy.int32)
-    c_env = numpy.asarray(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
@@ -81,7 +81,7 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
         cintopt = ao2mopt._cintopt
         cintor = ao2mopt._intor
     else:
-        cao2mopt = ctypes.c_void_p()
+        cao2mopt = pyscf.lib.c_null_ptr()
         cintor = _fpointer(intor)
         cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
@@ -237,7 +237,7 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
         cintopt = ao2mopt._cintopt
         cintor = ao2mopt._intor
     else:
-        cao2mopt = ctypes.c_void_p()
+        cao2mopt = pyscf.lib.c_null_ptr()
         cintor = _fpointer(intor)
         cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
