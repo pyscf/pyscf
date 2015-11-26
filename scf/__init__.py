@@ -182,6 +182,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
     def mf_kernel(mo_coeff=mo_coeff, mo_occ=mo_occ):
         return newton_class.kernel(mf1, mo_coeff, mo_occ)
     mf1.kernel = mf_kernel
+    mf1._keys = mf1._keys.union(['kernel'])
     return mf1
 
 def fast_scf(mf):
