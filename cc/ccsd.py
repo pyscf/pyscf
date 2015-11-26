@@ -4,7 +4,6 @@
 #
 
 import time
-import ctypes
 import tempfile
 import numpy
 import h5py
@@ -431,7 +430,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self._nocc = int(self.mo_occ.sum()) // 2 - self.frozen
         else:
             mo_occ = self.mo_occ.copy()
-            mo_occ[self.frozen] = 0
+            if len(self.frozen) > 0:
+                mo_occ[numpy.asarray(self.frozen)] = 0
             self._nocc = int(mo_occ.sum()) // 2
         return self._nocc
 
@@ -458,6 +458,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #log.info('diis_file = %s', self.diis_file)
         log.info('diis_start_cycle = %d', self.diis_start_cycle)
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
+        if self.mo_coeff is None:
+            log.warn('mo_coeff, mo_energy are not given.\n'
+                     'You may need mf.kernel() to generate them.')
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -623,8 +626,8 @@ class _ERIS:
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:cc.frozen] = False
-        else:
-            moidx[cc.frozen] = False
+        elif len(cc.frozen) > 0:
+            moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
             self.fock = numpy.diag(cc.mo_energy[moidx])

@@ -450,6 +450,9 @@ class CASCI(object):
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
         log.info('natorb = %s', self.natorb)
         log.info('max_memory %d (MB)', self.max_memory)
+        if self.mo_coeff is None:
+            log.warn('Orbital initial guess is not given.\n'
+                     'You may need mf.kernel() to generate initial guess form SCF calculation.')
         try:
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:

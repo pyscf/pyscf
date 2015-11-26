@@ -134,6 +134,10 @@ class MP2(object):
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
+        if mo_coeff is None:
+            log.warn('mo_coeff, mo_energy are not given.\n'
+                     'You may need mf.kernel() to generate them.')
+            raise RuntimeError
 
         self.emp2, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose)

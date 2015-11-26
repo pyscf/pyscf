@@ -165,27 +165,24 @@ def newton(mf):
     return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
+    mf1 = density_fit(newton(mf))
+
     if dm0 is not None:
-        mf1 = density_fit(newton(mf))
-        mf1.kernel(*mf1.from_dm(dm0))
+        mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
         mf0 = density_fit(mf)
         mf0.conv_tol = .1
+        mf0.level_shift_factor += .2
         mf0.kernel()
-        mf1 = density_fit(newton(mf))
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux
-        mf1.kernel(mf0.mo_coeff, mf0.mo_occ)
-    else:
-        mf1 = density_fit(newton(mf))
-        mf1.kernel(mo_coeff, mo_occ)
-    #return mf.kernel(mf1.make_rdm1())
-    mf.mo_occ = mf1.mo_occ
-    mf.mo_energy = mf1.mo_energy
-    mf.mo_coeff = mf1.mo_coeff
-    mf.e_tot = mf1.e_tot
-    mf.converged = mf1.converged
-    return mf
+        mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
+
+    newton_class = mf1.__class__
+    def mf_kernel(mo_coeff=mo_coeff, mo_occ=mo_occ):
+        return newton_class.kernel(mf1, mo_coeff, mo_occ)
+    mf1.kernel = mf_kernel
+    return mf1
 
 def fast_scf(mf):
     from pyscf.lib import logger
