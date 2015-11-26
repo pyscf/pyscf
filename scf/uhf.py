@@ -448,9 +448,9 @@ class UHF(hf.SCF):
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
         if level_shift_factor is None:
-            level_shift_factor = self.level_shift_factor
+            level_shift_factor = self.level_shift
         if damp_factor is None:
-            damp_factor = self.damp_factor
+            damp_factor = self.damp
         return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
 

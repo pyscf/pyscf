@@ -116,7 +116,7 @@ class KnowValues(unittest.TestCase):
 
     def test_level_shift_uhf(self):
         uhf = scf.UHF(mol)
-        uhf.level_shift_factor = .2
+        uhf.level_shift = .2
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_energy_nuc(self):

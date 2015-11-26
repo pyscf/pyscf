@@ -30,7 +30,7 @@ mol.basis = {'Cr': 'ccpvtz',
              'O' : 'ccpvtz',}
 mol.build()
 nrscf = scf.RHF(mol)
-nrscf.level_shift_factor = .5
+nrscf.level_shift = .5
 nrscf.diis_start_cycle = 2
 nrscf.conv_tol = 1e-9
 e = nrscf.scf()

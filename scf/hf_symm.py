@@ -417,9 +417,9 @@ class ROHF(rohf.ROHF):
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
         if level_shift_factor is None:
-            level_shift_factor = self.level_shift_factor
+            level_shift_factor = self.level_shift
         if damp_factor is None:
-            damp_factor = self.damp_factor
+            damp_factor = self.damp
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
         self._focka_ao = h1e + vhf[0]

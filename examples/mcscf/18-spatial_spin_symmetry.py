@@ -69,7 +69,7 @@ mol.symmetry = True
 mol.build()
 
 m = scf.ROHF(mol)
-m.level_shift_factor = 1.5
+m.level_shift = 1.5
 mf = scf.fast_newton(m)
 mf.kernel()
 

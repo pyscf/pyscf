@@ -171,8 +171,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
         mf0 = density_fit(mf)
-        mf0.conv_tol = .1
-        mf0.level_shift_factor += .2
+        mf0.conv_tol = .5
+        if mf0.level_shift == 0:
+            mf0.level_shift = .2
         mf0.kernel()
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux

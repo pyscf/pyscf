@@ -587,7 +587,7 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     if dm_last is None:
         ddm = numpy.asarray(dm)
     else:
-        ddm = numpy.asarray(dm) - numpy.array(dm_last)
+        ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
     vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
     if vhf_last is None:
         return vj - vk * .5
@@ -856,7 +856,7 @@ class SCF(object):
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
     >>> mf = scf.hf.SCF(mol)
     >>> mf.verbose = 0
-    >>> mf.level_shift_factor = .4
+    >>> mf.level_shift = .4
     >>> mf.scf()
     -1.0811707843775884
     '''
@@ -884,8 +884,8 @@ class SCF(object):
         self.diis_file = None
 # Give diis_space_rollback=True a trial if other efforts not converge
         self.diis_space_rollback = False
-        self.damp_factor = 0
-        self.level_shift_factor = 0
+        self.damp = 0
+        self.level_shift = 0
         self.direct_scf = True
         self.direct_scf_tol = 1e-13
 ##################################################
@@ -918,8 +918,8 @@ class SCF(object):
         logger.info(self, '******** SCF flags ********')
         logger.info(self, 'method = %s', self.__class__.__name__)
         logger.info(self, 'initial guess = %s', self.init_guess)
-        logger.info(self, 'damping factor = %g', self.damp_factor)
-        logger.info(self, 'level shift factor = %g', self.level_shift_factor)
+        logger.info(self, 'damping factor = %g', self.damp)
+        logger.info(self, 'level shift factor = %g', self.level_shift)
         logger.info(self, 'Do DIIS = %s', self.diis)
         logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
         logger.info(self, 'DIIS space = %d', self.diis_space)
@@ -957,9 +957,9 @@ class SCF(object):
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
         if level_shift_factor is None:
-            level_shift_factor = self.level_shift_factor
+            level_shift_factor = self.level_shift
         if damp_factor is None:
-            damp_factor = self.damp_factor
+            damp_factor = self.damp
         return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
 
@@ -1196,6 +1196,28 @@ class SCF(object):
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
                          'Please use .e_tot instead\n')
         return self.e_tot
+
+    @property
+    def level_shift_factor(self):
+        sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
+                         'Please use .level_shift instead\n')
+        return self.level_shift
+    @level_shift_factor.setter
+    def level_shift_factor(self, x):
+        sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
+                         'Please use .level_shift instead\n')
+        self.level_shift = x
+
+    @property
+    def damp_factor(self):
+        sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
+                         'Please use .damp instead\n')
+        return self.damp
+    @damp_factor.setter
+    def damp_factor(self, x):
+        sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
+                         'Please use .damp instead\n')
+        self.damp = x
 
 
 ############

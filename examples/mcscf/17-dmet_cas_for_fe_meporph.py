@@ -60,7 +60,7 @@ mol.spin = 4
 mol.build()
 
 mf = scf.RHF(mol)
-mf.level_shift_factor = 1.5
+mf.level_shift = 1.5
 #mf.chkfile = 'fepor5.chk'
 mf = scf.fast_scf(mf)
 

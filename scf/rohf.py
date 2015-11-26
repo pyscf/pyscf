@@ -74,9 +74,9 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
-        level_shift_factor = mf.level_shift_factor
+        level_shift_factor = mf.level_shift
     if damp_factor is None:
-        damp_factor = mf.damp_factor
+        damp_factor = mf.damp
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
 # Fc = (Fa+Fb)/2

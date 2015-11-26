@@ -20,7 +20,7 @@ from pyscf.mcscf import chkfile
 # the convergence are very unstable and slow
 
 # gradients, hessian operator and hessian diagonal
-def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
+def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = (ncas + ncore[0], ncas + ncore[1])
@@ -62,7 +62,8 @@ def gen_g_hop(casscf, mo, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
-    def gorb_update(u, r0):
+    def gorb_update(u):
+        r0 = casscf.pack_uniq_var(u)
         return g_orb + h_op(r0)
 
     ############## hessian, diagonal ###########
@@ -233,7 +234,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     max_cycle_micro = micro
     conv = False
     totmicro = totinner = 0
-    imicro = 0
     norm_gorb = norm_gci = 0
     elast = e_tot
     r0 = None
@@ -244,19 +244,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
     for imacro in range(macro):
-
-        micro_iter = casscf.rotate_orb_cc(mo, casdm1, casdm2, eris, r0,
-                                          conv_tol_grad, log)
         if casscf.dynamic_micro_step:
             max_cycle_micro = max(micro, int(micro-2-numpy.log(norm_ddm)))
-        for imicro in range(max_cycle_micro):
-            if imicro == 0:
-                u, g_orb, njk = micro_iter.next()
-                norm_gorb0 = norm_gorb = numpy.linalg.norm(g_orb)
-            else:
-                u, g_orb, njk = micro_iter.send((casdm1,casdm2))
-                norm_gorb = numpy.linalg.norm(g_orb)
-            casdm1, casdm2, gci = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
         imicro = 0
         rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
                                     eris, r0, conv_tol_grad, log)
@@ -271,13 +260,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                           imicro, norm_t, norm_gorb)
                 break
 
+            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             if isinstance(gci, numpy.ndarray):
                 norm_gci = numpy.linalg.norm(gci)
             else:
                 norm_gci = -1
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
-            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('update CAS DM', *t3m)
             log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ' \
                       '|g[c]|= %4.3g  |ddm|= %4.3g',
@@ -292,8 +281,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
                 break
 
         rota.close()
+        rota = None
 
-        totmicro += imicro + 1
+        totmicro += imicro
         totinner += njk
 
         r0 = casscf.pack_uniq_var(u)
@@ -312,7 +302,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
         log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, njk, imicro+1, e_tot, e_tot-elast)
+                 imacro, njk, imicro, e_tot, e_tot-elast)
         log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
                  norm_gorb0, norm_gci, norm_ddm)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
@@ -332,7 +322,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     else:
         log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
-    log.note('1-step CASSCF, energy = %.15g', e_tot)
     log.timer('1-step CASSCF', *cput0)
     return conv, e_tot, e_ci, fcivec, mo
 
@@ -443,6 +432,7 @@ class CASSCF(casci_uhf.CASCI):
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
+        logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         self._finalize_()
@@ -511,9 +501,9 @@ class CASSCF(casci_uhf.CASCI):
     def gen_g_hop(self, *args):
         return gen_g_hop(self, *args)
 
-    def rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess,
+    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, x0_guess,
                       conv_tol_grad, verbose):
-        return mc1step.rotate_orb_cc(self, mo, casdm1, casdm2, eris, x0_guess,
+        return mc1step.rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, x0_guess,
                                      conv_tol_grad, verbose)
 
     def ao2mo(self, mo):
