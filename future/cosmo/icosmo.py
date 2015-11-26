@@ -537,13 +537,16 @@ def cosmo_for_mcscf(mc, cosmo):
 # When CASSCF converged, we assumed the input DM (computed in update_casdm) is
 # identical to the CASCI DM (from the macro iteration).
         def get_hcore(self, mol=None):
-            if cosmo._dm_guess is None:  # Initial guess
-                dm = self._scf.make_rdm1()
-            else:
-                dm = cosmo._dm_guess
-            if cosmo.dm is not None:  # Initial guess
+            if cosmo.dm is not None:
                 v1 = vcosmo
             else:
+                if cosmo._dm_guess is None:  # Initial guess
+                    na = self.ncore + self.nelecas[0]
+                    nb = self.ncore + self.nelecas[1]
+                    dm =(numpy.dot(self.mo_coeff[:,:na], self.mo_coeff[:,:na].T)
+                       + numpy.dot(self.mo_coeff[:,:nb], self.mo_coeff[:,:nb].T))
+                else:
+                    dm = cosmo._dm_guess
                 v1 = cosmo.cosmo_fock(dm)
             cosmo._v = v1
             return self._scf.get_hcore(mol) + v1
@@ -592,13 +595,16 @@ def cosmo_for_casci(mc, cosmo):
             self.__dict__.update(mc.__dict__)
 
         def get_hcore(self, mol=None):
-            if cosmo._dm_guess is None:  # Initial guess
-                dm = self._scf.make_rdm1()
-            else:
-                dm = cosmo._dm_guess
-            if cosmo.dm is not None:  # Initial guess
+            if cosmo.dm is not None:
                 v1 = vcosmo
             else:
+                if cosmo._dm_guess is None:  # Initial guess
+                    na = self.ncore + self.nelecas[0]
+                    nb = self.ncore + self.nelecas[1]
+                    dm =(numpy.dot(self.mo_coeff[:,:na], self.mo_coeff[:,:na].T)
+                       + numpy.dot(self.mo_coeff[:,:nb], self.mo_coeff[:,:nb].T))
+                else:
+                    dm = cosmo._dm_guess
                 v1 = cosmo.cosmo_fock(dm)
             cosmo._v = v1
             return self._scf.get_hcore(mol) + v1

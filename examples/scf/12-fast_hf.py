@@ -61,4 +61,5 @@ H 9.239940 8.492427 3.423290
             verbose = 5,
             output = 'cu3.out')
 
-scf.fast_newton(scf.RHF(mol))
+mf = scf.fast_newton(scf.RHF(mol))
+mf.kernel()
