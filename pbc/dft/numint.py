@@ -266,12 +266,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
 
         mat = mat_re + 1j*mat_im
 
-        # print "MATRIX", mat.dtype
-        #return (mat + mat.T.conj()).real
-        # print "MAT DTYPE", mat.dtype
-        # print "HACK MAT"
         return (mat + mat.T.conj())
-        #return 2 * mat
         
     else:
         return pyscf.dft.numint.eval_mat(mol, ao, 

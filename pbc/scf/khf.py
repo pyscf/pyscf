@@ -66,8 +66,6 @@ def get_j(mf, cell, dm_kpts, kpts):
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
-
-    Note: This changes the mf object (mf._ecoul)
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
@@ -89,17 +87,85 @@ def get_j(mf, cell, dm_kpts, kpts):
 
     # TODO: REPLACE by eval_mat here (with non0tab)
     vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-    ecoul = 0.
     for k in range(nkpts):
         vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
                                                vR.reshape(-1,1)*aoR_kpts[k,:,:])
-        # TODO: energy is normally evaluated in dft.rks.get_veff
-        ecoul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vj_kpts[k,:,:])
-    if abs(ecoul.imag > 1.e-12):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", ecoul.imag)
-    mf._ecoul = ecoul.real
     return vj_kpts
+
+
+def get_jk(mf, cell, dm_kpts, kpts):
+    '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
+
+    Args:
+        dm_kpts : (nkpts, nao, nao) ndarray
+            Density matrix at each k-point
+        kpts : (nkpts, 3) ndarray
+
+    Returns:
+        vj : (nkpts, nao, nao) ndarray
+        vk : (nkpts, nao, nao) ndarray
+
+    Note: This changes the mf object (mf._ecoul)
+    '''
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    nkpts = len(kpts)
+    ngs = len(coords)
+    nao = cell.nao_nr()
+
+    aoR_kpts = np.zeros((nkpts, ngs, nao), np.complex128)
+    for k in range(nkpts):
+        kpt = kpts[k,:]
+        aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+
+    # The GOOD way to do vj:
+    # TODO: REPLACE by eval_mat here (with non0tab)
+    vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+    vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
+    for k in range(nkpts):
+        vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
+                                               vjR.reshape(-1,1)*aoR_kpts[k,:,:])
+    # The BAD way to do vj (but like vk) -- gives identical results.
+    #vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+    #for k1 in range(nkpts):
+    #    kpt1 = kpts[k1,:]
+    #    for k2 in range(nkpts):
+    #        kpt2 = kpts[k2,:]
+    #        vjR_k2k2 = pbchf.get_vkR_(cell, aoR_kpts[k2,:,:], aoR_kpts[k2,:,:], kpt2, kpt2)
+    #        vj_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('ls,rm,rls,rn->mn', 
+    #                            dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
+    #                            vjR_k2k2, aoR_kpts[k1,:,:])
+
+    vk_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+    for k1 in range(nkpts):
+        kpt1 = kpts[k1,:]
+        for k2 in range(nkpts):
+            kpt2 = kpts[k2,:]
+            vkR_k1k2 = pbchf.get_vkR_(cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], kpt1, kpt2)
+            vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('ls,rm,rns,rl->mn', 
+                                dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
+                                vkR_k1k2, aoR_kpts[k2,:,:])
+
+    return vj_kpts, vk_kpts
+
+
+def get_vjR_(cell, dm_kpts, aoR_kpts):
+    '''Get the real-space Hartree potential of the k-point sampled density matrix.
+
+    Returns:
+        vR : (ngs,) ndarray
+            The real-space Hartree potential at every grid point.
+    '''
+    nkpts, ngs, nao = aoR_kpts.shape 
+    coulG = tools.get_coulG(cell)
+
+    rhoR = np.zeros(ngs)
+    for k in range(nkpts):
+        rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(cell, aoR_kpts[k,:,:], dm_kpts[k,:,:])
+    rhoG = tools.fft(rhoR, cell.gs)
+
+    vG = coulG*rhoG
+    vR = tools.ifft(vG, cell.gs)
+    return vR
 
 
 def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
@@ -112,6 +178,7 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
        fock : (nkpts, nao, nao) ndarray
     '''
     fock = np.zeros_like(h1e_kpts)
+    # By inheritance, this is just pyscf.scf.hf.get_fock_
     fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
                                vhf_kpts, dm_kpts,
                                cycle, adiis, diis_start_cycle,
@@ -172,6 +239,15 @@ class KRHF(pbchf.RHF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         return get_j(self, cell, dm_kpts, kpts)
 
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None):
+        if cell is None: cell = self.cell
+        if kpts is None: kpts = self.kpts
+        if dm_kpts is None: dm_kpts = self.make_rdm1()
+        # CHANGE ME!
+        #vj, vk = get_jk(self, cell, dm_kpts, kpts)
+        #return vj, 0*vk
+        return get_jk(self, cell, dm_kpts, kpts)
+        
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
                   diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
 
@@ -185,22 +261,22 @@ class KRHF(pbchf.RHF):
         return get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
 
-    def get_veff(self, cell=None, dm=None, dm_last=None,
-                 vhf_last=0, hermi=1):
-        '''
-        Args:
-            cell : instance of :class:`Cell`
-            dm : (nkpts, nao, nao) ndarray
-                Density matrix at each k-point
-                Note: Because get_veff is often called in pyscf.scf.hf with
-                kwargs, we have to use the same argument name, 'dm', as in
-                pyscf.scf.hf.
-            dm_last : (nkpts, nao, nao) ndarray
-                Previous density matrix at each k-point
-            vhf_last: (nkpts, nao, nao) ndarray
-                Previous vhf at each k-point
-        '''
-        raise NotImplementedError
+#    def get_veff(self, cell=None, dm=None, dm_last=None,
+#                 vhf_last=0, hermi=1):
+#        '''
+#        Args:
+#            cell : instance of :class:`Cell`
+#            dm : (nkpts, nao, nao) ndarray
+#                Density matrix at each k-point
+#                Note: Because get_veff is often called in pyscf.scf.hf with
+#                kwargs, we have to use the same argument name, 'dm', as in
+#                pyscf.scf.hf.
+#            dm_last : (nkpts, nao, nao) ndarray
+#                Previous density matrix at each k-point
+#            vhf_last: (nkpts, nao, nao) ndarray
+#                Previous vhf at each k-point
+#        '''
+#        raise NotImplementedError
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''
@@ -297,7 +373,24 @@ class KRHF(pbchf.RHF):
         return dm_kpts
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
-        raise NotImplementedError
+        '''Following pyscf.scf.hf.energy_elec()
+        '''
+        if dm_kpts is None: dm_kpts = self.make_rdm1()
+        if h1e_kpts is None: h1e_kpts = self.get_hcore()
+        if vhf_kpts is None: vhf_kpts = self.get_veff(self.cell, dm_kpts)
+
+        nkpts = len(dm_kpts)
+        e1 = e_coul = 0.
+        for k in range(nkpts):
+            e1 += 1./nkpts * np.einsum('ij,ji', dm_kpts[k,:,:], h1e_kpts[k,:,:])
+            e_coul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vhf_kpts[k,:,:])
+        if abs(e_coul.imag > 1.e-12):
+            raise RuntimeError("Coulomb energy has imaginary part, "
+                               "something is wrong!", e_coul.imag)
+        e1 = e1.real
+        e_coul = e_coul.real
+        logger.debug(self, 'E_coul = %.15g', e_coul)
+        return e1+e_coul, e_coul
 
     def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
         '''Reconstruct Fock operator at a given 'band' k-point, not necessarily 
@@ -307,20 +400,7 @@ class KRHF(pbchf.RHF):
             fock : (nao, nao) ndarray
             ovlp : (nao, nao) ndarray
         '''
-        # To implement this analogously to get_band_fock_ovlp for a single
-        # cell, one needs the ovlp between basis functions at the kpts used in
-        # the KSCF calculation, and the band_kpt at which one is evaluating,
-        # i.e. one needs 
-        #      
-        #      < p(k_pt) | q (band_kpt) >
-        #
-        # This involves two lattice sums.
-        #
-        # The other way, is to take the converged real-space density on the
-        # grid from the KSCF calculation, and compute hcore (band_kpt) and veff
-        # (band_kpt).
-        # 
-        # This can only reasonably be done for DFT, and using the real-space
-        # grid.
+        # This will be easy to fill in once get_jk() and get_veff() are working.
+        # Remember to update the same in hf.py, rks.py, and/or krks.py
 
         raise NotImplementedError

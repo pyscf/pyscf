@@ -82,8 +82,11 @@ def get_coulG(cell, k=np.zeros(3)):
     absG2 = np.einsum('gi,gi->g', kG, kG)
     with np.errstate(divide='ignore'):
         coulG = 4*np.pi/absG2
-    if np.linalg.norm(k) < 1e-12:
+    if np.linalg.norm(k) < 1e-6:
         coulG[0] = 0.
+    #for g, G in enumerate(cell.Gv):
+    #    if np.linalg.norm(k+G) < 1e-6:
+    #        coulG[g] = 0.
 
     return coulG
 

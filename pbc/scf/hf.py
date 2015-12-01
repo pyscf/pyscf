@@ -6,6 +6,7 @@ See Also:
 '''
 
 import sys
+import time
 import numpy as np
 import scipy.linalg
 import pyscf.lib
@@ -158,7 +159,7 @@ def get_jvloc_G0(cell, kpt=np.zeros(3)):
 
 
 def get_j(cell, dm, kpt=np.zeros(3)):
-    '''Get the Coulomb (J) AO matrix.
+    '''Get the Coulomb (J) AO matrix for the given density matrix.
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
@@ -174,6 +175,105 @@ def get_j(cell, dm, kpt=np.zeros(3)):
 
     vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
     return vj
+
+
+def get_jk(cell, dm, hermi=1, vhfopt=None, kpt1=np.zeros(3), kpt2=None):
+    '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
+
+    Args:
+        kpt1 : (3,) ndarray
+            The "outer" primary k-point at which J and K are evaluated.
+        kpt2 : (3,) ndarray
+            The "inner" dummy k-point at which the DM is evaluated (or
+            sampled).
+
+    Kwargs:
+        hermi : int
+            Whether J, K matrix is hermitian
+
+            | 0 : no hermitian or symmetric
+            | 1 : hermitian
+            | 2 : anti-hermitian
+
+        vhfopt :
+            A class which holds precomputed quantities to optimize the
+            computation of J, K matrices
+
+    Returns:
+        The function returns one J and one K matrix, corresponding to the input
+        density matrix.
+    '''
+    if kpt2 is None:
+        kpt2 = kpt1
+
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    aoR_k1 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt1)
+    aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
+    ngs, nao = aoR_k1.shape
+
+    vjR_k2 = get_vjR_(cell, aoR_k2, dm)
+    vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+
+    vkR_k2 = get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2)
+    vk = (cell.vol/ngs) * np.einsum('ls,rm,rns,rl->mn', dm, aoR_k1.conj(), vkR_k2, aoR_k1)
+
+    return vj, vk
+
+
+def get_vjR_(cell, aoR, dm):
+    '''Get the real-space Hartree potential of the given density matrix.
+
+    Returns:
+        vR : (ngs,) ndarray
+            The real-space Hartree potential at every grid point.
+    '''
+    coulG = tools.get_coulG(cell)
+
+    rhoR = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
+    rhoG = tools.fft(rhoR, cell.gs)
+
+    vG = coulG*rhoG
+    vR = tools.ifft(vG, cell.gs)
+    return vR
+
+
+def get_vkR_(cell, aoR_k1, aoR_k2, kpt1=np.zeros(3), kpt2=None):
+    '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r).
+
+    Args:
+        kpt1 : (3,) ndarray
+            The "outer" primary k-point at which the exchange matrix is
+            evaluated.
+        kpt2 : (3,) ndarray
+            The "inner" dummy k-point at which the DM is evaluated (or
+            sampled).
+
+    Returns: 
+        vR : (ngs, nao, nao) ndarray
+            The real-space "exchange" potential at every grid point, for all
+            AO pairs.
+
+    Note:
+        This is essentially a density-fitting or resolution-of-the-identity.
+        The returned object is of size ngs*nao**2 and could be precomputed and
+        saved in vhfopt.
+    '''
+    if kpt2 is None:
+        kpt2 = kpt1
+
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    ngs, nao = aoR_k1.shape
+
+    coulG = tools.get_coulG(cell, kpt1-kpt2)
+
+    vR = np.zeros((ngs,nao,nao), dtype=np.complex128)
+    for i in range(nao):
+        for j in range(nao):
+            rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
+            rhoG = tools.fftk(rhoR, cell.gs, coords, kpt1-kpt2)
+            vG = coulG*rhoG
+            vR[:,i,j] = tools.ifftk(vG, cell.gs, coords, kpt1-kpt2)
+    return vR
 
 
 def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
@@ -324,6 +424,46 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True):
     return dm
 
 
+def dot_eri_dm_complex(eri, dm, hermi=0):
+    '''Compute J, K matrices in terms of the given 2-electron integrals and
+    density matrix if either eri or dm is complex.
+
+    Args:
+        eri : ndarray
+            8-fold or 4-fold ERIs
+        dm : ndarray or list of ndarrays
+            A density matrix or a list of density matrices
+
+    Kwargs:
+        hermi : int
+            Whether J, K matrix is hermitian
+
+            | 0 : no hermitian or symmetric
+            | 1 : hermitian
+            | 2 : anti-hermitian
+
+    Returns:
+        Depending on the given dm, the function returns one J and one K matrix,
+        or a list of J matrices and a list of K matrices, corresponding to the
+        input density matrices.
+    '''
+    eri_re = np.ascontiguousarray(eri.real)
+    eri_im = np.ascontiguousarray(eri.imag)
+    
+    dm_re = np.ascontiguousarray(dm.real)
+    dm_im = np.ascontiguousarray(dm.imag)
+
+    vj_rr, vk_rr = pyscf.scf.hf.dot_eri_dm(eri_re, dm_re, hermi)
+    vj_ir, vk_ir = pyscf.scf.hf.dot_eri_dm(eri_im, dm_re, hermi)
+    vj_ri, vk_ri = pyscf.scf.hf.dot_eri_dm(eri_re, dm_im, hermi)
+    vj_ii, vk_ii = pyscf.scf.hf.dot_eri_dm(eri_im, dm_im, hermi)
+    
+    vj = vj_rr - vj_ii + 1j*(vj_ir + vj_ri)
+    vk = vk_rr - vk_ii + 1j*(vk_ir + vk_ri)
+            
+    return vj, vk
+
+
 # TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
 # inherit from that.
 class RHF(pyscf.scf.hf.RHF):
@@ -388,7 +528,36 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
         return get_j(cell, dm, kpt)
 
-    def get_jk_(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):
+    def get_jk_(self, cell=None, dm=None, hermi=1, kpt=None):
+        '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
+
+        Note the incore version, which initializes an _eri array in memory.
+        '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpt is None: kpt = self.kpt
+        
+        cpu0 = (time.clock(), time.time())
+        vj, vk = get_jk(cell, dm, hermi, self.opt, kpt)
+        #if self._eri is not None or cell.incore_anyway or self._is_mem_enough():
+        #    print "self._is_mem_enough() =", self._is_mem_enough()
+        #    if self._eri is None:
+        #        logger.debug(self, 'Building PBC AO integrals incore')
+        #        if kpt is not None and pyscf.lib.norm(kpt) > 1.e-15:
+        #            raise RuntimeError("Non-zero kpts not implemented for incore eris")
+        #        self._eri = ao2mo.get_ao_eri(cell)
+        #    if np.iscomplexobj(dm) or np.iscomplexobj(self._eri):
+        #        vj, vk = dot_eri_dm_complex(self._eri, dm, hermi)
+        #    else:
+        #        vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
+        #else:
+        #    if self.direct_scf:
+        #        self.opt = self.init_direct_scf(cell)
+        #    vj, vk = get_jk(cell, dm, hermi, self.opt, kpt)
+        logger.timer(self, 'vj and vk', *cpu0)
+        return vj, vk
+
+    def get_jk_incore(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.
@@ -414,21 +583,7 @@ class RHF(pyscf.scf.hf.RHF):
             self._eri = ao2mo.get_ao_eri(cell)
 
         if np.iscomplexobj(dm) or np.iscomplexobj(self._eri):
-
-            eri_re = np.ascontiguousarray(self._eri.real)
-            eri_im = np.ascontiguousarray(self._eri.imag)
-            
-            dm_re = np.ascontiguousarray(dm.real)
-            dm_im = np.ascontiguousarray(dm.imag)
-
-            vj_rr, vk_rr = pyscf.scf.hf.dot_eri_dm(eri_re, dm_re, hermi)
-            vj_ir, vk_ir = pyscf.scf.hf.dot_eri_dm(eri_im, dm_re, hermi)
-            vj_ri, vk_ri = pyscf.scf.hf.dot_eri_dm(eri_re, dm_im, hermi)
-            vj_ii, vk_ii = pyscf.scf.hf.dot_eri_dm(eri_im, dm_im, hermi)
-            
-            vj = vj_rr - vj_ii + 1j*(vj_ir + vj_ri)
-            vk = vk_rr - vk_ii + 1j*(vk_ir + vk_ri)
-            
+            vj, vk = dot_eri_dm_complex(self._eri, dm, hermi)
         else:
             vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
         
