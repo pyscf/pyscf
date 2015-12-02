@@ -77,7 +77,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
-    eri_cas = casci.ao2mo(mo_cas)
+    eri_cas = casci.get_h2eff(mo_cas)
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI

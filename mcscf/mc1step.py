@@ -901,9 +901,15 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        if hasattr(self._scf, '_cderi'):
-            raise RuntimeError('TODO: density fitting')
-        return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
+        if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+            from pyscf.mcscf import df
+            # a hacky call using dm=[], to make sure all things are initialized
+            self._scf.get_jk(self.mol, [])
+            self._cderi = self._scf._cderi
+            self._naoaux = self._scf._naoaux
+            return df.ao2mo_(self, mo)
+        else:
+            return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
 
     def get_h2eff(self, mo_coeff=None):
         return self.get_h2cas(mo_coeff)
@@ -949,6 +955,8 @@ class CASSCF(casci.CASCI):
         ddm = numpy.dot(uc, uc.T) * 2 # ~ dm(1) + dm(2)
         ddm[numpy.diag_indices(ncore)] -= 2
         if self.ci_update_dep == 4 or self.grad_update_dep == 4:
+            if hasattr(self._scf, '_tag_df'):
+                raise NotImplementedError('density-fit ci_update_dep4')
             from pyscf import ao2mo
             mo1 = numpy.dot(mo, u)
             dm_core0 = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
@@ -1125,7 +1133,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas
     eri_cas = eris.ppaa[ncore:nocc,ncore:nocc,:,:].copy()
-    mc.ao2mo = lambda *args: eri_cas
+    mc.get_h2eff = lambda *args: eri_cas
     return mc
 
 def expmat(a):

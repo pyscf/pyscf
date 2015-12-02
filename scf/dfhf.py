@@ -11,6 +11,8 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
+from pyscf import df
+from pyscf.ao2mo import _ao2mo
 
 
 OCCDROP = 1e-12
@@ -49,9 +51,10 @@ def density_fit(mf, auxbasis='weigend'):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
             self.auxbasis = auxbasis
+            self.direct_scf = False
             self._cderi = None
             self._naoaux = None
-            self.direct_scf = False
+            self._tag_df = True
             self._keys = self._keys.union(['auxbasis'])
 
         def get_jk(self, mol=None, dm=None, hermi=1):
@@ -82,8 +85,6 @@ def density_fit(mf, auxbasis='weigend'):
 
 
 def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
-    from pyscf import df
-    from pyscf.ao2mo import _ao2mo
     t0 = (time.clock(), time.time())
     log = logger.Logger(mf.stdout, mf.verbose)
     if not hasattr(mf, '_cderi') or mf._cderi is None:
@@ -104,13 +105,10 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 #                with df.load(mf._cderi) as feri:
 #                    cderi = numpy.asarray(feri)
 #                mf._cderi = cderi
-    elif mf._naoaux is None:
+    if mf._naoaux is None:
 # By overwriting mf._cderi, one can provide the Cholesky integrals for "DF/RI" calculation
-        if isinstance(mf._cderi, numpy.ndarray):
-            mf._naoaux = mf._cderi.shape[0]
-        else:
-            with df.load(mf._cderi) as feri:
-                mf._naoaux = feri.shape[0]
+        with df.load(mf._cderi) as feri:
+            mf._naoaux = feri.shape[0]
 
     if len(dms) == 0:
         return [], []
@@ -119,7 +117,7 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
     nao = mol.nao_nr()
     fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-    ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2kl')
+    ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = [dms]

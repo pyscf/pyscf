@@ -96,14 +96,19 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph',
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    log.debug('mem cache %.8g MB', mem_words*8/1e6)
-    ti0 = log.timer('Initializing trans_e1_outcore', *time0)
     nstep = len(shranges)
     paapp = 0
     maxbuflen = max([x[2] for x in shranges])
+    log.debug('mem_words %.8g MB, maxbuflen = %d', mem_words*8/1e6, maxbuflen)
     bufs1 = numpy.empty((maxbuflen, nao_pair))
     bufs2 = numpy.empty((maxbuflen, nmo*ncas))
-    bufs3 = numpy.empty((maxbuflen, nao*ncore))
+    if level == 1:
+        bufs3 = numpy.empty((maxbuflen, nao*ncore))
+        log.debug('mem cache %.8g MB',
+                  (bufs1.nbytes+bufs2.nbytes+bufs3.nbytes)/1e6)
+    else:
+        log.debug('mem cache %.8g MB', (bufs1.nbytes+bufs2.nbytes)/1e6)
+    ti0 = log.timer('Initializing trans_e1_outcore', *time0)
 
     # fmmm, ftrans, fdrv for level 1
     fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
@@ -216,7 +221,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     log.debug1('Half transformation done. Current memory %d',
                pyscf.lib.current_memory()[0])
 
-    nblk = int(max(8, min(nmo, max(2000,max_memory*1e6/8-papa_buf.size)/(ncas**2*nmo))))
+    nblk = int(max(8, min(nmo, (max_memory*1e6/8-papa_buf.size)/(ncas**2*nmo))))
     log.debug1('nblk for papa = %d', nblk)
     dset = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
@@ -230,7 +235,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     for istep, sh_range in enumerate(shranges):
         tmp[:,p0:p0+sh_range[2]] = faapp_buf[str(istep)]
         p0 += sh_range[2]
-    nblk = int(max(8, min(nmo, max(2000,max_memory*1e6/8-tmp.size)/(ncas**2*nmo)-1)))
+    nblk = int(max(8, min(nmo, (max_memory*1e6/8-tmp.size)/(ncas**2*nmo)-1)))
     log.debug1('nblk for ppaa = %d', nblk)
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):

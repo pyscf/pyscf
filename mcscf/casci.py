@@ -332,7 +332,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
-    eri_cas = casci.ao2mo(mo_cas)
+    eri_cas = casci.get_h2eff(mo_cas)
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
@@ -480,13 +480,21 @@ class CASCI(object):
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
-        nao, nmo = mo_coeff.shape
-        if self._scf._eri is not None and \
-           (nao**2*nmo**2+nmo**4*2+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
-            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
+
+        if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+            from pyscf.mcscf import df
+            # a hacky call using dm=[], to make sure all things are initialized
+            self._scf.get_jk(self.mol, [])
+            self._cderi = self._scf._cderi
+            self._naoaux = self._scf._naoaux
+            return df.ao2mo_aaaa(self, mo_coeff)
         else:
-            eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
-                                                  verbose=self.verbose)
+            nao, nmo = mo_coeff.shape
+            if self._scf._eri is not None:
+                eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
+            else:
+                eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
+                                                      verbose=self.verbose)
         return eri
 
     def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):

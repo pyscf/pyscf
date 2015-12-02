@@ -736,7 +736,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     eri_cas = (eris.aapp[:,:,ncore[0]:nocc[0],ncore[0]:nocc[0]].copy(), \
                eris.aaPP[:,:,ncore[1]:nocc[1],ncore[1]:nocc[1]].copy(),
                eris.AAPP[:,:,ncore[1]:nocc[1],ncore[1]:nocc[1]].copy())
-    mc.ao2mo = lambda *args: eri_cas
+    mc.get_h2eff = lambda *args: eri_cas
     return mc
 
 
