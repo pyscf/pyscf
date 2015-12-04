@@ -90,42 +90,40 @@ def ao2mo_(casscf, mo):
     else:
         eris = mc_ao2mo._ERIS(casscf, mo, 'incore', level=2)
 
-    t0 = (time.clock(), time.time())
-    mo = numpy.asarray(mo, order='F')
-    nao, nmo = mo.shape
-    ncore = casscf.ncore
-    eris.j_pc = numpy.zeros((nmo,ncore))
-    k_cp = numpy.zeros((ncore,nmo))
-    fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
-    fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-    ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
-    bufs1 = numpy.empty((dfhf.BLOCKDIM,nmo,nmo))
-    with df.load(casscf._cderi) as feri:
-        for b0, b1 in dfhf.prange(0, casscf._naoaux, dfhf.BLOCKDIM):
-            eri1 = numpy.asarray(feri[b0:b1], order='C')
-            buf = bufs1[:b1-b0]
-            if log.verbose >= logger.DEBUG1:
-                t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
-            fdrv(ftrans, fmmm,
-                 buf.ctypes.data_as(ctypes.c_void_p),
-                 eri1.ctypes.data_as(ctypes.c_void_p),
-                 mo.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(b1-b0), ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(nmo),
-                 ctypes.c_int(0), ctypes.c_int(nmo),
-                 ctypes.c_void_p(0), ctypes.c_int(0))
-            if log.verbose >= logger.DEBUG1:
-                t1 = log.timer('transform [%d:%d]'%(b0,b1), *t1)
-            bufd = numpy.einsum('kii->ki', buf).copy()
-            #:eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
-            pyscf.lib.dot(bufd.T, numpy.asarray(bufd[:,:ncore],order='C'),
-                          1, eris.j_pc, 1)
-            k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
-            if log.verbose >= logger.DEBUG1:
-                t1 = log.timer('j_pc and k_pc', *t1)
-            eri1 = None
-    eris.k_pc = k_cp.T.copy()
-    log.timer('ao2mo density fit part', *t0)
+        t0 = (time.clock(), time.time())
+        mo = numpy.asarray(mo, order='F')
+        nao, nmo = mo.shape
+        ncore = casscf.ncore
+        eris.j_pc = numpy.zeros((nmo,ncore))
+        k_cp = numpy.zeros((ncore,nmo))
+        fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
+        fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+        ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
+        bufs1 = numpy.empty((dfhf.BLOCKDIM,nmo,nmo))
+        with df.load(casscf._cderi) as feri:
+            for b0, b1 in dfhf.prange(0, casscf._naoaux, dfhf.BLOCKDIM):
+                eri1 = numpy.asarray(feri[b0:b1], order='C')
+                buf = bufs1[:b1-b0]
+                if log.verbose >= logger.DEBUG1:
+                    t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
+                fdrv(ftrans, fmmm,
+                     buf.ctypes.data_as(ctypes.c_void_p),
+                     eri1.ctypes.data_as(ctypes.c_void_p),
+                     mo.ctypes.data_as(ctypes.c_void_p),
+                     ctypes.c_int(b1-b0), ctypes.c_int(nao),
+                     ctypes.c_int(0), ctypes.c_int(nmo),
+                     ctypes.c_int(0), ctypes.c_int(nmo),
+                     ctypes.c_void_p(0), ctypes.c_int(0))
+                if log.verbose >= logger.DEBUG1:
+                    t1 = log.timer('transform [%d:%d]'%(b0,b1), *t1)
+                bufd = numpy.einsum('kii->ki', buf)
+                eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
+                k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
+                if log.verbose >= logger.DEBUG1:
+                    t1 = log.timer('j_pc and k_pc', *t1)
+                eri1 = None
+        eris.k_pc = k_cp.T.copy()
+        log.timer('ao2mo density fit part', *t0)
     return eris
 
 def ao2mo_aaaa(casscf, mo):
@@ -177,6 +175,8 @@ class _ERIS(object):
         self.feri = h5py.File(self._tmpfile.name, 'w')
         self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
         self.papa = self.feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
+        self.j_pc = numpy.zeros((nmo,ncore))
+        k_cp = numpy.zeros((ncore,nmo))
 
         mo = numpy.asarray(mo, order='F')
         _tmpfile1 = tempfile.NamedTemporaryFile()
@@ -203,9 +203,13 @@ class _ERIS(object):
                      ctypes.c_void_p(0), ctypes.c_int(0))
                 fxpp[str(istep)] = bufpp.transpose(1,2,0)
                 bufpa[b0:b1] = bufpp[:,:,ncore:nocc]
-                eri1 = None
+                bufd = numpy.einsum('kii->ki', bufpp)
+                self.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
+                k_cp += numpy.einsum('kij,kij->ij', bufpp[:,:ncore], bufpp[:,:ncore])
                 if log.verbose >= logger.DEBUG1:
-                    t2 = log.timer('transform [%d:%d]'%(b0,b1), *t2)
+                    t1 = log.timer('j_pc and k_pc', *t1)
+                eri1 = None
+        self.k_pc = k_cp.T.copy()
         bufs1 = bufpp = None
         t1 = log.timer('density fitting ao2mo pass1', *t0)
 

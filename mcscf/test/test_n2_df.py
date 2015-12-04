@@ -4,6 +4,8 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
+from pyscf import df
+from pyscf import ao2mo
 from pyscf import mcscf
 
 b = 1.4
@@ -114,6 +116,20 @@ class KnowValues(unittest.TestCase):
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 #        emc = mc.mc2step()[0]
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
+
+    def test_df_ao2mo(self):
+        mf = scf.density_fit(msym)
+        mf.max_memory = 100
+        mf.kernel()
+        mc = mcscf.CASSCF(mf, 4, 4)
+        eri0 = numpy.dot(mf._cderi.T, mf._cderi)
+        nmo = mc.mo_coeff.shape[1]
+        ncore = mc.ncore
+        nocc = ncore + mc.ncas
+        eri0 = ao2mo.restore(1, ao2mo.kernel(eri0, mc.mo_coeff), nmo)
+        eris = mc.ao2mo(mc.mo_coeff)
+        self.assertTrue(numpy.allclose(eri0[:,:,ncore:nocc,ncore:nocc], eris.ppaa))
+        self.assertTrue(numpy.allclose(eri0[:,ncore:nocc,:,ncore:nocc], eris.papa))
 
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")
