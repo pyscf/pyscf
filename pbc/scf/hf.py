@@ -158,53 +158,33 @@ def get_jvloc_G0(cell, kpt=np.zeros(3)):
     return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 
-def get_j(cell, dm, kpt=np.zeros(3)):
+def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     '''Get the Coulomb (J) AO matrix for the given density matrix.
-    '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    ngs, nao = aoR.shape
-
-    coulG = tools.get_coulG(cell)
-
-    rhoR = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
-    rhoG = tools.fft(rhoR, cell.gs)
-
-    vG = coulG*rhoG
-    vR = tools.ifft(vG, cell.gs)
-
-    vj = (cell.vol/ngs) * np.dot(aoR.T.conj(), vR.reshape(-1,1)*aoR)
-    return vj
-
-
-def get_jk(cell, dm, hermi=1, vhfopt=None, kpt1=np.zeros(3), kpt2=None):
-    '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
-
-    Args:
-        kpt1 : (3,) ndarray
-            The "outer" primary k-point at which J and K are evaluated.
-        kpt2 : (3,) ndarray
-            The "inner" dummy k-point at which the DM is evaluated (or
-            sampled).
 
     Kwargs:
         hermi : int
             Whether J, K matrix is hermitian
-
             | 0 : no hermitian or symmetric
             | 1 : hermitian
             | 2 : anti-hermitian
-
         vhfopt :
             A class which holds precomputed quantities to optimize the
             computation of J, K matrices
+        kpt : (3,) ndarray
+            The "inner" dummy k-point at which the DM was evaluated (or
+            sampled).
+        kpt_band : (3,) ndarray
+            The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
-        The function returns one J and one K matrix, corresponding to the input
+        The function returns one J matrix, corresponding to the input
         density matrix.
     '''
-    if kpt2 is None:
-        kpt2 = kpt1
+    if kpt_band is None:
+        kpt1 = kpt2 = kpt
+    else:
+        kpt1 = kpt_band
+        kpt2 = kpt
 
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR_k1 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt1)
@@ -214,9 +194,49 @@ def get_jk(cell, dm, hermi=1, vhfopt=None, kpt1=np.zeros(3), kpt2=None):
     vjR_k2 = get_vjR_(cell, aoR_k2, dm)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
-    vkR_k2 = get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2)
-    vk = (cell.vol/ngs) * np.einsum('ls,rm,rns,rl->mn', dm, aoR_k1.conj(), vkR_k2, aoR_k1)
+    return vj
 
+
+def get_jk(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
+    '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
+
+    Kwargs:
+        hermi : int
+            Whether J, K matrix is hermitian
+            | 0 : no hermitian or symmetric
+            | 1 : hermitian
+            | 2 : anti-hermitian
+        vhfopt :
+            A class which holds precomputed quantities to optimize the
+            computation of J, K matrices
+        kpt : (3,) ndarray
+            The "inner" dummy k-point at which the DM was evaluated (or
+            sampled).
+        kpt_band : (3,) ndarray
+            The "outer" primary k-point at which J and K are evaluated.
+
+    Returns:
+        The function returns one J and one K matrix, corresponding to the input
+        density matrix.
+    '''
+    if kpt_band is None:
+        kpt1 = kpt2 = kpt
+    else:
+        kpt1 = kpt_band
+        kpt2 = kpt
+
+    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    aoR_k1 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt1)
+    aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
+    ngs, nao = aoR_k1.shape
+
+    vjR_k2 = get_vjR_(cell, aoR_k2, dm)
+    vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+
+    vkR_k1k2 = get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2)
+    # TODO: Break up the einsum
+    vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(), 
+                                    vkR_k1k2, aoR_k2)
     return vj, vk
 
 
@@ -237,16 +257,8 @@ def get_vjR_(cell, aoR, dm):
     return vR
 
 
-def get_vkR_(cell, aoR_k1, aoR_k2, kpt1=np.zeros(3), kpt2=None):
+def get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2):
     '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r).
-
-    Args:
-        kpt1 : (3,) ndarray
-            The "outer" primary k-point at which the exchange matrix is
-            evaluated.
-        kpt2 : (3,) ndarray
-            The "inner" dummy k-point at which the DM is evaluated (or
-            sampled).
 
     Returns: 
         vR : (ngs, nao, nao) ndarray
@@ -258,9 +270,6 @@ def get_vkR_(cell, aoR_k1, aoR_k2, kpt1=np.zeros(3), kpt2=None):
         The returned object is of size ngs*nao**2 and could be precomputed and
         saved in vhfopt.
     '''
-    if kpt2 is None:
-        kpt2 = kpt1
-
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     ngs, nao = aoR_k1.shape
 
@@ -522,13 +531,9 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             return get_ovlp(cell, kpt)
 
-    def get_j(self, cell=None, dm=None, hermi=1, kpt=None):
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        if kpt is None: kpt = self.kpt
-        return get_j(cell, dm, kpt)
-
-    def get_jk_(self, cell=None, dm=None, hermi=1, kpt=None):
+    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
+        return self.get_jk_(cell, dm, hermi, kpt, kpt_band)
+    def get_jk_(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         Note the incore version, which initializes an _eri array in memory.
@@ -538,7 +543,8 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
         
         cpu0 = (time.clock(), time.time())
-        vj, vk = get_jk(cell, dm, hermi, self.opt, kpt)
+        vj, vk = get_jk(cell, dm, hermi, self.opt, kpt, kpt_band)
+        # TODO: Check incore, direct_scf, _eri's, etc
         #if self._eri is not None or cell.incore_anyway or self._is_mem_enough():
         #    print "self._is_mem_enough() =", self._is_mem_enough()
         #    if self._eri is None:
@@ -556,6 +562,35 @@ class RHF(pyscf.scf.hf.RHF):
         #    vj, vk = get_jk(cell, dm, hermi, self.opt, kpt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
+
+    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
+        '''Compute J matrix for the given density matrix.
+        '''
+        #return self.get_jk(cell, dm, hermi, kpt, kpt_band)[0]
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpt is None: kpt = self.kpt
+        cpu0 = (time.clock(), time.time())
+        vj = get_j(cell, dm, hermi, self.opt, kpt, kpt_band)
+        logger.timer(self, 'vj', *cpu0)
+        return vj
+
+    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
+        '''Compute K matrix for the given density matrix.
+        '''
+        return self.get_jk(cell, dm, hermi, kpt, kpt_band)[1]
+
+    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, 
+                 kpt=None, kpt_band=None):
+        '''Hartree-Fock potential matrix for the given density matrix.
+        See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
+        '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpt is None: kpt = self.kpt
+        # TODO: Check incore, direct_scf, _eri's, etc
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpt_band)
+        return vj - vk * .5
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
@@ -597,63 +632,24 @@ class RHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
 
-    def get_jk_band(self, cell=None, dm=None, kpt=None):
-        '''Get J, K at a given (arbitrary) 'band' k-point.
+    def get_bands(self, kpt_band, cell=None, dm=None, kpt=None):
+        '''Get energy bands at a given (arbitrary) 'band' k-point.
 
         Returns:
-            vj, vk : each (nao, nao) ndarray
+            mo_energy : (nao,) ndarray
+                Bands energies E_n(k)
+            mo_coeff : (nao, nao) ndarray
+                Band orbitals psi_n(k)
         '''
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
-        # This would just return regular get_veff():
         if kpt is None: kpt = self.kpt
 
-        coords, weights = self.grids.setup_grids_()
-        ngs = len(weights)
-        aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords)
-        rho = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
-
-        # We have to construct J using the density, not the dm
-        # TODO: Re-write this to use orbitals instead of density
-        coulG = tools.get_coulG(cell)
-        rhoG = tools.fft(rho, cell.gs)
-        vG = coulG*rhoG
-        vR = tools.ifft(vG, cell.gs)
-
-        aokR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt=kpt)
-        vj = (cell.vol/ngs) * np.dot(aokR.T.conj(), vR.reshape(-1,1)*aokR)
-
-        # Construct K using the occupied orbitals from SCF
-        moR = np.einsum('rp,pi->ri', aoR, self.mo_coeff)
-        nao = cell.nao_nr() 
-        vk = np.zeros((nao,nao), np.complex128)
-        for q in range(nao):
-            for i in range(cell.nelectron//2):
-                rho_iqkR = np.conj(moR[:,i])*aokR[:,q]
-                # TODO: Check these next two lines w/ new fftk functions
-                rho_iqkG = tools.fftk(rho_iqkR, cell.gs, coords, kpt)
-                viqR = tools.ifftk(coulG*rho_iqkG, cell.gs, coords, kpt)
-                vk[:,q] += (cell.vol/ngs) * np.dot(aokR.T.conj(), viqR*moR[:,i])
-        
-        return vj, vk
-
-    def get_band_fock_ovlp(self, cell=None, dm=None, band_kpt=None):
-        '''Reconstruct Fock operator at a given (arbitrary) 'band' k-point.
-
-        Returns:
-            fock : (nao, nao) ndarray
-            ovlp : (nao, nao) ndarray
-        '''
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        # This would just return regular Fock and overlap matrices:
-        if band_kpt is None: band_kpt = self.kpt
-
-        j, k = self.get_jk_band(kpt=band_kpt)
-        fock = self.get_hcore(kpt=band_kpt) + j - k 
-        ovlp = self.get_ovlp(kpt=band_kpt)
-
-        return fock, ovlp
+        fock = self.get_hcore(kpt=kpt_band) \
+                + self.get_veff(kpt=kpt, kpt_band=kpt_band)
+        s1e = self.get_ovlp(kpt=kpt_band)
+        mo_energy, mo_coeff = self.eig(fock, s1e)
+        return mo_energy, mo_coeff 
 
     def init_guess_by_chkfile(self, chk=None, project=True):
         return init_guess_by_chkfile(self.cell, chk, project)

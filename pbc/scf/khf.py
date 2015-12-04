@@ -5,6 +5,7 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
+import time
 import numpy as np
 import pyscf.dft
 import pyscf.pbc.dft
@@ -56,50 +57,57 @@ def get_hcore(mf, cell, kpts):
     return hcore
 
 
-def get_j(mf, cell, dm_kpts, kpts):
-    '''Get the Coulomb (J) AO matrices at sampled k-points.
+def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
+    '''Get the Coulomb (J) AO matrix at sampled k-points.
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray
             Density matrix at each k-point
         kpts : (nkpts, 3) ndarray
 
+    Kwargs:
+        kpt_band : (3,) ndarray
+            An arbitrary "band" k-point at which to evalute the matrix.
+
     Returns:
         vj : (nkpts, nao, nao) ndarray
+        vk : (nkpts, nao, nao) ndarray
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
     ngs = len(coords)
     nao = cell.nao_nr()
 
-    coulG = tools.get_coulG(cell)
-
     aoR_kpts = np.zeros((nkpts, ngs, nao), np.complex128)
-    rhoR = np.zeros(ngs)
     for k in range(nkpts):
         kpt = kpts[k,:]
         aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-        rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(cell, aoR_kpts[k,:,:], dm_kpts[k,:,:])
-    rhoG = tools.fft(rhoR, cell.gs)
 
-    vG = coulG*rhoG
-    vR = tools.ifft(vG, cell.gs)
+    vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
+    if kpt_band is not None:
+        aoR_kband = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt_band)
+        vj_kpts = cell.vol/ngs * np.dot(aoR_kband.T.conj(),
+                                        vjR.reshape(-1,1)*aoR_kband)
+    else:
+        vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+        for k in range(nkpts):
+            vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
+                                                   vjR.reshape(-1,1)*aoR_kpts[k,:,:])
 
-    # TODO: REPLACE by eval_mat here (with non0tab)
-    vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-    for k in range(nkpts):
-        vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
-                                               vR.reshape(-1,1)*aoR_kpts[k,:,:])
     return vj_kpts
 
 
-def get_jk(mf, cell, dm_kpts, kpts):
+def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray
             Density matrix at each k-point
         kpts : (nkpts, 3) ndarray
+
+    Kwargs:
+        kpt_band : (3,) ndarray
+            An arbitrary "band" k-point at which to evalute the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
@@ -117,13 +125,35 @@ def get_jk(mf, cell, dm_kpts, kpts):
         kpt = kpts[k,:]
         aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
 
-    # The GOOD way to do vj:
-    # TODO: REPLACE by eval_mat here (with non0tab)
-    vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
     vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
-    for k in range(nkpts):
-        vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
-                                               vjR.reshape(-1,1)*aoR_kpts[k,:,:])
+    if kpt_band is not None:
+        aoR_kband = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt_band)
+        vj_kpts = cell.vol/ngs * np.dot(aoR_kband.T.conj(),
+                                        vjR.reshape(-1,1)*aoR_kband)
+        vk_kpts = np.zeros((nao,nao), np.complex128)
+        for k2 in range(nkpts):
+            kpt2 = kpts[k2,:]
+            vkR_k1k2 = pbchf.get_vkR_(cell, aoR_kband, aoR_kpts[k2,:,:], kpt_band, kpt2)
+            # TODO: Break up the einsum
+            vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
+                        dm_kpts[k2,:,:], aoR_kband.conj(), 
+                        vkR_k1k2, aoR_kpts[k2,:,:])
+    else:
+        vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+        for k in range(nkpts):
+            vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
+                                                   vjR.reshape(-1,1)*aoR_kpts[k,:,:])
+        vk_kpts = np.zeros((nkpts,nao,nao), np.complex128)
+        for k1 in range(nkpts):
+            kpt1 = kpts[k1,:]
+            for k2 in range(nkpts):
+                kpt2 = kpts[k2,:]
+                # TODO: Break up the einsum
+                vkR_k1k2 = pbchf.get_vkR_(cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], kpt1, kpt2)
+                vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
+                                    dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
+                                    vkR_k1k2, aoR_kpts[k2,:,:])
+
     # The BAD way to do vj (but like vk) -- gives identical results.
     #vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
     #for k1 in range(nkpts):
@@ -131,19 +161,9 @@ def get_jk(mf, cell, dm_kpts, kpts):
     #    for k2 in range(nkpts):
     #        kpt2 = kpts[k2,:]
     #        vjR_k2k2 = pbchf.get_vkR_(cell, aoR_kpts[k2,:,:], aoR_kpts[k2,:,:], kpt2, kpt2)
-    #        vj_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('ls,rm,rls,rn->mn', 
+    #        vj_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
     #                            dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
     #                            vjR_k2k2, aoR_kpts[k1,:,:])
-
-    vk_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-    for k1 in range(nkpts):
-        kpt1 = kpts[k1,:]
-        for k2 in range(nkpts):
-            kpt2 = kpts[k2,:]
-            vkR_k1k2 = pbchf.get_vkR_(cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], kpt1, kpt2)
-            vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('ls,rm,rns,rl->mn', 
-                                dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
-                                vkR_k1k2, aoR_kpts[k2,:,:])
 
     return vj_kpts, vk_kpts
 
@@ -233,20 +253,27 @@ class KRHF(pbchf.RHF):
         if kpts is None: kpts = self.kpts
         return get_ovlp(self, cell, kpts)
 
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None):
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
+        # Must use 'kpt' kwarg
         if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
+        if kpt is None: kpt = self.kpts
+        kpts = kpt
         if dm_kpts is None: dm_kpts = self.make_rdm1()
-        return get_j(self, cell, dm_kpts, kpts)
+        cpu0 = (time.clock(), time.time())
+        vj = get_j(self, cell, dm_kpts, kpts, kpt_band)
+        logger.timer(self, 'vj', *cpu0)
+        return vj
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None):
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
+        # Must use 'kpt' kwarg
         if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
+        if kpt is None: kpt = self.kpts
+        kpts = kpt
         if dm_kpts is None: dm_kpts = self.make_rdm1()
-        # CHANGE ME!
-        #vj, vk = get_jk(self, cell, dm_kpts, kpts)
-        #return vj, 0*vk
-        return get_jk(self, cell, dm_kpts, kpts)
+        cpu0 = (time.clock(), time.time())
+        vj, vk = get_jk(self, cell, dm_kpts, kpts, kpt_band)
+        logger.timer(self, 'vj and vk', *cpu0)
+        return vj, vk
         
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
                   diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -261,22 +288,17 @@ class KRHF(pbchf.RHF):
         return get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
 
-#    def get_veff(self, cell=None, dm=None, dm_last=None,
-#                 vhf_last=0, hermi=1):
-#        '''
-#        Args:
-#            cell : instance of :class:`Cell`
-#            dm : (nkpts, nao, nao) ndarray
-#                Density matrix at each k-point
-#                Note: Because get_veff is often called in pyscf.scf.hf with
-#                kwargs, we have to use the same argument name, 'dm', as in
-#                pyscf.scf.hf.
-#            dm_last : (nkpts, nao, nao) ndarray
-#                Previous density matrix at each k-point
-#            vhf_last: (nkpts, nao, nao) ndarray
-#                Previous vhf at each k-point
-#        '''
-#        raise NotImplementedError
+    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, 
+                 kpts=None, kpt_band=None):
+        '''Hartree-Fock potential matrix for the given density matrix.
+        See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
+        '''
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpts is None: kpts = self.kpts
+        # TODO: Check incore, direct_scf, _eri's, etc
+        vj, vk = self.get_jk(cell, dm, hermi, kpts, kpt_band)
+        return vj - vk * .5
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''
@@ -392,15 +414,22 @@ class KRHF(pbchf.RHF):
         logger.debug(self, 'E_coul = %.15g', e_coul)
         return e1+e_coul, e_coul
 
-    def get_band_fock_ovlp(self, fock, ovlp, band_kpt):
-        '''Reconstruct Fock operator at a given 'band' k-point, not necessarily 
-        in list of k-points.
+    def get_bands(self, kpt_band, cell=None, dm_kpts=None, kpts=None):
+        '''Get energy bands at a given (arbitrary) 'band' k-point.
 
         Returns:
-            fock : (nao, nao) ndarray
-            ovlp : (nao, nao) ndarray
+            mo_energy : (nao,) ndarray
+                Bands energies E_n(k)
+            mo_coeff : (nao, nao) ndarray
+                Band orbitals psi_n(k)
         '''
-        # This will be easy to fill in once get_jk() and get_veff() are working.
-        # Remember to update the same in hf.py, rks.py, and/or krks.py
+        if cell is None: cell = self.cell
+        if dm_kpts is None: dm_kpts = self.make_rdm1()
+        if kpts is None: kpts = self.kpts
 
-        raise NotImplementedError
+        fock = pbchf.get_hcore(cell, kpt_band) \
+                + self.get_veff(kpts=kpts, kpt_band=kpt_band)
+        s1e = pbchf.get_ovlp(cell, kpt_band)
+        mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
+        return mo_energy, mo_coeff 
+

@@ -3,14 +3,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-import pyscf.scf.hf as hf
 import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.scf as pbchf
 import pyscf.pbc.dft as pbcdft
 
+import ase
+import ase.dft.kpoints
+
 ANG2BOHR = 1.889725989
 
-def plot_bands(scftype, basis, ngs):
+def plot_bands(scftype, basis, ngs, nmp=None):
     # Set-up the unit cell
     from ase.lattice import bulk
     from ase.dft.kpoints import ibz_points, kpoint_convert, get_bandpath
@@ -44,8 +46,17 @@ def plot_bands(scftype, basis, ngs):
     if scftype == 'dft':
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
-    else:
+    elif scftype == 'hf':
         mf = pbchf.RHF(cell)
+    else: 
+        scaled_mp_kpts = ase.dft.kpoints.monkhorst_pack((nmp,nmp,nmp))
+        abs_mp_kpts = cell.get_abs_kpts(scaled_mp_kpts)
+        if scftype == 'kdft':
+            mf = pbcdft.KRKS(cell, abs_mp_kpts)
+            mf.xc = 'lda,vwn'
+        else:
+            mf = pbchf.KRHF(cell, abs_mp_kpts)
+
     mf.analytic_int = False
     mf.scf()
     print "SCF evals =", mf.mo_energy
@@ -54,8 +65,7 @@ def plot_bands(scftype, basis, ngs):
     e_kn = []
     efermi = -99
     for kpt in abs_kpts:
-        fb, sb = mf.get_band_fock_ovlp(band_kpt=kpt)
-        e, c = hf.eig(fb, sb)
+        e, c = mf.get_bands(kpt)
         print kpt, e
         e_kn.append(e)
         if e[4-1] > efermi:
@@ -86,19 +96,24 @@ def plot_bands(scftype, basis, ngs):
     plt.ylabel('Energy [au]')
 
     #plt.show()
-    plt.savefig('bands_%s_%s_%d.png'%(scftype,basis,ngs))
-    #plt.savefig('bands_%s_szv_%d.png'%(scftype,ngs))
-    #plt.savefig('bands_%s_dzvp_%d.png'%(scftype,ngs))
+    if nmp is None:
+        plt.savefig('bands_%s_%s_%d.png'%(scftype,basis,ngs))
+    else:
+        plt.savefig('bands_%s_%s_%d_%d.png'%(scftype,basis,ngs,nmp))
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if len(args) != 3:
-        print 'usage: diamond_bands.py dft/hf basis ngs' 
+    if len(args) != 3 and len(args) != 4:
+        print 'usage: diamond_bands.py (k)dft/hf basis ngs nmp' 
         sys.exit(1)
     scftype = args[0]
-    assert scftype in ['dft','hf']
+    assert scftype in ['dft','hf', 'kdft', 'khf']
     basis = args[1]
     assert basis in ['szv', 'dzvp']
     ngs = int(args[2])
-    plot_bands(scftype, basis, ngs)
+    if len(args) == 4:
+        nmp = int(args[3])
+        plot_bands(scftype, basis, ngs, nmp)
+    else:
+        plot_bands(scftype, basis, ngs)
 

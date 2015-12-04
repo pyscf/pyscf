@@ -11,6 +11,7 @@ import pyscf.dft
 import pyscf.pbc.scf
 import pyscf.pbc.scf.khf
 import pyscf.pbc.dft
+import pyscf.pbc.dft.rks
 from pyscf.lib import logger
 from pyscf.pbc.dft import numint
 
@@ -31,7 +32,8 @@ class KRKS(pyscf.pbc.scf.khf.KRHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=0, hermi=1):
+    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=0, hermi=1,
+                 kpts=None, kpt_band=None):
         '''
         Args:
              See pyscf.pbc.scf.khf.KRHF.get_veff
@@ -43,11 +45,15 @@ class KRKS(pyscf.pbc.scf.khf.KRHF):
         '''
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
+        if kpts is None: kpts = self.kpts
 
         dm = np.array(dm, np.complex128) # e.g. if passed initial DM
 
-        vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
-                                      hermi)
+        #vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
+        #                              hermi)
+        # This version correctly updates _exc and _ecoul
+        vhf = pyscf.pbc.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
+                                          hermi, kpts, kpt_band)
         return vhf
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):

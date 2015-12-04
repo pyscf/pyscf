@@ -33,6 +33,8 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
         e1 = mf.scf()
+        print "mf._ecoul =", mf._ecoul
+        print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -44.8952124954005, 8)
 
     def test_klda8_cubic_kpt_222(self):
@@ -46,6 +48,8 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
         e1 = mf.scf()
+        print "mf._ecoul =", mf._ecoul
+        print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -45.4292039673842, 8)
 
     def test_klda8_primitive_gamma(self):
@@ -56,6 +60,8 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
         e1 = mf.scf()
+        print "mf._ecoul =", mf._ecoul
+        print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -10.2214263103746, 8)
 
     def test_klda8_primitive_kpt_222(self):
@@ -69,6 +75,8 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
         e1 = mf.scf()
+        print "mf._ecoul =", mf._ecoul
+        print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -11.3536435234899, 8)
 
 
