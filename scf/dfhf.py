@@ -233,8 +233,6 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 
 def r_get_jk_(mf, mol, dms, hermi=1):
     '''Relativistic density fitting JK'''
-    from pyscf import df
-    from pyscf.ao2mo import _ao2mo
     t0 = (time.clock(), time.time())
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         log = logger.Logger(mf.stdout, mf.verbose)

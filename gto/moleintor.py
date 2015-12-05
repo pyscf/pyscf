@@ -291,7 +291,7 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
             assert(vout.flags.c_contiguous)
 
         cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
-        cvhfopt = ctypes.c_void_p()
+        cvhfopt = pyscf.lib.c_null_ptr()
         drv = _cint.GTOnr2e_fill_drv
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             _fpointer('GTOnr2e_fill_'+aosym),
@@ -502,12 +502,11 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             dk = (l*2+1) * bas[shls[2],NCTR_OF]
         buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
-        nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*3)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
         if comp == 1:
             return buf.reshape(di,dj,dk)
         else:
@@ -520,12 +519,11 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         dj = num_cgto_of(shls[1])
         buf = numpy.empty((di,dj,comp), order='F') # no complex?
         fintor = getattr(_cint, intor_name)
-        nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*2)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
         if comp == 1:
             return buf.reshape(di,dj)
         else:
@@ -535,17 +533,16 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         di, dj, dk, dl = map(num_cgto_of, shls)
         buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
         fintor = getattr(_cint, intor_name)
-        nullopt = ctypes.c_void_p()
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*4)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
         if comp == 1:
             return buf.reshape(di,dj,dk,dl)
         else:
             return buf.transpose(4,0,1,2,3)
-    else:
+    elif '1e' in intor_name:
         assert(len(shls) == 2)
         di, dj = map(num_cgto_of, shls)
         buf = numpy.empty((di,dj,comp), dtype, order='F')
@@ -559,6 +556,8 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.reshape(di,dj)
         else:
             return buf.transpose(2,0,1)
+    else:
+        raise RuntimeError('Unknown intor %s' % intor_name)
 
 
 def _stand_sym_code(sym):

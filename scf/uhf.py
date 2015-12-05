@@ -479,18 +479,21 @@ class UHF(hf.SCF):
             numpy.set_printoptions(threshold=len(mo_energy[0]))
             logger.debug(self, '  mo_energy = %s', mo_energy[0])
 
-        if n_b > 0:
+        if n_b > 0 and n_b < mo_energy[1].size:
             logger.info(self, 'beta  nocc = %d  HOMO = %.12g  LUMO = %.12g',
                         n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
             if mo_energy[1][n_b-1]+1e-3 > mo_energy[1][n_b]:
                 logger.warn(self, '!! beta HOMO %.12g >= LUMO %.12g',
                             mo_energy[1][n_b-1], mo_energy[1][n_b])
+            if mo_energy[0][n_a-1]+1e-3 > mo_energy[1][n_b]:
+                logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
+                            mo_energy[0][n_a-1], mo_energy[1][n_b])
+        elif n_b > 0:
+            logger.info(self, 'beta nocc = %d  HOMO = %.12g  no LUMO',
+                        n_b, mo_energy[1][n_b-1])
         else:
             logger.info(self, 'beta  nocc = %d  no HOMO  LUMO = %.12g',
                         n_b, mo_energy[1][n_b])
-        if mo_energy[0][n_a-1]+1e-3 > mo_energy[1][n_b]:
-            logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
-                        mo_energy[0][n_a-1], mo_energy[1][n_b])
         if self.verbose >= logger.DEBUG:
             logger.debug(self, '  mo_energy = %s', mo_energy[1])
             numpy.set_printoptions()

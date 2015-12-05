@@ -281,7 +281,7 @@ class UHF(uhf.UHF):
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
-        viridx = mo_occ[0]==0
+        viridx = (mo_occ[0]==0)
         if self.verbose < logger.INFO or viridx.sum() == 0:
             return mo_occ
         ehomoa = max(mo_energy[0][mo_occ[0]>0 ])
@@ -335,10 +335,10 @@ class UHF(uhf.UHF):
                                         eb[self.mo_occ[1]==0][vb_sort])))
         ca = self.mo_coeff[0]
         cb = self.mo_coeff[1]
-        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ][:,oa_sort],
-                                       ca[:,self.mo_occ[0]==0][:,va_sort])),
-                         numpy.hstack((cb[:,self.mo_occ[1]>0 ][:,ob_sort],
-                                       cb[:,self.mo_occ[1]==0][:,vb_sort])))
+        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ].take(oa_sort, axis=1),
+                                       ca[:,self.mo_occ[0]==0].take(va_sort, axis=1))),
+                         numpy.hstack((cb[:,self.mo_occ[1]>0 ].take(ob_sort, axis=1),
+                                       cb[:,self.mo_occ[1]==0].take(vb_sort, axis=1))))
         nocc_a = int(self.mo_occ[0].sum())
         nocc_b = int(self.mo_occ[1].sum())
         self.mo_occ[0][:nocc_a] = 1

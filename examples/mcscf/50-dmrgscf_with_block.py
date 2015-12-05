@@ -13,9 +13,8 @@ from pyscf.dmrgscf import settings
 if 'SLURMD_NODENAME' in os.environ:  # slurm system
     settings.MPIPREFIX = 'srun'
 elif 'PBS_NODEFILE' in os.environ:   # PBS system
-    nproc = len(open(os.environ['PBS_NODEFILE']).readlines())
-    settings.MPIPREFIX = 'mpirun -np %d --hostfile %s' % (nproc, os.environ['PBS_NODEFILE'])
-else:  # MPI on same node
+    settings.MPIPREFIX = 'mpirun'
+else:  # MPI on single node
     settings.MPIPREFIX = 'mpirun -np 4'
 
 '''

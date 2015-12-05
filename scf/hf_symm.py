@@ -220,6 +220,9 @@ class RHF(hf.RHF):
             occ_idx = idx_e_left[mo_e_sort][:(nelec_float//2)]
             mo_occ[occ_idx] = 2
 
+        viridx = (mo_occ==0)
+        if self.verbose < logger.INFO or viridx.sum() == 0:
+            return mo_occ
         ehomo = max(mo_energy[mo_occ>0 ])
         elumo = min(mo_energy[mo_occ==0])
         noccs = []
@@ -247,10 +250,10 @@ class RHF(hf.RHF):
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
-        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort], \
+        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0][:,o_sort], \
-                                      self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0].take(o_sort, axis=1),
+                                      self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
@@ -496,7 +499,7 @@ class ROHF(rohf.ROHF):
             mo_occ[core_idx] = 2
             mo_occ[open_idx[:nopen]] = 1
 
-        viridx = mo_occ==0
+        viridx = (mo_occ==0)
         if self.verbose < logger.INFO or viridx.sum() == 0:
             return mo_occ
         ehomo = max(mo_energy[mo_occ>0])
@@ -558,9 +561,9 @@ class ROHF(rohf.ROHF):
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ==2][c_sort],
                                        self.mo_energy[self.mo_occ==1][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2][:,c_sort],
-                                      self.mo_coeff[:,self.mo_occ==1][:,o_sort],
-                                      self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2].take(c_sort, axis=1),
+                                      self.mo_coeff[:,self.mo_occ==1].take(o_sort, axis=1),
+                                      self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
         ncore = len(c_sort)
         nocc = ncore + len(o_sort)
         self.mo_occ[:ncore] = 2

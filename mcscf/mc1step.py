@@ -1198,11 +1198,12 @@ if __name__ == '__main__':
     print(emc - -76.0873923174, emc - -76.0926176464)
 
     mc = CASSCF(m, 6, (3,1))
+    mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
-    mc.analyze()
+    #mc.analyze()
     print(emc - -75.7155632535814)
 
     mc.internal_rotation = True

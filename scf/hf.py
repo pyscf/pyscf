@@ -826,7 +826,7 @@ class SCF(object):
             The step to start DIIS.  Default is 1.
         diis_file: 'str'
             File to store DIIS vectors and error vectors.
-        level_shift_factor : float or int
+        level_shift : float or int
             Level shift (in AU) for virtual space.  Default is 0.
         direct_scf : bool
             Direct SCF is used by default.
