@@ -904,9 +904,10 @@ class CASSCF(casci.CASCI):
         if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
             from pyscf.mcscf import df
             # a hacky call using dm=[], to make sure all things are initialized
-            self._scf.get_jk(self.mol, [])
-            self._cderi = self._scf._cderi
-            self._naoaux = self._scf._naoaux
+            if not hasattr(self, '_cderi') or self._cderi is None:
+                self._scf.get_jk(self.mol, [])
+                self._cderi = self._scf._cderi
+                self._naoaux = self._scf._naoaux
             return df.ao2mo_(self, mo)
         else:
             return mc_ao2mo._ERIS(self, mo, method='incore', level=2)

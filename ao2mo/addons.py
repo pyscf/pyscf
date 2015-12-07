@@ -35,7 +35,9 @@ class load(object):
             return self.eri
 
     def __exit__(self, type, value, traceback):
-        if not isinstance(self.eri, numpy.ndarray):
+        if (isinstance(self.eri, str) or
+            (hasattr(self.eri, 'read') or
+             isinstance(self.eri, tempfile._TemporaryFileWrapper))):
             self.feri.close()
 
 
@@ -86,7 +88,7 @@ def restore(symmetry, eri, norb, tao=None):
     if targetsym not in ('8', '4', '1', '2kl', '2ij'):
         raise ValueError('symmetry = %s' % symmetry)
 
-    eri = numpy.ascontiguousarray(eri)
+    eri = numpy.asarray(eri, order='C')
     npair = norb*(norb+1)//2
     if eri.size == norb**4:
         origsym = '1'

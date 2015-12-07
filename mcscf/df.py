@@ -80,14 +80,17 @@ def density_fit(casscf, auxbasis='weigend'):
 def ao2mo_(casscf, mo):
     t0 = (time.clock(), time.time())
     log = logger.Logger(casscf.stdout, casscf.verbose)
-    # using dm=[], a hacky call to dfhf.get_jk, to generate casscf._cderi
-    dfhf.get_jk_(casscf, casscf.mol, [])
+    if not hasattr(casscf, '_cderi') or casscf._cderi is None:
+        # using dm=[], a hacky call to dfhf.get_jk, to generate casscf._cderi
+        dfhf.get_jk_(casscf, casscf.mol, [])
     if log.verbose >= logger.DEBUG1:
         t1 = log.timer('Generate density fitting integrals', *t0)
 
     if hasattr(casscf._scf, '_tag_df') and casscf._scf._tag_df:
         eris = _ERIS(casscf, mo)
     else:
+        # Only approximate the orbital rotation, call the 4-center integral
+        # transformation.  CASSCF is exact.
         eris = mc_ao2mo._ERIS(casscf, mo, 'incore', level=2)
 
         t0 = (time.clock(), time.time())
@@ -127,7 +130,8 @@ def ao2mo_(casscf, mo):
     return eris
 
 def ao2mo_aaaa(casscf, mo):
-    dfhf.get_jk_(casscf, casscf.mol, [])
+    if not hasattr(casscf, '_cderi') or casscf._cderi is None:
+        dfhf.get_jk_(casscf, casscf.mol, [])
     nao, nmo = mo.shape
     buf = numpy.empty((casscf._naoaux,nmo*(nmo+1)//2))
     mo = numpy.asarray(mo, order='F')
