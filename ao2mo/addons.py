@@ -35,9 +35,7 @@ class load(object):
             return self.eri
 
     def __exit__(self, type, value, traceback):
-        if (isinstance(self.eri, str) or
-            (hasattr(self.eri, 'read') or
-             isinstance(self.eri, tempfile._TemporaryFileWrapper))):
+        if self.feri is not None:
             self.feri.close()
 
 

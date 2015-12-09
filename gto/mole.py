@@ -813,7 +813,7 @@ def spheric_labels(mol, fmt=True):
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
         nelec_ecp = mol.atom_nelec_core(ia)
-        if nelec_ecp == 0:
+        if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
             coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
@@ -851,7 +851,13 @@ def cart_labels(mol, fmt=True):
         strl = param.ANGULAR[l]
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        for n in range(count[ia,l]+l+1, count[ia,l]+l+1+nc):
+        nelec_ecp = mol.atom_nelec_core(ia)
+        if nelec_ecp == 0 or l > 3:
+            shl_start = count[ia,l]+l+1
+        else:
+            coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+            shl_start = coreshl[l]+count[ia,l]+l+1
+        for n in range(shl_start, shl_start+nc):
             for lx in reversed(range(l+1)):
                 for ly in reversed(range(l+1-lx)):
                     lz = l - lx - ly
