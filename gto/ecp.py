@@ -19,24 +19,6 @@ from pyscf.gto import moleintor
 
 libecp = moleintor._cint
 
-def intor(mol):
-    nao = mol.nao_nr()
-    mat = numpy.zeros((nao,nao))
-    ip = 0
-    for ish in range(mol.nbas):
-        jp = 0
-        for jsh in range(ish+1):
-            buf = type1_by_shell(mol, (ish,jsh))
-            di, dj = buf.shape
-            mat[ip:ip+di,jp:jp+dj] += buf
-
-            buf = type2_by_shell(mol, (ish,jsh))
-            di, dj = buf.shape
-            mat[ip:ip+di,jp:jp+dj] += buf
-            jp += dj
-        ip += di
-    return lib.hermi_triu(mat)
-
 def type1_by_shell(mol, shls):
     li = mol.bas_angular(shls[0])
     lj = mol.bas_angular(shls[1])
@@ -49,8 +31,7 @@ def type1_by_shell(mol, shls):
                         ctypes.c_int(len(mol._ecpbas)),
                         mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                         mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                        mol._env.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_void_p())
+                        mol._env.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def type2_by_shell(mol, shls):
@@ -65,8 +46,7 @@ def type2_by_shell(mol, shls):
                         ctypes.c_int(len(mol._ecpbas)),
                         mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                         mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                        mol._env.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_void_p())
+                        mol._env.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def core_configuration(nelec_core):

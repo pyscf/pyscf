@@ -155,7 +155,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    if intor_name.startswith('cint1e'):
+    if intor_name.startswith('cint1e') or intor_name.startswith('ECP'):
         return getints1e(intor_name, atm, bas, env, bras, kets, comp, hermi)
     elif intor_name.startswith('cint2e'):
         return getints2e(intor_name, atm, bas, env, bras, kets, comp,

@@ -1010,6 +1010,8 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
+PTR_ECPBAS_OFFSET = 8
+PTR_NECPBAS     = 9
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -1845,7 +1847,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return moleintor.getints(intor, self._atm, self._bas, self._env,
+        if 'ECP' in intor:
+            assert(self._ecp is not None)
+            bas = numpy.vstack((self._bas, self._ecpbas))
+            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
+            self._env[PTR_NECPBAS] = len(self._ecpbas)
+            if bras is None: bras = numpy.arange(self.nbas, dtype=numpy.int32)
+            if kets is None: kets = numpy.arange(self.nbas, dtype=numpy.int32)
+        else:
+            bas = self._bas
+        return moleintor.getints(intor, self._atm, bas, self._env,
                                  bras=bras, kets=kets, comp=comp, hermi=hermi,
                                  aosym=aosym, vout=vout)
 
@@ -1935,9 +1946,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.37820346  0.        ]
          [ 0.          0.37820346]]
         '''
-        return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 bras, kets, comp=comp, hermi=0,
-                                 aosym=aosym, vout=vout)
+        return self.intor(intor, comp=comp, hermi=0, aosym=aosym, vout=vout,
+                          bras=bras, kets=kets)
 
     def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,

@@ -96,6 +96,7 @@ ALIAS = {
     'lanl08'     : 'lanl08.dat'     ,
     'sbkjc'      : 'sbkjc.dat'      ,
     'stuttgart'  : 'stuttgart_dz.dat',
+    'stuttgartdz': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
 }
 

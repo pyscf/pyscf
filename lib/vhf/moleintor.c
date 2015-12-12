@@ -140,3 +140,89 @@ void GTO1eintor_spinor(int (*intor)(), double complex *mat, int ncomp, int hermi
 }
 }
 
+void GTO1e_intor_drv(int (*intor)(), double *mat, size_t ijoff,
+                     int *basrange, int naoi, int naoj, int *iloc, int *jloc,
+                     int ncomp, int hermi, CINTOpt *cintopt,
+                     int *atm, int natm, int *bas, int nbas, double *env)
+{
+#pragma omp parallel default(none) \
+        shared(intor, mat, ijoff, basrange, naoi, naoj, iloc, jloc, \
+               ncomp, hermi, cintopt, atm, natm, bas, nbas, env)
+{
+        int ish, jsh, i, j, i0, j0, icomp;
+        int brastart = basrange[0];
+        int bracount = basrange[1];
+        int ketstart = basrange[2];
+        int ketcount = basrange[3];
+        int di, dj;
+        int shls[2];
+        double *buf = malloc(sizeof(double)*NCTRMAX*NCTRMAX*ncomp);
+        double *pmat, *pbuf;
+#pragma omp for nowait schedule(dynamic)
+        for (ish = 0; ish < bracount; ish++) {
+                di = iloc[ish+1] - iloc[ish];
+                for (jsh = 0; jsh < ketcount; jsh++) {
+                        if (hermi != PLAIN && iloc[ish] < jloc[jsh]) {
+                                continue;
+                        }
+                        dj = jloc[jsh+1] - jloc[jsh];
+                        shls[0] = brastart + ish;
+                        shls[1] = ketstart + jsh;
+                        (*intor)(buf, shls, atm, natm, bas, nbas, env);
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                pmat = mat + icomp*naoi*naoj + ijoff;
+                                pbuf = buf + icomp*di*dj;
+                                for (i0=iloc[ish], i=0; i < di; i++, i0++) {
+                                for (j0=jloc[jsh], j=0; j < dj; j++, j0++) {
+                                        pmat[i0*naoj+j0] = pbuf[j*di+i];
+                                } }
+                        }
+                }
+        }
+        free(buf);
+}
+}
+
+void GTO1e_spinor_drv(int (*intor)(), double complex *mat, size_t ijoff,
+                      int *basrange, int naoi, int naoj, int *iloc, int *jloc,
+                      int ncomp, int hermi, CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env)
+{
+#pragma omp parallel default(none) \
+        shared(intor, mat, ijoff, basrange, naoi, naoj, iloc, jloc, \
+               ncomp, hermi, cintopt, atm, natm, bas, nbas, env)
+{
+        int ish, jsh, i, j, i0, j0, icomp;
+        int brastart = basrange[0];
+        int bracount = basrange[1];
+        int ketstart = basrange[2];
+        int ketcount = basrange[3];
+        int di, dj;
+        int shls[2];
+        double complex *buf = malloc(sizeof(double)*NCTRMAX*NCTRMAX*ncomp);
+        double complex *pmat, *pbuf;
+#pragma omp for nowait schedule(dynamic)
+        for (ish = 0; ish < bracount; ish++) {
+                di = iloc[ish+1] - iloc[ish];
+                for (jsh = 0; jsh < ketcount; jsh++) {
+                        if (hermi != PLAIN && iloc[ish] < jloc[jsh]) {
+                                continue;
+                        }
+                        dj = jloc[jsh+1] - jloc[jsh];
+                        shls[0] = brastart + ish;
+                        shls[1] = ketstart + jsh;
+                        (*intor)(buf, shls, atm, natm, bas, nbas, env);
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                pmat = mat + icomp*naoi*naoj + ijoff;
+                                pbuf = buf + icomp*di*dj;
+                                for (i0=iloc[ish], i=0; i < di; i++, i0++) {
+                                for (j0=jloc[jsh], j=0; j < dj; j++, j0++) {
+                                        pmat[i0*naoj+j0] = pbuf[j*di+i];
+                                } }
+                        }
+                }
+        }
+        free(buf);
+}
+}
+

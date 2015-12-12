@@ -224,7 +224,7 @@ def get_hcore(mol):
     h = mol.intor_symmetric('cint1e_kin_sph') \
       + mol.intor_symmetric('cint1e_nuc_sph')
     if mol._ecp:
-        h += pyscf.gto.ecp.intor(mol)
+        h += mol.intor_symmetric('ECPscalar_sph')
     return h
 
 
