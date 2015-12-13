@@ -361,15 +361,18 @@ class DMRGCI(object):
         return callback
 
 
-def make_schedule(sweeps, Ms, tols, noises):
+def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):
         schedule = ['schedule']
         for i, s in enumerate(sweeps):
             schedule.append('%d %6d  %8.4e  %8.4e' % (s, Ms[i], tols[i], noises[i]))
         schedule.append('end')
+        if (twodot_to_onedot != 0):
+            schedule.append('twodot_to_onedot %i'%twodot_to_onedot)
         return '\n'.join(schedule)
     else:
-        return 'schedule default'
+        
+        return 'schedule default\nmaxM %s'%Ms[-1]
 
 def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
     confFile = DMRGCI.configFile
@@ -394,10 +397,9 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         schedule = make_schedule(DMRGCI.scheduleSweeps,
                                  DMRGCI.scheduleMaxMs,
                                  DMRGCI.scheduleTols,
-                                 DMRGCI.scheduleNoises)
+                                 DMRGCI.scheduleNoises,
+                                 DMRGCI.twodot_to_onedot)
         f.write('%s\n' % schedule)
-        if (DMRGCI.twodot_to_onedot != 0):
-            f.write('twodot_to_onedot %i\n'%DMRGCI.twodot_to_onedot)
     else :
         f.write('schedule\n')
         #if approx == True :
@@ -635,6 +637,7 @@ if __name__ == '__main__':
 
     mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
+    mc.fcisolver.scheduleSweeps = []
     emc_0 = mc.casci()[0]
 
     b = 1.4
