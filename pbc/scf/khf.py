@@ -47,7 +47,7 @@ def get_hcore(mf, cell, kpts):
     '''
     nao = cell.nao_nr()
     nkpts = len(kpts)
-    hcore = np.zeros((nkpts, nao, nao), np.complex128)
+    hcore = np.zeros((nkpts,nao,nao), np.complex128)
     for k in range(nkpts):
         kpt = kpts[k,:]
         if mf.analytic_int:
@@ -78,7 +78,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
     ngs = len(coords)
     nao = cell.nao_nr()
 
-    aoR_kpts = np.zeros((nkpts, ngs, nao), np.complex128)
+    aoR_kpts = np.zeros((nkpts,ngs,nao), np.complex128)
     for k in range(nkpts):
         kpt = kpts[k,:]
         aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
@@ -112,15 +112,13 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     Returns:
         vj : (nkpts, nao, nao) ndarray
         vk : (nkpts, nao, nao) ndarray
-
-    Note: This changes the mf object (mf._ecoul)
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
     ngs = len(coords)
     nao = cell.nao_nr()
 
-    aoR_kpts = np.zeros((nkpts, ngs, nao), np.complex128)
+    aoR_kpts = np.zeros((nkpts,ngs,nao), np.complex128)
     for k in range(nkpts):
         kpt = kpts[k,:]
         aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
@@ -133,7 +131,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
         vk_kpts = np.zeros((nao,nao), np.complex128)
         for k2 in range(nkpts):
             kpt2 = kpts[k2,:]
-            vkR_k1k2 = pbchf.get_vkR_(cell, aoR_kband, aoR_kpts[k2,:,:], kpt_band, kpt2)
+            vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kband, aoR_kpts[k2,:,:], 
+                                      kpt_band, kpt2)
             # TODO: Break up the einsum
             vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
                         dm_kpts[k2,:,:], aoR_kband.conj(), 
@@ -149,7 +148,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
             for k2 in range(nkpts):
                 kpt2 = kpts[k2,:]
                 # TODO: Break up the einsum
-                vkR_k1k2 = pbchf.get_vkR_(cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], kpt1, kpt2)
+                vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], 
+                                          kpt1, kpt2)
                 vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
                                     dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
                                     vkR_k1k2, aoR_kpts[k2,:,:])
@@ -160,7 +160,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     #    kpt1 = kpts[k1,:]
     #    for k2 in range(nkpts):
     #        kpt2 = kpts[k2,:]
-    #        vjR_k2k2 = pbchf.get_vkR_(cell, aoR_kpts[k2,:,:], aoR_kpts[k2,:,:], kpt2, kpt2)
+    #        vjR_k2k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k2,:,:], aoR_kpts[k2,:,:], 
+    #                                  kpt2, kpt2)
     #        vj_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
     #                            dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
     #                            vjR_k2k2, aoR_kpts[k1,:,:])
@@ -235,7 +236,7 @@ class KRHF(pbchf.RHF):
             dm = pyscf.scf.hf.get_init_guess(cell, key)
             nao = cell.nao_nr()
             nkpts = len(self.kpts)
-            dm_kpts = np.zeros((nkpts,nao,nao))
+            dm_kpts = np.zeros((nkpts,nao,nao), np.complex128)
 
             # Use the molecular "unit cell" dm for each k-point
             for k in range(nkpts):
@@ -274,7 +275,7 @@ class KRHF(pbchf.RHF):
         vj, vk = get_jk(self, cell, dm_kpts, kpts, kpt_band)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
-        
+
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
                   diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
 

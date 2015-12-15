@@ -29,7 +29,7 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def test_kpt_vs_supercell(self):
-        ngs = 4
+        ngs = 3
         nk = (3, 1, 1)
         cell = make_primitive_cell(ngs)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
@@ -53,6 +53,7 @@ class KnowValues(unittest.TestCase):
 
         print "kpt sampling energy =", ekpt
         print "supercell energy    =", esup
+        print "difference          =", ekpt-esup
         self.assertAlmostEqual(ekpt, esup, 8)
 
 if __name__ == '__main__':

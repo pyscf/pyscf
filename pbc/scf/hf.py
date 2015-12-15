@@ -197,7 +197,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     return vj
 
 
-def get_jk(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
+def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Kwargs:
@@ -233,7 +233,7 @@ def get_jk(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     vjR_k2 = get_vjR_(cell, aoR_k2, dm)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
-    vkR_k1k2 = get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2)
+    vkR_k1k2 = get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
     # TODO: Break up the einsum
     vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(), 
                                     vkR_k1k2, aoR_k2)
@@ -257,8 +257,12 @@ def get_vjR_(cell, aoR, dm):
     return vR
 
 
-def get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2):
+def get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r).
+
+    Kwargs:
+        kpts : (nkpts, 3) ndarray
+            The sampled k-points; may be required for G=0 correction.
 
     Returns: 
         vR : (ngs, nao, nao) ndarray
@@ -273,7 +277,8 @@ def get_vkR_(cell, aoR_k1, aoR_k2, kpt1, kpt2):
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     ngs, nao = aoR_k1.shape
 
-    coulG = tools.get_coulG(cell, kpt1-kpt2)
+    #coulG = tools.get_coulG(cell, kpt1-kpt2)
+    coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
 
     vR = np.zeros((ngs,nao,nao), dtype=np.complex128)
     for i in range(nao):
@@ -484,7 +489,7 @@ class RHF(pyscf.scf.hf.RHF):
         analytic_int : bool
             Whether to use analytic (libcint) integrals instead of grid-based. 
     '''
-    def __init__(self, cell, kpt=None, analytic_int=None):
+    def __init__(self, cell, kpt=None, analytic_int=None, exxdiv=None):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
@@ -501,6 +506,11 @@ class RHF(pyscf.scf.hf.RHF):
             self.analytic_int = False
         else:
             self.analytic_int = True
+
+        if exxdiv is None:
+            self.exxdiv = 'vcut_sph'
+        else:
+            self.exxdiv = exxdiv
 
         self._keys = self._keys.union(['cell', 'grids', 'kpt', 'analytic_int'])
 
@@ -543,7 +553,7 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
         
         cpu0 = (time.clock(), time.time())
-        vj, vk = get_jk(cell, dm, hermi, self.opt, kpt, kpt_band)
+        vj, vk = get_jk(self, cell, dm, hermi, self.opt, kpt, kpt_band)
         # TODO: Check incore, direct_scf, _eri's, etc
         #if self._eri is not None or cell.incore_anyway or self._is_mem_enough():
         #    print "self._is_mem_enough() =", self._is_mem_enough()
