@@ -74,27 +74,24 @@ def write_chk(mc,root,chkfile):
     fh5['h1e_Si']     =       h1e_Si   
     fh5['h1e_Sr']     =       h1e_Sr   
     h1e = mc.h1e_for_cas()
-    fh5['h1e']       =       h1e[0]
+    fh5['h1e']        =       h1e[0]
 
     if mc._scf._eri is None:
-        from pyscf.scf import _vhf
-        eri = _vhf.int2e_sph(mc.mol._atm, mol._bas, mol._env)
+        h2e = ao2mo.outcore.general_iofree(mol, (mo_cas,mo_cas,mo_cas,mo_cas),compact=False).reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas) 
+        fh5['h2e'] = h2e
+        h2e_Sr = ao2mo.outcore.general_iofree(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False).reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+        fh5['h2e_Sr'] = h2e_Sr
+        h2e_Si = ao2mo.outcore.general_iofree(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+        fh5['h2e_Si'] = h2e_Si
+
     else:
         eri = mc._scf._eri
-
-
-    #FIXME
-    #add outcore later
-
-    h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False)
-    h2e = h2e.reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas)
-    fh5['h2e'] = h2e
-    h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False)
-    h2e_Sr = h2e_Sr.reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
-    fh5['h2e_Sr'] = h2e_Sr
-    h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False)
-    h2e_Si = h2e_Si.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
-    fh5['h2e_Si'] = h2e_Si
+        h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas)
+        fh5['h2e'] = h2e
+        h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False).reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+        fh5['h2e_Sr'] = h2e_Sr
+        h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+        fh5['h2e_Si'] = h2e_Si
 
     fh5.close()
 
