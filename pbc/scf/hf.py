@@ -512,7 +512,7 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             self.exxdiv = exxdiv
 
-        self._keys = self._keys.union(['cell', 'grids', 'kpt', 'analytic_int'])
+        self._keys = self._keys.union(['cell', 'grids', 'kpt', 'analytic_int', 'exxdiv'])
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
@@ -520,6 +520,8 @@ class RHF(pyscf.scf.hf.RHF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'Grid size = (%d, %d, %d)', 
                     self.cell.gs[0], self.cell.gs[1], self.cell.gs[2])
+        logger.info(self, 'Using analytic integrals = %s', self.analytic_int)
+        logger.info(self, 'Exchange divergence treatment = %s', self.exxdiv)
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell

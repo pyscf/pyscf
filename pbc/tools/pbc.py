@@ -72,28 +72,6 @@ def ifftk(g, gs, r, k):
     return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
 
 
-def get_coulG_old(cell, k=np.zeros(3)):
-    '''Calculate the Coulomb kernel 4*pi/|k+G|^2 for all G-vectors (0 for |k+G|=0).
-
-    Args:
-        cell : instance of :class:`Cell`
-        k : (3,) ndarray
-
-    Returns:
-        coulG : (ngs,) ndarray
-            The Coulomb kernel.
-
-    '''
-    kG = k + cell.Gv
-    absG2 = np.einsum('gi,gi->g', kG, kG)
-    with np.errstate(divide='ignore'):
-        coulG = 4*np.pi/absG2
-    if np.linalg.norm(k) < 1e-8:
-        coulG[0] = 0.
-
-    return coulG
-
-
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
@@ -112,21 +90,88 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     kG = k + cell.Gv
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
+    try:
+        kpts = mf.kpts
+    except AttributeError:
+        kpts = k.reshape(1,3)
+
     if exx is False or mf.exxdiv is None:
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 0.
     elif mf.exxdiv == 'vcut_sph':
-        try:
-            Nk = len(mf.kpts)
-        except AttributeError:
-            Nk = 1
+        Nk = len(kpts)
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 4*np.pi*0.5*Rc**2
+    elif mf.exxdiv == 'ewald':
+        with np.errstate(divide='ignore'):
+            coulG = 4*np.pi/absG2
+        if np.linalg.norm(k) < 1e-8:
+            coulG[0] = madelung(cell, kpts)
+
+    return coulG
+
+
+def madelung(cell, kpts):
+    from pyscf.pbc import gto as pbcgto
+    from pyscf.pbc.scf.hf import ewald
+
+    Nk = get_monkhorst_pack_size(kpts)
+    ecell = pbcgto.Cell()
+    ecell.atom = 'H 0. 0. 0.'
+    ecell.gs = cell.gs
+    ecell.spin = 1
+    ecell.h = cell._h * Nk
+    ecell.build(False,False)
+    return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
+
+
+def get_monkhorst_pack_size(kpts): 
+    kxs = []; kys = []; kzs = []
+    for kpt in kpts:
+        kxnew, kynew, kznew = True, True, True
+        for kx in kxs:
+            if np.allclose(kx, kpt[0]):
+                kxnew = False
+        for ky in kys:
+            if np.allclose(ky, kpt[1]):
+                kynew = False
+        for kz in kzs:
+            if np.allclose(kz, kpt[2]):
+                kznew = False
+        if kxnew:
+            kxs.append(kpt[0])
+        if kynew:
+            kys.append(kpt[1])
+        if kznew:
+            kzs.append(kpt[2])
+
+    Nk = np.array([len(kxs), len(kys), len(kzs)])
+    return Nk
+
+
+def get_coulG_old(cell, k=np.zeros(3)):
+    '''Calculate the Coulomb kernel 4*pi/|k+G|^2 for all G-vectors (0 for |k+G|=0).
+
+    Args:
+        cell : instance of :class:`Cell`
+        k : (3,) ndarray
+
+    Returns:
+        coulG : (ngs,) ndarray
+            The Coulomb kernel.
+
+    '''
+    kG = k + cell.Gv
+    absG2 = np.einsum('gi,gi->g', kG, kG)
+    with np.errstate(divide='ignore'):
+        coulG = 4*np.pi/absG2
+    if np.linalg.norm(k) < 1e-8:
+        coulG[0] = 0.
 
     return coulG
 
