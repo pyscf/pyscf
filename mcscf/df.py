@@ -80,9 +80,8 @@ def density_fit(casscf, auxbasis='weigend'):
 def ao2mo_(casscf, mo):
     t0 = (time.clock(), time.time())
     log = logger.Logger(casscf.stdout, casscf.verbose)
-    if not hasattr(casscf, '_cderi') or casscf._cderi is None:
-        # using dm=[], a hacky call to dfhf.get_jk, to generate casscf._cderi
-        dfhf.get_jk_(casscf, casscf.mol, [])
+    # using dm=[], a hacky call to dfhf.get_jk, to generate casscf._cderi
+    dfhf.get_jk_(casscf, casscf.mol, [])
     if log.verbose >= logger.DEBUG1:
         t1 = log.timer('Generate density fitting integrals', *t0)
 
@@ -130,8 +129,7 @@ def ao2mo_(casscf, mo):
     return eris
 
 def ao2mo_aaaa(casscf, mo):
-    if not hasattr(casscf, '_cderi') or casscf._cderi is None:
-        dfhf.get_jk_(casscf, casscf.mol, [])
+    dfhf.get_jk_(casscf, casscf.mol, [])
     nao, nmo = mo.shape
     buf = numpy.empty((casscf._naoaux,nmo*(nmo+1)//2))
     mo = numpy.asarray(mo, order='F')
@@ -190,9 +188,9 @@ class _ERIS(object):
         fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
-        t2 = t0
+        t2 = t1 = t0
         with df.load(casscf._cderi) as feri:
-            for istep, (b0, b1) in enumerate(dfhf.prange(0, naoaux, dfhf.BLOCKDIM)):
+            for b0, b1 in dfhf.prange(0, naoaux, dfhf.BLOCKDIM):
                 eri1 = numpy.asarray(feri[b0:b1], order='C')
                 if log.verbose >= logger.DEBUG1:
                     t2 = log.timer('load buf %d:%d'%(b0,b1), *t2)
@@ -205,7 +203,7 @@ class _ERIS(object):
                      ctypes.c_int(0), ctypes.c_int(nmo),
                      ctypes.c_int(0), ctypes.c_int(nmo),
                      ctypes.c_void_p(0), ctypes.c_int(0))
-                fxpp[str(istep)] = bufpp.transpose(1,2,0)
+                fxpp[str(b0)] = bufpp.transpose(1,2,0)
                 bufpa[b0:b1] = bufpp[:,:,ncore:nocc]
                 bufd = numpy.einsum('kii->ki', bufpp)
                 self.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
@@ -238,8 +236,8 @@ class _ERIS(object):
             nrow = p1 - p0
             buf = bufs1[:nrow]
             col0 = 0
-            for key in range(len(fxpp)):
-                dat = fxpp[str(key)][p0:p1]
+            for key in fxpp.keys():
+                dat = fxpp[key][p0:p1]
                 col1 = col0 + dat.shape[2]
                 buf[:nrow,:,col0:col1] = dat
                 col0 = col1
