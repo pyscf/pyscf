@@ -62,6 +62,7 @@ include(ExternalProject)
 #endif()
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib)
+link_directories(${PROJECT_SOURCE_DIR}/deps/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
