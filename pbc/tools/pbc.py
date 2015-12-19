@@ -108,10 +108,12 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 4*np.pi*0.5*Rc**2
     elif mf.exxdiv == 'ewald':
+        Nk = len(kpts)
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
         if np.linalg.norm(k) < 1e-8:
-            coulG[0] = madelung(cell, kpts)
+            print "Setting v(G=0) =", cell.vol*madelung(cell, kpts)
+            coulG[0] = Nk*cell.vol*madelung(cell, kpts)
 
     return coulG
 
@@ -120,7 +122,7 @@ def madelung(cell, kpts):
     from pyscf.pbc import gto as pbcgto
     from pyscf.pbc.scf.hf import ewald
 
-    Nk = get_monkhorst_pack_size(kpts)
+    Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = pbcgto.Cell()
     ecell.atom = 'H 0. 0. 0.'
     ecell.gs = cell.gs
@@ -130,28 +132,32 @@ def madelung(cell, kpts):
     return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
 
 
-def get_monkhorst_pack_size(kpts): 
-    kxs = []; kys = []; kzs = []
-    for kpt in kpts:
-        kxnew, kynew, kznew = True, True, True
-        for kx in kxs:
-            if np.allclose(kx, kpt[0]):
-                kxnew = False
-        for ky in kys:
-            if np.allclose(ky, kpt[1]):
-                kynew = False
-        for kz in kzs:
-            if np.allclose(kz, kpt[2]):
-                kznew = False
-        if kxnew:
-            kxs.append(kpt[0])
-        if kynew:
-            kys.append(kpt[1])
-        if kznew:
-            kzs.append(kpt[2])
-
-    Nk = np.array([len(kxs), len(kys), len(kzs)])
+def get_monkhorst_pack_size(cell, ckpts): 
+    import ase.dft.kpoints
+    kpts = np.dot(ckpts, cell._h.T) / (2 * np.pi) 
+    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts) 
     return Nk
+#    kxs = []; kys = []; kzs = []
+#    for kpt in kpts:
+#        kxnew, kynew, kznew = True, True, True
+#        for kx in kxs:
+#            if np.allclose(kx, kpt[0]):
+#                kxnew = False
+#        for ky in kys:
+#            if np.allclose(ky, kpt[1]):
+#                kynew = False
+#        for kz in kzs:
+#            if np.allclose(kz, kpt[2]):
+#                kznew = False
+#        if kxnew:
+#            kxs.append(kpt[0])
+#        if kynew:
+#            kys.append(kpt[1])
+#        if kznew:
+#            kzs.append(kpt[2])
+#
+#    Nk = np.array([len(kxs), len(kys), len(kzs)])
+#    return Nk
 
 
 def get_coulG_old(cell, k=np.zeros(3)):

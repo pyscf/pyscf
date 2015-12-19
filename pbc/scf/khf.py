@@ -133,38 +133,34 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
             kpt2 = kpts[k2,:]
             vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kband, aoR_kpts[k2,:,:], 
                                       kpt_band, kpt2)
-            # TODO: Break up the einsum
-            vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
-                        dm_kpts[k2,:,:], aoR_kband.conj(), 
-                        vkR_k1k2, aoR_kpts[k2,:,:])
+            aoR_dm_k2 = np.dot(aoR_kpts[k2,:,:], dm_kpts[k2,:,:])
+            tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
+            vk_kpts += 1./nkpts * (cell.vol/ngs) \
+                                * np.dot(aoR_kband.T.conj(), tmp_Rq)
+            #vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
+            #            dm_kpts[k2,:,:], aoR_kband.conj(), 
+            #            vkR_k1k2, aoR_kpts[k2,:,:])
     else:
         vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
         for k in range(nkpts):
             vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
                                                    vjR.reshape(-1,1)*aoR_kpts[k,:,:])
+        aoR_dm_kpts = np.zeros((nkpts,ngs,nao), np.complex128)
+        for k in range(nkpts):
+            aoR_dm_kpts[k,:,:] = np.dot(aoR_kpts[k,:,:], dm_kpts[k,:,:])
         vk_kpts = np.zeros((nkpts,nao,nao), np.complex128)
         for k1 in range(nkpts):
             kpt1 = kpts[k1,:]
             for k2 in range(nkpts):
                 kpt2 = kpts[k2,:]
-                # TODO: Break up the einsum
                 vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], 
                                           kpt1, kpt2)
-                vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
-                                    dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
-                                    vkR_k1k2, aoR_kpts[k2,:,:])
-
-    # The BAD way to do vj (but like vk) -- gives identical results.
-    #vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-    #for k1 in range(nkpts):
-    #    kpt1 = kpts[k1,:]
-    #    for k2 in range(nkpts):
-    #        kpt2 = kpts[k2,:]
-    #        vjR_k2k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k2,:,:], aoR_kpts[k2,:,:], 
-    #                                  kpt2, kpt2)
-    #        vj_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
-    #                            dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
-    #                            vjR_k2k2, aoR_kpts[k1,:,:])
+                tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_kpts[k2,:,:])
+                vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) \
+                                    * np.dot(aoR_kpts[k1,:,:].T.conj(), tmp_Rq)
+                #vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
+                #                    dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
+                #                    vkR_k1k2, aoR_kpts[k2,:,:])
 
     return vj_kpts, vk_kpts
 

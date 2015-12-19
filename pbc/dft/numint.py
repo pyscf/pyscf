@@ -3,8 +3,11 @@ from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 import pyscf.lib
 import pyscf.dft
 from pyscf.pbc import tools
-#from pyscf.pbc.scf import scfint
 
+## Moderate speedup by caching eval_ao
+#from joblib import Memory
+#memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+#@memory.cache
 def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
