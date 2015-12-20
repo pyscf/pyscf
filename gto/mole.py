@@ -724,7 +724,7 @@ def ao_loc_2c(mol):
 
 def time_reversal_map(mol):
     r'''The index to map the spinor functions and its time reversal counterpart.
-    The returned indices have postive and negative value.  For the i-th basis function,
+    The returned indices have postive or negative values.  For the i-th basis function,
     if the returned j = idx[i] < 0, it means :math:`T|i\rangle = -|j\rangle`,
     otherwise :math:`T|i\rangle = |j\rangle`
     '''

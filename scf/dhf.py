@@ -44,8 +44,8 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
-    if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' \
-                         or mf._coulomb_now.upper() == 'LLSS'):
+    if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' or
+                        mf._coulomb_now.upper() == 'LLSS'):
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-3, 1e-1,
                             dump_chk, dm0=dm, callback=callback)
@@ -56,9 +56,6 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         mf._coulomb_now = 'SSSS'
     else:
         mf._coulomb_now = 'SSLL'
-
-    if mf.with_gaunt:
-        mf.get_veff = mf.get_vhf_with_gaunt
 
     return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
                      callback=callback)
@@ -179,20 +176,30 @@ def get_init_guess(mol, key='minao'):
         return init_guess_by_minao(mol)
 
 def time_reversal_matrix(mol, mat):
+    ''' T(A_ij) = A[T(i),T(j)]^*
+    '''
     n2c = mol.nao_2c()
-    tao = mol.time_reversal_map()
+    tao = numpy.asarray(mol.time_reversal_map())
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
-    taoL = numpy.array([abs(x)-1 for x in tao]) # -1 for C-array
-    idx = numpy.hstack((taoL, taoL+n2c))
-    signL = [(1 if x>0 else -1) for x in tao]
-    sign = numpy.hstack((signL, signL))
+    idx = abs(tao)-1 # -1 for C indexing convention
+    #:signL = [(1 if x>0 else -1) for x in tao]
+    #:sign = numpy.hstack((signL, signL))
 
-    tmat = numpy.empty_like(mat)
-    for j in range(mat.__len__()):
-        for i in range(mat.__len__()):
-            tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
-    return tmat.conjugate()
+    #:tmat = numpy.empty_like(mat)
+    #:for j in range(mat.__len__()):
+    #:    for i in range(mat.__len__()):
+    #:        tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
+    #:return tmat.conjugate()
+    sign_mask = tao<0
+    if tao.shape[0] == n2c*2:
+        idx = numpy.hstack((idx, idx+n2c))
+        sign_mask = numpy.hstack((sign_mask, sign_mask))
+
+    tmat = mat.take(idx,axis=0).take(idx,axis=1)
+    tmat[sign_mask,:] *= -1
+    tmat[:,sign_mask] *= -1
+    return tmat.T
 
 def analyze(mf, verbose=logger.DEBUG):
     #from pyscf.tools import dump_mat
@@ -252,7 +259,7 @@ class UHF(hf.SCF):
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
 
-        self.opt = (None, None, None) # (opt_llll, opt_ssll, opt_ssss)
+        self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         self._keys = set(self.__dict__.keys())
 
     def get_hcore(self, mol=None):
@@ -355,7 +362,9 @@ class UHF(hf.SCF):
                                'CVHFrkbssll_direct_scf_dm')
         opt_ssll.direct_scf_tol = self.direct_scf_tol
         set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
-        return opt_llll, opt_ssll, opt_ssss
+#TODO: prescreen for gaunt
+        opt_gaunt = None
+        return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
     def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
@@ -365,9 +374,16 @@ class UHF(hf.SCF):
         stdout_bak,  mol.stdout  = mol.stdout , self.stdout
         if self.direct_scf and self.opt[0] is None:
             self.opt = self.init_direct_scf(mol)
-        opt_llll, opt_ssll, opt_ssss = self.opt
+        opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
+
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
                                 opt_llll, opt_ssll, opt_ssss)
+
+        if self.with_gaunt and 'SS' in self._coulomb_now.upper():
+            vj1, vk1 = _call_veff_gaunt(mol, dm, hermi, opt_gaunt)
+            vj += vj1
+            vk += vk1
+
         mol.verbose = verbose_bak
         mol.stdout  = stdout_bak
         logger.timer(self, 'vj and vk', *t0)
@@ -512,13 +528,9 @@ def _call_veff_ssll(mol, dm, hermi=1, mf_opt=None):
     else:
         n_dm = len(dm)
         n2c = dm[0].shape[0] // 2
-        dms = []
-        for dmi in dm:
-            dms.append(dmi[:n2c,:n2c].copy())
-        for dmi in dm:
-            dms.append(dmi[n2c:,n2c:].copy())
-        for dmi in dm:
-            dms.append(dmi[n2c:,:n2c].copy())
+        dms = [dmi[:n2c,:n2c].copy() for dmi in dm] \
+            + [dmi[n2c:,n2c:].copy() for dmi in dm] \
+            + [dmi[n2c:,:n2c].copy() for dmi in dm]
     jks = ('lk->s2ij',) * n_dm \
         + ('ji->s2kl',) * n_dm \
         + ('jk->s1il',) * n_dm
@@ -550,6 +562,46 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
     return _jk_triu_(vj, vk, hermi)
 
+def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
+    c1 = .5/mol.light_speed
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        n_dm = 1
+        n2c = dm.shape[0] // 2
+        dmsl = dm[n2c:,:n2c].copy() * c1**2
+        dmll = dm[:n2c,:n2c].copy() * c1**2
+        dmss = dm[n2c:,n2c:].copy() * c1**2
+        dms = [dmsl, dmsl, dmll, dmss]
+    else:
+        n_dm = len(dm)
+        n2c = dm[0].shape[0] // 2
+        dmsl = [dmi[n2c:,:n2c].copy() * c1**2 for dmi in dm]
+        dmll = [dmi[:n2c,:n2c].copy() * c1**2 for dmi in dm]
+        dmss = [dmi[n2c:,n2c:].copy() * c1**2 for dmi in dm]
+        dms = dmsl + dmsl + dmll + dmss
+    vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
+
+    jks = ('ji->s1kl',) * n_dm \
+        + ('jk->s1il',) * n_dm
+    vx = _vhf.rdirect_bindm('cint2e_ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
+                            mol._atm, mol._bas, mol._env, mf_opt)
+    vj[:,n2c:,:n2c] = vx[:n_dm,:,:] + vx[:n_dm,:,:].transpose(0,2,1).conj()
+    vk[:,:n2c,n2c:] = vx[n_dm:,:,:]
+
+    jks = ('li->s1kj',) * n_dm \
+        + ('jk->s1il',) * n_dm
+    vx = _vhf.rdirect_bindm('cint2e_ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
+                            mol._atm, mol._bas, mol._env, mf_opt)
+    vk[:,n2c:,n2c:] = vx[:n_dm,:,:]
+    vk[:,:n2c,:n2c] = vx[n_dm:,:,:]
+
+    vj[:,:n2c,n2c:] = vj[:,n2c:,:n2c].transpose(0,2,1).conj()
+    vk[:,n2c:,:n2c] = vk[:,:n2c,n2c:].transpose(0,2,1).conj()
+    if n_dm == 1:
+        vj = vj.reshape(n2c*2,n2c*2)
+        vk = vk.reshape(n2c*2,n2c*2)
+    return vj, vk
+
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons
     proj = addons.project_mo_nr2r(mol_nr, 1, mol)
@@ -580,3 +632,5 @@ if __name__ == '__main__':
     method = UHF(mol)
     energy = method.scf() #-2.38146942868
     print(energy)
+    method.with_gaunt = True
+    print(method.scf()) # -2.38164150478
