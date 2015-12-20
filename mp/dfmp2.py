@@ -9,6 +9,7 @@ density fitting MP2,  3-center integrals incore.
 import time
 import tempfile
 import numpy
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import df
 
@@ -26,7 +27,7 @@ def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
 
     iolen = max(int(ioblk*1e6/8/(nvir*nocc)), 160)
 
-    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+    eia = lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
     t2 = None
     emp2 = 0
     with mp.ao2mo(mo_coeff, nocc) as fov:
@@ -36,10 +37,9 @@ def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
             for i in range(nocc):
                 buf = numpy.dot(qov[:,i*nvir:(i+1)*nvir].T,
                                 qov).reshape(nvir,nocc,nvir)
-                djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).ravel()
                 gi = numpy.array(buf, copy=False)
                 gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
-                t2i = (gi.ravel()/djba).reshape(nocc,nvir,nvir)
+                t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
                 # 2*ijab-ijba
                 theta = gi*2 - gi.transpose(0,2,1)
                 emp2 += numpy.einsum('jab,jab', t2i, theta)

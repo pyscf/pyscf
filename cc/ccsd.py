@@ -330,8 +330,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
     p0 = 0
     for i in range(nocc):
-        dajb = (eia[i].reshape(-1,1) + eia[:i+1].reshape(1,-1))
-        t2new_tril[p0:p0+i+1] /= dajb.reshape(nvir,i+1,nvir).transpose(1,0,2)
+        t2new_tril[p0:p0+i+1] /= lib.direct_sum('a,jb->jab', eia[i], eia[:i+1])
         p0 += i+1
     time1 = log.timer_debug1('g2/dijab', *time1)
 
@@ -472,9 +471,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t2 = numpy.empty((nocc,nocc,nvir,nvir))
         self.emp2 = 0
         for i in range(nocc):
-            dajb = (eia[i].reshape(-1,1) + eia.reshape(1,-1)).reshape(-1)
-            gi = eris.ovov[i].transpose(1,0,2).copy()
-            t2i = t2[i] = gi/dajb.reshape(nvir,nocc,nvir).transpose(1,0,2)
+            gi = eris.ovov[i].transpose(1,0,2)
+            t2i = t2[i] = gi/lib.direct_sum('jb,a->jba', eia, eia[i])
             self.emp2 += 4 * numpy.einsum('jab,jab', t2i[:i], gi[:i])
             self.emp2 += 2 * numpy.einsum('ab,ab'  , t2i[i] , gi[i] )
             self.emp2 -= 2 * numpy.einsum('jab,jba', t2i[:i], gi[:i])
@@ -774,8 +772,7 @@ def residual_as_diis_errvec(mycc):
                 tbuf[:nov] = ((t1-mycc.t1)*eia).ravel()
                 pbuf = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
                 for i in range(nocc):
-                    djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).reshape(-1)
-                    pbuf[i] = (t2[i]-mycc.t2[i]) * djba.reshape(nocc,nvir,nvir)
+                    pbuf[i] = (t2[i]-mycc.t2[i]) * lib.direct_sum('jb,a->jba', eia, eia[i])
                 adiis.push_err_vec(tbuf)
                 tbuf = numpy.empty(nov*(nov+1))
                 tbuf[:nov] = t1.ravel()

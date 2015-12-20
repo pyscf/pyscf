@@ -3,6 +3,7 @@ project (pyscf)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O2 -funroll-loops")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG -ffast-math -fno-strict-overflow -fomit-frame-pointer")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)

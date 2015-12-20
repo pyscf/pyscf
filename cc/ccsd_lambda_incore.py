@@ -250,7 +250,7 @@ def make_intermediates(mycc, t1, t2, eris):
     woooo += _cp(eris.oooo).transpose(0,2,1,3)
     saved.woooo = woooo
     saved.wooov = wooov
-    wooo = wooov = None
+    woooo = wooov = None
 
     w3 += numpy.einsum('bc,jc->bj', w1, t1)
     w3 -= numpy.einsum('kj,kb->bj', w2, t1)
@@ -437,23 +437,22 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     saved_woooo = m3 = None
 
     mo_e = eris.fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = lib.direct_sum('i-j->ij', mo_e[:nocc], mo_e[nocc:])
     l1new /= eia
     l1new += l1
 
 #    l2new = l2new + l2new.transpose(1,0,3,2)
-#    eiajb = eia.reshape(-1,1) + eia.reshape(1,-1)
-#    l2new /= eiajb.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+#    l2new /= lib.direct_sum('ia+jb->ijab', eia, eia)
 #    l2new += l2
     ij = 0
     for i in range(nocc):
         for j in range(i):
-            dab = eia[i].reshape(-1,1) + eia[j]
+            dab = lib.direct_sum('a+b->ab', eia[i], eia[j])
             tmp = (l2new[i,j]+l2new[j,i].T) / dab + l2[i,j]
             l2new[i,j] = tmp
             l2new[j,i] = tmp.T
             ij += 1
-        dab = eia[i].reshape(-1,1) + eia[i]
+        dab = lib.direct_sum('a+b->ab', eia[i], eia[i])
         l2new[i,i] = (l2new[i,i]+l2new[i,i].T)/dab + l2[i,i]
         ij += 1
 

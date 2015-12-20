@@ -27,7 +27,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
                 const double D0 = 0;
-                double *cpriv, *pc;
+                double *cpriv;
                 int ij, j, stride_b;
                 if (trans_a == 'N') {
                         stride = lda;
@@ -45,19 +45,18 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 } else {
                         for (i = 0; i < n; i++) {
-                                pc = c + i * ldc;
                                 for (j = 0; j < m; j++, ij++) {
-                                        pc[j] *= beta;
+                                        c[i*ldc+j] *= beta;
                                 }
                         }
                 }
 
 #pragma omp parallel default(none) \
         shared(a, b, c, stride, stride_b, nthread, nblk) \
-        private(i, ij, j, di, cpriv, pc)
+        private(i, ij, j, di, cpriv)
 {
 #if defined _OPENMP
-                        nthread = omp_get_num_threads();
+                nthread = omp_get_num_threads();
 #endif
                 nblk = MIN((int)((k-1)/nthread) + 1, k);
                 cpriv = malloc(sizeof(double) * m * n);
@@ -72,11 +71,10 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 }
 #pragma omp critical
-                {
+                if (di > 0) {
                         for (ij = 0, i = 0; i < n; i++) {
-                                pc = c + i * ldc;
                                 for (j = 0; j < m; j++, ij++) {
-                                        pc[j] += cpriv[ij];
+                                        c[i*ldc+j] += cpriv[ij];
                                 }
                         }
                 }
@@ -96,7 +94,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         private(i, di)
 {
 #if defined _OPENMP
-                        nthread = omp_get_num_threads();
+                nthread = omp_get_num_threads();
 #endif
                 nblk = MIN((int)((m-1)/nthread) + 1, m);
 #pragma omp for
@@ -123,7 +121,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         private(i, di)
 {
 #if defined _OPENMP
-                        nthread = omp_get_num_threads();
+                nthread = omp_get_num_threads();
 #endif
                 nblk = MIN((int)((n-1)/nthread) + 1, n);
 #pragma omp for

@@ -13,6 +13,7 @@ from pyscf.lib import logger
 import pyscf.ao2mo
 import pyscf.cc.ccsd_slow as ccsd
 
+BLKMIN = 4
 # t2,l2 as ijab
 
 # default max_memory = 2000 MB
@@ -32,7 +33,7 @@ def kernel(cc, eris=None, t1=None, t2=None, l1=None, l2=None,
     if l2 is None: l2 = t2
 
     nocc, nvir = t1.shape
-    blksize = cc.get_block_size()
+    blksize = max(BLKMIN, int(max_memory*.95e6/8/(nvir**3*6)))
     log.debug('block size = %d, nocc = %d is divided into %d blocks',
               blksize, nocc, int((nocc+blksize-1)/blksize))
     saved = make_intermediates(mcc, t1, t2, eris)
@@ -206,12 +207,11 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
     l1new +=-numpy.einsum('ca,ic->ia', mba, saved.w4)
 
     mo_e = eris.fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = lib.direct_sum('i-j->ij', mo_e[:nocc], mo_e[nocc:])
     l1new /= eia
     l1new += l1
 
-    eiajb = eia.reshape(-1,1) + eia.reshape(1,-1)
-    l2new /= eiajb.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+    l2new /= lib.direct_sum('ia+jb->ijab', eia, eia)
     l2new += l2
 
     time0 = log.timer_debug1('update l1 l2', *time0)

@@ -162,9 +162,7 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     h1 =-(mol.intor('cint1e_ipkin_sph', comp=3)
          +mol.intor('cint1e_ipnuc_sph', comp=3))
     s1 =-mol.intor('cint1e_ipovlp_sph', comp=3)
-    zeta = numpy.empty((nmo,nmo))
-    zeta[:nocc,:nocc] = (mo_energy[:nocc].reshape(-1,1) + mo_energy[:nocc]) * .5
-    zeta[nocc:,nocc:] = (mo_energy[nocc:].reshape(-1,1) + mo_energy[nocc:]) * .5
+    zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
     zeta = reduce(numpy.dot, (mo_coeff, zeta*dm1mo, mo_coeff.T))

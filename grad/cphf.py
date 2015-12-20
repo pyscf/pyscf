@@ -10,7 +10,7 @@ Coupled pertubed Hartree-Fock solver
 import sys
 import time
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 
 
@@ -34,7 +34,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
 
     e_a = mo_energy[mo_occ==0]
     e_i = mo_energy[mo_occ>0]
-    e_ai = 1 / (e_a.reshape(-1,1) - e_i)
+    e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
     nocc = e_i.size
     nvir = e_a.size
     nmo = nocc + nvir
@@ -45,8 +45,8 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
         v = fvind(mo1.reshape(h1.shape)).reshape(h1.shape)
         v *= e_ai
         return v.ravel()
-    mo1 = pyscf.lib.krylov(vind_vo, mo1base.ravel(),
-                           tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
+    mo1 = lib.krylov(vind_vo, mo1base.ravel(),
+                     tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     log.timer('krylov solver in CPHF', *t0)
     return mo1.reshape(h1.shape), None
 
@@ -61,7 +61,7 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1=None,
 
     e_a = mo_energy[mo_occ==0]
     e_i = mo_energy[mo_occ>0]
-    e_ai = 1 / (e_a.reshape(-1,1) - e_i)
+    e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
     nocc = e_i.size
     nvir = e_a.size
     nmo = nocc + nvir
@@ -71,7 +71,7 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1=None,
 
     mo1base[:,mo_occ==0] *= -e_ai
     mo1base[:,mo_occ>0] = -s1.reshape(-1,nmo,nocc)[:,mo_occ>0] * .5
-    e_ij = e_i.reshape(-1,1) - e_i
+    e_ij = lib.direct_sum('i-j->ij', e_i, e_i)
     mo_e1 += mo1base[:,mo_occ>0,:] * e_ij
 
     def vind_vo(mo1):
@@ -79,8 +79,8 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1=None,
         v[:,mo_occ==0,:] *= e_ai
         v[:,mo_occ>0,:] = 0
         return v.ravel()
-    mo1 = pyscf.lib.krylov(vind_vo, mo1base.ravel(),
-                           tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
+    mo1 = lib.krylov(vind_vo, mo1base.ravel(),
+                     tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     mo1 = mo1.reshape(mo1base.shape)
     log.timer('krylov solver in CPHF', *t0)
 
@@ -111,7 +111,7 @@ if __name__ == '__main__':
     mo_occ[:nocc] = 2
     e_i = mo_energy[mo_occ>0]
     e_a = mo_energy[mo_occ==0]
-    e_ai = 1 / (e_a.reshape(-1,1) - e_i)
+    e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
     h1 = numpy.random.random((nd,nmo,nocc))
     h1[:,:nocc,:nocc] = h1[:,:nocc,:nocc] + h1[:,:nocc,:nocc].transpose(0,2,1)
     s1 = numpy.random.random((nd,nmo,nocc))

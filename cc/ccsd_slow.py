@@ -216,11 +216,10 @@ class CCSD(object):
         t2 = numpy.empty((nocc,nvir,nocc,nvir))
         self.emp2 = 0
         for i in range(nocc):
-            dajb = (eia[i].reshape(-1,1) + eia.reshape(1,-1)).reshape(-1)
             gi = eris.ovov[i]
-            t2[i] = (gi.reshape(-1)/dajb).reshape(nvir,nocc,nvir)
-            theta = gi.reshape(-1)*2 - gi.transpose(2,1,0).reshape(-1)
-            self.emp2 += numpy.dot(t2[i].reshape(-1), theta)
+            t2[i] = gi/lib.direct_sum('a,jb->ajb', eia[i], eia)
+            theta = gi*2 - gi.transpose(2,1,0)
+            self.emp2 += numpy.einsum('ajb,ajb->', t2[i], theta)
         lib.logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         t1 = eris.fock[:nocc,nocc:] / eia
         return self.emp2, t1, t2
