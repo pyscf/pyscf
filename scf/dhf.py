@@ -192,7 +192,7 @@ def time_reversal_matrix(mol, mat):
     #:        tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
     #:return tmat.conjugate()
     sign_mask = tao<0
-    if tao.shape[0] == n2c*2:
+    if mat.shape[0] == n2c*2:
         idx = numpy.hstack((idx, idx+n2c))
         sign_mask = numpy.hstack((sign_mask, sign_mask))
 
@@ -326,20 +326,6 @@ class UHF(hf.SCF):
         if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-#TODO    def get_gaunt_vj_vk(self, mol, dm):
-#TODO        '''Dirac-Coulomb-Gaunt'''
-#TODO        import pyscf.lib.pycint as pycint
-#TODO        logger.info(self, 'integral for Gaunt term')
-#TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt, mol, dm)
-#TODO        return -vj, -vk
-#TODO
-#TODO    def get_gaunt_vj_vk_screen(self, mol, dm):
-#TODO        '''Dirac-Coulomb-Gaunt'''
-#TODO        import pyscf.lib.pycint as pycint
-#TODO        logger.info(self, 'integral for Gaunt term')
-#TODO        vj, vk = hf.get_vj_vk(pycint.rkb_vhf_gaunt_direct, mol, dm)
-#TODO        return -vj, -vk
-
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
@@ -400,17 +386,6 @@ class UHF(hf.SCF):
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk
-
-#TODO    def get_veff_with_gaunt(self, mol, dm, dm_last=0, vhf_last=0):
-#TODO        if self.direct_scf:
-#TODO            ddm = dm - dm_last
-#TODO            vj, vk = self.get_coulomb_vj_vk(mol, ddm, self._coulomb_now)
-#TODO            vj1, vk1 = self.get_gaunt_vj_vk_screen(mol, ddm)
-#TODO            return vhf_last + vj0 + vj1 - vk0 - vk1
-#TODO        else:
-#TODO            vj, vk = self.get_coulomb_vj_vk(mol, dm, self._coulomb_now)
-#TODO            vj1, vk1 = self.get_gaunt_vj_vk(mol, dm)
-#TODO            return vj0 + vj1 - vk0 - vk1
 
     def scf(self, dm0=None):
         cput0 = (time.clock(), time.time())
@@ -567,40 +542,50 @@ def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
         n2c = dm.shape[0] // 2
+        dmls = dm[:n2c,n2c:].copy() * c1**2
         dmsl = dm[n2c:,:n2c].copy() * c1**2
         dmll = dm[:n2c,:n2c].copy() * c1**2
         dmss = dm[n2c:,n2c:].copy() * c1**2
-        dms = [dmsl, dmsl, dmll, dmss]
+        dms = [dmsl, dmsl, dmls, dmll, dmss]
     else:
         n_dm = len(dm)
         n2c = dm[0].shape[0] // 2
-        dmsl = [dmi[n2c:,:n2c].copy() * c1**2 for dmi in dm]
         dmll = [dmi[:n2c,:n2c].copy() * c1**2 for dmi in dm]
+        dmls = [dmi[:n2c,n2c:].copy() * c1**2 for dmi in dm]
+        dmsl = [dmi[n2c:,:n2c].copy() * c1**2 for dmi in dm]
         dmss = [dmi[n2c:,n2c:].copy() * c1**2 for dmi in dm]
-        dms = dmsl + dmsl + dmll + dmss
+        dms = dmsl + dmsl + dmls + dmll + dmss
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
 
-    jks = ('ji->s1kl',) * n_dm \
+    jks = ('lk->s1ij',) * n_dm \
         + ('jk->s1il',) * n_dm
     vx = _vhf.rdirect_bindm('cint2e_ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
-    vj[:,n2c:,:n2c] = vx[:n_dm,:,:] + vx[:n_dm,:,:].transpose(0,2,1).conj()
+    vj[:,:n2c,n2c:] = vx[:n_dm,:,:]
     vk[:,:n2c,n2c:] = vx[n_dm:,:,:]
 
-    jks = ('li->s1kj',) * n_dm \
+    jks = ('lk->s1ij',) * n_dm \
+        + ('li->s1kj',) * n_dm \
         + ('jk->s1il',) * n_dm
     vx = _vhf.rdirect_bindm('cint2e_ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
-    vk[:,n2c:,n2c:] = vx[:n_dm,:,:]
-    vk[:,:n2c,:n2c] = vx[n_dm:,:,:]
+    vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
+    vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]
+    vk[:,:n2c,:n2c] = vx[n_dm*2:      ,:,:]
 
-    vj[:,:n2c,n2c:] = vj[:,n2c:,:n2c].transpose(0,2,1).conj()
-    vk[:,n2c:,:n2c] = vk[:,:n2c,n2c:].transpose(0,2,1).conj()
+    if hermi == 1:
+        vj[:,n2c:,:n2c] = vj[:,:n2c,n2c:].transpose(0,2,1).conj()
+        vk[:,n2c:,:n2c] = vk[:,:n2c,n2c:].transpose(0,2,1).conj()
+    elif hermi == 2:
+        vj[:,n2c:,:n2c] = -vj[:,:n2c,n2c:].transpose(0,2,1).conj()
+        vk[:,n2c:,:n2c] = -vk[:,:n2c,n2c:].transpose(0,2,1).conj()
+    else:
+        raise NotImplementedError
     if n_dm == 1:
         vj = vj.reshape(n2c*2,n2c*2)
         vk = vk.reshape(n2c*2,n2c*2)
-    return vj, vk
+    return -vj, -vk
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons
