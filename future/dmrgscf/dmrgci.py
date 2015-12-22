@@ -525,7 +525,9 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol)
     mc.callback = mc.fcisolver.restart_scheduler_()
-    mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
+    if mc.chkfile == mc._scf._chkfile.name:
+        # Do not delete chkfile after mcscf
+        mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
     return mc
 
 
