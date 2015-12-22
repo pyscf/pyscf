@@ -618,4 +618,4 @@ if __name__ == '__main__':
     energy = method.scf() #-2.38146942868
     print(energy)
     method.with_gaunt = True
-    print(method.scf()) # -2.38164150478
+    print(method.scf()) # -2.38138339005

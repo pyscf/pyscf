@@ -7,6 +7,7 @@
 
 import os, sys
 import time
+import tempfile
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
@@ -524,6 +525,7 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol)
     mc.callback = mc.fcisolver.restart_scheduler_()
+    mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
     return mc
 
 
