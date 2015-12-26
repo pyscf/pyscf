@@ -81,7 +81,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
 
-    time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
+    time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
+                           *time_0pass)
 
     e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
@@ -131,8 +132,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     feri.close()
     fswap.close()
 
-    log.timer('AO->MO eri transformation 2 pass', *time_1pass)
-    log.timer('AO->MO eri transformation', *time_0pass)
+    log.timer('AO->MO transformation for %s 2 pass'%intor, *time_1pass)
+    log.timer('AO->MO transformation for %s'%intor, *time_0pass)
     return erifile
 
 

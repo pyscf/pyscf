@@ -115,10 +115,10 @@ def get_ovlp(mol):
     c = mol.light_speed
 
     s = mol.intor_symmetric('cint1e_ovlp')
-    t = mol.intor_symmetric('cint1e_spsp') * .5
+    t = mol.intor_symmetric('cint1e_spsp')
     s1e = numpy.zeros((n4c, n4c), numpy.complex)
     s1e[:n2c,:n2c] = s
-    s1e[n2c:,n2c:] = t * (.5/c**2)
+    s1e[n2c:,n2c:] = t * (.5/c)**2
     return s1e
 
 def make_rdm1(mo_coeff, mo_occ):
@@ -366,6 +366,7 @@ class UHF(hf.SCF):
                                 opt_llll, opt_ssll, opt_ssss)
 
         if self.with_gaunt and 'SS' in self._coulomb_now.upper():
+            logger.info(mol, 'Gaunt integral')
             vj1, vk1 = _call_veff_gaunt(mol, dm, hermi, opt_gaunt)
             vj += vj1
             vk += vk1

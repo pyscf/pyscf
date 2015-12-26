@@ -311,6 +311,19 @@ def expand_etb(l, n, alpha, beta):
     '''
     return [[l, [alpha*beta**i, 1]] for i in reversed(range(n))]
 def expand_etbs(etbs):
+    r'''Generate even tempered basis.  See also :func:`expand_etb`
+
+    Args:
+        etbs = [(l, n, alpha, beta), (l, n, alpha, beta),...]
+
+    Returns:
+        Formated :attr:`~Mole.basis`
+
+    Examples:
+
+    >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
+    [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
+    '''
     basis = [expand_etb(*etb) for etb in etbs]
     return list(itertools.chain.from_iterable(basis))
 
