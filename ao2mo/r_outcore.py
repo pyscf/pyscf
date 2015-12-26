@@ -73,6 +73,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     if nij_pair == 0 or nkl_pair == 0:
         feri.close()
         return erifile
+    log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
     log.debug('num. MO ints = %.8g, require disk %.8g', \
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
