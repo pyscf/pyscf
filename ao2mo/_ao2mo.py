@@ -43,9 +43,9 @@ class AO2MOpt(object):
         libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
 
 
-# if vout is not None, transform AO to MO in-place
+# if out is not None, transform AO to MO in-place
 def nr_e1fill_(intor, sh_range, atm, bas, env,
-               aosym='s1', comp=1, ao2mopt=None, vout=None):
+               aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
 
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -67,14 +67,14 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
     else:
         raise NotImplementedError('cint2e spinor AO integrals')
 
-    if vout is None:
-        if aosym in ('s4', 's2ij'):
-            nao_pair = nao * (nao+1) // 2
-        else:
-            nao_pair = nao * nao
-        vout = numpy.empty((comp,nkl,nao_pair))
+    if aosym in ('s4', 's2ij'):
+        nao_pair = nao * (nao+1) // 2
     else:
-        assert(vout.flags.c_contiguous)
+        nao_pair = nao * nao
+    if out is None:
+        out = numpy.empty((comp,nkl,nao_pair))
+    else:
+        out = numpy.ndarray((comp,nkl,nao_pair), buffer=out)
 
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
@@ -88,7 +88,7 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
     fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
     fill = _fpointer('AO2MOfill_nr_' + aosym)
     fdrv(cintor, cgto_in_shell, fill,
-         vout.ctypes.data_as(ctypes.c_void_p),
+         out.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
          ctypes.c_int(nkl), ctypes.c_int(comp),
          cintopt, cao2mopt,
@@ -98,9 +98,9 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
 
     if ao2mopt is None:
         libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
-    return vout
+    return out
 
-def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
+def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
     assert(mosym in ('s2', 's1'))
@@ -126,29 +126,28 @@ def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None):
 
     nrow = eri.shape[0]
 
-    if vout is None:
-        vout = numpy.empty((nrow,ij_count))
+    if out is None:
+        out = numpy.empty((nrow,ij_count))
     else:
-        assert(vout.flags.c_contiguous)
-        assert(vout.size >= nrow*ij_count)
+        out = numpy.ndarray((nrow,ij_count), buffer=out)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     c_nbas = ctypes.c_int(0)
     ftrans = _fpointer('AO2MOtranse1_nr_' + aosym)
     fdrv(ftrans, fmmm,
-         vout.ctypes.data_as(ctypes.c_void_p),
+         out.ctypes.data_as(ctypes.c_void_p),
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
          ctypes.c_int(i0), ctypes.c_int(icount),
          ctypes.c_int(j0), ctypes.c_int(jcount),
          pao_loc, c_nbas)
-    return vout
+    return out
 
-# if vout is not None, transform AO to MO in-place
+# if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
-def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None,
+def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None,
            ao_loc=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
@@ -175,11 +174,10 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None,
 
     nrow = eri.shape[0]
 
-    if vout is None:
-        vout = numpy.empty((nrow,kl_count))
+    if out is None:
+        out = numpy.empty((nrow,kl_count))
     else:
-        assert(vout.flags.c_contiguous)
-        assert(vout.size >= nrow*kl_count)
+        out = numpy.ndarray((nrow,kl_count), buffer=out)
 
     if ao_loc is None:
         pao_loc = ctypes.POINTER(ctypes.c_void_p)()
@@ -193,19 +191,19 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', vout=None,
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
     fdrv(ftrans, fmmm,
-         vout.ctypes.data_as(ctypes.c_void_p),
+         out.ctypes.data_as(ctypes.c_void_p),
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
          ctypes.c_int(k0), ctypes.c_int(kc),
          ctypes.c_int(l0), ctypes.c_int(lc),
          pao_loc, c_nbas)
-    return vout
+    return out
 
 
-# if vout is not None, transform AO to MO in-place
+# if out is not None, transform AO to MO in-place
 def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
-          tao, aosym='s1', comp=1, ao2mopt=None, vout=None):
+          tao, aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
@@ -225,12 +223,11 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     else:
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
-    if vout is None:
-        vout = numpy.empty((comp,nkl,ij_count), dtype=numpy.complex)
+    if out is None:
+        out = numpy.empty((comp,nkl,ij_count), dtype=numpy.complex)
     else:
-        assert(vout.flags.c_contiguous)
-        assert(numpy.iscomplexobj(vout))
-        assert(vout.size >= comp*nkl*ij_count)
+        out = numpy.ndarray((comp,nkl,nao_pair), dtype=numpy.complex,
+                            buffer=out)
 
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
@@ -247,7 +244,7 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     fill = _fpointer('AO2MOfill_r_' + aosym)
     ftrans = _fpointer('AO2MOtranse1_r_' + aosym)
     fdrv(cintor, fill, ftrans, fmmm,
-         vout.ctypes.data_as(ctypes.c_void_p),
+         out.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
          ctypes.c_int(nkl),
@@ -261,11 +258,11 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
 
     if ao2mopt is None:
         libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
-    return vout
+    return out
 
-# if vout is not None, transform AO to MO in-place
+# if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
-def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', vout=None):
+def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
@@ -281,12 +278,11 @@ def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', vout=None):
 
     nrow = eri.shape[0]
 
-    if vout is None:
-        vout = numpy.empty((nrow,kl_count), dtype=numpy.complex)
+    if out is None:
+        out = numpy.empty((nrow,kl_count), dtype=numpy.complex)
     else:
-        assert(vout.flags.c_contiguous)
-        assert(numpy.iscomplexobj(vout))
-        assert(vout.size >= nrow*kl_count)
+        out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex,
+                            buffer=out)
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
     ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
@@ -295,7 +291,7 @@ def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', vout=None):
 
     fdrv = getattr(libao2mo, 'AO2MOr_e2_drv')
     fdrv(ftrans, fmmm,
-         vout.ctypes.data_as(ctypes.c_void_p),
+         out.ctypes.data_as(ctypes.c_void_p),
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
@@ -303,7 +299,7 @@ def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', vout=None):
          ctypes.c_int(l0), ctypes.c_int(lc),
          tao.ctypes.data_as(ctypes.c_void_p),
          ao_loc.ctypes.data_as(ctypes.c_void_p), c_nbas)
-    return vout
+    return out
 
 
 def _get_num_threads():

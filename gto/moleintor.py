@@ -16,7 +16,7 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(_cint._handle, name))
 
 def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
-            aosym='s1', vout=None):
+            aosym='s1', out=None):
     r'''1e and 2e integral generator.
 
     Args:
@@ -138,7 +138,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
             | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
             | 1 or '1' or 's1': no symmetry
 
-        vout : ndarray (2e integral only)
+        out : ndarray (2e integral only)
             array to store the 2e AO integrals
 
     Returns:
@@ -159,7 +159,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
         return getints1e(intor_name, atm, bas, env, bras, kets, comp, hermi)
     elif intor_name.startswith('cint2e'):
         return getints2e(intor_name, atm, bas, env, bras, kets, comp,
-                         aosym, vout)
+                         aosym, out)
     else:
         raise RuntimeError('Unknown intor')
 
@@ -222,7 +222,7 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         return mat
 
 def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
-              aosym='s1', vout=None):
+              aosym='s1', out=None):
     aosym = _stand_sym_code(aosym)
 
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -248,15 +248,15 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
     if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
         assert(bras is None and kets is None)
         nao_pair = nao*(nao+1)//2
-        if vout is None:
-            vout = numpy.empty((nao_pair*(nao_pair+1)//2))
+        if out is None:
+            out = numpy.empty((nao_pair*(nao_pair+1)//2))
         else:
-            assert(vout.flags.c_contiguous)
+            out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
         drv = _cint.GTO2e_cart_or_sph
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
-            vout.ctypes.data_as(ctypes.c_void_p),
+            out.ctypes.data_as(ctypes.c_void_p),
             c_atm, natm, c_bas, nbas, c_env)
-        return vout
+        return out
 
     else:
         from pyscf.scf import _vhf
@@ -282,24 +282,27 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
             nkl = nao * (nao + 1) / 2
         else:
             nkl = nao * nao
-        if vout is None:
-            if comp == 1:
-                vout = numpy.empty((nij,nkl))
+        if comp == 1:
+            if out is None:
+                out = numpy.empty((nij,nkl))
             else:
-                vout = numpy.empty((comp,nij,nkl))
+                out = numpy.ndarray((nij,nkl), buffer=out)
         else:
-            assert(vout.flags.c_contiguous)
+            if out is None:
+                out = numpy.empty((comp,nij,nkl))
+            else:
+                out = numpy.ndarray((comp,nij,nkl), buffer=out)
 
         cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
         cvhfopt = pyscf.lib.c_null_ptr()
         drv = _cint.GTOnr2e_fill_drv
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             _fpointer('GTOnr2e_fill_'+aosym),
-            vout.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+            out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
             cintopt, cvhfopt, c_atm, natm, c_bas, nbas, c_env)
-        return vout
+        return out
 
 ANG_OF     = 1
 NPRIM_OF   = 2

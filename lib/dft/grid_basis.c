@@ -8,11 +8,13 @@
 #include "cint.h"
 #include "vhf/fblas.h"
 
-// l = 6, nprim can reach 9
-#define NPRIM_CART      256
+// 128s42p21d12f8g6h4i3j 
+#define NCTR_CART      128
+//  72s24p14d10f8g6h5i4j 
+#define NCTR_SPH        72
 #define NPRIMAX         64
-#define BLKSIZE         224
-#define EXPCUTOFF       40  // 4e-18
+#define BLKSIZE         96
+#define EXPCUTOFF       50  // 1e-22
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 #define NOTZERO(e)      ((e)>1e-18 || (e)<-1e-18)
@@ -27,8 +29,8 @@ static int _len_cart[] = {
 // exps, np can be used for both primitive or contract case
 // for contracted case, np stands for num contracted functions, exps are
 // contracted factors = \sum c_{i} exp(-a_i*r_i**2)
-static void grid_cart_gto(double *gto, double *coord, double *exps,
-                          int l, int np, int blksize)
+static void grid_cart_gto0(double *gto, double *coord, double *exps,
+                           int l, int np, int blksize)
 {
         int lx, ly, lz, i, k;
         double ce[3];
@@ -177,17 +179,20 @@ static void grid_cart_gto(double *gto, double *coord, double *exps,
         }
 }
 
-static void grid_cart_gto_grad(double *gto, double *coord, double *exps,
-                               int l, int np, int blksize)
+static void grid_cart_gto1(double *gto, double *coord, double *exps,
+                           int l, int np, int blksize)
 {
-        const int gtosize = np*_len_cart[l]*blksize;
-        int lx, ly, lz, i, k;
+        const int degen = _len_cart[l];
+        const int gtosize = np*degen*blksize;
+        int lx, ly, lz, i, j, k, n;
+        char mask[blksize+16];
+        int *imask = (int *)mask;
         double xinv, yinv, zinv;
-        double ax, ay, az, tmp;
+        double ax, ay, az, tmp, tmp1;
         double ce[6];
-        double xpows[8*blksize];
-        double ypows[8*blksize];
-        double zpows[8*blksize];
+        double xpows[64];
+        double ypows[64];
+        double zpows[64];
         double *gridx = coord;
         double *gridy = coord+blksize;
         double *gridz = coord+blksize*2;
@@ -512,62 +517,663 @@ static void grid_cart_gto_grad(double *gto, double *coord, double *exps,
                 for (k = 0; k < np; k++) {
                         for (i = 0; i < blksize; i++) {
                                 if (NOTZERO(exps[i])) {
-                                        xpows[i*8+0] = 1;
-                                        ypows[i*8+0] = 1;
-                                        zpows[i*8+0] = 1;
-                                        for (lx = 1; lx < l+1; lx++) {
-                                                xpows[i*8+lx] = xpows[i*8+lx-1] * gridx[i];
-                                                ypows[i*8+lx] = ypows[i*8+lx-1] * gridy[i];
-                                                zpows[i*8+lx] = zpows[i*8+lx-1] * gridz[i];
+                                        mask[i] = 1;
+                                } else {
+                                        mask[i] = 0;
+                                }
+                        }
+                        for (i = 0; i < blksize/4; i++) {
+                                if (imask[i]) {
+        for (j = 0; j < 4; j++) {
+                xpows[j] = 1;
+                ypows[j] = 1;
+                zpows[j] = 1;
+        }
+        for (lx = 1; lx <= l; lx++) {
+                for (j = 0; j < 4; j++) {
+                        xpows[lx*4+j] = xpows[(lx-1)*4+j] * gridx[i*4+j];
+                        ypows[lx*4+j] = ypows[(lx-1)*4+j] * gridy[i*4+j];
+                        zpows[lx*4+j] = zpows[(lx-1)*4+j] * gridz[i*4+j];
+                }
+        }
+        for (lx = l, n = 0; lx >= 0; lx--) {
+        for (ly = l - lx; ly >= 0; ly--, n++) {
+                lz = l - lx - ly;
+                for (j = 0; j < 4; j++) {
+                        xinv = lx/(gridx[i*4+j]+1e-200);
+                        yinv = ly/(gridy[i*4+j]+1e-200);
+                        zinv = lz/(gridz[i*4+j]+1e-200);
+                        tmp = exps_2a[i*4+j]/(exps[i*4+j]+1e-200);
+                        tmp1 = xpows[lx*4+j] * ypows[ly*4+j]
+                             * zpows[lz*4+j] * exps[i*4+j];
+                        gto[n*blksize+i*4+j] = tmp1;
+                        gtox[n*blksize+i*4+j] = (xinv + tmp*gridx[i*4+j]) * tmp1;
+                        gtoy[n*blksize+i*4+j] = (yinv + tmp*gridy[i*4+j]) * tmp1;
+                        gtoz[n*blksize+i*4+j] = (zinv + tmp*gridz[i*4+j]) * tmp1;
+                }
+        } }
+                                } else {
+        for (n = 0; n < degen; n++) {
+                for (j = 0; j < 4; j++) {
+                        gto [n*blksize+i*4+j] = 0;
+                        gtox[n*blksize+i*4+j] = 0;
+                        gtoy[n*blksize+i*4+j] = 0;
+                        gtoz[n*blksize+i*4+j] = 0;
+                }
+        }
+                                }
+                        }
+                        for (i = i*4; i < blksize; i++) {
+                                if (mask[i]) {
+                                        xpows[0] = 1;
+                                        ypows[0] = 1;
+                                        zpows[0] = 1;
+                                        for (lx = 1; lx <= l; lx++) {
+                                                xpows[lx] = xpows[lx-1] *gridx[i];
+                                                ypows[lx] = ypows[lx-1] *gridy[i];
+                                                zpows[lx] = zpows[lx-1] *gridz[i];
+                                        }
+                                        for (lx = l, n = 0; lx >= 0; lx--) {
+                                        for (ly = l - lx; ly >= 0; ly--, n++) {
+                                                lz = l - lx - ly;
+                                                xinv = lx/(gridx[i]+1e-200);
+                                                yinv = ly/(gridy[i]+1e-200);
+                                                zinv = lz/(gridz[i]+1e-200);
+                                                tmp = exps_2a[i]/(exps[i]+1e-200);
+                                                tmp1 = xpows[lx] * ypows[ly]
+                                                     * zpows[lz] * exps[i];
+                                                gto[n*blksize+i] = tmp1;
+                                                gtox[n*blksize+i] = (xinv + tmp*gridx[i]) * tmp1;
+                                                gtoy[n*blksize+i] = (yinv + tmp*gridy[i]) * tmp1;
+                                                gtoz[n*blksize+i] = (zinv + tmp*gridz[i]) * tmp1;
+                                        } }
+                                } else {
+                                        for (n = 0; n < degen; n++) {
+                                                gto [n*blksize+i] = 0;
+                                                gtox[n*blksize+i] = 0;
+                                                gtoy[n*blksize+i] = 0;
+                                                gtoz[n*blksize+i] = 0;
                                         }
                                 }
                         }
-                        for (lx = l; lx >= 0; lx--) {
-                        for (ly = l - lx; ly >= 0; ly--) {
-                                lz = l - lx - ly;
-                                for (i = 0; i < blksize; i++) {
-                                        if (NOTZERO(exps[i])) {
-                                                xinv = 1/(gridx[i]+1e-200);
-                                                yinv = 1/(gridy[i]+1e-200);
-                                                zinv = 1/(gridz[i]+1e-200);
-                                                tmp = exps_2a[i]/(exps[i]+1e-200);
-                                                ax = tmp * gridx[i];
-                                                ay = tmp * gridy[i];
-                                                az = tmp * gridz[i];
-                                                gto[i] = xpows[i*8+lx]
-                                                       * ypows[i*8+ly]
-                                                       * zpows[i*8+lz]*exps[i];
-                                                gtox[i] = (lx * xinv + ax) * gto[i];
-                                                gtoy[i] = (ly * yinv + ay) * gto[i];
-                                                gtoz[i] = (lz * zinv + az) * gto[i];
-                                        } else {
-                                                gto [i] = 0;
-                                                gtox[i] = 0;
-                                                gtoy[i] = 0;
-                                                gtoz[i] = 0;
-                                        }
-                                }
-                                gto  += blksize;
-                                gtox += blksize;
-                                gtoy += blksize;
-                                gtoz += blksize;
-                        } }
                         exps    += blksize;
                         exps_2a += blksize;
+                        gto     += blksize * degen;
+                        gtox    += blksize * degen;
+                        gtoy    += blksize * degen;
+                        gtoz    += blksize * degen;
                 }
         }
 }
 
-// ectr["exps",ngrid]
-static int _contract_exp(double *ectr, double *coord, double *alpha,
-                         double *coeff,
-                         int l, int nprim, int nctr, int blksize)
+static void derivative(double *fx1, double *fy1, double *fz1,
+                       double *fx0, double *fy0, double *fz0, double a, int l)
 {
-        int i, j;
-        double rr, arr, maxc;
+        int i;
+        double a2 = -2 * a;
+        fx1[0] = a2*fx0[1];
+        fy1[0] = a2*fy0[1];
+        fz1[0] = a2*fz0[1];
+        for (i = 1; i <= l; i++) {
+                fx1[i] = i*fx0[i-1] + a2*fx0[i+1];
+                fy1[i] = i*fy0[i-1] + a2*fy0[i+1];
+                fz1[i] = i*fz0[i-1] + a2*fz0[i+1];
+        }
+}
+
+static void grid_cart_gto0_slow(double *cgto, double *coord, double *exps,
+                                double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
+{
+        const int degen = _len_cart[l];
+        const int mblksize = blksize * degen;
+        const int gtosize = np * mblksize;
+        double gtobuf[gtosize];
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        grid_cart_gto0(gtobuf, coord, exps, l, np, blksize);
+
+        dgemm_(&TRANS_N, &TRANS_N, &mblksize, &nc, &np,
+               &D1, gtobuf, &mblksize, coeff, &np, &D0, cgto, &mblksize);
+}
+
+static void grid_cart_gto1_slow(double *cgto, double *coord, double *exps,
+                                double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
+{
+        const int degen = _len_cart[l];
+        const int mblksize = blksize * degen;
+        const int gtosize = np * mblksize;
+        int lx, ly, lz, i, k, n;
+        double fx0[16];
+        double fy0[16];
+        double fz0[16];
+        double fx1[16];
+        double fy1[16];
+        double fz1[16];
+        double *gridx = coord;
+        double *gridy = coord+blksize;
+        double *gridz = coord+blksize*2;
+        double gtobuf[gtosize*4];
+        double *gto = gtobuf;
+        double *gtox = gto + gtosize;
+        double *gtoy = gto + gtosize * 2;
+        double *gtoz = gto + gtosize * 3;
+
+        for (k = 0; k < np; k++) {
+                for (i = 0; i < blksize; i++) {
+                        if (NOTZERO(exps[i])) {
+        fx0[0] = 1;
+        fy0[0] = 1;
+        fz0[0] = 1;
+        for (lx = 1; lx <= l+1; lx++) {
+                fx0[lx] = fx0[lx-1] * gridx[i];
+                fy0[lx] = fy0[lx-1] * gridy[i];
+                fz0[lx] = fz0[lx-1] * gridz[i];
+        }
+        derivative(fx1, fy1, fz1, fx0, fy0, fz0, alpha[k], l);
+        for (lx = l, n = 0; lx >= 0; lx--) {
+        for (ly = l - lx; ly >= 0; ly--, n++) {
+                lz = l - lx - ly;
+                gto  [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz0[lz];
+                gtox [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz0[lz];
+                gtoy [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz0[lz];
+                gtoz [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz1[lz];
+        } }
+                        } else {
+                                for (n = 0; n < degen; n++) {
+                                        gto  [n*blksize+i] = 0;
+                                        gtox [n*blksize+i] = 0;
+                                        gtoy [n*blksize+i] = 0;
+                                        gtoz [n*blksize+i] = 0;
+                                }
+                        }
+                }
+                exps  += blksize;
+                gto   += mblksize;
+                gtox  += mblksize;
+                gtoy  += mblksize;
+                gtoz  += mblksize;
+        }
+
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        for (k = 0; k < 4; k++) {
+                dgemm_(&TRANS_N, &TRANS_N, &mblksize, &nc, &np,
+                       &D1, gtobuf+gtosize*k, &mblksize, coeff, &np,
+                       &D0, cgto+nc*mblksize*k, &mblksize);
+        }
+}
+
+static void grid_cart_gto2_slow(double *cgto, double *coord, double *exps,
+                                double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
+{
+        const int degen = _len_cart[l];
+        const int mblksize = blksize * degen;
+        const int gtosize = np * mblksize;
+        int lx, ly, lz, i, k, n;
+        double fx0[16];
+        double fy0[16];
+        double fz0[16];
+        double fx1[16];
+        double fy1[16];
+        double fz1[16];
+        double fx2[16];
+        double fy2[16];
+        double fz2[16];
+        double *gridx = coord;
+        double *gridy = coord+blksize;
+        double *gridz = coord+blksize*2;
+        double gtobuf[gtosize*10];
+        double *gto = gtobuf;
+        double *gtox = gto + gtosize;
+        double *gtoy = gto + gtosize * 2;
+        double *gtoz = gto + gtosize * 3;
+        double *gtoxx = gto + gtosize * 4;
+        double *gtoxy = gto + gtosize * 5;
+        double *gtoxz = gto + gtosize * 6;
+        double *gtoyy = gto + gtosize * 7;
+        double *gtoyz = gto + gtosize * 8;
+        double *gtozz = gto + gtosize * 9;
+
+        for (k = 0; k < np; k++) {
+                for (i = 0; i < blksize; i++) {
+                        if (NOTZERO(exps[i])) {
+        fx0[0] = 1;
+        fy0[0] = 1;
+        fz0[0] = 1;
+        for (lx = 1; lx <= l+2; lx++) {
+                fx0[lx] = fx0[lx-1] * gridx[i];
+                fy0[lx] = fy0[lx-1] * gridy[i];
+                fz0[lx] = fz0[lx-1] * gridz[i];
+        }
+        derivative(fx1, fy1, fz1, fx0, fy0, fz0, alpha[k], l+1);
+        derivative(fx2, fy2, fz2, fx1, fy1, fz1, alpha[k], l);
+        for (lx = l, n = 0; lx >= 0; lx--) {
+        for (ly = l - lx; ly >= 0; ly--, n++) {
+                lz = l - lx - ly;
+                gto  [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz0[lz];
+                gtox [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz0[lz];
+                gtoy [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz0[lz];
+                gtoz [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz1[lz];
+                gtoxx[n*blksize+i] = exps[i] * fx2[lx] * fy0[ly] * fz0[lz];
+                gtoxy[n*blksize+i] = exps[i] * fx1[lx] * fy1[ly] * fz0[lz];
+                gtoxz[n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz1[lz];
+                gtoyy[n*blksize+i] = exps[i] * fx0[lx] * fy2[ly] * fz0[lz];
+                gtoyz[n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz1[lz];
+                gtozz[n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz2[lz];
+        } }
+                        } else {
+                                for (n = 0; n < degen; n++) {
+                                        gto  [n*blksize+i] = 0;
+                                        gtox [n*blksize+i] = 0;
+                                        gtoy [n*blksize+i] = 0;
+                                        gtoz [n*blksize+i] = 0;
+                                        gtoxx[n*blksize+i] = 0;
+                                        gtoxy[n*blksize+i] = 0;
+                                        gtoxz[n*blksize+i] = 0;
+                                        gtoyy[n*blksize+i] = 0;
+                                        gtoyz[n*blksize+i] = 0;
+                                        gtozz[n*blksize+i] = 0;
+                                }
+                        }
+                }
+                exps  += blksize;
+                gto   += mblksize;
+                gtox  += mblksize;
+                gtoy  += mblksize;
+                gtoz  += mblksize;
+                gtoxx += mblksize;
+                gtoxy += mblksize;
+                gtoxz += mblksize;
+                gtoyy += mblksize;
+                gtoyz += mblksize;
+                gtozz += mblksize;
+        }
+
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        for (k = 0; k < 10; k++) {
+                dgemm_(&TRANS_N, &TRANS_N, &mblksize, &nc, &np,
+                       &D1, gtobuf+gtosize*k, &mblksize, coeff, &np,
+                       &D0, cgto+nc*mblksize*k, &mblksize);
+        }
+}
+
+static void grid_cart_gto3_slow(double *cgto, double *coord, double *exps,
+                                double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
+{
+        const int degen = _len_cart[l];
+        const int mblksize = blksize * degen;
+        const int gtosize = np * mblksize;
+        int lx, ly, lz, i, k, n;
+        double fx0[16];
+        double fy0[16];
+        double fz0[16];
+        double fx1[16];
+        double fy1[16];
+        double fz1[16];
+        double fx2[16];
+        double fy2[16];
+        double fz2[16];
+        double fx3[16];
+        double fy3[16];
+        double fz3[16];
+        double *gridx = coord;
+        double *gridy = coord+blksize;
+        double *gridz = coord+blksize*2;
+        double gtobuf[gtosize*20];
+        double *gto = gtobuf;
+        double *gtox = gto + gtosize;
+        double *gtoy = gto + gtosize * 2;
+        double *gtoz = gto + gtosize * 3;
+        double *gtoxx = gto + gtosize * 4;
+        double *gtoxy = gto + gtosize * 5;
+        double *gtoxz = gto + gtosize * 6;
+        double *gtoyy = gto + gtosize * 7;
+        double *gtoyz = gto + gtosize * 8;
+        double *gtozz = gto + gtosize * 9;
+        double *gtoxxx = gto + gtosize * 10;
+        double *gtoxxy = gto + gtosize * 11;
+        double *gtoxxz = gto + gtosize * 12;
+        double *gtoxyy = gto + gtosize * 13;
+        double *gtoxyz = gto + gtosize * 14;
+        double *gtoxzz = gto + gtosize * 15;
+        double *gtoyyy = gto + gtosize * 16;
+        double *gtoyyz = gto + gtosize * 17;
+        double *gtoyzz = gto + gtosize * 18;
+        double *gtozzz = gto + gtosize * 19;
+
+        for (k = 0; k < np; k++) {
+                for (i = 0; i < blksize; i++) {
+                        if (NOTZERO(exps[i])) {
+        fx0[0] = 1;
+        fy0[0] = 1;
+        fz0[0] = 1;
+        for (lx = 1; lx <= l+3; lx++) {
+                fx0[lx] = fx0[lx-1] * gridx[i];
+                fy0[lx] = fy0[lx-1] * gridy[i];
+                fz0[lx] = fz0[lx-1] * gridz[i];
+        }
+        derivative(fx1, fy1, fz1, fx0, fy0, fz0, alpha[k], l+2);
+        derivative(fx2, fy2, fz2, fx1, fy1, fz1, alpha[k], l+1);
+        derivative(fx3, fy3, fz3, fx2, fy2, fz2, alpha[k], l);
+        for (lx = l, n = 0; lx >= 0; lx--) {
+        for (ly = l - lx; ly >= 0; ly--, n++) {
+                lz = l - lx - ly;
+                gto   [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz0[lz];
+                gtox  [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz0[lz];
+                gtoy  [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz0[lz];
+                gtoz  [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz1[lz];
+                gtoxx [n*blksize+i] = exps[i] * fx2[lx] * fy0[ly] * fz0[lz];
+                gtoxy [n*blksize+i] = exps[i] * fx1[lx] * fy1[ly] * fz0[lz];
+                gtoxz [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz1[lz];
+                gtoyy [n*blksize+i] = exps[i] * fx0[lx] * fy2[ly] * fz0[lz];
+                gtoyz [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz1[lz];
+                gtozz [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz2[lz];
+                gtoxxx[n*blksize+i] = exps[i] * fx3[lx] * fy0[ly] * fz0[lz];
+                gtoxxy[n*blksize+i] = exps[i] * fx2[lx] * fy1[ly] * fz0[lz];
+                gtoxxz[n*blksize+i] = exps[i] * fx2[lx] * fy0[ly] * fz1[lz];
+                gtoxyy[n*blksize+i] = exps[i] * fx1[lx] * fy2[ly] * fz0[lz];
+                gtoxyz[n*blksize+i] = exps[i] * fx1[lx] * fy1[ly] * fz1[lz];
+                gtoxzz[n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz2[lz];
+                gtoyyy[n*blksize+i] = exps[i] * fx0[lx] * fy3[ly] * fz0[lz];
+                gtoyyz[n*blksize+i] = exps[i] * fx0[lx] * fy2[ly] * fz1[lz];
+                gtoyzz[n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz2[lz];
+                gtozzz[n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz3[lz];
+        } }
+                        } else {
+                                for (n = 0; n < degen; n++) {
+                                        gto   [n*blksize+i] = 0;
+                                        gtox  [n*blksize+i] = 0;
+                                        gtoy  [n*blksize+i] = 0;
+                                        gtoz  [n*blksize+i] = 0;
+                                        gtoxx [n*blksize+i] = 0;
+                                        gtoxy [n*blksize+i] = 0;
+                                        gtoxz [n*blksize+i] = 0;
+                                        gtoyy [n*blksize+i] = 0;
+                                        gtoyz [n*blksize+i] = 0;
+                                        gtozz [n*blksize+i] = 0;
+                                        gtoxxx[n*blksize+i] = 0;
+                                        gtoxxy[n*blksize+i] = 0;
+                                        gtoxxz[n*blksize+i] = 0;
+                                        gtoxyy[n*blksize+i] = 0;
+                                        gtoxyz[n*blksize+i] = 0;
+                                        gtoxzz[n*blksize+i] = 0;
+                                        gtoyyy[n*blksize+i] = 0;
+                                        gtoyyz[n*blksize+i] = 0;
+                                        gtoyzz[n*blksize+i] = 0;
+                                        gtozzz[n*blksize+i] = 0;
+                                }
+                        }
+                }
+                exps   += blksize;
+                gto    += mblksize;
+                gtox   += mblksize;
+                gtoy   += mblksize;
+                gtoz   += mblksize;
+                gtoxx  += mblksize;
+                gtoxy  += mblksize;
+                gtoxz  += mblksize;
+                gtoyy  += mblksize;
+                gtoyz  += mblksize;
+                gtozz  += mblksize;
+                gtoxxx += mblksize;
+                gtoxxy += mblksize;
+                gtoxxz += mblksize;
+                gtoxyy += mblksize;
+                gtoxyz += mblksize;
+                gtoxzz += mblksize;
+                gtoyyy += mblksize;
+                gtoyyz += mblksize;
+                gtoyzz += mblksize;
+                gtozzz += mblksize;
+        }
+
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        for (k = 0; k < 20; k++) {
+                dgemm_(&TRANS_N, &TRANS_N, &mblksize, &nc, &np,
+                       &D1, gtobuf+gtosize*k, &mblksize, coeff, &np,
+                       &D0, cgto+nc*mblksize*k, &mblksize);
+        }
+}
+
+static void grid_cart_gto4_slow(double *cgto, double *coord, double *exps,
+                                double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
+{
+        const int degen = _len_cart[l];
+        const int mblksize = blksize * degen;
+        const int gtosize = np * mblksize;
+        int lx, ly, lz, i, k, n;
+        double fx0[16];
+        double fy0[16];
+        double fz0[16];
+        double fx1[16];
+        double fy1[16];
+        double fz1[16];
+        double fx2[16];
+        double fy2[16];
+        double fz2[16];
+        double fx3[16];
+        double fy3[16];
+        double fz3[16];
+        double fx4[16];
+        double fy4[16];
+        double fz4[16];
+        double *gridx = coord;
+        double *gridy = coord+blksize;
+        double *gridz = coord+blksize*2;
+        double gtobuf[gtosize*35];
+        double *gto = gtobuf;
+        double *gtox = gto + gtosize;
+        double *gtoy = gto + gtosize * 2;
+        double *gtoz = gto + gtosize * 3;
+        double *gtoxx = gto + gtosize * 4;
+        double *gtoxy = gto + gtosize * 5;
+        double *gtoxz = gto + gtosize * 6;
+        double *gtoyy = gto + gtosize * 7;
+        double *gtoyz = gto + gtosize * 8;
+        double *gtozz = gto + gtosize * 9;
+        double *gtoxxx = gto + gtosize * 10;
+        double *gtoxxy = gto + gtosize * 11;
+        double *gtoxxz = gto + gtosize * 12;
+        double *gtoxyy = gto + gtosize * 13;
+        double *gtoxyz = gto + gtosize * 14;
+        double *gtoxzz = gto + gtosize * 15;
+        double *gtoyyy = gto + gtosize * 16;
+        double *gtoyyz = gto + gtosize * 17;
+        double *gtoyzz = gto + gtosize * 18;
+        double *gtozzz = gto + gtosize * 19;
+        double *gtoxxxx = gto + gtosize * 20;
+        double *gtoxxxy = gto + gtosize * 21;
+        double *gtoxxxz = gto + gtosize * 22;
+        double *gtoxxyy = gto + gtosize * 23;
+        double *gtoxxyz = gto + gtosize * 24;
+        double *gtoxxzz = gto + gtosize * 25;
+        double *gtoxyyy = gto + gtosize * 26;
+        double *gtoxyyz = gto + gtosize * 27;
+        double *gtoxyzz = gto + gtosize * 28;
+        double *gtoxzzz = gto + gtosize * 29;
+        double *gtoyyyy = gto + gtosize * 30;
+        double *gtoyyyz = gto + gtosize * 31;
+        double *gtoyyzz = gto + gtosize * 32;
+        double *gtoyzzz = gto + gtosize * 33;
+        double *gtozzzz = gto + gtosize * 34;
+
+        for (k = 0; k < np; k++) {
+                for (i = 0; i < blksize; i++) {
+                        if (NOTZERO(exps[i])) {
+        fx0[0] = 1;
+        fy0[0] = 1;
+        fz0[0] = 1;
+        for (lx = 1; lx <= l+4; lx++) {
+                fx0[lx] = fx0[lx-1] * gridx[i];
+                fy0[lx] = fy0[lx-1] * gridy[i];
+                fz0[lx] = fz0[lx-1] * gridz[i];
+        }
+        derivative(fx1, fy1, fz1, fx0, fy0, fz0, alpha[k], l+3);
+        derivative(fx2, fy2, fz2, fx1, fy1, fz1, alpha[k], l+2);
+        derivative(fx3, fy3, fz3, fx2, fy2, fz2, alpha[k], l+1);
+        derivative(fx4, fy4, fz4, fx3, fy3, fz3, alpha[k], l);
+        for (lx = l, n = 0; lx >= 0; lx--) {
+        for (ly = l - lx; ly >= 0; ly--, n++) {
+                lz = l - lx - ly;
+                gto    [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz0[lz];
+                gtox   [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz0[lz];
+                gtoy   [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz0[lz];
+                gtoz   [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz1[lz];
+                gtoxx  [n*blksize+i] = exps[i] * fx2[lx] * fy0[ly] * fz0[lz];
+                gtoxy  [n*blksize+i] = exps[i] * fx1[lx] * fy1[ly] * fz0[lz];
+                gtoxz  [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz1[lz];
+                gtoyy  [n*blksize+i] = exps[i] * fx0[lx] * fy2[ly] * fz0[lz];
+                gtoyz  [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz1[lz];
+                gtozz  [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz2[lz];
+                gtoxxx [n*blksize+i] = exps[i] * fx3[lx] * fy0[ly] * fz0[lz];
+                gtoxxy [n*blksize+i] = exps[i] * fx2[lx] * fy1[ly] * fz0[lz];
+                gtoxxz [n*blksize+i] = exps[i] * fx2[lx] * fy0[ly] * fz1[lz];
+                gtoxyy [n*blksize+i] = exps[i] * fx1[lx] * fy2[ly] * fz0[lz];
+                gtoxyz [n*blksize+i] = exps[i] * fx1[lx] * fy1[ly] * fz1[lz];
+                gtoxzz [n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz2[lz];
+                gtoyyy [n*blksize+i] = exps[i] * fx0[lx] * fy3[ly] * fz0[lz];
+                gtoyyz [n*blksize+i] = exps[i] * fx0[lx] * fy2[ly] * fz1[lz];
+                gtoyzz [n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz2[lz];
+                gtozzz [n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz3[lz];
+                gtoxxxx[n*blksize+i] = exps[i] * fx4[lx] * fy0[ly] * fz0[lz];
+                gtoxxxy[n*blksize+i] = exps[i] * fx3[lx] * fy1[ly] * fz0[lz];
+                gtoxxxz[n*blksize+i] = exps[i] * fx3[lx] * fy0[ly] * fz1[lz];
+                gtoxxyy[n*blksize+i] = exps[i] * fx2[lx] * fy2[ly] * fz0[lz];
+                gtoxxyz[n*blksize+i] = exps[i] * fx2[lx] * fy1[ly] * fz1[lz];
+                gtoxxzz[n*blksize+i] = exps[i] * fx2[lx] * fy0[ly] * fz2[lz];
+                gtoxyyy[n*blksize+i] = exps[i] * fx1[lx] * fy3[ly] * fz0[lz];
+                gtoxyyz[n*blksize+i] = exps[i] * fx1[lx] * fy2[ly] * fz1[lz];
+                gtoxyzz[n*blksize+i] = exps[i] * fx1[lx] * fy1[ly] * fz2[lz];
+                gtoxzzz[n*blksize+i] = exps[i] * fx1[lx] * fy0[ly] * fz3[lz];
+                gtoyyyy[n*blksize+i] = exps[i] * fx0[lx] * fy4[ly] * fz0[lz];
+                gtoyyyz[n*blksize+i] = exps[i] * fx0[lx] * fy3[ly] * fz1[lz];
+                gtoyyzz[n*blksize+i] = exps[i] * fx0[lx] * fy2[ly] * fz2[lz];
+                gtoyzzz[n*blksize+i] = exps[i] * fx0[lx] * fy1[ly] * fz3[lz];
+                gtozzzz[n*blksize+i] = exps[i] * fx0[lx] * fy0[ly] * fz4[lz];
+        } }
+                        } else {
+                                for (n = 0; n < degen; n++) {
+                                        gto    [n*blksize+i] = 0;
+                                        gtox   [n*blksize+i] = 0;
+                                        gtoy   [n*blksize+i] = 0;
+                                        gtoz   [n*blksize+i] = 0;
+                                        gtoxx  [n*blksize+i] = 0;
+                                        gtoxy  [n*blksize+i] = 0;
+                                        gtoxz  [n*blksize+i] = 0;
+                                        gtoyy  [n*blksize+i] = 0;
+                                        gtoyz  [n*blksize+i] = 0;
+                                        gtozz  [n*blksize+i] = 0;
+                                        gtoxxx [n*blksize+i] = 0;
+                                        gtoxxy [n*blksize+i] = 0;
+                                        gtoxxz [n*blksize+i] = 0;
+                                        gtoxyy [n*blksize+i] = 0;
+                                        gtoxyz [n*blksize+i] = 0;
+                                        gtoxzz [n*blksize+i] = 0;
+                                        gtoyyy [n*blksize+i] = 0;
+                                        gtoyyz [n*blksize+i] = 0;
+                                        gtoyzz [n*blksize+i] = 0;
+                                        gtozzz [n*blksize+i] = 0;
+                                        gtoxxxx[n*blksize+i] = 0;
+                                        gtoxxxy[n*blksize+i] = 0;
+                                        gtoxxxz[n*blksize+i] = 0;
+                                        gtoxxyy[n*blksize+i] = 0;
+                                        gtoxxyz[n*blksize+i] = 0;
+                                        gtoxxzz[n*blksize+i] = 0;
+                                        gtoxyyy[n*blksize+i] = 0;
+                                        gtoxyyz[n*blksize+i] = 0;
+                                        gtoxyzz[n*blksize+i] = 0;
+                                        gtoxzzz[n*blksize+i] = 0;
+                                        gtoyyyy[n*blksize+i] = 0;
+                                        gtoyyyz[n*blksize+i] = 0;
+                                        gtoyyzz[n*blksize+i] = 0;
+                                        gtoyzzz[n*blksize+i] = 0;
+                                        gtozzzz[n*blksize+i] = 0;
+                                }
+                        }
+                }
+                exps    += blksize;
+                gto     += mblksize;
+                gtox    += mblksize;
+                gtoy    += mblksize;
+                gtoz    += mblksize;
+                gtoxx   += mblksize;
+                gtoxy   += mblksize;
+                gtoxz   += mblksize;
+                gtoyy   += mblksize;
+                gtoyz   += mblksize;
+                gtozz   += mblksize;
+                gtoxxx  += mblksize;
+                gtoxxy  += mblksize;
+                gtoxxz  += mblksize;
+                gtoxyy  += mblksize;
+                gtoxyz  += mblksize;
+                gtoxzz  += mblksize;
+                gtoyyy  += mblksize;
+                gtoyyz  += mblksize;
+                gtoyzz  += mblksize;
+                gtozzz  += mblksize;
+                gtoxxxx += mblksize;
+                gtoxxxy += mblksize;
+                gtoxxxz += mblksize;
+                gtoxxyy += mblksize;
+                gtoxxyz += mblksize;
+                gtoxxzz += mblksize;
+                gtoxyyy += mblksize;
+                gtoxyyz += mblksize;
+                gtoxyzz += mblksize;
+                gtoxzzz += mblksize;
+                gtoyyyy += mblksize;
+                gtoyyyz += mblksize;
+                gtoyyzz += mblksize;
+                gtoyzzz += mblksize;
+                gtozzzz += mblksize;
+        }
+
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        for (k = 0; k < 35; k++) {
+                dgemm_(&TRANS_N, &TRANS_N, &mblksize, &nc, &np,
+                       &D1, gtobuf+gtosize*k, &mblksize, coeff, &np,
+                       &D0, cgto+nc*mblksize*k, &mblksize);
+        }
+}
+
+void (*grid_cart_gto[])() = {
+        grid_cart_gto0,
+        grid_cart_gto1,
+        NULL,
+        NULL,
+};
+
+void (*grid_cart_gto_slow[])() = {
+        grid_cart_gto0_slow,
+        grid_cart_gto1_slow,
+        grid_cart_gto2_slow,
+        grid_cart_gto3_slow,
+        grid_cart_gto4_slow,
+};
+
+static int _contract_exp(double *ectr, double *coord, double *alpha, double *coeff,
+                         int l, int nprim, int nctr, int blksize, int deriv)
+{
+        int i, j, k;
+        double arr, maxc;
         double fac = CINTcommon_fac_sp(l);
         double eprim[nprim*blksize];
         double logcoeff[nprim];
+        double rr[blksize];
         double *gridx = coord;
         double *gridy = coord+blksize;
         double *gridz = coord+blksize*2;
@@ -583,9 +1189,12 @@ static int _contract_exp(double *ectr, double *coord, double *alpha,
         }
 
         for (i = 0; i < blksize; i++) {
-                rr = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
+                rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
+        }
+
+        for (i = 0; i < blksize; i++) {
                 for (j = 0; j < nprim; j++) {
-                        arr = alpha[j] * rr;
+                        arr = alpha[j] * rr[i];
                         if (arr-logcoeff[j] < EXPCUTOFF) {
                                 peprim[j] = exp_cephes(-arr) * fac;
                                 not0 = 1;
@@ -594,7 +1203,6 @@ static int _contract_exp(double *ectr, double *coord, double *alpha,
                         }
                 }
                 peprim += nprim;
-                coord += 3;
         }
 
         if (not0) {
@@ -602,30 +1210,48 @@ static int _contract_exp(double *ectr, double *coord, double *alpha,
                 const char TRANS_N = 'N';
                 const double D0 = 0;
                 const double D1 = 1;
+                double d2 = 1;
+                double *ectr_2a = ectr;
+                double coeff_a[nprim*nctr];
                 dgemm_(&TRANS_T, &TRANS_N, &blksize, &nctr, &nprim,
                        &D1, eprim, &nprim, coeff, &nprim, &D0, ectr, &blksize);
-        } else {
-                memset(ectr, 0, sizeof(double)*nctr*blksize);
+
+                // -2 alpha_i C_ij exp(-alpha_i r_k^2)
+                for (k = 1; k <= deriv; k++) {
+                        if (k == 1) {
+                                for (i = 0; i < nctr; i++) {
+                                for (j = 0; j < nprim; j++) {
+                                        coeff_a[i*nprim+j] = coeff[i*nprim+j]*alpha[j];
+                                } }
+                        } else {
+                                for (i = 0; i < nctr; i++) {
+                                for (j = 0; j < nprim; j++) {
+                                        coeff_a[i*nprim+j] *= alpha[j];
+                                } }
+                        }
+
+                        ectr_2a += NPRIMAX*blksize;
+                        d2 *= -2;
+                        dgemm_(&TRANS_T, &TRANS_N, &blksize, &nctr, &nprim,
+                               &d2, eprim, &nprim, coeff_a, &nprim,
+                               &D0, ectr_2a, &blksize);
+                }
         }
 
         return not0;
 }
 
-static int _contract_exp_grad(double *ectr, double *coord, double *alpha,
-                              double *coeff,
-                              int l, int nprim, int nctr, int blksize)
+static int _prim_exp(double *eprim, double *coord, double *alpha, double *coeff,
+                     int l, int nprim, int nctr, int blksize, int deriv)
 {
         int i, j;
-        double rr, arr, maxc;
+        double arr, maxc;
         double fac = CINTcommon_fac_sp(l);
-        double eprim[nprim*blksize];
         double logcoeff[nprim];
-        double coeff_a[nprim*nctr];
+        double rr[blksize];
         double *gridx = coord;
         double *gridy = coord+blksize;
         double *gridz = coord+blksize*2;
-        double *ectr_2a = ectr + NPRIMAX*blksize;
-        double *peprim = eprim;
         int not0 = 0;
 
         // the maximum value of the coefficients for each pGTO
@@ -638,54 +1264,30 @@ static int _contract_exp_grad(double *ectr, double *coord, double *alpha,
         }
 
         for (i = 0; i < blksize; i++) {
-                rr = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
-                for (j = 0; j < nprim; j++) {
-                        arr = alpha[j] * rr;
+                rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
+        }
+
+        for (j = 0; j < nprim; j++) {
+                for (i = 0; i < blksize; i++) {
+                        arr = alpha[j] * rr[i];
                         if (arr-logcoeff[j] < EXPCUTOFF) {
-                                peprim[j] = exp_cephes(-arr) * fac;
+                                eprim[j*blksize+i] = exp_cephes(-arr) * fac;
                                 not0 = 1;
                         } else {
-                                peprim[j] = 0;
+                                eprim[j*blksize+i] = 0;
                         }
                 }
-                peprim += nprim;
-                coord += 3;
         }
-
-        if (not0) {
-                const char TRANS_T = 'T';
-                const char TRANS_N = 'N';
-                const double D0 = 0;
-                const double D1 = 1;
-                const double D2 = -2;
-                dgemm_(&TRANS_T, &TRANS_N, &blksize, &nctr, &nprim,
-                       &D1, eprim, &nprim, coeff, &nprim, &D0, ectr, &blksize);
-
-                for (i = 0; i < nctr; i++) {
-                        for (j = 0; j < nprim; j++) {
-                                coeff_a[i*nprim+j] = coeff[i*nprim+j]*alpha[j];
-                        }
-                }
-                dgemm_(&TRANS_T, &TRANS_N, &blksize, &nctr, &nprim,
-                       &D2, eprim, &nprim, coeff_a, &nprim,
-                       &D0, ectr_2a, &blksize);
-        } else {
-                memset(ectr   , 0, sizeof(double)*nctr*blksize);
-                memset(ectr_2a, 0, sizeof(double)*nctr*blksize);
-        }
-
         return not0;
 }
 
 
 // grid2atm[atm_id,xyz,grid_id]
-static void _fill_grid2atm(double *grid2atm, double *coord,
-                           int blksize, int bastart, int bascount,
+static void _fill_grid2atm(double *grid2atm, double *coord, int blksize,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         int atm_id, ig;
         double *r_atm;
-        bas += bastart * BAS_SLOTS;
         for (atm_id = 0; atm_id < natm; atm_id++) {
                 r_atm = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                 for (ig = 0; ig < blksize; ig++) {
@@ -727,126 +1329,97 @@ static void _trans(double *ao, double *aobuf, int nao, int blksize, int counts)
         }
 }
 
-// ao[:nao,:ngrids] in Fortran-order
-void VXCeval_nr_gto(int nao, int ngrids, int blksize,
-                    int bastart, int bascount, double *ao, double *coord,
-                    char *non0table,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+static void _set0(double *ao, int nao, int blksize, int counts)
 {
-        int k, l, np, nc, atm_id, bas_id, deg;
-        int counts = 0;
-        int *pbas = bas;
-        double *p_exp, *pcoeff, *pcoord, *pgto, *pcart;
-        double *ectr = malloc(sizeof(double) * NPRIMAX*blksize);
-        double *cart_gto = malloc(sizeof(double) * NPRIM_CART*blksize);
-        double *aobuf = malloc(sizeof(double) * nao * blksize);
-        double *paobuf = aobuf;
-        double *grid2atm = malloc(sizeof(double) * natm*3*blksize); // [atm_id,xyz,grid]
-        _fill_grid2atm(grid2atm, coord, blksize, bastart, bascount,
-                       atm, natm, bas, nbas, env);
-
-        pbas = bas + bastart * BAS_SLOTS;
-        for (bas_id = bastart; bas_id < bastart+bascount; bas_id++) {
-                np = pbas[NPRIM_OF];
-                nc = pbas[NCTR_OF ];
-                l  = pbas[ANG_OF  ];
-                deg = l * 2 + 1;
-                p_exp = env + pbas[PTR_EXP];
-                pcoeff = env + pbas[PTR_COEFF];
-                atm_id = pbas[ATOM_OF];
-                pcoord = grid2atm + atm_id * blksize*3;
-                if (non0table[bas_id] &&
-                    _contract_exp(ectr, pcoord, p_exp, pcoeff,
-                                  l, np, nc, blksize)) {
-                        grid_cart_gto(cart_gto, pcoord, ectr, l, nc, blksize);
-                        pcart = cart_gto;
-                        for (k = 0; k < nc; k++) {
-                                pgto = CINTc2s_ket_sph(paobuf, blksize, pcart, l);
-                                if (pgto != paobuf) { // s,p functions
-                                        memcpy(paobuf, pcart, sizeof(double)*deg*blksize);
-                                }
-                                pcart += _len_cart[l] * blksize;
-                                paobuf += deg * blksize;
-                        }
-                } else {
-                        memset(paobuf, 0, sizeof(double) * nc*deg*blksize);
-                        paobuf += nc * deg * blksize;
+        int i, j;
+        for (j = 0; j < blksize; j++) {
+                for (i = 0; i < counts; i++) {
+                        ao[j*nao+i] = 0;
                 }
-                pbas += BAS_SLOTS;
-                counts += deg * nc;
         }
-        _trans(ao, aobuf, nao, blksize, counts);
-        free(ectr);
-        free(cart_gto);
-        free(grid2atm);
-        free(aobuf);
 }
 
-// in ao[:nao,:ngrids,:4] in Fortran-order, [:4] ~ ao, ao_dx, ao_dy, ao_dz
-void VXCeval_nr_gto_grad(int nao, int ngrids, int blksize,
-                         int bastart, int bascount, double *ao, double *coord,
-                         char *non0table,
-                         int *atm, int natm, int *bas, int nbas, double *env)
+/*
+ * ao in Fortran contiguous
+ * deriv 0 ao[:nao,:ngrids]
+ * deriv 1 ao[:nao,:ngrids,:4] ~ ao, ao_dx, ao_dy, ao_dz
+ * deriv 2 ao[:nao,:ngrids,:10] ~ ao, ao_dx, ao_dy, ao_dz, xx, xy, xz, yy, yz, zz
+ * deriv 3 ao[:nao,:ngrids,:20] ~ ao, ao_dx, ao_dy, ao_dz, xx, xy, xz, yy, yz, zz, xxx, xxy, ...
+ */
+void VXCeval_nr_iter(int nao, int ngrids, int deriv, int blksize,
+                     int bastart, int bascount, double *ao, double *coord,
+                     char *non0table,
+                     int *atm, int natm, int *bas, int nbas, double *env)
 {
+        const int ndd = (deriv+1) * (deriv+2) * (deriv+3) / 6;
+        const int basend = bastart + bascount;
+        const int atmstart = bas[bastart*BAS_SLOTS+ATOM_OF];
+        const int atmend = bas[(basend-1)*BAS_SLOTS+ATOM_OF]+1;
+        const int atmcount = atmend - atmstart;
         int i, k, l, np, nc, atm_id, bas_id, deg;
-        int counts = 0;
-        int *pbas = bas;
-        double *p_exp, *pcoeff, *pcoord, *pgto, *pcart;
-        double *ectr = malloc(sizeof(double) * NPRIMAX*blksize*2);
-        double *cart_gto = malloc(sizeof(double) * NPRIM_CART*blksize * 4);
-        double *aobuf = malloc(sizeof(double) * nao*blksize * 4);
-        double *paobuf = aobuf;
-        double *paobuf1;
-        double *grid2atm = malloc(sizeof(double) * natm*3*blksize); // [atm_id,xyz,grid]
-        _fill_grid2atm(grid2atm, coord, blksize, bastart, bascount,
-                       atm, natm, bas, nbas, env);
+        int ao_id = 0;
+        double *p_exp, *pcoeff, *pcoord, *pcart;
+        double ectr[NPRIMAX*blksize*(deriv+1)];
+        double cart_gto[NCTR_CART*blksize * ndd];
+        double aobuf[NCTR_SPH*blksize * ndd];
+        double grid2atm[atmcount*3*blksize]; // [atm_id,xyz,grid]
+        double *paobuf;
+        int (*fexp)();
+        void (*fgrid)();
+        if (deriv < 2) {
+                fexp = _contract_exp;
+                fgrid = grid_cart_gto[deriv];
+        } else {
+                fexp = _prim_exp;
+                fgrid = grid_cart_gto_slow[deriv];
+        }
 
-        pbas = bas + bastart * BAS_SLOTS;
-        for (bas_id = bastart; bas_id < bastart+bascount; bas_id++) {
-                np = pbas[NPRIM_OF];
-                nc = pbas[NCTR_OF ];
-                l  = pbas[ANG_OF  ];
+        _fill_grid2atm(grid2atm, coord, blksize,
+                       atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
+
+        for (bas_id = bastart; bas_id < basend; bas_id++) {
+                np = bas[bas_id*BAS_SLOTS+NPRIM_OF];
+                nc = bas[bas_id*BAS_SLOTS+NCTR_OF ];
+                l  = bas[bas_id*BAS_SLOTS+ANG_OF  ];
                 deg = l * 2 + 1;
-                p_exp = env + pbas[PTR_EXP];
-                pcoeff = env + pbas[PTR_COEFF];
-                atm_id = pbas[ATOM_OF];
+                p_exp = env + bas[bas_id*BAS_SLOTS+PTR_EXP];
+                pcoeff = env + bas[bas_id*BAS_SLOTS+PTR_COEFF];
+                atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF] - atmstart;
                 pcoord = grid2atm + atm_id * 3*blksize;
                 if (non0table[bas_id] &&
-                    _contract_exp_grad(ectr, pcoord, p_exp, pcoeff,
-                                       l, np, nc, blksize)) {
-                        grid_cart_gto_grad(cart_gto, pcoord, ectr, l, nc, blksize);
-                        for (i = 0; i < 4; i++) {
+                    (*fexp)(ectr, pcoord, p_exp, pcoeff,
+                            l, np, nc, blksize, deriv)) {
+                        if (deriv < 2) {
+                                (*fgrid)(cart_gto, pcoord, ectr,
+                                         l, nc, blksize);
+                        } else {
+                                (*fgrid)(cart_gto, pcoord, ectr, p_exp, pcoeff,
+                                         l, np, nc, blksize);
+                        }
+                        for (i = 0; i < ndd; i++) {
                                 pcart = cart_gto + i*nc*_len_cart[l]*blksize;
-                                paobuf1 = paobuf + i*nao*blksize;
-                                for (k = 0; k < nc; k++) {
-                                        pgto = CINTc2s_ket_sph(paobuf1, blksize,
-                                                               pcart, l);
-                                        if (pgto != paobuf1) { // s,p functions
-                                                memcpy(paobuf1, pcart,
-                                                       sizeof(double)*deg*blksize);
+                                if (l < 2) { // s, p functions
+                                        _trans(ao+i*nao*ngrids+ao_id, pcart,
+                                               nao, blksize, nc*deg);
+                                } else {
+                                        paobuf = aobuf;
+                                        for (k = 0; k < nc; k++) {
+                                                CINTc2s_ket_sph(paobuf, blksize,
+                                                                pcart, l);
+                                                pcart += _len_cart[l] * blksize;
+                                                paobuf += deg * blksize;
                                         }
-                                        pcart += _len_cart[l] * blksize;
-                                        paobuf1 += deg * blksize;
+                                        _trans(ao+i*nao*ngrids+ao_id, aobuf,
+                                               nao, blksize, nc*deg);
                                 }
                         }
                 } else {
-                        for (i = 0; i < 4; i++) {
-                                paobuf1 = paobuf + i*nao*blksize;
-                                memset(paobuf1, 0, sizeof(double)*nc*deg*blksize);
+                        for (i = 0; i < ndd; i++) {
+                                _set0(ao+i*nao*ngrids+ao_id, nao, blksize, nc*deg);
                         }
                 }
-                paobuf += nc * deg * blksize;
-                pbas += BAS_SLOTS;
-                counts += deg * nc;
+                ao_id += deg * nc;
         }
-        for (i = 0; i < 4; i++) {
-                // note the structure of ao[4,ngrids,nao]
-                _trans(ao+i*nao*ngrids, aobuf+i*nao*blksize, nao, blksize, counts);
-        }
-        free(ectr);
-        free(cart_gto);
-        free(aobuf);
-        free(grid2atm);
 }
 
 /*
@@ -854,8 +1427,8 @@ void VXCeval_nr_gto_grad(int nao, int ngrids, int blksize,
  * non0table[ngrids/blksize,natm] is the T/F table for ao values
  * It used to screen the ao evaluation for each shells
  */
-void VXCeval_ao_drv(void (*eval_gto)(),
-                    int nao, int ngrids, int bastart, int bascount, int blksize,
+void VXCeval_ao_drv(int deriv, int nao, int ngrids,
+                    int bastart, int bascount, int blksize,
                     double *ao, double *coord, char *non0table,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -865,17 +1438,17 @@ void VXCeval_ao_drv(void (*eval_gto)(),
 
         int ip, ib;
 #pragma omp parallel default(none) \
-        shared(eval_gto, nao, ngrids, bastart, bascount, blksize, \
+        shared(deriv, nao, ngrids, bastart, bascount, blksize, \
                ao, coord, non0table, atm, natm, bas, nbas, env) \
         private(ip, ib)
         {
 #pragma omp for nowait schedule(dynamic, 1)
                 for (ib = 0; ib < nblk; ib++) {
                         ip = ib * blksize;
-                        (*eval_gto)(nao, ngrids, MIN(ngrids-ip, blksize),
-                                    bastart, bascount, ao+ip*nao, coord+ip*3,
-                                    non0table+ib*nbas,
-                                    atm, natm, bas, nbas, env);
+                        VXCeval_nr_iter(nao, ngrids, deriv, MIN(ngrids-ip, blksize),
+                                        bastart, bascount, ao+ip*nao, coord+ip*3,
+                                        non0table+ib*nbas,
+                                        atm, natm, bas, nbas, env);
                 }
         }
 }

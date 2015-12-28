@@ -172,7 +172,9 @@ def take_2d(a, idx, idy, out=None):
     '''
     a = numpy.asarray(a, order='C')
     if out is None:
-        out = numpy.zeros((len(idx),len(idy)))
+        out = numpy.zeros((len(idx),len(idy)), dtype=a.dtype)
+    else:
+        out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
     if numpy.iscomplexobj(a):
         out += a.take(idx, axis=0).take(idy, axis=1)
     else:
@@ -241,6 +243,8 @@ def transpose(a, inplace=False, out=None):
     else:
         if out is None:
             out = numpy.empty((acol,arow), a.dtype)
+        else:
+            out = numpy.ndarray((acol,arow), a.dtype, buffer=out)
 # C code is ~5% faster for acol=arow=10000
 # Note: when the input a is a submatrix of another array, cannot call NPd(z)transpose
 # since NPd(z)transpose assumes data continuity
@@ -283,6 +287,8 @@ def transpose_sum(a, inplace=False, out=None):
         out = a
     elif out is None:
         out = numpy.empty_like(a)
+    else:
+        out = numpy.ndarray(a.shape, a.dtype, buffer=out)
     for c0, c1 in prange(0, na, BLOCK_DIM):
         for r0, r1 in prange(0, c0, BLOCK_DIM):
             tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].T
@@ -458,6 +464,8 @@ def cartesian_prod(arrays, out=None):
 
     if out is None:
         out = numpy.empty(dims, dtype)
+    else:
+        out = numpy.ndarray(dims, dtype, buffer=out)
     tout = out.reshape(dims)
 
     shape = [-1] + [1] * nd
@@ -570,3 +578,9 @@ if __name__ == '__main__':
     c = numpy.random.random((400,400))
     d = numpy.random.random((400,400))
     print(numpy.allclose(numpy.dot(a+b*1j, c+d*1j), zdot(a+b*1j, c+d*1j)))
+
+    import itertools
+    arrs = (range(3,9), range(4))
+    cp = cartesian_prod(arrs)
+    for i,x in enumerate(itertools.product(*arrs)):
+        assert(numpy.allclose(x,cp[i]))

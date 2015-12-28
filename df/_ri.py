@@ -15,7 +15,7 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def nr_auxe2(intor, basrange, atm, bas, env,
-             aosym='s1', comp=1, cintopt=None, vout=None, ijkoff=0,
+             aosym='s1', comp=1, cintopt=None, out=None, ijkoff=0,
              naoi=None, naoj=None, naoaux=None,
              iloc=None, jloc=None, kloc=None):
     assert(aosym[:2] in ('s1', 's2'))
@@ -50,10 +50,10 @@ def nr_auxe2(intor, basrange, atm, bas, env,
     else:
         fill = _fpointer('RIfill_s2ij_auxe2')
         ij_count = naoi * (naoi+1) // 2
-    if vout is None:
-        vout = numpy.empty((ij_count,naoaux))
+    if out is None:
+        out = numpy.empty((ij_count,naoaux))
     else:
-        assert(vout.flags.c_contiguous)
+        out = numpy.ndarray((ij_count,naoaux), buffer=out)
 
     basrange = numpy.asarray(basrange, numpy.int32)
     fintor = _fpointer(intor)
@@ -62,7 +62,7 @@ def nr_auxe2(intor, basrange, atm, bas, env,
     else:
         intopt = cintopt
     libri.RInr_3c2e_auxe2_drv(fintor, fill,
-                              vout.ctypes.data_as(ctypes.c_void_p),
+                              out.ctypes.data_as(ctypes.c_void_p),
                               ctypes.c_size_t(ijkoff),
                               ctypes.c_int(naoj), ctypes.c_int(naoaux),
                               basrange.ctypes.data_as(ctypes.c_void_p),
@@ -75,7 +75,7 @@ def nr_auxe2(intor, basrange, atm, bas, env,
                               env.ctypes.data_as(ctypes.c_void_p))
     if cintopt is None:
         libri.CINTdel_optimizer(ctypes.byref(intopt))
-    return vout
+    return out
 
 def totcart(bas):
     return ((bas[:,gto.ANG_OF]+1) * (bas[:,gto.ANG_OF]+2)//2 *

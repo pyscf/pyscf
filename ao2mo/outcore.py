@@ -305,7 +305,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             tioi += ti2[1]-ti0[1]
             pbuf = bufs1[:nrow]
             _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym,
-                          ao_loc=ao_loc, vout=pbuf)
+                          ao_loc=ao_loc, out=pbuf)
 
             tw1 = time.time()
             if comp == 1:
@@ -455,7 +455,7 @@ def half_e1(mol, mo_coeffs, swapfile,
                        imic+1, nmic, *aoshs)
             buf = bufs1[:comp*aoshs[2]] # (@)
             _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
-                              aosym, comp, ao2mopt, vout=buf)
+                              aosym, comp, ao2mopt, out=buf)
             buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]
@@ -471,15 +471,15 @@ def half_e1(mol, mo_coeffs, swapfile,
         fswap.close()
     return swapfile
 
-def _load_from_h5g(h5group, row0, row1, vout):
+def _load_from_h5g(h5group, row0, row1, out):
     nrow = row1 - row0
     col0 = 0
     for key in range(len(h5group)):
         dat = h5group[str(key)][row0:row1]
         col1 = col0 + dat.shape[1]
-        vout[:nrow,col0:col1] = dat
+        out[:nrow,col0:col1] = dat
         col0 = col1
-    return vout
+    return out
 
 def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     nrow, ncol = dat.shape

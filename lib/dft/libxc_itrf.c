@@ -109,7 +109,6 @@ void VXCnr_eval_xc(int x_id, int c_id, int spin, int relativity, int np,
         xc_func_type func_c = {};
         VXCinit_libxc(&func_x, &func_c, x_id, c_id, spin, relativity);
 
-        int i;
         double *buf = malloc(sizeof(double) * np*6);
         double *vcrho = buf;
         double *vcsigma = vcrho+2*np;

@@ -1822,7 +1822,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def time_reversal_map(self):
         return time_reversal_map(self)
 
-    def intor(self, intor, comp=1, hermi=0, aosym='s1', vout=None,
+    def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               bras=None, kets=None):
         '''One-electron integral generator.
 
@@ -1871,7 +1871,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             bas = self._bas
         return moleintor.getints(intor, self._atm, bas, self._env,
                                  bras=bras, kets=kets, comp=comp, hermi=hermi,
-                                 aosym=aosym, vout=vout)
+                                 aosym=aosym, out=out)
 
     def intor_symmetric(self, intor, comp=1):
         '''One-electron integral generator. The integrals are assumed to be hermitian
@@ -1925,7 +1925,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self.intor(intor, comp, 2, aosym='a4')
 
-    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', vout=None):
+    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', out=None):
         r'''Cross 1-electron integrals like
 
         .. math::
@@ -1959,7 +1959,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.37820346  0.        ]
          [ 0.          0.37820346]]
         '''
-        return self.intor(intor, comp=comp, hermi=0, aosym=aosym, vout=vout,
+        return self.intor(intor, comp=comp, hermi=0, aosym=aosym, out=out,
                           bras=bras, kets=kets)
 
     def intor_by_shell(self, intor, shells, comp=1):

@@ -191,7 +191,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
         buf = fload(i)
         klshape = (0, ncore[1], ncore[1], nmo-ncore[1])
         _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[1], klshape,
-                      aosym='s4', mosym='s1', vout=cvCV[i], ao_loc=ao_loc)
+                      aosym='s4', mosym='s1', out=cvCV[i], ao_loc=ao_loc)
 
         klshape = (0, nmo, 0, nmo)
         tmp = _ao2mo.nr_e2_(buf[i:i+1], mo[1], klshape, aosym='s4',
@@ -200,12 +200,12 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 
         klshape = (0, ncore[0], 0, nmo)
         _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[0], klshape,
-                      aosym='s4', mosym='s1', vout=vcp, ao_loc=ao_loc)
+                      aosym='s4', mosym='s1', out=vcp, ao_loc=ao_loc)
         kc_pp[i,ncore[0]:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
         _ao2mo.nr_e2_(buf[:ncore[0]], mo[0], klshape,
-                      aosym='s4', mosym='s2', vout=buf[:ncore[0]],
+                      aosym='s4', mosym='s2', out=buf[:ncore[0]],
                       ao_loc=ao_loc)
         for j in range(ncore[0]):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),

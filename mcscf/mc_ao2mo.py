@@ -40,27 +40,27 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     for i in range(ncas):
         _ao2mo.nr_e2_(eri1[ncore+i,ncore:nocc], mo, klppshape,
-                      aosym='s4', mosym='s1', vout=aapp[i])
+                      aosym='s4', mosym='s1', out=aapp[i])
     ppaa = pyscf.lib.transpose(aapp.reshape(ncas*ncas,-1)).reshape(nmo,nmo,ncas,ncas)
     aapp = None
 
     papa = numpy.empty((nmo,ncas,nmo,ncas))
     for i in range(nmo):
         _ao2mo.nr_e2_(eri1[i,ncore:nocc], mo, klpashape,
-                      aosym='s4', mosym='s1', vout=papa[i])
+                      aosym='s4', mosym='s1', out=papa[i])
 
     pp = numpy.empty((nmo,nmo))
     j_cp = numpy.zeros((ncore,nmo))
     k_pc = numpy.zeros((nmo,ncore))
     for i in range(ncore):
-        _ao2mo.nr_e2_(eri1[i,i:i+1], mo, klppshape, aosym='s4', mosym='s1', vout=pp)
+        _ao2mo.nr_e2_(eri1[i,i:i+1], mo, klppshape, aosym='s4', mosym='s1', out=pp)
         j_cp[i] = pp.diagonal()
     j_pc = j_cp.T.copy()
 
     pp = numpy.empty((ncore,ncore))
     for i in range(nmo):
         klshape = (i, 1, 0, ncore)
-        _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', vout=pp)
+        _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', out=pp)
         k_pc[i] = pp.diagonal()
     return j_pc, k_pc, ppaa, papa
 
@@ -123,7 +123,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
         bufpa = bufs2[:sh_range[2]]
-        _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
+        _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', out=bufpa)
 # jc_pp, kc_pp
         if level == 1: # ppaa, papa and vhf, jcp, kcp
             if log.verbose >= logger.DEBUG1:
