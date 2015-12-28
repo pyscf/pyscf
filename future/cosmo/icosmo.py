@@ -705,10 +705,10 @@ if __name__ == '__main__':
     mf = cosmo_for_scf(scf.RHF(mol), sol)
     mf.kernel()  # -76.003067568
 
-    #mc = mcscf.CASSCF(mf, 4, 4)
-    #mc = cosmo_for_mcscf(mc, sol)
-    #mo = mc.sort_mo([3,4,6,7])
-    #mc.kernel(mo)
+    mc = mcscf.CASSCF(mf, 4, 4)
+    mc = cosmo_for_mcscf(mc, sol)
+    mo = mc.sort_mo([3,4,6,7])
+    mc.kernel(mo)
     
     mc = mcscf.CASCI(mf, 4, 4)
     mc = cosmo_for_casci(mc, sol)
