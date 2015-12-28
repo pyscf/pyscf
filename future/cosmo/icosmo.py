@@ -305,7 +305,7 @@ class COSMO(object):
         return e_tot
 
     def cosmo_fock(self, dm):
-        return cosmo_fock(self, dm)
+	return cosmo_fock(self, dm)
 
     def cosmo_occ(self, dm):
         return cosmo_occ(self, dm)
@@ -466,7 +466,7 @@ def cosmo_for_scf(mf, cosmo):
     if cosmo.dm is not None:
         # static solvation environment.  The potential and dielectric energy
         # are not updated SCFly
-        csomo._v = cosmo.cosmo_fock(cosmo.dm)
+        cosmo._v = cosmo.cosmo_fock(cosmo.dm)
 
     class MF(oldMF):
         def __init__(self):
@@ -588,7 +588,7 @@ def cosmo_for_casci(mc, cosmo):
     cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:
         cosmo._dm_guess = cosmo.dm
-        vcosmo = cosmo.cosmo_fock(cosmo.dm)
+	vcosmo = cosmo.cosmo_fock(cosmo.dm)
 
     class CAS(oldCAS):
         def __init__(self):
@@ -601,6 +601,7 @@ def cosmo_for_casci(mc, cosmo):
                 if cosmo._dm_guess is None:  # Initial guess
                     na = self.ncore + self.nelecas[0]
                     nb = self.ncore + self.nelecas[1]
+		    print 'Initial DM: na,nb,nelec=',na,nb,na+nb
                     dm =(numpy.dot(self.mo_coeff[:,:na], self.mo_coeff[:,:na].T)
                        + numpy.dot(self.mo_coeff[:,:nb], self.mo_coeff[:,:nb].T))
                 else:
@@ -642,20 +643,20 @@ def cosmo_for_casci(mc, cosmo):
                     hasattr(self.fcisolver, 'spin_square')):
                     ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
                     if isinstance(e_cas, (float, numpy.number)):
-                        log.info('cycle %d CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                        log.info('COSMO_cycle %d CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                                  cycle, e_tot, e_cas, ss[0])
                     else:
                         for i, e in enumerate(e_cas):
-                            log.info('cycle %d CASCI root %d  E = %.15g  '
+                            log.info('COSMO_cycle %d CASCI root %d  E = %.15g  '
                                      'E(CI) = %.15g  S^2 = %.7f',
                                      cycle, i, e_tot[i], e, ss[0][i])
                 else:
                     if isinstance(e_cas, (float, numpy.number)):
-                        log.note('cycle %d CASCI E = %.15g  E(CI) = %.15g',
+                        log.note('COSMO_cycle %d CASCI E = %.15g  E(CI) = %.15g',
                                  cycle, e_tot, e_cas)
                     else:
                         for i, e in enumerate(e_cas):
-                            log.note('cycle %d CASCI root %d  E = %.15g  E(CI) = %.15g',
+                            log.note('COSMO_cycle %d CASCI root %d  E = %.15g  E(CI) = %.15g',
                                      cycle, i, e_tot[i], e)
                 return e_tot, e_cas, fcivec
 
@@ -694,21 +695,31 @@ if __name__ == '__main__':
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
                    H                 -0.00000000   -0.84695236    0.59109389
                    H                 -0.00000000    0.89830571    0.52404783 '''
-    mol.basis = 'cc-pvdz'
+    mol.basis = '3-21g' #cc-pvdz'
     mol.verbose = 4
     mol.build()
 
     sol = COSMO(mol)
-    sol.build()
+    #sol.build()
     #mf = scf.fast_newton(cosmo_for_scf(scf.RHF(mol), sol))
     mf = cosmo_for_scf(scf.RHF(mol), sol)
     mf.kernel()  # -76.003067568
 
-    mc = mcscf.CASSCF(mf, 4, 4)
-    mc = cosmo_for_mcscf(mc, sol)
-    mo = mc.sort_mo([3,4,6,7])
-    mc.kernel(mo)
-
-    mc = mcscf.CASCI(mc, 4, 4)
+    #mc = mcscf.CASSCF(mf, 4, 4)
+    #mc = cosmo_for_mcscf(mc, sol)
+    #mo = mc.sort_mo([3,4,6,7])
+    #mc.kernel(mo)
+    
+    mc = mcscf.CASCI(mf, 4, 4)
     mc = cosmo_for_casci(mc, sol)
     mc.kernel()
+
+    # Single-step CASCI
+    sol.dm = sol._dm_guess
+    #sol.casci_max_cycle = 1
+    mc = mcscf.CASCI(mf, 4, 4)
+    mc = cosmo_for_casci(mc, sol)
+    mc.kernel()
+
+    from pyscf.mrpt.nevpt2 import sc_nevpt
+    sc_nevpt(mc)
