@@ -39,3 +39,7 @@ mc = dmrgscf.dmrgci.DMRGSCF(m, 8, 8)
 emc = mc.kernel()[0]
 print(emc)
 
+mc.state_average_([0.5, 0.5])
+mc.kernel()
+print(mc.e_tot)
+

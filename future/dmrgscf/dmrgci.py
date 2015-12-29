@@ -521,13 +521,20 @@ def readEnergy(DMRGCI):
 
 
 def DMRGSCF(mf, norb, nelec, *args, **kwargs):
-    '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRGCI solver'''
+    '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRG solver'''
+
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol)
     mc.callback = mc.fcisolver.restart_scheduler_()
     if mc.chkfile == mc._scf._chkfile.name:
         # Do not delete chkfile after mcscf
         mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
+
+    def state_average_(self, weights=(0.5,0.5)):
+        self.fcisolver.nroots = len(weights)
+        self.fcisolver.weights = weights
+        return self
+    mc.state_average_ = state_average_
     return mc
 
 

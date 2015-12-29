@@ -587,6 +587,18 @@ class CASCI(object):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
+    def sort_mo_by_irrep(self, cas_irrep_nocc,
+                         cas_irrep_ncore=None, mo_coeff=None, s=None):
+        from pyscf.mcscf import addons
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
+                                       cas_irrep_ncore, s)
+
+    def state_average_(self, weights=(0.5,0.5)):
+        from pyscf.mcscf import addons
+        self.fcisolver = addons.state_average(self, weights)
+        return self
+
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                    ncore=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff

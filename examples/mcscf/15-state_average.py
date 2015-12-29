@@ -22,7 +22,14 @@ mol = gto.M(
 mf = scf.RHF(mol)
 mf.kernel()
 
-mc = mcscf.state_average_(mcscf.CASSCF(mf, 4, 4), (.64,.36))
+mc = mcscf.state_average_(mcscf.CASSCF(mf, 4, 4), [.64,.36])
+mc.verbose = 4
+mc.kernel()
+mo = mc.mo_coeff
+
+# An equivalent input for state average is
+mc = mcscf.CASSCF(mf, 4, 4)
+mc.state_average_([.64,.36])
 mc.verbose = 4
 mc.kernel()
 mo = mc.mo_coeff
