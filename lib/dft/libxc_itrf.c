@@ -34,192 +34,303 @@ double VXChybrid_coeff(int xc_id, int spin)
         return factor;
 }
 
-int VXCinit_libxc(xc_func_type *func_x, xc_func_type *func_c,
-                  int x_id, int c_id, int spin, int relativity)
-{
-        if (!func_x) {
-                func_x->info = NULL;
-        }
-        if (!func_c) {
-                func_c->info = NULL;
-        }
-        if (xc_func_init(func_x, x_id, spin) != 0) {
-                fprintf(stderr, "X functional %d not found\n", x_id);
-                exit(1);
-        }
-        if (func_x->info->kind == XC_EXCHANGE &&
-            xc_func_init(func_c, c_id, spin) != 0) {
-                fprintf(stderr, "C functional %d not found\n", c_id);
-                exit(1);
-        }
-
-#if defined XC_SET_RELATIVITY
-        xc_lda_x_set_params(func_x, relativity);
-#endif
-        return 0;
-}
-
-int VXCdel_libxc(xc_func_type *func_x, xc_func_type *func_c)
-{
-        if (func_x->info->kind == XC_EXCHANGE) {
-                xc_func_end(func_c);
-        }
-        xc_func_end(func_x);
-        return 0;
-}
-
-// y += x
-static void addvec(double *y, double *x, int n)
-{
-        int i;
-        for (i = 0; i < n; i++) {
-                y[i] += x[i];
-        }
-}
-
 /* Extracted from comments of libxc:gga.c
  
-    sigma_st       = grad rho_s . grad rho_t
-    zk             = energy density per unit particle
+    sigma_st          = grad rho_s . grad rho_t
+    zk                = energy density per unit particle
  
-    vrho_s         = d zk / d rho_s
-    vsigma_st      = d n*zk / d sigma_st
+    vrho_s            = d zk / d rho_s
+    vsigma_st         = d n*zk / d sigma_st
     
-    v2rho2_st      = d^2 n*zk / d rho_s d rho_t
-    v2rhosigma_svx = d^2 n*zk / d rho_s d sigma_tv
-    v2sigma2_stvx  = d^2 n*zk / d sigma_st d sigma_vx
+    v2rho2_st         = d^2 n*zk / d rho_s d rho_t
+    v2rhosigma_svx    = d^2 n*zk / d rho_s d sigma_tv
+    v2sigma2_stvx     = d^2 n*zk / d sigma_st d sigma_vx
+ 
+    v3rho3_stv        = d^3 n*zk / d rho_s d rho_t d rho_v
+    v3rho2sigma_stvx  = d^3 n*zk / d rho_s d rho_t d sigma_vx
+    v3rhosigma2_svxyz = d^3 n*zk / d rho_s d sigma_vx d sigma_yz
+    v3sigma3_stvxyz   = d^3 n*zk / d sigma_st d sigma_vx d sigma_yz
  
  if nspin == 2
-    rho(2)        = (u, d)
-    sigma(3)      = (uu, du, dd)
+    rho(2)          = (u, d)
+    sigma(3)        = (uu, ud, dd)
  
-    vrho(2)       = (u, d)
-    vsigma(3)     = (uu, du, dd)
+ * vxc(N*5):
+    vrho(2)         = (u, d)
+    vsigma(3)       = (uu, ud, dd)
  
-    v2rho2(3)     = (uu, du, dd)
-    v2rhosigma(6) = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-    v2sigma2(6)   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
+ * fxc(N*45):
+    v2rho2(3)       = (u_u, u_d, d_d)
+    v2rhosigma(6)   = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
+    v2sigma2(6)     = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
+    v2lapl2(3)
+    vtau2(3)
+    v2rholapl(4)
+    v2rhotau(4)
+    v2lapltau(4)
+    v2sigmalapl(6)
+    v2sigmatau(6)
+
+ * kxc(N*35):
+    v3rho3(4)       = (u_u_u, u_u_d, u_d_d, d_d_d)
+    v3rho2sigma(9)  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
+    v3rhosigma2(12) = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
+    v3sigma(10)     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+
  */
-// e ~ energy,  n ~ num electrons,  v ~ XC potential matrix
-void VXCnr_eval_xc(int x_id, int c_id, int spin, int relativity, int np,
-                   double *rho, double *sigma,
-                   double *exc, double *vrho, double *vsigma)
+/*
+ * rho_u/rho_d = (den,grad_x,grad_y,grad_z,laplacian,tau)
+ * In spin restricted case (spin == 1), rho_u is assumed to be the
+ * spin-free quantities, rho_d is not used.
+ */
+static int _eval_xc(xc_func_type *func_x, int spin, int np,
+                    double *rho_u, double *rho_d,
+                    double *ex, double *vxc, double *fxc, double *kxc)
 {
-        xc_func_type func_x = {};
-        xc_func_type func_c = {};
-        VXCinit_libxc(&func_x, &func_c, x_id, c_id, spin, relativity);
+        int i;
+        double *rho, *sigma, *lapl, *tau;
+        double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd;
+        double *lapl_u, *lapl_d, *tau_u, *tau_d;
+        double *vsigma = NULL;
+        double *vlapl  = NULL;
+        double *vtau   = NULL;
+        double *v2rhosigma  = NULL;
+        double *v2sigma2    = NULL;
+        double *v2lapl2     = NULL;
+        double *v2tau2      = NULL;
+        double *v2rholapl   = NULL;
+        double *v2rhotau    = NULL;
+        double *v2sigmalapl = NULL;
+        double *v2sigmatau  = NULL;
+        double *v2lapltau   = NULL;
+        double *v3rho2sigma = NULL;
+        double *v3rhosigma2 = NULL;
+        double *v3sigma3    = NULL;
 
-        double *buf = malloc(sizeof(double) * np*6);
-        double *vcrho = buf;
-        double *vcsigma = vcrho+2*np;
-        double *ec = vcsigma+3*np;
-
-        switch (func_x.info->family) {
+        switch (func_x->info->family) {
         case XC_FAMILY_LDA:
-                // exc is the energy density
-                // note libxc have added exc/ec to vrho/vcrho
-                xc_lda_exc_vxc(&func_x, np, rho, exc, vrho);
-                //memset(vsigma, 0, sizeof(double)*np);
+                // ex is the energy density
+                // NOTE libxc library added ex/ec into vrho/vcrho
+                if (spin == XC_POLARIZED) {
+                        rho = malloc(sizeof(double) * np*2);
+                        for (i = 0; i < np; i++) {
+                                rho[i*2+0] = rho_u[i];
+                                rho[i*2+1] = rho_d[i];
+                        }
+                        xc_lda(func_x, np, rho, ex, vxc, fxc, kxc);
+                        free(rho);
+                } else {
+                        rho = rho_u;
+                        xc_lda(func_x, np, rho, ex, vxc, fxc, kxc);
+                }
                 break;
         case XC_FAMILY_GGA:
         case XC_FAMILY_HYB_GGA:
-                xc_gga_exc_vxc(&func_x, np, rho, sigma, exc,
-                               vrho, vsigma);
+                if (spin == XC_POLARIZED) {
+                        rho = malloc(sizeof(double) * np*2);
+                        sigma = malloc(sizeof(double) * np*3);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        gxd = rho_d + np;
+                        gyd = rho_d + np * 2;
+                        gzd = rho_d + np * 3;
+                        for (i = 0; i < np; i++) {
+                                rho[i*2+0] = rho_u[i];
+                                rho[i*2+1] = rho_d[i];
+                                sigma[i*3+0] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                                sigma[i*3+1] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
+                                sigma[i*3+2] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
+                        }
+                        if (vxc != NULL) {
+                                // vrho = vxc
+                                vsigma = vxc + np * 2;
+                        }
+                        if (fxc != NULL) {
+                                // v2rho2 = fxc
+                                v2rhosigma = fxc + np * 3;
+                                v2sigma2 = v2rhosigma + np * 6; // np*6
+                        }
+                        if (kxc != NULL) {
+                                // v3rho3 = kxc
+                                v3rho2sigma = kxc + np * 4;
+                                v3rhosigma2 = v3rho2sigma + np * 9;
+                                v3sigma3 = v3rhosigma2 + np * 12; // np*10
+                        }
+#if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
+                        xc_gga(func_x, np, rho, sigma, ex,
+                               vxc, vsigma, fxc, v2rhosigma, v2sigma2);
+#else
+                        xc_gga(func_x, np, rho, sigma, ex,
+                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
+                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+#endif
+                        free(rho);
+                        free(sigma);
+                } else {
+                        rho = rho_u;
+                        sigma = malloc(sizeof(double) * np);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        for (i = 0; i < np; i++) {
+                                sigma[i] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                        }
+                        if (vxc != NULL) {
+                                vsigma = vxc + np;
+                        }
+                        if (fxc != NULL) {
+                                v2rhosigma = fxc + np;
+                                v2sigma2 = v2rhosigma + np;
+                        }
+                        if (kxc != NULL) {
+                                v3rho2sigma = kxc + np;
+                                v3rhosigma2 = v3rho2sigma + np;
+                                v3sigma3 = v3rhosigma2 + np;
+                        }
+#if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
+                        xc_gga(func_x, np, rho, sigma, ex,
+                               vxc, vsigma, fxc, v2rhosigma, v2sigma2);
+#else
+                        xc_gga(func_x, np, rho, sigma, ex,
+                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
+                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+#endif
+                        free(sigma);
+                }
+                break;
+        case XC_FAMILY_MGGA:
+        case XC_FAMILY_HYB_MGGA:
+                if (spin == XC_POLARIZED) {
+                        rho = malloc(sizeof(double) * np*2);
+                        sigma = malloc(sizeof(double) * np*3);
+                        lapl = malloc(sizeof(double) * np*2);
+                        tau = malloc(sizeof(double) * np*2);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        gxd = rho_d + np;
+                        gyd = rho_d + np * 2;
+                        gzd = rho_d + np * 3;
+                        lapl_u = rho_u + np * 4;
+                        tau_u  = rho_u + np * 5;
+                        lapl_d = rho_d + np * 4;
+                        tau_d  = rho_d + np * 5;
+                        for (i = 0; i < np; i++) {
+                                rho[i*2+0] = rho_u[i];
+                                rho[i*2+1] = rho_d[i];
+                                sigma[i*3+0] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                                sigma[i*3+1] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
+                                sigma[i*3+2] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
+                                lapl[i*2+0] = lapl_u[i];
+                                lapl[i*2+1] = lapl_d[i];
+                                tau[i*2+0] = tau_u[i];
+                                tau[i*2+1] = tau_d[i];
+                        }
+                        if (vxc != NULL) {
+                                // vrho = vxc
+                                vsigma = vxc + np * 2;
+                                vlapl = vsigma + np * 3;
+                                vtau = vlapl + np * 2; // np*2
+                        }
+                        if (fxc != NULL) {
+                                // v2rho2 = fxc
+                                v2rhosigma  = fxc         + np * 3;
+                                v2sigma2    = v2rhosigma  + np * 6;
+                                v2lapl2     = v2sigma2    + np * 6;
+                                v2tau2      = v2lapl2     + np * 3;
+                                v2rholapl   = v2tau2      + np * 3;
+                                v2rhotau    = v2rholapl   + np * 4;
+                                v2lapltau   = v2rhotau    + np * 4;
+                                v2sigmalapl = v2lapltau   + np * 4;
+                                v2sigmatau  = v2sigmalapl + np * 6; // np*6
+                        }
+                        xc_mgga(func_x, np, rho, sigma, lapl, tau, ex,
+                                vxc, vsigma, vlapl, vtau,
+                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+                        free(rho);
+                        free(sigma);
+                        free(lapl);
+                        free(tau);
+                } else {
+                        rho = rho_u;
+                        sigma = malloc(sizeof(double) * np);
+                        lapl = rho_u + np * 4;
+                        tau  = rho_u + np * 5;
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        for (i = 0; i < np; i++) {
+                                sigma[i] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                        }
+                        if (vxc != NULL) {
+                                vsigma = vxc + np;
+                                vlapl = vsigma + np;
+                                vtau = vlapl + np;
+                        }
+                        if (fxc != NULL) {
+                                v2rhosigma  = fxc         + np;
+                                v2sigma2    = v2rhosigma  + np;
+                                v2lapl2     = v2sigma2    + np;
+                                v2tau2      = v2lapl2     + np;
+                                v2rholapl   = v2tau2      + np;
+                                v2rhotau    = v2rholapl   + np;
+                                v2lapltau   = v2rhotau    + np;
+                                v2sigmalapl = v2lapltau   + np;
+                                v2sigmatau  = v2sigmalapl + np;
+                        }
+                        xc_mgga(func_x, np, rho, sigma, lapl, tau, ex,
+                                vxc, vsigma, vlapl, vtau,
+                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+                        free(sigma);
+                }
                 break;
         default:
-                fprintf(stderr, "X functional %d '%s' is not implmented\n",
-                        func_x.info->number, func_x.info->name);
+                fprintf(stderr, "functional %d '%s' is not implmented\n",
+                        func_x->info->number, func_x->info->name);
                 exit(1);
         }
-
-        if (func_x.info->kind == XC_EXCHANGE) {
-                switch (func_c.info->family) {
-                case XC_FAMILY_LDA:
-                        xc_lda_exc_vxc(&func_c, np, rho, ec, vcrho);
-                        break;
-                case XC_FAMILY_GGA:
-                        xc_gga_exc_vxc(&func_c, np, rho, sigma, ec,
-                                       vcrho, vcsigma);
-                        if (spin == XC_POLARIZED) {
-                                addvec(vsigma, vcsigma, np*3);
-                        } else {
-                                addvec(vsigma, vcsigma, np);
-                        }
-                        break;
-                default:
-                        fprintf(stderr, "C functional %d '%s' is not implmented\n",
-                                func_c.info->number,
-                                func_c.info->name);
-                        exit(1);
-                }
-                addvec(exc, ec, np);
-                if (spin == XC_POLARIZED) {
-                        addvec(vrho, vcrho, np*2);
-                } else {
-                        addvec(vrho, vcrho, np);
-                }
-        }
-
-        free(buf);
-        VXCdel_libxc(&func_x, &func_c);
+        return 1;
 }
 
-void VXCnr_eval_x(int x_id, int spin, int relativity, int np,
-                  double *rho, double *sigma,
-                  double *ex, double *vrho, double *vsigma)
+int VXCnr_eval_x(int x_id, int spin, int relativity, int np,
+                 double *rho_u, double *rho_d,
+                 double *ex, double *vxc, double *fxc, double *kxc)
 {
         xc_func_type func_x = {};
         if (xc_func_init(&func_x, x_id, spin) != 0) {
                 fprintf(stderr, "X functional %d not found\n", x_id);
                 exit(1);
         }
-
-        switch (func_x.info->family) {
-        case XC_FAMILY_LDA:
-                // ex is the energy density
-                // note libxc have added ex/ec to vrho/vcrho
-                xc_lda_exc_vxc(&func_x, np, rho, ex, vrho);
-                //memset(vsigma, 0, sizeof(double)*np);
-                break;
-        case XC_FAMILY_GGA:
-        case XC_FAMILY_HYB_GGA:
-                xc_gga_exc_vxc(&func_x, np, rho, sigma, ex,
-                               vrho, vsigma);
-                break;
-        default:
-                fprintf(stderr, "X functional %d '%s' is not implmented\n",
-                        func_x.info->number, func_x.info->name);
-                exit(1);
-        }
-
+#if defined XC_SET_RELATIVITY
+        xc_lda_x_set_params(&func_x, relativity);
+#endif
+        _eval_xc(&func_x, spin, np, rho_u, rho_d, ex, vxc, fxc, kxc);
         xc_func_end(&func_x);
+        return 1;
 }
 
-void VXCnr_eval_c(int c_id, int spin, int relativity, int np,
-                  double *rho, double *sigma,
-                  double *ec, double *vrho, double *vsigma)
+int VXCnr_eval_c(int c_id, int spin, int relativity, int np,
+                 double *rho_u, double *rho_d,
+                 double *ex, double *vxc, double *fxc, double *kxc)
 {
+        int not0 = 1;
         xc_func_type func_c = {};
         if (xc_func_init(&func_c, c_id, spin) != 0) {
                 fprintf(stderr, "C functional %d not found\n", c_id);
                 exit(1);
         }
-
-        switch (func_c.info->family) {
-        case XC_FAMILY_LDA:
-                xc_lda_exc_vxc(&func_c, np, rho, ec, vrho);
-                break;
-        case XC_FAMILY_GGA:
-                xc_gga_exc_vxc(&func_c, np, rho, sigma, ec,
-                               vrho, vsigma);
-                break;
-        default:
-                fprintf(stderr, "C functional %d '%s' is not implmented\n",
-                        func_c.info->number,
-                        func_c.info->name);
-                exit(1);
+        if (!(func_c.info->family == XC_FAMILY_HYB_GGA ||
+              func_c.info->family == XC_FAMILY_HYB_MGGA)) {
+                not0 = 0;
+#if defined XC_SET_RELATIVITY
+        xc_lda_x_set_params(&func_c, relativity);
+#endif
+                _eval_xc(&func_c, spin, np, rho_u, rho_d, ex, vxc, fxc, kxc);
         }
-
         xc_func_end(&func_c);
+        return not0;
 }
 

@@ -288,58 +288,56 @@ XC_CODES = {
 #'XC_HYB_MGGA_XC_M06_2X': 450, # M06-2X functional of Minnesota
 }
 
-def _is_lda(xc_code):
-    if isinstance(xc_code, int):
-        return xc_code in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-                           16, 17, 17, 18, 19, 20, 21, 22, 23, 24, 25, 50, 51)
-    else:
-        return xc_code.upper() in \
-                ('X',           'C_WIGNER',    'C_RPA',       'C_HL',        'C_GL',
-                 'C_XALPHA',    'C_VWN',       'C_VWN_RPA',   'C_PZ',        'C_PZ_MOD',
-                 'C_OB_PZ',     'C_PW',        'C_PW_MOD',    'C_OB_PW',     'C_2D_AMGB',
-                 'C_2D_PRM',    'C_vBH',       'C_VBH',       'C_1D_CSC',    'X_2D',
-                 'XC_TETER93',  'X_1D',        'C_ML1',       'C_ML2',       'C_GOMBAS',
-                 'C_PW_RPA',    'K_TF',        'K_LP',)
+def is_lda(xc_code):
+    if isinstance(xc_code, str):
+        xc_code = parse_xc_name(xc_code)
+    return xc_code <= 51
 
-def _is_hybrid_xc(xc_code):
-    if isinstance(xc_code, int):
-        return xc_code in (401, 402, 403, 404, 405,
-                           406, 407, 408, 410, 411,
-                           412, 413, 414, 415, 416,
-                           417, 418, 419, 420, 421,
-                           422, 423, 424, 425,)
+def is_hybrid_xc(xc_code):
+    if (isinstance(xc_code, int) and
+        xc_code in (401, 402, 403, 404, 405, 406, 407, 408, 410, 411,
+                    412, 413, 414, 415, 416, 417, 418, 419, 420, 421,
+                    422, 423, 424, 425, 426, 427, 428, 429, 430, 431,
+                    432, 433, 434, 435, 436, 437,
+                    438, 439, 440, 441, 442, 443, 444, 445, 446, 447,
+                    448, 449, 450,)):
+        return xc_code
+    elif xc_code in ('B3PW91' , 'B3LYP'  , 'B3P86' , 'O3LYP'    , 'mPW1K'     ,
+                     'MPW1K'  , 'PBEH'   , 'X3LYP' , 'B1WC'     , 'mPW3PW'    ,
+                     'MPW3PW' , 'B1LYP'  , 'B1PW91', 'mPW1PW'   , 'MPW1PW'    ,
+                     'mPW3LYP', 'MPW3LYP', 'HSE03' , 'HSE06'    , 'CAM_B3LYP' ,
+                     'TUNED_CAM_B3LYP'   , 'BHANDH', 'BHANDHLYP',
+                     'MB3LYP_RC04',):
+        return XC_CODES['XC_HYB_GGA_XC_'+xc_code]
+    elif xc_code in ('B88B95', 'B86B95', 'PW86B95', 'BB1K', 'MPW1B95',
+                     'MPWB1K', 'X1B95' , 'XB1K'):
+        return XC_CODES['XC_HYB_MGGA_XC_'+xc_code]
     else:
-        return xc_code.upper() in \
-                ('B3PW91' , 'B3LYP'  , 'B3P86'  , 'O3LYP'  , 'MPW1K'  ,
-                 'PBEH'   , 'B97'    , 'B97_1'  , 'B97_2'  , 'X3LYP'  ,
-                 'B1WC'   , 'B97_K'  , 'B97_3'  , 'MPW3PW' , 'B1LYP'  ,
-                 'B1PW91' , 'MPW1PW' , 'MPW3LYP', 'SB98_1A', 'SB98_1B',
-                 'SB98_1C', 'SB98_2A', 'SB98_2B', 'SB98_2C',)
+        return None
 
-def _is_x_and_c(xc_code):
-    if isinstance(xc_code, int):
-        return xc_code in (20 , 146, 154, 155, 156, 157, 161, 162, 163, 164,
-                           165, 166, 167, 168, 169, 170, 171, 172, 173, 174,
-                           175, 176, 177, 178, 179, 180, 181, 176, 177, 178,
-                           179, 180, 181, 194, 195, 196, 197, 198, 199, 401,
-                           402, 403, 404, 405, 405, 406, 407, 408, 410, 411,
-                           412, 413, 414, 415, 415, 416, 417, 418, 418, 419,
-                           419, 420, 421, 422, 423, 424, 425, 420, 421, 422,
-                           423, 424, 425,)
-    else:
-        return xc_code.upper() in \
-                ('TETER93' , 'KT2'    , 'TH1'     , 'TH2'     , 'TH3'      ,
-                 'TH4'     , 'HCTH_93', 'HCTH_120', 'HCTH_147', 'HCTH_407' ,
-                 'EDF1'    , 'XLYP'   , 'B97'     , 'B97_1'   , 'B97_2'    ,
-                 'B97_D'   , 'B97_K'  , 'B97_3'   , 'PBE1W'   , 'MPWLYP1W' ,
-                 'PBELYP1W', 'SB98_1A', 'SB98_1B' , 'SB98_1C' , 'SB98_2A'  ,
-                 'SB98_2B' , 'SB98_2C', 'MOHLYP'  , 'MOHLYP2' , 'TH_FL'    ,
-                 'TH_FC'   , 'TH_FCFO', 'TH_FCO'  ,
-                 'B3PW91'  , 'B3LYP'  , 'B3P86'   , 'O3LYP'   , 'MPW1K'    ,
-                 'PBEH'    , 'B97'    , 'B97_1'   , 'B97_2'   , 'X3LYP'    ,
-                 'B1WC'    , 'B97_K'  , 'B97_3'   , 'MPW3PW'  , 'B1LYP'    ,
-                 'B1PW91'  , 'MPW1PW' , 'MPW3LYP' , 'SB98_1A' , 'SB98_1B'  ,
-                 'SB98_1C' , 'SB98_2A', 'SB98_2B' , 'SB98_2C' ,)
+def is_meta_gga(xc_code):
+    if isinstance(xc_code, str):
+        xc_code = parse_xc_name(xc_code)
+    return xc_code in (201, 202, 203, 204, 205, 206, 207, 208, 209, 210,
+                       211, 212, 213, 214, 215, 216, 217, 218, 219, 220,
+                       231, 232, 233, 234, 235, 236, 237, 238, 239, 240,
+                       438, 439, 440, 441, 442, 443, 444, 445, 446, 447,
+                       448, 449, 450,)
+
+def is_x_and_c(xc_code):
+    if isinstance(xc_code, str):
+        xc_code = parse_xc_name(xc_code)
+    return xc_code in (20 , 146, 154, 155, 156, 157, 161, 162, 163, 164,
+                       165, 166, 167, 168, 169, 170, 171, 172, 173, 174,
+                       175, 176, 177, 178, 179, 180, 181, 176, 177, 178,
+                       179, 180, 181, 194, 195, 196, 197, 198, 199, 401,
+                       402, 403, 404, 405, 405, 406, 407, 408, 410, 411,
+                       412, 413, 414, 415, 415, 416, 417, 418, 418, 419,
+                       419, 420, 421, 422, 423, 424, 425, 420, 421, 422,
+                       423, 424, 425, 426, 427, 428, 429, 430, 431, 432,
+                       433, 434, 435, 436, 437,
+                       438, 439, 440, 441, 442, 443, 444, 445, 446, 447,
+                       448, 449, 450,)
 
 # parse xc_code
 def parse_xc_name(xc_name='LDA,VWN'):
@@ -355,8 +353,13 @@ def parse_xc_name(xc_name='LDA,VWN'):
     if c_name.isdigit():
         c_name = int(c_name)
 
-    if _is_hybrid_xc(x_name):
-        return XC_CODES['XC_HYB_GGA_XC_'+x_name], 0
+    if 'HYB' in x_name:
+        return XC_CODES[x_name], 0
+    else:
+        hyb_id = is_hybrid_xc(x_name)
+        if hyb_id is not None:
+            return hyb_id, 0
+
     if x_name in ('TETER93',):
         return XC_CODES['XC_LDA_XC_'+x_name], 0
     elif x_name in ('KT2'    , 'TH1'     , 'TH2'     , 'TH3'     , 'TH4'     ,
@@ -389,11 +392,11 @@ def parse_xc_name(xc_name='LDA,VWN'):
             x_code = XC_CODES['XC_GGA_X_'+x_name]
         elif x_name in ('SOGGA11_X',):
             x_code = XC_CODES['XC_HYB_GGA_X_'+x_name]
-        elif x_name in ('LTA' , 'TPSS' , 'M06L' , 'GVT4'  , 'TAU_HCTH'  ,
-                        'BR89', 'BJ06' , 'TB09' , 'RPP09' , '2D_PRHG07' ,
-                        '2D_PRHG07_PRP10',):
+        elif x_name in ('LTA'    , 'TPSS'   , 'M06L'  , 'GVT4'  , 'TAU_HCTH' ,
+                        'BR89'   , 'BJ06'   , 'TB09'  , 'RPP09' , '2D_PRHG07',
+                        '2D_PRHG07_PRP10', 'REVTPSS', 'PKZB', 'M05', 'M05_2X',
+                        'M06_HF' , 'M06'    , 'M06_2X', 'M08_HX', 'M08_SO'):
             x_code = XC_CODES['XC_MGGA_X_'+x_name]
-            raise RuntimeError('TODO: meta-GGA')
         else:
             raise KeyError('Unknown exchange functional %s' % x_name)
 
@@ -410,20 +413,16 @@ def parse_xc_name(xc_name='LDA,VWN'):
                                 'WL'  , 'WI'  , 'SOGGA11', 'WI0'     , 'SOGGA11_X',
                                 'APBE',):
             c_code = XC_CODES['XC_GGA_C_'+c_name]
-        elif c_name in ('TPSS', 'VSXC',):
+        elif c_name in ('TPSS'  , 'VSXC', 'M06_L' , 'M06_HF', 'M06' ,
+                        'M06_2X', 'M05' , 'M05_2X', 'PKZB'  , 'BC95',):
             c_code = XC_CODES['XC_MGGA_C_'+c_name]
-            raise RuntimeError('TODO: meta-GGA')
-        elif _is_hybrid_xc(c_name):
-            raise KeyError('xc = %s, C functional %s is hybrid' % (xc_name, c_name))
-        elif _is_x_and_c(c_name):
-            raise KeyError('xc = %s, C functional %s is hybrid' % (xc_name, c_name))
         else:
             raise KeyError('Unknown correlation functional %s' % c_name)
         return x_code, c_code
 
 
 def hybrid_coeff(xc_code, spin=1):
-    if _is_hybrid_xc(xc_code):
+    if is_hybrid_xc(xc_code):
         libdft.VXChybrid_coeff.restype = ctypes.c_double
         return libdft.VXChybrid_coeff(ctypes.c_int(xc_code), ctypes.c_int(spin))
     else:
