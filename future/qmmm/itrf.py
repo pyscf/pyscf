@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 #
-# Author: Zhendong Li <zhendongli2008@gmail.com>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
