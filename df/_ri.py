@@ -49,7 +49,7 @@ def nr_auxe2(intor, basrange, atm, bas, env,
         ij_count = naoi * naoj
     else:
         fill = _fpointer('RIfill_s2ij_auxe2')
-        ij_count = naoi * (naoi+1) // 2
+        ij_count = iloc[-1]*(iloc[-1]+1)//2 - iloc[0]*(iloc[0]+1)//2
     if comp == 1:
         shape = (ij_count,naoaux)
     else:

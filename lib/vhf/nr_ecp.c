@@ -1951,9 +1951,6 @@ void type1_rad_ang(double *rad_ang, int lmax, double *r, double *rad_all)
                 pnuc = omega_nuc + _offset_cart[i];
                 ang_nuc_in_cart(pnuc, i, unitr);
         }
-//        for (i = 0; i < _offset_cart[lmax+1]; i++) {
-//                omega_nuc[i] *= 4 * M_PI;
-//        }
 
         const int d1 = lmax + 1;
         const int d2 = d1 * d1;
@@ -2343,7 +2340,6 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                                ai[ip]+aj[jp], ur, rs+start, nrs, step);
                                 converged[ip*npj+jp] = 1;
                                 for (i = 0; i < d2; i++) {
-//printf("%d %d %g\n", i, level, prad[i]);
                                         if (fabs(plast[i]-prad[i]) > EPS) {
                                                 converged[ip*npj+jp] = 0;
                                                 all_conv = 0;
