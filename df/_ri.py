@@ -50,10 +50,14 @@ def nr_auxe2(intor, basrange, atm, bas, env,
     else:
         fill = _fpointer('RIfill_s2ij_auxe2')
         ij_count = naoi * (naoi+1) // 2
-    if out is None:
-        out = numpy.empty((ij_count,naoaux))
+    if comp == 1:
+        shape = (ij_count,naoaux)
     else:
-        out = numpy.ndarray((ij_count,naoaux), buffer=out)
+        shape = (comp,ij_count,naoaux)
+    if out is None:
+        out = numpy.empty(shape)
+    else:
+        out = numpy.ndarray(shape, buffer=out)
 
     basrange = numpy.asarray(basrange, numpy.int32)
     fintor = _fpointer(intor)

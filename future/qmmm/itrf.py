@@ -106,13 +106,13 @@ def mm_charge_grad(method, coords, charges):
             if mol is None: mol = method.mol
             g_qm = method.get_hcore(mol)
             nao = g_qm.shape[1]
-            fakemol = _make_fakemol(coords)
-            if 1: # For debug
+            if 0: # For debug
                 v = 0
                 for i,q in enumerate(charges):
                     mol.set_rinv_origin_(coords[i])
                     v += mol.intor('cint1e_iprinv_sph') * q
             else:
+                fakemol = _make_fakemol(coords)
                 j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_ip1_sph',
                                        aosym='s1', comp=3)
                 v = numpy.einsum('ixk,k->ix', j3c, charges).reshape(3,nao,nao)

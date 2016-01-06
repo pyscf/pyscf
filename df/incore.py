@@ -58,7 +58,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
                                           mol1._atm, mol1._bas, mol1._env)
         basrange = (0, mol.nbas, mol.nbas+auxmol.nbas, mol1.nbas,
                     mol.nbas, auxmol.nbas)
-        jloc = None
+        jloc = _ri.make_loc(0, mol1.nbas, _ri._cgto_spheric(mol1._bas))
     eri = _ri.nr_auxe2(intor, basrange,
                        atm, bas, env, aosym, comp, iloc=iloc, jloc=jloc)
     return eri
