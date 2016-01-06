@@ -92,6 +92,13 @@ class COSMO(object):
         self.phio = None
         self._built = False
 
+    def fepsi(self):
+        if self.eps<0.0:
+  	   fe = 1.0
+	else:
+	   fe = (self.eps-1.0)/(self.eps+0.5)
+	return fe
+
     def check(self):
         print('asso_cosurf= %s' % self.asso_cosurf)
         print('asso_qcos  = %s' % self.asso_qcos  )
@@ -350,6 +357,8 @@ def cosmo_fock_o0(cosmo, dm):
         mol.set_rinv_origin_(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         fock -= vpot*cosmo.qcos[i]
+    fepsi = cosmo.fepsi() 
+    fock = fepsi*fock
     return fock
 def cosmo_fock_o1(cosmo, dm):
     mol = cosmo.mol
@@ -374,6 +383,8 @@ def cosmo_fock_o1(cosmo, dm):
 #X    fakemol = _make_fakemol(cosmo.cosurf[:cosmo.nps*3].reshape(-1,3))
 #X    j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_sph', aosym='s2ij')
     fock = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -cosmo.qcos[:cosmo.nps]))
+    fepsi = cosmo.fepsi() 
+    fock = fepsi*fock
     return fock
 def cosmo_fock(cosmo, dm):
     if not isinstance(dm, numpy.ndarray) or dm.ndim != 2:
@@ -571,8 +582,8 @@ def cosmo_for_mcscf(mc, cosmo):
             mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
             cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
             cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
-
             edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm_guess)
+	    # Substract <VP> to get E0, then add Ediel
             e_tot = e_tot - edup + cosmo.ediel
             return e_tot, e_cas, fcivec
 
@@ -635,6 +646,7 @@ def cosmo_for_casci(mc, cosmo):
                 cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
                 cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
                 edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm_guess)
+	        # Substract <VP> to get E0, then add Ediel
                 e_tot = e_tot - edup + cosmo.ediel
 
                 log.debug('COSMO E_diel = %.15g', cosmo.ediel)
@@ -691,6 +703,34 @@ def cosmo_for_casci(mc, cosmo):
 
 
 if __name__ == '__main__':
+
+    #------
+    # FeH2
+    #------
+    mol = gto.Mole()
+    mol.atom = ''' Fe                  0.00000000    0.00000000   -0.11081188
+                   H                 -0.00000000   -0.84695236    0.59109389
+                   H                 -0.00000000    0.89830571    0.52404783 '''
+    mol.basis = '3-21g' #cc-pvdz'
+    mol.verbose = 4
+    mol.build()
+
+    sol = COSMO(mol)
+    sol.eps = -1
+    mf = cosmo_for_scf(scf.RHF(mol), sol)
+    mf.init_guess = 'atom' # otherwise it cannot converge to the correct result!
+    escf = mf.kernel()  
+    assert (abs(escf+1256.8956727624)<1.e-6)
+    
+    sol.eps = 37
+    mf = cosmo_for_scf(scf.RHF(mol), sol)
+    mf.init_guess = 'atom' # otherwise it cannot converge to the correct result!
+    escf = mf.kernel()  
+    assert (abs(escf+1256.8946175945)<1.e-6)
+
+    #------
+    # H2O
+    #------
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
                    H                 -0.00000000   -0.84695236    0.59109389
@@ -700,26 +740,31 @@ if __name__ == '__main__':
     mol.build()
 
     sol = COSMO(mol)
-    #sol.build()
-    #mf = scf.fast_newton(cosmo_for_scf(scf.RHF(mol), sol))
+    sol.eps = -1
     mf = cosmo_for_scf(scf.RHF(mol), sol)
-    mf.kernel()  # -76.003067568
-
+    mf.init_guess = 'atom' # otherwise it cannot converge to the correct result!
+    escf = mf.kernel()  
+ 
+    sol.eps = 37
     mc = mcscf.CASSCF(mf, 4, 4)
     mc = cosmo_for_mcscf(mc, sol)
     mo = mc.sort_mo([3,4,6,7])
-    mc.kernel(mo)
+    emc = mc.kernel(mo)[0]
+    assert(abs(emc+75.6377646267)<1.e-6)
     
     mc = mcscf.CASCI(mf, 4, 4)
     mc = cosmo_for_casci(mc, sol)
-    mc.kernel()
+    eci = mc.kernel()[0]
+    assert(abs(eci+75.5789635682)<1.e-6)
 
     # Single-step CASCI
     sol.dm = sol._dm_guess
     #sol.casci_max_cycle = 1
     mc = mcscf.CASCI(mf, 4, 4)
     mc = cosmo_for_casci(mc, sol)
-    mc.kernel()
+    eci = mc.kernel()[0]
+    assert(abs(eci+75.5789635647)<1.e-6)
 
     from pyscf.mrpt.nevpt2 import sc_nevpt
-    sc_nevpt(mc)
+    ec = sc_nevpt(mc)
+    assert(abs(ec+0.128805510364)<1.e-6)
