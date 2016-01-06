@@ -188,7 +188,7 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
         return [symb, numpy.dot(axes, c*convert).tolist()]
 
     if isinstance(atoms, str):
-        atoms = atoms.replace(';','\n').replace(',',' ')
+        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
         for line in atoms.split('\n'):
             line1 = line.strip()
             if line1 and not line1.startswith('#'):

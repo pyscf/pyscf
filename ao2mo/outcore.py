@@ -265,7 +265,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             feri.close()
         return erifile
     log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
-    log.debug('num. MO ints = %.8g, require disk %.8g', \
+    log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
 # transform e1
@@ -318,8 +318,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
-    for key in fswap.keys():
-        del(fswap[key])
     fswap.close()
     if isinstance(erifile, str):
         feri.close()

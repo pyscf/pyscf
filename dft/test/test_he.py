@@ -22,19 +22,19 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_pw91pw91(self):
         method.xc = 'pw91, pw91'
-        self.assertAlmostEqual(method.scf(), -2.8914067559105869, 9)
+        self.assertAlmostEqual(method.scf(), -2.8914066724838849, 9)
 
     def test_nr_b88vwn(self):
         method.xc = 'b88, vwn'
-        self.assertAlmostEqual(method.scf(), -2.9670729628693024, 9)
+        self.assertAlmostEqual(method.scf(), -2.9670729652962606, 9)
 
     def test_nr_xlyp(self):
         method.xc = 'xlyp'
-        self.assertAlmostEqual(method.scf(), -2.9045738765259781, 9)
+        self.assertAlmostEqual(method.scf(), -2.9045738259332161, 9)
 
     def test_nr_b3lyp(self):
         method.xc = 'b3lyp'
-        self.assertAlmostEqual(method.scf(), -2.9070541116757713, 9)
+        self.assertAlmostEqual(method.scf(), -2.9070540942168002, 9)
 
 
 if __name__ == "__main__":
