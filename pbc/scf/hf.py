@@ -413,6 +413,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
 
 
 #FIXME: project initial guess for k-point
+#FIXME: write init_guess_by_chkfile for khf.py, i.e. DM with kpts
 def init_guess_by_chkfile(cell, chkfile_name, project=True):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``cell``
@@ -491,7 +492,7 @@ class RHF(pyscf.scf.hf.RHF):
         analytic_int : bool
             Whether to use analytic (libcint) integrals instead of grid-based. 
     '''
-    def __init__(self, cell, kpt=None, analytic_int=None, exxdiv=None):
+    def __init__(self, cell, kpt=None, analytic_int=None, exxdiv='vcut_sph'):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
@@ -509,10 +510,7 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             self.analytic_int = True
 
-        if exxdiv is None:
-            self.exxdiv = 'vcut_sph'
-        else:
-            self.exxdiv = exxdiv
+        self.exxdiv = exxdiv
 
         self._keys = self._keys.union(['cell', 'grids', 'kpt', 'analytic_int', 'exxdiv'])
 
@@ -666,6 +664,7 @@ class RHF(pyscf.scf.hf.RHF):
         return mo_energy, mo_coeff 
 
     def init_guess_by_chkfile(self, chk=None, project=True):
+        if chk is None: chk = self.chkfile
         return init_guess_by_chkfile(self.cell, chk, project)
     def from_chk(self, chk=None, project=True):
         return self.init_guess_by_chkfile(chk, project)

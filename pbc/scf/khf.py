@@ -7,6 +7,7 @@ See Also:
 
 import time
 import numpy as np
+import scipy.special
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.scf.hf as pbchf
@@ -214,8 +215,8 @@ class KRHF(pbchf.RHF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpts):
-        pbchf.RHF.__init__(self, cell, kpts)
+    def __init__(self, cell, kpts, exxdiv='vcut_sph'):
+        pbchf.RHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         self.kpts = kpts
         self.mo_occ = []
         self.mo_coeff_kpts = []
@@ -223,11 +224,65 @@ class KRHF(pbchf.RHF):
         if cell.ke_cutoff is not None:
             raise RuntimeError("ke_cutoff not supported with K pts yet")
 
+        self.exx_built = False
+        if self.exxdiv == 'vcut_ws':
+            self.precompute_exx()
+
+    def dump_flags(self):
+        pbchf.RHF.dump_flags(self)
+        if self.exxdiv == 'vcut_ws':
+            if self.exx_built is False:
+                self.precompute_exx()
+            logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+    def precompute_exx(self):
+        print "# Precomputing Wigner-Seitz EXX kernel" 
+        from pyscf.pbc import gto as pbcgto
+        Nk = tools.get_monkhorst_pack_size(self.cell, self.kpts) 
+        print "# Nk =", Nk
+        kcell = pbcgto.Cell()
+        kcell.atom = 'H 0. 0. 0.'
+        kcell.spin = 1
+        kcell.unit = 'B'
+        kcell.h = self.cell._h * Nk
+        Lc = 1.0/np.linalg.norm(np.linalg.inv(kcell.h.T), axis=0)
+        print "# Lc =", Lc
+        Rin = Lc.min() / 2.0
+        print "# Rin =", Rin
+        alpha = 5. / Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-9}
+        kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc]) 
+        #kcell.gs = 2 * self.cell.gs #FIXME 
+        print "# kcell.gs FFT =", kcell.gs
+        kcell.build(False,False)
+        vR = tools.ifft( tools.get_coulG(kcell), kcell.gs )
+        kngs = len(vR)
+        print "# kcell kngs =", kngs
+        rs = pyscf.pbc.dft.gen_grid.gen_uniform_grids(kcell)
+        corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell._h)
+        for i, rv in enumerate(rs):
+            # Minimum image convention to corners of kcell parallelepiped
+            r = np.linalg.norm(rv-corners, axis=1).min()
+            if np.isclose(r, 0.):
+                vR[i] = 2*alpha / np.sqrt(np.pi)
+            else:
+                vR[i] = scipy.special.erf(alpha*r) / r
+        vG = (kcell.vol/kngs) * tools.fft(vR, kcell.gs)
+        self.exx_alpha = alpha
+        self.exx_kcell = kcell
+        self.exx_q = kcell.Gv
+        self.exx_vq = vG
+        self.exx_built = True
+        print "# Finished precomputing"
+
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
 
         if key.lower() == '1e':
             return self.init_guess_by_1e(cell)
+        elif key.lower() == 'chkfile':
+            # FIXME: hf.py's init_guess_by_chkfile is inherited, but
+            # doesn't make correct DM with kpts, like below
+            return self.init_guess_by_chkfile() 
         else:
             dm = pyscf.scf.hf.get_init_guess(cell, key)
             nao = cell.nao_nr()

@@ -360,13 +360,12 @@ class Cell(pyscf.gto.Mole):
             Gv : (ngs, 3) ndarray of floats
                 The array of G-vectors.
         '''
-        invh = scipy.linalg.inv(self.lattice_vectors())
-
         gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
         gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)
         gzrange = range(self.gs[2]+1)+range(-self.gs[2],0)
         gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
 
+        invh = scipy.linalg.inv(self.lattice_vectors())
         Gv = 2*np.pi* np.dot(gxyz, invh)
         return Gv
 
