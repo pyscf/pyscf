@@ -131,7 +131,7 @@ class KnowValues(unittest.TestCase):
         vj0 = -numpy.einsum('ijkl,lk->ij', erig, dm) * c1**2
         vk0 = -numpy.einsum('ijkl,jk->il', erig, dm) * c1**2
 
-        vj1, vk1 = scf.dhf._call_veff_gaunt(mol, dm)
+        vj1, vk1 = scf.dhf._call_veff_gaunt_breit(mol, dm)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(vk0, vk1))
 

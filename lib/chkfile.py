@@ -118,7 +118,7 @@ def load_mol(chkfile):
     >>> lib.chkfile.load_mol('He.chk')
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
-    with h5py.File(chkfile) as fh5:
+    with h5py.File(chkfile, 'r') as fh5:
         mol = pyscf.gto.Mole()
         mol.verbose = 0
         mol.output = '/dev/null'

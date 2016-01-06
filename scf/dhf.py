@@ -258,9 +258,15 @@ class UHF(hf.SCF):
         self.with_ssss = True
         self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
+        self.with_breit = False
 
         self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self):
+        hf.SCF.dump_flags(self)
+        logger.info(self, 'with_ssss %s, with_gaunt %s, with_breit %s',
+                    self.with_ssss, self.with_gaunt, self.with_breit)
 
     def get_hcore(self, mol=None):
         if mol is None:
@@ -365,9 +371,13 @@ class UHF(hf.SCF):
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
                                 opt_llll, opt_ssll, opt_ssss)
 
-        if self.with_gaunt and 'SS' in self._coulomb_now.upper():
-            logger.info(mol, 'Gaunt integral')
-            vj1, vk1 = _call_veff_gaunt(mol, dm, hermi, opt_gaunt)
+        if self.with_breit:
+            if 'SSSS' in self._coulomb_now.upper() or not self.with_ssss:
+                vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, True)
+                vj += vj1
+                vk += vk1
+        elif self.with_gaunt and 'SS' in self._coulomb_now.upper():
+            vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
             vk += vk1
 
@@ -538,8 +548,14 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
     return _jk_triu_(vj, vk, hermi)
 
-def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
+def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     c1 = .5/mol.light_speed
+    if with_breit:
+        logger.debug(mol, 'Breit integral')
+        intor_prefix = 'cint2e_breit_'
+    else:
+        logger.debug(mol, 'Gaunt integral')
+        intor_prefix = 'cint2e_'
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
         n2c = dm.shape[0] // 2
@@ -561,7 +577,7 @@ def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
 
     jks = ('lk->s1ij',) * n_dm \
         + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm('cint2e_ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
+    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
     vj[:,:n2c,n2c:] = vx[:n_dm,:,:]
     vk[:,:n2c,n2c:] = vx[n_dm:,:,:]
@@ -569,7 +585,7 @@ def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
     jks = ('lk->s1ij',) * n_dm \
         + ('li->s1kj',) * n_dm \
         + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm('cint2e_ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
+    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
     vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
     vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]
@@ -586,7 +602,10 @@ def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
     if n_dm == 1:
         vj = vj.reshape(n2c*2,n2c*2)
         vk = vk.reshape(n2c*2,n2c*2)
-    return -vj, -vk
+    if with_breit:
+        return vj, vk
+    else:
+        return -vj, -vk
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons
@@ -619,4 +638,6 @@ if __name__ == '__main__':
     energy = method.scf() #-2.38146942868
     print(energy)
     method.with_gaunt = True
+    print(method.scf()) # -2.38138339005
+    method.with_breit = True
     print(method.scf()) # -2.38138339005

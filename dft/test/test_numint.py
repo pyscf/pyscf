@@ -23,7 +23,7 @@ nao = mol.nao_nr()
 class KnowValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
-        self.assertEqual(non0.sum(), 71955)
+        self.assertEqual(non0.sum(), 181911)
         self.assertAlmostEqual(numpy.dot(non0.ravel(),
                                          numpy.cos(numpy.arange(non0.size))),
                                107.69227300597809, 9)
