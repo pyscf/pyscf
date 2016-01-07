@@ -204,6 +204,37 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
     return fock
 
 
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+    nkpts = len(mo_occ_kpts)
+    dm_kpts = np.zeros_like(mo_coeff_kpts)
+    for k in range(nkpts):
+        dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], 
+                                                mo_occ_kpts[k,:]).T.conj()
+    return dm_kpts
+
+
+#FIXME: project initial guess for k-point
+def init_guess_by_chkfile(cell, chkfile_name, project=True):
+    '''Read the KHF results from checkpoint file, then project it to the
+    basis defined by ``cell``
+
+    Returns:
+        Density matrix, 3D ndarray
+    '''
+    from pyscf.pbc.scf import addons
+    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+
+    #def fproj(mo):
+    #    if project:
+    #        return addons.project_mo_nr2nr(chk_cell, mo, cell)
+    #    else:
+    #        return mo
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    dm = make_rdm1(mo, mo_occ)
+    return dm
+
+
 class KRHF(pbchf.RHF):
     '''RHF class with k-point sampling.
 
@@ -249,8 +280,12 @@ class KRHF(pbchf.RHF):
         print "# Lc =", Lc
         Rin = Lc.min() / 2.0
         print "# Rin =", Rin
-        alpha = 5. / Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-9}
+        # ASE:
+        alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-9}
         kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc]) 
+        # QE:
+        #alpha = 3./Rin * np.sqrt(0.5)
+        #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
         #kcell.gs = 2 * self.cell.gs #FIXME 
         print "# kcell.gs FFT =", kcell.gs
         kcell.build(False,False)
@@ -258,7 +293,7 @@ class KRHF(pbchf.RHF):
         kngs = len(vR)
         print "# kcell kngs =", kngs
         rs = pyscf.pbc.dft.gen_grid.gen_uniform_grids(kcell)
-        corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell._h)
+        corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell._h.T)
         for i, rv in enumerate(rs):
             # Minimum image convention to corners of kcell parallelepiped
             r = np.linalg.norm(rv-corners, axis=1).min()
@@ -439,12 +474,7 @@ class KRHF(pbchf.RHF):
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
             mo_occ_kpts = self.mo_occ
 
-        nkpts = len(mo_occ_kpts)
-        dm_kpts = np.zeros_like(mo_coeff_kpts)
-        for k in range(nkpts):
-            dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], 
-                                                    mo_occ_kpts[k,:]).T.conj()
-        return dm_kpts
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         '''Following pyscf.scf.hf.energy_elec()
@@ -485,3 +515,6 @@ class KRHF(pbchf.RHF):
         mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
         return mo_energy, mo_coeff 
 
+    def init_guess_by_chkfile(self, chk=None, project=True):
+        if chk is None: chk = self.chkfile
+        return init_guess_by_chkfile(self.cell, chk, project)

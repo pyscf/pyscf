@@ -413,7 +413,6 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
 
 
 #FIXME: project initial guess for k-point
-#FIXME: write init_guess_by_chkfile for khf.py, i.e. DM with kpts
 def init_guess_by_chkfile(cell, chkfile_name, project=True):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``cell``
