@@ -134,6 +134,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
+    buf = pbuf = None
     fswap.close()
     if isinstance(erifile, str):
         feri.close()

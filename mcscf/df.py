@@ -171,7 +171,8 @@ class _ERIS(object):
         mem_now = pyscf.lib.current_memory()[0]
         max_memory = max(3000, casscf.max_memory*.9-mem_now)
         if max_memory < mem_basic:
-            log.warn('Not enough memory! You need increase CASSCF.max_memory')
+            log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+                     (mem_basic+mem_now)/.9, casscf.max_memory)
 
         t0 = (time.clock(), time.time())
         self._tmpfile = tempfile.NamedTemporaryFile()

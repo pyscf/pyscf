@@ -280,7 +280,8 @@ class _ERIS(object):
             self._tmpfile = tempfile.NamedTemporaryFile()
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
-                log.warn('Not enough memory! You need increase CASSCF.max_memory')
+                log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+                         (mem_basic+mem_now)/.9, casscf.max_memory)
             self.j_pc, self.k_pc = \
                     trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                      self._tmpfile.name,
