@@ -37,6 +37,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
     else:
         dm = dm0
 
+    mf._coulomb_now = 'LLLL'
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
@@ -256,7 +257,7 @@ class UHF(hf.SCF):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8
         self.with_ssss = True
-        self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
         self.with_breit = False
 
@@ -374,9 +375,11 @@ class UHF(hf.SCF):
         if self.with_breit:
             if 'SSSS' in self._coulomb_now.upper() or not self.with_ssss:
                 vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, True)
+                logger.info(self, 'Add Breit term')
                 vj += vj1
                 vk += vk1
         elif self.with_gaunt and 'SS' in self._coulomb_now.upper():
+            logger.info(self, 'Add Gaunt term')
             vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
             vk += vk1
@@ -549,28 +552,25 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
     return _jk_triu_(vj, vk, hermi)
 
 def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
-    c1 = .5/mol.light_speed
     if with_breit:
-        logger.debug(mol, 'Breit integral')
         intor_prefix = 'cint2e_breit_'
     else:
-        logger.debug(mol, 'Gaunt integral')
         intor_prefix = 'cint2e_'
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
         n2c = dm.shape[0] // 2
-        dmls = dm[:n2c,n2c:].copy() * c1**2
-        dmsl = dm[n2c:,:n2c].copy() * c1**2
-        dmll = dm[:n2c,:n2c].copy() * c1**2
-        dmss = dm[n2c:,n2c:].copy() * c1**2
+        dmls = dm[:n2c,n2c:].copy()
+        dmsl = dm[n2c:,:n2c].copy()
+        dmll = dm[:n2c,:n2c].copy()
+        dmss = dm[n2c:,n2c:].copy()
         dms = [dmsl, dmsl, dmls, dmll, dmss]
     else:
         n_dm = len(dm)
         n2c = dm[0].shape[0] // 2
-        dmll = [dmi[:n2c,:n2c].copy() * c1**2 for dmi in dm]
-        dmls = [dmi[:n2c,n2c:].copy() * c1**2 for dmi in dm]
-        dmsl = [dmi[n2c:,:n2c].copy() * c1**2 for dmi in dm]
-        dmss = [dmi[n2c:,n2c:].copy() * c1**2 for dmi in dm]
+        dmll = [dmi[:n2c,:n2c].copy() for dmi in dm]
+        dmls = [dmi[:n2c,n2c:].copy() for dmi in dm]
+        dmsl = [dmi[n2c:,:n2c].copy() for dmi in dm]
+        dmss = [dmi[n2c:,n2c:].copy() for dmi in dm]
         dms = dmsl + dmsl + dmls + dmll + dmss
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
@@ -602,10 +602,11 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     if n_dm == 1:
         vj = vj.reshape(n2c*2,n2c*2)
         vk = vk.reshape(n2c*2,n2c*2)
+    c1 = .5/mol.light_speed
     if with_breit:
-        return vj, vk
+        return vj*c1**2, vk*c1**2
     else:
-        return -vj, -vk
+        return -vj*c1**2, -vk*c1**2
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons

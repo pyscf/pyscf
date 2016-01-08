@@ -28,7 +28,7 @@ def mm_charge(method, coords, charges):
 
     Note:
         1. if MM charge and X2C correction are used together, function mm_charge
-        needs to be applied before X2C decoration (scf.sfx2c function), eg
+        needs to be applied after X2C decoration (scf.sfx2c function), eg
         mf = mm_charge(scf.sfx2c(scf.RHF(mol)), [(0.5,0.6,0.8)], [-0.5]).
         2. Once mm_charge function is applied on the "method" object, it affects
         all following calculations eg MP2, CCSD, MCSCF etc
