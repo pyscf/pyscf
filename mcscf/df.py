@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import time
 import tempfile
 import ctypes
@@ -215,7 +216,8 @@ class _ERIS(object):
         bufs1 = bufpp = None
         t1 = log.timer('density fitting ao2mo pass1', *t0)
 
-        nblk = int(max(8, min(nmo, (max_memory*1e6/8-bufpa.size)/(ncas**2*nmo))))
+        mem_now = pyscf.lib.current_memory()[0]
+        nblk = int(max(8, min(nmo, ((max_memory-mem_now)*1e6/8-bufpa.size)/(ncas**2*nmo))))
         bufs1 = numpy.empty((nblk,ncas,nmo,ncas))
         dgemm = pyscf.lib.numpy_helper._dgemm
         for p0, p1 in prange(0, nmo, nblk):
@@ -226,24 +228,27 @@ class _ERIS(object):
                   bufpa.reshape(naoaux,-1), bufpa.reshape(naoaux,-1),
                   tmp.reshape(-1,nmo*ncas), 1, 0, p0*ncas, 0, 0)
             self.papa[p0:p1] = tmp.reshape(p1-p0,ncas,nmo,ncas)
-        bufaa = bufpa[:,ncore:nocc,:].copy()
+        bufaa = bufpa[:,ncore:nocc,:].copy().reshape(-1,ncas**2)
         bufs1 = bufpa = None
         t1 = log.timer('density fitting papa pass2', *t1)
 
-        nblk = int(max(8, min(nmo, max_memory*1e6/8/(ncas**2*nmo))))
+        mem_now = pyscf.lib.current_memory()[0]
+        nblk = int(max(8, min(nmo, (max_memory-mem_now)*1e6/8/(nmo*naoaux+ncas**2*nmo))))
         bufs1 = numpy.empty((nblk,nmo,naoaux))
+        bufs2 = numpy.empty((nblk,nmo,ncas,ncas))
         for p0, p1 in prange(0, nmo, nblk):
             nrow = p1 - p0
             buf = bufs1[:nrow]
+            tmp = bufs2[:nrow].reshape(-1,ncas**2)
             col0 = 0
             for key in fxpp.keys():
                 dat = fxpp[key][p0:p1]
                 col1 = col0 + dat.shape[2]
                 buf[:nrow,:,col0:col1] = dat
                 col0 = col1
-            tmp = numpy.dot(buf.reshape(-1,naoaux), bufaa.reshape(naoaux,-1))
+            pyscf.lib.dot(buf.reshape(-1,naoaux), bufaa, 1, tmp)
             self.ppaa[p0:p1] = tmp.reshape(p1-p0,nmo,ncas,ncas)
-        bufs1 = buf = None
+        bufs1 = bufs2 = buf = None
         t1 = log.timer('density fitting ppaa pass2', *t1)
 
         fxpp.close()
