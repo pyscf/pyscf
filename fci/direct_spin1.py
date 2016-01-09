@@ -368,7 +368,8 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               max_memory=None, verbose=None, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
@@ -423,10 +424,16 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
         else:
             ci0 = [x.ravel() for x in ci0]
 
+    if tol is None: tol = fci.conv_tol
+    if lindep is None: lindep = fci.lindep
+    if max_cycle is None: max_cycle = fci.max_cycle
+    if max_space is None: max_space = fci.max_space
+    if max_memory is None: max_memory = fci.max_memory
+    if verbose is None: verbose = pyscf.lib.logger.Logger(fci.stdout, fci.verbose)
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   **kwargs)
+                   max_memory=max_memory, verbose=verbose, **kwargs)
     if nroots > 1:
         return e, [ci.reshape(na,nb) for ci in c]
     else:
@@ -518,21 +525,12 @@ class FCISolver(object):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond, nroots=None, tol=None, **kwargs):
-        if nroots is None: nroots = self.nroots
-        if tol is None: tol = self.conv_tol
-        opts = {'max_memory': self.max_memory,
-                'nroots' : nroots,
-                'tol' : tol,
-                'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if nroots == 1 and x0[0].size > 6.5e7: # 500MB
-            opts['lessio'] = True
-        for k, v in kwargs.iteritems():
-            if v is None:
-                opts[k] = getattr(self, k)
-            else:
-                opts[k] = v
-        return pyscf.lib.davidson(op, x0, precond, **opts)
+    def eig(self, op, x0, precond, **kwargs):
+        if kwargs['nroots'] == 1 and x0[0].size > 6.5e7: # 500MB
+            lessio = True
+        else:
+            lessio = False
+        return pyscf.lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
