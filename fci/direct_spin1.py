@@ -385,22 +385,25 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-    pw, pv = scipy.linalg.eigh(h0)
+    if pspace_size > 0:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = scipy.linalg.eigh(h0)
+    else:
+        pw = pv = addr = None
+
+    if pspace_size >= na*nb and ci0 is not None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-    if ci0 is not None and not davidson_only:
-        if len(pw) == na*nb:
-            if na*nb == 1:
-                return pw[0], pv[:,0]
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*nb))
-                civec[:,addr] = pv[:,:nroots].T
-                return pw[:nroots], civec.reshape(nroots,na,nb)
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*nb))
-                civec[addr] = pv[:,0]
-                return pw[0], civec.reshape(na,nb)
+        if na*nb == 1:
+            return pw[0], pv[:,0]
+        elif nroots > 1:
+            civec = numpy.empty((nroots,na*nb))
+            civec[:,addr] = pv[:,:nroots].T
+            return pw[:nroots], civec.reshape(nroots,na,nb)
+        elif abs(pw[0]-pw[1]) > 1e-12:
+            civec = numpy.empty((na*nb))
+            civec[addr] = pv[:,0]
+            return pw[0], civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -533,10 +536,11 @@ class FCISolver(object):
         return pyscf.lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
-                                   self.level_shift)
-#    def make_precond(self, hdiag, *args):
-#        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+        if pspaceig is None:
+            return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+        else:
+            return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
+                                       self.level_shift)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)

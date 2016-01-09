@@ -264,10 +264,6 @@ class FCISolver(direct_spin1.FCISolver):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-#    def make_precond(self, hdiag, *args):
-#        return make_diag_precond(hdiag, self.level_shift)
-#        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
-
     def spin_square(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
         return spin_op.spin_square(fcivec, norb, nelec)

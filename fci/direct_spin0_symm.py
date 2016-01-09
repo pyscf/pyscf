@@ -185,6 +185,7 @@ class FCISolver(direct_spin0.FCISolver):
         self.wfnsym = None
         direct_spin0.FCISolver.__init__(self, mol, **kwargs)
         self.davidson_only = True
+        self.pspace_size = 0  # Improper pspace size may break symmetry
 
     def dump_flags(self, verbose=None):
         direct_spin0.FCISolver.dump_flags(self, verbose)

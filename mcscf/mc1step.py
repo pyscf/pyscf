@@ -461,7 +461,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E = %.15g', e_tot)
+    if hasattr(casscf.fcisolver, 'spin_square'):
+        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+        log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
+    else:
+        log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
@@ -539,16 +543,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        if hasattr(casscf.fcisolver, 'spin_square'):
-            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-        else:
-            ss = ['not defined']
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        if hasattr(casscf.fcisolver,'spin_square'):
+        if hasattr(casscf.fcisolver, 'spin_square'):
+            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
             log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
                  imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
         else:

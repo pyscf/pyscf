@@ -253,35 +253,38 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None,
     na = link_index.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-    pw, pv = scipy.linalg.eigh(h0)
+    if pspace_size > 0:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = scipy.linalg.eigh(h0)
+    else:
+        pw = pv = addr = None
+
+    if pspace_size >= na*na and ci0 is not None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-    if ci0 is not None and not davidson_only:
-        if len(addr) == na*na:
-            if na*na == 1:
-                return pw[0], pv[:,0]
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*na))
-                civec[:,addr] = pv[:,:nroots].T
-                civec = civec.reshape(nroots,na,na)
-                try:
-                    return pw[:nroots], [_check_(ci) for ci in civec]
-                except ValueError:
-                    pass
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*na))
-                civec[addr] = pv[:,0]
-                civec = civec.reshape(na,na)
-                civec = pyscf.lib.transpose_sum(civec) * .5
-                # direct diagonalization may lead to triplet ground state
+        if na*na == 1:
+            return pw[0], pv[:,0]
+        elif nroots > 1:
+            civec = numpy.empty((nroots,na*na))
+            civec[:,addr] = pv[:,:nroots].T
+            civec = civec.reshape(nroots,na,na)
+            try:
+                return pw[:nroots], [_check_(ci) for ci in civec]
+            except ValueError:
+                pass
+        elif abs(pw[0]-pw[1]) > 1e-12:
+            civec = numpy.empty((na*na))
+            civec[addr] = pv[:,0]
+            civec = civec.reshape(na,na)
+            civec = pyscf.lib.transpose_sum(civec) * .5
+            # direct diagonalization may lead to triplet ground state
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-                try:
-                    return pw[0], _check_(civec.reshape(na,na))
-                except ValueError:
-                    pass
+            try:
+                return pw[0], _check_(civec.reshape(na,na))
+            except ValueError:
+                pass
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -350,10 +353,6 @@ class FCISolver(direct_spin1.FCISolver):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
-
-    def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
-                                                self.level_shift)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)
