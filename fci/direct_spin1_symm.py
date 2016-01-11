@@ -45,10 +45,10 @@ def reorder4irrep(eri, norb, link_index, orbsym):
 # of the sorted pair
     order = numpy.argsort(trilirrep)
     rank = order.argsort()
-    eri = eri[order][:,order]
+    eri = eri.take(order,axis=0).take(order,axis=1)
     link_index_irrep = link_index.copy()
     link_index_irrep[:,:,0] = rank[link_index[:,:,0]]
-    return eri, link_index_irrep, dimirrep
+    return numpy.asarray(eri, order='C'), link_index_irrep, dimirrep
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return direct_spin1.contract_1e(f1e, fcivec, norb, nelec, link_index)
