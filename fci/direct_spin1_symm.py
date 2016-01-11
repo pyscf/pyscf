@@ -28,7 +28,7 @@ from pyscf.fci import addons
 libfci = pyscf.lib.load_library('libfci')
 
 def reorder4irrep(eri, norb, link_index, orbsym):
-    if not orbsym:
+    if not list(orbsym):
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
     orbsym = numpy.array(orbsym)
 # map irrep IDs of Dooh or Coov to D2h, C2v
@@ -63,7 +63,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     assert(fcivec.flags.c_contiguous)
-    if not orbsym:
+    if not list(orbsym):
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -235,7 +235,7 @@ class FCISolver(direct_spin1.FCISolver):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
                     orbsym=[], **kwargs):
-        if not orbsym:
+        if not list(orbsym):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 

@@ -42,7 +42,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     assert(fcivec.flags.c_contiguous)
-    if not orbsym:
+    if not list(orbsym):
         return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -200,7 +200,7 @@ class FCISolver(direct_spin0.FCISolver):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
                     orbsym=[], **kwargs):
-        if not orbsym:
+        if not list(orbsym):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
