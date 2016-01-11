@@ -511,6 +511,7 @@ class FCISolver(object):
         log.info('max_memory %d MB', self.max_memory)
         log.info('davidson only = %s', self.davidson_only)
         log.info('nroots = %d', self.nroots)
+        log.info('pspace_size = %d', self.pspace_size)
 
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
