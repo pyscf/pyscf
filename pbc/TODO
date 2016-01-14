@@ -36,7 +36,7 @@ SCF convergence:
 
 Other Functionality:
 - q->0 term for (ia|jb) integral, by finite difference q calc [J]
-- Band structure for K pt calc [T]
+X Band structure for K pt calc [T]
   - Grid based veff or
   - Grid based general <p(k)|q(k')> ovlp 
 - Poisson equation [Q]
@@ -46,8 +46,11 @@ Other Functionality:
   X Molecular XC grids  [Done]
 - UHF code and UHF initial guess (specify mag. moment for AFM)
 - 1D and 2D Coulomb and Ewald
-- Exchange part of Fock matrix with k-points [J]
-- Exact HF exchange
+X Exchange part of Fock matrix with k-points [T]
+  X Ewald probe-charge
+  X Spherical and Wigner-Seitz truncation
+  - Auxiliary function
+X Exact HF exchange [T]
 - Gamma pt MP2
   - check q->0, compare against VASP / CP2K 
 - Gamma pt CCSD

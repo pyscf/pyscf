@@ -29,26 +29,28 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def test_kpt_vs_supercell(self):
-        ngs = 3
+        ngs = 8
         nk = (3, 1, 1)
         cell = make_primitive_cell(ngs)
+        print "cell gs =", cell.gs
         scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
         kmf = pbchf.KRHF(cell, abs_kpts)
-        #kmf.verbose = 7
+        kmf.verbose = 7
         ekpt = kmf.scf()
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
         supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2, 
                                nk[1]*ngs + (nk[1]-1)//2,
                                nk[2]*ngs + (nk[2]-1)//2])
+        print "supcell gs =", supcell.gs
         #supcell.verbose = 7
         supcell.build()
 
         scaled_gamma = ase.dft.kpoints.monkhorst_pack((1,1,1))
         gamma = supcell.get_abs_kpts(scaled_gamma)
         mf = pbchf.KRHF(supcell, gamma)
-        #mf.verbose = 7
+        mf.verbose = 7
         esup = mf.scf()/np.prod(nk)
 
         print "kpt sampling energy =", ekpt
@@ -59,3 +61,4 @@ class KnowValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.krks")
     unittest.main()
+

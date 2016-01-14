@@ -279,7 +279,6 @@ def get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     ngs, nao = aoR_k1.shape
 
-    #coulG = tools.get_coulG(cell, kpt1-kpt2)
     coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
 
     vR = np.zeros((ngs,nao,nao), dtype=np.complex128)
@@ -491,7 +490,7 @@ class RHF(pyscf.scf.hf.RHF):
         analytic_int : bool
             Whether to use analytic (libcint) integrals instead of grid-based. 
     '''
-    def __init__(self, cell, kpt=None, analytic_int=None, exxdiv='vcut_sph'):
+    def __init__(self, cell, kpt=None, analytic_int=None, exxdiv='ewald'):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()

@@ -60,7 +60,7 @@ class KnowValues(unittest.TestCase):
     def test_numint20(self):
         mol, cell = make_cell1(20, 20)
         mf = pbchf.RHF(cell)
-        self.assertAlmostEqual(mf.scf(), -2.4607103378280013, 8)
+        self.assertAlmostEqual(mf.scf(), -2.6025752068330492, 8)
 
 #    def test_numint(self):
 #        mol, cell = make_cell1(60, 120)

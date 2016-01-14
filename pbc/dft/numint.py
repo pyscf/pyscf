@@ -35,7 +35,6 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
 
     '''
     aoR = 0
-    # TODO: this is 1j, not -1j; check for band_ovlp convention
     for L in tools.get_lattice_Ls(cell, cell.nimgs):
         if kpt is None:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,

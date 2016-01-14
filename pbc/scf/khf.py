@@ -246,7 +246,7 @@ class KRHF(pbchf.RHF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpts, exxdiv='vcut_sph'):
+    def __init__(self, cell, kpts, exxdiv='ewald'):
         pbchf.RHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         self.kpts = kpts
         self.mo_occ = []
@@ -281,12 +281,11 @@ class KRHF(pbchf.RHF):
         Rin = Lc.min() / 2.0
         print "# Rin =", Rin
         # ASE:
-        alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-9}
+        alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
         kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc]) 
         # QE:
         #alpha = 3./Rin * np.sqrt(0.5)
         #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
-        #kcell.gs = 2 * self.cell.gs #FIXME 
         print "# kcell.gs FFT =", kcell.gs
         kcell.build(False,False)
         vR = tools.ifft( tools.get_coulG(kcell), kcell.gs )
@@ -315,8 +314,6 @@ class KRHF(pbchf.RHF):
         if key.lower() == '1e':
             return self.init_guess_by_1e(cell)
         elif key.lower() == 'chkfile':
-            # FIXME: hf.py's init_guess_by_chkfile is inherited, but
-            # doesn't make correct DM with kpts, like below
             return self.init_guess_by_chkfile() 
         else:
             dm = pyscf.scf.hf.get_init_guess(cell, key)

@@ -55,7 +55,7 @@ def plot_bands(scftype, basis, ngs, nmp=None):
             mf = pbcdft.KRKS(cell, abs_mp_kpts)
             mf.xc = 'lda,vwn'
         else:
-            mf = pbchf.KRHF(cell, abs_mp_kpts)
+            mf = pbchf.KRHF(cell, abs_mp_kpts, exxdiv=None)
 
     mf.analytic_int = False
     mf.scf()
@@ -99,7 +99,7 @@ def plot_bands(scftype, basis, ngs, nmp=None):
     if nmp is None:
         plt.savefig('bands_%s_%s_%d.png'%(scftype,basis,ngs))
     else:
-        plt.savefig('bands_%s_%s_%d_%d.png'%(scftype,basis,ngs,nmp))
+        plt.savefig('bands_%s-None_%s_%d_%d.png'%(scftype,basis,ngs,nmp))
 
 if __name__ == '__main__':
     args = sys.argv[1:]

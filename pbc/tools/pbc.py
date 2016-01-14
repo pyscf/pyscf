@@ -107,9 +107,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 4*np.pi*0.5*Rc**2
-        #print "# SPH k =", k
-        #for i,kGi in enumerate(kG):
-        #    print np.linalg.norm(kGi), coulG[i].real
     elif mf.exxdiv == 'ewald':
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
@@ -132,10 +129,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG += mf.exx_vq[qidx] * is_lt_maxqv
 
-        #print "# WS k =", k
-        #for i,kGi in enumerate(kG):
-        #    print np.linalg.norm(kGi), coulG[i].real
-
     return coulG
 
 
@@ -148,6 +141,7 @@ def madelung(cell, kpts):
     ecell.atom = 'H 0. 0. 0.'
     ecell.spin = 1
     ecell.gs = cell.gs
+    ecell.precision = 1e-16
     ecell.unit = 'B'
     ecell.h = cell._h * Nk
     ecell.build(False,False)
