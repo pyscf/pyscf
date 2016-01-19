@@ -191,6 +191,7 @@ class _ERIS(object):
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
         t2 = t1 = t0
+        fxpp_keys = []
         with df.load(casscf._cderi) as feri:
             for b0, b1 in dfhf.prange(0, naoaux, dfhf.BLOCKDIM):
                 eri1 = numpy.asarray(feri[b0:b1], order='C')
@@ -205,6 +206,7 @@ class _ERIS(object):
                      ctypes.c_int(0), ctypes.c_int(nmo),
                      ctypes.c_int(0), ctypes.c_int(nmo),
                      ctypes.c_void_p(0), ctypes.c_int(0))
+                fxpp_keys.append([str(b0), b0, b1])
                 fxpp[str(b0)] = bufpp.transpose(1,2,0)
                 bufpa[b0:b1] = bufpp[:,:,ncore:nocc]
                 bufd = numpy.einsum('kii->ki', bufpp)
@@ -242,11 +244,8 @@ class _ERIS(object):
             buf = bufs1[:nrow]
             tmp = bufs2[:nrow].reshape(-1,ncas**2)
             col0 = 0
-            for key in fxpp.keys():
-                dat = fxpp[key][p0:p1]
-                col1 = col0 + dat.shape[2]
-                buf[:nrow,:,col0:col1] = dat
-                col0 = col1
+            for key, col0, col1 in fxpp_keys:
+                buf[:nrow,:,col0:col1] = fxpp[key][p0:p1]
             pyscf.lib.dot(buf.reshape(-1,naoaux), bufaa, 1, tmp)
             self.ppaa[p0:p1] = tmp.reshape(p1-p0,nmo,ncas,ncas)
         bufs1 = bufs2 = buf = None

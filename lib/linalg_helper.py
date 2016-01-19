@@ -229,12 +229,9 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             else:
                 xs = _Xlist()
                 ax = _Xlist()
-            space = head = nroots
-            for k in range(nroots):
-                xs.append(x0[k])
-                ax.append(ax0[k])
-            heff[:nroots,:nroots] = numpy.diag(e)
-            ovlp[:nroots,:nroots] = numpy.eye(nroots)
+            space = head = 0
+            xt = x0
+            axt = [aop(xi) for xi in x0]
 
         for k in range(rnow):
             if head + k >= space:
