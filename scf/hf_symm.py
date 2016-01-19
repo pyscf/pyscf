@@ -477,6 +477,7 @@ class ROHF(rohf.ROHF):
             p0 += nso
 
         mo_energy = mo_energy.copy()  # Roothan Fock eigenvalue + alpha energy
+        open_mo_energy = mo_energy
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
         assert(nelec_float >= 0)
         if len(float_idx) > 0:
@@ -487,9 +488,7 @@ class ROHF(rohf.ROHF):
             core_sort = numpy.argsort(ecore)
             core_idx = float_idx[core_sort][:ncore]
             open_idx = float_idx[core_sort][ncore:]
-            if mo_coeff is None:
-                open_mo_energy = mo_energy
-            else:
+            if mo_coeff is not None:
                 open_mo_energy = numpy.einsum('ki,ki->i', mo_coeff,
                                               self._focka_ao.dot(mo_coeff))
             eopen = open_mo_energy[open_idx]
