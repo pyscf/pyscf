@@ -51,18 +51,18 @@ def get_hcore(cell, kpt=np.zeros(3)):
 
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
-    
+
     Note: Evaluated in real space using orbital gradients, for improved accuracy.
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=True)
-    ngs = aoR.shape[1]  # because we requested isgga, aoR.shape[0] = 4
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, deriv=1)
+    ngs = aoR.shape[1]  # because we requested deriv=1, aoR.shape[0] = 4
 
     t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
              np.dot(aoR[2].T.conj(), aoR[2]) +
              np.dot(aoR[3].T.conj(), aoR[3]))
     t *= (cell.vol/ngs)
-    
+
     return t
 
 
@@ -72,7 +72,7 @@ def get_t_pw(cell, kpt=np.zeros(3)):
     Note: Incurs error due to finite resolution of the gradient operator.
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, isgga=False)
+    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, deriv=0)
     nao = cell.nao_nr()
 
     kG = kpt + cell.Gv
@@ -115,12 +115,12 @@ def get_pp(cell, kpt=np.zeros(3)):
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    nao = cell.nao_nr() 
+    nao = cell.nao_nr()
 
     SI = cell.get_SI()
     vlocG = pseudo.get_vlocG(cell)
     vpplocG = -np.sum(SI * vlocG, axis=0)
-    
+
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs)
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
@@ -144,8 +144,8 @@ def get_pp(cell, kpt=np.zeros(3)):
                 for i in range(nl):
                     for j in range(nl):
                         # Note: There is no (-1)^l here.
-                        vppnl += h[i,j]*np.einsum('p,q->pq', 
-                                                   SPG_lm_aoG[i,:].conj(), 
+                        vppnl += h[i,j]*np.einsum('p,q->pq',
+                                                   SPG_lm_aoG[i,:].conj(),
                                                    SPG_lm_aoG[j,:])
     vppnl *= (1./ngs**2)
 
@@ -237,7 +237,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     aoR_dm_k2 = np.dot(aoR_k2, dm)
     tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
     vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
-    #vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(), 
+    #vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
     #                                vkR_k1k2, aoR_k2)
     return vj, vk
 
@@ -266,7 +266,7 @@ def get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
         kpts : (nkpts, 3) ndarray
             The sampled k-points; may be required for G=0 correction.
 
-    Returns: 
+    Returns:
         vR : (ngs, nao, nao) ndarray
             The real-space "exchange" potential at every grid point, for all
             AO pairs.
@@ -379,10 +379,10 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
 
     ewovrl *= 0.5
 
-    # last line of Eq. (F.5) in Martin 
+    # last line of Eq. (F.5) in Martin
     ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
     ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
-    
+
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
     SI = cell.get_SI()
     ZSI = np.einsum("i,ij->j", chargs, SI)
@@ -394,7 +394,7 @@ def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
     #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
-    # See also Eq. (32) of ewald.pdf at 
+    # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
     coulG = tools.get_coulG(cell)
@@ -464,7 +464,7 @@ def dot_eri_dm_complex(eri, dm, hermi=0):
     '''
     eri_re = np.ascontiguousarray(eri.real)
     eri_im = np.ascontiguousarray(eri.imag)
-    
+
     dm_re = np.ascontiguousarray(dm.real)
     dm_im = np.ascontiguousarray(dm.imag)
 
@@ -472,10 +472,10 @@ def dot_eri_dm_complex(eri, dm, hermi=0):
     vj_ir, vk_ir = pyscf.scf.hf.dot_eri_dm(eri_im, dm_re, hermi)
     vj_ri, vk_ri = pyscf.scf.hf.dot_eri_dm(eri_re, dm_im, hermi)
     vj_ii, vk_ii = pyscf.scf.hf.dot_eri_dm(eri_im, dm_im, hermi)
-    
+
     vj = vj_rr - vj_ii + 1j*(vj_ir + vj_ri)
     vk = vk_rr - vk_ii + 1j*(vk_ir + vk_ri)
-            
+
     return vj, vk
 
 
@@ -488,7 +488,7 @@ class RHF(pyscf.scf.hf.RHF):
         kpt : (3,) ndarray
             The AO k-point in Cartesian coordinates, in units of 1/Bohr.
         analytic_int : bool
-            Whether to use analytic (libcint) integrals instead of grid-based. 
+            Whether to use analytic (libcint) integrals instead of grid-based.
     '''
     def __init__(self, cell, kpt=None, analytic_int=None, exxdiv='ewald'):
         if not cell._built:
@@ -516,7 +516,7 @@ class RHF(pyscf.scf.hf.RHF):
         pyscf.scf.hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'Grid size = (%d, %d, %d)', 
+        logger.info(self, 'Grid size = (%d, %d, %d)',
                     self.cell.gs[0], self.cell.gs[1], self.cell.gs[2])
         logger.info(self, 'Using analytic integrals = %s', self.analytic_int)
         logger.info(self, 'Exchange divergence treatment = %s', self.exxdiv)
@@ -534,7 +534,7 @@ class RHF(pyscf.scf.hf.RHF):
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        
+
         if self.analytic_int:
             logger.info(self, "Using analytic integrals")
             return scfint.get_ovlp(cell, kpt)
@@ -551,7 +551,7 @@ class RHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        
+
         cpu0 = (time.clock(), time.time())
         vj, vk = get_jk(self, cell, dm, hermi, self.opt, kpt, kpt_band)
         # TODO: Check incore, direct_scf, _eri's, etc
@@ -590,7 +590,7 @@ class RHF(pyscf.scf.hf.RHF):
         '''
         return self.get_jk(cell, dm, hermi, kpt, kpt_band)[1]
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, 
+    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpt_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
@@ -612,7 +612,7 @@ class RHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        
+
         log = logger.Logger
         if isinstance(verbose, logger.Logger):
             log = verbose
@@ -631,13 +631,13 @@ class RHF(pyscf.scf.hf.RHF):
             vj, vk = dot_eri_dm_complex(self._eri, dm, hermi)
         else:
             vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
-        
+
         return vj, vk
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
         etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
         return etot.real
-    
+
     def ewald_nuc(self, cell=None):
         if cell is None: cell = self.cell
         return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
@@ -659,7 +659,7 @@ class RHF(pyscf.scf.hf.RHF):
                 + self.get_veff(kpt=kpt, kpt_band=kpt_band)
         s1e = self.get_ovlp(kpt=kpt_band)
         mo_energy, mo_coeff = self.eig(fock, s1e)
-        return mo_energy, mo_coeff 
+        return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True):
         if chk is None: chk = self.chkfile

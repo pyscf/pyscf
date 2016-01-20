@@ -38,7 +38,7 @@ class KnowValues(unittest.TestCase):
 
 #    def test_eval_ao_gga(self):
 #        cell, grids = make_grids(30)
-#        ao1 = numint.eval_ao(cell, grids.coords, isgga=True)
+#        ao1 = numint.eval_ao(cell, grids.coords, deriv=1)
 #        w = np.arange(ao1.size)
 #        self.assertAlmostEqual(np.dot(w,ao1), 0, 8)
 #

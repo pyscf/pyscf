@@ -132,14 +132,14 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
         vk_kpts = np.zeros((nao,nao), np.complex128)
         for k2 in range(nkpts):
             kpt2 = kpts[k2,:]
-            vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kband, aoR_kpts[k2,:,:], 
+            vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kband, aoR_kpts[k2,:,:],
                                       kpt_band, kpt2)
             aoR_dm_k2 = np.dot(aoR_kpts[k2,:,:], dm_kpts[k2,:,:])
             tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
             vk_kpts += 1./nkpts * (cell.vol/ngs) \
                                 * np.dot(aoR_kband.T.conj(), tmp_Rq)
-            #vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
-            #            dm_kpts[k2,:,:], aoR_kband.conj(), 
+            #vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+            #            dm_kpts[k2,:,:], aoR_kband.conj(),
             #            vkR_k1k2, aoR_kpts[k2,:,:])
     else:
         vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
@@ -154,13 +154,13 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
             kpt1 = kpts[k1,:]
             for k2 in range(nkpts):
                 kpt2 = kpts[k2,:]
-                vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:], 
+                vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:],
                                           kpt1, kpt2)
                 tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_kpts[k2,:,:])
                 vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) \
                                     * np.dot(aoR_kpts[k1,:,:].T.conj(), tmp_Rq)
-                #vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', 
-                #                    dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(), 
+                #vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+                #                    dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(),
                 #                    vkR_k1k2, aoR_kpts[k2,:,:])
 
     return vj_kpts, vk_kpts
@@ -173,7 +173,7 @@ def get_vjR_(cell, dm_kpts, aoR_kpts):
         vR : (ngs,) ndarray
             The real-space Hartree potential at every grid point.
     '''
-    nkpts, ngs, nao = aoR_kpts.shape 
+    nkpts, ngs, nao = aoR_kpts.shape
     coulG = tools.get_coulG(cell)
 
     rhoR = np.zeros(ngs)
@@ -208,7 +208,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
     nkpts = len(mo_occ_kpts)
     dm_kpts = np.zeros_like(mo_coeff_kpts)
     for k in range(nkpts):
-        dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:], 
+        dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:],
                                                 mo_occ_kpts[k,:]).T.conj()
     return dm_kpts
 
@@ -221,16 +221,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True):
     Returns:
         Density matrix, 3D ndarray
     '''
-    from pyscf.pbc.scf import addons
-    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    #from pyscf.pbc.scf import addons
+    mo = pyscf.pbc.scf.chkfile.load(chkfile_name, 'scf/mo_coeff')
+    mo_occ = pyscf.pbc.scf.chkfile.load(chkfile_name, 'scf/mo_occ')
 
     #def fproj(mo):
     #    if project:
     #        return addons.project_mo_nr2nr(chk_cell, mo, cell)
     #    else:
     #        return mo
-    mo = scf_rec['mo_coeff']
-    mo_occ = scf_rec['mo_occ']
     dm = make_rdm1(mo, mo_occ)
     return dm
 
@@ -239,7 +238,7 @@ class KRHF(pbchf.RHF):
     '''RHF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
-    now have an additional first dimension for the k-points, 
+    now have an additional first dimension for the k-points,
     e.g. mo_coeff is (nkpts, nao, nao) ndarray
 
     Attributes:
@@ -267,9 +266,9 @@ class KRHF(pbchf.RHF):
             logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
     def precompute_exx(self):
-        print "# Precomputing Wigner-Seitz EXX kernel" 
+        print "# Precomputing Wigner-Seitz EXX kernel"
         from pyscf.pbc import gto as pbcgto
-        Nk = tools.get_monkhorst_pack_size(self.cell, self.kpts) 
+        Nk = tools.get_monkhorst_pack_size(self.cell, self.kpts)
         print "# Nk =", Nk
         kcell = pbcgto.Cell()
         kcell.atom = 'H 0. 0. 0.'
@@ -282,7 +281,7 @@ class KRHF(pbchf.RHF):
         print "# Rin =", Rin
         # ASE:
         alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
-        kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc]) 
+        kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc])
         # QE:
         #alpha = 3./Rin * np.sqrt(0.5)
         #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
@@ -314,7 +313,7 @@ class KRHF(pbchf.RHF):
         if key.lower() == '1e':
             return self.init_guess_by_1e(cell)
         elif key.lower() == 'chkfile':
-            return self.init_guess_by_chkfile() 
+            return self.init_guess_by_chkfile()
         else:
             dm = pyscf.scf.hf.get_init_guess(cell, key)
             nao = cell.nao_nr()
@@ -365,14 +364,14 @@ class KRHF(pbchf.RHF):
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
         if level_shift_factor is None:
-            level_shift_factor = self.level_shift_factor
+            level_shift_factor = self.level_shift
         if damp_factor is None:
-            damp_factor = self.damp_factor
+            damp_factor = self.damp
 
         return get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
                          diis_start_cycle, level_shift_factor, damp_factor)
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, 
+    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpt_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
@@ -400,7 +399,7 @@ class KRHF(pbchf.RHF):
         grad_kpts = np.empty(0,)
 
         for k in range(nkpts):
-            grad = pyscf.scf.hf.RHF.get_grad(self, 
+            grad = pyscf.scf.hf.RHF.get_grad(self,
                         mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:], fock[k,:,:])
             grad_kpts = np.hstack((grad_kpts, grad))
         return grad_kpts
@@ -421,7 +420,7 @@ class KRHF(pbchf.RHF):
 
         This is a k-point version of scf.hf.SCF.get_occ
         '''
-        if mo_energy_kpts is None: mo_energy_kpts = self.mo_energy_kpts
+        if mo_energy_kpts is None: mo_energy_kpts = self.mo_energy
         mo_occ_kpts = np.zeros_like(mo_energy_kpts)
 
         nkpts, nao = mo_coeff_kpts.shape[:2]
@@ -510,7 +509,7 @@ class KRHF(pbchf.RHF):
                 + self.get_veff(kpts=kpts, kpt_band=kpt_band)
         s1e = pbchf.get_ovlp(cell, kpt_band)
         mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
-        return mo_energy, mo_coeff 
+        return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True):
         if chk is None: chk = self.chkfile

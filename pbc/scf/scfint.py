@@ -13,6 +13,7 @@ import pyscf.scf.hf
 import pyscf.dft
 import pyscf.gto
 import pyscf.lib
+import pyscf.pbc.scf
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc import tools
 
@@ -26,7 +27,7 @@ def get_hcore(cell, kpt=None):
     if cell.pseudo is None:
         hcore = pyscf.pbc.scf.hf.get_nuc(cell, kpt)
     else:
-        hcore = (pyscf.pbc.scf.hf.get_pp(cell, kpt) + 
+        hcore = (pyscf.pbc.scf.hf.get_pp(cell, kpt) +
                  get_jvloc_G0(cell, kpt))
     hcore += get_t(cell, kpt)
 
@@ -91,7 +92,7 @@ def test_periodic_ints():
     Lx = Lunit
 
     h = np.diag([Lx,Ly,Lz])
-    
+
     mol.build(
         verbose = 0,
         atom = '''
@@ -101,7 +102,7 @@ def test_periodic_ints():
         basis={'H':'sto-3g'})
     #    basis={'H':[[0,(1.0,1.0)]]})
 
-    # these are some exponents which are 
+    # these are some exponents which are
     # not hard to integrate
     # mol.basis = { 'He': [[0, (1.0, 1.0)], [0, [2.0, 1.0]]] }
     #mol.basis = { 'H': [[0, (1.0, 1.0)], [0, [2.0, 1.0]]] }
@@ -111,8 +112,8 @@ def test_periodic_ints():
     cell = pgto.Cell()
     cell.__dict__ = mol.__dict__ # hacky way to make a cell
     cell.h = h
-    cell.nimgs = gto.get_nimgs(cell, 1.e-6)
-    # print "NIMG",  
+    cell.nimgs = cell.get_nimgs(1.e-6)
+    # print "NIMG",
     print "NIMGS", cell.nimgs
     cell.pseudo = None
     cell.output = None
@@ -126,8 +127,8 @@ def test_periodic_ints():
     tA=get_t(cell)
 
     # Grid
-    sG=scf.get_ovlp(cell, gs)
-    tG=scf.get_t(cell, gs)
+    sG=pyscf.pbc.scf.hf.get_ovlp(cell, gs)
+    tG=pyscf.pbc.scf.hf.get_t(cell, gs)
 
     # These differences should be 0 up to grid integration error
     print "Diff", np.linalg.norm(sA-sG) # 1.05796568891e-06

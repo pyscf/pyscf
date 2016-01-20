@@ -8,7 +8,7 @@ from pyscf.pbc import tools
 #from joblib import Memory
 #memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
 #@memory.cache
-def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
+def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
@@ -21,11 +21,17 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     Kwargs:
         kpt : (3,) ndarray
             The k-point corresponding to the crystal AO.
+        deriv : int
+            AO derivative order.  It affects the shape of the return array.
+            If deriv=0, the returned AO values are stored in a (N,nao) array.
+            Otherwise the AO values are stored in an array of shape (M,N,nao).
+            Here N is the number of grids, nao is the number of AO functions,
+            M is the size associated to the derivative deriv.
 
     Returns:
-        aoR : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
-            The value of the AO crystal orbitals on the real-space grid. If
-            isgga=True, also contains the value of the orbitals gradient in the
+        aoR : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray
+            The value of the AO crystal orbitals on the real-space grid by default.
+            If deriv=1, also contains the value of the orbitals gradient in the
             x, y, and z directions.  It can be either complex or float array,
             depending on the kpt argument.  If kpt is not given (gamma point),
             aoR is a float array.
@@ -37,12 +43,12 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
     aoR = 0
     for L in tools.get_lattice_Ls(cell, cell.nimgs):
         if kpt is None:
-            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,
+            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             bastart, bascount,
                                             non0tab, verbose)
         else:
             factor = numpy.exp(1j*numpy.dot(kpt,L))
-            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, isgga, relativity,
+            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             bastart, bascount,
                                             non0tab, verbose) * factor
 
@@ -52,7 +58,7 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
 
         aoG = numpy.zeros_like(aoR)
         for i in range(cell.nao_nr()):
-            if isgga:
+            if deriv == 1:
                 for c in range(4):
                     aoG[c][ke_mask, i] = tools.fft(aoR[c][:,i], cell.gs)[ke_mask]
                     aoR[c][:,i] = tools.ifft(aoG[c][:,i], cell.gs)
@@ -60,23 +66,22 @@ def eval_ao(cell, coords, kpt=None, isgga=False, relativity=0, bastart=0,
                 aoG[ke_mask, i] = tools.fft(aoR[:,i], cell.gs)[ke_mask]
                 aoR[:,i] = tools.ifft(aoG[:,i], cell.gs)
 
-    return aoR
+    return numpy.asarray(aoR)
 
-def eval_rho(mol, ao, dm, non0tab=None, 
-             isgga=False, verbose=None):
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     '''Collocate the *real* density (opt. gradients) on the real-space grid.
 
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
-            The value of the AO crystal orbitals on the real-space grid. If
-            isgga=True, also contains the value of the gradient in the x, y,
+        ao : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray
+            The value of the AO crystal orbitals on the real-space grid by default.
+            If xctype='GGA', also contains the value of the gradient in the x, y,
             and z directions.
 
     Returns:
         rho : ([4,] nx*ny*nz) ndarray
-            The value of the density on the real-space grid. If isgga=True,
+            The value of the density on the real-space grid. If xctype='GGA',
             also contains the value of the gradient in the x, y, and z
             directions.
 
@@ -86,7 +91,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
     '''
 
     assert(ao.flags.c_contiguous)
-    if isgga:
+    if xctype == 'GGA':
         ngrids, nao = ao[0].shape
     else:
         ngrids, nao = ao.shape
@@ -95,7 +100,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.int8)
 
-    # if isgga:
+    # if xctype == 'GGA':
     #     rho = numpy.empty((4,ngrids))
     #     c0 = _dot_ao_dm(mol, ao[0], dm, nao, ngrids, non0tab)
     #     rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
@@ -107,7 +112,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
     #     rho = numpy.einsum('pi,pi->p', ao, c0)
     # return rho
 
-    # if isgga:
+    # if xctype == 'GGA':
     #     ngrids, nao = ao[0].shape
     # else:
     #     ngrids, nao = ao.shape
@@ -147,7 +152,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
         dm_re = numpy.ascontiguousarray(dm.real)
         dm_im = numpy.ascontiguousarray(dm.imag)
 
-        if isgga:
+        if xctype == 'GGA':
             rho = numpy.empty((4,ngrids))
             ao0_re = numpy.ascontiguousarray(ao[0].real)
             ao0_im = numpy.ascontiguousarray(ao[0].imag)
@@ -169,7 +174,7 @@ def eval_rho(mol, ao, dm, non0tab=None,
                 # ao_im = numpy.ascontiguousarray(ao[i].imag)
                 ao_re = numpy.ascontiguousarray(ao[i].real)
                 ao_im = numpy.ascontiguousarray(ao[i].imag)
-    
+
                 c1_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
                 c1_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
                 c1_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
@@ -178,12 +183,12 @@ def eval_rho(mol, ao, dm, non0tab=None,
                 rho[i] = (numpy.einsum('pi,pi->p', ao0_im, c1_ri) +
                           numpy.einsum('pi,pi->p', ao0_re, c1_rr) +
                           numpy.einsum('pi,pi->p', ao0_im, c1_ir) -
-                          numpy.einsum('pi,pi->p', ao0_re, c1_ii)) * 2 # *2 for +c.c.       
+                          numpy.einsum('pi,pi->p', ao0_re, c1_ii)) * 2 # *2 for +c.c.
         else:
             ao_re = numpy.ascontiguousarray(ao.real)
             ao_im = numpy.ascontiguousarray(ao.imag)
             # DM * ket: e.g. ir denotes dm_im | ao_re >
-            
+
             c0_rr = _dot_ao_dm(mol, ao_re, dm_re, nao, ngrids, non0tab)
             c0_ri = _dot_ao_dm(mol, ao_im, dm_re, nao, ngrids, non0tab)
             c0_ir = _dot_ao_dm(mol, ao_re, dm_im, nao, ngrids, non0tab)
@@ -196,34 +201,33 @@ def eval_rho(mol, ao, dm, non0tab=None,
 
     # real orbitals and real DM
     else:
-        rho = pyscf.dft.numint.eval_rho(mol, ao, dm, non0tab, isgga, verbose)
+        rho = pyscf.dft.numint.eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
     return rho
 
 def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-             isgga=False, verbose=None):
+             xctype='LDA', verbose=None):
     '''Calculate the XC potential AO matrix.
 
     Args:
         mol : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray 
-            The value of the AO crystal orbitals on the real-space grid. If
-            isgga=True, also contains the value of the gradient in the x, y,
+        ao : ([4,] nx*ny*nz, nao=cell.nao_nr()) ndarray
+            The value of the AO crystal orbitals on the real-space grid by default.
+            If xctype='GGA', also contains the value of the gradient in the x, y,
             and z directions.
 
-    Returns:
         rho : ([4,] nx*ny*nz) ndarray
-            The value of the density on the real-space grid. If isgga=True,
+            The value of the density on the real-space grid. If xctype='GGA',
             also contains the value of the gradient in the x, y, and z
             directions.
-    
+
     See Also:
         pyscf.dft.numint.eval_mat
 
     '''
 
-    if isgga:
+    if xctype == 'GGA':
         ngrids, nao = ao[0].shape
     else:
         ngrids, nao = ao.shape
@@ -233,7 +237,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                              dtype=numpy.int8)
 
     if numpy.iscomplexobj(ao):
-        if isgga:
+        if xctype == 'GGA':
             assert(vsigma is not None and rho.ndim==2)
             #wv = weight * vsigma * 2
             #aow  = numpy.einsum('pi,p->pi', ao[1], rho[1]*wv)
@@ -269,12 +273,11 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         mat = mat_re + 1j*mat_im
 
         return (mat + mat.T.conj())
-        
+
     else:
-        return pyscf.dft.numint.eval_mat(mol, ao, 
-                                         weight, rho, vrho, 
+        return pyscf.dft.numint.eval_mat(mol, ao, weight, rho, vrho,
                                          vsigma=None, non0tab=None,
-                                         isgga=False, verbose=None)
+                                         xctype='LDA', verbose=None)
 
 
 def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
@@ -335,6 +338,7 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         kpt1 = kpt_band
         kpt2 = kpt
 
+    xctype = pyscf.dft.numint._xc_type(x_id, c_id)
     nao = dm.shape[1] # a bit hacky, but correct for dm or list of dm's
     ngrids = len(grids.weights)
     blksize = min(int(max_memory/6*1e6/8/nao), ngrids)
@@ -348,40 +352,38 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         ip1 = min(ngrids, ip0+blksize)
         coords = grids.coords[ip0:ip1]
         weight = grids.weights[ip0:ip1]
-        if pyscf.dft.vxc._is_lda(x_id) and pyscf.dft.vxc._is_lda(c_id):
-            isgga = False
+        if xctype == 'LDA':
             if kpt_band is None:
-                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, isgga=isgga)
+                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, deriv=0)
             else:
-                ao_k1 = eval_ao(mol, coords, kpt=kpt1, isgga=isgga) 
-            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, isgga=isgga)
-            rho = ni.eval_rho(mol, ao_k2, dm, isgga=isgga)
-            exc, vrho, vsigma = ni.eval_xc(x_id, c_id, rho, rho,
-                                           spin, relativity, verbose)
+                ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=0)
+            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=0)
+            rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
+            exc, vxc = ni.eval_xc(x_id, c_id, rho, spin, relativity, 1)[:2]
+            vrho = vxc[0]
+            vsigma = None
             den = rho*weight
             nelec += den.sum()
             excsum += (den*exc).sum()
         else:
-            isgga = True
             if kpt_band is None:
-                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, isgga=isgga)
+                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, deriv=1)
             else:
-                ao_k1 = eval_ao(ni, mol, coords, kpt=kpt1, isgga=isgga) 
-            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, isgga=isgga)
-            rho = ni.eval_rho(mol, ao_k2, dm, isgga=isgga)
-            sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
-            exc, vrho, vsigma = ni.eval_xc(x_id, c_id, rho[0], sigma,
-                                           spin, relativity, verbose)
+                ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=1)
+            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=1)
+            rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
+            exc, vxc = ni.eval_xc(x_id, c_id, rho, spin, relativity, 1)[:2]
+            vrho, vsigma = vxc[:2]
             den = rho[0]*weight
             nelec += den.sum()
             excsum += (den*exc).sum()
 
         if kpt_band is None:
-            vmat += ni.eval_mat(mol, ao_k1, weight, rho, vrho, vsigma, isgga=isgga,
-                                verbose=verbose)
+            vmat += ni.eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
+                                xctype=xctype, verbose=verbose)
         else:
-            vmat += eval_mat(mol, ao_k1, weight, rho, vrho, vsigma, isgga=isgga,
-                                verbose=verbose)
+            vmat += eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
+                             xctype=xctype, verbose=verbose)
 
     return nelec, excsum, vmat
 
@@ -394,15 +396,15 @@ class _NumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
 
-    def eval_ao(self, mol, coords, kpt=None, isgga=False, relativity=0, bastart=0,
+    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, bastart=0,
                 bascount=None, non0tab=None, verbose=None):
-        return eval_ao(mol, coords, kpt, isgga, relativity, bastart, 
+        return eval_ao(mol, coords, kpt, deriv, relativity, bastart,
                        bascount, non0tab, verbose)
 
-    def eval_rho(self, mol, ao, dm, non0tab=None, isgga=False, verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, isgga, verbose)
+    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
+        return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
-    def eval_rho2(self, mol, ao, dm, non0tab=None, isgga=False, verbose=None):
+    def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         raise NotImplementedError
 
     def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
@@ -411,7 +413,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, mol, grids, x_id, c_id, dms, 
+        return nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
                           spin=0, relativity=0, hermi=1,
                           max_memory=max_memory, verbose=verbose,
                           kpt=kpt, kpt_band=kpt_band)
@@ -421,25 +423,25 @@ class _NumInt(pyscf.dft.numint._NumInt):
         raise NotImplementedError
 
     def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-                 isgga=False, verbose=None):
+                 xctype='LDA', verbose=None):
         # use local function for complex eval_mat
         return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
-                        isgga, verbose)
+                        xctype, verbose)
 
 
 class _KNumInt(pyscf.dft.numint._NumInt):
-    '''Generalization of pyscf's _NumInt class for k-point sampling and 
+    '''Generalization of pyscf's _NumInt class for k-point sampling and
     periodic images.
     '''
     def __init__(self, kpts=None):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpts = kpts
 
-    def eval_ao(self, mol, coords, kpt=None, isgga=False, relativity=0, bastart=0,
+    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, bastart=0,
                 bascount=None, non0tab=None, verbose=None):
         '''
         Returns:
-            ao_kpts: (nkpts, ngs, nao) ndarray 
+            ao_kpts: (nkpts, ngs, nao) ndarray
                 AO values at each k-point
         '''
         if kpt is None:
@@ -453,13 +455,13 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
         for k in range(nkpts):
             kpt = kpts[k,:]
-            ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, isgga,
+            ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, deriv,
                                   relativity, bastart, bascount,
                                   non0tab, verbose)
         return ao_kpts
 
     def eval_rho(self, mol, ao_kpts, dm_kpts, non0tab=None,
-             isgga=False, verbose=None):
+                 xctype='LDA', verbose=None):
         '''
         Args:
             mol : Mole or Cell object
@@ -477,8 +479,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
             rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
         return rhoR
 
-    def eval_rho2(self, mol, ao, dm, non0tab=None, isgga=False,
-                  verbose=None):
+    def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         raise NotImplementedError
 
     def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
@@ -487,7 +488,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, mol, grids, x_id, c_id, dms, 
+        return nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
                           spin=0, relativity=0, hermi=1,
                           max_memory=max_memory, verbose=verbose,
                           kpt=kpt, kpt_band=kpt_band)
@@ -497,7 +498,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         raise NotImplementedError
 
     def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-                 isgga=False, verbose=None):
+                 xctype='LDA', verbose=None):
         # use local function for complex eval_mat
         nkpts = len(self.kpts)
         nao = ao.shape[2]
@@ -505,6 +506,6 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         for k in range(nkpts):
             mat[k,:,:] = eval_mat(mol, ao[k,:,:], weight,
                                     rho, vrho, vsigma, non0tab,
-                                    isgga, verbose)
+                                    xctype, verbose)
         return mat
 
