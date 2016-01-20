@@ -1,5 +1,5 @@
 /*
- *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>

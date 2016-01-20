@@ -19,7 +19,7 @@ from pyscf.df import incore
 from pyscf.df import _ri
 
 #
-# for auxe1 (ij|P)
+# for auxe1 (P|ij)
 #
 
 libri = pyscf.lib.load_library('libri')

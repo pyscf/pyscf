@@ -1,5 +1,5 @@
 /*
- *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>
@@ -7,7 +7,7 @@
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
-#include "fblas.h"
+#include "vhf/fblas.h"
 
 #define RADI_POWER      3
 #define ECP_LMAX        4

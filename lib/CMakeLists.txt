@@ -74,6 +74,7 @@ configure_file(
 include_directories("${PROJECT_BINARY_DIR}")
 
 add_subdirectory(np_helper)
+add_subdirectory(gto)
 add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)

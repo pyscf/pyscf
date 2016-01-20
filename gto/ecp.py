@@ -17,7 +17,7 @@ import numpy
 from pyscf import lib
 from pyscf.gto import moleintor
 
-libecp = moleintor._cint
+libecp = moleintor.libcgto
 
 def type1_by_shell(mol, shls):
     li = mol.bas_angular(shls[0])

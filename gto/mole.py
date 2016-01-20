@@ -17,6 +17,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
+from pyscf.gto import eval_gto
 import pyscf.gto.ecp
 
 
@@ -80,7 +81,7 @@ def cart2sph(l):
     else:
         nd = l * 2 + 1
         c2sph = numpy.zeros((nf,nd), order='F')
-        fn = moleintor._cint.CINTc2s_ket_sph
+        fn = moleintor.libcgto.CINTc2s_ket_sph
         fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
            cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
@@ -1321,7 +1322,7 @@ class Mole(object):
                                                    self._basis):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self._atom, self._basis)
-                    sys.stderr.write('Warn: unable to identify input symmetry %s,'
+                    sys.stderr.write('Warn: unable to identify input symmetry %s, '
                                      'use %s instead.\n' %
                                      (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
@@ -1966,6 +1967,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
                                           self._env, comp)
 
+    def eval_gto(self, eval_name, coords,
+                 comp=1, bastart=0, bascount=None, non0tab=None, out=None):
+        return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
+                                 coords, comp, bastart, bascount, non0tab, out)
+
     def energy_nuc(self):
         return energy_nuc(self)
     def get_enuc(self):
@@ -1988,7 +1994,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def spinor_labels(self):
         return spinor_labels(self)
 
-_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
+_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.iteritems())
 
 def _rm_digit(symb):
     if symb.isalpha():
@@ -2055,13 +2061,23 @@ def _update_from_cmdargs_(mol):
 
 
 def from_zmatrix(atomstr):
+    '''>>> a = """H
+    H 1 2.67247631453057
+    H 1 4.22555607338457 2 50.7684795164077
+    H 1 2.90305235726773 2 79.3904651036893 3 6.20854462618583"""
+    >>> for x in zmat2cart(a): print x
+    ['H', array([ 0.,  0.,  0.])]
+    ['H', array([ 2.67247631,  0.        ,  0.        ])]
+    ['H', array([ 2.67247631,  0.        ,  3.27310166])]
+    ['H', array([ 0.53449526,  0.30859098,  2.83668811])]
+    '''
     import pyscf.symm
     atomstr = atomstr.replace(';','\n').replace(',',' ')
     atoms = []
     for line in atomstr.split('\n'):
         if line.strip():
             rawd = line.split()
-            if len(rawd) == 1:
+            if len(rawd) < 3:
                 atoms.append([rawd[0], numpy.zeros(3)])
             elif len(rawd) == 3:
                 atoms.append([rawd[0], numpy.array((float(rawd[2]), 0, 0))])
@@ -2094,7 +2110,66 @@ def from_zmatrix(atomstr):
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
                 atoms.append([rawd[0], atoms[bonda][1]+c])
     return atoms
-zmat = from_zmatrix
+zmat2cart = zmat = from_zmatrix
+
+def cart2zmat(coord):
+    '''>>> c = numpy.array((
+    (0.000000000000,  1.889726124565,  0.000000000000),
+    (0.000000000000,  0.000000000000, -1.889726124565),
+    (1.889726124565, -1.889726124565,  0.000000000000),
+    (1.889726124565,  0.000000000000,  1.133835674739)))
+    >>> print cart2zmat(c)
+    1
+    1 2.67247631453057
+    1 4.22555607338457 2 50.7684795164077
+    1 2.90305235726773 2 79.3904651036893 3 6.20854462618583
+    '''
+    zstr = []
+    zstr.append('1')
+    if len(coord) > 1:
+        r1 = coord[1] - coord[0]
+        nr1 = numpy.linalg.norm(r1)
+        zstr.append('1 %.15g' % nr1)
+    if len(coord) > 2:
+        r2 = coord[2] - coord[0]
+        nr2 = numpy.linalg.norm(r2)
+        a = numpy.arccos(numpy.dot(r1,r2)/(nr1*nr2))
+        zstr.append('1 %.15g 2 %.15g' % (nr2, a*180/numpy.pi))
+    if len(coord) > 3:
+        o0, o1, o2 = coord[:3]
+        p0, p1, p2 = 1, 2, 3
+        for k, c in enumerate(coord[3:]):
+            r0 = c - o0
+            nr0 = numpy.linalg.norm(r0)
+            r1 = o1 - o0
+            nr1 = numpy.linalg.norm(r1)
+            a1 = numpy.arccos(numpy.dot(r0,r1)/(nr0*nr1))
+            b0 = numpy.cross(r0, r1)
+            nb0 = numpy.linalg.norm(b0)
+
+            if abs(nb0) < 1e-7: # o0, o1, c in line
+                a2 = 0
+                zstr.append('%d %.15g %d %.15g %d %.15g' %
+                           (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
+            else:
+                b1 = numpy.cross(o2-o0, r1)
+                nb1 = numpy.linalg.norm(b1)
+
+                if abs(nb1) < 1e-7:  # o0 o1 o2 in line
+                    a2 = 0
+                    zstr.append('%d %.15g %d %.15g %d %.15g' %
+                               (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
+                    o2 = c
+                    p2 = 4 + k
+                else:
+                    if numpy.dot(numpy.cross(b1, b0), r1) < 0:
+                        a2 = numpy.arccos(numpy.dot(b1, b0) / (nb0*nb1))
+                    else:
+                        a2 =-numpy.arccos(numpy.dot(b1, b0) / (nb0*nb1))
+                    zstr.append('%d %.15g %d %.15g %d %.15g' %
+                               (p0, nr0, p1, a1*180/numpy.pi, p2, a2*180/numpy.pi))
+
+    return '\n'.join(zstr)
 
 def dyall_nuc_mod(mass, c=param.LIGHTSPEED):
     ''' Generate the nuclear charge distribution parameter zeta

@@ -4,12 +4,12 @@
 #
 
 import ctypes
-import _ctypes
 import time
 import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.dft.vxc
+from pyscf.lib import logger
 
 libdft = pyscf.lib.load_library('libdft')
 OCCDROP = 1e-12
@@ -17,7 +17,7 @@ BLKSIZE = 96
 
 def eval_ao(mol, coords, deriv=0, relativity=0, bastart=0, bascount=None,
             non0tab=None, out=None, verbose=None):
-    '''Evaluate AO function value on the given grids, for LDA and GGA functional.
+    '''Evaluate AO function value on the given grids.
 
     Args:
         mol : an instance of :class:`Mole`
@@ -73,43 +73,9 @@ def eval_ao(mol, coords, deriv=0, relativity=0, bastart=0, bascount=None,
 You see this error message because of the API updates in pyscf v1.1.
 Argument "isgga" is replaced by argument "deriv", to support high order AO derivatives''')
 
-    natm = ctypes.c_int(mol._atm.shape[0])
-    nbas = ctypes.c_int(mol.nbas)
-    ngrids = len(coords)
-    if bascount is None:
-        bascount = mol.nbas - bastart
-        nao = mol.nao_nr()
-    else:
-        nao_bound = mol.nao_nr_range(bastart, bastart+bascount)
-        nao = nao_bound[1] - nao_bound[0]
-
-    if deriv > 0:
-        m = (deriv+1)*(deriv+2)*(deriv+3)//6
-        if out is None:
-            ao = numpy.empty((m, ngrids,nao))
-        else:
-            ao = numpy.ndarray((m,ngrids,nao), buffer=out)
-    else:
-        if out is None:
-            ao = numpy.empty((ngrids,nao))
-        else:
-            ao = numpy.ndarray((ngrids,nao), buffer=out)
-
-    if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
-
-    libdft.VXCeval_ao_drv(ctypes.c_int(deriv),
-                          ctypes.c_int(nao), ctypes.c_int(ngrids),
-                          ctypes.c_int(bastart), ctypes.c_int(bascount),
-                          ctypes.c_int(BLKSIZE),
-                          ao.ctypes.data_as(ctypes.c_void_p),
-                          coords.ctypes.data_as(ctypes.c_void_p),
-                          non0tab.ctypes.data_as(ctypes.c_void_p),
-                          mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                          mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                          mol._env.ctypes.data_as(ctypes.c_void_p))
-    return ao
+    comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+    feval = 'GTOval_sph_deriv%d' % deriv
+    return mol.eval_gto(feval, coords, comp, bastart, bascount, non0tab, out)
 
 def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
               verbose=None):
@@ -516,6 +482,7 @@ def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
             vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
             vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
             vtau   = vxc[ngrids*7:ngrids*9].reshape(ngrids,2)
+            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
         else:
             vxc = vrho = vsigma = vlapl = vtau = None
             pvxc = pyscf.lib.c_null_ptr()
@@ -534,8 +501,7 @@ def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     libdft.VXCnr_eval_x(ctypes.c_int(x_id), ctypes.c_int(nspin),
                         ctypes.c_int(relativity), ctypes.c_int(ngrids),
                         prho_u, prho_d,
-                        exc.ctypes.data_as(ctypes.c_void_p),
-                        vxc.ctypes.data_as(ctypes.c_void_p), pfxc, pkxc)
+                        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
     return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
 
 def eval_c(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
@@ -643,6 +609,7 @@ def eval_c(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
             vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
             vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
             vtau   = vxc[ngrids*7:ngrids*9].reshape(ngrids,2)
+            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
         else:
             vxc = vrho = vsigma = vlapl = vtau = None
             pvxc = pyscf.lib.c_null_ptr()
@@ -661,8 +628,7 @@ def eval_c(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     libdft.VXCnr_eval_c(ctypes.c_int(x_id), ctypes.c_int(nspin),
                         ctypes.c_int(relativity), ctypes.c_int(ngrids),
                         prho_u, prho_d,
-                        exc.ctypes.data_as(ctypes.c_void_p),
-                        vxc.ctypes.data_as(ctypes.c_void_p), pfxc, pkxc)
+                        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
     return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
 
 def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
@@ -778,10 +744,14 @@ def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
 
 def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
-    return nr_rks_vxc(_NumInt(), mol, grids, x_id, c_id, dm, spin, relativity,
-                      hermi, max_memory, verbose)
+    if spin == 0:
+        return nr_rks_vxc(_NumInt(), mol, grids, x_id, c_id, dm, spin, relativity,
+                          hermi, max_memory, verbose)
+    else:
+        return nr_uks_vxc(_NumInt(), mol, grids, x_id, c_id, dm, spin, relativity,
+                          hermi, max_memory, verbose)
 
-def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
+def nr_rks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
@@ -795,8 +765,8 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         x_id, c_id : int
             Exchange/Correlation functional ID used by libxc library.
             See pyscf/dft/vxc.py for more details.
-        dm : 2D array
-            Density matrix
+        dms : 2D array a list of 2D arrays
+            Density matrix or multiple density matrices
 
     Kwargs:
         spin : int
@@ -827,51 +797,207 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
     >>> dm = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
     >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, x_id, c_id, dm)
     '''
-    nao = dm.shape[0]
+    assert(hermi == 1)
+
+#TEST ME
+
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        nao = dms.shape[0]
+        dms = [dms]
+    else:
+        nao = dms[0].shape[0]
+
+    xctype = _xc_type(x_id, c_id)
     ngrids = len(grids.weights)
-    blksize = min(int(max_memory/6*1e6/8/nao), ngrids)
-    nelec = 0
-    excsum = 0
-    vmat = numpy.zeros_like(dm)
-    if pyscf.dft.vxc.is_lda(x_id) and pyscf.dft.vxc.is_lda(c_id):
+    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
+    if ni.non0tab is None:
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                             dtype=numpy.int8)
+    else:
+        non0tab = ni.non0tab
+
+    nset = len(dms)
+    nelec = numpy.zeros(nset)
+    excsum = numpy.zeros(nset)
+    vmat = numpy.zeros_like(dms)
+    if xctype == 'LDA':
         buf = numpy.empty((blksize,nao))
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
-            ao = ni.eval_ao(mol, coords, deriv=0, out=buf)
-            rho = ni.eval_rho(mol, ao, dm, xctype='LDA')
-            exc, vxc = ni.eval_xc(x_id, c_id, rho,
-                                  spin, relativity, 1, verbose)[:2]
-            vrho = vxc[0]
-            den = rho*weight
-            nelec += den.sum()
-            excsum += (den*exc).sum()
-            vmat += eval_mat(mol, ao, weight, rho, vrho, xctype='LDA',
-                             verbose=verbose)
-    elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
-        raise NotImplementedError('meta-GGA')
-    else:
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0, out=buf)
+            for idm, dm in enumerate(dms):
+                rho = ni.eval_rho(mol, ao, dm, non0, xctype)
+                exc, vxc = ni.eval_xc(x_id, c_id, rho,
+                                      spin, relativity, 1, verbose)[:2]
+                vrho = vxc[0]
+                den = rho * weight
+                nelec[idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+                aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
+                vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0)
+                rho = exc = vxc = vrho = aow = None
+    elif xctype == 'GGA':
         buf = numpy.empty((4,blksize,nao))
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
-            ao = ni.eval_ao(mol, coords, deriv=1, out=buf)
-            rho = ni.eval_rho(mol, ao, dm, xctype='GGA')
-            exc, vxc = ni.eval_xc(x_id, c_id, rho,
-                                  spin, relativity, 1, verbose)[:2]
-            vrho, vsigma = vxc[:2]
-            den = rho[0]*weight
-            nelec += den.sum()
-            excsum += (den*exc).sum()
-            vmat += eval_mat(mol, ao, weight, rho, vrho, vsigma, xctype='GGA',
-                             verbose=verbose)
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0, out=buf)
+            for idm, dm in enumerate(dms):
+                rho = ni.eval_rho(mol, ao, dm, non0, xctype)
+                exc, vxc = ni.eval_xc(x_id, c_id, rho,
+                                      spin, relativity, 1, verbose)[:2]
+                vrho, vsigma = vxc[:2]
+                den = rho[0] * weight
+                nelec[idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+# ref eval_mat function
+                wv = numpy.empty_like(rho)
+                wv[0]  = weight * vrho * .5
+                wv[1:] = rho[1:] * (weight * vsigma * 2)
+                aow = numpy.einsum('npi,np->pi', ao, wv)
+                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0)
+                rho = exc = vxc = vrho = vsigma = wv = aow = None
+    else:
+        buf = numpy.empty((6,blksize,nao))
+        raise NotImplementedError('meta-GGA')
+
+    for i in range(nset):
+        vmat[i] = vmat[i] + vmat[i].T
+    if nset == 1:
+        nelec = nelec[0]
+        excsum = excsum[0]
+        vmat = vmat.reshape(nao,nao)
     return nelec, excsum, vmat
 
-def nr_uks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
+def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
-    raise NotImplementedError('UKS vxc')
+    '''Calculate UKS XC functional and potential matrix for given meshgrids
+    and a set of density matrices
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        grids : an instance of :class:`Grids`
+            grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+        x_id, c_id : int
+            Exchange/Correlation functional ID used by libxc library.
+            See pyscf/dft/vxc.py for more details.
+        dms : a list of 2D arrays
+            A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
+
+    Kwargs:
+        hermi : int
+            No effects
+        max_memory : int or float
+            The maximum size of cache to use (in MB).
+        verbose : int or object of :class:`Logger`
+
+    Returns:
+        nelec, excsum, vmat.
+        nelec is the number of (alpha,beta) electrons generated by numerical integration.
+        excsum is the XC functional value.
+        vmat is the XC potential matrix for (alpha,beta) spin.
+    '''
+    assert(hermi == 1)
+
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        nao = dms.shape[0]
+        nset = 1
+        dms = [dms,dms]
+    else:
+        nao = dms[0].shape[0]
+        nset = len(dms) // 2
+
+    xctype = _xc_type(x_id, c_id)
+    ngrids = len(grids.weights)
+# NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
+    if ni.non0tab is None:
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                             dtype=numpy.int8)
+    else:
+        non0tab = ni.non0tab
+
+    nelec = numpy.zeros((2,nset))
+    excsum = numpy.zeros(nset)
+    vmat = numpy.zeros((2,nset,nao,nao))
+    if xctype == 'LDA':
+        buf = numpy.empty((blksize,nao))
+        for ip0, ip1 in prange(0, ngrids, blksize):
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0, out=buf)
+            for idm in range(nset):
+                dm_a = dms[idm]
+                dm_b = dms[nset+idm]
+                rho_a = ni.eval_rho(mol, ao, dm_a, non0, xctype)
+                rho_b = ni.eval_rho(mol, ao, dm_b, non0, xctype)
+                exc, vxc = ni.eval_xc(x_id, c_id, (rho_a, rho_b),
+                                      1, relativity, 1, verbose)[:2]
+                vrho = vxc[0]
+                den = rho_a * weight
+                nelec[0,idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+                den = rho_b * weight
+                nelec[1,idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+
+                aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0])
+                vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0)
+                aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1])
+                vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0)
+                rho_a = rho_b = exc = vxc = vrho = aow = None
+    elif xctype == 'GGA':
+        buf = numpy.empty((4,blksize,nao))
+        for ip0, ip1 in prange(0, ngrids, blksize):
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0, out=buf)
+            for idm in range(nset):
+                dm_a = dms[idm]
+                dm_b = dms[nset+idm]
+                rho_a = ni.eval_rho(mol, ao, dm_a, non0, xctype)
+                rho_b = ni.eval_rho(mol, ao, dm_b, non0, xctype)
+                exc, vxc = ni.eval_xc(x_id, c_id, (rho_a, rho_b),
+                                      1, relativity, 1, verbose)[:2]
+                vrho, vsigma = vxc[:2]
+                den = rho_a[0]*weight
+                nelec[0,idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+                den = rho_b[0]*weight
+                nelec[1,idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+
+                wv = numpy.empty_like(rho_a)
+                wv[0]  = weight * vrho[:,0] * .5
+                wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
+                wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
+                aow = numpy.einsum('npi,np->pi', ao, wv)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0)
+                wv[0]  = weight * vrho[:,1] * .5
+                wv[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
+                wv[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
+                aow = numpy.einsum('npi,np->pi', ao, wv)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0)
+                rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
+    else:
+        raise NotImplementedError('meta-GGA')
+
+    for i in range(nset):
+        vmat[0,i] = vmat[0,i] + vmat[0,i].T
+        vmat[1,i] = vmat[1,i] + vmat[1,i].T
+    if nset == 1:
+        nelec = nelec.reshape(2)
+        excsum = excsum[0]
+        vmat = vmat.reshape(2,nao,nao)
+    return nelec, excsum, vmat
 
 
 class _NumInt(object):
@@ -880,7 +1006,7 @@ class _NumInt(object):
 
     def nr_vxc(self, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
-        '''Evaluate RKS/UKS XC functional and potential matrix matrix for given meshgrids
+        '''Evaluate RKS/UKS XC functional and potential matrix for given meshgrids
         and a set of density matrices.  See :func:`nr_rks` and :func:`nr_uks`
         for more details.
         '''
@@ -893,7 +1019,7 @@ class _NumInt(object):
 
     def nr_rks(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
-        '''Calculate RKS XC functional and potential matrix matrix for given meshgrids
+        '''Calculate RKS XC functional and potential matrix for given meshgrids
         and a set of density matrices
 
         Args:
@@ -904,7 +1030,7 @@ class _NumInt(object):
             x_id, c_id : int
                 Exchange/Correlation functional ID used by libxc library.
                 See pyscf/dft/vxc.py for more details.
-            dm : 2D array a list of 2D arrays
+            dms : 2D array a list of 2D arrays
                 Density matrix or multiple density matrices
 
         Kwargs:
@@ -922,17 +1048,10 @@ class _NumInt(object):
         '''
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
-        nao = mol.nao_nr()
-        ngrids = len(grids.weights)
-# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
-        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
-        if pyscf.dft.vxc.is_lda(x_id) and pyscf.dft.vxc.is_lda(c_id):
-            xctype = 'LDA'
-        elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
-            xctype = 'MGGA'
-            raise NotImplementedError('meta-GGA')
-        else:
-            xctype = 'GGA'
+
+        if hermi != 1:
+            return nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
+                              0, relativity, hermi, max_memory, verbose)
 
         natocc = []
         natorb = []
@@ -940,11 +1059,19 @@ class _NumInt(object):
             e, c = scipy.linalg.eigh(dms)
             natocc.append(e)
             natorb.append(c)
+            nao = dms.shape[0]
         else:
             for dm in dms:
                 e, c = scipy.linalg.eigh(dm)
                 natocc.append(e)
                 natorb.append(c)
+            nao = dms[0].shape[0]
+
+        xctype = _xc_type(x_id, c_id)
+        ngrids = len(grids.weights)
+# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
+
         nset = len(natocc)
         nelec = numpy.zeros(nset)
         excsum = numpy.zeros(nset)
@@ -959,17 +1086,17 @@ class _NumInt(object):
                                   out=buf)
                 for idm in range(nset):
                     rho = self.eval_rho2(mol, ao, natorb[idm], natocc[idm],
-                                         non0tab=non0tab, xctype=xctype)
+                                         non0tab, xctype)
                     exc, vxc = self.eval_xc(x_id, c_id, rho,
                                             0, relativity, 1, verbose)[:2]
                     vrho = vxc[0]
-                    den = rho*weight
+                    den = rho * weight
                     nelec[idm] += den.sum()
-                    excsum[idm] += (den*exc).sum()
-                    aow = ao * (.5*weight*vrho).reshape(-1,1)
-                    vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0,
-                                            non0tab)
-                wv = aow = vrho = vsigma = exc = None
+                    excsum[idm] += (den * exc).sum()
+                    # *.5 because vmat + vmat.T
+                    aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
+                    vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
+                    rho = exc = vxc = vrho = aow = None
         elif xctype == 'GGA':
             buf = numpy.empty((4,blksize,nao))
             for ip0, ip1 in prange(0, ngrids, blksize):
@@ -980,21 +1107,20 @@ class _NumInt(object):
                                   out=buf)
                 for idm in range(nset):
                     rho = self.eval_rho2(mol, ao, natorb[idm], natocc[idm],
-                                         non0tab=non0tab, xctype=xctype)
+                                         non0tab, xctype)
                     exc, vxc = self.eval_xc(x_id, c_id, rho,
                                             0, relativity, 1, verbose)[:2]
                     vrho, vsigma = vxc[:2]
-                    den = rho[0]*weight
+                    den = rho[0] * weight
                     nelec[idm] += den.sum()
-                    excsum[idm] += (den*exc).sum()
+                    excsum[idm] += (den * exc).sum()
 # ref eval_mat function
                     wv = numpy.empty_like(rho)
                     wv[0]  = weight * vrho * .5
                     wv[1:] = rho[1:] * (weight * vsigma * 2)
                     aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
-                                            non0tab)
-                wv = aow = vrho = vsigma = exc = None
+                    vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
+                    rho = exc = vxc = vrho = vsigma = wv = aow = None
         else:
             raise NotImplementedError('meta-GGA')
         for i in range(nset):
@@ -1007,7 +1133,7 @@ class _NumInt(object):
 
     def nr_uks(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
-        '''Calculate UKS XC functional and potential matrix matrix for given meshgrids
+        '''Calculate UKS XC functional and potential matrix for given meshgrids
         and a set of density matrices
 
         Args:
@@ -1018,8 +1144,8 @@ class _NumInt(object):
             x_id, c_id : int
                 Exchange/Correlation functional ID used by libxc library.
                 See pyscf/dft/vxc.py for more details.
-            dm : 2D array a list of 2D arrays
-                Density matrix or multiple density matrices
+            dm : a list of 2D arrays
+                A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
 
         Kwargs:
             hermi : int
@@ -1036,17 +1162,10 @@ class _NumInt(object):
         '''
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
-        nao = mol.nao_nr()
-        ngrids = len(grids.weights)
-# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
-        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
-        if pyscf.dft.vxc.is_lda(x_id) and pyscf.dft.vxc.is_lda(c_id):
-            xctype = 'LDA'
-        elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
-            xctype = 'MGGA'
-            raise NotImplementedError('meta-GGA')
-        else:
-            xctype = 'GGA'
+
+        if hermi != 1:
+            return nr_uks_vxc(self, mol, grids, x_id, c_id, dms,
+                              mol.spin, relativity, hermi, max_memory, verbose)
 
         natocc = []
         natorb = []
@@ -1055,6 +1174,7 @@ class _NumInt(object):
             natocc.append((e*.5,e*.5))
             natorb.append((c,c))
             nset = 1
+            nao = dms.shape[0]
         else:
             nset = len(dms) // 2
             for idm in range(nset):
@@ -1062,6 +1182,13 @@ class _NumInt(object):
                 e_b, c_b = scipy.linalg.eigh(dms[nset+idm])
                 natocc.append((e_a,e_b))
                 natorb.append((c_a,c_b))
+            nao = dms[0].shape[0]
+
+        xctype = _xc_type(x_id, c_id)
+        ngrids = len(grids.weights)
+# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
+
         nelec = numpy.zeros((2,nset))
         excsum = numpy.zeros(nset)
         vmat = numpy.zeros((2,nset,nao,nao))
@@ -1075,27 +1202,23 @@ class _NumInt(object):
                 for idm in range(nset):
                     c_a, c_b = natorb[idm]
                     e_a, e_b = natocc[idm]
-                    rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab=non0tab,
-                                           xctype=xctype)
-                    rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab=non0tab,
-                                           xctype=xctype)
+                    rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab, xctype)
+                    rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab, xctype)
                     exc, vxc = self.eval_xc(x_id, c_id, (rho_a, rho_b),
                                             1, relativity, 1, verbose)[:2]
                     vrho = vxc[0]
-                    den = rho_a*weight
+                    den = rho_a * weight
                     nelec[0,idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
-                    den = rho_b*weight
+                    den = rho_b * weight
                     nelec[1,idm] += den.sum()
                     excsum[idm] += (den*exc).sum()
 
-                    aow = ao * (.5*weight*vrho[:,0]).reshape(-1,1)
-                    vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0,
-                                              non0tab)
-                    aow = ao * (.5*weight*vrho[:,1]).reshape(-1,1)
-                    vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0,
-                                              non0tab)
-                wv = aow = None
+                    aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0])
+                    vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
+                    aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1])
+                    vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
+                    rho_a = rho_b = exc = vxc = vrho = aow = None
         elif xctype == 'GGA':
             buf = numpy.empty((4,blksize,nao))
             for ip0, ip1 in prange(0, ngrids, blksize):
@@ -1106,10 +1229,8 @@ class _NumInt(object):
                 for idm in range(nset):
                     c_a, c_b = natorb[idm]
                     e_a, e_b = natocc[idm]
-                    rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab=non0tab,
-                                           xctype=xctype)
-                    rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab=non0tab,
-                                           xctype=xctype)
+                    rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab, xctype)
+                    rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab, xctype)
                     exc, vxc = self.eval_xc(x_id, c_id, (rho_a, rho_b),
                                             1, relativity, 1, verbose)[:2]
                     vrho, vsigma = vxc[:2]
@@ -1125,15 +1246,13 @@ class _NumInt(object):
                     wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
                     wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
                     aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
-                                              non0tab)
+                    vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
                     wv[0]  = weight * vrho[:,1] * .5
                     wv[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
                     wv[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
                     aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0,
-                                              non0tab)
-                wv = aow = None
+                    vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
+                    rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
         else:
             raise NotImplementedError('meta-GGA')
 
@@ -1174,6 +1293,16 @@ class _NumInt(object):
 def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
+
+def _xc_type(x_id, c_id):
+    if pyscf.dft.vxc.is_lda(x_id) and pyscf.dft.vxc.is_lda(c_id):
+        xctype = 'LDA'
+    elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
+        xctype = 'MGGA'
+        raise NotImplementedError('meta-GGA')
+    else:
+        xctype = 'GGA'
+    return xctype
 
 
 if __name__ == '__main__':
