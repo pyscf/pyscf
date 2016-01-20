@@ -28,10 +28,10 @@ def density_fit(casscf, auxbasis='weigend'):
     corresponding density fitting integrals.
     
     Note, depending on the underlying mean-field objects, this function
-    maybe NOT execute the density fitting for 2e integral transformation.
+    may NOT execute the density fitting for 2e integral transformation.
     If the underlying meanfield object is density-fitting SCF (self._scf._tag_df is True),
     the 2e integral will be transformed using density fitting method.
-    Otherwise,  the exact 2e integral transformation will be called.
+    Otherwise, the exact 2e integral transformation will be called.
 
     Args:
         casscf : an CASSCF object
@@ -64,11 +64,21 @@ def density_fit(casscf, auxbasis='weigend'):
             self._naoaux = None
             self._keys = self._keys.union(['auxbasis'])
 
-        def ao2mo(self, mo):
-            return ao2mo_(self, mo)
+        def dump_flags(self):
+            casscf.dump_flags()
+            if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+                logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
+            elif 'CASSCF' in str(casscf.__class__):
+                logger.info(self, 'CASSCF: density fitting for orbital hessian')
 
-        def get_h2eff(self, mo):  # For CASCI
-            return ao2mo_aaaa(self, mo)
+        def ao2mo(self, mo_coeff):
+            return ao2mo_(self, mo_coeff)
+
+        def get_h2eff(self, mo_coeff=None):  # For CASCI
+            if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+                return ao2mo_aaaa(self, mo_coeff)
+            else:
+                return casscf.get_h2eff(mo_coeff)
 
 # We don't modify self._scf because it changes self.h1eff function.
 # We only need approximate jk for self.update_jk_in_ah

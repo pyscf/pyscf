@@ -402,10 +402,7 @@ class CASCI(object):
     def __init__(self, mf, ncas, nelecas, ncore=None):
         mol = mf.mol
         self.mol = mol
-        if hasattr(mf, '_scf'):  # Support the fake mf which is an post-HF object
-            self._scf = mf._scf
-        else:
-            self._scf = mf
+        self._scf = mf
         self.verbose = mol.verbose
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
@@ -481,20 +478,12 @@ class CASCI(object):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
 
-        if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
-            from pyscf.mcscf import df
-            # a hacky call using dm=[], to make sure all things are initialized
-            self._scf.get_jk(self.mol, [])
-            self._cderi = self._scf._cderi
-            self._naoaux = self._scf._naoaux
-            return df.ao2mo_aaaa(self, mo_coeff)
+        nao, nmo = mo_coeff.shape
+        if self._scf._eri is not None:
+            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
         else:
-            nao, nmo = mo_coeff.shape
-            if self._scf._eri is not None:
-                eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
-            else:
-                eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
-                                                      verbose=self.verbose)
+            eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
+                                                  verbose=self.verbose)
         return eri
 
     def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):

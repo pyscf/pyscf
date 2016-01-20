@@ -523,7 +523,7 @@ def newton(mf):
         def dump_flags(self):
             log = logger.Logger(self.stdout, self.verbose)
             log.info('\n')
-            log.info('******** SCF Newton Raphson flags ********')
+            log.info('******** %s Newton solver flags ********', self._scf.__class__)
             log.info('SCF tol = %g', self.conv_tol)
             log.info('conv_tol_grad = %s',    self.conv_tol_grad)
             log.info('max. SCF cycles = %d', self.max_cycle)

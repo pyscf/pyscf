@@ -501,8 +501,7 @@ class FCISolver(object):
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
         log = pyscf.lib.logger.Logger(self.stdout, verbose)
-        log.info('******** CI flags ********')
-        log.info('fci module = %s', self.__module__)
+        log.info('******** %s flags ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('linear dependence = %g', self.lindep)

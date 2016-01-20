@@ -47,7 +47,7 @@ def density_fit(mf, auxbasis='weigend'):
     '''
 
     import pyscf.scf
-    class HF(mf.__class__):
+    class DFHF(mf.__class__):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
             self.auxbasis = auxbasis
@@ -81,7 +81,7 @@ def density_fit(mf, auxbasis='weigend'):
             else:
                 return get_jk_(self, mol, dm, hermi, with_j=False)[1]
 
-    return HF()
+    return DFHF()
 
 
 def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):

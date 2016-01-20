@@ -244,7 +244,6 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
 #    else:
 #        max_cycle = casscf.max_cycle_micro_inner
     max_cycle = casscf.max_cycle_micro_inner
-    conv_tol_grad = conv_tol_grad * .8
     dr = 0
     jkcount = 0
     norm_dr = 0
@@ -301,7 +300,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                 if ikf > 1 and norm_gorb > norm_gkf*casscf.ah_grad_trust_region:
                     break
 
-                elif (imic >= max_cycle or norm_gorb < conv_tol_grad):
+                elif (imic >= max_cycle or norm_gorb < conv_tol_grad*.4):
                     break
 
                 elif (ikf > 4 and # avoid frequent keyframe
@@ -481,7 +480,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     totmicro = totinner = 0
     norm_gorb = norm_gci = -1
     elast = e_tot
-
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -525,11 +523,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < conv_tol_grad or
-                (norm_gorb < conv_tol_grad*.8 and
+                (norm_gorb < conv_tol_grad*.4 and
                  (norm_ddm < conv_tol_ddm or norm_ddm_micro < conv_tol_ddm*.1))):
                 break
 
         rota.close()
+        rota = None
 
         totmicro += imicro
         totinner += njk
@@ -758,7 +757,7 @@ class CASSCF(casci.CASCI):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** CASSCF flags ********')
+        log.info('******** %s flags ********', self.__class__)
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
@@ -902,16 +901,7 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
-            from pyscf.mcscf import df
-            # a hacky call using dm=[], to make sure all things are initialized
-            if not hasattr(self, '_cderi') or self._cderi is None:
-                self._scf.get_jk(self.mol, [])
-                self._cderi = self._scf._cderi
-                self._naoaux = self._scf._naoaux
-            return df.ao2mo_(self, mo)
-        else:
-            return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
+        return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
 
     def get_h2eff(self, mo_coeff=None):
         return self.get_h2cas(mo_coeff)
@@ -957,8 +947,8 @@ class CASSCF(casci.CASCI):
         ddm = numpy.dot(uc, uc.T) * 2 # ~ dm(1) + dm(2)
         ddm[numpy.diag_indices(ncore)] -= 2
         if self.ci_update_dep == 4 or self.grad_update_dep == 4:
-            if hasattr(self._scf, '_tag_df'):
-                raise NotImplementedError('density-fit ci_update_dep4')
+            #?if hasattr(self._scf, '_tag_df'):
+            #?    raise NotImplementedError('density-fit ci_update_dep4')
             from pyscf import ao2mo
             mo1 = numpy.dot(mo, u)
             dm_core0 = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
