@@ -74,27 +74,24 @@ def write_chk(mc,root,chkfile):
     fh5['h1e_Si']     =       h1e_Si   
     fh5['h1e_Sr']     =       h1e_Sr   
     h1e = mc.h1e_for_cas()
-    fh5['h1e']       =       h1e[0]
+    fh5['h1e']        =       h1e[0]
 
     if mc._scf._eri is None:
-        from pyscf.scf import _vhf
-        eri = _vhf.int2e_sph(mc.mol._atm, mol._bas, mol._env)
+        h2e = ao2mo.outcore.general_iofree(mc.mol, (mo_cas,mo_cas,mo_cas,mo_cas),compact=False).reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas) 
+        fh5['h2e'] = h2e
+        h2e_Sr = ao2mo.outcore.general_iofree(mc.mol,(mo_virt,mo_cas,mo_cas,mo_cas),compact=False).reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+        fh5['h2e_Sr'] = h2e_Sr
+        h2e_Si = ao2mo.outcore.general_iofree(mc.mol,(mo_cas,mo_core,mo_cas,mo_cas),compact=False).reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+        fh5['h2e_Si'] = h2e_Si
+
     else:
         eri = mc._scf._eri
-
-
-    #FIXME
-    #add outcore later
-
-    h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False)
-    h2e = h2e.reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas)
-    fh5['h2e'] = h2e
-    h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False)
-    h2e_Sr = h2e_Sr.reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
-    fh5['h2e_Sr'] = h2e_Sr
-    h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False)
-    h2e_Si = h2e_Si.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
-    fh5['h2e_Si'] = h2e_Si
+        h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas)
+        fh5['h2e'] = h2e
+        h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False).reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+        fh5['h2e_Sr'] = h2e_Sr
+        h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+        fh5['h2e_Si'] = h2e_Si
 
     fh5.close()
 
@@ -116,23 +113,62 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     rank = comm.Get_rank()
 
 
-    fh5 = h5py.File(mc_chkfile,'r')
+    if rank == 0:
+        fh5 = h5py.File(mc_chkfile,'r')
 
-    moldic    =     eval(fh5['mol'].value)
-    mol = pyscf.gto.Mole()
-    mol.build(False,False,**moldic)
-    mo_coeff  =     fh5['mc/mo'].value
-    ncore     =     fh5['mc/ncore'].value
-    ncas      =     fh5['mc/ncas'].value
-    nvirt     =     fh5['mc/nvirt'].value
-    orbe      =     fh5['mc/orbe'].value
-    root      =     fh5['mc/root'].value
-    orbsym    =     list(fh5['mc/orbsym'].value)
-    nelecas   =     fh5['mc/nelecas'].value
-    h1e_Si    =     fh5['h1e_Si'].value
-    h1e_Sr    =     fh5['h1e_Sr'].value
-    h1e       =     fh5['h1e'].value
-    h2e       =     fh5['h2e'].value
+        moldic    =     eval(fh5['mol'].value)
+        mol = pyscf.gto.Mole()
+        mol.build(False,False,**moldic)
+        mo_coeff  =     fh5['mc/mo'].value
+        ncore     =     fh5['mc/ncore'].value
+        ncas      =     fh5['mc/ncas'].value
+        nvirt     =     fh5['mc/nvirt'].value
+        orbe      =     fh5['mc/orbe'].value
+        root      =     fh5['mc/root'].value
+        orbsym    =     list(fh5['mc/orbsym'].value)
+        nelecas   =     fh5['mc/nelecas'].value
+        h1e_Si    =     fh5['h1e_Si'].value
+        h1e_Sr    =     fh5['h1e_Sr'].value
+        h1e       =     fh5['h1e'].value
+        h2e       =     fh5['h2e'].value
+        h2e_Si    =     fh5['h2e_Si'].value
+        h2e_Sr    =     fh5['h2e_Sr'].value
+        fh5.close()
+        headnode = MPI.Get_processor_name()
+    else:
+        mol = None
+        mo_coeff  =  None  
+        ncore     =  None  
+        ncas      =  None  
+        nvirt     =  None  
+        orbe      =  None  
+        root      =  None  
+        orbsym    =  None  
+        nelecas   =  None 
+        h1e_Si    =  None  
+        h1e_Sr    =  None  
+        h1e       =  None  
+        h2e       =  None  
+        h2e_Si    =  None  
+        h2e_Sr    =  None  
+        headnode  =  None
+    comm.barrier()
+    mol = comm.bcast(mol,root=0)
+    mo_coeff = comm.bcast(mo_coeff,root=0)
+    ncas = comm.bcast(ncas,root=0)
+    ncore = comm.bcast(ncore,root=0)
+    nvirt = comm.bcast(nvirt,root=0)
+    root = comm.bcast(root,root=0)
+    orbsym = comm.bcast(orbsym,root=0)
+    nelecas = comm.bcast(nelecas,root=0)
+    orbe = comm.bcast(orbe,root=0)
+    h1e_Si = comm.bcast(h1e_Si,root=0)
+    h1e_Sr = comm.bcast(h1e_Sr,root=0)
+    h1e = comm.bcast(h1e,root=0)
+    h2e = comm.bcast(h2e,root=0)
+    h2e_Si = comm.bcast(h2e_Si,root=0)
+    h2e_Sr = comm.bcast(h2e_Sr,root=0)
+    headnode = comm.bcast(headnode,root=0)
 
 
 
@@ -178,15 +214,15 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
        #     norb = ncas + ncore + nvirt - num_of_orb_begin
         else :
             h1e_Si = h1e_Si[:,num_of_orb_begin:]
-            h2e_Si = fh5['h2e_Si'].value[:,num_of_orb_begin:,:,:]
+            h2e_Si = h2e_Si[:,num_of_orb_begin:,:,:]
             h1e_Sr = h1e_Sr[:num_of_orb_end - ncore,:]
-            h2e_Sr = fh5['h2e_Sr'].value[:num_of_orb_end - ncore,:,:,:]
+            h2e_Sr = h2e_Sr[:num_of_orb_end - ncore,:,:,:]
     elif num_of_orb_begin < ncore + nvirt :
         if num_of_orb_end <= ncore + nvirt:
             h1e_Si = []
             h2e_Si = []
             h1e_Sr = h1e_Sr[num_of_orb_begin - ncore:num_of_orb_end - ncore,:]
-            h2e_Sr = fh5['h2e_Sr'].value[num_of_orb_begin - ncore:num_of_orb_end - ncore,:,:,:]
+            h2e_Sr = h2e_Sr[num_of_orb_begin - ncore:num_of_orb_end - ncore,:,:,:]
     #    else :
     #        h1e_Si = []
     #        h2e_Si = []
@@ -198,7 +234,6 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
         print 'No job for this processor'
         return
 
-    fh5.close()
 
     norb = ncas + num_of_orb_end - num_of_orb_begin
     orbsym = orbsym[:ncas] + orbsym[ncas + num_of_orb_begin:ncas + num_of_orb_end]
@@ -218,6 +253,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     if not os.path.exists('%s'%newscratch):
         os.makedirs('%s'%newscratch)
     check_call('cp %s %s/%s'%(dmrginp,newscratch,dmrginp), shell=True)
+
     f = open('%s/%s'%(newscratch,dmrginp), 'a')
     f.write('restart_mps_nevpt %d %d %d \n'%(ncas,partial_core, partial_virt))
     f.close()
@@ -236,8 +272,12 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     #import os
     #call('cp %s/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
     #call('cp %s/node0/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
-    call('cp %s/* %s/'%(scratch,newscratch),shell = True)
-    call('cp %s/node0/* %s/'%(scratch,newscratch),shell = True)
+    if MPI.Get_processor_name() == headnode:
+        call('cp %s/* %s/'%(scratch,newscratch),shell = True)
+        call('cp %s/node0/* %s/'%(scratch,newscratch),shell = True)
+    else:
+        call('scp %s:%s/* %s/'%(headnode,scratch,newscratch),shell = True)
+        call('scp %s:%s/node0/* %s/'%(headnode,scratch,newscratch),shell = True)
     f = open('%s/FCIDUMP'%newscratch,'w')
 
     pyscf.tools.fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)

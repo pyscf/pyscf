@@ -57,10 +57,11 @@ C60, on 16 CPU cores
  Basis            6-31G**   cc-pVTZ 
 ================ ========= =========
  HF               1291 s    189 m
+ SOSCF (newton)             77 m
  density fit HF   316.7 s   43.3 m
 ================ ========= =========
 
-Fe(II)-porphyrin, on 16 CPU cores
+Fe(II)-porphyrin (FeC20H12N4), on 16 CPU cores
 
 ================ ========= ========= =========
  Basis            cc-pVDZ   cc-pVTZ   cc-pVQZ

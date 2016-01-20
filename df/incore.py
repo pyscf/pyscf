@@ -58,7 +58,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
                                           mol1._atm, mol1._bas, mol1._env)
         basrange = (0, mol.nbas, mol.nbas+auxmol.nbas, mol1.nbas,
                     mol.nbas, auxmol.nbas)
-        jloc = None
+        jloc = _ri.make_loc(0, mol1.nbas, _ri._cgto_spheric(mol1._bas))
     eri = _ri.nr_auxe2(intor, basrange,
                        atm, bas, env, aosym, comp, iloc=iloc, jloc=jloc)
     return eri
@@ -76,9 +76,9 @@ def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
 def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
-    c_atm = numpy.array(auxmol._atm, dtype=numpy.int32)
-    c_bas = numpy.array(auxmol._bas, dtype=numpy.int32)
-    c_env = numpy.array(auxmol._env)
+    c_atm = numpy.asarray(auxmol._atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(auxmol._bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(auxmol._env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 

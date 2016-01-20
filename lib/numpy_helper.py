@@ -172,7 +172,9 @@ def take_2d(a, idx, idy, out=None):
     '''
     a = numpy.asarray(a, order='C')
     if out is None:
-        out = numpy.zeros((len(idx),len(idy)))
+        out = numpy.zeros((len(idx),len(idy)), dtype=a.dtype)
+    else:
+        out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
     if numpy.iscomplexobj(a):
         out += a.take(idx, axis=0).take(idy, axis=1)
     else:
@@ -241,6 +243,8 @@ def transpose(a, inplace=False, out=None):
     else:
         if out is None:
             out = numpy.empty((acol,arow), a.dtype)
+        else:
+            out = numpy.ndarray((acol,arow), a.dtype, buffer=out)
 # C code is ~5% faster for acol=arow=10000
 # Note: when the input a is a submatrix of another array, cannot call NPd(z)transpose
 # since NPd(z)transpose assumes data continuity
@@ -283,6 +287,8 @@ def transpose_sum(a, inplace=False, out=None):
         out = a
     elif out is None:
         out = numpy.empty_like(a)
+    else:
+        out = numpy.ndarray(a.shape, a.dtype, buffer=out)
     for c0, c1 in prange(0, na, BLOCK_DIM):
         for r0, r1 in prange(0, c0, BLOCK_DIM):
             tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].T
@@ -404,6 +410,127 @@ def norm(x, ord=None, axis=None):
         return numpy.sqrt(xx)
     else:
         return numpy.linalg.norm(x, ord, axis)
+        #raise RuntimeError('Not support for axis = %d' % axis)
+
+# numpy.linalg.cond has a bug, where it
+# does not correctly generalize
+# condition number if s1e is not a matrix
+def cond(x, p=None):
+    '''Compute the condition number'''
+    if p is None:
+        sigma = numpy.linalg.svd(numpy.asarray(x), compute_uv=False)
+        c = sigma.T[0]/sigma.T[-1] # values are along last dimension, so
+                                   # so must transpose. This transpose
+                                   # is omitted in numpy.linalg
+        return c
+    else:
+        return numpy.linalg.cond(x, p)
+
+def cartesian_prod(arrays, out=None):
+    '''
+    Generate a cartesian product of input arrays.
+    http://stackoverflow.com/questions/1208118/using-numpy-to-build-an-array-of-all-combinations-of-two-arrays
+
+    Args:
+        arrays : list of array-like
+            1-D arrays to form the cartesian product of.
+        out : ndarray
+            Array to place the cartesian product in.
+
+    Returns:
+        out : ndarray
+            2-D array of shape (M, len(arrays)) containing cartesian products
+            formed of input arrays.
+
+    Examples:
+
+    >>> cartesian(([1, 2, 3], [4, 5], [6, 7]))
+    array([[1, 4, 6],
+           [1, 4, 7],
+           [1, 5, 6],
+           [1, 5, 7],
+           [2, 4, 6],
+           [2, 4, 7],
+           [2, 5, 6],
+           [2, 5, 7],
+           [3, 4, 6],
+           [3, 4, 7],
+           [3, 5, 6],
+           [3, 5, 7]])
+
+    '''
+    arrays = [numpy.asarray(x) for x in arrays]
+    dtype = arrays[0].dtype
+    nd = len(arrays)
+    dims = [nd] + [len(x) for x in arrays]
+
+    if out is None:
+        out = numpy.empty(dims, dtype)
+    else:
+        out = numpy.ndarray(dims, dtype, buffer=out)
+    tout = out.reshape(dims)
+
+    shape = [-1] + [1] * nd
+    for i, arr in enumerate(arrays):
+        tout[i] = arr.reshape(shape[:nd-i])
+
+    return tout.reshape(nd,-1).T
+
+def direct_sum(subscripts, *operands):
+    '''Apply the summation over many operands with the einsum fashion.
+
+    Examples:
+
+    >>> a = numpy.ones((6,5))
+    >>> b = numpy.ones((4,3,2))
+    >>> direct_sum('ij,klm->ijklm', a, b).shape
+    (6, 5, 4, 3, 2)
+    >>> direct_sum('ij,klm', a, b).shape
+    (6, 5, 4, 3, 2)
+    >>> direct_sum('i,j,klm->mjlik', a[0], a[:,0], b).shape
+    (2, 6, 3, 5, 4)
+    >>> direct_sum('ij-klm->ijklm', a, b).shape
+    (6, 5, 4, 3, 2)
+    >>> direct_sum('ij+klm', a, b).shape
+    (6, 5, 4, 3, 2)
+    >>> direct_sum('-i-j+klm->mjlik', a[0], a[:,0], b).shape
+    (2, 6, 3, 5, 4)
+    '''
+
+    def sign_and_symbs(subscript):
+        ''' sign list and notation list'''
+        subscript = subscript.replace(' ', '').replace(',', '+')
+
+        if subscript[0] not in '+-':
+            subscript = '+' + subscript
+        sign = [x for x in subscript if x in '+-']
+
+        symbs = subscript[1:].replace('-', '+').split('+')
+        return sign, symbs
+
+    if '->' in subscripts:
+        src, dest = subscripts.split('->')
+        sign, src = sign_and_symbs(src)
+        dest = dest.replace(' ', '')
+    else:
+        sign, src = sign_and_symbs(subscripts)
+        dest = ''.join(src)
+    assert(len(src) == len(operands))
+
+    for i, symb in enumerate(src):
+        op = numpy.asarray(operands[i])
+        assert(len(symb) == op.ndim)
+        if i == 0:
+            if sign[i] is '+':
+                out = op
+            else:
+                out = -op
+        elif sign[i] == '+':
+            out = out.reshape(out.shape+(1,)*op.ndim) + op
+        else:
+            out = out.reshape(out.shape+(1,)*op.ndim) - op
+
+    return numpy.einsum('->'.join((''.join(src), dest)), out)
 
 # numpy.linalg.cond has a bug, where it
 # does not correctly generalize

@@ -7,6 +7,7 @@
 
 import os, sys
 import time
+import tempfile
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
@@ -28,6 +29,7 @@ except ImportError:
     msg = '''settings.py not found.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
+    raise ImportError
 
 
 
@@ -360,15 +362,18 @@ class DMRGCI(object):
         return callback
 
 
-def make_schedule(sweeps, Ms, tols, noises):
+def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):
         schedule = ['schedule']
         for i, s in enumerate(sweeps):
             schedule.append('%d %6d  %8.4e  %8.4e' % (s, Ms[i], tols[i], noises[i]))
         schedule.append('end')
+        if (twodot_to_onedot != 0):
+            schedule.append('twodot_to_onedot %i'%twodot_to_onedot)
         return '\n'.join(schedule)
     else:
-        return 'schedule default'
+        
+        return 'schedule default\nmaxM %s'%Ms[-1]
 
 def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
     confFile = DMRGCI.configFile
@@ -393,10 +398,9 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         schedule = make_schedule(DMRGCI.scheduleSweeps,
                                  DMRGCI.scheduleMaxMs,
                                  DMRGCI.scheduleTols,
-                                 DMRGCI.scheduleNoises)
+                                 DMRGCI.scheduleNoises,
+                                 DMRGCI.twodot_to_onedot)
         f.write('%s\n' % schedule)
-        if (DMRGCI.twodot_to_onedot != 0):
-            f.write('twodot_to_onedot %i\n'%DMRGCI.twodot_to_onedot)
     else :
         f.write('schedule\n')
         #if approx == True :
@@ -517,10 +521,20 @@ def readEnergy(DMRGCI):
 
 
 def DMRGSCF(mf, norb, nelec, *args, **kwargs):
-    '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRGCI solver'''
+    '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRG solver'''
+
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol)
     mc.callback = mc.fcisolver.restart_scheduler_()
+    if mc.chkfile == mc._scf._chkfile.name:
+        # Do not delete chkfile after mcscf
+        mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
+
+    def state_average_(self, weights=(0.5,0.5)):
+        self.fcisolver.nroots = len(weights)
+        self.fcisolver.weights = weights
+        return self
+    mc.state_average_ = state_average_
     return mc
 
 
@@ -634,6 +648,7 @@ if __name__ == '__main__':
 
     mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = DMRGCI(mol)
+    mc.fcisolver.scheduleSweeps = []
     emc_0 = mc.casci()[0]
 
     b = 1.4

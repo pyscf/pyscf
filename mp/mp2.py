@@ -25,17 +25,15 @@ t2[i,j,a,b] = (ia|jb) / D_ij^ab
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+    eia = pyscf.lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
     t2 = numpy.empty((nocc,nocc,nvir,nvir))
     emp2 = 0
 
     with mp.ao2mo(mo_coeff) as ovov:
         for i in range(nocc):
-            dajb = (eia[i].reshape(-1,1) +
-                    eia.reshape(1,-1)).reshape(nvir,nocc,nvir)
             gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
             gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-            t2[i] = (gi/dajb.transpose(1,0,2)).reshape(nocc,nvir,nvir)
+            t2[i] = gi/pyscf.lib.direct_sum('jb+a->jba', eia, eia[i])
             # 2*ijab-ijba
             theta = gi*2 - gi.transpose(0,2,1)
             emp2 += numpy.einsum('jab,jab', t2[i], theta)
@@ -134,6 +132,10 @@ class MP2(object):
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
+        if mo_coeff is None:
+            log.warn('mo_coeff, mo_energy are not given.\n'
+                     'You may need mf.kernel() to generate them.')
+            raise RuntimeError
 
         self.emp2, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
@@ -229,5 +231,6 @@ if __name__ == '__main__':
     h1e = reduce(numpy.dot, (mf.mo_coeff, mf.get_hcore(), mf.mo_coeff))
     eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
     rdm2 = pt.make_rdm2()
-    print(numpy.dot(rdm1.flatten(), h1e.flatten()))
-    print(.5 * numpy.dot(eri.flatten(), rdm2.flatten()))
+    print(numpy.dot(rdm1.flatten(), h1e.flatten()))      # FIXME
+    print(.5 * numpy.dot(eri.flatten(), rdm2.flatten())) # -0.204019976381
+

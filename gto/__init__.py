@@ -9,6 +9,7 @@ from pyscf.gto import basis
 from pyscf.gto.basis import parse, load, parse_ecp, load_ecp
 from pyscf.gto.mole import *
 from pyscf.gto.moleintor import getints, getints_by_shell
+from pyscf.gto.eval_gto import eval_gto
 from pyscf.gto import ecp
 
 parse = basis.parse

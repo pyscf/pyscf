@@ -220,6 +220,9 @@ class RHF(hf.RHF):
             occ_idx = idx_e_left[mo_e_sort][:(nelec_float//2)]
             mo_occ[occ_idx] = 2
 
+        viridx = (mo_occ==0)
+        if self.verbose < logger.INFO or viridx.sum() == 0:
+            return mo_occ
         ehomo = max(mo_energy[mo_occ>0 ])
         elumo = min(mo_energy[mo_occ==0])
         noccs = []
@@ -247,16 +250,16 @@ class RHF(hf.RHF):
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
-        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort], \
+        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0][:,o_sort], \
-                                      self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0].take(o_sort, axis=1),
+                                      self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile,
-                             self.hf_energy, self.mo_energy,
+                             self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
     def analyze(self, verbose=logger.DEBUG):
@@ -292,8 +295,8 @@ class HF1e(hf.SCF):
         self.mo_coeff = so2ao_mo_coeff(self.mol.symm_orb, cs)[:,idx]
         self.mo_occ = numpy.zeros_like(self.mo_energy)
         self.mo_occ[0] = 1
-        self.hf_energy = self.mo_energy[0] + self.mol.energy_nuc()
-        return self.hf_energy
+        self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
+        return self.e_tot
 
 
 class ROHF(rohf.ROHF):
@@ -417,9 +420,9 @@ class ROHF(rohf.ROHF):
         if diis_start_cycle is None:
             diis_start_cycle = self.diis_start_cycle
         if level_shift_factor is None:
-            level_shift_factor = self.level_shift_factor
+            level_shift_factor = self.level_shift
         if damp_factor is None:
-            damp_factor = self.damp_factor
+            damp_factor = self.damp
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
         self._focka_ao = h1e + vhf[0]
@@ -474,6 +477,7 @@ class ROHF(rohf.ROHF):
             p0 += nso
 
         mo_energy = mo_energy.copy()  # Roothan Fock eigenvalue + alpha energy
+        open_mo_energy = mo_energy
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
         assert(nelec_float >= 0)
         if len(float_idx) > 0:
@@ -484,9 +488,7 @@ class ROHF(rohf.ROHF):
             core_sort = numpy.argsort(ecore)
             core_idx = float_idx[core_sort][:ncore]
             open_idx = float_idx[core_sort][ncore:]
-            if mo_coeff is None:
-                open_mo_energy = mo_energy
-            else:
+            if mo_coeff is not None:
                 open_mo_energy = numpy.einsum('ki,ki->i', mo_coeff,
                                               self._focka_ao.dot(mo_coeff))
             eopen = open_mo_energy[open_idx]
@@ -496,7 +498,7 @@ class ROHF(rohf.ROHF):
             mo_occ[core_idx] = 2
             mo_occ[open_idx[:nopen]] = 1
 
-        viridx = mo_occ==0
+        viridx = (mo_occ==0)
         if self.verbose < logger.INFO or viridx.sum() == 0:
             return mo_occ
         ehomo = max(mo_energy[mo_occ>0])
@@ -558,9 +560,9 @@ class ROHF(rohf.ROHF):
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ==2][c_sort],
                                        self.mo_energy[self.mo_occ==1][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2][:,c_sort],
-                                      self.mo_coeff[:,self.mo_occ==1][:,o_sort],
-                                      self.mo_coeff[:,self.mo_occ==0][:,v_sort]))
+        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2].take(c_sort, axis=1),
+                                      self.mo_coeff[:,self.mo_occ==1].take(o_sort, axis=1),
+                                      self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
         ncore = len(c_sort)
         nocc = ncore + len(o_sort)
         self.mo_occ[:ncore] = 2
@@ -568,7 +570,7 @@ class ROHF(rohf.ROHF):
         self.mo_occ[nocc:] = 0
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile,
-                             self.hf_energy, self.mo_energy,
+                             self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
     def analyze(self, verbose=logger.DEBUG):

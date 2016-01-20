@@ -17,6 +17,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
+from pyscf.gto import eval_gto
 import pyscf.gto.ecp
 
 
@@ -80,7 +81,7 @@ def cart2sph(l):
     else:
         nd = l * 2 + 1
         c2sph = numpy.zeros((nf,nd), order='F')
-        fn = moleintor._cint.CINTc2s_ket_sph
+        fn = moleintor.libcgto.CINTc2s_ket_sph
         fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
            cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
@@ -188,7 +189,7 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
         return [symb, numpy.dot(axes, c*convert).tolist()]
 
     if isinstance(atoms, str):
-        atoms = atoms.replace(';','\n').replace(',',' ')
+        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
         for line in atoms.split('\n'):
             line1 = line.strip()
             if line1 and not line1.startswith('#'):
@@ -311,6 +312,19 @@ def expand_etb(l, n, alpha, beta):
     '''
     return [[l, [alpha*beta**i, 1]] for i in reversed(range(n))]
 def expand_etbs(etbs):
+    r'''Generate even tempered basis.  See also :func:`expand_etb`
+
+    Args:
+        etbs = [(l, n, alpha, beta), (l, n, alpha, beta),...]
+
+    Returns:
+        Formated :attr:`~Mole.basis`
+
+    Examples:
+
+    >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
+    [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
+    '''
     basis = [expand_etb(*etb) for etb in etbs]
     return list(itertools.chain.from_iterable(basis))
 
@@ -724,7 +738,7 @@ def ao_loc_2c(mol):
 
 def time_reversal_map(mol):
     r'''The index to map the spinor functions and its time reversal counterpart.
-    The returned indices have postive and negative value.  For the i-th basis function,
+    The returned indices have postive or negative values.  For the i-th basis function,
     if the returned j = idx[i] < 0, it means :math:`T|i\rangle = -|j\rangle`,
     otherwise :math:`T|i\rangle = |j\rangle`
     '''
@@ -813,7 +827,7 @@ def spheric_labels(mol, fmt=True):
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
         nelec_ecp = mol.atom_nelec_core(ia)
-        if nelec_ecp == 0:
+        if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
             coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
@@ -851,7 +865,13 @@ def cart_labels(mol, fmt=True):
         strl = param.ANGULAR[l]
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
-        for n in range(count[ia,l]+l+1, count[ia,l]+l+1+nc):
+        nelec_ecp = mol.atom_nelec_core(ia)
+        if nelec_ecp == 0 or l > 3:
+            shl_start = count[ia,l]+l+1
+        else:
+            coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+            shl_start = coreshl[l]+count[ia,l]+l+1
+        for n in range(shl_start, shl_start+nc):
             for lx in reversed(range(l+1)):
                 for ly in reversed(range(l+1-lx)):
                     lz = l - lx - ly
@@ -1004,6 +1024,8 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
+PTR_ECPBAS_OFFSET = 8
+PTR_NECPBAS     = 9
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -1301,7 +1323,7 @@ class Mole(object):
                                                    self._basis):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self._atom, self._basis)
-                    sys.stderr.write('Warn: unable to identify input symmetry %s,'
+                    sys.stderr.write('Warn: unable to identify input symmetry %s, '
                                      'use %s instead.\n' %
                                      (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
@@ -1414,13 +1436,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
-            dn = os.path.join(pyscfdir, '.git', 'refs', 'heads')
+            head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
+            branch = os.path.basename(open(head, 'r').read().splitlines()[0])
             # or command(git log -1 --pretty=%H)
-            version_msg = []
-            for branch in 'master', 'dev':
-                with open(os.path.join(dn, branch), 'r') as fin:
-                    self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
+            head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
+            with open(head, 'r') as fin:
+                self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
             self.stdout.write('\n')
         except IOError:
             pass
@@ -1433,7 +1455,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
 
         for ia,atom in enumerate(self._atom):
-            coorda = tuple(atom[1])
+            coorda = tuple([x * param.BOHR for x in atom[1]])
             coordb = tuple([x for x in atom[1]])
             self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '\
                               '%16.12f %16.12f %16.12f Bohr\n' \
@@ -1802,7 +1824,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def time_reversal_map(self):
         return time_reversal_map(self)
 
-    def intor(self, intor, comp=1, hermi=0, aosym='s1', vout=None,
+    def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               bras=None, kets=None):
         '''One-electron integral generator.
 
@@ -1840,9 +1862,18 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return moleintor.getints(intor, self._atm, self._bas, self._env,
+        if 'ECP' in intor:
+            assert(self._ecp is not None)
+            bas = numpy.vstack((self._bas, self._ecpbas))
+            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
+            self._env[PTR_NECPBAS] = len(self._ecpbas)
+            if bras is None: bras = numpy.arange(self.nbas, dtype=numpy.int32)
+            if kets is None: kets = numpy.arange(self.nbas, dtype=numpy.int32)
+        else:
+            bas = self._bas
+        return moleintor.getints(intor, self._atm, bas, self._env,
                                  bras=bras, kets=kets, comp=comp, hermi=hermi,
-                                 aosym=aosym, vout=vout)
+                                 aosym=aosym, out=out)
 
     def intor_symmetric(self, intor, comp=1):
         '''One-electron integral generator. The integrals are assumed to be hermitian
@@ -1896,7 +1927,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self.intor(intor, comp, 2, aosym='a4')
 
-    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', vout=None):
+    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', out=None):
         r'''Cross 1-electron integrals like
 
         .. math::
@@ -1930,13 +1961,17 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.37820346  0.        ]
          [ 0.          0.37820346]]
         '''
-        return moleintor.getints(intor, self._atm, self._bas, self._env,
-                                 bras, kets, comp=comp, hermi=0,
-                                 aosym=aosym, vout=vout)
+        return self.intor(intor, comp=comp, hermi=0, aosym=aosym, out=out,
+                          bras=bras, kets=kets)
 
     def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
                                           self._env, comp)
+
+    def eval_gto(self, eval_name, coords,
+                 comp=1, bastart=0, bascount=None, non0tab=None, out=None):
+        return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
+                                 coords, comp, bastart, bascount, non0tab, out)
 
     def energy_nuc(self):
         return energy_nuc(self)
@@ -1960,7 +1995,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def spinor_labels(self):
         return spinor_labels(self)
 
-_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
+_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.iteritems())
 
 def _rm_digit(symb):
     if symb.isalpha():
@@ -2027,13 +2062,23 @@ def _update_from_cmdargs_(mol):
 
 
 def from_zmatrix(atomstr):
+    '''>>> a = """H
+    H 1 2.67247631453057
+    H 1 4.22555607338457 2 50.7684795164077
+    H 1 2.90305235726773 2 79.3904651036893 3 6.20854462618583"""
+    >>> for x in zmat2cart(a): print x
+    ['H', array([ 0.,  0.,  0.])]
+    ['H', array([ 2.67247631,  0.        ,  0.        ])]
+    ['H', array([ 2.67247631,  0.        ,  3.27310166])]
+    ['H', array([ 0.53449526,  0.30859098,  2.83668811])]
+    '''
     import pyscf.symm
     atomstr = atomstr.replace(';','\n').replace(',',' ')
     atoms = []
     for line in atomstr.split('\n'):
         if line.strip():
             rawd = line.split()
-            if len(rawd) == 1:
+            if len(rawd) < 3:
                 atoms.append([rawd[0], numpy.zeros(3)])
             elif len(rawd) == 3:
                 atoms.append([rawd[0], numpy.array((float(rawd[2]), 0, 0))])
@@ -2066,7 +2111,66 @@ def from_zmatrix(atomstr):
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
                 atoms.append([rawd[0], atoms[bonda][1]+c])
     return atoms
-zmat = from_zmatrix
+zmat2cart = zmat = from_zmatrix
+
+def cart2zmat(coord):
+    '''>>> c = numpy.array((
+    (0.000000000000,  1.889726124565,  0.000000000000),
+    (0.000000000000,  0.000000000000, -1.889726124565),
+    (1.889726124565, -1.889726124565,  0.000000000000),
+    (1.889726124565,  0.000000000000,  1.133835674739)))
+    >>> print cart2zmat(c)
+    1
+    1 2.67247631453057
+    1 4.22555607338457 2 50.7684795164077
+    1 2.90305235726773 2 79.3904651036893 3 6.20854462618583
+    '''
+    zstr = []
+    zstr.append('1')
+    if len(coord) > 1:
+        r1 = coord[1] - coord[0]
+        nr1 = numpy.linalg.norm(r1)
+        zstr.append('1 %.15g' % nr1)
+    if len(coord) > 2:
+        r2 = coord[2] - coord[0]
+        nr2 = numpy.linalg.norm(r2)
+        a = numpy.arccos(numpy.dot(r1,r2)/(nr1*nr2))
+        zstr.append('1 %.15g 2 %.15g' % (nr2, a*180/numpy.pi))
+    if len(coord) > 3:
+        o0, o1, o2 = coord[:3]
+        p0, p1, p2 = 1, 2, 3
+        for k, c in enumerate(coord[3:]):
+            r0 = c - o0
+            nr0 = numpy.linalg.norm(r0)
+            r1 = o1 - o0
+            nr1 = numpy.linalg.norm(r1)
+            a1 = numpy.arccos(numpy.dot(r0,r1)/(nr0*nr1))
+            b0 = numpy.cross(r0, r1)
+            nb0 = numpy.linalg.norm(b0)
+
+            if abs(nb0) < 1e-7: # o0, o1, c in line
+                a2 = 0
+                zstr.append('%d %.15g %d %.15g %d %.15g' %
+                           (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
+            else:
+                b1 = numpy.cross(o2-o0, r1)
+                nb1 = numpy.linalg.norm(b1)
+
+                if abs(nb1) < 1e-7:  # o0 o1 o2 in line
+                    a2 = 0
+                    zstr.append('%d %.15g %d %.15g %d %.15g' %
+                               (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
+                    o2 = c
+                    p2 = 4 + k
+                else:
+                    if numpy.dot(numpy.cross(b1, b0), r1) < 0:
+                        a2 = numpy.arccos(numpy.dot(b1, b0) / (nb0*nb1))
+                    else:
+                        a2 =-numpy.arccos(numpy.dot(b1, b0) / (nb0*nb1))
+                    zstr.append('%d %.15g %d %.15g %d %.15g' %
+                               (p0, nr0, p1, a1*180/numpy.pi, p2, a2*180/numpy.pi))
+
+    return '\n'.join(zstr)
 
 def dyall_nuc_mod(mass, c=param.LIGHTSPEED):
     ''' Generate the nuclear charge distribution parameter zeta

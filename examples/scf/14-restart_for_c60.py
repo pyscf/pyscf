@@ -32,7 +32,7 @@ mol.build()
 mf = scf.density_fit(scf.RHF(mol))
 mf.verbose = 5
 mf.chkfile = 'c60tz.chkfile'
-mf.level_shift_factor=.5
+mf.level_shift = .5
 mf.conv_tol = 1e-7
 mf.scf()
 

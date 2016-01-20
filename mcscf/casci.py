@@ -327,12 +327,12 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
+    h1eff, energy_core = casci.get_h1eff(mo_coeff)
     log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
-    eri_cas = casci.ao2mo(mo_cas)
+    eri_cas = casci.get_h2eff(mo_cas)
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
@@ -447,6 +447,9 @@ class CASCI(object):
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
         log.info('natorb = %s', self.natorb)
         log.info('max_memory %d (MB)', self.max_memory)
+        if self.mo_coeff is None:
+            log.warn('Orbital initial guess is not given.\n'
+                     'You may need mf.kernel() to generate initial guess form SCF calculation.')
         try:
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
@@ -474,9 +477,9 @@ class CASCI(object):
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
+
         nao, nmo = mo_coeff.shape
-        if self._scf._eri is not None and \
-           (nao**2*nmo**2+nmo**4*2+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
+        if self._scf._eri is not None:
             eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
         else:
             eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
@@ -533,7 +536,11 @@ class CASCI(object):
                 for i, e in enumerate(self.e_cas):
                     log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
                              i, self.e_tot[i], e)
+        self._finalize_()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
+
+    def _finalize_(self):
+        pass
 
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
                    casdm1=None, verbose=None):
@@ -568,6 +575,18 @@ class CASCI(object):
         from pyscf.mcscf import addons
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
+
+    def sort_mo_by_irrep(self, cas_irrep_nocc,
+                         cas_irrep_ncore=None, mo_coeff=None, s=None):
+        from pyscf.mcscf import addons
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
+                                       cas_irrep_ncore, s)
+
+    def state_average_(self, weights=(0.5,0.5)):
+        from pyscf.mcscf import addons
+        self.fcisolver = addons.state_average(self, weights)
+        return self
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                    ncore=None):

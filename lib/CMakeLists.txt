@@ -4,6 +4,9 @@ project (pyscf)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O2 -funroll-loops")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG -ffast-math -fno-strict-overflow -fomit-frame-pointer")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
+if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
+  set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
+endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -62,6 +65,7 @@ include(ExternalProject)
 #endif()
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib)
+link_directories(${PROJECT_SOURCE_DIR}/deps/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
@@ -70,6 +74,7 @@ configure_file(
 include_directories("${PROJECT_BINARY_DIR}")
 
 add_subdirectory(np_helper)
+add_subdirectory(gto)
 add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
@@ -77,8 +82,8 @@ add_subdirectory(cc)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
-if (${ENABLE_LIBXC})
-endif()
+if (${DISABLE_DFT})
+else()
 if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
 else()
   ExternalProject_Add(libxc
@@ -91,3 +96,4 @@ else()
   )
 endif()
 add_subdirectory(dft)
+endif()

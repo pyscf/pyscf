@@ -36,9 +36,12 @@ def get_inertia_momentum(atoms, basis):
     im = numpy.einsum('i,ij,ik->jk', charge, coords, coords)/charge.sum()
     return im
 
-def parallel_vectors(v1, v2):
-    v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
-    return numpy.linalg.norm(v3) < GEOM_THRESHOLD
+def parallel_vectors(v1, v2, tol=GEOM_THRESHOLD):
+    if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
+        return True
+    else:
+        v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
+        return numpy.linalg.norm(v3) < GEOM_THRESHOLD
 
 def argsort_coords(coords):
     coords = numpy.around(coords, decimals=PLACE-1)

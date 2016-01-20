@@ -58,6 +58,7 @@ IRREP_MAP = {'D2h': (1,         # Ag
 
 class FCIQMCCI(object):
     def __init__(self, mol):
+
         self.mol = mol
         self.verbose = mol.verbose
         self.stdout = mol.stdout
@@ -73,6 +74,7 @@ class FCIQMCCI(object):
         self.outputFileCurrent = self.outputFileRoot
         self.maxwalkers = 10000
         self.maxIter = -1
+        self.InitShift = 0.1
         self.RDMSamples = 5000
         self.restart = False
         self.time = 10
@@ -310,7 +312,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('methods\n')
     f.write('method vertex fcimc\n')
     f.write('endmethods\n')
-    f.write('time %d\n' % fciqmcci.time)
+    f.write('time %f\n' % fciqmcci.time)
     f.write('memoryfacpart 2.0\n')
     f.write('memoryfacspawn 1.0\n')
     f.write('totalwalkers %d\n' % fciqmcci.maxwalkers)
@@ -319,8 +321,8 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     if (restart):
         f.write('readpops')
     else:
-        f.write('startsinglepart 500\n')
-        f.write('diagshift 0.1\n')
+        f.write('startsinglepart\n')
+        f.write('diagshift %f\n' % fciqmcci.InitShift)
     f.write('rdmsamplingiters %d\n' % fciqmcci.RDMSamples)
     f.write('shiftdamp 0.05\n')
     if (fciqmcci.tau != -1.0):
@@ -359,7 +361,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('logging\n')
     f.write('popsfiletimer 60.0\n')
     f.write('binarypops\n')
-    f.write('calcrdmonfly 3 200 500\n')
+    f.write('calcrdmonfly 3 500 500\n')
     f.write('write-spin-free-rdm\n') 
     f.write('printonerdm\n')
     if fciqmcci.logging_options:

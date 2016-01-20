@@ -67,12 +67,14 @@ def grad_nuc(mol, atmlst=None):
 def get_hcore(mol):
     h =(mol.intor('cint1e_ipkin_sph', comp=3)
       + mol.intor('cint1e_ipnuc_sph', comp=3))
+    if mol._ecp:
+        raise NotImplementedError("gradients for ECP")
     return -h
 
 def get_ovlp(mol):
     return -mol.intor('cint1e_ipovlp_sph', comp=3)
 
-def get_veff(mol, dm):
+def get_veff(mf, mol, dm):
     return get_coulomb_hf(mol, dm)
 def get_coulomb_hf(mol, dm):
     '''NR Hartree-Fock Coulomb repulsion'''
@@ -117,12 +119,10 @@ class RHF(object):
         self.chkfile = scf_method.chkfile
 
     def dump_flags(self):
-        pass
-#        log.info(self, '\n')
-#        log.info(self, '******** Gradients flags ********')
-#        if not self._scf.converged:
-#            log.warn(self, 'underneath SCF of gradients not converged')
-#        log.info(self, '\n')
+        log.info(self, '\n')
+        if not self._scf.converged:
+            log.warn(self, 'Ground state SCF is not converged')
+        log.info(self, '******** %s Gradients ********', self.__class__)
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -170,15 +170,15 @@ class RHF(object):
             self.dump_flags()
         de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
            + self.grad_nuc(atmlst))
-        logger.note(self, 'HF gradinets')
-        logger.note(self, '==============')
+        logger.note(self, '--------------')
         logger.note(self, '           x                y                z')
         if atmlst is None:
             atmlst = range(self.mol.natm)
         for k, ia in enumerate(atmlst):
             logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
                         self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
-        logger.timer(self, 'HF gradients', *cput0)
+        logger.note(self, '--------------')
+        logger.timer(self, 'SCF gradients', *cput0)
         return de
 
     def aorange_by_atom(self):

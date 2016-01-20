@@ -28,9 +28,7 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
     x_code, c_code = vxc.parse_xc_name(ks.xc)
-    n, ks._exc, vx = \
-            ks._numint.nr_uks(mol, ks.grids, x_code, c_code,
-                                dm, verbose=ks.verbose)
+    n, ks._exc, vx = ks._numint.nr_uks(mol, ks.grids, x_code, c_code, dm)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 

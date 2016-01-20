@@ -368,7 +368,8 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               max_memory=None, verbose=None, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
@@ -384,22 +385,25 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-    pw, pv = scipy.linalg.eigh(h0)
+    if pspace_size > 0:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = scipy.linalg.eigh(h0)
+    else:
+        pw = pv = addr = None
+
+    if pspace_size >= na*nb and ci0 is not None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-    if ci0 is not None and not davidson_only:
-        if len(pw) == na*nb:
-            if na*nb == 1:
-                return pw[0], pv[:,0]
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*nb))
-                civec[:,addr] = pv[:,:nroots].T
-                return pw[:nroots], civec.reshape(nroots,na,nb)
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*nb))
-                civec[addr] = pv[:,0]
-                return pw[0], civec.reshape(na,nb)
+        if na*nb == 1:
+            return pw[0], pv[:,0]
+        elif nroots > 1:
+            civec = numpy.empty((nroots,na*nb))
+            civec[:,addr] = pv[:,:nroots].T
+            return pw[:nroots], civec.reshape(nroots,na,nb)
+        elif abs(pw[0]-pw[1]) > 1e-12:
+            civec = numpy.empty((na*nb))
+            civec[addr] = pv[:,0]
+            return pw[0], civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -423,10 +427,16 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
         else:
             ci0 = [x.ravel() for x in ci0]
 
+    if tol is None: tol = fci.conv_tol
+    if lindep is None: lindep = fci.lindep
+    if max_cycle is None: max_cycle = fci.max_cycle
+    if max_space is None: max_space = fci.max_space
+    if max_memory is None: max_memory = fci.max_memory
+    if verbose is None: verbose = pyscf.lib.logger.Logger(fci.stdout, fci.verbose)
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   **kwargs)
+                   max_memory=max_memory, verbose=verbose, **kwargs)
     if nroots > 1:
         return e, [ci.reshape(na,nb) for ci in c]
     else:
@@ -472,7 +482,7 @@ class FCISolver(object):
             self.verbose = mol.verbose
         self.mol = mol
         self.max_cycle = 50
-        self.max_space = 20
+        self.max_space = 12
         self.conv_tol = 1e-10
         self.lindep = 1e-14
         self.max_memory = pyscf.lib.parameters.MEMORY_MAX
@@ -491,8 +501,7 @@ class FCISolver(object):
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
         log = pyscf.lib.logger.Logger(self.stdout, verbose)
-        log.info('******** CI flags ********')
-        log.info('fci module = %s', self.__module__)
+        log.info('******** %s flags ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('linear dependence = %g', self.lindep)
@@ -501,6 +510,7 @@ class FCISolver(object):
         log.info('max_memory %d MB', self.max_memory)
         log.info('davidson only = %s', self.davidson_only)
         log.info('nroots = %d', self.nroots)
+        log.info('pspace_size = %d', self.pspace_size)
 
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
@@ -518,27 +528,19 @@ class FCISolver(object):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond, nroots=None, tol=None, **kwargs):
-        if nroots is None: nroots = self.nroots
-        if tol is None: tol = self.conv_tol
-        opts = {'max_memory': self.max_memory,
-                'nroots' : nroots,
-                'tol' : tol,
-                'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if nroots == 1 and x0[0].size > 6.5e7: # 500MB
-            opts['lessio'] = True
-        for k, v in kwargs.iteritems():
-            if v is None:
-                opts[k] = getattr(self, k)
-            else:
-                opts[k] = v
-        return pyscf.lib.davidson(op, x0, precond, **opts)
+    def eig(self, op, x0, precond, **kwargs):
+        if kwargs['nroots'] == 1 and x0[0].size > 6.5e7: # 500MB
+            lessio = True
+        else:
+            lessio = False
+        return pyscf.lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
-                                   self.level_shift)
-#    def make_precond(self, hdiag, *args):
-#        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+        if pspaceig is None:
+            return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+        else:
+            return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
+                                       self.level_shift)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)

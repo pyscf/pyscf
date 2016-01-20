@@ -12,8 +12,8 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
+from pyscf.cc import _ccsd
 
-libcc = lib.load_library('libcc')
 BLKMIN = 4
 
 # t2 as ijab
@@ -58,7 +58,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
             break
-    logger.timer(cc, 'CCSD', *cput0)
+    log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
 
@@ -93,7 +93,7 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('woooo', *time0)
 
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = unpack_tril(eris_ovvv.reshape(nov,-1))
+    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nov,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
 
     fvv += numpy.einsum('kc,kcba->ab', 2*t1, eris_ovvv)
@@ -283,11 +283,10 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('vvvv', *time1)
 
     mo_e = fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     p0 = 0
     for i in range(nocc):
-        dajb = (eia[i].reshape(-1,1) + eia[:i+1].reshape(1,-1))
-        t2new_tril[p0:p0+i+1] /= dajb.reshape(nvir,i+1,nvir).transpose(1,0,2)
+        t2new_tril[p0:p0+i+1] /= lib.direct_sum('a+jb->jab', eia[i], eia[:i+1])
         p0 += i+1
     time1 = log.timer_debug1('g2/dijab', *time1)
 
@@ -425,9 +424,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t2 = numpy.empty((nocc,nocc,nvir,nvir))
         self.emp2 = 0
         for i in range(nocc):
-            dajb = (eia[i].reshape(-1,1) + eia.reshape(1,-1)).reshape(-1)
-            gi = eris.ovov[i].transpose(1,0,2).copy()
-            t2i = t2[i] = gi/dajb.reshape(nvir,nocc,nvir).transpose(1,0,2)
+            gi = eris.ovov[i].transpose(1,0,2)
+            t2i = t2[i] = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
             self.emp2 += 4 * numpy.einsum('jab,jab', t2i[:i], gi[:i])
             self.emp2 += 2 * numpy.einsum('ab,ab'  , t2i[i] , gi[i] )
             self.emp2 -= 2 * numpy.einsum('jab,jba', t2i[:i], gi[:i])
@@ -452,11 +450,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.info(self, 'CCSD converged')
         else:
             logger.info(self, 'CCSD not converge')
-        if self._scf.hf_energy == 0:
+        if self._scf.e_tot == 0:
             logger.info(self, 'E_corr = %.16g', self.ecc)
         else:
             logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.hf_energy, self.ecc)
+                        self.ecc+self._scf.e_tot, self.ecc)
         return self.ecc, self.t1, self.t2
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
@@ -530,7 +528,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         p0 = 0
         outbuf = numpy.empty((nvir,nvir,nvir))
         for a in range(nvir):
-            buf = unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
+            buf = _ccsd.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
             #: t2new_tril[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
             lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
                                     tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
@@ -579,8 +577,8 @@ class _ERIS:
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            moidx[numpy.asarray(cc.frozen)] = False
+        else:
+            moidx[cc.frozen] = False
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
             self.fock = numpy.diag(cc.mo_energy[moidx])
@@ -623,7 +621,7 @@ class _ERIS:
             ij = 0
             outbuf = numpy.empty((nmo,nmo,nmo))
             for i in range(nocc):
-                buf = unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 for j in range(i+1):
                     self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
                     self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
@@ -631,7 +629,7 @@ class _ERIS:
                     ij += 1
             ij1 = 0
             for i in range(nocc,nmo):
-                buf = unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
                 self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
                 for j in range(nocc):
@@ -669,13 +667,13 @@ class _ERIS:
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
-                    buf = unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
+                    buf = _ccsd.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
                     self.oooo[i] = buf[:nocc,:nocc,:nocc]
                     self.ooov[i] = buf[:nocc,:nocc,nocc:]
                     self.ovoo[i] = buf[nocc:,:nocc,:nocc]
                     self.oovv[i] = buf[:nocc,nocc:,nocc:]
                     self.ovov[i] = buf[nocc:,:nocc,nocc:]
-                    self.ovvv[i] = pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
+                    self.ovvv[i] = _ccsd.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
                     cput1 = log.timer_debug1('sorting %d'%i, *cput1)
                 for key in feri.keys():
                     del(feri[key])
@@ -728,8 +726,7 @@ def residual_as_diis_errvec(mycc):
                 tbuf[:nov] = ((t1-mycc.t1)*eia).ravel()
                 pbuf = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
                 for i in range(nocc):
-                    djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).reshape(-1)
-                    pbuf[i] = (t2[i]-mycc.t2[i]) * djba.reshape(nocc,nvir,nvir)
+                    pbuf[i] = (t2[i]-mycc.t2[i]) * lib.direct_sum('jb+a->jba', eia, eia[i])
                 adiis.push_err_vec(tbuf)
                 tbuf = numpy.empty(nov*(nov+1))
                 tbuf[:nov] = t1.ravel()
@@ -764,54 +761,13 @@ def _fp(nocc, nvir):
             nocc**2*nvir**3*2 * 2 + nocc**3*nvir**2*2 * 2 +     # t2
             nocc**3*nvir**3*2 * 3 + nocc**3*nvir**2*2 * 4)      # Wiabj
 
-
-def pack_tril(mat, out=None):
-    assert(mat.flags.c_contiguous)
-    count, nd = mat.shape[:2]
-    if out is None:
-        out = numpy.empty((count,nd*(nd+1)//2))
-    libcc.CCpack_tril(ctypes.c_int(count), ctypes.c_int(nd),
-                      out.ctypes.data_as(ctypes.c_void_p),
-                      mat.ctypes.data_as(ctypes.c_void_p))
-    return out
-
-
-def unpack_tril(tril, out=None):
-    assert(tril.flags.c_contiguous)
-    count = tril.shape[0]
-    nd = int(numpy.sqrt(tril.shape[1]*2))
-    if out is None:
-        mat = numpy.empty((count,nd,nd))
-    else:
-        mat = out
-    libcc.CCunpack_tril(ctypes.c_int(count), ctypes.c_int(nd),
-                        tril.ctypes.data_as(ctypes.c_void_p),
-                        mat.ctypes.data_as(ctypes.c_void_p))
-    return mat
-
 # t2 + numpy.einsum('ia,jb->ijab', t1a, t1b)
 def make_tau(t2, t1a, t1b, fac=1, out=None):
-    nocc = t1a.shape[0]
-    if out is None:
-        tau = numpy.empty(t2.shape)
-    else:
-        tau = out
-    for i in range(nocc):
-        tau[i] = numpy.einsum('a,jb->jab', t1a[i]*fac, t1b)
-        tau[i] += t2[i]
-    return tau
+    return _ccsd.make_tau(t2, t1a, t1b, fac, out)
 
 # t2.transpose(0,1,3,2)*2 - t2
 def make_theta(t2, out=None):
-    if out is None:
-        out = numpy.empty(t2.shape)
-    shape = numpy.asarray(t2.shape, dtype=numpy.int32)
-    libcc.CCmake_g0132(out.ctypes.data_as(ctypes.c_void_p),
-                       t2.ctypes.data_as(ctypes.c_void_p),
-                       t2.ctypes.data_as(ctypes.c_void_p),
-                       shape.ctypes.data_as(ctypes.c_void_p),
-                       ctypes.c_double(-1), ctypes.c_double(2))
-    return out
+    return _ccsd.make_0132(t2, t2, -1, 2, out)
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

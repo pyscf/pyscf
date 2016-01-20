@@ -8,21 +8,20 @@ import ctypes
 import _ctypes
 import pyscf.lib
 
-_cint = pyscf.lib.load_library('libcvhf')
-_cint.CINTcgto_cart.restype = ctypes.c_int
-_cint.CINTcgto_spheric.restype = ctypes.c_int
-_cint.CINTcgto_spinor.restype = ctypes.c_int
+libcgto = pyscf.lib.load_library('libcgto')
+libcgto.CINTcgto_cart.restype = ctypes.c_int
+libcgto.CINTcgto_spheric.restype = ctypes.c_int
+libcgto.CINTcgto_spinor.restype = ctypes.c_int
+libcvhf = pyscf.lib.load_library('libcvhf')
 def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(_cint._handle, name))
+    return ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, name))
 
 def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
-            aosym='s1', vout=None):
+            aosym='s1', out=None):
     r'''1e and 2e integral generator.
 
     Args:
         intor_name : str
-            Name of the 1-electron integral.  The list of 1e integrals in
-            current version of libcint (v2.6.4)
 
             ==========================  =========  =============
             Function                    type       Expression
@@ -140,7 +139,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
             | '2kl' or 's2kl' : symmetry between k, l in (ij|kl)
             | 1 or '1' or 's1': no symmetry
 
-        vout : ndarray (2e integral only)
+        out : ndarray (2e integral only)
             array to store the 2e AO integrals
 
     Returns:
@@ -157,11 +156,11 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    if intor_name.startswith('cint1e'):
+    if intor_name.startswith('cint1e') or intor_name.startswith('ECP'):
         return getints1e(intor_name, atm, bas, env, bras, kets, comp, hermi)
     elif intor_name.startswith('cint2e'):
         return getints2e(intor_name, atm, bas, env, bras, kets, comp,
-                         aosym, vout)
+                         aosym, out)
     else:
         raise RuntimeError('Unknown intor')
 
@@ -177,6 +176,9 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         ketlst = numpy.asarray(kets, dtype=numpy.int32)
         assert(ketlst.max() < len(bas))
 
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
@@ -187,21 +189,21 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
 
     if '_cart' in intor_name:
         dtype = numpy.double
-        num_cgto_of = _cint.CINTcgto_cart
-        drv = _cint.GTO1eintor_cart
+        num_cgto_of = libcgto.CINTcgto_cart
+        drv = libcgto.GTO1eintor_cart
     elif '_sph' in intor_name:
         dtype = numpy.double
-        num_cgto_of = _cint.CINTcgto_spheric
-        drv = _cint.GTO1eintor_sph
+        num_cgto_of = libcgto.CINTcgto_spheric
+        drv = libcgto.GTO1eintor_sph
     else:
         dtype = numpy.complex
-        num_cgto_of = _cint.CINTcgto_spinor
-        drv = _cint.GTO1eintor_spinor
+        num_cgto_of = libcgto.CINTcgto_spinor
+        drv = libcgto.GTO1eintor_spinor
     naoi = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in bralst])
     naoj = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in ketlst])
 
     mat = numpy.empty((comp,naoi,naoj), dtype)
-    fnaddr = ctypes.c_void_p(_ctypes.dlsym(_cint._handle, intor_name))
+    fnaddr = ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, intor_name))
     drv(fnaddr, mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
         ctypes.c_int(hermi),
         bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
@@ -221,9 +223,12 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
         return mat
 
 def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
-              aosym='s1', vout=None):
+              aosym='s1', out=None):
     aosym = _stand_sym_code(aosym)
 
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
@@ -231,12 +236,12 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
     nbas = ctypes.c_int(bas.shape[0])
 
     if '_cart' in intor_name:
-        _cint.CINTtot_cgto_cart.restype = ctypes.c_int
-        nao = _cint.CINTtot_cgto_cart(c_bas, nbas)
+        libcgto.CINTtot_cgto_cart.restype = ctypes.c_int
+        nao = libcgto.CINTtot_cgto_cart(c_bas, nbas)
         cgto_in_shell = 'CINTcgto_cart'
     elif '_sph' in intor_name:
-        _cint.CINTtot_cgto_spheric.restype = ctypes.c_int
-        nao = _cint.CINTtot_cgto_spheric(c_bas, nbas)
+        libcgto.CINTtot_cgto_spheric.restype = ctypes.c_int
+        nao = libcgto.CINTtot_cgto_spheric(c_bas, nbas)
         cgto_in_shell = 'CINTcgto_spheric'
     else:
         raise NotImplementedError('cint2e spinor AO integrals')
@@ -244,15 +249,15 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
     if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
         assert(bras is None and kets is None)
         nao_pair = nao*(nao+1)//2
-        if vout is None:
-            vout = numpy.empty((nao_pair*(nao_pair+1)//2))
+        if out is None:
+            out = numpy.empty((nao_pair*(nao_pair+1)//2))
         else:
-            assert(vout.flags.c_contiguous)
-        drv = _cint.GTO2e_cart_or_sph
+            out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
+        drv = _cvhf.GTO2e_cart_or_sph
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
-            vout.ctypes.data_as(ctypes.c_void_p),
+            out.ctypes.data_as(ctypes.c_void_p),
             c_atm, natm, c_bas, nbas, c_env)
-        return vout
+        return out
 
     else:
         from pyscf.scf import _vhf
@@ -266,7 +271,7 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
         else:
             ketlst = numpy.asarray(kets, dtype=numpy.int32)
             assert(ketlst.max() < len(bas))
-        num_cgto_of = getattr(_cint, cgto_in_shell)
+        num_cgto_of = getattr(libcgto, cgto_in_shell)
         naoi = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in bralst])
         naoj = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in ketlst])
         if aosym in ('s4', 's2ij'):
@@ -278,24 +283,27 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
             nkl = nao * (nao + 1) / 2
         else:
             nkl = nao * nao
-        if vout is None:
-            if comp == 1:
-                vout = numpy.empty((nij,nkl))
+        if comp == 1:
+            if out is None:
+                out = numpy.empty((nij,nkl))
             else:
-                vout = numpy.empty((comp,nij,nkl))
+                out = numpy.ndarray((nij,nkl), buffer=out)
         else:
-            assert(vout.flags.c_contiguous)
+            if out is None:
+                out = numpy.empty((comp,nij,nkl))
+            else:
+                out = numpy.ndarray((comp,nij,nkl), buffer=out)
 
         cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
-        cvhfopt = ctypes.c_void_p()
-        drv = _cint.GTOnr2e_fill_drv
+        cvhfopt = pyscf.lib.c_null_ptr()
+        drv = libcgto.GTOnr2e_fill_drv
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             _fpointer('GTOnr2e_fill_'+aosym),
-            vout.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+            out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
             cintopt, cvhfopt, c_atm, natm, c_bas, nbas, c_env)
-        return vout
+        return out
 
 ANG_OF     = 1
 NPRIM_OF   = 2
@@ -310,7 +318,6 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
     Args:
         intor_name : str
-            Integral name.  In the current version of libcint (v2.5.5), it can be
 
             ==========================  =========  =============
             Function                    type       Expression
@@ -464,6 +471,9 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_bas = bas.ctypes.data_as(ctypes.c_void_p)
     natm = ctypes.c_int(atm.shape[0])
     nbas = ctypes.c_int(bas.shape[0])
@@ -495,13 +505,12 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         else:
             dk = (l*2+1) * bas[shls[2],NCTR_OF]
         buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
-        fintor = getattr(_cint, intor_name)
-        nullopt = ctypes.c_void_p()
+        fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*3)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
         if comp == 1:
             return buf.reshape(di,dj,dk)
         else:
@@ -513,13 +522,12 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
         buf = numpy.empty((di,dj,comp), order='F') # no complex?
-        fintor = getattr(_cint, intor_name)
-        nullopt = ctypes.c_void_p()
+        fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*2)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
         if comp == 1:
             return buf.reshape(di,dj)
         else:
@@ -528,22 +536,21 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         assert(len(shls) == 4)
         di, dj, dk, dl = map(num_cgto_of, shls)
         buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
-        fintor = getattr(_cint, intor_name)
-        nullopt = ctypes.c_void_p()
+        fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*4)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), nullopt)
+               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
         if comp == 1:
             return buf.reshape(di,dj,dk,dl)
         else:
             return buf.transpose(4,0,1,2,3)
-    else:
+    elif '1e' in intor_name:
         assert(len(shls) == 2)
         di, dj = map(num_cgto_of, shls)
         buf = numpy.empty((di,dj,comp), dtype, order='F')
-        fintor = getattr(_cint, intor_name)
+        fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
                (ctypes.c_int*2)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
@@ -553,6 +560,8 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.reshape(di,dj)
         else:
             return buf.transpose(2,0,1)
+    else:
+        raise RuntimeError('Unknown intor %s' % intor_name)
 
 
 def _stand_sym_code(sym):

@@ -20,21 +20,6 @@ from pyscf.mcscf import chkfile
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
-def h1e_for_cas(casscf, mo, eris):
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    nocc = ncas + ncore
-    if ncore == 0:
-        vhf_c = 0
-    else:
-        vhf_c = eris.vhf_c[ncore:nocc,ncore:nocc]
-    mocc = mo[:,ncore:nocc]
-    h1eff = reduce(numpy.dot, (mocc.T, casscf.get_hcore(), mocc)) + vhf_c
-    return h1eff
-
-def expmat(a):
-    return scipy.linalg.expm(a)
-
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     ncas = casscf.ncas
@@ -259,7 +244,6 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
 #    else:
 #        max_cycle = casscf.max_cycle_micro_inner
     max_cycle = casscf.max_cycle_micro_inner
-    conv_tol_grad = conv_tol_grad * .8
     dr = 0
     jkcount = 0
     norm_dr = 0
@@ -316,7 +300,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                 if ikf > 1 and norm_gorb > norm_gkf*casscf.ah_grad_trust_region:
                     break
 
-                elif (imic >= max_cycle or norm_gorb < conv_tol_grad):
+                elif (imic >= max_cycle or norm_gorb < conv_tol_grad*.4):
                     break
 
                 elif (ikf > 4 and # avoid frequent keyframe
@@ -458,8 +442,7 @@ def _dgemv(v, m):
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
-           ci0=None, callback=None, verbose=logger.NOTE,
-           dump_chk=True, dump_chk_ci=False):
+           ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
     '''CASSCF solver
     '''
     if isinstance(verbose, logger.Logger):
@@ -477,7 +460,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E = %.15g', e_tot)
+    if hasattr(casscf.fcisolver, 'spin_square'):
+        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+        log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
+    else:
+        log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
@@ -493,7 +480,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     totmicro = totinner = 0
     norm_gorb = norm_gci = -1
     elast = e_tot
-
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -537,11 +523,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < conv_tol_grad or
-                (norm_gorb < conv_tol_grad*.8 and
+                (norm_gorb < conv_tol_grad*.4 and
                  (norm_ddm < conv_tol_ddm or norm_ddm_micro < conv_tol_ddm*.1))):
                 break
 
         rota.close()
+        rota = None
 
         totmicro += imicro
         totinner += njk
@@ -555,16 +542,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
         elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        if hasattr(casscf.fcisolver, 'spin_square'):
-            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-        else:
-            ss = ['not defined']
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        if hasattr(casscf.fcisolver,'spin_square'):
+        if hasattr(casscf.fcisolver, 'spin_square'):
+            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
             log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
                  imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
         else:
@@ -755,6 +739,7 @@ class CASSCF(casci.CASCI):
         self.chkfile = mf.chkfile
         self.ci_response_space = 4
         self.callback = None
+        self.chk_ci = False
 
         self.fcisolver.max_cycle = 50
 
@@ -772,7 +757,7 @@ class CASSCF(casci.CASCI):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** CASSCF flags ********')
+        log.info('******** %s flags ********', self.__class__)
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
@@ -834,8 +819,7 @@ class CASSCF(casci.CASCI):
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
-        #if self.verbose >= logger.INFO:
-        #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
+        self._finalize_()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
@@ -917,8 +901,6 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        if hasattr(self._scf, '_cderi'):
-            raise RuntimeError('TODO: density fitting')
         return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
 
     def get_h2eff(self, mo_coeff=None):
@@ -965,6 +947,8 @@ class CASSCF(casci.CASCI):
         ddm = numpy.dot(uc, uc.T) * 2 # ~ dm(1) + dm(2)
         ddm[numpy.diag_indices(ncore)] -= 2
         if self.ci_update_dep == 4 or self.grad_update_dep == 4:
+            #?if hasattr(self._scf, '_tag_df'):
+            #?    raise NotImplementedError('density-fit ci_update_dep4')
             from pyscf import ao2mo
             mo1 = numpy.dot(mo, u)
             dm_core0 = numpy.dot(mo[:,:ncore], mo[:,:ncore].T) * 2
@@ -1107,7 +1091,7 @@ class CASSCF(casci.CASCI):
     def dump_chk(self, envs):
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             civec = None
-        elif envs['dump_chk_ci']:
+        elif self.chk_ci:
             civec = envs['fcivec']
         else:
             civec = None
@@ -1123,13 +1107,9 @@ class CASSCF(casci.CASCI):
             mo_energy = envs['mo_energy']
         else:
             mo_energy = None
-        chkfile.dump_mcscf(self.mol, self.chkfile, mo,
-                           mcscf_energy=envs['e_tot'], e_cas=envs['e_ci'],
-                           ci_vector=civec,
-                           iter_macro=(envs['imacro']+1),
-                           iter_micro_tot=(envs['totmicro']),
-                           converged=envs['conv'],
-                           mo_occ=mo_occ, mo_energy=mo_energy)
+        chkfile.dump_mcscf(self.mol, self.chkfile, envs['e_tot'],
+                           mo, self.ncore, self.ncas, mo_occ, mo_energy,
+                           envs['e_ci'], civec)
 
 
 
@@ -1145,8 +1125,11 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas
     eri_cas = eris.ppaa[ncore:nocc,ncore:nocc,:,:].copy()
-    mc.ao2mo = lambda *args: eri_cas
+    mc.get_h2eff = lambda *args: eri_cas
     return mc
+
+def expmat(a):
+    return scipy.linalg.expm(a)
 
 
 if __name__ == '__main__':
@@ -1207,11 +1190,12 @@ if __name__ == '__main__':
     print(emc - -76.0873923174, emc - -76.0926176464)
 
     mc = CASSCF(m, 6, (3,1))
+    mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
-    mc.analyze()
+    #mc.analyze()
     print(emc - -75.7155632535814)
 
     mc.internal_rotation = True

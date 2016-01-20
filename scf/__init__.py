@@ -74,7 +74,7 @@ Saved results
 
     converged : bool
         SCF converged or not
-    hf_energy : float
+    e_tot : float
         Total HF energy (electronic energy plus nuclear repulsion)
     mo_energy : 
         Orbital energies
@@ -164,33 +164,47 @@ def newton(mf):
     '''augmented hessian for Newton Raphson'''
     return newton_ah.newton(mf)
 
-def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None):
+def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
+                **newton_kwargs):
+    '''Wrap function to quickly setup and call Newton solver.
+    Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
+    ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.
+    '''
+    mf1 = density_fit(newton(mf), auxbasis)
+    for key in newton_kwargs:
+        setattr(mf1, key, newton_kwargs[key])
+
     if dm0 is not None:
-        mf1 = density_fit(newton(mf))
-        mf1.kernel(*mf1.from_dm(dm0))
+        mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
-        mf0 = density_fit(mf)
-        mf0.conv_tol = .1
+        mf0 = density_fit(mf, auxbasis)
+        mf0.conv_tol = .5
+        if mf0.level_shift == 0:
+            mf0.level_shift = .2
         mf0.kernel()
-        mf1 = density_fit(newton(mf))
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux
-        mf1.kernel(mf0.mo_coeff, mf0.mo_occ)
-    else:
-        mf1 = density_fit(newton(mf))
-        mf1.kernel(mo_coeff, mo_occ)
-    #return mf.kernel(mf1.make_rdm1())
-    mf.mo_occ = mf1.mo_occ
-    mf.mo_energy = mf1.mo_energy
-    mf.mo_coeff = mf1.mo_coeff
-    mf.hf_energy = mf1.hf_energy
+        mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
+
+    mf1.kernel(mo_coeff, mo_occ)
     mf.converged = mf1.converged
+    mf.e_tot     = mf1.e_tot
+    mf.mo_energy = mf1.mo_energy
+    mf.mo_coeff  = mf1.mo_coeff
+    mf.mo_occ    = mf1.mo_occ
+
+    def mf_kernel(*args, **kwargs):
+        from pyscf.lib import logger
+        logger.warn(mf, "fast_newton is a wrap function to quickly setup and call Newton solver. "
+                    "There's no need to call kernel function again for fast_newton.")
+        return mf.e_tot
+    mf.kernel = mf_kernel
     return mf
 
 def fast_scf(mf):
     from pyscf.lib import logger
-    logger.warn(mf, 'NOTE the  fast_scf  function will be removed in the recent updates. '
-                'Use the fast_newton instead')
+    logger.warn(mf, 'NOTE function fast_scf will be removed in the next release. '
+                'Use function fast_newton instead')
     return fast_newton(mf)
 
 

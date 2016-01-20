@@ -46,7 +46,7 @@ m.scf(dm0=rdm1)
 mol.basis = 'aug-cc-pvdz'
 mol.build(False, False)
 m = scf.RHF(mol)
-m.level_shift_factor = .2
+m.level_shift = .2
 m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 # init guess can also be read from chkfile
 dm = m.from_chk('cr_atom.chk')

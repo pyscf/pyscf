@@ -23,6 +23,12 @@ mol.build(
 )
 
 mf = scf.RHF(mol)
+
+# Frozen occupancy
+# 'A1g': 4 electrons
+# 'E1gx': 2 electrons
+# 'E1gy': 2 electrons
+# Rest 4 electrons are put in irreps A1u, E1ux, E1uy ... based on Aufbau principle
 mf.irrep_nelec = {'A1g': 4, 'E1gx': 2, 'E1gy': 2}
 e = mf.kernel()
 print('E = %.15g  ref = -74.1112374269129' % e)
@@ -33,11 +39,21 @@ mol.charge = 1
 mol.spin = 1
 mol.build(dump_input=False, parse_arg=False)
 mf = scf.RHF(mol)
+
+# Frozen occupancy
+# 'Ag': 2 alpha, 1 beta electrons
+# 'B1u': 4 electrons
+# 'B2u': 2 electrons
+# 'B3u': 2 electrons
 mf.irrep_nelec = {'Ag': (2,1), 'B1u': 4, 'B2u': 2, 'B3u': 2,}
 e = mf.kernel()
 print('E = %.15g  ref = -74.4026583773135' % e)
 
-
+# Frozen occupancy
+# 'Ag': 4 electrons
+# 'B1u': 2 alpha, 1 beta electrons
+# 'B2u': 2 electrons
+# 'B3u': 2 electrons
 mf.irrep_nelec = {'Ag': 4, 'B1u': (2,1), 'B2u': 2, 'B3u': 2,}
 e = mf.kernel()
 print('E = %.15g  ref = -74.8971476600812' % e)

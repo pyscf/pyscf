@@ -112,13 +112,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.8896744464714, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 0, 7)
 
-    def test_h1e_for_cas(self):
-        mc = mcscf.CASSCF(m, 4, 4)
-        mo = m.mo_coeff
-        h0 = mcscf.casci.h1e_for_cas(mc, mo, 4, 5)[0]
-        h1 = mcscf.mc1step.h1e_for_cas(mc, mo, mc.ao2mo(mo))
-        self.assertTrue(numpy.allclose(h0, h1))
-
     def test_casci_uhf(self):
         mf = scf.UHF(mol)
         mf.scf()

@@ -161,7 +161,7 @@ from pyscf.mcscf import mc1step_uhf
 from pyscf.mcscf.addons import *
 from pyscf.mcscf.df import density_fit
 
-def CASSCF(mf, *args, **kwargs):
+def CASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf, gto.Mole):
@@ -181,15 +181,15 @@ of API conventions''')
         mf = mf1
 
     if mf.mol.symmetry:
-        mc = mc1step_symm.CASSCF(mf, *args, **kwargs)
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
-        mc = mc1step.CASSCF(mf, *args, **kwargs)
+        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
     return mc
 
 RCASSCF = CASSCF
 
 
-def CASCI(mf, *args, **kwargs):
+def CASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf, gto.Mole):
@@ -209,35 +209,51 @@ of API conventions''')
         mf = mf1
 
     if mf.mol.symmetry:
-        mc = casci_symm.CASCI(mf, *args, **kwargs)
+        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
     else:
-        mc = casci.CASCI(mf, *args, **kwargs)
+        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
     return mc
 
 RCASCI = CASCI
 
 
-def UCASCI(mf, *args, **kwargs):
+def UCASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
     if (mf.__class__.__name__ in ('RHF','ROHF') or
         isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
     if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
-        mc = casci_uhf.CASCI(mf, *args, **kwargs)
+        mc = casci_uhf.CASCI(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
 
 
-def UCASSCF(mf, *args, **kwargs):
+def UCASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
     if (mf.__class__.__name__ in ('RHF','ROHF') or
         isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
         raise RuntimeError('First argument needs to be UHF object.')
 
     if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
-        mc = mc1step_uhf.CASSCF(mf, *args, **kwargs)
+        mc = mc1step_uhf.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
+
+def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
+    if not hasattr(mf, '_tag_df') or not mf._tag_df:
+        from pyscf.lib import logger
+        logger.warn(mf, 'DFCASSCF: the first argument needs to be density-fitting SCF object. '
+                    '%s is not density-fitting SCF object.', mf.__class__)
+    mc = CASSCF(mf, ncas, nelecas, **kwargs)
+    return density_fit(mc, auxbasis)
+
+def DFCASCI(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
+    if not hasattr(mf, '_tag_df') or not mf._tag_df:
+        from pyscf.lib import logger
+        logger.warn(mf, 'DFCASCI: the first argument needs to be density-fitting SCF object. '
+                    '%s is not density-fitting SCF object.', mf.__class__)
+    mc = CASCI(mf, ncas, nelecas, **kwargs)
+    return density_fit(mc, auxbasis)

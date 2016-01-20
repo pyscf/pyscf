@@ -237,7 +237,8 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               max_memory=None, verbose=None, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
@@ -252,35 +253,38 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None,
     na = link_index.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-    pw, pv = scipy.linalg.eigh(h0)
+    if pspace_size > 0:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = scipy.linalg.eigh(h0)
+    else:
+        pw = pv = addr = None
+
+    if pspace_size >= na*na and ci0 is not None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-    if ci0 is not None and not davidson_only:
-        if len(addr) == na*na:
-            if na*na == 1:
-                return pw[0], pv[:,0]
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*na))
-                civec[:,addr] = pv[:,:nroots].T
-                civec = civec.reshape(nroots,na,na)
-                try:
-                    return pw[:nroots], [_check_(ci) for ci in civec]
-                except ValueError:
-                    pass
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*na))
-                civec[addr] = pv[:,0]
-                civec = civec.reshape(na,na)
-                civec = pyscf.lib.transpose_sum(civec) * .5
-                # direct diagonalization may lead to triplet ground state
+        if na*na == 1:
+            return pw[0], pv[:,0]
+        elif nroots > 1:
+            civec = numpy.empty((nroots,na*na))
+            civec[:,addr] = pv[:,:nroots].T
+            civec = civec.reshape(nroots,na,na)
+            try:
+                return pw[:nroots], [_check_(ci) for ci in civec]
+            except ValueError:
+                pass
+        elif abs(pw[0]-pw[1]) > 1e-12:
+            civec = numpy.empty((na*na))
+            civec[addr] = pv[:,0]
+            civec = civec.reshape(na,na)
+            civec = pyscf.lib.transpose_sum(civec) * .5
+            # direct diagonalization may lead to triplet ground state
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-                try:
-                    return pw[0], _check_(civec.reshape(na,na))
-                except ValueError:
-                    pass
+            try:
+                return pw[0], _check_(civec.reshape(na,na))
+            except ValueError:
+                pass
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -310,10 +314,16 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None,
         else:
             ci0 = [x.ravel() for x in ci0]
 
+    if tol is None: tol = fci.conv_tol
+    if lindep is None: lindep = fci.lindep
+    if max_cycle is None: max_cycle = fci.max_cycle
+    if max_space is None: max_space = fci.max_space
+    if max_memory is None: max_memory = fci.max_memory
+    if verbose is None: verbose = pyscf.lib.logger.Logger(fci.stdout, fci.verbose)
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   **kwargs)
+                   max_memory=max_memory, verbose=verbose, **kwargs)
     if nroots > 1:
         return e, [_check_(ci.reshape(na,na)) for ci in c]
     else:
@@ -343,26 +353,6 @@ class FCISolver(direct_spin1.FCISolver):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
-
-    def eig(self, op, x0, precond, nroots=None, tol=None, **kwargs):
-        if nroots is None: nroots = self.nroots
-        if tol is None: tol = self.conv_tol
-        opts = {'max_memory': self.max_memory,
-                'nroots' : nroots,
-                'tol' : tol,
-                'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if nroots == 1 and x0[0].size > 6.5e7: # 500MB
-            opts['lessio'] = True
-        for k, v in kwargs.iteritems():
-            if v is None:
-                opts[k] = getattr(self, k)
-            else:
-                opts[k] = v
-        return pyscf.lib.davidson(op, x0, precond, **opts)
-
-    def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        return direct_spin1.make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
-                                                self.level_shift)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)

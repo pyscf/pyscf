@@ -69,8 +69,9 @@ mol.symmetry = True
 mol.build()
 
 m = scf.ROHF(mol)
-m.level_shift_factor = 1.5
-scf.fast_newton(m)
+m.level_shift = 1.5
+mf = scf.fast_newton(m)
+mf.kernel()
 
 mc = mcscf.CASSCF(m, 10, 10)
 idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]

@@ -247,10 +247,12 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                 grid = numpy.empty((n,4))
                 libdft.MakeAngularGrid(grid.ctypes.data_as(ctypes.c_void_p),
                                        ctypes.c_int(n))
-                coords.append(numpy.einsum('i,jk->ijk',rad[angs==n],
-                                           grid[:,:3]).reshape(-1,3))
-                vol.append(numpy.einsum('i,j->ij', rad_weight[angs==n],
-                                        grid[:,3]).ravel())
+                idx = numpy.where(angs==n)[0]
+                for i0, i1 in prange(0, len(idx), 12):  # 12 radi-grids as a group
+                    coords.append(numpy.einsum('i,jk->jik',rad[idx[i0:i1]],
+                                               grid[:,:3]).reshape(-1,3))
+                    vol.append(numpy.einsum('i,j->ji', rad_weight[idx[i0:i1]],
+                                            grid[:,3]).ravel())
             atom_grids_tab[symb] = (numpy.vstack(coords), numpy.hstack(vol))
     return atom_grids_tab
 
@@ -422,13 +424,13 @@ def _default_rad(nuc, level=3):
     '''Number of radial grids '''
     tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
     #           Period    1   2   3   4   5   6   7         # level
-    grids = numpy.array(((20, 25, 35, 40, 50, 60, 70 ),     # 0
-                         (25, 30, 40, 45, 55, 65, 75 ),     # 1
-                         (30, 35, 45, 50, 60, 70, 80 ),     # 2
-                         (35, 40, 50, 55, 65, 75, 85 ),     # 3
-                         (40, 45, 55, 60, 70, 80, 90 ),     # 4
-                         (45, 50, 60, 65, 75, 85, 95 ),     # 5
-                         (50, 55, 65, 70, 80, 90, 100),))   # 6
+    grids = numpy.array(((20, 30, 35, 45, 50, 55, 60),     # 0
+                         (30, 45, 50, 60, 65, 70, 75),     # 1
+                         (40, 60, 65, 75, 80, 85, 90),     # 2
+                         (50, 75, 80, 90, 95,100,105),     # 3
+                         (60, 90, 95,105,110,115,120),     # 4
+                         (70,105,110,120,125,130,135),     # 5
+                         (80,120,125,135,140,145,150),))   # 6
     period = (nuc > tab).sum()
     return grids[level,period]
 
@@ -439,14 +441,17 @@ def _default_ang(nuc, level=3):
     #           Period    1   2   3   4   5   6   7         # level
     order = numpy.array(((15, 17, 17, 17, 17, 17, 17 ),     # 0
                          (17, 23, 23, 23, 23, 23, 23 ),     # 1
-                         (23, 29, 29, 29, 29, 29, 29 ),     # 2
-                         (29, 35, 35, 35, 35, 35, 35 ),     # 3
+                         (23, 25, 29, 29, 29, 29, 29 ),     # 2
+                         (29, 29, 35, 35, 35, 35, 35 ),     # 3
                          (35, 41, 41, 41, 41, 41, 41 ),     # 4
                          (41, 47, 47, 47, 47, 47, 47 ),     # 5
                          (47, 53, 53, 53, 53, 53, 53 ),))   # 6
     period = (nuc > tab).sum()
     return SPHERICAL_POINTS_ORDER[order[level,period]]
 
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
 
 

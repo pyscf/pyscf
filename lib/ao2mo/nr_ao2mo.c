@@ -852,6 +852,12 @@ void AO2MOtranse1_nr_s2ij(int (*fmmm)(), int row_id,
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
+void AO2MOtranse1_nr_s2(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse1_nr_s2ij(fmmm, row_id, vout, vin, buf, envs);
+}
 
 void AO2MOtranse1_nr_s2kl(int (*fmmm)(), int row_id,
                           double *vout, double *vin, double *buf,
@@ -897,6 +903,12 @@ void AO2MOtranse2_nr_s2kl(int (*fmmm)(), int row_id,
         size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
         NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
+}
+void AO2MOtranse2_nr_s2(int (*fmmm)(), int row_id,
+                        double *vout, double *vin, double *buf,
+                        struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse2_nr_s2kl(fmmm, row_id, vout, vin, buf, envs);
 }
 
 void AO2MOtranse2_nr_s4(int (*fmmm)(), int row_id,
@@ -983,6 +995,12 @@ void AO2MOsortranse2_nr_s2kl(int (*fmmm)(), int row_id,
         }
 
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
+}
+void AO2MOsortranse2_nr_s2(int (*fmmm)(), int row_id,
+                           double *vout, double *vin, double *buf,
+                           struct _AO2MOEnvs *envs)
+{
+        AO2MOsortranse2_nr_s2kl(fmmm, row_id, vout, vin, buf, envs);
 }
 
 void AO2MOsortranse2_nr_s4(int (*fmmm)(), int row_id,
@@ -1095,6 +1113,7 @@ void AO2MOnr_e1_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
         }
         ao_loc[nbas] = nao;
         double *eri_ao = malloc(sizeof(double) * nao*nao*nkl*ncomp);
+        assert(eri_ao);
         AO2MOnr_e1fill_drv(intor, cgto_in_shell, fill,
                            eri_ao, klsh_start, klsh_count,
                            nkl, ncomp, cintopt, vhfopt,

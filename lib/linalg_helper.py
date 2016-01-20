@@ -208,9 +208,10 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                 dx_norm.append(dxtmp_norm)
 
                 #xt.append(precond(dxtmp, ek, x0[k])) # not accurate enough?
-                xt.append(precond(dxtmp, e[0], x0[k]))
-                xt[-1] *= 1/(numpy.linalg.norm(xt[-1])+1e-15)
-                axt.append(aop(xt[-1]))
+                if dxtmp_norm > toloose:
+                    xt.append(precond(dxtmp, e[0], x0[k]))
+                    xt[-1] *= 1/(numpy.linalg.norm(xt[-1])+1e-15)
+                    axt.append(aop(xt[-1]))
         rnow = len(xt)
 # Cannot require both dx_norm and de converged, because we want to stick on
 # the states associated with the initial guess.  Numerical instability can
@@ -229,12 +230,9 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             else:
                 xs = _Xlist()
                 ax = _Xlist()
-            space = head = nroots
-            for k in range(nroots):
-                xs.append(x0[k])
-                ax.append(ax0[k])
-            heff[:nroots,:nroots] = numpy.diag(e)
-            ovlp[:nroots,:nroots] = numpy.eye(nroots)
+            space = head = 0
+            xt = x0
+            axt = [aop(xi) for xi in x0]
 
         for k in range(rnow):
             if head + k >= space:

@@ -344,9 +344,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     log.debug('h1 and JK1')
     h1 = grad_hf.get_hcore(mol)
     s1 = grad_hf.get_ovlp(mol)
-    zeta = numpy.empty((nmo,nmo))
-    zeta[:nocc,:nocc] = (mo_energy[:nocc].reshape(-1,1) + mo_energy[:nocc]) * .5
-    zeta[nocc:,nocc:] = (mo_energy[nocc:].reshape(-1,1) + mo_energy[nocc:]) * .5
+    zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
     zeta = reduce(numpy.dot, (mo_coeff, zeta*dm1mo, mo_coeff.T))
@@ -431,8 +429,13 @@ def shell_prange(mol, start, stop, blksize):
             nao = now
     yield (ib0, stop, nao)
 
-def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave, max_memory=2000):
+def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
     log = logger.Logger(mycc.stdout, mycc.verbose)
+    if fsave is None:
+        _dm2file = tempfile.NamedTemporaryFile()
+        fsave = h5py.File(_dm2file.name, 'w')
+    else:
+        _dm2file = None
     time1 = time.clock(), time.time()
     dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
@@ -545,6 +548,15 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave, max_memory=2000):
     fswap.close()
     _tmpfile = None
     time1 = log.timer_debug1('_rdm2_mo2ao cleanup', *time1)
+    if _dm2file is not None:
+        nvir_pair = nvir * (nvir+1) // 2
+        dm2 = numpy.empty((nvir_pair, nvir_pair))
+        ao2mo.outcore._load_from_h5g(fsave['dm2'], 0, nvir_pair, dm2)
+        fsave.close()
+        _dm2file = None
+        return dm2
+    else:
+        return fsave
 
 #
 # .
@@ -559,6 +571,8 @@ def _load_block_tril(dat, row0, row1, out=None):
     nd = int(numpy.sqrt(shape[0]*2))
     if out is None:
         out = numpy.empty((row1-row0,nd)+shape[1:])
+    else:
+        out = numpy.ndarray((row1-row0,nd)+shape[1:], buffer=out)
     p0 = row0*(row0+1)//2
     for i in range(row0, row1):
         out[i-row0,:i+1] = _cp(dat[p0:p0+i+1])

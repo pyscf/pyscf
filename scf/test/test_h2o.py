@@ -116,7 +116,7 @@ class KnowValues(unittest.TestCase):
 
     def test_level_shift_uhf(self):
         uhf = scf.UHF(mol)
-        uhf.level_shift_factor = .2
+        uhf.level_shift = .2
         self.assertAlmostEqual(uhf.scf(), -75.98394849812, 9)
 
     def test_energy_nuc(self):
@@ -224,7 +224,7 @@ class KnowValues(unittest.TestCase):
             f = mf0.get_fock(h, s, numpy.zeros_like(h), numpy.zeros_like(h))
             mo_energy, mo_coeff = mf0.eig(f, s)
             mo_occ = mf0.get_occ(mo_energy, mo_coeff)
-            hf_energy = 0
+            e_tot = 0
             mf0.dump_chk(locals())
         def check(HFclass, ref):
             mol1 = mol.copy()

@@ -264,7 +264,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         if isinstance(erifile, str):
             feri.close()
         return erifile
-    log.debug('num. MO ints = %.8g, require disk %.8g', \
+    log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
+    log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
 # transform e1
@@ -273,7 +274,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     half_e1(mol, mo_coeffs, fswap, intor, aosym, comp, max_memory, ioblk_size,
             log, compact)
 
-    time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
+    time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
+                           *time_0pass)
 
     mem_words = max_memory * 1e6 / 8
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
@@ -303,7 +305,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             tioi += ti2[1]-ti0[1]
             pbuf = bufs1[:nrow]
             _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym,
-                          ao_loc=ao_loc, vout=pbuf)
+                          ao_loc=ao_loc, out=pbuf)
 
             tw1 = time.time()
             if comp == 1:
@@ -316,14 +318,12 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
-    for key in fswap.keys():
-        del(fswap[key])
     fswap.close()
     if isinstance(erifile, str):
         feri.close()
 
-    log.timer('AO->MO eri transformation 2 pass', *time_1pass)
-    log.timer('AO->MO eri transformation', *time_0pass)
+    log.timer('AO->MO transformation for %s 2 pass'%intor, *time_1pass)
+    log.timer('AO->MO transformation for %s '%intor, *time_0pass)
     return erifile
 
 
@@ -453,7 +453,7 @@ def half_e1(mol, mo_coeffs, swapfile,
                        imic+1, nmic, *aoshs)
             buf = bufs1[:comp*aoshs[2]] # (@)
             _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
-                              aosym, comp, ao2mopt, vout=buf)
+                              aosym, comp, ao2mopt, out=buf)
             buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]
@@ -469,15 +469,15 @@ def half_e1(mol, mo_coeffs, swapfile,
         fswap.close()
     return swapfile
 
-def _load_from_h5g(h5group, row0, row1, vout):
+def _load_from_h5g(h5group, row0, row1, out):
     nrow = row1 - row0
     col0 = 0
     for key in range(len(h5group)):
         dat = h5group[str(key)][row0:row1]
         col1 = col0 + dat.shape[1]
-        vout[:nrow,col0:col1] = dat
+        out[:nrow,col0:col1] = dat
         col0 = col1
-    return vout
+    return out
 
 def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     nrow, ncol = dat.shape

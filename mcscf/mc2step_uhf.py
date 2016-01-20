@@ -11,8 +11,7 @@ from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc1step_uhf
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
-           ci0=None, callback=None, verbose=None,
-           dump_chk=True, dump_chk_ci=False):
+           ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)

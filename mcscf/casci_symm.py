@@ -21,7 +21,7 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
 
-    def casci(self, mo_coeff=None, ci0=None):
+    def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -30,7 +30,7 @@ class CASCI(casci.CASCI):
             ci0 = self.ci
 
         label_symmetry_(self, self.mo_coeff)
-        return self.kernel(mo_coeff, ci0)
+        return casci.CASCI.kernel(self, mo_coeff, ci0)
 
     def _eig(self, mat, b0, b1):
         return eig(mat, numpy.array(self.orbsym[b0:b1]))

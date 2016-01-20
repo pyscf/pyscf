@@ -77,7 +77,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     t1 = log.timer('effective h1e in CAS space', *t0)
 
     # 2e
-    eri_cas = casci.ao2mo(mo_cas)
+    eri_cas = casci.get_h2eff(mo_cas)
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
@@ -219,7 +219,11 @@ class CASCI(object):
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         logger.note(self, 'CASCI E = %.15g', self.e_tot)
+        self._finalize_()
         return self.e_tot, e_cas, self.ci
+
+    def _finalize_(self):
+        pass
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
         return addons.cas_natorb(self, mo_coeff, ci0)

@@ -40,27 +40,27 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     for i in range(ncas):
         _ao2mo.nr_e2_(eri1[ncore+i,ncore:nocc], mo, klppshape,
-                      aosym='s4', mosym='s1', vout=aapp[i])
+                      aosym='s4', mosym='s1', out=aapp[i])
     ppaa = pyscf.lib.transpose(aapp.reshape(ncas*ncas,-1)).reshape(nmo,nmo,ncas,ncas)
     aapp = None
 
     papa = numpy.empty((nmo,ncas,nmo,ncas))
     for i in range(nmo):
         _ao2mo.nr_e2_(eri1[i,ncore:nocc], mo, klpashape,
-                      aosym='s4', mosym='s1', vout=papa[i])
+                      aosym='s4', mosym='s1', out=papa[i])
 
     pp = numpy.empty((nmo,nmo))
     j_cp = numpy.zeros((ncore,nmo))
     k_pc = numpy.zeros((nmo,ncore))
     for i in range(ncore):
-        _ao2mo.nr_e2_(eri1[i,i:i+1], mo, klppshape, aosym='s4', mosym='s1', vout=pp)
+        _ao2mo.nr_e2_(eri1[i,i:i+1], mo, klppshape, aosym='s4', mosym='s1', out=pp)
         j_cp[i] = pp.diagonal()
     j_pc = j_cp.T.copy()
 
     pp = numpy.empty((ncore,ncore))
     for i in range(nmo):
         klshape = (i, 1, 0, ncore)
-        _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', vout=pp)
+        _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', out=pp)
         k_pc[i] = pp.diagonal()
     return j_pc, k_pc, ppaa, papa
 
@@ -96,14 +96,19 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph',
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    log.debug('mem cache %.8g MB', mem_words*8/1e6)
-    ti0 = log.timer('Initializing trans_e1_outcore', *time0)
     nstep = len(shranges)
     paapp = 0
     maxbuflen = max([x[2] for x in shranges])
+    log.debug('mem_words %.8g MB, maxbuflen = %d', mem_words*8/1e6, maxbuflen)
     bufs1 = numpy.empty((maxbuflen, nao_pair))
     bufs2 = numpy.empty((maxbuflen, nmo*ncas))
-    bufs3 = numpy.empty((maxbuflen, nao*ncore))
+    if level == 1:
+        bufs3 = numpy.empty((maxbuflen, nao*ncore))
+        log.debug('mem cache %.8g MB',
+                  (bufs1.nbytes+bufs2.nbytes+bufs3.nbytes)/1e6)
+    else:
+        log.debug('mem cache %.8g MB', (bufs1.nbytes+bufs2.nbytes)/1e6)
+    ti0 = log.timer('Initializing trans_e1_outcore', *time0)
 
     # fmmm, ftrans, fdrv for level 1
     fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
@@ -118,7 +123,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
         bufpa = bufs2[:sh_range[2]]
-        _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', vout=bufpa)
+        _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', out=bufpa)
 # jc_pp, kc_pp
         if level == 1: # ppaa, papa and vhf, jcp, kcp
             if log.verbose >= logger.DEBUG1:
@@ -216,7 +221,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     log.debug1('Half transformation done. Current memory %d',
                pyscf.lib.current_memory()[0])
 
-    nblk = int(max(8, min(nmo, max(2000,max_memory*1e6/8-papa_buf.size)/(ncas**2*nmo))))
+    nblk = int(max(8, min(nmo, (max_memory*1e6/8-papa_buf.size)/(ncas**2*nmo))))
     log.debug1('nblk for papa = %d', nblk)
     dset = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
@@ -230,7 +235,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     for istep, sh_range in enumerate(shranges):
         tmp[:,p0:p0+sh_range[2]] = faapp_buf[str(istep)]
         p0 += sh_range[2]
-    nblk = int(max(8, min(nmo, max(2000,max_memory*1e6/8-tmp.size)/(ncas**2*nmo)-1)))
+    nblk = int(max(8, min(nmo, (max_memory*1e6/8-tmp.size)/(ncas**2*nmo)-1)))
     log.debug1('nblk for ppaa = %d', nblk)
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
@@ -275,7 +280,8 @@ class _ERIS(object):
             self._tmpfile = tempfile.NamedTemporaryFile()
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
-                log.warn('Not enough memory! You need increase CASSCF.max_memory')
+                log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+                         (mem_basic+mem_now)/.9, casscf.max_memory)
             self.j_pc, self.k_pc = \
                     trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                      self._tmpfile.name,

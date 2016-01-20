@@ -52,6 +52,7 @@ class CASSCF(mc1step.CASSCF):
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
+        self._finalize_()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def gen_g_hop(self, mo, u, casdm1, casdm2, eris):

@@ -20,7 +20,7 @@
 
 
 void RIfill_s1_auxe2(int (*intor)(), double *eri, size_t ijkoff,
-                     int ish, int jsh, int naoaux,
+                     int ncomp, int ish, int jsh, int naoaux,
                      int *basrange, int *iloc, int *jloc, int *kloc,
                      CINTOpt *cintopt, struct _VHFEnvs *envs)
 {
@@ -32,10 +32,12 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri, size_t ijkoff,
         const int di = iloc[ish+1] - iloc[ish];
         const int dj = jloc[jsh+1] - jloc[jsh];
         const int dij = di * dj;
-        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux);
+        const size_t nao2 = nao * nao;
+        const size_t neri = nao2 * naoaux;
+        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux*ncomp);
 
         int ksh, dk;
-        int i, j, k, i0, j0, k0;
+        int i, j, k, i0, j0, k0, icomp;
         int shls[3];
         size_t ij0;
         double *peri, *pbuf;
@@ -49,24 +51,28 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri, size_t ijkoff,
                 dk = kloc[ksh+1] - kloc[ksh];
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
+                        for (icomp = 0; icomp < ncomp; icomp++) {
                         for (i0 = iloc[ish], i = 0; i < di; i++, i0++) {
                         for (j0 = jloc[jsh], j = 0; j < dj; j++, j0++) {
                                 ij0 = i0 * nao + j0;
-                                peri = eri + ij0 * naoaux + k0 - ijkoff;
+                                peri = eri + neri * icomp
+                                     + ij0 * naoaux + k0 - ijkoff;
                                 pbuf = eribuf + j * di + i;
                                 for (k = 0; k < dk; k++) {
                                         peri[k] = pbuf[k*dij];
                                 }
-                        } }
+                        } } }
                 } else {
+                        for (icomp = 0; icomp < ncomp; icomp++) {
                         for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
                         for (j0 = jloc[jsh]; j0 < jloc[jsh+1]; j0++) {
                                 ij0 = i0 * nao + j0;
-                                peri = eri + ij0 * naoaux + k0 - ijkoff;
+                                peri = eri + neri * icomp
+                                     + ij0 * naoaux + k0 - ijkoff;
                                 for (k = 0; k < dk; k++) {
                                         peri[k] = 0;
                                 }
-                        } }
+                        } } }
                 }
         }
         free(eribuf);
@@ -81,7 +87,7 @@ void RIfill_s1_auxe2(int (*intor)(), double *eri, size_t ijkoff,
  * [      \ ]
  */
 void RIfill_s2ij_auxe2(int (*intor)(), double *eri, size_t ijkoff,
-                       int ish, int jsh, int naoaux,
+                       int ncomp, int ish, int jsh, int naoaux,
                        int *basrange, int *iloc, int *jloc, int *kloc,
                        CINTOpt *cintopt, struct _VHFEnvs *envs)
 {
@@ -96,10 +102,13 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri, size_t ijkoff,
         const int di = iloc[ish+1] - iloc[ish];
         const int dj = jloc[jsh+1] - jloc[jsh];
         const int dij = di * dj;
-        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux);
+        const int nao = envs->nao;
+        const size_t nao2 = nao*(nao+1)/2;
+        const size_t neri = nao2 * naoaux;
+        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux*ncomp);
 
         int ksh, dk;
-        int i, j, k, i0, j0, k0;
+        int i, j, k, i0, j0, k0, icomp;
         int shls[3];
         size_t ij0;
         double *peri, *pbuf;
@@ -114,37 +123,44 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri, size_t ijkoff,
                 if ((*intor)(eribuf, shls, envs->atm, envs->natm,
                              envs->bas, envs->nbas, envs->env, cintopt)) {
                         if (iloc[ish] != jloc[jsh]) {
+                                for (icomp = 0; icomp < ncomp; icomp++) {
                                 for (i0 = iloc[ish], i = 0; i < di; i++,i0++) {
                                 for (j0 = jloc[jsh], j = 0; j < dj; j++,j0++) {
                                         ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
+                                        peri = eri + neri * icomp
+                                             + ij0 * naoaux + k0 - ijkoff;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = pbuf[k*dij];
                                         }
-                                } }
+                                } } }
                         } else {
+                                for (icomp = 0; icomp < ncomp; icomp++) {
                                 for (i0 = iloc[ish],i = 0; i < di; i++, i0++) {
                                 for (j0 = jloc[jsh],j = 0; j0 <= i0; j++, j0++) {
                                         ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
+                                        peri = eri + neri * icomp
+                                             + ij0 * naoaux + k0 - ijkoff;
                                         pbuf = eribuf + j * di + i;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = pbuf[k*dij];
                                         }
-                                } }
+                                } } }
                         }
                 } else {
                         if (iloc[ish] != jloc[jsh]) {
+                                for (icomp = 0; icomp < ncomp; icomp++) {
                                 for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
                                 for (j0 = jloc[jsh]; j0 < jloc[jsh+1]; j0++) {
                                         ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
+                                        peri = eri + neri * icomp
+                                             + ij0 * naoaux + k0 - ijkoff;
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = 0;
                                         }
-                                } }
+                                } } }
                         } else {
+                                for (icomp = 0; icomp < ncomp; icomp++) {
                                 for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
                                 for (j0 = jloc[jsh]; j0 <= i0; j0++) {
                                         ij0 = i0*(i0+1)/2 + j0;
@@ -152,7 +168,7 @@ void RIfill_s2ij_auxe2(int (*intor)(), double *eri, size_t ijkoff,
                                         for (k = 0; k < dk; k++) {
                                                 peri[k] = 0;
                                         }
-                                } }
+                                } } }
                         }
                 }
         }
@@ -173,7 +189,7 @@ void RInr_3c2e_auxe2_drv(int (*intor)(), void (*fill)(), double *eri,
         struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao};
 #pragma omp parallel default(none) \
         shared(eri, intor, fill, basrange, iloc, jloc, kloc, \
-               ijkoff, naoaux, envs, cintopt)
+               ijkoff, ncomp, naoaux, envs, cintopt)
 {
         int i, j, ij;
         int bracount = basrange[1];
@@ -182,7 +198,7 @@ void RInr_3c2e_auxe2_drv(int (*intor)(), void (*fill)(), double *eri,
         for (ij = 0; ij < bracount*ketcount; ij++) {
                 i = ij / ketcount;
                 j = ij - i * ketcount;
-                (*fill)(intor, eri, ijkoff, i, j, naoaux,
+                (*fill)(intor, eri, ijkoff, ncomp, i, j, naoaux,
                         basrange, iloc, jloc, kloc, cintopt, &envs);
         }
 }

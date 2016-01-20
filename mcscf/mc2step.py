@@ -10,8 +10,7 @@ from pyscf.mcscf import mc1step
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
-           ci0=None, callback=None, verbose=None,
-           dump_chk=True, dump_chk_ci=False):
+           ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
     if callback is None:
@@ -28,7 +27,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     ncas = casscf.ncas
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E = %.15g', e_tot)
+    if hasattr(casscf.fcisolver, 'spin_square'):
+        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+        log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
+    else:
+        log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
@@ -77,7 +80,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < 1e-4 or abs(de) < tol*.8 or norm_gorb < conv_tol_grad*.8:
+            if norm_t < 1e-4 or abs(de) < tol*.8 or norm_gorb < conv_tol_grad*.4:
                 break
 
         r0 = casscf.pack_uniq_var(u)
@@ -87,9 +90,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
         if hasattr(casscf.fcisolver,'spin_square'):
             ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-        else:
-            ss = ['not defined']
-        if hasattr(casscf.fcisolver,'spin_square'):
             log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
                  imacro, ninner, imicro+1, e_tot, e_tot-elast, ss[0])
         else:

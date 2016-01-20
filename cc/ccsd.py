@@ -4,7 +4,6 @@
 #
 
 import time
-import ctypes
 import tempfile
 import numpy
 import h5py
@@ -331,8 +330,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
     p0 = 0
     for i in range(nocc):
-        dajb = (eia[i].reshape(-1,1) + eia[:i+1].reshape(1,-1))
-        t2new_tril[p0:p0+i+1] /= dajb.reshape(nvir,i+1,nvir).transpose(1,0,2)
+        t2new_tril[p0:p0+i+1] /= lib.direct_sum('a,jb->jab', eia[i], eia[:i+1])
         p0 += i+1
     time1 = log.timer_debug1('g2/dijab', *time1)
 
@@ -431,7 +429,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self._nocc = int(self.mo_occ.sum()) // 2 - self.frozen
         else:
             mo_occ = self.mo_occ.copy()
-            mo_occ[self.frozen] = 0
+            if len(self.frozen) > 0:
+                mo_occ[numpy.asarray(self.frozen)] = 0
             self._nocc = int(mo_occ.sum()) // 2
         return self._nocc
 
@@ -458,6 +457,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #log.info('diis_file = %s', self.diis_file)
         log.info('diis_start_cycle = %d', self.diis_start_cycle)
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
+        if self.mo_coeff is None:
+            log.warn('mo_coeff, mo_energy are not given.\n'
+                     'You may need mf.kernel() to generate them.')
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -469,9 +471,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t2 = numpy.empty((nocc,nocc,nvir,nvir))
         self.emp2 = 0
         for i in range(nocc):
-            dajb = (eia[i].reshape(-1,1) + eia.reshape(1,-1)).reshape(-1)
-            gi = eris.ovov[i].transpose(1,0,2).copy()
-            t2i = t2[i] = gi/dajb.reshape(nvir,nocc,nvir).transpose(1,0,2)
+            gi = eris.ovov[i].transpose(1,0,2)
+            t2i = t2[i] = gi/lib.direct_sum('jb,a->jba', eia, eia[i])
             self.emp2 += 4 * numpy.einsum('jab,jab', t2i[:i], gi[:i])
             self.emp2 += 2 * numpy.einsum('ab,ab'  , t2i[i] , gi[i] )
             self.emp2 -= 2 * numpy.einsum('jab,jba', t2i[:i], gi[:i])
@@ -495,11 +496,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.info(self, 'CCSD converged')
         else:
             logger.info(self, 'CCSD not converge')
-        if self._scf.hf_energy == 0:
+        if self._scf.e_tot == 0:
             logger.info(self, 'E_corr = %.16g', self.ecc)
         else:
             logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.hf_energy, self.ecc)
+                        self.ecc+self._scf.e_tot, self.ecc)
         return self.ecc, self.t1, self.t2
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
@@ -623,8 +624,8 @@ class _ERIS:
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:cc.frozen] = False
-        else:
-            moidx[cc.frozen] = False
+        elif len(cc.frozen) > 0:
+            moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
             self.fock = numpy.diag(cc.mo_energy[moidx])
@@ -771,8 +772,7 @@ def residual_as_diis_errvec(mycc):
                 tbuf[:nov] = ((t1-mycc.t1)*eia).ravel()
                 pbuf = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
                 for i in range(nocc):
-                    djba = (eia.reshape(-1,1) + eia[i].reshape(1,-1)).reshape(-1)
-                    pbuf[i] = (t2[i]-mycc.t2[i]) * djba.reshape(nocc,nvir,nvir)
+                    pbuf[i] = (t2[i]-mycc.t2[i]) * lib.direct_sum('jb,a->jba', eia, eia[i])
                 adiis.push_err_vec(tbuf)
                 tbuf = numpy.empty(nov*(nov+1))
                 tbuf[:nov] = t1.ravel()

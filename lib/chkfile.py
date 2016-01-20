@@ -35,7 +35,7 @@ def load(chkfile, key):
     (1, 1)
     >>> scfdat = lib.chkfile.load('He.chk', 'scf')
     >>> scfdat.keys()
-    ['hf_energy', 'mo_occ', 'mo_energy', 'mo_coeff']
+    ['e_tot', 'mo_occ', 'mo_energy', 'mo_coeff']
     '''
     def loadasdic(key, group):
         if key in group:
@@ -120,7 +120,10 @@ def load_mol(chkfile):
     >>> lib.chkfile.load_mol('He.chk')
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
-    with h5py.File(chkfile) as fh5:
+    with h5py.File(chkfile, 'r') as fh5:
+        mol = pyscf.gto.Mole()
+        mol.verbose = 0
+        mol.output = '/dev/null'
         moldic = eval(fh5['mol'].value)
         mol = pyscf.gto.mole.unpack(moldic)
         mol.build(False, False)

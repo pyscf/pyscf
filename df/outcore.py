@@ -19,7 +19,7 @@ from pyscf.df import incore
 from pyscf.df import _ri
 
 #
-# for auxe1 (ij|P)
+# for auxe1 (P|ij)
 #
 
 libri = pyscf.lib.load_library('libri')
@@ -139,9 +139,9 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     atm, bas, env = \
             pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                     auxmol._atm, auxmol._bas, auxmol._env)
-    c_atm = numpy.array(atm, dtype=numpy.int32)
-    c_bas = numpy.array(bas, dtype=numpy.int32)
-    c_env = numpy.array(env)
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
     if 'ssc' in int3c:
@@ -182,7 +182,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
             ijkoff = ao_loc[bstart] * (ao_loc[bstart]+1) // 2 * naoaux
         _ri.nr_auxe2(int3c, basrange,
                      atm, bas, env, aosym, comp, cintopt, buf, ijkoff,
-                     nao, nao, naoaux, ao_loc[bstart:bend], ao_loc, kloc)
+                     nao, nao, naoaux, ao_loc[bstart:bend+1], ao_loc, kloc)
         for icomp in range(comp):
             if comp == 1:
                 label = '%s/%d'%(dataname,istep)

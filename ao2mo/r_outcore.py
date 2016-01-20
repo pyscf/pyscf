@@ -55,12 +55,16 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
         klshape = (0, nmok, nmok, nmol)
 
-    if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
+    if isinstance(erifile, str):
+        if h5py.is_hdf5(erifile):
+            feri = h5py.File(erifile)
+            if dataname in feri:
+                del(feri[dataname])
+        else:
+            feri = h5py.File(erifile, 'w')
     else:
-        feri = h5py.File(erifile, 'w')
+        assert(isinstance(erifile, h5py.Group))
+        feri = erifile
     if comp == 1:
         chunks = (nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
@@ -73,7 +77,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     if nij_pair == 0 or nkl_pair == 0:
         feri.close()
         return erifile
-    log.debug('num. MO ints = %.8g, require disk %.8g', \
+    log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
+    log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
 # transform e1
@@ -81,7 +86,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
 
-    time_1pass = log.timer('AO->MO eri transformation 1 pass', *time_0pass)
+    time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
+                           *time_0pass)
 
     e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
@@ -128,11 +134,13 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
-    feri.close()
+    buf = pbuf = None
     fswap.close()
+    if isinstance(erifile, str):
+        feri.close()
 
-    log.timer('AO->MO eri transformation 2 pass', *time_1pass)
-    log.timer('AO->MO eri transformation', *time_0pass)
+    log.timer('AO->MO transformation for %s 2 pass'%intor, *time_1pass)
+    log.timer('AO->MO transformation for %s '%intor, *time_0pass)
     return erifile
 
 

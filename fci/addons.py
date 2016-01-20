@@ -218,7 +218,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     mask = (numpy.bitwise_xor(airreps.reshape(-1,1), birreps) == wfnsym)
     ci1 = numpy.zeros_like(ci)
     ci1[mask] = ci[mask]
-    return ci1
+    return ci1 * (1/numpy.linalg.norm(ci1))
 
 
 def des_a(ci0, norb, nelec, ap_id):
