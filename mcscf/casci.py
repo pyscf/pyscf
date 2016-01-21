@@ -482,10 +482,9 @@ class CASCI(object):
 
         nao, nmo = mo_coeff.shape
         if self._scf._eri is not None:
-            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
+            eri = pyscf.ao2mo.full(self._scf._eri, mo_coeff)
         else:
-            eri = pyscf.ao2mo.outcore.full(self.mol, mo_coeff,
-                                           verbose=self.verbose)
+            eri = pyscf.ao2mo.full(self.mol, mo_coeff, verbose=self.verbose)
         return eri
 
     def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
