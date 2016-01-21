@@ -1106,8 +1106,8 @@ class CASSCF(casci.CASCI):
         if 'mo_energy' in envs:
             mo_energy = envs['mo_energy']
         else:
-            mo_energy = None
-        chkfile.dump_mcscf(self.mol, self.chkfile, envs['e_tot'],
+            mo_energy = 'None'
+        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
                            mo, self.ncore, self.ncas, mo_occ, mo_energy,
                            envs['e_ci'], civec)
 

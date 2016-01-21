@@ -160,6 +160,7 @@ from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step_uhf
 from pyscf.mcscf.addons import *
 from pyscf.mcscf.df import density_fit
+from pyscf.mcscf import chkfile
 
 def CASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import gto

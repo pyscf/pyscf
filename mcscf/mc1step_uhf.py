@@ -710,9 +710,9 @@ class CASSCF(casci_uhf.CASCI):
         mo_occ[1,:ncore[1]] = 1
         mo_occ[0,ncore[0]:nocca] = -occa
         mo_occ[1,ncore[1]:noccb] = -occb
-        mo_energy = None
+        mo_energy = 'None'
 
-        chkfile.dump_mcscf(self.mol, self.chkfile, envs['e_tot'],
+        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
                            mo, self.ncore, self.ncas, mo_occ, mo_energy,
                            envs['e_ci'], civec)
 
