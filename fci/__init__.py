@@ -53,7 +53,7 @@ def FCI(mol, mo, singlet=True):
         def __init__(self):
             self.__dict__.update(cis.__dict__)
             self.h1e = reduce(numpy.dot, (mo.T, scf.hf.get_hcore(mol), mo))
-            self.eri = ao2mo.outcore.full_iofree(mol, mo)
+            self.eri = ao2mo.full(mol, mo)
             self.eci = None
             self.ci = None
             if mol.symmetry:
