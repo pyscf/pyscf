@@ -9,7 +9,7 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
-import pyscf.symm
+from pyscf import symm
 from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
@@ -25,10 +25,10 @@ def analyze(mf, verbose=logger.DEBUG):
     log = pyscf.lib.logger.Logger(mf.stdout, verbose)
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
-    orbsyma = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[0], s=ovlp_ao)
-    orbsymb = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[1], s=ovlp_ao)
+    orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                  mo_coeff[0], s=ovlp_ao)
+    orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                  mo_coeff[1], s=ovlp_ao)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
     tot_sym = 0
@@ -40,15 +40,15 @@ def analyze(mf, verbose=logger.DEBUG):
     if mol.groupname in ('Dooh', 'Coov', 'SO3'):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
-        log.info('total symmetry = %s', \
-                 pyscf.symm.irrep_id2name(mol.groupname, tot_sym))
-    log.info('alpha occupancy for each irrep:  '+(' %4s'*nirrep), \
+        log.info('total symmetry = %s',
+                 symm.irrep_id2name(mol.groupname, tot_sym))
+    log.info('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
              *mol.irrep_name)
-    log.info('                                 '+(' %4d'*nirrep), \
+    log.info('                                 '+(' %4d'*nirrep),
              *noccsa)
-    log.info('beta  occupancy for each irrep:  '+(' %4s'*nirrep), \
+    log.info('beta  occupancy for each irrep:  '+(' %4s'*nirrep),
              *mol.irrep_name)
-    log.info('                                 '+(' %4d'*nirrep), \
+    log.info('                                 '+(' %4d'*nirrep),
              *noccsb)
 
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
@@ -128,10 +128,10 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
-    orbsyma = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[0], s)
-    orbsymb = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                        mo_coeff[1], s)
+    orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                  mo_coeff[0], s)
+    orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                  mo_coeff[1], s)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
     irrep_nelec = dict([(mol.irrep_name[k], (int(sum(mo_occ[0][orbsyma==ir])),
@@ -215,8 +215,8 @@ class UHF(uhf.UHF):
 
     def eig(self, h, s):
         nirrep = self.mol.symm_orb.__len__()
-        s = pyscf.symm.symmetrize_matrix(s, self.mol.symm_orb)
-        ha = pyscf.symm.symmetrize_matrix(h[0], self.mol.symm_orb)
+        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
+        ha = symm.symmetrize_matrix(h[0], self.mol.symm_orb)
         cs = []
         es = []
         for ir in range(nirrep):
@@ -226,7 +226,7 @@ class UHF(uhf.UHF):
         ea = numpy.hstack(es)
         ca = hf_symm.so2ao_mo_coeff(self.mol.symm_orb, cs)
 
-        hb = pyscf.symm.symmetrize_matrix(h[1], self.mol.symm_orb)
+        hb = symm.symmetrize_matrix(h[1], self.mol.symm_orb)
         cs = []
         es = []
         for ir in range(nirrep):
@@ -243,26 +243,40 @@ class UHF(uhf.UHF):
         the orbital energies are grouped by symmetry irreps
         '''
         mol = self.mol
+        nirrep = len(mol.symm_orb)
+        if mo_coeff is not None:
+            ovlp_ao = self.get_ovlp()
+            orbsyma = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                          mo_coeff[0], ovlp_ao, False)
+            orbsymb = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                          mo_coeff[1], ovlp_ao, False)
+            orbsyma = numpy.asarray(orbsyma)
+            orbsymb = numpy.asarray(orbsymb)
+        else:
+            orbsyma = [numpy.repeat(ir, mol.symm_orb[ir].shape[1])
+                       for ir in range(nirrep)]
+            orbsyma = orbsymb = numpy.hstack(orbsyma)
+
         mo_occ = numpy.zeros_like(mo_energy)
-        nirrep = mol.symm_orb.__len__()
         idx_ea_left = []
         idx_eb_left = []
         neleca_fix = nelecb_fix = 0
-        p0 = 0
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
-            nso = mol.symm_orb[ir].shape[1]
+            ir_idxa = numpy.where(orbsyma == ir)[0]
+            ir_idxb = numpy.where(orbsymb == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname][0]
-                mo_occ[0][p0:p0+n] = 1
+                e_idx = numpy.argsort(mo_energy[0][ir_idxa])
+                mo_occ[0][ir_idxa[e_idx[:n]]] = 1
                 neleca_fix += n
                 n = self.irrep_nelec[irname][1]
-                mo_occ[1][p0:p0+n] = 1
+                e_idx = numpy.argsort(mo_energy[1][ir_idxb])
+                mo_occ[1][ir_idxb[e_idx[:n]]] = 1
                 nelecb_fix += n
             else:
-                idx_ea_left.append(range(p0,p0+nso))
-                idx_eb_left.append(range(p0,p0+nso))
-            p0 += nso
+                idx_ea_left.append(ir_idxa)
+                idx_eb_left.append(ir_idxb)
 
         neleca_float = self.nelec[0] - neleca_fix
         nelecb_float = self.nelec[1] - nelecb_fix
@@ -293,19 +307,19 @@ class UHF(uhf.UHF):
         p0 = 0
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
-            nso = mol.symm_orb[ir].shape[1]
+            ir_idxa = orbsyma == ir
+            ir_idxb = orbsymb == ir
 
-            noccsa.append(int(mo_occ[0][p0:p0+nso].sum()))
-            noccsb.append(int(mo_occ[1][p0:p0+nso].sum()))
-            if ehomoa in mo_energy[0][p0:p0+nso]:
+            noccsa.append(int(mo_occ[0][ir_idxa].sum()))
+            noccsb.append(int(mo_occ[1][ir_idxb].sum()))
+            if ehomoa in mo_energy[0][ir_idxa]:
                 irhomoa = irname
-            if elumoa in mo_energy[0][p0:p0+nso]:
+            if elumoa in mo_energy[0][ir_idxa]:
                 irlumoa = irname
-            if ehomob in mo_energy[1][p0:p0+nso]:
+            if ehomob in mo_energy[1][ir_idxb]:
                 irhomob = irname
-            if elumob in mo_energy[1][p0:p0+nso]:
+            if elumob in mo_energy[1][ir_idxb]:
                 irlumob = irname
-            p0 += nso
 
         logger.info(self, 'alpha HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                     irhomoa, ehomoa, irlumoa, elumoa)
@@ -318,6 +332,11 @@ class UHF(uhf.UHF):
             logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
             hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo, 'alpha-')
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
+
+        if mo_coeff is not None:
+            ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
+                                      mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
+            logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
     def _finalize_(self):

@@ -462,38 +462,42 @@ class UHF(hf.SCF):
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
+        e_idx_a = numpy.argsort(mo_energy[0])
+        e_idx_b = numpy.argsort(mo_energy[1])
+        e_sort_a = mo_energy[0][e_idx_a]
+        e_sort_b = mo_energy[1][e_idx_b]
         n_a, n_b = self.nelec
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[0][:n_a] = 1
-        mo_occ[1][:n_b] = 1
+        mo_occ[0][e_idx_a[:n_a]] = 1
+        mo_occ[1][e_idx_b[:n_b]] = 1
         if n_a < mo_energy[0].size:
             logger.info(self, 'alpha nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                        n_a, mo_energy[0][n_a-1], mo_energy[0][n_a])
-            if mo_energy[0][n_a-1]+1e-3 > mo_energy[0][n_a]:
+                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
+            if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
                 logger.warn(self, '!! alpha HOMO %.12g >= LUMO %.12g',
-                            mo_energy[0][n_a-1], mo_energy[0][n_a])
+                            e_sort_a[n_a-1], e_sort_a[n_a])
         else:
             logger.info(self, 'alpha nocc = %d  HOMO = %.12g  no LUMO',
-                        n_a, mo_energy[0][n_a-1])
+                        n_a, e_sort_a[n_a-1])
         if self.verbose >= logger.DEBUG:
-            numpy.set_printoptions(threshold=len(mo_energy[0]))
+            numpy.set_printoptions(threshold=len(e_sort_a))
             logger.debug(self, '  mo_energy = %s', mo_energy[0])
 
         if n_b > 0 and n_b < mo_energy[1].size:
             logger.info(self, 'beta  nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                        n_b, mo_energy[1][n_b-1], mo_energy[1][n_b])
-            if mo_energy[1][n_b-1]+1e-3 > mo_energy[1][n_b]:
+                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
+            if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
                 logger.warn(self, '!! beta HOMO %.12g >= LUMO %.12g',
-                            mo_energy[1][n_b-1], mo_energy[1][n_b])
-            if mo_energy[0][n_a-1]+1e-3 > mo_energy[1][n_b]:
+                            e_sort_b[n_b-1], e_sort_b[n_b])
+            if e_sort_b[n_a-1]+1e-3 > e_sort_b[n_b]:
                 logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
-                            mo_energy[0][n_a-1], mo_energy[1][n_b])
+                            e_sort_b[n_a-1], e_sort_b[n_b])
         elif n_b > 0:
             logger.info(self, 'beta nocc = %d  HOMO = %.12g  no LUMO',
-                        n_b, mo_energy[1][n_b-1])
+                        n_b, e_sort_b[n_b-1])
         else:
             logger.info(self, 'beta  nocc = %d  no HOMO  LUMO = %.12g',
-                        n_b, mo_energy[1][n_b])
+                        n_b, e_sort_b[n_b])
         if self.verbose >= logger.DEBUG:
             logger.debug(self, '  mo_energy = %s', mo_energy[1])
             numpy.set_printoptions()

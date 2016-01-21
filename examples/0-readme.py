@@ -21,13 +21,11 @@ mol = gto.M(
 # MUST 'build' the molecule before doing anything else.
     verbose = 5,
     output = 'out_h2o',
-# atom = [(atom_type/nuc_charge, (coordinates:0.,0.,0.)),
-#              ... ]   Coordinates are in Angstrom
-# case insensitive
-    atom = [
-    ['O' , (0. , 0.    , 0.  )],
-    ['H' , (0. , -.757 , .587)],
-    [1   , (0. , .757  , .587)]],
+# Coordinates are in Angstrom
+    atom = '''
+      O     0    0       0
+      h     0    -.757   .587
+     1      0    .757    .587''',
 # basis = {atom_type/nuc_charge: 'name of basis sets'}
 # or one name for all atoms such as   basis = 'cc-pvdz'
 # case insensitive

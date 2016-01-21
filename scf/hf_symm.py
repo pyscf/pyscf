@@ -195,29 +195,37 @@ class RHF(hf.RHF):
         the orbital energies are grouped by symmetry irreps
         '''
         mol = self.mol
+        nirrep = len(mol.symm_orb)
+        if mo_coeff is not None:
+            orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                         mo_coeff, self.get_ovlp(), False)
+            orbsym = numpy.asarray(orbsym)
+        else:
+            orbsym = [numpy.repeat(ir, mol.symm_orb[ir].shape[1])
+                      for ir in range(nirrep)]
+            orbsym = numpy.hstack(orbsym)
+
         mo_occ = numpy.zeros_like(mo_energy)
-        nirrep = mol.symm_orb.__len__()
         mo_e_left = []
         idx_e_left = []
         nelec_fix = 0
-        p0 = 0
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
-            nso = mol.symm_orb[ir].shape[1]
+            ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
-                mo_occ[p0:p0+n//2] = 2
+                e_idx = numpy.argsort(mo_energy[ir_idx])
+                mo_occ[ir_idx[e_idx[:n//2]]] = 2
                 nelec_fix += n
             else:
-                idx_e_left.append(range(p0,p0+nso))
-            p0 += nso
+                idx_e_left.append(ir_idx)
         nelec_float = mol.nelectron - nelec_fix
         assert(nelec_float >= 0)
         if nelec_float > 0:
             idx_e_left = numpy.hstack(idx_e_left)
             mo_e_left = mo_energy[idx_e_left]
             mo_e_sort = numpy.argsort(mo_e_left)
-            occ_idx = idx_e_left[mo_e_sort][:(nelec_float//2)]
+            occ_idx = idx_e_left[mo_e_sort[:(nelec_float//2)]]
             mo_occ[occ_idx] = 2
 
         viridx = (mo_occ==0)
@@ -226,17 +234,15 @@ class RHF(hf.RHF):
         ehomo = max(mo_energy[mo_occ>0 ])
         elumo = min(mo_energy[mo_occ==0])
         noccs = []
-        p0 = 0
         for ir in range(nirrep):
             irname = mol.irrep_name[ir]
-            nso = mol.symm_orb[ir].shape[1]
+            ir_idx = orbsym == ir
 
-            noccs.append(int(mo_occ[p0:p0+nso].sum()))
-            if ehomo in mo_energy[p0:p0+nso]:
+            noccs.append(int(mo_occ[ir_idx].sum()))
+            if ehomo in mo_energy[ir_idx]:
                 irhomo = irname
-            if elumo in mo_energy[p0:p0+nso]:
+            if elumo in mo_energy[ir_idx]:
                 irlumo = irname
-            p0 += nso
         logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                     irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
@@ -476,8 +482,8 @@ class ROHF(rohf.ROHF):
                 float_idx.append(range(p0,p0+nso))
             p0 += nso
 
-        mo_energy = mo_energy.copy()  # Roothan Fock eigenvalue + alpha energy
         open_mo_energy = mo_energy
+        mo_energy = mo_energy.copy()  # Roothan Fock eigenvalue + alpha energy
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
         assert(nelec_float >= 0)
         if len(float_idx) > 0:

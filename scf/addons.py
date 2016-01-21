@@ -5,7 +5,7 @@ import numpy
 from pyscf.gto import mole
 from pyscf.gto import moleintor
 from pyscf.lib import logger
-import pyscf.symm
+from pyscf import symm
 from pyscf.scf import hf
 
 
@@ -158,7 +158,7 @@ def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('cint1e_ovlp')
     s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
 
-    ua, ub = pyscf.symm.cg.real2spinor_whole(mol2)
+    ua, ub = symm.cg.real2spinor_whole(mol2)
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
@@ -187,4 +187,56 @@ def project_mo_r2r(mol1, mo1, mol2):
     return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
                          numpy.dot(ps, mo1[n2c:])))
 
+
+def remove_linear_dep(mf):
+    def eig_nosym(h, s):
+        d, t = numpy.linalg.eigh(s)
+        x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
+        xhx = reduce(numpy.dot, (x.T, h, x))
+        e, c = numpy.linalg.eigh(xhx)
+        c = numpy.dot(x, c)
+        return e, c
+
+    def eig_symm(h, s):
+        nirrep = mol.symm_orb.__len__()
+        h = symm.symmetrize_matrix(h, mol.symm_orb)
+        s = symm.symmetrize_matrix(s, mol.symm_orb)
+        cs = []
+        es = []
+        for ir in range(nirrep):
+            d, t = numpy.linalg.eigh(s[ir])
+            x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
+            xhx = reduce(numpy.dot, (x.T, h[ir], x))
+            e, c = numpy.linalg.eigh(xhx)
+            cs.append(reduce(numpy.dot, (mol.symm_orb[ir], x, c)))
+            es.append(e)
+        e = numpy.hstack(es)
+        c = numpy.hstack(cs)
+        return e, c
+
+    import pyscf.scf
+    if mol.symmetry:
+        if isinstance(mf, pyscf.scf.uhf.UHF):
+            def eig(h, s):
+                e_a, c_a = eig_symm(h[0], s)
+                e_b, c_b = eig_symm(h[1], s)
+                return numpy.array((e_a,e_b)), (c_a,c_b)
+        elif isinstance(mf, pyscf.scf.rohf.ROHF):
+            raise NotImplementedError
+        else:
+            eig = eig_symm
+    else:
+        if isinstance(mf, pyscf.scf.uhf.UHF):
+            def eig(h, s):
+                e_a, c_a = eig_nosymm(h[0], s)
+                e_b, c_b = eig_nosymm(h[1], s)
+                return numpy.array((e_a,e_b)), (c_a,c_b)
+        elif isinstance(mf, pyscf.scf.rohf.ROHF):
+            raise NotImplementedError
+        else:
+            eig = eig_nosymm
+    return eig
+def remove_linear_dep_(mf):
+    mf.eig = remove_linear_dep(mf)
+    return mf.eig
 

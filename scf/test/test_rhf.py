@@ -58,10 +58,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(pop).sum(), 22.941032799355845, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
         self.assertAlmostEqual(abs(pop).sum(), 22.056441149586863, 7)
-        pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
-        self.assertAlmostEqual(abs(pop).sum(), 22.11825416138074, 7)
-        pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(abs(pop).sum(), 22.117869619510266, 7)
 
     def test_analyze(self):
         numpy.random.seed(1)

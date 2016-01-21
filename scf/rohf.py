@@ -178,8 +178,7 @@ class ROHF(hf.RHF):
         return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
@@ -226,6 +225,19 @@ class ROHF(hf.RHF):
         return get_grad(mo_coeff, mo_occ, fock)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
+        '''Label the occupancies for each orbital.
+        NOTE the occupancies are not assigned based on the orbital energy ordering.
+        The first N orbitals are assigned to be occupied orbitals.
+
+        Examples:
+
+        >>> mol = gto.M(atom='H 0 0 0; O 0 0 1.1', spin=1)
+        >>> mf = scf.hf.SCF(mol)
+        >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
+        >>> mf.get_occ(energy)
+        array([2, 2, 2, 2, 1, 0])
+        '''
+
         if mo_energy is None: mo_energy = self.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
         ncore = self.nelec[1]

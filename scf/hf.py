@@ -104,7 +104,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     cond = numpy.linalg.cond(s1e)
     if cond*1e-17 > conv_tol:
-        logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g).'
+        logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', cond)
 
     if mf.diis and mf.DIIS:
@@ -915,7 +915,7 @@ class SCF(object):
 
     def dump_flags(self):
         logger.info(self, '\n')
-        logger.info(self, '******** SCF flags ********')
+        logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'method = %s', self.__class__.__name__)
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
@@ -1039,21 +1039,24 @@ class SCF(object):
         >>> from pyscf import gto, scf
         >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
         >>> mf = scf.hf.SCF(mol)
-        >>> mf.get_occ(numpy.arange(mol.nao_nr()))
-        array([2, 2, 2, 2, 2, 0])
+        >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
+        >>> mf.get_occ(energy)
+        array([2, 2, 0, 2, 2, 2])
         '''
         if mo_energy is None: mo_energy = self.mo_energy
+        e_idx = numpy.argsort(mo_energy)
+        e_sort = mo_energy[e_idx]
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = self.mol.nelectron // 2
-        mo_occ[:nocc] = 2
+        mo_occ[e_idx[:nocc]] = 2
         if nocc < mo_occ.size:
             logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+                        e_sort[nocc-1], e_sort[nocc])
+            if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
                 logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
-                            mo_energy[nocc-1], mo_energy[nocc])
+                            e_sort[nocc-1], e_sort[nocc])
         else:
-            logger.info(self, 'HOMO = %.12g', mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g', e_sort[nocc-1])
         if self.verbose >= logger.DEBUG:
             numpy.set_printoptions(threshold=len(mo_energy))
             logger.debug(self, '  mo_energy = %s', mo_energy)
