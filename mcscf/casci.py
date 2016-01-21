@@ -259,8 +259,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mc : a CASSCF/CASCI object or RHF object
 
     Returns:
-        A tuple, the first item is natural orbitals, the second is updated CI
-        coefficients.
+        A tuple, (natural orbitals, CI coefficients, orbital energies)
+        The orbital energies are the diagonal terms of general Fock matrix.
     '''
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -268,6 +268,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
+    if casdm1 is None:
+        casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
@@ -618,6 +620,25 @@ class CASCI(object):
         dm1 = numpy.dot(mocore, mocore.T) * 2
         dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T))
         return dm1
+
+    def dump_chk(self, chkfile):
+        import pyscf.mcscf.chkfile
+        ncore = self.ncore
+        nocc = self.ncore + self.ncas
+        ncas = self.ncas
+        casdm1 = self.fcisolver.make_rdm1(self.ci, ncas, self.nelecas)
+        fock_ao = self.get_fock(casdm1=casdm1)
+
+        mo_coeff = self.mo_coeff.copy()
+        occ, ucas = self._eig(-casdm1, ncore, nocc)
+        mo_coeff[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+        mo_energy = numpy.einsum('ji,ji->i', mo_coeff, fock_ao.dot(mo_coeff))
+        mo_occ = numpy.zeros_like(mo_energy)
+        mo_occ[:ncore] = 2
+        mo_occ[ncore:nocc] = occ
+
+        pyscf.mcscf.chkfile.dump_mcscf(self.mol, chkfile, self.e_tot, mo_coeff,
+                                       ncore, ncas, mo_occ, mo_energy, self.e_cas)
 
 
 if __name__ == '__main__':
