@@ -35,10 +35,10 @@ def contract_2e_o0(g2e, fcivec, norb, nelec, opt=None):
     fcinew = numpy.zeros_like(fcivec)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
-            fcinew[str0] += sign * t1[a,i,str1]
+            fcinew[str1] += sign * t1[a,i,str0]
     for str0, tab in enumerate(link_indexb):
         for a, i, str1, sign in tab:
-            fcinew[:,str0] += sign * t1[a,i,:,str1]
+            fcinew[:,str1] += sign * t1[a,i,:,str0]
     return fcinew
 
 class KnowValues(unittest.TestCase):

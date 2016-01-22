@@ -35,7 +35,7 @@ static void spread_a_t1(double *ci1, double *t1,
                 i    = EXTRACT_DES (tab[j]);
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
-                cp0 = t1 + i*norb+a;
+                cp0 = t1 + a*norb+i; // propagate from t1 to bra, through a^+ i
                 cp1 = ci1 + str1*(size_t)nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
@@ -64,7 +64,8 @@ static void spread_b_t1(double *ci1, double *t1,
                         i    = EXTRACT_DES (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
-                        pci[str1] += sign * t1[i*norb+a];
+                        // propagate from t1 to bra, through a^+ i
+                        pci[str1] += sign * t1[a*norb+i];
                 }
                 t1 += nnorb;
                 tab += nlinkb;
