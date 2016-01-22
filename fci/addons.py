@@ -220,6 +220,30 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     ci1[mask] = ci[mask]
     return ci1 * (1/numpy.linalg.norm(ci1))
 
+def guess_wfnsym(ci, norb, nelec, orbsym):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
+        idx = numpy.argmax(ci)
+    else:
+        idx = ci[0].argmax()
+    stra = cistring.addr2str(norb, neleca, idx // nb)
+    strb = cistring.addr2str(norb, nelecb, idx % nb )
+
+    airrep = 0
+    birrep = 0
+    for i in range(norb):
+        if (stra & (1<<i)):
+            airrep ^= orbsym[i]
+        if (strb & (1<<i)):
+            birrep ^= orbsym[i]
+    return airrep ^ birrep
+
 
 def des_a(ci0, norb, nelec, ap_id):
     r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
@@ -425,7 +449,7 @@ def overlap(string1, string2, norb, s=None):
         s1 = pyscf.lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
-def fix_spin_(fciobj, shift=.1, ss_value=None):
+def fix_spin_(fciobj, shift=.2, ss_value=None):
     r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
     adding a shift on spin square operator
 
@@ -449,19 +473,22 @@ def fix_spin_(fciobj, shift=.1, ss_value=None):
     from pyscf.fci import direct_spin0
     fciobj.davidson_only = True
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        if isinstance(nelec, (int, numpy.integer)):
+            sz = (nelec % 2) * .5
+        else:
+            sz = abs(nelec[0]-nelec[1]) * .5
         if ss_value is None:
-# (S^2-ss_value)|Psi> to shift state other than the lowest state
-            if isinstance(nelec, (int, numpy.integer)):
-                sz = (nelec % 2) * .5
-            else:
-                sz = abs(nelec[0]-nelec[1]) * .5
             ss = sz*(sz+1)
+        else:
+            ss = ss_value
+
+        if ss < sz*(sz+1)+.1:
+# (S^2-ss_value)|Psi> to shift state other than the lowest state
             ci1 = spin_op.contract_ss(fcivec, norb, nelec)
             ci1 -= ss * fcivec.reshape(ci1.shape)
         else:
 # (S^2-ss_value)^2|Psi> to shift states except the given spin.
 # It still relies on the quality of initial guess
-            ss = ss_value
             tmp = spin_op.contract_ss(fcivec, norb, nelec)
             tmp -= ss * fcivec.reshape(tmp.shape)
             ci1 = -ss * tmp
@@ -519,6 +546,8 @@ if __name__ == '__main__':
         symm_initguess(6, (3,2), [3,3,3,3,3,3], wfnsym=2)
     except RuntimeError:
         pass
+    ci1 = symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3, irrep_nelec={5:[0,1],3:[1,0]})
+    print(guess_wfnsym(ci1, 6, (3,3), [0,1,5,4,3,7]) == 3)
 
     def finger(ci1):
         numpy.random.seed(1)

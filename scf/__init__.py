@@ -170,21 +170,29 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
     ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.
     '''
+    from pyscf.lib import logger
     mf1 = density_fit(newton(mf), auxbasis)
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
 
+    logger.note(mf, '======================================')
+    logger.note(mf, 'Generating initial guess with DIIS-SCF')
+    logger.note(mf, '======================================')
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
         mf0 = density_fit(mf, auxbasis)
-        mf0.conv_tol = .5
+        mf0.conv_tol = .1
         if mf0.level_shift == 0:
             mf0.level_shift = .2
         mf0.kernel()
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
+
+    logger.note(mf, '============================')
+    logger.note(mf, 'Generating initial guess end')
+    logger.note(mf, '============================')
 
     mf1.kernel(mo_coeff, mo_occ)
     mf.converged = mf1.converged

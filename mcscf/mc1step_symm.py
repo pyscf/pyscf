@@ -6,6 +6,7 @@
 import numpy
 import pyscf.lib.logger as logger
 import pyscf.gto
+from pyscf import symm
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
@@ -38,11 +39,19 @@ class CASSCF(mc1step.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
+        log = logger.Logger(self.stdout, self.verbose)
         if self.verbose > logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
 
         self.mol.check_sanity(self)
         self.dump_flags()
+        if (hasattr(self.fcisolver, 'wfnsym') and
+            self.fcisolver.wfnsym is None and
+            hasattr(self.fcisolver, 'guess_wfnsym')):
+            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
+                                                 verbose=log)
+            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
+            log.info('Active space CI wfn symmetry = %s', wfnsym)
 
         casci_symm.label_symmetry_(self, self.mo_coeff)
         self.converged, self.e_tot, self.e_cas, self.ci, \
@@ -51,7 +60,7 @@ class CASSCF(mc1step.CASSCF):
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
-        logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
+        log.note('CASSCF energy = %.15g', self.e_tot)
         self._finalize_()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 

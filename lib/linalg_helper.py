@@ -233,6 +233,7 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             space = head = 0
             xt = x0
             axt = [aop(xi) for xi in x0]
+            e = 0
 
         for k in range(rnow):
             if head + k >= space:
