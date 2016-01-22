@@ -50,8 +50,7 @@ def dmet_cas(mc, dm, implst):
     implst = numpy.asarray(implst)
     notimp = numpy.asarray([i for i in range(nao) if i not in implst])
     occi, ui = scipy.linalg.eigh(-dm[implst][:,implst])
-    occi *= -1
-    occb, ub = scipy.linalg.eigh(dm[notimp][:,notimp])
+    occb, ub = scipy.linalg.eigh(-dm[notimp][:,notimp])
     bathorb = numpy.dot(corth[:,notimp], ub)
     imporb = numpy.dot(corth[:,implst], ui)
     mocore = bathorb[:,:ncore]
