@@ -1,5 +1,6 @@
 /*
- * No permutation symmetry for 2e Hamiltonian
+ * Paticle permutation symmetry for 2e Hamiltonian only
+ * h2e[i,j,k,l] == h2e[k,l,i,j]
  * h2e[i,j,k,l] =/= h2e[j,i,k,l] =/= h2e[i,j,l,k] ...
  */
 

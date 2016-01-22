@@ -222,11 +222,15 @@ def contract_ss(fcivec, norb, nelec):
     nb = cistring.num_strings(norb, nelecb)
     fcivec = fcivec.reshape(na,nb)
 
-    def gen_map(fstr_index, nelec):
+    def gen_map(fstr_index, nelec, des=True):
         a_index = fstr_index(range(norb), nelec)
         amap = numpy.zeros((a_index.shape[0],norb,2), dtype=numpy.int32)
-        for k, tab in enumerate(a_index):
-            amap[k,tab[:,0]] = tab[:,2:]
+        if des:
+            for k, tab in enumerate(a_index):
+                amap[k,tab[:,1]] = tab[:,2:]
+        else:
+            for k, tab in enumerate(a_index):
+                amap[k,tab[:,0]] = tab[:,2:]
         return amap
 
     if neleca > 0:
@@ -240,12 +244,12 @@ def contract_ss(fcivec, norb, nelec):
         bdes = None
 
     if neleca < norb:
-        acre = gen_map(cistring.gen_cre_str_index, neleca)
+        acre = gen_map(cistring.gen_cre_str_index, neleca, False)
     else:
         acre = None
 
     if nelecb < norb:
-        bcre = gen_map(cistring.gen_cre_str_index, nelecb)
+        bcre = gen_map(cistring.gen_cre_str_index, nelecb, False)
     else:
         bcre = None
 
@@ -334,20 +338,21 @@ if __name__ == '__main__':
     print(spin_square0(ci1, 4, (3,1)))
 
     print(numpy.einsum('ij,ij->', ci1, contract_ss(ci1, 4, (3,1))),
-          spin_square(ci1, 4, (3,1)))
+          spin_square(ci1, 4, (3,1))[0])
 
     numpy.random.seed(1)
     n = cistring.num_strings(6,3)
     ci0 = numpy.random.random((n,n))
     print(numpy.einsum('ij,ij->', ci0,contract_ss(ci0, 6, 6)),
-          spin_square(ci0, 6, 6))
+          spin_square(ci0, 6, 6)[0])
 
     na = cistring.num_strings(6,4)
     nb = cistring.num_strings(6,2)
     ci0 = numpy.random.random((na,nb))
     print(numpy.einsum('ij,ij->', ci0,contract_ss(ci0, 6, (4,2))),
-          spin_square(ci0, 6, (4,2)))
+          spin_square(ci0, 6, (4,2))[0])
 
+    print('----------')
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -386,4 +391,4 @@ if __name__ == '__main__':
     n = cistring.num_strings(10,5)
     ci0 = numpy.random.random((n,n))
     ss1 = numpy.einsum('ij,ij->', ci0, contract_ss(ci0, 10, 10))
-    print(ss1, spin_square(ci0, 10, 10))
+    print(ss1, spin_square(ci0, 10, 10)[0])

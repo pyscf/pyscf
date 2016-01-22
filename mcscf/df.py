@@ -65,7 +65,7 @@ def density_fit(casscf, auxbasis='weigend'):
             self._keys = self._keys.union(['auxbasis'])
 
         def dump_flags(self):
-            casscf.dump_flags()
+            casscf.__class__.dump_flags(self)
             if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
                 logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
             elif 'CASSCF' in str(casscf.__class__):

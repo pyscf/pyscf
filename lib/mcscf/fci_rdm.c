@@ -163,6 +163,7 @@ static void _transpose_jikl(double *dm2, int norb)
         int i, j;
         double *p0, *p1;
         double *tmp = malloc(sizeof(double)*nnorb*nnorb);
+        memcpy(tmp, dm2, sizeof(double)*nnorb*nnorb);
         for (i = 0; i < norb; i++) {
                 for (j = 0; j < norb; j++) {
                         p0 = tmp + (j*norb+i) * nnorb;

@@ -26,6 +26,7 @@ from pyscf.fci.cistring import num_strings
 from pyscf.fci.rdm import reorder_rdm
 from pyscf.fci.spin_op import spin_square
 from pyscf.fci.direct_spin1 import make_pspace_precond, make_diag_precond
+from pyscf.fci import direct_nosym
 
 def solver(mol, singlet=True):
     if mol.symmetry:
