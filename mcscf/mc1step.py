@@ -1103,6 +1103,7 @@ class CASSCF(casci.CASCI):
         mo_occ = numpy.zeros(mo.shape[1])
         mo_occ[:ncore] = 2
         mo_occ[ncore:nocc] = -occ
+# Note: mo_energy in active space =/= F_{ii}  (F is general Fock)
         if 'mo_energy' in envs:
             mo_energy = envs['mo_energy']
         else:

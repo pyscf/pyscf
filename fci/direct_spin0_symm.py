@@ -231,7 +231,7 @@ class FCISolver(direct_spin0.FCISolver):
             log.debug('total symmetry = %s', wfnsym)
         else:
             logger.debug(self, 'total symmetry = %s', wfnsym)
-        e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0,
+        e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
                                        davidson_only, pspace_size, **kwargs)
         if self.wfnsym is not None:

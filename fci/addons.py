@@ -252,7 +252,7 @@ def des_a(ci0, norb, nelec, ap_id):
     na_ci1 = cistring.num_strings(norb, neleca-1)
     ci1 = numpy.zeros((na_ci1, ci0.shape[1]))
 
-    entry_has_ap = (des_index[:,:,0] == ap_id)
+    entry_has_ap = (des_index[:,:,1] == ap_id)
     addr_ci0 = numpy.any(entry_has_ap, axis=1)
     addr_ci1 = des_index[entry_has_ap,2]
     sign = des_index[entry_has_ap,3]
@@ -287,7 +287,7 @@ def des_b(ci0, norb, nelec, ap_id):
     nb_ci1 = cistring.num_strings(norb, nelecb-1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
 
-    entry_has_ap = (des_index[:,:,0] == ap_id)
+    entry_has_ap = (des_index[:,:,1] == ap_id)
     addr_ci0 = numpy.any(entry_has_ap, axis=1)
     addr_ci1 = des_index[entry_has_ap,2]
     sign = des_index[entry_has_ap,3]
@@ -529,7 +529,7 @@ if __name__ == '__main__':
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci = numpy.ones((na,nb))
-    print(finger(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)), 18.801458376605162)
+    print(finger(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)), 3.010642818688976,)
     s1 = numpy.random.seed(1)
     s1 = numpy.random.random((6,6))
     s1 = s1 + s1.T

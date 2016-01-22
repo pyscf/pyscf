@@ -146,10 +146,10 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2 and 3-particle density matrices.
 
     .. note::
-        The 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
-        stored as [p,r,q,s];
-        The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
-        stored as [p,s,q,t,r,u].
+        The 2pdm is :math:`\langle p^\dagger q^\dagger r s\rangle` but is
+        stored as [p,s,q,r];
+        The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger s t u\rangle`,
+        stored as [p,u,q,t,r,s].
     '''
     assert(cibra.flags.c_contiguous)
     assert(ciket.flags.c_contiguous)

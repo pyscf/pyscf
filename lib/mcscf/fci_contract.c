@@ -10,6 +10,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "fci_string.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 #define CSUMTHR         1e-28
@@ -29,32 +30,15 @@
  *      + na*nb*nnorb**2 (*2 for spin1, *1 for spin0)
  *        / (CPU_freq (*4 for SSE3 blas, or *6-8 for AVX blas)) / num_threads
  */
-typedef struct {
-        unsigned int addr;
-        unsigned short ia;
-        signed char sign;
-        signed char _padding;
-} _LinkT;
-#define EXTRACT_IA(I)   (I.ia)
-#define EXTRACT_SIGN(I) (I.sign)
-#define EXTRACT_ADDR(I) (I.addr)
 
-static void compress_link(_LinkT *clink, int *link_index, int nstr, int nlink)
-{
-        int i, j, ia, str1, sign;
-        for (i = 0; i < nstr; i++) {
-                for (j = 0; j < nlink; j++) {
-                        ia   = link_index[j*4+0];
-                        str1 = link_index[j*4+2];
-                        sign = link_index[j*4+3];
-                        clink[j].ia = ia;
-                        clink[j].sign = sign;
-                        clink[j].addr = str1;
-                }
-                clink += nlink;
-                link_index += nlink * 4;
-        }
-}
+/*
+ ***********************************************************
+ *
+ * Need the permutation symmetry 
+ * h2e[i,j,k,l] = h2e[j,i,k,l] = h2e[i,j,l,k] = h2e[j,i,l,k]
+ *
+ ***********************************************************
+ */
 
 // for (16e,16o) ~ 39 MB buffer = 112 * 136 * 8 * 320 KB
 static int strb_buflen(int nstr, int nnorb)
@@ -74,12 +58,12 @@ static int strb_buflen(int nstr, int nnorb)
  */
 static double prog_a_t1(double *ci0, double *t1,
                         int bcount, int stra_id, int strb_id,
-                        int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
+                        int norb, int nstrb, int nlinka, _LinkTrilT *clink_indexa)
 {
         ci0 += strb_id;
         const int nnorb = norb * (norb+1)/2;
         int j, k, ia, str1, sign;
-        const _LinkT *tab = clink_indexa + stra_id * nlinka;
+        const _LinkTrilT *tab = clink_indexa + stra_id * nlinka;
         double *pt1, *pci;
         double csum = 0;
 
@@ -88,7 +72,7 @@ static double prog_a_t1(double *ci0, double *t1,
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 pt1 = t1 + ia;
-                pci = ci0 + str1*(uint64_t)nstrb;
+                pci = ci0 + str1*(size_t)nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] += pci[k];
@@ -116,8 +100,8 @@ static double prog_b_t1(double *ci0, double *t1,
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*(uint64_t)nstrb;
+        const _LinkTrilT *tab = clink_indexb + strb_id * nlinkb;
+        double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -142,12 +126,12 @@ static double prog_b_t1(double *ci0, double *t1,
  */
 static double prog0_b_t1(double *ci0, double *t1,
                          int bcount, int stra_id, int strb_id,
-                         int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
+                         int norb, int nstrb, int nlinkb, _LinkTrilT *clink_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*(uint64_t)nstrb;
+        const _LinkTrilT *tab = clink_indexb + strb_id * nlinkb;
+        double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -171,12 +155,12 @@ static double prog0_b_t1(double *ci0, double *t1,
  */
 static void spread_a_t1(double *ci1, double *t1,
                         int bcount, int stra_id, int strb_id,
-                        int norb, int nstrb, int nlinka, _LinkT *clink_indexa)
+                        int norb, int nstrb, int nlinka, _LinkTrilT *clink_indexa)
 {
         ci1 += strb_id;
         const int nnorb = norb * (norb+1)/2;
         int j, k, ia, str1, sign;
-        const _LinkT *tab = clink_indexa + stra_id * nlinka;
+        const _LinkTrilT *tab = clink_indexa + stra_id * nlinka;
         double *cp0, *cp1;
 
         for (j = 0; j < nlinka; j++) {
@@ -184,7 +168,7 @@ static void spread_a_t1(double *ci1, double *t1,
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 cp0 = t1 + ia;
-                cp1 = ci1 + str1*(uint64_t)nstrb;
+                cp1 = ci1 + str1*(size_t)nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 cp1[k] += cp0[k*nnorb];
@@ -199,12 +183,12 @@ static void spread_a_t1(double *ci1, double *t1,
 
 static void spread_b_t1(double *ci1, double *t1,
                         int bcount, int stra_id, int strb_id,
-                        int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
+                        int norb, int nstrb, int nlinkb, _LinkTrilT *clink_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
         int j, ia, str0, str1, sign;
-        const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci1 + stra_id * (uint64_t)nstrb;
+        const _LinkTrilT *tab = clink_indexb + strb_id * nlinkb;
+        double *pci = ci1 + stra_id * (size_t)nstrb;
 
         for (str0 = 0; str0 < bcount; str0++) {
                 for (j = 0; j < nlinkb; j++) {
@@ -228,9 +212,9 @@ void FCIcontract_a_1e(double *f1e_tril, double *ci0, double *ci1,
         int j, k, ia, str0, str1, sign;
         double *pci0, *pci1;
         double tmp;
-        _LinkT *tab;
-        _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * nstra);
-        compress_link(clink, link_indexa, nstra, nlinka);
+        _LinkTrilT *tab;
+        _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlinka * nstra);
+        FCIcompress_link_tril(clink, link_indexa, nstra, nlinka);
 
         for (str0 = 0; str0 < nstra; str0++) {
                 tab = clink + str0 * nlinka;
@@ -238,8 +222,8 @@ void FCIcontract_a_1e(double *f1e_tril, double *ci0, double *ci1,
                         ia   = EXTRACT_IA  (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
-                        pci0 = ci0 + str0 * (uint64_t)nstrb;
-                        pci1 = ci1 + str1 * (uint64_t)nstrb;
+                        pci0 = ci0 + str0 * (size_t)nstrb;
+                        pci1 = ci1 + str1 * (size_t)nstrb;
                         tmp = sign * f1e_tril[ia];
                         for (k = 0; k < nstrb; k++) {
                                 pci1[k] += tmp * pci0[k];
@@ -259,15 +243,15 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
         int j, k, ia, str0, str1, sign;
         double *pci1;
         double tmp;
-        _LinkT *tab;
-        _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nstrb);
-        compress_link(clink, link_indexb, nstrb, nlinkb);
+        _LinkTrilT *tab;
+        _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlinkb * nstrb);
+        FCIcompress_link_tril(clink, link_indexb, nstrb, nlinkb);
 
         for (str0 = 0; str0 < nstra; str0++) {
-                pci1 = ci1 + str0 * (uint64_t)nstrb;
+                pci1 = ci1 + str0 * (size_t)nstrb;
                 for (k = 0; k < nstrb; k++) {
                         tab = clink + k * nlinkb;
-                        tmp = ci0[str0*(uint64_t)nstrb+k];
+                        tmp = ci0[str0*(size_t)nstrb+k];
                         for (j = 0; j < nlinkb; j++) {
                                 ia   = EXTRACT_IA  (tab[j]);
                                 str1 = EXTRACT_ADDR(tab[j]);
@@ -295,7 +279,7 @@ void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
 static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1, double *tbuf,
                            int bcount, int stra_id, int strb_id,
                            int norb, int na, int nb, int nlinka, int nlinkb,
-                           _LinkT *clink_indexa, _LinkT *clink_indexb)
+                           _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb)
 {
         const char TRANS_N = 'N';
         const double D0 = 0;
@@ -350,8 +334,8 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
         int bufbas = MIN(BUFBASE, na);
         double *buf = malloc(sizeof(double)*bufbas*blklenb*nnorb);
         double *pbuf;
-        _LinkT *clink = malloc(sizeof(_LinkT) * nlink * na);
-        compress_link(clink, link_index, na, nlink);
+        _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlink * na);
+        FCIcompress_link_tril(clink, link_index, na, nlink);
 
         memset(ci1, 0, sizeof(double)*na*na);
         for (strk0 = 0, strk1 = na; strk0 < na; strk0 = strk1) {
@@ -400,10 +384,10 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
         int bufbas = MIN(BUFBASE, nb);
         double *buf = (double *)malloc(sizeof(double) * bufbas*nnorb*blklenb);
         double *pbuf;
-        _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
-        _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clinka, link_indexa, na, nlinka);
-        compress_link(clinkb, link_indexb, nb, nlinkb);
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
+        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
+        FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
+        FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
         memset(ci1, 0, sizeof(double)*na*nb);
         for (strk0 = 0; strk0 < na; strk0 += bufbas) {
@@ -444,7 +428,7 @@ static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
                            double *ci0, double *ci1, double *tbuf,
                            int bcount, int stra_id, int strb_id,
                            int norb, int na, int nb, int nlinka, int nlinkb,
-                           _LinkT *clink_indexa, _LinkT *clink_indexb)
+                           _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb)
 {
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
@@ -492,10 +476,10 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
         int bufbas = MIN(BUFBASE, nb);
         double *buf = (double *)malloc(sizeof(double) * bufbas*nnorb*blklenb);
         double *pbuf;
-        _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
-        _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clinka, link_indexa, na, nlinka);
-        compress_link(clinkb, link_indexb, nb, nlinkb);
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
+        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
+        FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
+        FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
         memset(ci1, 0, sizeof(double)*na*nb);
         for (strk0 = 0; strk0 < na; strk0 += bufbas) {
@@ -761,7 +745,7 @@ void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
 static void ctr_rhf2esym_kern(double *eri, double *ci0, double *ci1, double *tbuf,
                               int bcount, int stra_id, int strb_id,
                               int norb, int na, int nb, int nlinka, int nlinkb,
-                              _LinkT *clink_indexa, _LinkT *clink_indexb,
+                              _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb,
                               int *dimirrep, int totirrep)
 {
         const char TRANS_N = 'N';
@@ -805,10 +789,10 @@ void FCIcontract_2e_spin1_symm(double *eri, double *ci0, double *ci1,
         int bufbas = MIN(BUFBASE, nb);
         double *buf = (double *)malloc(sizeof(double) * bufbas*nnorb*blklenb);
         double *pbuf;
-        _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
-        _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clinka, link_indexa, na, nlinka);
-        compress_link(clinkb, link_indexb, nb, nlinkb);
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
+        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
+        FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
+        FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
         memset(ci1, 0, sizeof(double)*na*nb);
         for (strk0 = 0; strk0 < na; strk0 += bufbas) {
@@ -855,8 +839,8 @@ void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
         int bufbas = MIN(BUFBASE, na);
         double *buf = malloc(sizeof(double)*bufbas*blklenb*nnorb);
         double *pbuf;
-        _LinkT *clink = malloc(sizeof(_LinkT) * nlink * na);
-        compress_link(clink, link_index, na, nlink);
+        _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlink * na);
+        FCIcompress_link_tril(clink, link_index, na, nlink);
 
         memset(ci1, 0, sizeof(double)*na*na);
         for (strk0 = 0, strk1 = na; strk0 < na; strk0 = strk1) {

@@ -235,21 +235,23 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 # direct-CI driver
 ###############################################################
 
-def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None,
+def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
                max_memory=None, verbose=None, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+
     h1e = numpy.ascontiguousarray(h1e)
     eri = numpy.ascontiguousarray(eri)
-    link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na = link_index.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
@@ -362,7 +364,7 @@ class FCISolver(direct_spin1.FCISolver):
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
         if self.verbose > pyscf.lib.logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-        e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0,
+        e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
                            davidson_only, pspace_size, **kwargs)
         return e, ci

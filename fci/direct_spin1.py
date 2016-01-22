@@ -87,7 +87,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
         eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 
-    Please refer to the treatment in :func:`direct_spin1.absorb_h1e`
+    See also :func:`direct_spin1.absorb_h1e`
     '''
     assert(fcivec.flags.c_contiguous)
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -366,21 +366,25 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 # direct-CI driver
 ###############################################################
 
-def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
+def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
                max_memory=None, verbose=None, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-        nelec = (neleca, nelecb)
+
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     else:
-        neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        link_indexa, link_indexb = link_index
+
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
@@ -537,7 +541,8 @@ class FCISolver(object):
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         if pspaceig is None:
-            return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+            return make_diag_precond(hdiag, pspaceig, pspaceci, addr,
+                                     self.level_shift)
         else:
             return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                        self.level_shift)
@@ -550,9 +555,9 @@ class FCISolver(object):
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
         if self.verbose > pyscf.lib.logger.QUIET:
             pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, tol, lindep,
-                          max_cycle, max_space, nroots, davidson_only,
-                          pspace_size, **kwargs)
+        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
+                          tol, lindep, max_cycle, max_space, nroots,
+                          davidson_only, pspace_size, **kwargs)
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)

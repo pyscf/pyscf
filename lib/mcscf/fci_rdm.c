@@ -7,6 +7,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "fci_string.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
 #define BUFBASE         96
@@ -14,38 +15,6 @@
 
 #define BRAKETSYM       1
 #define PARTICLESYM     2
-
-typedef struct {
-        unsigned int addr;
-        unsigned char a;
-        unsigned char i;
-        char sign;
-        char _padding;
-} _LinkT;
-#define EXTRACT_I(I)    (I.i)
-#define EXTRACT_A(I)    (I.a)
-#define EXTRACT_SIGN(I) (I.sign)
-#define EXTRACT_ADDR(I) (I.addr)
-
-static void compress_link(_LinkT *clink, int *link_index,
-                          int norb, int nstr, int nlink)
-{
-        int i, j, k, a, str1, sign;
-        for (k = 0; k < nstr; k++) {
-                for (j = 0; j < nlink; j++) {
-                        a    = link_index[j*4+0];
-                        i    = link_index[j*4+1];
-                        str1 = link_index[j*4+2];
-                        sign = link_index[j*4+3];
-                        clink[j].a = a;
-                        clink[j].i = i;
-                        clink[j].sign = sign;
-                        clink[j].addr = str1;
-                }
-                clink += nlink;
-                link_index += nlink * 4;
-        }
-}
 
 /*
  * i is the index of the annihilation operator, a is the index of
@@ -66,8 +35,8 @@ double FCIrdm2_a_t1ci(double *ci0, double *t1,
         double csum = 0;
 
         for (j = 0; j < nlinka; j++) {
-                i    = EXTRACT_I   (tab[j]);
-                a    = EXTRACT_A   (tab[j]);
+                a    = EXTRACT_CRE (tab[j]);
+                i    = EXTRACT_DES (tab[j]);
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 pci = ci0 + str1*nstrb;
@@ -100,8 +69,8 @@ double FCIrdm2_b_t1ci(double *ci0, double *t1,
 
         for (str0 = 0; str0 < bcount; str0++) {
                 for (j = 0; j < nlinkb; j++) {
-                        i    = EXTRACT_I   (tab[j]);
-                        a    = EXTRACT_A   (tab[j]);
+                        a    = EXTRACT_CRE (tab[j]);
+                        i    = EXTRACT_DES (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
                         t1[i*norb+a] += sign * pci[str1];
@@ -125,8 +94,8 @@ double FCIrdm2_0b_t1ci(double *ci0, double *t1,
         for (str0 = 0; str0 < bcount; str0++) {
                 memset(t1, 0, sizeof(double) * nnorb);
                 for (j = 0; j < nlinkb; j++) {
-                        i    = EXTRACT_I   (tab[j]);
-                        a    = EXTRACT_A   (tab[j]);
+                        a    = EXTRACT_CRE (tab[j]);
+                        i    = EXTRACT_DES (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
                         t1[i*norb+a] += sign * pci[str1];
@@ -194,7 +163,6 @@ static void _transpose_jikl(double *dm2, int norb)
         int i, j;
         double *p0, *p1;
         double *tmp = malloc(sizeof(double)*nnorb*nnorb);
-        memcpy(tmp, dm2, sizeof(double)*nnorb*nnorb);
         for (i = 0; i < norb; i++) {
                 for (j = 0; j < norb; j++) {
                         p0 = tmp + (j*norb+i) * nnorb;
@@ -236,8 +204,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clinka, link_indexa, norb, na, nlinka);
-        compress_link(clinkb, link_indexb, norb, nb, nlinkb);
+        FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
+        FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
 
 #pragma omp parallel default(none) \
         shared(dm12kernel, bra, ket, norb, na, nb, nlinka, \
@@ -644,7 +612,7 @@ void FCItrans_rdm1a(double *rdm1, double *bra, double *ket,
         double *pket, *pbra;
         _LinkT *tab;
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * na);
-        compress_link(clink, link_indexa, norb, na, nlinka);
+        FCIcompress_link(clink, link_indexa, norb, na, nlinka);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
@@ -652,8 +620,8 @@ void FCItrans_rdm1a(double *rdm1, double *bra, double *ket,
                 tab = clink + str0 * nlinka;
                 pket = ket + str0 * nb;
                 for (j = 0; j < nlinka; j++) {
-                        i    = EXTRACT_I   (tab[j]);
-                        a    = EXTRACT_A   (tab[j]);
+                        a    = EXTRACT_CRE (tab[j]);
+                        i    = EXTRACT_DES (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
                         pbra = bra + str1 * nb;
@@ -674,7 +642,7 @@ void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
         double tmp;
         _LinkT *tab;
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clink, link_indexb, norb, nb, nlinkb);
+        FCIcompress_link(clink, link_indexb, norb, nb, nlinkb);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
@@ -685,8 +653,8 @@ void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
                         tab = clink + k * nlinkb;
                         tmp = pket[k];
                         for (j = 0; j < nlinkb; j++) {
-                                i    = EXTRACT_I   (tab[j]);
-                                a    = EXTRACT_A   (tab[j]);
+                                a    = EXTRACT_CRE (tab[j]);
+                                i    = EXTRACT_DES (tab[j]);
                                 str1 = EXTRACT_ADDR(tab[j]);
                                 sign = EXTRACT_SIGN(tab[j]);
                                 rdm1[a*norb+i] += sign*pbra[str1]*tmp;
@@ -708,7 +676,7 @@ void FCImake_rdm1a(double *rdm1, double *cibra, double *ciket,
         double *ci0 = ciket;
         _LinkT *tab;
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * na);
-        compress_link(clink, link_indexa, norb, na, nlinka);
+        FCIcompress_link(clink, link_indexa, norb, na, nlinka);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
@@ -716,8 +684,8 @@ void FCImake_rdm1a(double *rdm1, double *cibra, double *ciket,
                 tab = clink + str0 * nlinka;
                 pci0 = ci0 + str0 * nb;
                 for (j = 0; j < nlinka; j++) {
-                        i    = EXTRACT_I   (tab[j]);
-                        a    = EXTRACT_A   (tab[j]);
+                        a    = EXTRACT_CRE (tab[j]);
+                        i    = EXTRACT_DES (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
                         pci1 = ci0 + str1 * nb;
@@ -752,7 +720,7 @@ void FCImake_rdm1b(double *rdm1, double *cibra, double *ciket,
         double tmp;
         _LinkT *tab;
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clink, link_indexb, norb, nb, nlinkb);
+        FCIcompress_link(clink, link_indexb, norb, nb, nlinkb);
 
         memset(rdm1, 0, sizeof(double) * norb*norb);
 
@@ -762,8 +730,8 @@ void FCImake_rdm1b(double *rdm1, double *cibra, double *ciket,
                         tab = clink + k * nlinkb;
                         tmp = pci0[k];
                         for (j = 0; j < nlinkb; j++) {
-                                i    = EXTRACT_I   (tab[j]);
-                                a    = EXTRACT_A   (tab[j]);
+                                a    = EXTRACT_CRE (tab[j]);
+                                i    = EXTRACT_DES (tab[j]);
                                 str1 = EXTRACT_ADDR(tab[j]);
                                 sign = EXTRACT_SIGN(tab[j]);
                                 if (a >= i) {

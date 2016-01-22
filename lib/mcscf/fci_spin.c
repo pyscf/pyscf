@@ -9,6 +9,11 @@
 #include "vhf/fblas.h"
 #define CSUMTHR         1e-28
 
+#define EXTRACT_CRE(tab, i)  (tab[i*4+0])
+#define EXTRACT_DES(tab, i)  (tab[i*4+1])
+#define EXTRACT_ADDR(tab, i) (tab[i*4+2])
+#define EXTRACT_SIGN(tab, i) (tab[i*4+3])
+
 /*
  * the intermediate determinants ~ (norb,neleca+1;norb,nelecb-1)
  * Annihilating one alpha electron and creating one beta electron lead
@@ -31,17 +36,17 @@ static double ades_bcre_t1(double *ci0, double *t1, int fillcnt, int stra_id,
 
         ades_index = ades_index + stra_id * inelec * 4;
         for (id = 0; id < inelec; id++) {
-                j     = ades_index[id*4+0];
-                str1  = ades_index[id*4+2];
-                signa = ades_index[id*4+3];
+                j     = EXTRACT_DES (ades_index, id);
+                str1  = EXTRACT_ADDR(ades_index, id);
+                signa = EXTRACT_SIGN(ades_index, id);
                 pci = ci0 + str1 * (size_t)nstrb;
                 pt1 = t1 + j*norb;
                 for (k = 0; k < fillcnt; k++) {
                         tab = bcre_index + k * invir * 4;
                         for (ic = 0; ic < invir; ic++) {
-                                i    = tab[ic*4+0];
-                                str1 = tab[ic*4+2];
-                                sign = tab[ic*4+3] * signa;
+                                i    = EXTRACT_CRE (tab, ic);
+                                str1 = EXTRACT_ADDR(tab, ic);
+                                sign = EXTRACT_SIGN(tab, ic) * signa;
                                 pt1[i] += pci[str1] * sign;
                                 csum += pci[str1] * pci[str1];
                         }
@@ -73,17 +78,17 @@ static double acre_bdes_t1(double *ci0, double *t1, int fillcnt, int stra_id,
 
         acre_index = acre_index + stra_id * invir * 4;
         for (ic = 0; ic < invir; ic++) {
-                i     = acre_index[ic*4+0];
-                str1  = acre_index[ic*4+2];
-                signa = acre_index[ic*4+3];
+                i     = EXTRACT_CRE (acre_index, ic);
+                str1  = EXTRACT_ADDR(acre_index, ic);
+                signa = EXTRACT_SIGN(acre_index, ic);
                 pci = ci0 + str1 * (size_t)nstrb;
                 pt1 = t1 + i;
                 tab = bdes_index;
                 for (str0 = 0; str0 < fillcnt; str0++) {
                         for (id = 0; id < inelec; id++) {
-                                j    = tab[id*4+0];
-                                str1 = tab[id*4+2];
-                                sign = tab[id*4+3] * signa;
+                                j    = EXTRACT_DES (tab, id);
+                                str1 = EXTRACT_ADDR(tab, id);
+                                sign = EXTRACT_SIGN(tab, id) * signa;
                                 pt1[j*norb] += sign * pci[str1];
                                 csum += pci[str1] * pci[str1];
                         }
