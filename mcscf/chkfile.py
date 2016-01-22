@@ -42,7 +42,7 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
         mo_energy = numpy.einsum('ji,ji->i', mo_coeff, fock_ao.dot(mo_coeff))
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:ncore] = 2
-        mo_occ[ncore:nocc] = occ
+        mo_occ[ncore:nocc] = -occ
 
     if h5py.is_hdf5(chkfile):
         fh5 = h5py.File(chkfile)

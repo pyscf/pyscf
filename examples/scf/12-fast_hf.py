@@ -58,8 +58,8 @@ H 9.239940 8.492427 3.423290
             basis = 'ccpvdz',
             charge = 3,
             spin = 3,
-            verbose = 5,
+            verbose = 4,
             output = 'cu3.out')
 
 mf = scf.fast_newton(scf.RHF(mol))
-mf.kernel()
+print('E(tot) %.15g  ref = -5668.38221757799' % mf.e_tot)

@@ -9,15 +9,19 @@ from pyscf import gto, scf, mcscf
 Density fitting for orbital optimzation.
 
 NOTE mcscf.density_fit function decorates the mcscf.CASSCF object to
-approximate the second order optimization solver.  There is no approximation
-for the 2e integrals.  They are evaluated by the regular 4-center integration.
-To approximate every 2e integrals using density fitting method,  we need
-decorate the SCF object with density_fit function.  (The "overall" density
-fitting is new in PySCF-1.1).
+approximate the orbital hessian.  The 2e integrals are evaluated by the
+regular 4-center integration (exactly) when computing the total energy.
+The CASSCF answer should not be affected by this approximation.
 
-This rule basically follows the same convention used in the SCF decoration.
-See pyscf/mcscf/df.py for more details and
-pyscf/example/scf/23-decorate_scf.py as an exmple
+The overall density fitting for CASCI/CASSCF (which affects total energy)
+needs mcscf.DFCASSCF or mcscf.DFCASCI class.  The overall density fitting also
+requires the underlying SCF object to be DF-SCF, which can be obtained by
+decoration function scf.density_fit.  See also the example
+pyscf/examples/scf/20-density_fitting.py.
+
+Note mcscf.density_fit function follows the same convention of decoration
+ordering which is applied in the SCF decoration.  See pyscf/mcscf/df.py for
+more details and pyscf/example/scf/23-decorate_scf.py as an exmple.
 '''
 
 mol = gto.Mole()
@@ -46,4 +50,25 @@ mc = mcscf.density_fit(mcscf.CASSCF(mf, 6, 6))
 mo = mc.sort_mo([17,20,21,22,23,30])
 mc.kernel(mo)
 print('E(CAS) = %.12f, ref = -230.848493421389' % mc.e_tot)
+
+#
+# DFCASSCF + conventional SCF will only affect the orbital hessian.  You'll
+# probably see the warning msg for this combination
+# Warn: DFCASSCF: the first argument needs to be density-fitting SCF object.  <class 'pyscf.scf.hf.RHF'> is not density-fitting SCF object.
+#
+mc = mcscf.DFCASSCF(mf, 6, 6)
+mo = mc.sort_mo([17,20,21,22,23,30])
+mc.kernel(mo)
+print('E(CAS) = %.12f, ref = -230.848493421389' % mc.e_tot)
+
+#
+# To carry out the overall density-fitting CASSCF calculation,  you need start
+# from DF-SCF calculation
+#
+mf = scf.density_fit(scf.RHF(mol), auxbasis='ccpvtzfit')
+mf.kernel()
+mc = mcscf.DFCASSCF(mf, 6, 6, auxbasis='ccpvtzfit')
+mo = mc.sort_mo([17,20,21,22,23,30])
+mc.kernel(mo)
+print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
 
