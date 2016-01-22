@@ -175,9 +175,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
 
-    logger.note(mf, '======================================')
-    logger.note(mf, 'Generating initial guess with DIIS-SCF')
-    logger.note(mf, '======================================')
+    logger.note(mf, '========================================================')
+    logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
+    logger.note(mf, '========================================================')
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:

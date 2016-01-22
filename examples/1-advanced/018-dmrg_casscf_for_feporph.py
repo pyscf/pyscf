@@ -6,18 +6,24 @@ import scipy.linalg
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf, fci
+from pyscf import dmrgscf
+from pyscf import mrpt
+# Adjust mpirun flags to execute the calculation with multi-processor
+dmrgscf.settings.MPIPREFIX = 'mpirun -np 16'
+
 
 '''
-Triplet and quintet energy gap of Iron-Porphyrin molecule
+Triplet and quintet energy gap of Iron-Porphyrin molecule using DMRG-CASSCF
+and DMRG-NEVPT2 methods.  DMRG is an approximate FCI solver.  It can be used
+to handle large active space.  This example is the next step to example
+017-dmet_cas_for_feporph.py
 '''
 
 #
-# For 3d transition metal, people usually consider the so-called double
-# d-shell effects for CASSCF calculation.  Double d-shell here refers to 3d
-# and 4d atomic orbitals.  Density matrix embedding theory (DMET) provides a
-# method to generate CASSCF initial guess in terms of localized orbitals.
-# Given DMET impurity and truncated bath, we can select Fe 3d and 4d orbitals
-# and a few entangled bath as the active space.
+# Following 017-dmet_cas_for_feporph.py, we still use density matrix embedding
+# theory (DMET) to generate CASSCF initial guess.  The active space includes
+# the Fe double d-shell, 4s shell, and the ligand N 2pz orbitals to describe
+# metal-ligand pi bond and pi backbond.
 #
 
 
@@ -131,7 +137,7 @@ mol.atom = [
 ]
 mol.basis = 'ccpvdz'
 mol.verbose = 4
-mol.output = 'fepor.out'
+mol.output = 'fepor-dmrgscf.out'
 mol.spin = 4
 mol.symmetry = True
 mol.build()
@@ -140,22 +146,28 @@ mf = scf.ROHF(mol)
 mf = scf.fast_newton(mf)
 
 #
-# CAS(8e, 11o)
+# CAS(16e, 20o)
 #
 # mcscf.density_fit approximates the orbital hessian.  It does not affect
-# CASSCF results.
+# results.  The N-2pz orbitals introduces more entanglement to environment.
+# 5 bath orbitals which have the strongest entanglement to impurity are
+# considered in active space.
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
-idx = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s or 'Fe 4d' in s]
+mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(m, 20, 16))
+idx = [i for i,s in enumerate(mol.spheric_labels(1))
+       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
 
 mc.fcisolver.wfnsym = 'Ag'
 mc.kernel(mo)
 #mc.analyze()
-e_q = mc.e_tot  # -2244.82910509839
+e_q = mc.e_tot  # -2244.90267106288
 cas_q = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 
-
+#
+# call DMRG-NEVPT2
+#
+ept2_q = mrpt.nevpt2.sc_nevpt(mc)
 
 
 
@@ -166,14 +178,6 @@ cas_q = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 # Triplet
 #
 ##################################################
-#
-# Slow convergence is observed in the triplet state.  In this system, the CI
-# coefficients and orbital rotation are strongly coupled.  Small orbital
-# rotation leads to significant change of CI eigenfunction.  The micro iteration
-# is not able to predict the right orbital rotations since the first order
-# approximation for orbital gradients and CI hamiltonian are just too far to the
-# exact value.
-# 
 
 mol.spin = 2
 
@@ -181,52 +185,38 @@ mf = scf.ROHF(mol)
 mf = scf.fast_newton(mf)
 
 #
-# CAS(8e, 11o)
+# CAS(16e, 20o)
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
-idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
-idx4d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 4d' in s]
-mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
+# Unlike CAS(8e, 11o) which is easily to draw 4s-character orbitals into the
+# active space, the larger active space, which includes 4s orbitals, does not
+# have such issue on MCSCF wfn.
 #
-# 1. Small spin contaimination is observed for the default FCI solver.
-#    Call fci.addons.fix_spin_ to force FCI wfn following the triplet state.
-#
-# 2. Without specifying wfnsym for fcisolver, it may converge to B2g or B3g
-#    states.  The two states are very close to B1g solution (~ 1 mEh higher).
-#
-# 3. mc.frozen = idx4d to freeze the 4D orbitals in active space.  Without
-#    doing so, it's possible for the optimizer to cross the barrier, and
-#    mixing the 4d and 4s orbital, then converge to a nearby solution which
-#    involves 4s orbitals.  The 4s character solution is energetically lower
-#    than the target solution (~0.5 mEh).  But it has quite different active
-#    space feature to the initial guess.
-#
-fci.addons.fix_spin_(mc.fcisolver, ss_value=2)  # Triplet, ss_value = S*(S+1)
+mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(m, 20, 16))
+idx = [i for i,s in enumerate(mol.spheric_labels(1))
+       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+mo = dmet_cas(mc, mf.make_rdm1(), idx3d)
 mc.fcisolver.wfnsym = 'B1g'
-mc.frozen = idx4d
 mc.kernel(mo)
 mo = mc.mo_coeff
-
-#
-# Using the frozen-4d wfn as the initial guess,  we can converge the triplet
-# to the correct active space
-#
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
-fci.addons.fix_spin_(mc.fcisolver, ss_value=2)
-mc.fcisolver.wfnsym = 'B1g'
-mc.kernel(mo)
 #mc.analzye()
-e_t = mc.e_tot  # -2244.81493852189
+e_t = mc.e_tot  # -2244.88920313881
 cas_t = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 
-
+#
+# call DMRG-NEVPT2
+#
+ept2_t = mrpt.nevpt2.sc_nevpt(mc)
 
 print('E(T) = %.15g  E(Q) = %.15g  gap = %.15g' % (e_t, e_q, e_t-e_q))
-# E(T) = -2244.81493852189  E(Q) = -2244.82910509839  gap = 0.0141665764999743
+# E(T) = -2244.88920313881  E(Q) = -2244.90267106288  gap = 0.0134679240700279
 
 # The triplet and quintet active space are not perfectly overlaped
 s = reduce(numpy.dot, (cas_t.T, mol.intor('cint1e_ovlp_sph'), cas_q))
-print('Active space overlpa <T|Q> ~ %f' % numpy.linalg.det(s)) # 0.307691
+print('Active space overlpa <T|Q> ~ %f' % numpy.linalg.det(s))
+
+print('NEVPT2: E(T) = %.15g  E(Q) = %.15g  gap = %.15g' %
+      (ept2_t, ept2_q, ept2_t-ept2_q))
+# E(T) =                    E(Q) =                    gap =                   
 
 
 
