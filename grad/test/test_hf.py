@@ -24,7 +24,7 @@ class KnowValues(unittest.TestCase):
         rhf = scf.RHF(mol)
         rhf.conv_tol = 1e-14
         rhf.scf()
-        g = grad.hf.RHF(rhf)
+        g = grad.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 7.9210392362911595, 7)
         self.assertAlmostEqual(finger(g.grad()), 0.367743084803, 7)
 
@@ -32,7 +32,7 @@ class KnowValues(unittest.TestCase):
         uhf = scf.dhf.UHF(mol)
         uhf.conv_tol_grad = 1e-5
         uhf.scf()
-        g = grad.dhf.UHF(uhf)
+        g = grad.DHF(uhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 7.9216825870803245, 7)
         g.level = 'LLLL'
         self.assertAlmostEqual(finger(g.grad_elec()), 7.924684281032623, 7)
@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
     def test_energy_nuc(self):
         rhf = scf.RHF(mol)
         rhf.scf()
-        g = grad.hf.RHF(rhf)
+        g = grad.RHF(rhf)
         self.assertAlmostEqual(finger(g.grad_nuc()), 8.2887823210941249, 9)
 
     def test_ccsd(self):

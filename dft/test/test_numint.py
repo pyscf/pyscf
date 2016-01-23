@@ -44,7 +44,7 @@ class KnowValues(unittest.TestCase):
 
     def test_dot_ao_ao(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)
-        ao = dft.numint.eval_ao(mol, mf.grids.coords, isgga=True)
+        ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
         res0 = lib.dot(ao[0].T, ao[1])
         res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], nao,
                                      mf.grids.weights.size, non0tab)

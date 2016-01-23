@@ -29,6 +29,9 @@ def IX_intermediates(cc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 # Note gamma2 are in Chemist's notation
         d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
+    dvvov = dovvv.transpose(2,3,0,1)
+    nocc, nvir = t1.shape
+    dvvvv = pyscf.ao2mo.restore(1, dvvvv, nvir).reshape((nvir,)*4)
 
 # Note Ioo is not hermitian
     Ioo  =(numpy.einsum('jakb,iakb->ij', dovov, eris.ovov)
@@ -99,7 +102,7 @@ def IX_intermediates(cc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 
 
 def response_dm1(cc, t1, t2, l1, l2, eris=None, IX=None):
-    from pyscf.grad import cphf
+    from pyscf.scf import cphf
     if eris is None:
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(cc)
@@ -147,6 +150,8 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
     Ioo, Ivv, Ivo, Xvo = IX_intermediates(cc, t1, t2, l1, l2, eris, (doo,dvv), d2)
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
+    dvvov = dovvv.transpose(2,3,0,1)
+    dvvvv = pyscf.ao2mo.restore(1, dvvvv, nvir).reshape((nvir,)*4)
 
     dm1mo = response_dm1(cc, t1, t2, l1, l2, eris, (Ioo, Ivv, Ivo, Xvo))
     dm1mo[:nocc,:nocc] = doo * 2
@@ -311,7 +316,7 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
     g1 = kernel(mycc, t1, t2, l1, l2)
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     print('ghf')
     print(ghf)
     print('gcc')
@@ -329,14 +334,14 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-14
     ehf0 = mf.scf()
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     mycc = pyscf.cc.ccsd.CCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
     g1 = kernel(mycc, t1, t2, l1, l2)
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     print('ghf')
     print(ghf)
     print('gcc')

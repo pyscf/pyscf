@@ -109,7 +109,7 @@ def aorange_by_atom(mol):
     return aorange
 
 
-class RHF(object):
+class Gradients(object):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
@@ -119,10 +119,12 @@ class RHF(object):
         self.chkfile = scf_method.chkfile
 
     def dump_flags(self):
-        log.info(self, '\n')
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
         if not self._scf.converged:
             log.warn(self, 'Ground state SCF is not converged')
-        log.info(self, '******** %s Gradients ********', self.__class__)
+        log.info('******** %s for %s ********',
+                 self.__class__, self._scf.__class__)
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -196,7 +198,7 @@ if __name__ == '__main__':
     mol.build()
     method = scf.RHF(mol)
     method.scf()
-    g = RHF(method)
+    g = Gradients(method)
     print(g.grad())
 
     h2o = gto.Mole()
@@ -211,7 +213,7 @@ if __name__ == '__main__':
     h2o.build()
     rhf = scf.RHF(h2o)
     rhf.scf()
-    g = RHF(rhf)
+    g = Gradients(rhf)
     print(g.grad())
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]

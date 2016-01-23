@@ -16,8 +16,8 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
-import pyscf.grad
-from pyscf.grad import cphf
+from pyscf.scf import rhf_grad
+from pyscf.scf import cphf
 
 BLKSIZE = 192
 
@@ -44,7 +44,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
         dovvv = fd2intermediate['dovvv']
         dooov = fd2intermediate['dooov']
     else:
-        dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = d2
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
@@ -84,8 +84,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
     d_ovvo = None
     d_ovov = lib.transpose_sum(d_ovov.reshape(nov,nov)).reshape(nocc,nvir,nocc,nvir)
     #:Ivo += numpy.einsum('jbka,jbki->ai', d_ovov, eris.ovoo)
-    Ivo += lib.dot(d_ovov.reshape(-1,nvir).T,
-                   _cp(eris.ovoo).reshape(-1,nocc))
+    Ivo += lib.dot(d_ovov.reshape(-1,nvir).T, _cp(eris.ovoo).reshape(-1,nocc))
     eris_ovov = _cp(eris.ovov)
     #:Ioo += numpy.einsum('jakb,iakb->ij', d_ovov, eris.ovov)
     #:Ivv += numpy.einsum('jcib,jcia->ab', d_ovov, eris.ovov)
@@ -288,7 +287,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if l2 is None: l2 = mycc.l2
     if eris is None: eris = ccsd._ERIS(mycc)
     if grad_hf is None:
-        grad_hf = pyscf.grad.hf.RHF(mycc._scf)
+        grad_hf = rhf_grad.Gradients(mycc._scf)
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time0 = time.clock(), time.time()
@@ -384,9 +383,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 # 2e AO integrals dot 2pdm
         ip0 = p0
         for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
-            eri1 = gto.moleintor.getints('cint2e_ip1_sph', mol._atm, mol._bas,
-                                         mol._env, numpy.arange(b0,b1), comp=3,
-                                         aosym='s2kl').reshape(3,nf,nao,-1)
+            eri1 = mol.intor('cint2e_ip1_sph', comp=3, aosym='s2kl',
+                             bras=numpy.arange(b0,b1)).reshape(3,nf,nao,-1)
             dm2buf = numpy.empty((nf,nao,nao_pair))
             for ic, (i0, i1) in enumerate(prange(0, nao_pair, ioblksize)):
                 _load_block_tril(fdm2['dm2/%d'%ic], ip0, ip0+nf, dm2buf[:,:,i0:i1])
@@ -437,7 +435,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
     else:
         _dm2file = None
     time1 = time.clock(), time.time()
-    dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = d2
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nov = nocc * nvir
     nao, nmo = mo_coeff.shape
@@ -663,7 +661,7 @@ if __name__ == '__main__':
         verbose = 0,
         atom = [
             ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. ,-0.757  , 0.587)],
             [1   , (0. , 0.757  , 0.587)]],
         basis = '631g'
     )
@@ -675,9 +673,9 @@ if __name__ == '__main__':
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -691,14 +689,14 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-14
     ehf0 = mf.scf()
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     mycc = ccsd.CCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0.          0.         -0.07080036]
 # [ 0.          0.          0.07080036]]

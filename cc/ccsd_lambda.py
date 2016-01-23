@@ -387,7 +387,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
           - numpy.einsum('jiab,jb->ia', l2new, t1) * 2)
     tmp = tmp1 = None
 
-    l1new += eris.fock[:nocc,nocc:]
+    l1new += fov
     l1new += numpy.einsum('ib,ba->ia', l1, saved.w1)
     l1new -= numpy.einsum('ja,ij->ia', l1, saved.w2)
     l1new -= numpy.einsum('ik,ka->ia', mij, saved.w4)
@@ -420,7 +420,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
 
     max_memory = max_memory - lib.current_memory()[0]
     unit = max(nvir**3*2+nocc*nvir**2, nocc*nvir**2*5)
-    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     for p0, p1 in prange(0, nocc, blksize):

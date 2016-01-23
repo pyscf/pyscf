@@ -444,7 +444,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** CCSD flags ********')
+        log.info('******** %s flags ********', self.__class__)
         nocc = self.nocc()
         nvir = nmo - nocc
         log.info('CAS nocc = %d, nvir = %d', nocc, nvir)

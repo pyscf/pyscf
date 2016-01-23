@@ -21,7 +21,7 @@ def gamma1_intermediates(cc, t1, t2, l1, l2):
     gvv += numpy.einsum('ijac,ijbc->ab', l2, theta)
     return goo, gvv
 
-# gamma2 intermediates in Physist's notation
+# gamma2 intermediates in Chemist's notation
 def gamma2_intermediates(cc, t1, t2, l1, l2):
     tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
     tau2 = t2 + numpy.einsum('ia,jb->ijab', t1, t1*2)
@@ -79,7 +79,15 @@ def gamma2_intermediates(cc, t1, t2, l1, l2):
     dovvo = gOvVo*2 + gOvvO
     dvovv = gvovv*2 - gvovv.transpose(0,1,3,2)
     dooov = gooov*2 - gooov.transpose(1,0,2,3)
-    return doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov
+
+    dovvv = None
+    doovv, dovov = dovov.transpose(0,2,1,3), doovv.transpose(0,2,1,3)
+    dvvvv = dvvvv.transpose(0,2,1,3)
+    doooo = doooo.transpose(0,2,1,3)
+    dovvo = dovvo.transpose(0,2,1,3)
+    dvvov = dvovv.transpose(0,2,1,3)
+    dooov = dooov.transpose(0,2,1,3)
+    return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
 def make_rdm1(cc, t1, t2, l1, l2, d1=None):
     if d1 is None:
@@ -102,44 +110,44 @@ def make_rdm2(cc, t1, t2, l1, l2, d1=None, d2=None):
     else:
         doo, dvv = d1
     if d2 is None:
-        doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = \
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
                 gamma2_intermediates(cc, t1, t2, l1, l2)
     else:
-        doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = d2
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
     dm2 = numpy.empty((nmo,nmo,nmo,nmo))
 
     dm2[:nocc,nocc:,:nocc,nocc:] = \
-            (doovv.transpose(0,2,1,3)+doovv.transpose(1,3,0,2))
+            (dovov                   +dovov.transpose(2,3,0,1))
     dm2[nocc:,:nocc,nocc:,:nocc] = \
-            (doovv.transpose(2,0,3,1)+doovv.transpose(3,1,2,0))
+            (dovov.transpose(1,0,3,2)+dovov.transpose(3,2,1,0))
 
     dm2[:nocc,:nocc,nocc:,nocc:] = \
-            (dovov.transpose(0,2,3,1)+dovov.transpose(2,0,1,3))
+            (doovv.transpose(0,1,3,2)+doovv.transpose(1,0,2,3))
     dm2[nocc:,nocc:,:nocc,:nocc] = \
-            (dovov.transpose(3,1,0,2)+dovov.transpose(1,3,2,0))
+            (doovv.transpose(3,2,0,1)+doovv.transpose(2,3,1,0))
     dm2[:nocc,nocc:,nocc:,:nocc] = \
-            (dovvo.transpose(0,2,1,3)+dovvo.transpose(3,1,2,0))
+            (dovvo                   +dovvo.transpose(3,2,1,0))
     dm2[nocc:,:nocc,:nocc,nocc:] = \
-            (dovvo.transpose(1,3,0,2)+dovvo.transpose(2,0,3,1))
+            (dovvo.transpose(2,3,0,1)+dovvo.transpose(1,0,3,2))
 
     dm2[nocc:,nocc:,nocc:,nocc:] = \
-            (dvvvv.transpose(0,2,1,3)+dvvvv.transpose(2,0,3,1)) * 2
+            (dvvvv                   +dvvvv.transpose(1,0,3,2)) * 2
 
     dm2[:nocc,:nocc,:nocc,:nocc] = \
-            (doooo.transpose(0,2,1,3)+doooo.transpose(2,0,3,1)) * 2
+            (doooo                   +doooo.transpose(1,0,3,2)) * 2
 
-    dm2[nocc:,nocc:,:nocc,nocc:] = dvovv.transpose(0,2,1,3)
-    dm2[:nocc,nocc:,nocc:,nocc:] = dvovv.transpose(1,3,0,2)
-    dm2[nocc:,nocc:,nocc:,:nocc] = dvovv.transpose(2,0,3,1)
-    dm2[nocc:,:nocc,nocc:,nocc:] = dvovv.transpose(3,1,2,0)
+    dm2[nocc:,nocc:,:nocc,nocc:] = dvvov
+    dm2[:nocc,nocc:,nocc:,nocc:] = dvvov.transpose(2,3,0,1)
+    dm2[nocc:,nocc:,nocc:,:nocc] = dvvov.transpose(1,0,3,2)
+    dm2[nocc:,:nocc,nocc:,nocc:] = dvvov.transpose(3,2,1,0)
 
-    dm2[:nocc,:nocc,:nocc,nocc:] = dooov.transpose(0,2,1,3)
-    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(1,3,0,2)
-    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(2,0,3,1)
-    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,1,2,0)
+    dm2[:nocc,:nocc,:nocc,nocc:] = dooov
+    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
+    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
+    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
 
     doo = doo + doo.T
     dvv = dvv + dvv.T
@@ -204,26 +212,26 @@ if __name__ == '__main__':
     print((numpy.einsum('ij,ij', goo, fock0[:nocc,:nocc]))*2+20166.3298610348)
     print((numpy.einsum('ab,ab', gvv, fock0[nocc:,nocc:]))*2-58078.9640192468)
 
-    doovv, dvvvv, doooo, dovov, dovvo, dvovv, dooov = \
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             gamma2_intermediates(mcc, t1, t2, l1, l2)
 
-    print('doooo',numpy.einsum('klij,kilj', doooo, eris.oooo)*2-15939.9007625418)
-    print('dvvvv',numpy.einsum('abcd,acbd', dvvvv, eris.vvvv)*2-37581.823919588 )
-    print('dooov',numpy.einsum('jika,jkia', dooov, eris.ooov)*2-128470.009687716)
-    print('dvovv',numpy.einsum('aibc,icab', dvovv, eris.ovvv)*2+166794.225195056)
-    print('doovv',numpy.einsum('ijab,iajb', doovv, eris.ovov)*2+719279.812916893)
-    print('dovvo',numpy.einsum('jabi,jbia', dovvo, eris.ovov)*2
-                 +numpy.einsum('jaib,jiba', dovov, eris.oovv)*2+53634.0012286654)
+    print('doooo',numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2-15939.9007625418)
+    print('dvvvv',numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2-37581.823919588 )
+    print('dooov',numpy.einsum('jkia,jkia', dooov, eris.ooov)*2-128470.009687716)
+    print('dvovv',numpy.einsum('abic,icab', dvvov, eris.ovvv)*2+166794.225195056)
+    print('doovv',numpy.einsum('iajb,iajb', dovov, eris.ovov)*2+719279.812916893)
+    print('dovvo',numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
+                 +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2+53634.0012286654)
 
     dm1 = make_rdm1(mcc, t1, t2, l1, l2)
     dm2 = make_rdm2(mcc, t1, t2, l1, l2)
-    e2 =(numpy.einsum('klij,kilj', doooo, eris.oooo)*2
-        +numpy.einsum('abcd,acbd', dvvvv, eris.vvvv)*2
-        +numpy.einsum('jika,jkia', dooov, eris.ooov)*2
-        +numpy.einsum('aibc,icab', dvovv, eris.ovvv)*2
-        +numpy.einsum('ijab,iajb', doovv, eris.ovov)*2
-        +numpy.einsum('jabi,jbia', dovvo, eris.ovov)*2
-        +numpy.einsum('jaib,jiba', dovov, eris.oovv)*2
+    e2 =(numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2
+        +numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2
+        +numpy.einsum('jkia,jkia', dooov, eris.ooov)*2
+        +numpy.einsum('abic,icab', dvvov, eris.ovvv)*2
+        +numpy.einsum('iajb,iajb', dovov, eris.ovov)*2
+        +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
+        +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
         +numpy.einsum('ij,ij', goo, fock0[:nocc,:nocc])*2
         +numpy.einsum('ab,ab', gvv, fock0[nocc:,nocc:])*2
         +fock0[:nocc].trace()*2

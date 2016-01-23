@@ -39,8 +39,10 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
         nov = nocc * nvir
         dovvv = numpy.empty((nocc,nvir,nvir,nvir))
         ao2mo.outcore._load_from_h5g(f['dovvv'], 0, nov, dovvv.reshape(nov,-1))
+        dvvov = None
         d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value,
-              f['doovv'].value, f['dovvo'].value, dovvv, f['dooov'].value)
+              f['doovv'].value, f['dovvo'].value, dvvov, dovvv,
+              f['dooov'].value)
         for key in f.keys():
             del(f[key])
         return d2
@@ -287,8 +289,8 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
     del(fswap['mvOVo'])
     fswap.close()
     _tmpfile = None
-    return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'],
-            h5fobj['doovv'], h5fobj['dovvo'], h5fobj['dovvv'], h5fobj['dooov'])
+    return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
+            h5fobj['dovvo'], None, h5fobj['dovvv'], h5fobj['dooov'])
 
 def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     if d1 is None:
@@ -311,10 +313,10 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     else:
         doo, dvv = d1
     if d2 is None:
-        dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = \
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
                 gamma2_intermediates(mycc, t1, t2, l1, l2)
     else:
-        dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = d2
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
@@ -339,8 +341,8 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
 
     dm2[:nocc,:nocc,:nocc,:nocc] =(doooo+doooo.transpose(1,0,3,2)) * 2
 
-    dm2[nocc:,nocc:,:nocc,nocc:] = dovvv.transpose(2,3,0,1)
     dm2[:nocc,nocc:,nocc:,nocc:] = dovvv
+    dm2[nocc:,nocc:,:nocc,nocc:] = dovvv.transpose(2,3,0,1)
     dm2[nocc:,nocc:,nocc:,:nocc] = dovvv.transpose(3,2,1,0)
     dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2)
 
@@ -422,7 +424,7 @@ if __name__ == '__main__':
     print((numpy.einsum('ij,ij', goo, fock0[:nocc,:nocc]))*2+20166.3298610348)
     print((numpy.einsum('ab,ab', gvv, fock0[nocc:,nocc:]))*2-58078.9640192468)
 
-    dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = \
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             gamma2_intermediates(mcc, t1, t2, l1, l2)
 
     dvvvv = ao2mo.restore(1, dvvvv, nvir)

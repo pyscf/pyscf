@@ -16,8 +16,8 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm_incore as ccsd_rdm
-import pyscf.grad
-from pyscf.grad import cphf
+from pyscf.scf import rhf_grad
+from pyscf.scf import cphf
 
 BLKSIZE = 192
 
@@ -237,7 +237,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if l2 is None: l2 = mycc.l2
     if eris is None: eris = ccsd._ERIS(mycc)
     if grad_hf is None:
-        grad_hf = pyscf.grad.hf.RHF(mycc._scf)
+        grad_hf = rhf_grad.Gradients(mycc._scf)
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time0 = time.clock(), time.time()
@@ -405,7 +405,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff):
 
     pool = pool.ravel()[:blksize*nvir**3].reshape((blksize*nvir,nvir,nvir))
     for p0, p1 in prange(0, nvir_pair, blksize*nvir):
-        buf1 = _ccsd.unpack_tril(dvvvv[p0:p1], out=pool[:p1-p0])
+        buf1 = _ccsd.unpack_tril(_cp(dvvvv[p0:p1]), out=pool[:p1-p0])
         _trans(buf1, nocc, nvir, nocc, nvir, bufvv[p0:p1])
     pool = buf1 = None
 
@@ -553,9 +553,9 @@ if __name__ == '__main__':
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -569,14 +569,14 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-14
     ehf0 = mf.scf()
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     mycc = ccsd.CCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0.          0.         -0.07080036]
 # [ 0.          0.          0.07080036]]
