@@ -56,14 +56,19 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
     x_code, c_code = vxc.parse_xc_name(ks.xc)
-    if ks._numint is None:
-        n, ks._exc, vx = numint.nr_rks_vxc(mol, ks.grids, x_code, c_code, dm)
-    else:
-        n, ks._exc, vx = ks._numint.nr_rks(mol, ks.grids, x_code, c_code, dm)
-    logger.debug(ks, 'nelec by numeric integration = %s', n)
-    t0 = logger.timer(ks, 'vxc', *t0)
-
     hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+
+    if hermi == 2:  # because rho = 0
+        n, ks._exc, vx = 0, 0, 0
+    else:
+        if ks._numint is None:
+            n, ks._exc, vx = numint.nr_rks_vxc(mol, ks.grids, x_code, c_code,
+                                               dm, hermi=hermi)
+        else:
+            n, ks._exc, vx = ks._numint.nr_rks(mol, ks.grids, x_code, c_code,
+                                               dm, hermi=hermi)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:
         vj = ks.get_j(mol, dm, hermi)

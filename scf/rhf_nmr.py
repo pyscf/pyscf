@@ -16,9 +16,8 @@ import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
 import pyscf.lib.parameters as param
-import pyscf.scf
 from pyscf.scf import _vhf
-from pyscf.grad import cphf
+from pyscf.scf import cphf
 
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
@@ -79,7 +78,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         # A10_j dot p + p dot A10_j consistents with <g p^2>
         # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
         h1 = .5 * mol.intor('cint1e_giao_irjxp_sph', 3)
-        log.debug('First-order Fock matrix of GIAOs')
+        log.debug('First-order GIAO Fock matrix')
         h1 += make_h10giao(mol, dm0)
     else:
         mol.set_common_origin_(gauge_orig)
@@ -87,15 +86,11 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     return h1
 
 def make_h10giao(mol, dm0):
-    vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
-                               'a4ij', ('lk->s1ij', 'jk->s1il'),
-                               dm0, 3, # xyz, 3 components
-                               mol._atm, mol._bas, mol._env)
-# J = i[(i i|\mu g\nu) + (i gi|\mu \nu)]
-# K = i[(\mu gi|i \nu) + (\mu i|i g\nu)]
-#   = (\mu g i|i \nu) - h.c.   anti-symm because of the factor i
-    vk = vk - vk.transpose(0,2,1)
-    h1 = vj - .5 * vk
+    vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
+                           'a4ij', 'jk->s1il',
+                           dm0, 3, # xyz, 3 components
+                           mol._atm, mol._bas, mol._env)
+    h1 = -.5 * vk
     h1 += mol.intor_asymmetric('cint1e_ignuc_sph', 3)
     h1 += mol.intor('cint1e_igkin_sph', 3)
     return h1
@@ -160,20 +155,23 @@ class NMR(object):
 #            raise AttributeError('TODO: UHF')
 
     def dump_flags(self):
-        logger.info(self, '\n')
-        logger.info(self, '******** NMR flags ********')
-        logger.info(self, 'mean field = %s', self._scf.__module__)
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s shielding for %s ********',
+                 self.__class__, self._scf.__class__)
         if self.gauge_orig is None:
-            logger.info(self, 'gauge = GIAO')
+            log.info('gauge = GIAO')
         else:
-            logger.info(self, 'Common gauge = %s', str(self.gauge_orig))
-        logger.info(self, 'shielding for atoms %s', str(self.shielding_nuc))
+            log.info('Common gauge = %s', str(self.gauge_orig))
+        log.info('shielding for atoms %s', str(self.shielding_nuc))
         if self.cphf:
-            logger.info(self, 'Solving MO10 eq. with CPHF')
+            log.info('Solving MO10 eq with CPHF.')
         if not self._scf.converged:
-            logger.warn(self, 'underneath SCF of NMR not converged')
-        logger.info(self, '\n')
+            log.warn('Ground state SCF is not converged')
+        log.info('\n')
 
+    def kernel(self, mo1=None):
+        return self.shielding(mo1)
     def shielding(self, mo1=None):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
@@ -230,7 +228,7 @@ class NMR(object):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         log = logger.Logger(self.stdout, self.verbose)
         h1 = make_h10(mol, dm0, gauge_orig, log)
-        pyscf.scf.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        pyscf.lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
     def make_s10(self, mol=None, gauge_orig=None):

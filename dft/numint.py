@@ -797,9 +797,6 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
     >>> dm = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
     >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, x_id, c_id, dm)
     '''
-    assert(hermi == 1)
-
-#TEST ME
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         nao = dms.shape[0]

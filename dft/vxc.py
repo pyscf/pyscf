@@ -294,26 +294,34 @@ def is_lda(xc_code):
     return xc_code <= 51
 
 def is_hybrid_xc(xc_code):
-    if (isinstance(xc_code, int) and
-        xc_code in (401, 402, 403, 404, 405, 406, 407, 408, 410, 411,
-                    412, 413, 414, 415, 416, 417, 418, 419, 420, 421,
-                    422, 423, 424, 425, 426, 427, 428, 429, 430, 431,
-                    432, 433, 434, 435, 436, 437,
-                    438, 439, 440, 441, 442, 443, 444, 445, 446, 447,
-                    448, 449, 450,)):
-        return xc_code
-    elif xc_code in ('B3PW91' , 'B3LYP'  , 'B3P86' , 'O3LYP'    , 'mPW1K'     ,
-                     'MPW1K'  , 'PBEH'   , 'X3LYP' , 'B1WC'     , 'mPW3PW'    ,
-                     'MPW3PW' , 'B1LYP'  , 'B1PW91', 'mPW1PW'   , 'MPW1PW'    ,
-                     'mPW3LYP', 'MPW3LYP', 'HSE03' , 'HSE06'    , 'CAM_B3LYP' ,
-                     'TUNED_CAM_B3LYP'   , 'BHANDH', 'BHANDHLYP',
-                     'MB3LYP_RC04',):
-        return XC_CODES['XC_HYB_GGA_XC_'+xc_code]
-    elif xc_code in ('B88B95', 'B86B95', 'PW86B95', 'BB1K', 'MPW1B95',
-                     'MPWB1K', 'X1B95' , 'XB1K'):
-        return XC_CODES['XC_HYB_MGGA_XC_'+xc_code]
+    if isinstance(xc_code, int):
+        if xc_code in (401, 402, 403, 404, 405, 406, 407, 408, 410, 411,
+                       412, 413, 414, 415, 416, 417, 418, 419, 420, 421,
+                       422, 423, 424, 425, 426, 427, 428, 429, 430, 431,
+                       432, 433, 434, 435, 436, 437,
+                       438, 439, 440, 441, 442, 443, 444, 445, 446, 447,
+                       448, 449, 450,):
+            return xc_code
+        else:
+            return None
+
     else:
-        return None
+        if ',' in xc_code:
+            x_code = re.split(', *', xc_code)[0].upper()
+        else:
+            x_code = xc_code.upper()
+
+        if x_code in ('B3PW91'   , 'B3LYP' , 'B3P86'  , 'O3LYP' , 'MPW1K',
+                      'PBEH'     , 'X3LYP' , 'B1WC'   , 'MPW3PW', 'B1LYP',
+                      'B1PW91'   , 'MPW1PW', 'MPW3LYP', 'HSE03' , 'HSE06',
+                      'CAM_B3LYP', 'TUNED_CAM_B3LYP'  , 'BHANDH', 'BHANDHLYP',
+                      'MB3LYP_RC04',):
+            return XC_CODES['XC_HYB_GGA_XC_'+x_code]
+        elif x_code in ('B88B95', 'B86B95', 'PW86B95', 'BB1K', 'MPW1B95',
+                        'MPWB1K', 'X1B95' , 'XB1K'):
+            return XC_CODES['XC_HYB_MGGA_XC_'+x_code]
+        else:
+            return None
 
 def is_meta_gga(xc_code):
     if isinstance(xc_code, str):
@@ -422,9 +430,10 @@ def parse_xc_name(xc_name='LDA,VWN'):
 
 
 def hybrid_coeff(xc_code, spin=1):
-    if is_hybrid_xc(xc_code):
+    x_code = is_hybrid_xc(xc_code)
+    if x_code is not None:
         libdft.VXChybrid_coeff.restype = ctypes.c_double
-        return libdft.VXChybrid_coeff(ctypes.c_int(xc_code), ctypes.c_int(spin))
+        return libdft.VXChybrid_coeff(ctypes.c_int(x_code), ctypes.c_int(spin))
     else:
         return 0
 

@@ -10,9 +10,9 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.scf import _vhf
+from pyscf.scf import rhf_grad
 from pyscf.dft import numint
 import pyscf.dft
-import pyscf.scf.rhf_grad
 
 
 def get_veff_(ks, mol, dm):
@@ -148,9 +148,9 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
     return vmat
 
 
-class Gradients(pyscf.scf.rhf_grad.Gradients):
+class Gradients(rhf_grad.Gradients):
     def __init__(self, scf_method):
-        pyscf.scf.rhf_grad.Gradients.__init__(self, scf_method)
+        rhf_grad.Gradients.__init__(self, scf_method)
 
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol

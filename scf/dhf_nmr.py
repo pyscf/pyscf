@@ -17,7 +17,7 @@ from pyscf.lib import logger
 import pyscf.lib.parameters as param
 from pyscf import scf
 from pyscf.scf import _vhf
-from pyscf.nmr import hf
+from pyscf.scf import rhf_nmr
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     if shielding_nuc is None:
@@ -65,7 +65,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
         for m in range(3):
             h01[m,:n2c,n2c:] = .5 * t01[m]
             h01[m,n2c:,:n2c] = .5 * t01[m].conj().T
-        h01_mo = hf._mat_ao2mo(h01, mo_coeff, mo_occ)
+        h01_mo = rhf_nmr._mat_ao2mo(h01, mo_coeff, mo_occ)
         for b in range(3):
             for m in range(3):
                 # + c.c.
@@ -217,16 +217,16 @@ def make_s10(mol, gauge_orig=None, mb='RMB'):
     return s1
 
 
-class NMR(hf.NMR):
+class NMR(rhf_nmr.NMR):
     __doc__ = 'magnetic shielding constants'
     def __init__(self, scf_method):
-        hf.NMR.__init__(self, scf_method)
+        rhf_nmr.NMR.__init__(self, scf_method)
         self.cphf = True
         self.mb = 'RMB'
         self._keys = self._keys.union(['mb'])
 
     def dump_flags(self):
-        hf.NMR.dump_flags(self)
+        rhf_nmr.NMR.dump_flags(self)
         logger.info(self, 'MB basis = %s', self.mb)
 
     def shielding(self, mo1=None):
@@ -246,16 +246,16 @@ class NMR(hf.NMR):
         logger.timer(self, 'NMR shielding', *cput0)
         if self.verbose > param.VERBOSE_QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
-                hf._write(self.stdout, e11[i], \
-                          '\ntotal shielding of atom %d %s' \
-                          % (atm_id, self.mol.atom_symbol(atm_id-1)))
-                hf._write(self.stdout, msc_dia[i], 'dia-magnetism')
-                hf._write(self.stdout, msc_para[i], 'para-magnetism')
+                rhf_nmr._write(self.stdout, e11[i],
+                               '\ntotal shielding of atom %d %s'
+                               % (atm_id, self.mol.atom_symbol(atm_id-1)))
+                rhf_nmr._write(self.stdout, msc_dia[i], 'dia-magnetism')
+                rhf_nmr._write(self.stdout, msc_para[i], 'para-magnetism')
                 if self.verbose >= param.VERBOSE_INFO:
-                    hf._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
-                    hf._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
-                    hf._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
-        self.stdout.flush()
+                    rhf_nmr._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
+                    rhf_nmr._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
+                    rhf_nmr._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
+            self.stdout.flush()
         return e11
 
     def dia(self, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
@@ -320,7 +320,7 @@ class NMR(hf.NMR):
 # hermi=1 because dm1 = C^1 C^{0dagger} + C^0 C^{1dagger}
         v_ao = self._scf.get_veff(self.mol, dm1, hermi=1)
         self._scf.direct_scf = direct_scf_bak
-        return hf._mat_ao2mo(v_ao, mo_coeff, mo_occ)
+        return rhf_nmr._mat_ao2mo(v_ao, mo_coeff, mo_occ)
 
 def _call_rmb_vhf1(mol, dm, key='giao'):
     c1 = .5/mol.light_speed
@@ -335,7 +335,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
                             ('ji->s2kl', 'lk->s1ij', 'jk->s1il', 'li->s1kj'),
                             dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
     for i in range(3):
-        vx[0,i] = pyscf.lib.hermi_triu(vx[0,i], 2)
+        vx[0,i] = pyscf.lib.hermi_triu_(vx[0,i], 2)
     vj[:,n2c:,n2c:] = vx[0] + vx[1]
     vk[:,n2c:,n2c:] = vx[2] + vx[3]
 
@@ -344,7 +344,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
                             (dmll,dmss,dmsl,dmls), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
     for i in range(3):
-        vx[1,i] = pyscf.lib.hermi_triu(vx[1,i], 2)
+        vx[1,i] = pyscf.lib.hermi_triu_(vx[1,i], 2)
     vj[:,n2c:,n2c:] += vx[0]
     vj[:,:n2c,:n2c] += vx[1]
     vk[:,n2c:,:n2c] += vx[2]
@@ -384,7 +384,7 @@ def _call_giao_vhf1(mol, dm):
     vj[:,n2c:,n2c:] += vx[0]
     vk[:,n2c:,:n2c] += vx[1]
     for i in range(3):
-        vj[i] = pyscf.lib.hermi_triu(vj[i], 1)
+        vj[i] = pyscf.lib.hermi_triu_(vj[i], 1)
         vk[i] = vk[i] + vk[i].T.conj()
     return vj, vk
 
