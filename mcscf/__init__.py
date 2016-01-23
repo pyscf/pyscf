@@ -246,15 +246,18 @@ def UCASSCF(mf, ncas, nelecas, **kwargs):
 def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
     if not hasattr(mf, '_tag_df') or not mf._tag_df:
         from pyscf.lib import logger
-        logger.warn(mf, 'DFCASSCF: the first argument needs to be density-fitting SCF object. '
-                    '%s is not density-fitting SCF object.', mf.__class__)
+        logger.warn(mf, 'DFCASSCF: the first argument%s is not density-fitting SCF object. '
+                    'Only orbital hessian are computed with density-fitting integrals. '
+                    'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
+                    mf.__class__)
     mc = CASSCF(mf, ncas, nelecas, **kwargs)
     return density_fit(mc, auxbasis)
 
 def DFCASCI(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
     if not hasattr(mf, '_tag_df') or not mf._tag_df:
         from pyscf.lib import logger
-        logger.warn(mf, 'DFCASCI: the first argument needs to be density-fitting SCF object. '
-                    '%s is not density-fitting SCF object.', mf.__class__)
+        logger.warn(mf, 'DFCASCI: the first argument%s is not density-fitting SCF object. '
+                    'Only orbital hessian are computed with density-fitting integrals. '
+                    'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
     mc = CASCI(mf, ncas, nelecas, **kwargs)
     return density_fit(mc, auxbasis)

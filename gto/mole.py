@@ -497,13 +497,17 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
 
     for ia, atom in enumerate(atoms):
         symb = atom[0]
+        puresymb = _rm_digit(symb)
         if symb in _basdic:
-            bas0 = _basdic[symb]
+            b = _basdic[symb].copy()
+            b[:,ATOM_OF] = ia
+            _bas.append(b)
+        elif puresymb in _basdic:
+            b = _basdic[puresymb].copy()
+            b[:,ATOM_OF] = ia
+            _bas.append(b)
         else:
-            bas0 = _basdic[_rm_digit(symb)]
-        b = bas0.copy()
-        b[:,ATOM_OF] = ia
-        _bas.append(b)
+            sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
 
     if _atm:
         _atm = numpy.asarray(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
