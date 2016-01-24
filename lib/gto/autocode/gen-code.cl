@@ -92,6 +92,20 @@
 #include \"vhf/fblas.h\"
 "))
 
+(defun dump-declare-dri-for-rc (fout i-ops symb)
+  (when (intersection '(rc xc yc zc) i-ops)
+    (format fout "double dr~a[3];~%" symb)
+    (format fout "dr~a[0] = r~a[0] - env[PTR_COMMON_ORIG+0];~%" symb symb)
+    (format fout "dr~a[1] = r~a[1] - env[PTR_COMMON_ORIG+1];~%" symb symb)
+    (format fout "dr~a[2] = r~a[2] - env[PTR_COMMON_ORIG+2];~%" symb symb))
+  (when (intersection '(ri xi yi zi) i-ops)
+    (if (intersection '(rc xc yc zc) i-ops)
+      (error "Cannot declare dri because rc and ri coexist"))
+    (format fout "double dr~a[3];~%" symb)
+    (format fout "dr~a[0] = r~a[0] - ri[0];~%" symb symb)
+    (format fout "dr~a[1] = r~a[1] - ri[1];~%" symb symb)
+    (format fout "dr~a[2] = r~a[2] - ri[2];~%" symb symb)))
+
 (defun dump-declare-giao (fout expr)
   (let ((n-giao (count 'g expr)))
     (when (> n-giao 0)
@@ -183,6 +197,7 @@ double fz0[16*~d];~%" (ash 1 op-len) (ash 1 op-len) (ash 1 op-len))
 double *gridy = coord+blksize;
 double *gridz = coord+blksize*2;
 double s[~d];~%" (expt 3 op-len))
+    (dump-declare-dri-for-rc fout expr "i")
     (dump-declare-giao fout expr)
     (format fout "for (k = 0; k < np; k++) {
                  for (i = 0; i < blksize; i++) {

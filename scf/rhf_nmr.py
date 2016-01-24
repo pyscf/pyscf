@@ -86,11 +86,15 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     return h1
 
 def make_h10giao(mol, dm0):
-    vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
-                           'a4ij', 'jk->s1il',
-                           dm0, 3, # xyz, 3 components
-                           mol._atm, mol._bas, mol._env)
-    h1 = -.5 * vk
+    vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
+                               'a4ij', ('lk->s1ij', 'jk->s1il'),
+                               dm0, 3, # xyz, 3 components
+                               mol._atm, mol._bas, mol._env)
+# J = i[(i i|\mu g\nu) + (i gi|\mu \nu)] = i (i i|\mu g\nu)
+# K = i[(\mu gi|i \nu) + (\mu i|i g\nu)]
+#   = (\mu g i|i \nu) - h.c.   anti-symm because of the factor i
+    vk = vk - vk.transpose(0,2,1)
+    h1 = vj - .5 * vk
     h1 += mol.intor_asymmetric('cint1e_ignuc_sph', 3)
     h1 += mol.intor('cint1e_igkin_sph', 3)
     return h1

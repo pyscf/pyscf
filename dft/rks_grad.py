@@ -8,6 +8,7 @@
 import time
 import numpy
 import scipy.linalg
+import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
@@ -28,12 +29,13 @@ def get_veff_(ks, mol, dm):
     if ks._numint.non0tab is None:
         ks._numint.non0tab = ks._numint.make_mask(mol, ks.grids.coords)
     x_code, c_code = pyscf.dft.vxc.parse_xc_name(ks.xc)
-
-    vxc = _get_vxc(ks._numint, mol, ks.grids, x_code, c_code, dm,
-                   max_memory=mol.max_memory, verbose=ks.verbose)
-    t0 = logger.timer(ks, 'vxc', *t0)
-
     hyb = pyscf.dft.vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+
+    mem_now = pyscf.lib.current_memory()[0]
+    max_memory = max(2000, ks.max_memory*.9-mem_now)
+    vxc = _get_vxc(ks._numint, mol, ks.grids, x_code, c_code, dm,
+                   max_memory=max_memory, verbose=ks.verbose)
+    t0 = logger.timer(ks, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:
         vj = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
@@ -72,11 +74,9 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
     xctype = numint._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
-    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
+    blksize = min(int(max_memory/6*1e6/12/nao/BLKSIZE)*BLKSIZE, ngrids)
 
     nset = len(natocc)
-    nelec = numpy.zeros(nset)
-    excsum = numpy.zeros(nset)
     vmat = numpy.zeros((nset,3,nao,nao))
     if xctype == 'LDA':
         buf = numpy.empty((4,blksize,nao))
@@ -87,16 +87,13 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
             ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
             for idm in range(nset):
                 rho = ni.eval_rho2(mol, ao[0], natorb[idm], natocc[idm], non0tab, xctype)
-                exc, vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[:2]
+                vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[1]
                 vrho = vxc[0]
-                den = rho * weight
-                nelec[idm] += den.sum()
-                excsum[idm] += (den * exc).sum()
                 aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
                 vmat[idm,0] += numint._dot_ao_ao(mol, ao[1], aow, nao, ip1-ip0, non0tab)
                 vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, ip1-ip0, non0tab)
                 vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, ip1-ip0, non0tab)
-                rho = exc = vxc = vrho = aow = None
+                rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
         XX, XY, XZ = 4, 5, 6
@@ -109,14 +106,10 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
             ao = ni.eval_ao(mol, coords, deriv=2, non0tab=non0tab, out=buf)
             for idm in range(nset):
                 rho = ni.eval_rho2(mol, ao, natorb[idm], natocc[idm], non0tab, xctype)
-                exc, vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[:2]
+                vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[1]
                 vrho, vsigma = vxc[:2]
-                den = rho[0] * weight
-                nelec[idm] += den.sum()
-                excsum[idm] += (den * exc).sum()
                 wv = numpy.empty_like(rho)
-                # *.5 because vmat + vmat.T implicitly
-                wv[0]  = weight * vrho * .5
+                wv[0]  = weight * vrho
                 wv[1:] = rho[1:] * (weight * vsigma * 2)
 
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv)
@@ -124,22 +117,19 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
                 vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, ip1-ip0, non0tab)
                 vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, ip1-ip0, non0tab)
 
-                aow = numpy.einsum('pi,p->pi', ao[1] , wv[0])
-                aow+= numpy.einsum('pi,p->pi', ao[XX], wv[1])
+                aow = numpy.einsum('pi,p->pi', ao[XX], wv[1])
                 aow+= numpy.einsum('pi,p->pi', ao[XY], wv[2])
                 aow+= numpy.einsum('pi,p->pi', ao[XZ], wv[3])
                 vmat[idm,0] += numint._dot_ao_ao(mol, aow, ao[0], nao, ip1-ip0, non0tab)
-                aow = numpy.einsum('pi,p->pi', ao[2] , wv[0])
-                aow+= numpy.einsum('pi,p->pi', ao[YX], wv[1])
+                aow = numpy.einsum('pi,p->pi', ao[YX], wv[1])
                 aow+= numpy.einsum('pi,p->pi', ao[YY], wv[2])
                 aow+= numpy.einsum('pi,p->pi', ao[YZ], wv[3])
                 vmat[idm,1] += numint._dot_ao_ao(mol, aow, ao[0], nao, ip1-ip0, non0tab)
-                aow = numpy.einsum('pi,p->pi', ao[3] , wv[0])
-                aow+= numpy.einsum('pi,p->pi', ao[ZX], wv[1])
+                aow = numpy.einsum('pi,p->pi', ao[ZX], wv[1])
                 aow+= numpy.einsum('pi,p->pi', ao[ZY], wv[2])
                 aow+= numpy.einsum('pi,p->pi', ao[ZZ], wv[3])
                 vmat[idm,2] += numint._dot_ao_ao(mol, aow, ao[0], nao, ip1-ip0, non0tab)
-                rho = exc = vxc = vrho = vsigma = wv = aow = None
+                rho = vxc = vrho = vsigma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')
 
