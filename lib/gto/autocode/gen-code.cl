@@ -222,7 +222,7 @@ for (lx = 1; lx <= l+~d; lx++) {
 for (n = 0; n < degen; n++) {~%" (get-output-stream-string strout))
     (loop
        for i in (range goutinc) do
-         (format fout "gto~d[i] = 0;~%" i))
+         (format fout "gto~d[n*blksize+i] = 0;~%" i))
     (format fout "} } }
 exps += blksize;~%")
     (loop

@@ -29,7 +29,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
 
     vmat = numpy.zeros((3,nao,nao))
     if xctype == 'LDA':
-        buf = numpy.empty((3,blksize,nao))
+        buf = numpy.empty((4,blksize,nao))
         for ip0, ip1 in numint.prange(0, ngrids, blksize):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
@@ -40,11 +40,11 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao, weight*vrho)
             giao = mol.eval_gto('GTOval_ig_sph', coords, comp=3,
-                                non0tab=non0tab, out=buf)
+                                non0tab=non0tab, out=buf[1:])
             vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, ip1-ip0, non0tab)
             vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, ip1-ip0, non0tab)
             vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, ip1-ip0, non0tab)
-            rho = vxc = vrho = aow = None
+            rho = vxc = vrho = aow = giao = None
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
         XX, XY, XZ = 0, 1, 2
@@ -64,13 +64,13 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
 
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
             giao = mol.eval_gto('GTOval_ig_sph', coords, 3,
-                                non0tab=non0tab, out=buf)
+                                non0tab=non0tab, out=buf[4:])
             vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, ip1-ip0, non0tab)
             vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, ip1-ip0, non0tab)
             vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, ip1-ip0, non0tab)
 
             giao = mol.eval_gto('GTOval_ipig_sph', coords, 9,
-                                non0tab=non0tab, out=buf)
+                                non0tab=non0tab, out=buf[1:])
             aow = numpy.einsum('pi,p->pi', giao[XX], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YX], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZX], wv[3])
@@ -83,7 +83,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             aow+= numpy.einsum('pi,p->pi', giao[YZ], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZZ], wv[3])
             vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
-            rho = vxc = vrho = vsigma = wv = aow = None
+            rho = vxc = vrho = vsigma = wv = aow = giao = None
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -136,6 +136,7 @@ class NMR(rhf_nmr.NMR):
         return h1
 
     def _vind(self, mo1):
+        mol = self.mol
         hyb = pyscf.dft.vxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
 
         if abs(hyb) > 1e-10:
@@ -161,8 +162,19 @@ if __name__ == '__main__':
     mol.output = None
 
     mol.atom = [
+        ['Ne' , (0. , 0. , 0.)], ]
+    mol.basis='631g'
+    mol.build()
+
+    mf = dft.RKS(mol)
+    mf.kernel()
+    nmr = NMR(mf)
+    msc = nmr.kernel() # _xx,_yy,_zz = 55.131555
+    print(msc)
+
+    mol.atom = [
         [1   , (0. , 0. , .917)],
-        ['F' , (0. , 0. , 0.)], ]
+        ['F' , (0. , 0. , 0.  )], ]
     mol.basis = {'H': '6-31g',
                  'F': '6-31g',}
     mol.build()
@@ -170,13 +182,15 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.kernel()
     nmr = NMR(mf)
-    msc = nmr.kernel() # _xx,_yy = 368.878, _zz = 482.413
+    msc = nmr.kernel() # _xx,_yy = 368.878091, _zz = 482.413409
     print(msc)
 
+    mol.basis = 'ccpvdz'
+    mol.build(0, 0)
     mf = dft.RKS(mol)
     mf.xc = 'b3lyp'
     mf.kernel()
     nmr = NMR(mf)
-    msc = nmr.kernel() # _xx,_yy = 362.220, _zz = 483.072
+    msc = nmr.kernel() # _xx,_yy = 387.081157, _zz = 482.217461
     print(msc)
 
