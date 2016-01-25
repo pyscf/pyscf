@@ -535,6 +535,7 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
         self.fcisolver.weights = weights
         return self
     mc.state_average_ = state_average_
+    mc._keys = mc._keys.union(['state_average_'])
     return mc
 
 

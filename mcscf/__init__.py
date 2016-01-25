@@ -259,5 +259,6 @@ def DFCASCI(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
         logger.warn(mf, 'DFCASCI: the first argument%s is not density-fitting SCF object. '
                     'Only orbital hessian are computed with density-fitting integrals. '
                     'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
+                    mf.__class__)
     mc = CASCI(mf, ncas, nelecas, **kwargs)
     return density_fit(mc, auxbasis)
