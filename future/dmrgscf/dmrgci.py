@@ -539,7 +539,8 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     return mc
 
 
-def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None, maxm = 500, tol =1e-6, parallel= True):
+def DMRG_MPS_NEVPT(mc, maxM = 500, root=0, nevptsolver=None, tol =1e-7):
+    import h5py
     
     if (isinstance(mc, basestring)):
         fh5 = h5py.File(mc,'r')
@@ -549,6 +550,7 @@ def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None, maxm = 500, tol =1e-6, parallel= 
         ncore = fh5['mc/ncore'].value
         nvirt = fh5['mc/nvirt'].value
         nelecas = fh5['mc/nelecas'].value
+        nroots = fh5['mc/nroots'].value
         fh5.close()
         mc_chk = mc
     else :
@@ -557,64 +559,60 @@ def DMRG_MPS_NEVPT(mc, root=0, fcisolver=None, maxm = 500, tol =1e-6, parallel= 
         ncore = mc.ncore
         nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
         nelecas = mc.nelecas
+        nroots = mc.fcisolver.nroots
         mc_chk = 'mc_chkfile'
         write_chk(mc,root,mc_chk)
         
 
 
 
-    if fcisolver is None:
-        fcisolver = DMRGCI(mol, maxm, tol)
-    fcisolver.twopdm = False
-    fcisolver.nroots = mc.fcisolver.nroots
-    scratch = fcisolver.scratchDirectory
-    fcisolver.scratchDirectory = ''
-    #if (not parallel):
-    #    ci.extraline.append('restart_mps_nevpt %d %d %d'%(ncas,ncore, nvirt))
+    if nevptsolver is None:
+        nevptsolver = DMRGCI(mol, maxM, tol)
+        nevptsolver.scheduleSweeps = [0, 4]
+        nevptsolver.scheduleMaxMs  = [maxM, maxM]               
+        nevptsolver.scheduleTols   = [0.0001, tol]
+        nevptsolver.scheduleNoises = [0.0001, 0.0]   
+        nevptsolver.twodot_to_onedot = 4
+        nevptsolver.maxIter = 6
+    nevptsolver.executable = settings.BLOCKEXE_MPS_NEVPT
+    nevptsolver.twopdm = False
+    nevptsolver.nroots = nroots
+    scratch = nevptsolver.scratchDirectory
+    nevptsolver.scratchDirectory = ''
 
 
-    fcisolver.extraline.append('fullrestart')
-    fcisolver.extraline.append('nevpt_state_num %d'%root)
+    nevptsolver.extraline.append('fullrestart')
+    nevptsolver.extraline.append('nevpt_state_num %d'%root)
     
-    writeDMRGConfFile(nelecas[0], nelecas[1], False, fcisolver)
-    fcisolver.scratchDirectory = scratch
+    writeDMRGConfFile(nelecas[0], nelecas[1], False, nevptsolver)
+    nevptsolver.scratchDirectory = scratch
 
-    if fcisolver.verbose >= logger.DEBUG1:
-        inFile = fcisolver.configFile
+    if nevptsolver.verbose >= logger.DEBUG1:
+        inFile = nevptsolver.configFile
         #inFile = os.path.join(self.scratchDirectory,self.configFile)
-        logger.debug1(fcisolver, 'Block Input conf')
-        logger.debug1(fcisolver, open(inFile, 'r').read())
+        logger.debug1(nevptsolver, 'Block Input conf')
+        logger.debug1(nevptsolver, open(inFile, 'r').read())
 
     t0 = (time.clock(), time.time())
 
     from subprocess import check_call
     import os
     full_path = os.path.realpath(__file__)
-    check_call('%s %s/nevpt_mpi.py %s %s %s %s %s'%(fcisolver.mpiprefix, os.path.dirname(full_path), mc_chk, fcisolver.executable, fcisolver.configFile,fcisolver.outputFile, fcisolver.scratchDirectory), shell=True)
+    check_call('%s %s/nevpt_mpi.py %s %s %s %s %s'%(nevptsolver.mpiprefix, os.path.dirname(full_path), mc_chk, nevptsolver.executable, nevptsolver.configFile,nevptsolver.outputFile, nevptsolver.scratchDirectory), shell=True)
 
-    if fcisolver.verbose >= logger.DEBUG1:
-        logger.debug1(fcisolver, open(os.path.join(fcisolver.scratchDirectory, '0/dmrg.out')).read())
+    if nevptsolver.verbose >= logger.DEBUG1:
+        logger.debug1(nevptsolver, open(os.path.join(nevptsolver.scratchDirectory, '0/dmrg.out')).read())
 
     import h5py
     fh5 = h5py.File('Perturbation_%d'%root,'r')
     Vi_e  =  fh5['Vi/energy'].value      
-    Vi_n  =  fh5['Vi/norm'].value        
     Vr_e  =  fh5['Vr/energy'].value      
-    Vr_n  =  fh5['Vr/norm'].value        
     fh5.close()
-    logger.note(fcisolver,'Nevpt Energy:')
-    logger.note(fcisolver,'Sr Subspace: Norm = %s, E = %s'%(Vr_n, Vr_e))
-    logger.note(fcisolver,'Si Subspace: Norm = %s, E = %s'%(Vi_n, Vi_e))
+    logger.note(nevptsolver,'Nevpt Energy:')
+    logger.note(nevptsolver,'Sr Subspace:  E = %.14f'%( Vr_e))
+    logger.note(nevptsolver,'Si Subspace:  E = %.14f'%( Vi_e))
 
-    logger.timer(fcisolver,'MPS NEVPT calculation time', *t0)
-
-    #if (parallel):
-    #    from subprocess import check_call
-    #    check_call('/home/shengg/opt/pyscf/future/dmrgscf/nevpt_mpi.py mc_chk %s %s %s'%(ci.executable, ci.configFile,ci.outputFile), shell=True)
-    #    #check_call('%s /home/shengg/opt/pyscf/future/dmrgscf/nevpt_mpi.py mc_chk %s %s %s'%(ci.mpiprefix, ci.executable, ci.configFile,ci.outputFile))
-    #else:
-    #    nevpt_integral(mc)
-    #    executeBLOCK(ci)
+    logger.timer(nevptsolver,'MPS NEVPT calculation time', *t0)
 
 
 
