@@ -189,6 +189,7 @@ def project_mo_r2r(mol1, mo1, mol2):
 
 
 def remove_linear_dep(mf):
+    mol = mf.mol
     def eig_nosym(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
@@ -228,13 +229,13 @@ def remove_linear_dep(mf):
     else:
         if isinstance(mf, pyscf.scf.uhf.UHF):
             def eig(h, s):
-                e_a, c_a = eig_nosymm(h[0], s)
-                e_b, c_b = eig_nosymm(h[1], s)
+                e_a, c_a = eig_nosym(h[0], s)
+                e_b, c_b = eig_nosym(h[1], s)
                 return numpy.array((e_a,e_b)), (c_a,c_b)
         elif isinstance(mf, pyscf.scf.rohf.ROHF):
             raise NotImplementedError
         else:
-            eig = eig_nosymm
+            eig = eig_nosym
     return eig
 def remove_linear_dep_(mf):
     mf.eig = remove_linear_dep(mf)
