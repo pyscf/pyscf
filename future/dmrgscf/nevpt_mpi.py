@@ -59,6 +59,7 @@ def write_chk(mc,root,chkfile):
     fh5['mc/nelecas'] =       mc.nelecas 
     fh5['mc/root']    =       root
     fh5['mc/orbe']    =       mc.mo_energy
+    fh5['mc/nroots']   =       mc.fcisolver.nroots
     if hasattr(mc, 'orbsym'):
         fh5.create_dataset('mc/orbsym',data=mc.orbsym)
     else :
@@ -77,21 +78,28 @@ def write_chk(mc,root,chkfile):
     fh5['h1e']        =       h1e[0]
 
     if mc._scf._eri is None:
-        h2e = ao2mo.outcore.general_iofree(mc.mol, (mo_cas,mo_cas,mo_cas,mo_cas),compact=False).reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas) 
+        h2e_t = ao2mo.outcore.general_iofree(mc.mol, (mc.mo_coeff,mo_cas,mo_cas,mo_cas),compact=False).reshape(-1,mc.ncas,mc.ncas,mc.ncas) 
+        h2e =h2e_t[mc.ncore:mc.ncore+mc.ncas,:,:,:]
         fh5['h2e'] = h2e
-        h2e_Sr = ao2mo.outcore.general_iofree(mc.mol,(mo_virt,mo_cas,mo_cas,mo_cas),compact=False).reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+
+        h2e_Sr =h2e_t[mc.ncore+mc.ncas:,:,:,:]
         fh5['h2e_Sr'] = h2e_Sr
-        h2e_Si = ao2mo.outcore.general_iofree(mc.mol,(mo_cas,mo_core,mo_cas,mo_cas),compact=False).reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+
+        h2e_Si =numpy.transpose(h2e_t[:mc.ncore,:,:,:], (1,0,2,3))
         fh5['h2e_Si'] = h2e_Si
 
     else:
         eri = mc._scf._eri
-        h2e = ao2mo.incore.general(eri,[mo_cas,mo_cas,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncas,mc.ncas,mc.ncas)
+        h2e_t = ao2mo.incore.general(eri,[mc.mo_coeff,mo_cas,mo_cas,mo_cas],compact=False).reshape(-1,mc.ncas,mc.ncas,mc.ncas)
+        h2e =h2e_t[mc.ncore:mc.ncore+mc.ncas,:,:,:]
         fh5['h2e'] = h2e
-        h2e_Sr = ao2mo.incore.general(eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False).reshape(nvirt,mc.ncas,mc.ncas,mc.ncas)
+
+        h2e_Sr =h2e_t[mc.ncore+mc.ncas:,:,:,:]
         fh5['h2e_Sr'] = h2e_Sr
-        h2e_Si = ao2mo.incore.general(eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False).reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas)
+
+        h2e_Si =numpy.transpose(h2e_t[:mc.ncore,:,:,:], (1,0,2,3))
         fh5['h2e_Si'] = h2e_Si
+
 
     fh5.close()
 
@@ -252,7 +260,8 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     newscratch = os.path.join('%s/'%scratch,'%d'%(rank))
     if not os.path.exists('%s'%newscratch):
         os.makedirs('%s'%newscratch)
-    check_call('cp %s %s/%s'%(dmrginp,newscratch,dmrginp), shell=True)
+        os.makedirs('%s/node0'%newscratch)
+    check_call('cp %s %s/%s'%(dmrginp,newscratch,dmrginp),shell=True)
 
     f = open('%s/%s'%(newscratch,dmrginp), 'a')
     f.write('restart_mps_nevpt %d %d %d \n'%(ncas,partial_core, partial_virt))
@@ -272,12 +281,14 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     #import os
     #call('cp %s/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
     #call('cp %s/node0/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
+    f1 =open(os.devnull,'w')
     if MPI.Get_processor_name() == headnode:
-        call('cp %s/* %s/'%(scratch,newscratch),shell = True)
-        call('cp %s/node0/* %s/'%(scratch,newscratch),shell = True)
+        call('cp %s/* %s/'%(scratch,newscratch),stderr=f1,shell = True)
+        call('cp %s/node0/* %s/node0'%(scratch,newscratch),shell = True)
     else:
-        call('scp %s:%s/* %s/'%(headnode,scratch,newscratch),shell = True)
-        call('scp %s:%s/node0/* %s/'%(headnode,scratch,newscratch),shell = True)
+        call('scp %s:%s/* %s/'%(headnode,scratch,newscratch),stderr=f1,shell = True)
+        call('scp %s:%s/node0/* %s/node0'%(headnode,scratch,newscratch),shell = True)
+    f1.close()
     f = open('%s/FCIDUMP'%newscratch,'w')
 
     pyscf.tools.fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)
@@ -312,11 +323,11 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     os.chdir('%s'%newscratch)
 
     check_call('%s %s > %s'%(blockfile,dmrginp,dmrgout), shell=True)
-    f = open('Va_%d'%root,'r')
+    f = open('node0/Va_%d'%root,'r')
     Vr_energy = float(f.readline())
     Vr_norm = float(f.readline())
     f.close()
-    f = open('Vi_%d'%root,'r')
+    f = open('node0/Vi_%d'%root,'r')
     Vi_energy = float(f.readline())
     Vi_norm = float(f.readline())
     f.close()

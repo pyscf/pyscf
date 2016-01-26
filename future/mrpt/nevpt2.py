@@ -574,13 +574,9 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
     time0 = (time.clock(), time.time())
 
     #By defaut, mc is canonicalized for the first root.
-    if mc.fcisolver.nroots > 1:
+    #For SC-NEVPT based on compressed MPS perturber functions, the mc was already canonicalized.
+    if mc.fcisolver.nroots > 1 and not useMPS:
         mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=ci,verbose=log)
-
-    #if not useMPS:
-    #    mc.mo_coeff, _, orbe = mc.canonicalize(casdm1=dm1)
-    #else:
-    #    orbe = reduce(numpy.dot, (mc.mo_coeff.T, mc.get_fock(ci=ci), mc.mo_coeff)).diagonal()
 
 
     if hasattr(mc.fcisolver, 'nevpt_intermediate'):
@@ -620,37 +616,40 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
     if useMPS:
         fh5 = h5py.File('Perturbation_%d'%ci,'r')
         e_Si     =   fh5['Vi/energy'].value    
+        #The definition of norm changed. 
+        #However, there is no need to print out it. 
+        #Only perturbation energy is wanted.
         norm_Si  =   fh5['Vi/norm'].value       
         e_Sr     =   fh5['Vr/energy'].value     
         norm_Sr  =   fh5['Vr/norm'].value       
         fh5.close()
-        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
-        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
+        logger.note(mc, "Sr    (-1)'  E = %.14f",  e_Sr  )
+        logger.note(mc, "Si    (+1)'  E = %.14f",  e_Si  )
 
     else:
         norm_Sr   , e_Sr    = Sr(mc,ci, dms, eris)
-        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
+        logger.note(mc, "Sr    (-1)',   E = %.14f",  e_Sr  )
         time1 = log.timer("space Sr (-1)'", *time1)
         norm_Si   , e_Si    = Si(mc,ci, dms, eris)
-        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
+        logger.note(mc, "Si    (+1)',   E = %.14f",  e_Si  )
         time1 = log.timer("space Si (+1)'", *time1)
     norm_Sijrs, e_Sijrs = Sijrs(mc, eris)
-    logger.note(mc, "Sijrs (0)  , Norm = %.14f  E = %.14f", norm_Sijrs,e_Sijrs)
+    logger.note(mc, "Sijrs (0)  ,   E = %.14f", e_Sijrs)
     time1 = log.timer('space Sijrs (0)', *time1)
     norm_Sijr , e_Sijr  = Sijr(mc, dms, eris)
-    logger.note(mc, "Sijr  (+1) , Norm = %.14f  E = %.14f", norm_Sijr, e_Sijr)
+    logger.note(mc, "Sijr  (+1) ,   E = %.14f",  e_Sijr)
     time1 = log.timer('space Sijr (+1)', *time1)
     norm_Srsi , e_Srsi  = Srsi(mc, dms, eris)
-    logger.note(mc, "Srsi  (-1) , Norm = %.14f  E = %.14f", norm_Srsi, e_Srsi)
+    logger.note(mc, "Srsi  (-1) ,   E = %.14f",  e_Srsi)
     time1 = log.timer('space Srsi (-1)', *time1)
     norm_Srs  , e_Srs   = Srs(mc, dms, eris)
-    logger.note(mc, "Srs   (-2) , Norm = %.14f  E = %.14f", norm_Srs , e_Srs )
+    logger.note(mc, "Srs   (-2) ,   E = %.14f",  e_Srs )
     time1 = log.timer('space Srs (-2)', *time1)
     norm_Sij  , e_Sij   = Sij(mc, dms, eris)
-    logger.note(mc, "Sij   (+2) , Norm = %.14f  E = %.14f", norm_Sij , e_Sij )
+    logger.note(mc, "Sij   (+2) ,   E = %.14f",  e_Sij )
     time1 = log.timer('space Sij (+2)', *time1)
     norm_Sir  , e_Sir   = Sir(mc, dms, eris)
-    logger.note(mc, "Sir   (0)' , Norm = %.14f  E = %.14f", norm_Sir , e_Sir )
+    logger.note(mc, "Sir   (0)' ,   E = %.14f",  e_Sir )
     time1 = log.timer("space Sir (0)'", *time1)
 
     nevpt_e  = e_Sr + e_Si + e_Sijrs + e_Sijr + e_Srsi + e_Srs + e_Sij + e_Sir

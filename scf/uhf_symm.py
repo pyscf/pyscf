@@ -34,9 +34,9 @@ def analyze(mf, verbose=logger.DEBUG):
     tot_sym = 0
     noccsa = [sum(orbsyma[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
     noccsb = [sum(orbsymb[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
-    for ir in range(nirrep):
-        if (noccsa[ir]+noccsb[ir]) % 2:
-            tot_sym ^= mol.irrep_id[ir]
+    for i, ir in enumerate(mol.irrep_id):
+        if (noccsa[i]+noccsb[i]) % 2:
+            tot_sym ^= ir
     if mol.groupname in ('Dooh', 'Coov', 'SO3'):
         log.info('TODO: total symmetry for %s', mol.groupname)
     else:
@@ -58,7 +58,7 @@ def analyze(mf, verbose=logger.DEBUG):
     if verbose >= logger.INFO:
         log.info('**** MO energy ****')
         irname_full = {}
-        for k,ir in enumerate(mol.irrep_id):
+        for k, ir in enumerate(mol.irrep_id):
             irname_full[ir] = mol.irrep_name[k]
         irorbcnt = {}
         for k, j in enumerate(orbsyma):
@@ -253,16 +253,16 @@ class UHF(uhf.UHF):
             orbsyma = numpy.asarray(orbsyma)
             orbsymb = numpy.asarray(orbsymb)
         else:
-            orbsyma = [numpy.repeat(ir, mol.symm_orb[ir].shape[1])
-                       for ir in range(nirrep)]
+            orbsyma = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                       for i, ir in enumerate(mol.irrep_id)]
             orbsyma = orbsymb = numpy.hstack(orbsyma)
 
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
         idx_eb_left = []
         neleca_fix = nelecb_fix = 0
-        for ir in range(nirrep):
-            irname = mol.irrep_name[ir]
+        for i, ir in enumerate(mol.irrep_id):
+            irname = mol.irrep_name[i]
             ir_idxa = numpy.where(orbsyma == ir)[0]
             ir_idxb = numpy.where(orbsymb == ir)[0]
             if irname in self.irrep_nelec:
@@ -305,8 +305,8 @@ class UHF(uhf.UHF):
         noccsa = []
         noccsb = []
         p0 = 0
-        for ir in range(nirrep):
-            irname = mol.irrep_name[ir]
+        for i, ir in enumerate(mol.irrep_id):
+            irname = mol.irrep_name[i]
             ir_idxa = orbsyma == ir
             ir_idxb = orbsymb == ir
 
@@ -330,8 +330,10 @@ class UHF(uhf.UHF):
             elumo = min(elumoa,elumob)
             logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
             logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
-            hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo, 'alpha-')
-            hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo, 'beta-')
+            hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo,
+                                    orbsyma, 'alpha-')
+            hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo,
+                                    orbsymb, 'beta-')
 
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],

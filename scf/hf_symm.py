@@ -201,16 +201,16 @@ class RHF(hf.RHF):
                                          mo_coeff, self.get_ovlp(), False)
             orbsym = numpy.asarray(orbsym)
         else:
-            orbsym = [numpy.repeat(ir, mol.symm_orb[ir].shape[1])
-                      for ir in range(nirrep)]
+            orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                      for i, ir in enumerate(mol.irrep_id)]
             orbsym = numpy.hstack(orbsym)
 
         mo_occ = numpy.zeros_like(mo_energy)
         mo_e_left = []
         idx_e_left = []
         nelec_fix = 0
-        for ir in range(nirrep):
-            irname = mol.irrep_name[ir]
+        for i, ir in enumerate(mol.irrep_id):
+            irname = mol.irrep_name[i]
             ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
@@ -234,9 +234,9 @@ class RHF(hf.RHF):
         ehomo = max(mo_energy[mo_occ>0 ])
         elumo = min(mo_energy[mo_occ==0])
         noccs = []
-        for ir in range(nirrep):
-            irname = mol.irrep_name[ir]
-            ir_idx = orbsym == ir
+        for i, ir in enumerate(mol.irrep_id):
+            irname = mol.irrep_name[i]
+            ir_idx = (orbsym == ir)
 
             noccs.append(int(mo_occ[ir_idx].sum()))
             if ehomo in mo_energy[ir_idx]:
@@ -247,7 +247,7 @@ class RHF(hf.RHF):
                     irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
             logger.debug(self, 'irrep_nelec = %s', noccs)
-            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
+            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym)
         return mo_occ
 
     def _finalize_(self):
@@ -533,7 +533,10 @@ class ROHF(rohf.ROHF):
         if self.verbose >= logger.DEBUG:
             logger.debug(self, 'double occ irrep_nelec = %s', ndoccs)
             logger.debug(self, 'single occ irrep_nelec = %s', nsoccs)
-            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo)
+            orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                      for i, ir in enumerate(mol.irrep_id)]
+            orbsym = numpy.hstack(orbsym)
+            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym)
             p0 = 0
             for ir in range(nirrep):
                 irname = mol.irrep_name[ir]
@@ -645,13 +648,14 @@ class ROHF(rohf.ROHF):
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
 
 
-def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):
+def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title=''):
     nirrep = mol.symm_orb.__len__()
     p0 = 0
-    for ir in range(nirrep):
-        irname = mol.irrep_name[ir]
-        nso = mol.symm_orb[ir].shape[1]
-        nocc = (mo_occ[p0:p0+nso]>0).sum()
+    for i, ir in enumerate(mol.irrep_id):
+        irname = mol.irrep_name[i]
+        ir_idx = (orbsym == ir)
+        nso = ir_idx.sum()
+        nocc = (mo_occ[ir_idx]>0).sum()
         if nocc == 0:
             logger.debug(mol, '%s%s nocc = 0', title, irname)
         elif nocc == nso:
@@ -667,8 +671,7 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, title=''):
             if mo_energy[p0+nocc] < ehomo+1e-3:
                 logger.warn(mol, '!! %s%s LUMO %.12g < system HOMO %.12g',
                             title, irname, mo_energy[p0+nocc], ehomo)
-        logger.debug(mol, '   mo_energy = %s', mo_energy[p0:p0+nso])
-        p0 += nso
+        logger.debug(mol, '   mo_energy = %s', mo_energy[ir_idx])
 
 
 

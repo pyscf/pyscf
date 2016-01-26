@@ -20,6 +20,10 @@ if __name__ == '__main__':
     import pickle
     from pyscf.dmrgscf import settings
     settings.MPIPREFIX ='mpirun -n 3'
+    settings.BLOCKEXE = '/home/shengg/blocknewest/block.spin_adapted'
+    #BLOCKEXE_MPS_NEVPT is a Block executable file, which is compiled without mpi.
+    #It is parallelized by mpi4py rather than in Block code. 
+    settings.BLOCKEXE_MPS_NEVPT = '/tigress/shengg/block_mpsnevpt/Block/block.spin_adapted'
 
     b = 1.4
     mol = gto.Mole()
@@ -59,23 +63,20 @@ if __name__ == '__main__':
     mo = pickle.load(file)
     file.close()
     mc = mcscf.CASCI(m, 4, 4)
-    mc.fcisolver = DMRGCI(mol)
+    mc.fcisolver = DMRGCI(mol,maxM=200)
     mc.fcisolver.nroots = 2
     mc.casci(mo)
+    #DMRG-SC-NEVPT2 based on up to fourth order rdm.
     dmrg_nevpt_e1 = sc_nevpt(mc,ci=mc.ci[0])
     dmrg_nevpt_e2 = sc_nevpt(mc,ci=mc.ci[1])
 
 
 
-    #Use MPS perturber for nevpt
-
-    #MPS perturber nevpt code has not been merged with master branch of Block code. 
-    #And it is parallelized by mpi4py rather than in Block code. 
-    settings.BLOCKEXE = '/home/shengg/block_nevpt2/block/block.spin_adapted'
-
-    DMRG_MPS_NEVPT(mc,root=0)
+    #Use compressed MPS as perturber functions for sc-nevpt2
+    #Fourth order rdm is no longer needed..
+    DMRG_MPS_NEVPT(mc,maxM=100, root=0)
     mps_nevpt_e1 = sc_nevpt(mc,ci=mc.ci[0],useMPS=True)
-    DMRG_MPS_NEVPT(mc,root=1)
+    DMRG_MPS_NEVPT(mc,maxM=100, root=1)
     mps_nevpt_e2 = sc_nevpt(mc,ci=mc.ci[1],useMPS=True)
 
 
