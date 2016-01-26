@@ -175,12 +175,12 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
 
-    logger.note(mf, '========================================================')
-    logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
-    logger.note(mf, '========================================================')
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
+        logger.note(mf, '========================================================')
+        logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
+        logger.note(mf, '========================================================')
         mf0 = density_fit(mf, auxbasis)
         mf0.conv_tol = .1
         if mf0.level_shift == 0:
@@ -189,10 +189,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
-
-    logger.note(mf, '============================')
-    logger.note(mf, 'Generating initial guess end')
-    logger.note(mf, '============================')
+        logger.note(mf, '============================')
+        logger.note(mf, 'Generating initial guess end')
+        logger.note(mf, '============================')
 
     mf1.kernel(mo_coeff, mo_occ)
     mf.converged = mf1.converged

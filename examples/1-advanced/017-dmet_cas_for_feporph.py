@@ -176,6 +176,7 @@ cas_q = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 # 
 
 mol.spin = 2
+mol.build(0, 0)  # (0, 0) to avoid dumping input file again
 
 mf = scf.ROHF(mol)
 mf = scf.fast_newton(mf)

@@ -180,6 +180,7 @@ ept2_q = mrpt.nevpt2.sc_nevpt(mc)
 ##################################################
 
 mol.spin = 2
+mol.build(0, 0)
 
 mf = scf.ROHF(mol)
 mf = scf.fast_newton(mf)

@@ -588,15 +588,12 @@ class UHF(hf.SCF):
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
-    def mulliken_pop_meta_lowdin_ao(self, mol=None, dm=None,
-                                    verbose=logger.DEBUG,
-                                    pre_orth_method='ANO', s=None):
+    def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
+                      pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        return mulliken_pop_meta_lowdin_ao(mol, dm, s=s, verbose=verbose,
-                                           pre_orth_method=pre_orth_method)
-    def mulliken_meta(self, *args, **kwargs):
-        return self.mulliken_pop_meta_lowdin_ao(*args, **kwargs)
+        return mulliken_meta(mol, dm, s=s, verbose=verbose,
+                             pre_orth_method=pre_orth_method)
 
     def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
