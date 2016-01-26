@@ -23,7 +23,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
 
     mo = mo_coeff
     nmo = mo.shape[1]
-    ncore = casscf.ncore
     ncas = casscf.ncas
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
@@ -68,6 +67,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = numpy.dot(mo, u)
+            if log.verbose >= logger.DEBUG:
+                ncore = casscf.ncore
+                nocc = ncore + ncas
+                s = reduce(numpy.dot, (mo[:,ncore:nocc].T, casscf._scf.get_ovlp(),
+                                       mo_coeff[:,ncore:nocc]))
+                log.debug('Active space overlap to initial guess, SVD = %s',
+                          numpy.linalg.svd(s)[1])
+                log.debug('Active space overlap to last step, SVD = %s',
+                          numpy.linalg.svd(u[ncore:nocc,ncore:nocc])[1])
 
             eris = None
             eris = casscf.ao2mo(mo)
