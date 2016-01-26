@@ -10,6 +10,7 @@ import numpy
 import scipy.linalg
 import h5py
 from pyscf.lib import logger
+from pyscf.lib import numpy_helper
 
 '''
 Extension to scipy.linalg module
@@ -49,7 +50,7 @@ def safe_eigh(h, s, lindep=1e-15):
 
 # default max_memory 2000 MB
 def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
-             lindep=1e-16, max_memory=2000, dot=numpy.dot, callback=None,
+             lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
              nroots=1, lessio=False, verbose=logger.WARN):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
@@ -121,13 +122,27 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
+    def qr(xs):
+        #q, r = numpy.linalg.qr(numpy.asarray(xs).T)
+        #q = [qi/numpy_helper.norm(qi)
+        #     for i, qi in enumerate(q.T) if r[i,i] > 1e-7]
+        qs = [xs[0]/numpy_helper.norm(xs[0])]
+        for i in range(1, len(xs)):
+            xi = xs[i].copy()
+            for j in range(len(qs)):
+                xi -= qs[j] * numpy.dot(qs[j], xi)
+            norm = numpy_helper.norm(xi)
+            if norm > 1e-7:
+                qs.append(xi/norm)
+        return qs
+
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         xt = [x0]
         axt = [aop(x0)]
         max_cycle = min(max_cycle,x0.size)
     else:
-        xt = [xi for xi in x0]
-        axt = [aop(xi) for xi in x0]
+        xt = qr(x0)
+        axt = [aop(xi) for xi in xt]
         max_cycle = min(max_cycle,x0[0].size)
 
     max_space = max_space + nroots * 2
@@ -141,33 +156,28 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         _incore = False
 
     toloose = numpy.sqrt(tol) * 1e-2
-    head = 0
-    rnow = len(xt)
 
-    for i in range(rnow):
-        xs.append(xt[i])
+    for i,xi in enumerate(xt):
+        xs.append(xi)
         ax.append(axt[i])
+    space = len(xs)
+    head = 0
 
     heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
-    ovlp = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     e = 0
     for icyc in range(max_cycle):
-        space = len(xs)
+        rnow = len(xt)
         for i in range(space):
             if head <= i < head+rnow:
                 for k in range(i-head+1):
                     heff[head+k,i] = dot(xt[k].conj(), axt[i-head])
-                    ovlp[head+k,i] = dot(xt[k].conj(), xt [i-head])
                     heff[i,head+k] = heff[head+k,i].conj()
-                    ovlp[i,head+k] = ovlp[head+k,i].conj()
             else:
                 for k in range(rnow):
                     heff[head+k,i] = dot(xt[k].conj(), ax[i])
-                    ovlp[head+k,i] = dot(xt[k].conj(), xs[i])
                     heff[i,head+k] = heff[head+k,i].conj()
-                    ovlp[i,head+k] = ovlp[head+k,i].conj()
 
-        w, v, seig = safe_eigh(heff[:space,:space], ovlp[:space,:space])
+        w, v = scipy.linalg.eigh(heff[:space,:space])
         try:
             de = w[:nroots] - e
         except ValueError:
@@ -178,11 +188,11 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         ax0 = []
         if lessio and not _incore:
             for k, ek in enumerate(e):
-                x0 .append(xs[space-1] * v[space-1,k])
+                x0.append(xs[space-1] * v[space-1,k])
             for i in reversed(range(space-1)):
                 xsi = xs[i]
                 for k, ek in enumerate(e):
-                    x0 [k] += v[i,k] * xsi
+                    x0[k] += v[i,k] * xsi
             ax0 = [aop(xi) for xi in x0]
         else:
             for k, ek in enumerate(e):
@@ -195,53 +205,75 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                     x0 [k] += v[i,k] * xsi
                     ax0[k] += v[i,k] * axi
 
-        head += rnow
-        dx = []
-        dx_norm = []
-        xt = []
-        axt = []
-        for k, ek in enumerate(e):
-            dxtmp = ax0[k] - ek * x0[k]
-            dxtmp_norm = numpy.linalg.norm(dxtmp)
-            if dxtmp_norm > toloose or abs(de[k]) > tol:
-                dx.append(dxtmp)
-                dx_norm.append(dxtmp_norm)
-
-                #xt.append(precond(dxtmp, ek, x0[k])) # not accurate enough?
-                if dxtmp_norm > toloose:
-                    xt.append(precond(dxtmp, e[0], x0[k]))
-                    xt[-1] *= 1/(numpy.linalg.norm(xt[-1])+1e-15)
-                    axt.append(aop(xt[-1]))
-        rnow = len(xt)
-# Cannot require both dx_norm and de converged, because we want to stick on
-# the states associated with the initial guess.  Numerical instability can
-# break the symmetry restriction and move to lower state, eg BeH2 CAS(2,2)
-        if rnow > 0:
-            log.debug('davidson %d %d  |r|= %4.3g  e= %s  seig= %4.3g',
-                      icyc, space, max(dx_norm), e, seig[0])
-        if (rnow == 0 or seig[0] < lindep or
-            (max(dx_norm) < toloose or max(abs(de)) < tol)):
+        ide = numpy.argmax(abs(de))
+        if abs(de[ide]) < tol:
+            log.debug('converge %d %d  e= %s  max|de|= %4.3g',
+                      icyc, space, e, de[ide])
             break
 
-        if head+rnow > max_space:
+        dx_norm = []
+        xt = []
+        for k, ek in enumerate(e):
+            dxtmp = ax0[k] - ek * x0[k]
+            xt.append(dxtmp)
+            dx_norm.append(numpy_helper.norm(dxtmp))
+
+        if max(dx_norm) < toloose:
+            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                      icyc, space, max(dx_norm), e, de[ide])
+            break
+
+        # remove subspace linear dependency
+        for k, ek in enumerate(e):
+            if dx_norm[k] > toloose:
+                xt[k] = precond(xt[k], e[0], x0[k])
+                xt[k] *= 1/numpy_helper.norm(xt[k])
+            else:
+                xt[k] = None
+        xt = [xi for xi in xt if xi is not None]
+        for i in range(space):
+            for xi in xt:
+                xsi = xs[i]
+                xi -= xsi * numpy.dot(xi, xsi)
+        norm = 1
+        for i,xi in enumerate(xt):
+            norm = numpy_helper.norm(xi)
+            if norm > toloose:
+                xt[i] *= 1/norm
+            else:
+                xt[i] = None
+        xt = [xi for xi in xt if xi is not None]
+        if len(xt) > 1:
+            xt = qr(xt)
+        if len(xt) == 0:
+            log.debug('Linear dependency in trial subspace')
+            break
+        log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
+                  icyc, space, max(dx_norm), e, de[ide], norm)
+
+        if space+len(xt) > max_space:
             if _incore:
                 xs = []
                 ax = []
             else:
                 xs = _Xlist()
                 ax = _Xlist()
-            space = head = 0
             xt = x0
-            axt = [aop(xi) for xi in x0]
+            space = head = 0
             e = 0
 
-        for k in range(rnow):
+        head = space
+        axt = []
+        for k, xi in enumerate(xt):
             if head + k >= space:
                 xs.append(xt[k])
+                axt.append(aop(xt[k]))
                 ax.append(axt[k])
             else:
                 xs[head+k] = xt[k]
+                axt.append(aop(xt[k]))
                 ax[head+k] = axt[k]
+        space += len(xt)
 
         if callable(callback):
             callback(locals())
