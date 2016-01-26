@@ -221,18 +221,24 @@ def get_KLMN(cell,kpts):
         for L, kvL in enumerate(kpts):
             for M, kvM in enumerate(kpts):
                 found = 0
-                # Here we find where kvN = kvM + kvL - kvK (mod K)
+                kvMLK = kvM + kvL - kvK
+                kvN = kvMLK
+                finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
+                                                 kpts > kvN - 1.e-12))
+                # You want to make sure the k-point is the same in all 3 indices as kvN
+                if len(finder[0]) == 3:
+                    KLMN[K, L, M] = finder[0][0]
+                    continue
+
+                # If we didn't find the vector before, here we find where kvN = kvM + kvL - kvK (mod K)
                 for mod in xrange(6):
                     pn = (-1.)**mod
                     kval = kvecs[ ( mod // 2 ) ]
-                    kvN = kvM + kvL - kvK + pn*kval
+                    kvN = kvMLK + pn*kval
                     finder =  np.where(np.logical_and(kpts < kvN + 1.e-12,
                                                       kpts > kvN - 1.e-12))
-                    # You want to make sure the k-point is the same in all 3 indices as kvN
                     if len(finder[0]) == 3:
-                        KLMN[K, L, M] = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                      kpts > kvN - 1.e-12))[0][0]
-                        found = 1
+                        KLMN[K, L, M] = finder[0][0]
                         break
     return KLMN
 
