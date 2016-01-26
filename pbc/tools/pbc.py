@@ -148,10 +148,10 @@ def madelung(cell, kpts):
     return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
 
 
-def get_monkhorst_pack_size(cell, ckpts): 
-    kpts = np.dot(ckpts, cell._h.T) / (2*np.pi) 
+def get_monkhorst_pack_size(cell, ckpts):
+    kpts = np.dot(ckpts, cell._h.T) / (2*np.pi)
     import ase.dft.kpoints
-    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts) 
+    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts)
     #Nk = np.array([len(np.unique(ki)) for ki in kpts.T])
     return Nk
 
@@ -162,7 +162,7 @@ def f_aux(cell, q):
     denom = 4 * np.dot(b*np.sin(a*q/2.), b*np.sin(a*q/2.)) \
           + 2 * np.dot(b*np.sin(a*q), np.roll(b,1,axis=0)*np.sin(np.roll(a,1,axis=0)*q ))
     return 1./(2*np.pi)**2 * 1./denom
-    
+
 
 def get_lattice_Ls(cell, nimgs):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
@@ -200,7 +200,7 @@ def super_cell(cell, ncopy):
     return supcell
 
 
-def get_KLMN(kpts):
+def get_KLMN(cell,kpts):
     '''Get array KLMN where for gs indices, K, L, M,
     KLMN[K,L,M] gives index of N that satifies
     momentum conservation
@@ -215,14 +215,25 @@ def get_KLMN(kpts):
     '''
     nkpts = kpts.shape[0]
     KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
+    kvecs = 2*np.pi*scipy.linalg.inv(cell._h)
 
     for K, kvK in enumerate(kpts):
         for L, kvL in enumerate(kpts):
             for M, kvM in enumerate(kpts):
-                kvN = kvM + kvL - kvK
-                KLMN[K, L, M] = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                              kpts > kvN - 1.e-12))[0][0]
-
+                found = 0
+                # Here we find where kvN = kvM + kvL - kvK (mod K)
+                for mod in xrange(6):
+                    pn = (-1.)**mod
+                    kval = kvecs[ ( mod // 2 ) ]
+                    kvN = kvM + kvL - kvK + pn*kval
+                    finder =  np.where(np.logical_and(kpts < kvN + 1.e-12,
+                                                      kpts > kvN - 1.e-12))
+                    # You want to make sure the k-point is the same in all 3 indices as kvN
+                    if len(finder[0]) == 3:
+                        KLMN[K, L, M] = np.where(np.logical_and(kpts < kvN + 1.e-12,
+                                                      kpts > kvN - 1.e-12))[0][0]
+                        found = 1
+                        break
     return KLMN
 
 
@@ -232,13 +243,13 @@ def cutoff_to_gs(h, cutoff):
 
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
 
-    Args: 
+    Args:
         h : (3,3) ndarray
             The unit cell lattice vectors, a "three-column" array [a1|a2|a3], in Bohr
         cutoff : float
             KE energy cutoff in a.u.
 
-    Returns: 
+    Returns:
         gs : (3,) array
     '''
     grid_spacing = np.pi / np.sqrt(2 * cutoff)
@@ -251,8 +262,8 @@ def cutoff_to_gs(h, cutoff):
     h2 = np.linalg.norm(h[:,2])
 
     print h0, h1, h2
-    # number of grid points is 2gs+1 (~ 2 gs) along each direction 
-    gs = np.ceil([h0 / (2*grid_spacing), 
-                  h1 / (2*grid_spacing), 
+    # number of grid points is 2gs+1 (~ 2 gs) along each direction
+    gs = np.ceil([h0 / (2*grid_spacing),
+                  h1 / (2*grid_spacing),
                   h2 / (2*grid_spacing)])
     return gs
