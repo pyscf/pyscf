@@ -4,10 +4,14 @@ import numpy as np
 
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc import lib as pbclib
 import pyscf.cc
 import pyscf.cc.ccsd
 import pyscf.pbc.ao2mo
 from pyscf.pbc.cc import intermediates
+
+#einsum = np.einsum
+einsum = pbclib.einsum
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            max_memory=2000, verbose=logger.INFO):
@@ -55,7 +59,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
-
+@profile
 def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
@@ -92,34 +96,30 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     eris_vvvo = eris.ovvv.transpose(2,3,1,0) # conj() for complex
 
     # T1 equation
-    t1new = ( fov + np.einsum('ie,ae->ia',t1,Fvv)
-            - np.einsum('ma,mi->ia',t1,Foo) 
-            + np.einsum('imae,me->ia',t2,Fov)
-            - np.einsum('nf,naif->ia',t1,eris.ovov)
-            - 0.5*np.einsum('imef,maef->ia',t2,eris.ovvv)
-            - 0.5*np.einsum('mnae,nmei->ia',t2,eris_oovo) )
+    t1new = fov.copy() 
+    t1new +=   einsum('ie,ae->ia',t1,Fvv)
+    t1new += - einsum('ma,mi->ia',t1,Foo) 
+    t1new +=   einsum('imae,me->ia',t2,Fov)
+    t1new += - einsum('nf,naif->ia',t1,eris.ovov)
+    t1new += - 0.5*einsum('imef,maef->ia',t2,eris.ovvv)
+    t1new += - 0.5*einsum('mnae,nmei->ia',t2,eris_oovo)
     # T2 equation
     t2new = eris.oovv.copy()
-    Ftmp = Fvv - 0.5*np.einsum('mb,me->be',t1,Fov)
-    tmp = np.einsum('ijae,be->ijab',t2,Ftmp)
+    Ftmp = Fvv - 0.5*einsum('mb,me->be',t1,Fov)
+    tmp = einsum('ijae,be->ijab',t2,Ftmp)
     t2new += (tmp - tmp.transpose(0,1,3,2))
-    Ftmp = Foo + 0.5*np.einsum('je,me->mj',t1,Fov)
-    tmp = np.einsum('imab,mj->ijab',t2,Ftmp)
+    Ftmp = Foo + 0.5*einsum('je,me->mj',t1,Fov)
+    tmp = einsum('imab,mj->ijab',t2,Ftmp)
     t2new -= (tmp - tmp.transpose(1,0,2,3))
-    t2new += ( 0.5*np.einsum('mnab,mnij->ijab',tau,Woooo) 
-             + 0.5*np.einsum('ijef,abef->ijab',tau,Wvvvv) )
-    #tmp = np.einsum('imae,mbej->ijab',t2,Wovvo) 
-    # --> tmp = np.einsum('iame,mebj->iabj',t2.transpose(0,2,1,3),Wovvo.transpose(0,2,1,3)).transpose(0,3,1,2)
-    tmp = np.dot(t2.transpose(0,2,1,3).reshape(nocc*nvir,-1),
-                Wovvo.transpose(0,2,1,3).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nocc).transpose(0,3,1,2)
-    #tmp -= np.einsum('ie,ma,mbej->ijab',t1,t1,eris_ovvo)
-    t1w = np.einsum('ie,mbej->imbj',t1,eris_ovvo)
-    tmp -= np.einsum('ma,imbj->ijab',t1,t1w)
+    t2new += ( 0.5*einsum('mnab,mnij->ijab',tau,Woooo) 
+             + 0.5*einsum('ijef,abef->ijab',tau,Wvvvv) )
+    tmp = einsum('imae,mbej->ijab',t2,Wovvo) 
+    tmp -= einsum('ie,ma,mbej->ijab',t1,t1,eris_ovvo)
     t2new += ( tmp - tmp.transpose(0,1,3,2) 
              - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
-    tmp = np.einsum('ie,abej->ijab',t1,eris_vvvo)
+    tmp = einsum('ie,abej->ijab',t1,eris_vvvo)
     t2new += (tmp - tmp.transpose(1,0,2,3))
-    tmp = np.einsum('ma,mbij->ijab',t1,eris.ovoo)
+    tmp = einsum('ma,mbij->ijab',t1,eris.ovoo)
     t2new -= (tmp - tmp.transpose(0,1,3,2))
 
     t1new /= eia
@@ -134,12 +134,12 @@ def energy(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
     eris_oovv = eris.oovv.copy()
-    e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1)
-    t1t1 = np.einsum('ia,jb->ijab',t1,t1)
+    e = einsum('ia,ia', fock[:nocc,nocc:], t1)
+    t1t1 = einsum('ia,jb->ijab',t1,t1)
     tau = t2 + 2*t1t1
     e += 0.25 * np.dot(tau.flatten(), eris_oovv.flatten())
-    #e += (0.25*np.einsum('ijab,ijab',t2,eris_oovv)
-    #      + 0.5*np.einsum('ia,jb,ijab',t1,t1,eris_oovv))
+    #e += (0.25*einsum('ijab,ijab',t2,eris_oovv)
+    #      + 0.5*einsum('ia,jb,ijab',t1,t1,eris_oovv))
     return e
 
 
@@ -205,7 +205,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
                         eijab[i,j,a,b] = ( foo[i,i] + foo[j,j]
                                       - fvv[a,a] - fvv[b,b] )
                         t2[i,j,a,b] = eris_oovv[i,j,a,b]/eijab[i,j,a,b]
-        self.emp2 = 0.25*np.einsum('ijab,ijab',t2,eris_oovv)
+        self.emp2 = 0.25*einsum('ijab,ijab',t2,eris_oovv)
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
