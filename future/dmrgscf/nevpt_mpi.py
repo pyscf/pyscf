@@ -322,7 +322,17 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     current_path = os.getcwd()
     os.chdir('%s'%newscratch)
 
-    check_call('%s %s > %s'%(blockfile,dmrginp,dmrgout), shell=True)
+    env = os.environ
+    envnew = {}
+    for k in env:
+      if 'MPI_' not in k:
+        envnew[k] = os.environ[k]
+
+
+    import subprocess
+
+    p = subprocess.Popen(['%s %s > %s'%(blockfile,dmrginp,dmrgout)], env=envnew, shell=True)
+    p.wait()
     f = open('node0/Va_%d'%root,'r')
     Vr_energy = float(f.readline())
     Vr_norm = float(f.readline())
