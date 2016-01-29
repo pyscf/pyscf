@@ -58,3 +58,5 @@ def test_eris():
     print "Coulomb/Exchange HF energy from MO evaluation on grid", Ej2, Ek2
     print "Diff (should be zero)", Ej-Ej2,Ek - Ek2
 
+if __name__ == '__main__':
+    test_eris()
