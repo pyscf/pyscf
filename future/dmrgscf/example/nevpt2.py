@@ -21,9 +21,6 @@ if __name__ == '__main__':
     from pyscf.dmrgscf import settings
     settings.MPIPREFIX ='mpirun -n 3'
     settings.BLOCKEXE = '/home/shengg/blocknewest/block.spin_adapted'
-    #BLOCKEXE_MPS_NEVPT is a Block executable file, which is compiled without mpi.
-    #It is parallelized by mpi4py rather than in Block code. 
-    settings.BLOCKEXE_MPS_NEVPT = '/tigress/shengg/block_mpsnevpt/Block/block.spin_adapted'
 
     b = 1.4
     mol = gto.Mole()

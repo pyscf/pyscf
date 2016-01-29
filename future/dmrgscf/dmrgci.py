@@ -574,7 +574,6 @@ def DMRG_MPS_NEVPT(mc, maxM = 500, root=0, nevptsolver=None, tol =1e-7):
         nevptsolver.scheduleNoises = [0.0001, 0.0]   
         nevptsolver.twodot_to_onedot = 4
         nevptsolver.maxIter = 6
-    nevptsolver.executable = settings.BLOCKEXE_MPS_NEVPT
     nevptsolver.twopdm = False
     nevptsolver.nroots = nroots
     scratch = nevptsolver.scratchDirectory
