@@ -24,10 +24,10 @@ dm = mf.make_rdm1()
 # Use default mesh grids and weights
 coords = mf.grids.coords
 weights = mf.grids.weights
-ao_value = numint.eval_ao(mol, coords, isgga=True)
+ao_value = numint.eval_ao(mol, coords, deriv=1)
 # The first row of rho is electron density, the rest three rows are electron
 # density gradients which are needed for GGA functional
-rho = numint.eval_rho(mol, ao_value, dm, isgga=True)
+rho = numint.eval_rho(mol, ao_value, dm, xctype='GGA')
 print(rho.shape)
 sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
 

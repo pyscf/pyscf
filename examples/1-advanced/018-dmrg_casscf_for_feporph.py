@@ -9,7 +9,8 @@ from pyscf import mcscf, fci
 from pyscf import dmrgscf
 from pyscf import mrpt
 # Adjust mpirun flags to execute the calculation with multi-processor
-dmrgscf.settings.MPIPREFIX = 'mpirun -np 16'
+# Note DMRG-NEVPT2 requires about 10 GB memory per processor for this system
+dmrgscf.settings.MPIPREFIX = 'mpirun -np 8'
 
 
 '''

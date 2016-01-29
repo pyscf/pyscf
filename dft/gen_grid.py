@@ -461,15 +461,10 @@ if __name__ == '__main__':
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None#"out_h2o"
-    h2o.atom.extend([
+    h2o.atom = [
         ['O' , (0. , 0.     , 0.)],
         ['H' , (0. , -0.757 , 0.587)],
-        ['H' , (0. , 0.757  , 0.587)] ])
-
-    h2o.basis = {"H": '6-31g',
-                 "O": '6-31g',}
-    h2o.grids = {"H": (50, 302),
-                 "O": (50, 302),}
+        ['H' , (0. , 0.757  , 0.587)] ]
     h2o.build()
     import time
     t0 = time.clock()

@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+#
+# Author: Sheng Guo <shengg@princeton.edu>
+#         Qiming Sun <osirpt.sun@gmail.com>
+#
 import time
 import numpy
 from pyscf.mrpt.nevpt2 import sc_nevpt
