@@ -551,6 +551,7 @@ def DMRG_MPS_NEVPT(mc, maxM = 500, root=0, nevptsolver=None, tol =1e-7):
         nvirt = fh5['mc/nvirt'].value
         nelecas = fh5['mc/nelecas'].value
         nroots = fh5['mc/nroots'].value
+        wfnsym = fh5['mc/wfnsym'].value
         fh5.close()
         mc_chk = mc
     else :
@@ -560,6 +561,7 @@ def DMRG_MPS_NEVPT(mc, maxM = 500, root=0, nevptsolver=None, tol =1e-7):
         nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
+        wfnsym = mc.fcisolver.wfnsym
         mc_chk = 'mc_chkfile'
         write_chk(mc,root,mc_chk)
         
@@ -574,6 +576,7 @@ def DMRG_MPS_NEVPT(mc, maxM = 500, root=0, nevptsolver=None, tol =1e-7):
         nevptsolver.scheduleNoises = [0.0001, 0.0]   
         nevptsolver.twodot_to_onedot = 4
         nevptsolver.maxIter = 6
+        nevptsolver.wfnsym = wfnsym
     nevptsolver.twopdm = False
     nevptsolver.nroots = nroots
     scratch = nevptsolver.scratchDirectory

@@ -64,6 +64,7 @@ def write_chk(mc,root,chkfile):
     fh5['mc/root']    =       root
     fh5['mc/orbe']    =       mc.mo_energy
     fh5['mc/nroots']   =       mc.fcisolver.nroots
+    fh5['mc/wfnsym']   =       mc.fcisolver.wfnsym
     if hasattr(mc, 'orbsym'):
         fh5.create_dataset('mc/orbsym',data=mc.orbsym)
     else :
