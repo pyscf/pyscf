@@ -47,7 +47,7 @@ def plot_bands(scftype, basis, ngs, nmp=None):
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
     elif scftype == 'hf':
-        mf = pbchf.RHF(cell)
+        mf = pbchf.RHF(cell, exxdiv=None)
     else: 
         scaled_mp_kpts = ase.dft.kpoints.monkhorst_pack((nmp,nmp,nmp))
         abs_mp_kpts = cell.get_abs_kpts(scaled_mp_kpts)
@@ -55,7 +55,7 @@ def plot_bands(scftype, basis, ngs, nmp=None):
             mf = pbcdft.KRKS(cell, abs_mp_kpts)
             mf.xc = 'lda,vwn'
         else:
-            mf = pbchf.KRHF(cell, abs_mp_kpts, exxdiv=None)
+            mf = pbchf.KRHF(cell, abs_mp_kpts, exxdiv='vcut_sph')
 
     mf.analytic_int = False
     mf.scf()
@@ -74,11 +74,16 @@ def plot_bands(scftype, basis, ngs, nmp=None):
         e_kn[k] = ek-efermi
 
     # Write the bands to stdout 
+    f = open('bands_%s_%s_%d_%d.dat'%(scftype,basis,ngs,nmp),'w')
+    f.write("# Special points:\n")
+    for point, label in zip(X,['L', 'G', 'X', 'W', 'K', 'G']):
+        f.write("# %0.6f %s\n"%(point,label))
     for kk, ek in zip(x, e_kn):
-        print "%0.6f "%(kk),
+        f.write("%0.6f "%(kk))
         for ekn in ek:
-            print "%0.6f "%(ekn),
-        print ""
+            f.write("%0.6f "%(ekn))
+        f.write("\n")
+    f.close()
 
     # Plot the band structure via matplotlib
     emin = -1.0
@@ -99,7 +104,7 @@ def plot_bands(scftype, basis, ngs, nmp=None):
     if nmp is None:
         plt.savefig('bands_%s_%s_%d.png'%(scftype,basis,ngs))
     else:
-        plt.savefig('bands_%s-None_%s_%d_%d.png'%(scftype,basis,ngs,nmp))
+        plt.savefig('bands_%s_%s_%d_%d.png'%(scftype,basis,ngs,nmp))
 
 if __name__ == '__main__':
     args = sys.argv[1:]

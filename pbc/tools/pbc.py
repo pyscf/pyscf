@@ -196,6 +196,9 @@ def super_cell(cell, ncopy):
                     supcell.atom.append([atom, coord + L])
     supcell.unit = 'B'
     supcell.h = np.dot(cell._h, np.diag(ncopy))
+    supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2, 
+                           ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
+                           ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
     supcell.build(False, False)
     return supcell
 
@@ -273,3 +276,4 @@ def cutoff_to_gs(h, cutoff):
                   h1 / (2*grid_spacing),
                   h2 / (2*grid_spacing)])
     return gs
+
