@@ -9,6 +9,9 @@ from pyscf import mcscf, fci
 
 '''
 Triplet and quintet energy gap of Iron-Porphyrin molecule
+
+In this example, we use density matrix embedding theory
+(ref. Q Sun, JCTC, 10(2014), 3784) to generate initial guess.
 '''
 
 #

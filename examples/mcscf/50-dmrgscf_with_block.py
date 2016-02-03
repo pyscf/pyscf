@@ -20,8 +20,8 @@ else:  # MPI on single node
 '''
 Use BLOCK program as the DMRG solver and parallel DMRGSCF on different nodes.
 
-BLOCK is invoked through system call.  Different MPIPREFIX needs to be
-specified for PBS and SLURM systems.
+BLOCK is invoked through system call.  Different settings.MPIPREFIX needs to
+be specified for PBS and SLURM systems.
 '''
 
 b = 1.2

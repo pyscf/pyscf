@@ -15,12 +15,12 @@ By default, the DFT grid employs
   ===================================
   Elements  radial part  angular part
   --------  -----------  ------------
-  H, He         35           29
-  Li - Ne       40           35
-  Na - Ar       50           35
-  K  - Kr       55           35
-  Rb - Xe       65           35
-  Cs - Rn       75           35
+  H, He         50           302
+  Li - Ne       75           302
+  Na - Ar       80           434
+  K  - Kr       90           434
+  Rb - Xe       95           434
+  Cs - Rn      100           434
   ===================================
 
 See pyscf/dft/gen_grid.py  "class Grids" for more details.

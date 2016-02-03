@@ -44,10 +44,10 @@ def analyze(mf, verbose=logger.DEBUG):
     orbsym = numpy.array(orbsym)
     wfnsym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-    log.info('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
-    log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
-    log.info('double occ                 ' + (' %4d'*nirrep), *noccs)
-    log.info('**** MO energy ****')
+    log.note('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
+    log.note('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
+    log.note('double occ                 ' + (' %4d'*nirrep), *noccs)
+    log.note('**** MO energy ****')
     irname_full = {}
     for k,ir in enumerate(mol.irrep_id):
         irname_full[ir] = mol.irrep_name[k]
@@ -57,7 +57,7 @@ def analyze(mf, verbose=logger.DEBUG):
             irorbcnt[j] += 1
         else:
             irorbcnt[j] = 1
-        log.info('MO #%d (%s #%d), energy= %.15g occ= %g',
+        log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
                  k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
     if verbose >= logger.DEBUG:
@@ -268,7 +268,8 @@ class RHF(hf.RHF):
                              self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):

@@ -380,6 +380,8 @@ class Grids(object):
         if self.atom_grid:
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
 
+    def build(self, mol=None):
+        return self.setup_grids_(mol)
     def build_(self, mol=None):
         return self.setup_grids_(mol)
     def setup_grids(self, mol=None):

@@ -4,7 +4,7 @@
 #
 
 '''
-Non-relativistic
+Non-relativistic analytical nuclear gradients
 '''
 
 import time
