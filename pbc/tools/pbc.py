@@ -196,7 +196,7 @@ def super_cell(cell, ncopy):
                     supcell.atom.append([atom, coord + L])
     supcell.unit = 'B'
     supcell.h = np.dot(cell._h, np.diag(ncopy))
-    supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2, 
+    supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2,
                            ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
                            ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
     supcell.build(False, False)
@@ -227,10 +227,11 @@ def get_KLMN(cell,kpts):
                 kvMLK = kvM + kvL - kvK
                 kvN = kvMLK
                 finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                 kpts > kvN - 1.e-12))
+                                                 kpts > kvN - 1.e-12).sum(axis=1)==3)
                 # You want to make sure the k-point is the same in all 3 indices as kvN
-                if len(finder[0]) == 3:
+                if len(finder[0]) > 0:
                     KLMN[K, L, M] = finder[0][0]
+                    found = 1
                     continue
 
                 # If we didn't find the vector before, here we find where kvN = kvM + kvL - kvK (mod K)
@@ -239,10 +240,16 @@ def get_KLMN(cell,kpts):
                     kval = kvecs[ ( mod // 2 ) ]
                     kvN = kvMLK + pn*kval
                     finder =  np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                      kpts > kvN - 1.e-12))
-                    if len(finder[0]) == 3:
+                                                      kpts > kvN - 1.e-12).sum(axis=1)==3)
+                    if len(finder[0]) > 0:
                         KLMN[K, L, M] = finder[0][0]
+                        found = 1
                         break
+
+                if found == 0:
+                    print "get_klmn is screwing up again!"
+                    print kvMLK
+                    sys.exit()
     return KLMN
 
 
