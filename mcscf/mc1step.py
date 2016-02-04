@@ -772,21 +772,21 @@ class CASSCF(casci.CASCI):
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
         if self.frozen:
             log.info('frozen orbitals %s', str(self.frozen))
-        log.info('max. macro cycles = %d', self.max_cycle_macro)
-        log.info('max. micro cycles = %d', self.max_cycle_micro)
+        log.info('max_cycle_macro = %d', self.max_cycle_macro)
+        log.info('max_cycle_micro = %d', self.max_cycle_micro)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
         log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
-        log.info('max. orb step = %g', self.max_stepsize)
+        log.info('orbital rotation max_stepsize = %g', self.max_stepsize)
         #log.info('max. ci step = %g', self.max_ci_stepsize)
-        log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
-        log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
-        log.info('augmented hessian linear dependence = %g', self.ah_lindep)
-        log.info('augmented hessian level shift = %d', self.ah_level_shift)
-        log.info('augmented hessian start_tol = %g', self.ah_start_tol)
-        log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
-        log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
-        log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
+        log.info('augmented hessian ah_max_cycle = %d', self.ah_max_cycle)
+        log.info('augmented hessian ah_conv_tol = %g', self.ah_conv_tol)
+        log.info('augmented hessian ah_linear dependence = %g', self.ah_lindep)
+        log.info('augmented hessian ah_level shift = %d', self.ah_level_shift)
+        log.info('augmented hessian ah_start_tol = %g', self.ah_start_tol)
+        log.info('augmented hessian ah_start_cycle = %d', self.ah_start_cycle)
+        log.info('augmented hessian ah_grad_trust_region = %g', self.ah_grad_trust_region)
+        log.info('augmented hessian ah_decay rate = %g', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
@@ -803,7 +803,10 @@ class CASSCF(casci.CASCI):
         except AttributeError:
             pass
         if hasattr(self, 'max_orb_stepsize'):
-            raise AttributeError('"max_orb_stepsize" was replaced by "max_stepsize"')
+            log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
+        if self.mo_coeff is None:
+            log.warn('Orbital for CASCI is not specified.  You probably need '
+                     'call SCF.kernel() to initialize orbitals.')
 
     def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                callback=None, _kern=kernel):

@@ -6,8 +6,8 @@ from functools import reduce
 import numpy
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import chkfile
 from pyscf.scf import _vhf
+import pyscf.scf.chkfile
 
 
 def init_guess_by_minao(mol):
@@ -30,7 +30,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
 
     def fproj(mo):
         if project:
@@ -500,7 +500,7 @@ class UHF(hf.SCF):
                         n_b, e_sort_b[n_b])
         if self.verbose >= logger.DEBUG:
             logger.debug(self, '  mo_energy = %s', mo_energy[1])
-            numpy.set_printoptions()
+            numpy.set_printoptions(threshold=1000)
 
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
@@ -533,9 +533,9 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_1e(mol)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol

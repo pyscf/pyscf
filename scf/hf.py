@@ -17,10 +17,9 @@ import pyscf.gto
 import pyscf.lib
 import pyscf.gto.ecp
 from pyscf.lib import logger
-from pyscf.scf import chkfile
 from pyscf.scf import diis
 from pyscf.scf import _vhf
-
+import pyscf.scf.chkfile
 
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
@@ -120,7 +119,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     if dump_chk:
         # dump mol after reading initialized DM
-        chkfile.save_mol(mol, mf.chkfile)
+        pyscf.scf.chkfile.save_mol(mol, mf.chkfile)
 
     scf_conv = False
     cycle = 0
@@ -355,7 +354,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         Density matrix, 2D ndarray
     '''
     from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
 
     def fproj(mo):
         if project:
@@ -971,9 +970,9 @@ class SCF(object):
 
     def dump_chk(self, envs):
         if self.chkfile:
-            chkfile.dump_scf(self.mol, self.chkfile,
-                             envs['e_tot'], envs['mo_energy'],
-                             envs['mo_coeff'], envs['mo_occ'])
+            pyscf.scf.chkfile.dump_scf(self.mol, self.chkfile,
+                                       envs['e_tot'], envs['mo_energy'],
+                                       envs['mo_coeff'], envs['mo_occ'])
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
@@ -993,15 +992,15 @@ class SCF(object):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if isinstance(chk, pyscf.gto.Mole):
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if isinstance(chkfile, pyscf.gto.Mole):
             raise RuntimeError('''
     You see this error message because of the API updates.
-    The first argument is chk file name.''')
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
-    def from_chk(self, chk=None, project=True):
-        return self.init_guess_by_chkfile(chk, project)
+    The first argument is chkfile name.''')
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
+    def from_chk(self, chkfile=None, project=True):
+        return self.init_guess_by_chkfile(chkfile, project)
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
@@ -1060,7 +1059,7 @@ class SCF(object):
         if self.verbose >= logger.DEBUG:
             numpy.set_printoptions(threshold=len(mo_energy))
             logger.debug(self, '  mo_energy = %s', mo_energy)
-            numpy.set_printoptions()
+            numpy.set_printoptions(threshold=1000)
         return mo_occ
 
     # full density matrix for RHF
@@ -1195,6 +1194,13 @@ class SCF(object):
     def density_fit(self, auxbasis='weigend'):
         import pyscf.scf.dfhf
         return pyscf.scf.dfhf.density_fit(self, auxbasis)
+
+    def update_(self, chkfile=None):
+        return self.update_from_chk_(chkfile)
+    def update_from_chk_(self, chkfile=None):
+        if chkfile is None: chkfile = self.chkfile
+        self.__dict__.update(pyscf.scf.chkfile.load(chkfile, 'scf'))
+        return self
 
     @property
     def hf_energy(self):

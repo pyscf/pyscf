@@ -331,9 +331,9 @@ class UHF(uhf.UHF):
             logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
             logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
             hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo,
-                                    orbsyma, 'alpha-')
+                                    orbsyma, 'alpha-', verbose=self.verbose)
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo,
-                                    orbsymb, 'beta-')
+                                    orbsymb, 'beta-', verbose=self.verbose)
 
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
