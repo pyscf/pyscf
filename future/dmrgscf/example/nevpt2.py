@@ -22,9 +22,11 @@ on the memory usage.  The fast version employs the so called MPS-pertuber
 technique.  It is able to handle much larger systems, up to about 35 orbitals.
 '''
 
-from pyscf.dmrgscf import settings
-settings.MPIPREFIX ='mpirun -n 3'
-settings.BLOCKEXE = '/home/shengg/blocknewest/block.spin_adapted'
+#
+# One can adjust the processor numbers for Block code on the runtime.
+#
+#from pyscf.dmrgscf import settings
+#settings.MPIPREFIX ='mpirun -n 3'
 
 b = 1.4
 mol = gto.Mole()

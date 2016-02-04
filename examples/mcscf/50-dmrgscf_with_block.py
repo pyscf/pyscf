@@ -25,10 +25,9 @@ be specified for PBS and SLURM systems.
 '''
 
 b = 1.2
-mol = gto.Mole()
-mol.build(
+mol = gto.M(
     verbose = 4,
-    atom = [['N', (0.,0.,0.)], ['N', (0.,0.,b)]],
+    atom = 'N 0 0 0; N 0 0 %f'%b,
     basis = 'cc-pvdz',
     symmetry = True,
 )
