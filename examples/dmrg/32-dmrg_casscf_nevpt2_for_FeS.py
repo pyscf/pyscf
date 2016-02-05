@@ -463,7 +463,7 @@ mc.chkfile = 'hs_mc.chk'
 mc.max_memory = 30000
 mc.fcisolver.maxM = 1000
 mc.fcisolver.tol = 1e-6
-orbs = mc.sort_mo(caslst, coeff)
+orbs = mc.sort_mo(caslst, coeff, base=0)
 mc.mc1step(orbs)
 
 

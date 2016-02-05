@@ -135,8 +135,7 @@ AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
 Exception AttributeError: "'NoneType' object has no attribute 'byref'" in
 <bound method VHFOpt.__del__ of <pyscf.scf._vhf.VHFOpt object at 0x2b52390>> ignored
 ```
-  It was observed when pyscf is used with inspectors like profiler, pdb
-  etc.
+  It happens when pyscf is used with inspectors like profiler, pdb etc.
 
 
 

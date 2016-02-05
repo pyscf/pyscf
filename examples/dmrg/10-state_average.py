@@ -58,14 +58,21 @@ print(mc.e_tot)
 #
 
 #
-# state-average over different spin states
+# state-average over different spin states.
 #
 weights = [.25, .25, .5]  # 0.25 singlet + 0.25 singlet + 0.5 triplet
+#
+# dmrgsolver1 to handle singlet and dmrgsolver2 to handle triplet
+#
 dmrgsolver1 = DMRGCI(mol)
 dmrgsolver1.nroots = 2
 dmrgsolver1.weights = [.5, .5]
-dmrgsolver1.scratchDirectory = '/scratch/dmrg1'
 dmrgsolver2 = DMRGCI(mol)
+#
+# Note one must assign different scratches to the different DMRG solvers.
+# Mixing the scratch directories can cause DMRG program fail.
+#
+dmrgsolver1.scratchDirectory = '/scratch/dmrg1'
 dmrgsolver2.scratchDirectory = '/scratch/dmrg2'
 
 class FakeCISolver(DMRGCI):
