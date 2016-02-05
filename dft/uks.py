@@ -11,7 +11,7 @@ import time
 import numpy
 from pyscf.lib import logger
 import pyscf.scf
-from pyscf.dft import vxc
+import pyscf.dft.vxc
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
@@ -27,12 +27,12 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         ks.grids.setup_grids_()
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
-    x_code, c_code = vxc.parse_xc_name(ks.xc)
+    x_code, c_code = pyscf.dft.vxc.parse_xc_name(ks.xc)
     n, ks._exc, vx = ks._numint.nr_uks(mol, ks.grids, x_code, c_code, dm)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+    hyb = ks._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
 
     if abs(hyb) < 1e-10:
         vj = ks.get_j(mol, dm, hermi)

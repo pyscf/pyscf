@@ -178,7 +178,10 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
         for i in range(1, 4):
             c1 = _dot_ao_dm(mol, ao[i], dm, nao, ngrids, non0tab)
-            rho[i] = numpy.einsum('pi,pi->p', ao[0], c1) * 2 # *2 for +c.c.
+            rho[i] = numpy.einsum('pi,pi->p', ao[0], c1)
+            rho[i] *= 2 # *2 for +c.c. in the next two lines
+            #c1 = _dot_ao_dm(mol, ao[i], dm.T, nao, ngrids, non0tab)
+            #rho[i] += numpy.einsum('pi,pi->p', c1, ao[0])
     else: # meta-GGA
         # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
         rho = numpy.empty((6,ngrids))
@@ -377,61 +380,12 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         raise NotImplementedError('meta-GGA')
     return mat + mat.T
 
-def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None,
+           _driver='VXCnr_eval_x'):
     r'''Interface to call libxc library to evaluate exchange functional,
     potential and functional derivatives.
-
-    Args:
-        x_id : int
-            Exchange functional ID used by libxc library.  See pyscf/dft/vxc.py for more details.
-        rho : ndarray
-            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
-            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
-            where N is number of grids.
-            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
-            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
-            In spin unrestricted case,
-            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
-                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
-
-    Kwargs:
-        spin : int
-            spin polarized if spin > 0
-        relativity : int
-            No effects.
-        verbose : int or object of :class:`Logger`
-            No effects.
-
-    Returns:
-        ex, (vrho(*,2), vsigma(*,3), vlapl(*,2), vtau(*,2)), fxc, kxc
-
-        where
-
-        * fxc(N*45) for unrestricted case:
-        | v2rho2[*,3]     = (u_u, u_d, d_d)
-        | v2rhosigma[*,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-        | v2sigma2[*,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
-        | v2lapl2[*,3]
-        | vtau2[*,3]
-        | v2rholapl[*,4]
-        | v2rhotau[*,4]
-        | v2lapltau[*,4]
-        | v2sigmalapl[*,6]
-        | v2sigmatau[*,6]
-
-        * fxc(N*10) for restricted case:
-        (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
-
-        * kxc(N*35) for unrestricted case:
-        | v3rho3[*,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-        | v3rho2sigma[*,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-        | v3rhosigma2[*,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-        | v3sigma[*,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
-
-        * kxc(N*4) for restricted case:
-        (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
-
-        see also libxc_itrf.c
+    
+    See also eval_xc function.
     '''
     if spin == 0:
         rho_u = numpy.asarray(rho, order='C')
@@ -442,6 +396,8 @@ def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
         rho_d = numpy.asarray(rho[1], order='C')
         prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
         prho_d = rho_d.ctypes.data_as(ctypes.c_void_p)
+
+    mgga = pyscf.dft.vxc.is_meta_gga(x_id)
 
     if rho_u.ndim == 2:
         ngrids = rho_u.shape[1]
@@ -451,185 +407,130 @@ def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     if spin == 0:
         nspin = 1
         exc = numpy.empty(ngrids)
+        vxc = vrho = vsigma = vlapl = vtau = None
         if deriv > 0:
-            vxc = numpy.zeros(4*ngrids)
-            vrho   = vxc[        :ngrids  ]
-            vsigma = vxc[ngrids  :ngrids*2]
-            vlapl  = vxc[ngrids*2:ngrids*3]
-            vtau   = vxc[ngrids*3:ngrids*4]
+            if mgga:
+                vxc = numpy.zeros(4*ngrids)
+                vrho   = vxc[        :ngrids  ]
+                vsigma = vxc[ngrids  :ngrids*2]
+                vlapl  = vxc[ngrids*2:ngrids*3]
+                vtau   = vxc[ngrids*3:        ]
+            else:
+                vxc = numpy.zeros(2*ngrids)
+                vrho   = vxc[      :ngrids]
+                vsigma = vxc[ngrids:      ]
             pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
         else:
-            vxc = vrho = vsigma = vlapl = vtau = None
             pvxc = pyscf.lib.c_null_ptr()
         if deriv > 1:
-            fxc = numpy.zeros(10*ngrids)
+            if mgga:
+                fxc = numpy.zeros(10*ngrids)
+                v2rho2      = fxc[        :ngrids  ]
+                v2rhosigma  = fxc[ngrids  :ngrids*2]
+                v2sigma2    = fxc[ngrids*2:ngrids*3]
+                v2lapl2     = fxc[ngrids*3:ngrids*4]
+                vtau2       = fxc[ngrids*4:ngrids*5]
+                v2rholapl   = fxc[ngrids*5:ngrids*6]
+                v2rhotau    = fxc[ngrids*6:ngrids*7]
+                v2lapltau   = fxc[ngrids*7:ngrids*8]
+                v2sigmalapl = fxc[ngrids*8:ngrids*9]
+                v2sigmatau  = fxc[ngrids*9:        ]
+            else:
+                fxc = numpy.zeros(3*ngrids)
+                v2rho2      = fxc[        :ngrids  ]
+                v2rhosigma  = fxc[ngrids  :ngrids*2]
+                v2sigma2    = fxc[ngrids*2:        ]
+                v2lapl2   = vtau2       = v2rholapl  = v2rhotau = \
+                v2lapltau = v2sigmalapl = v2sigmatau = None
             pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
+            fxc = (v2rho2   , v2rhosigma , v2sigma2  ,
+                   v2lapl2  , vtau2      , v2rholapl , v2rhotau,
+                   v2lapltau, v2sigmalapl, v2sigmatau,)
         else:
             fxc = None
             pfxc = pyscf.lib.c_null_ptr()
         if deriv > 2:
             kxc = numpy.zeros(4*ngrids)
+            v3rho3      = kxc[        :ngrids  ]
+            v3rho2sigma = kxc[ngrids  :ngrids*2]
+            v3rhosigma2 = kxc[ngrids*2:ngrids*3]
+            v3sigma     = kxc[ngrids*3:        ]
             pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
+            kxc = (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
         else:
             kxc = None
             pkxc = pyscf.lib.c_null_ptr()
     else:
         nspin = 2
         exc = numpy.zeros(ngrids)
+        vxc = vrho = vsigma = vlapl = vtau = None
         if deriv > 0:
-            vxc = numpy.zeros(9*ngrids)
-            vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
-            vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
-            vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
-            vtau   = vxc[ngrids*7:ngrids*9].reshape(ngrids,2)
+            if mgga:
+                vxc = numpy.zeros(9*ngrids)
+                vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
+                vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
+                vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
+                vtau   = vxc[ngrids*7:        ].reshape(ngrids,2)
+            else:
+                vxc = numpy.zeros(5*ngrids)
+                vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
+                vsigma = vxc[ngrids*2:        ].reshape(ngrids,3)
             pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
         else:
             vxc = vrho = vsigma = vlapl = vtau = None
             pvxc = pyscf.lib.c_null_ptr()
         if deriv > 1:
-            fxc = numpy.zeros(45*ngrids)
+            if mgga:
+                fxc = numpy.zeros(45*ngrids)
+                v2rho2      = fxc[         :ngrids* 3].reshape(ngrids,3)
+                v2rhosigma  = fxc[ngrids* 3:ngrids* 9].reshape(ngrids,6)
+                v2sigma2    = fxc[ngrids* 9:ngrids*15].reshape(ngrids,6)
+                v2lapl2     = fxc[ngrids*15:ngrids*18].reshape(ngrids,3)
+                vtau2       = fxc[ngrids*18:ngrids*21].reshape(ngrids,3)
+                v2rholapl   = fxc[ngrids*21:ngrids*25].reshape(ngrids,4)
+                v2rhotau    = fxc[ngrids*25:ngrids*29].reshape(ngrids,4)
+                v2lapltau   = fxc[ngrids*29:ngrids*33].reshape(ngrids,4)
+                v2sigmalapl = fxc[ngrids*33:ngrids*39].reshape(ngrids,6)
+                v2sigmatau  = fxc[ngrids*39:         ].reshape(ngrids,6)
+            else:
+                fxc = numpy.zeros(15*ngrids)
+                v2rho2      = fxc[        :ngrids*3].reshape(ngrids,3)
+                v2rhosigma  = fxc[ngrids*3:ngrids*9].reshape(ngrids,6)
+                v2sigma2    = fxc[ngrids*9:        ].reshape(ngrids,6)
+                v2lapl2   = vtau2       = v2rholapl  = v2rhotau = \
+                v2lapltau = v2sigmalapl = v2sigmatau = None
             pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
+            fxc = (v2rho2   , v2rhosigma , v2sigma2  ,
+                   v2lapl2  , vtau2      , v2rholapl , v2rhotau,
+                   v2lapltau, v2sigmalapl, v2sigmatau,)
         else:
             fxc = None
             pfxc = pyscf.lib.c_null_ptr()
         if deriv > 2:
             kxc = numpy.zeros(35*ngrids)
+            v3rho3      = kxc[         :ngrids* 4].reshape(ngrids,4 )
+            v3rho2sigma = kxc[ngrids* 4:ngrids*13].reshape(ngrids,9 )
+            v3rhosigma2 = kxc[ngrids*13:ngrids*25].reshape(ngrids,12)
+            v3sigma     = kxc[ngrids*25:         ].reshape(ngrids,10)
             pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
+            kxc = (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
         else:
             kxc = None
             pkxc = pyscf.lib.c_null_ptr()
-    libdft.VXCnr_eval_x(ctypes.c_int(x_id), ctypes.c_int(nspin),
-                        ctypes.c_int(relativity), ctypes.c_int(ngrids),
-                        prho_u, prho_d,
-                        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
+    drv = getattr(libdft, _driver)
+    drv(ctypes.c_int(x_id), ctypes.c_int(nspin),
+        ctypes.c_int(relativity), ctypes.c_int(ngrids),
+        prho_u, prho_d,
+        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
     return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
 
-def eval_c(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def eval_c(c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     r'''Interface to call libxc library to evaluate correlation functional,
     potential and functional derivatives.
-
-    Args:
-        x_id : int
-            Correlation functional ID used by libxc library.  See pyscf/dft/vxc.py for more details.
-        rho : ndarray
-            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
-            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
-            where N is number of grids.
-            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
-            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
-            In spin unrestricted case,
-            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
-                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
-
-    Kwargs:
-        spin : int
-            spin polarized if spin > 0
-        relativity : int
-            No effects.
-        verbose : int or object of :class:`Logger`
-            No effects.
-
-    Returns:
-        ex, (vrho(*,2), vsigma(*,3), vlapl(*,2), vtau(*,2)), fxc, kxc
-
-        where
-
-        * fxc(N*45) for unrestricted case:
-        | v2rho2[*,3]     = (u_u, u_d, d_d)
-        | v2rhosigma[*,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-        | v2sigma2[*,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
-        | v2lapl2[*,3]
-        | vtau2[*,3]
-        | v2rholapl[*,4]
-        | v2rhotau[*,4]
-        | v2lapltau[*,4]
-        | v2sigmalapl[*,6]
-        | v2sigmatau[*,6]
-
-        * fxc(N*10) for restricted case:
-        (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
-
-        * kxc(N*35) for unrestricted case:
-        | v3rho3[*,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-        | v3rho2sigma[*,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-        | v3rhosigma2[*,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-        | v3sigma[*,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
-
-        * kxc(N*4) for restricted case:
-        (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
-
-        see also libxc_itrf.c
+    
+    See also eval_xc function.
     '''
-    if spin == 0:
-        rho_u = numpy.asarray(rho, order='C')
-        prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
-        prho_d = pyscf.lib.c_null_ptr()
-    else:
-        rho_u = numpy.asarray(rho[0], order='C')
-        rho_d = numpy.asarray(rho[1], order='C')
-        prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
-        prho_d = rho_d.ctypes.data_as(ctypes.c_void_p)
-
-    if rho_u.ndim == 2:
-        ngrids = rho_u.shape[1]
-    else:
-        ngrids = len(rho_u)
-
-    if spin == 0:
-        nspin = 1
-        exc = numpy.zeros(ngrids)
-        if deriv > 0:
-            vxc = numpy.zeros(4*ngrids)
-            vrho   = vxc[        :ngrids  ]
-            vsigma = vxc[ngrids  :ngrids*2]
-            vlapl  = vxc[ngrids*2:ngrids*3]
-            vtau   = vxc[ngrids*3:ngrids*4]
-            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            vxc = vrho = vsigma = vlapl = vtau = None
-            pvxc = pyscf.lib.c_null_ptr()
-        if deriv > 1:
-            fxc = numpy.zeros(10*ngrids)
-            pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            fxc = None
-            pfxc = pyscf.lib.c_null_ptr()
-        if deriv > 2:
-            kxc = numpy.zeros(4*ngrids)
-            pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            kxc = None
-            pkxc = pyscf.lib.c_null_ptr()
-    else:
-        nspin = 2
-        exc = numpy.zeros(ngrids)
-        if deriv > 0:
-            vxc = numpy.zeros(9*ngrids)
-            vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
-            vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
-            vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
-            vtau   = vxc[ngrids*7:ngrids*9].reshape(ngrids,2)
-            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            vxc = vrho = vsigma = vlapl = vtau = None
-            pvxc = pyscf.lib.c_null_ptr()
-        if deriv > 1:
-            fxc = numpy.zeros(45*ngrids)
-            pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            fxc = None
-            pfxc = pyscf.lib.c_null_ptr()
-        if deriv > 2:
-            kxc = numpy.zeros(35*ngrids)
-            pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            kxc = None
-            pkxc = pyscf.lib.c_null_ptr()
-    libdft.VXCnr_eval_c(ctypes.c_int(x_id), ctypes.c_int(nspin),
-                        ctypes.c_int(relativity), ctypes.c_int(ngrids),
-                        prho_u, prho_d,
-                        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
-    return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
+    return eval_x(c_id, rho, spin, relativity, deriv, verbose, 'VXCnr_eval_c')
 
 def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     r'''Interface to call libxc library to evaluate XC functional, potential
@@ -658,9 +559,17 @@ def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
             No effects.
 
     Returns:
-        ex, (vrho(*,2), vsigma(*,3), vlapl(*,2), vtau(*,2)), fxc, kxc
+        ex, vxc, fxc, kxc
 
         where
+
+        * vxc = (vrho, vsigma, vlapl, vtau) for unrestricted case
+        vrho[*,2]   = (u, d)
+        vsigma[*,3] = (uu, ud, dd)
+        vlapl[*,2]  = (u, d)
+        vtau[*,2]   = (u, d)
+
+        * vxc = (vrho[*], vsigma[*], vlapl[*], vtau[*]) for restricted case
 
         * fxc(N*45) for unrestricted case:
         | v2rho2[*,3]     = (u_u, u_d, d_d)
@@ -690,19 +599,22 @@ def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     '''
     exc, (vrho, vsigma, vlapl, vtau), fxc, kxc = \
             eval_x(x_id, rho, spin, relativity, deriv, verbose)
-    if c_id > 0 and not pyscf.dft.vxc.is_hybrid_xc(x_id):
+    if c_id > 0:
         ec, (vrhoc, vsigmac, vlaplc, vtauc), fc, kc = \
                 eval_c(c_id, rho, spin, relativity, deriv, verbose)
         exc += ec
-        if vrho is not None:
-            vrho   += vrhoc
-            vsigma += vsigmac
-            vlapl  += vlaplc
-            vtau   += vtauc
-        if fxc is not None:
-            fxc += fc
+        if vrho   is not None: vrho   += vrhoc
+        if vsigma is not None: vsigma += vsigmac
+        if vlapl  is not None: vlapl  += vlaplc
+        if vtau   is not None: vtau   += vtauc
+        if fxc is not None: # Note: inplace updates for fxc, kxc
+            for i, fxci in enumerate(fxc):
+                if fxci is not None:
+                    fxci += fc[i]
         if kxc is not None:
-            kxc += kc
+            for i, kxci in enumerate(kxc):
+                if kxci is not None:
+                    kxci += kc[i]
     return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
 
 
@@ -1286,6 +1198,9 @@ class _NumInt(object):
 
     def eval_c(self, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
         return eval_c(c_id, rho, spin, relativity, deriv, verbose)
+
+    def hybrid_coeff(self, x_id, spin=1):
+        return pyscf.dft.vxc.hybrid_coeff(x_id, spin)
 
 def prange(start, end, step):
     for i in range(start, end, step):

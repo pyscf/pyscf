@@ -10,8 +10,10 @@ from pyscf.df import density_fit
 
 # register the XC keywords in module
 curmod = sys.modules[__name__]
-for k,v in vxc.XC_CODES.items():
+for k,v in vxc.XC_CODES.iteritems():
     setattr(curmod, k, v)
+del(k)
+del(v)
 
 
 def RKS(mol, *args):

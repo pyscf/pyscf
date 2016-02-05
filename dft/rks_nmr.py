@@ -25,7 +25,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
     xctype = numint._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
-    blksize = min(int(max_memory/6*1e6/12/nao/BLKSIZE)*BLKSIZE, ngrids)
+    blksize = min(int(max_memory/12*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
 
     vmat = numpy.zeros((3,nao,nao))
     if xctype == 'LDA':
@@ -35,7 +35,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             weight = grids.weights[ip0:ip1]
             non0tab = ni.non0tab[ip0//BLKSIZE:]
             ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0tab, out=buf)
-            rho = ni.eval_rho2(mol, ao, natorb, natocc, non0tab, xctype)
+            rho = ni.eval_rho2(mol, ao, natorb, natocc, non0tab, 'LDA')
             vxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=1)[1]
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao, weight*vrho)
@@ -44,7 +44,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, ip1-ip0, non0tab)
             vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, ip1-ip0, non0tab)
             vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, ip1-ip0, non0tab)
-            rho = vxc = vrho = aow = giao = None
+            rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
         XX, XY, XZ = 0, 1, 2
@@ -55,7 +55,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             weight = grids.weights[ip0:ip1]
             non0tab = ni.non0tab[ip0//BLKSIZE:]
             ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
-            rho = ni.eval_rho2(mol, ao, natorb, natocc, non0tab, xctype)
+            rho = ni.eval_rho2(mol, ao, natorb, natocc, non0tab, 'GGA')
             vxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=1)[1]
             vrho, vsigma = vxc[:2]
             wv = numpy.empty_like(rho)
@@ -83,7 +83,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             aow+= numpy.einsum('pi,p->pi', giao[YZ], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZZ], wv[3])
             vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
-            rho = vxc = vrho = vsigma = wv = aow = giao = None
+            rho = vxc = vrho = vsigma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -110,7 +110,7 @@ class NMR(rhf_nmr.NMR):
             h1 += mol.intor('cint1e_igkin_sph', 3)
 
             x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
-            hyb = pyscf.dft.vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+            hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
 
             mem_now = pyscf.lib.current_memory()[0]
             max_memory = max(2000, self._scf.max_memory*.9-mem_now)
@@ -135,9 +135,9 @@ class NMR(rhf_nmr.NMR):
         pyscf.lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
-    def _vind(self, mo1):
+    def get_vind(self, mo1):
         mol = self.mol
-        hyb = pyscf.dft.vxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
+        hyb = self._scf._numint.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
 
         if abs(hyb) > 1e-10:
             mo_coeff = self._scf.mo_coeff

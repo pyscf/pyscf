@@ -13,46 +13,39 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
 from pyscf.dft import numint
-import pyscf.dft
+import pyscf.dft.vxc
 
 
-def get_veff_(ks, mol, dm):
+def get_veff_(ks_grad, mol, dm):
     '''Coulomb + XC functional
     '''
     t0 = (time.clock(), time.time())
-    assert(dm.ndim == 2)
-    nao = dm.shape[0]
 
-    if ks.grids.coords is None:
-        ks.grids.build_()
-    grids = ks.grids
-    if ks._numint.non0tab is None:
-        ks._numint.non0tab = ks._numint.make_mask(mol, ks.grids.coords)
-    x_code, c_code = pyscf.dft.vxc.parse_xc_name(ks.xc)
-    hyb = pyscf.dft.vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+    mf = ks_grad._scf
+    if mf.grids.coords is None:
+        mf.grids.build_()
+    grids = mf.grids
+    if mf._numint.non0tab is None:
+        mf._numint.non0tab = mf._numint.make_mask(mol, mf.grids.coords)
+    x_code, c_code = pyscf.dft.vxc.parse_xc_name(mf.xc)
+    hyb = mf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
 
     mem_now = pyscf.lib.current_memory()[0]
-    max_memory = max(2000, ks.max_memory*.9-mem_now)
-    vxc = _get_vxc(ks._numint, mol, ks.grids, x_code, c_code, dm,
-                   max_memory=max_memory, verbose=ks.verbose)
-    t0 = logger.timer(ks, 'vxc', *t0)
+    max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
+    vxc = _get_vxc(mf._numint, mol, mf.grids, x_code, c_code, dm,
+                   max_memory=max_memory, verbose=ks_grad.verbose)
+    nao = vxc.shape[-1]
+    vxc = vxc.reshape(-1,nao,nao)
+    t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:
-        vj = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
-                               's2kl', # ip1_sph has k>=l,
-                               ('lk->s1ij',),
-                               dm, 3, # xyz, 3 components
-                               mol._atm, mol._bas, mol._env)
+        vj = ks_grad.get_j(mol, dm)
         vhf = vj
     else:
-        vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
-                                   's2kl', # ip1_sph has k>=l,
-                                   ('lk->s1ij', 'jk->s1il'),
-                                   dm, 3, # xyz, 3 components
-                                   mol._atm, mol._bas, mol._env)
+        vj, vk = ks_grad.get_jk(mol, dm)
         vhf = vj - vk * (hyb * .5)
 
-    return -(vhf + vxc)
+    return vhf + vxc
 
 
 def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
@@ -74,7 +67,7 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
     xctype = numint._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
-    blksize = min(int(max_memory/6*1e6/12/nao/BLKSIZE)*BLKSIZE, ngrids)
+    blksize = min(int(max_memory/12*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
 
     nset = len(natocc)
     vmat = numpy.zeros((nset,3,nao,nao))
@@ -135,17 +128,22 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
 
     if nset == 1:
         vmat = vmat.reshape(3,nao,nao)
-    return vmat
+    # - sign because nabla_X = -nabla_x
+    return -vmat
 
 
 class Gradients(rhf_grad.Gradients):
-    def __init__(self, scf_method):
-        rhf_grad.Gradients.__init__(self, scf_method)
-
+    def dump_flags(self):
+        rhf_grad.Gradients.dump_flags(self)
+        if callable(self._scf.grids.prune_scheme):
+            logger.info(self, 'Grid pruning %s may affect DFT gradients accuracy.'
+                        'Call mf.grids.run(prune_scheme=False) to mute grid pruning',
+                        self._scf.grids.prune_scheme)
+        return self
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self._scf.make_rdm1()
-        return get_veff_(self._scf, mol, dm)
+        return get_veff_(self, mol, dm)
 
 
 if __name__ == '__main__':
@@ -167,9 +165,9 @@ if __name__ == '__main__':
     print mf.scf()
     g = Gradients(mf)
     print(g.grad())
-#[[  1.37487273e-15  -1.80817689e-15   2.10512437e-02]
-# [  4.62450121e-17   2.82055102e-02  -1.05251807e-02]
-# [ -4.95856104e-17  -2.82055102e-02  -1.05251807e-02]]
+#[[ -1.20185763e-15   5.85017075e-16   2.10514006e-02]
+# [ -1.51765862e-17   2.82055434e-02  -1.05252592e-02]
+# [ -1.00778811e-16  -2.82055434e-02  -1.05252592e-02]]
 
     #mf.grids.level = 6
     mf.xc = 'b88,p86'
@@ -187,3 +185,28 @@ if __name__ == '__main__':
 #[[ -3.44790653e-16  -2.31083509e-15   1.21670343e-02]
 # [  7.15579513e-17   2.11176116e-02  -6.08866586e-03]
 # [ -6.40735965e-17  -2.11176116e-02  -6.08866586e-03]]
+
+    mol = gto.Mole()
+    mol.atom = [
+        ['H' , (0. , 0. , 1.804)],
+        ['F' , (0. , 0. , 0.   )], ]
+    mol.unit = 'B'
+    mol.basis = '631g'
+    mol.build()
+
+    mf = dft.RKS(mol)
+    mf.conv_tol = 1e-15
+    mf.kernel()
+    print(Gradients(mf).grad())
+# sum over z direction non-zero, due to meshgrid response?
+#[[ -3.01281832e-17  -2.88065811e-17  -2.69065384e-03]
+# [  3.04095683e-16   5.85874058e-16   2.72243724e-03]]
+    mf = dft.RKS(mol)
+    mf.grids.prune_scheme = None
+    mf.grids.level = 6
+    mf.conv_tol = 1e-15
+    mf.kernel()
+    print(Gradients(mf).grad())
+#[[  5.02557583e-18   6.72559117e-17  -2.68931547e-03]
+# [  1.14142464e-16  -6.66172332e-16   2.68911282e-03]]
+
