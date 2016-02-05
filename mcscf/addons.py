@@ -486,6 +486,49 @@ def state_average_(casscf, weights=(0.5,0.5)):
     return casscf
 
 
+def state_specific(casscf, state=1):
+    '''For excited state
+
+    Kwargs:
+        state : int
+        0 for ground state; 1 for first excited state.
+    '''
+    fcibase = casscf.fcisolver
+    fcibase_class = casscf.fcisolver.__class__
+    class FakeCISolver(fcibase_class):
+        def __init__(self):
+            self.__dict__.update(fcibase.__dict__)
+            self.nroots = state+1
+            self.davidson_only = 1
+            self._civec = None
+        def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
+            if self._civec is not None:
+                ci0 = self._civec
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                        nroots=self.nroots, **kwargs)
+            self._civec = c
+            if casscf.verbose >= logger.DEBUG:
+                ss = fcibase_class.spin_square(self, c[state], norb, nelec)
+                logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                             state+1, e[state], ss[0])
+            return e[state], c[state]
+        def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
+            if self._civec is not None:
+                ci0 = self._civec
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                        max_cycle=casscf.ci_response_space,
+                                        nroots=self.nroots, **kwargs)
+            self._civec = c
+            return e[state], c[state]
+        def spin_square(self, fcivec, norb, nelec):
+            return pyscf.fci.spin_op.spin_square0(fcivec, norb, nelec)
+    return FakeCISolver()
+
+def state_specific_(casscf, state=1):
+    casscf.fcisolver = state_specific(casscf, state)
+    return casscf
+
+
 
 if __name__ == '__main__':
     from pyscf import scf
