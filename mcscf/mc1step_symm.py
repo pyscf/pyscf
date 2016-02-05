@@ -39,12 +39,9 @@ class CASSCF(mc1step.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
-        log = logger.Logger(self.stdout, self.verbose)
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
-        self.mol.check_sanity(self)
+        self.check_sanity()
         self.dump_flags()
+        log = logger.Logger(self.stdout, self.verbose)
         if (hasattr(self.fcisolver, 'wfnsym') and
             self.fcisolver.wfnsym is None and
             hasattr(self.fcisolver, 'guess_wfnsym')):

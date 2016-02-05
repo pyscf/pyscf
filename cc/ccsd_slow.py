@@ -165,7 +165,7 @@ def energy(cc, t1, t2, eris):
     return e
 
 
-class CCSD(object):
+class CCSD(lib.StreamObject):
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
         if mo_energy is None: mo_energy = mf.mo_energy
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff

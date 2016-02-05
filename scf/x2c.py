@@ -183,11 +183,10 @@ class UHF(hf.SCF):
     def dump_flags(self):
         hf.SCF.dump_flags(self)
         logger.info(self, 'X equation %s', self.xequation)
+        return self
 
     def build_(self, mol=None):
-        if self.verbose > logger.QUIET:
-            mole.check_sanity(self, self._keys, self.stdout)
-
+        self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
 
@@ -200,9 +199,9 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def eig(self, h, s):
         e, c = scipy.linalg.eigh(h, s)

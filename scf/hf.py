@@ -796,7 +796,7 @@ def unpack_uniq_var(dx, mo_occ):
 
 
 
-class SCF(object):
+class SCF(pyscf.lib.StreamObject):
     '''SCF base class.   non-relativistic RHF.
 
     Attributes:
@@ -903,10 +903,8 @@ class SCF(object):
     def build(self, mol=None):
         return self.build_(mol)
     def build_(self, mol=None):
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
         if mol is None: mol = self.mol
+        self.check_sanity()
         if (self.direct_scf and not mol.incore_anyway and
             not self._is_mem_enough()):
 # Should I lazy initialize direct SCF?
@@ -932,6 +930,7 @@ class SCF(object):
             logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
         logger.info(self, 'max_memory %d MB (current use %d MB)',
                     self.max_memory, pyscf.lib.current_memory()[0])
+        return self
 
 
     def eig(self, h, s):

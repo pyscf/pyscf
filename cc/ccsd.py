@@ -372,7 +372,7 @@ def energy(cc, t1, t2, eris):
     return e
 
 
-class CCSD(object):
+class CCSD(lib.StreamObject):
     '''CCSD
 
     Args

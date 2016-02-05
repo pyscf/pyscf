@@ -11,6 +11,7 @@ from pyscf.lib.numpy_helper import *
 from pyscf.lib.linalg_helper import *
 from pyscf.lib import chkfile
 from pyscf.lib import diis
+from pyscf.lib.misc import StreamObject
 
 '''
 C code and some fundamental functions

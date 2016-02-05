@@ -90,7 +90,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class CASCI(object):
+class CASCI(pyscf.lib.StreamObject):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
@@ -144,6 +144,7 @@ class CASCI(object):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        return self
 
     def get_hcore(self, mol=None):
         hcore = self._scf.get_hcore(mol)
@@ -209,9 +210,7 @@ class CASCI(object):
         if ci0 is None:
             ci0 = self.ci
 
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
+        self.check_sanity()
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci = \

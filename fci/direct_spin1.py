@@ -476,7 +476,7 @@ def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 
-class FCISolver(object):
+class FCISolver(pyscf.lib.StreamObject):
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
@@ -515,6 +515,7 @@ class FCISolver(object):
         log.info('davidson only = %s', self.davidson_only)
         log.info('nroots = %d', self.nroots)
         log.info('pspace_size = %d', self.pspace_size)
+        return self
 
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
@@ -553,8 +554,7 @@ class FCISolver(object):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
-        if self.verbose > pyscf.lib.logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                           tol, lindep, max_cycle, max_space, nroots,
                           davidson_only, pspace_size, **kwargs)

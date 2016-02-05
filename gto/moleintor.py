@@ -295,14 +295,14 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
                 out = numpy.ndarray((comp,nij,nkl), buffer=out)
 
         cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
-        cvhfopt = pyscf.lib.c_null_ptr()
+        prescreen = pyscf.lib.c_null_ptr()
         drv = libcgto.GTOnr2e_fill_drv
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
-            _fpointer('GTOnr2e_fill_'+aosym),
+            _fpointer('GTOnr2e_fill_'+aosym), prescreen,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
-            cintopt, cvhfopt, c_atm, natm, c_bas, nbas, c_env)
+            cintopt, c_atm, natm, c_bas, nbas, c_env)
         return out
 
 ANG_OF     = 1

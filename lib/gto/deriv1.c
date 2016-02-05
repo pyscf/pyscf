@@ -1,5 +1,5 @@
 /*
- * Author: Qiming Sun <osirpt.sun@gmail.com>
+ * Copyright (C) 2016-  Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <math.h>

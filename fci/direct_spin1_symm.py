@@ -231,6 +231,7 @@ class FCISolver(direct_spin1.FCISolver):
         elif isinstance(self.wfnsym, (int, numpy.integer)):
             log.info('specified CI wfn symmetry = %s',
                      symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+        return self
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
@@ -280,8 +281,7 @@ class FCISolver(direct_spin1.FCISolver):
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
         else:
             wfnsym_bak = None
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
 
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,

@@ -245,8 +245,7 @@ class FCISolver(direct_spin0.FCISolver):
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
         else:
             wfnsym_bak = None
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
 
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,

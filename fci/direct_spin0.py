@@ -362,8 +362,7 @@ class FCISolver(direct_spin1.FCISolver):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
-        if self.verbose > pyscf.lib.logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
         e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
                            davidson_only, pspace_size, **kwargs)

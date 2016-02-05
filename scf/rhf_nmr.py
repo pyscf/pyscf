@@ -134,7 +134,7 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
     return mo10, mo_e10
 
 
-class NMR(object):
+class NMR(pyscf.lib.StreamObject):
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
@@ -170,17 +170,19 @@ class NMR(object):
         log.info('shielding for atoms %s', str(self.shielding_nuc))
         if self.cphf:
             log.info('Solving MO10 eq with CPHF.')
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         if not self._scf.converged:
             log.warn('Ground state SCF is not converged')
         log.info('\n')
+        return self
 
     def kernel(self, mo1=None):
         return self.shielding(mo1)
     def shielding(self, mo1=None):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
 
         facppm = 1e6/param.LIGHTSPEED**2
         msc_para, para_vir, para_occ = [x*facppm for x in self.para_(mo10=mo1)]
@@ -256,7 +258,7 @@ class NMR(object):
 
         cput1 = log.timer('first order Fock matrix', *cput1)
         if self.cphf:
-            mo10, mo_e10 = cphf.solve(self._vind, mo_energy, mo_occ, h1, s1,
+            mo10, mo_e10 = cphf.solve(self.get_vind, mo_energy, mo_occ, h1, s1,
                                       self.max_cycle_cphf, self.conv_tol,
                                       verbose=log)
         else:
@@ -264,7 +266,7 @@ class NMR(object):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo10, mo_e10
 
-    def _vind(self, mo1):
+    def get_vind(self, mo1):
         '''Induced potential'''
         mo_coeff = self._scf.mo_coeff
         mo_occ = self._scf.mo_occ

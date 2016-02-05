@@ -807,6 +807,7 @@ class CASSCF(casci.CASCI):
         if self.mo_coeff is None:
             log.warn('Orbital for CASCI is not specified.  You probably need '
                      'call SCF.kernel() to initialize orbitals.')
+        return self
 
     def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                callback=None, _kern=kernel):
@@ -818,10 +819,7 @@ class CASSCF(casci.CASCI):
         if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
-        self.mol.check_sanity(self)
+        self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, self.e_cas, self.ci, \
@@ -1123,7 +1121,14 @@ class CASSCF(casci.CASCI):
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
                            mo, self.ncore, self.ncas, mo_occ, mo_energy,
                            envs['e_ci'], civec)
+        return self
 
+    def update_(self, chkfile=None):
+        return self.update_from_chk_(chkfile)
+    def update_from_chk_(self, chkfile=None):
+        if chkfile is None: chkfile = self.chkfile
+        self.__dict__.update(pyscf.lib.chkfile.load(chkfile, 'mcscf'))
+        return self
 
 
 # to avoid calculating AO integrals
