@@ -498,7 +498,7 @@ if __name__ == '__main__':
     mol.verbose = 0
     mol.output = None
     mol.atom = [['H', c] for c in tools.ring.make(6, 1.2)]
-    mol.basis = {'H': '6-31g',}
+    mol.basis = '6-31g'
     mol.build()
 
     m = scf.RHF(mol)

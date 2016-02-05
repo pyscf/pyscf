@@ -141,7 +141,7 @@ def irrep_name(pgname, irrep_id):
     raise RuntimeError('This function was obsoleted. Use irrep_id2name')
 
 def route(target, nelec, orbsym):
-    '''Pick the orbitals to form the given symmetry.
+    '''Pick orbitals to form a determinant which has the right symmetry.
     If solution is not found, return []
     '''
     def riter(target, nelec, orbsym):
