@@ -38,25 +38,25 @@ def analyze(mf, verbose=logger.DEBUG):
         if (noccsa[i]+noccsb[i]) % 2:
             tot_sym ^= ir
     if mol.groupname in ('Dooh', 'Coov', 'SO3'):
-        log.info('TODO: total symmetry for %s', mol.groupname)
+        log.note('TODO: total symmetry for %s', mol.groupname)
     else:
-        log.info('total symmetry = %s',
+        log.note('total symmetry = %s',
                  symm.irrep_id2name(mol.groupname, tot_sym))
-    log.info('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
+    log.note('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
              *mol.irrep_name)
-    log.info('                                 '+(' %4d'*nirrep),
+    log.note('                                 '+(' %4d'*nirrep),
              *noccsa)
-    log.info('beta  occupancy for each irrep:  '+(' %4s'*nirrep),
+    log.note('beta  occupancy for each irrep:  '+(' %4s'*nirrep),
              *mol.irrep_name)
-    log.info('                                 '+(' %4d'*nirrep),
+    log.note('                                 '+(' %4d'*nirrep),
              *noccsb)
 
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
-    log.info('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
+    log.note('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
-    if verbose >= logger.INFO:
-        log.info('**** MO energy ****')
+    if verbose >= logger.NOTE:
+        log.note('**** MO energy ****')
         irname_full = {}
         for k, ir in enumerate(mol.irrep_id):
             irname_full[ir] = mol.irrep_name[k]
@@ -66,7 +66,7 @@ def analyze(mf, verbose=logger.DEBUG):
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            log.info('alpha MO #%d (%s #%d), energy= %.15g occ= %g', \
+            log.note('alpha MO #%d (%s #%d), energy= %.15g occ= %g',
                      k+1, irname_full[j], irorbcnt[j], mo_energy[0][k], mo_occ[0][k])
         irorbcnt = {}
         for k, j in enumerate(orbsymb):
@@ -74,7 +74,7 @@ def analyze(mf, verbose=logger.DEBUG):
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            log.info('beta  MO #%d (%s #%d), energy= %.15g occ= %g', \
+            log.note('beta  MO #%d (%s #%d), energy= %.15g occ= %g',
                      k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
 
     if mf.verbose >= logger.DEBUG:
@@ -331,9 +331,9 @@ class UHF(uhf.UHF):
             logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
             logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
             hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo,
-                                    orbsyma, 'alpha-')
+                                    orbsyma, 'alpha-', verbose=self.verbose)
             hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo,
-                                    orbsymb, 'beta-')
+                                    orbsymb, 'beta-', verbose=self.verbose)
 
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
@@ -371,8 +371,9 @@ class UHF(uhf.UHF):
                              self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
-    def analyze(self, mo_verbose=logger.DEBUG):
-        return analyze(self, mo_verbose)
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
+        return analyze(self, verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol

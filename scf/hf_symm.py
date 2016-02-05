@@ -44,10 +44,10 @@ def analyze(mf, verbose=logger.DEBUG):
     orbsym = numpy.array(orbsym)
     wfnsym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-    log.info('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
-    log.info('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
-    log.info('double occ                 ' + (' %4d'*nirrep), *noccs)
-    log.info('**** MO energy ****')
+    log.note('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
+    log.note('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
+    log.note('double occ                 ' + (' %4d'*nirrep), *noccs)
+    log.note('**** MO energy ****')
     irname_full = {}
     for k,ir in enumerate(mol.irrep_id):
         irname_full[ir] = mol.irrep_name[k]
@@ -57,7 +57,7 @@ def analyze(mf, verbose=logger.DEBUG):
             irorbcnt[j] += 1
         else:
             irorbcnt[j] = 1
-        log.info('MO #%d (%s #%d), energy= %.15g occ= %g',
+        log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
                  k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
     if verbose >= logger.DEBUG:
@@ -247,7 +247,8 @@ class RHF(hf.RHF):
                     irhomo, ehomo, irlumo, elumo)
         if self.verbose >= logger.DEBUG:
             logger.debug(self, 'irrep_nelec = %s', noccs)
-            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym)
+            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
+                            verbose=self.verbose)
         return mo_occ
 
     def _finalize_(self):
@@ -268,7 +269,8 @@ class RHF(hf.RHF):
                              self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
@@ -536,7 +538,8 @@ class ROHF(rohf.ROHF):
             orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
                       for i, ir in enumerate(mol.irrep_id)]
             orbsym = numpy.hstack(orbsym)
-            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym)
+            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
+                            verbose=self.verbose)
             p0 = 0
             for ir in range(nirrep):
                 irname = mol.irrep_name[ir]
@@ -648,30 +651,34 @@ class ROHF(rohf.ROHF):
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
 
 
-def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title=''):
+def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
+                    verbose=logger.DEBUG):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     nirrep = mol.symm_orb.__len__()
-    p0 = 0
     for i, ir in enumerate(mol.irrep_id):
         irname = mol.irrep_name[i]
         ir_idx = (orbsym == ir)
         nso = ir_idx.sum()
         nocc = (mo_occ[ir_idx]>0).sum()
+        e_ir = mo_energy[ir_idx]
         if nocc == 0:
-            logger.debug(mol, '%s%s nocc = 0', title, irname)
+            log.debug('%s%s nocc = 0', title, irname)
         elif nocc == nso:
-            logger.debug(mol, '%s%s nocc = %d  HOMO = %.12g',
-                         title, irname, nocc, mo_energy[p0+nocc-1])
+            log.debug('%s%s nocc = %d  HOMO = %.12g',
+                      title, irname, nocc, e_ir[nocc-1])
         else:
-            logger.debug(mol, '%s%s nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                         title, irname,
-                         nocc, mo_energy[p0+nocc-1], mo_energy[p0+nocc])
-            if mo_energy[p0+nocc-1]+1e-3 > elumo:
-                logger.warn(mol, '!! %s%s HOMO %.12g > system LUMO %.12g',
-                            title, irname, mo_energy[p0+nocc-1], elumo)
-            if mo_energy[p0+nocc] < ehomo+1e-3:
-                logger.warn(mol, '!! %s%s LUMO %.12g < system HOMO %.12g',
-                            title, irname, mo_energy[p0+nocc], ehomo)
-        logger.debug(mol, '   mo_energy = %s', mo_energy[ir_idx])
+            log.debug('%s%s nocc = %d  HOMO = %.12g  LUMO = %.12g',
+                      title, irname, nocc, e_ir[nocc-1], e_ir[nocc])
+            if e_ir[nocc-1]+1e-3 > elumo:
+                log.warn('!! %s%s HOMO %.12g > system LUMO %.12g',
+                         title, irname, e_ir[nocc-1], elumo)
+            if e_ir[nocc] < ehomo+1e-3:
+                log.warn('!! %s%s LUMO %.12g < system HOMO %.12g',
+                         title, irname, e_ir[nocc], ehomo)
+        log.debug('   mo_energy = %s', e_ir)
 
 
 

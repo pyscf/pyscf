@@ -641,12 +641,13 @@ Yes, we are ready to implement our own density fitting Hartree-Fock now!
 
   def get_vhf(mol, dm, *args, **kwargs):
       naux = eri2c.shape[0]
+      nao = mol.nao_nr()
       rho = numpy.einsum('ijp,ij->p', eri3c, dm)
       rho = numpy.linalg.solve(eri2c, rho)
       jmat = numpy.einsum('p,ijp->ij', rho, eri3c)
       kpj = numpy.einsum('ijp,jk->ikp', eri3c, dm)
       pik = numpy.linalg.solve(eri2c, kpj.reshape(-1,naux).T)
-      kmat = numpy.einsum('pik,kjp->ij', pik, eri3c)
+      kmat = numpy.einsum('pik,kjp->ij', pik.reshape(naux,nao,nao), eri3c)
       return jmat - kmat * .5
       
   mf = scf.RHF(mol)

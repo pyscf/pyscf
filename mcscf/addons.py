@@ -128,57 +128,62 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     >>> mf.kernel()
     >>> mc = mcscf.CASSCF(mf, 12, 4)
     >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
+    >>> # identical to mo = sort_mo_by_irrep(mc, mf.mo_coeff, {2: 4, 3: 4, 6: 2, 7: 2})
+    >>> # identical to mo = sort_mo_by_irrep(mc, mf.mo_coeff, [0, 0, 4, 4, 0, 0, 2, 2])
     >>> mc.kernel(mo)[0]
-    -108.187921313468
+    -108.162863845084
     '''
     if s is None:
         s = casscf._scf.get_ovlp()
     orbsym = pyscf.symm.label_orb_symm(casscf.mol, casscf.mol.irrep_id,
                                        casscf.mol.symm_orb, mo_coeff, s)
-    if cas_irrep_ncore is None:
-        ncore = casscf.ncore
-        nocc = ncore + casscf.ncas
-        cas_irrep_ncore = {}
-        for x in orbsym[:ncore]:
-            if x in cas_irrep_ncore:
-                cas_irrep_ncore[x] += 1
-            else:
-                cas_irrep_ncore[x] = 1
-    else:
-        cas_irrep_ncore_ = {}
-        for k, ncore in cas_irrep_ncore.iteritems():
+    orbsym = numpy.asarray(orbsym)
+    ncore = casscf.ncore
+    nocc = ncore + casscf.ncas
+
+    irreps = set(orbsym)
+    orbidx_by_irrep = {}
+    for ir in irreps:
+        orbidx_by_irrep[ir] = numpy.where(orbsym == ir)[0]
+
+    irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
+    if cas_irrep_ncore is not None:
+        for k, n in cas_irrep_ncore.iteritems():
             if isinstance(k, str):
                 irid = symm.irrep_name2id(casscf.mol.groupname, k)
             else:
                 irid = k
-            cas_irrep_ncore_[irid] = ncore
-        cas_irrep_ncore = cas_irrep_ncore_
+            irrep_ncore[irid] = n
 
-    orbidx_by_irrep = {}
-    for i,x in enumerate(orbsym):
-        if x in orbidx_by_irrep:
-            orbidx_by_irrep[x].append(i)
-        else:
-            orbidx_by_irrep[x] = [i]
-
-    # list => dict
     if not isinstance(cas_irrep_nocc, dict):
+        # list => dict
         cas_irrep_nocc = dict([(ir, n) for ir,n in enumerate(cas_irrep_nocc)
                                if n > 0])
-
-    caslst = []
-    for k, ncas in cas_irrep_nocc.iteritems():
+    irrep_ncas = {}
+    count = 0
+    for k, n in cas_irrep_nocc.iteritems():
         if isinstance(k, str):
             irid = symm.irrep_name2id(casscf.mol.groupname, k)
         else:
             irid = k
-        idx = orbidx_by_irrep[irid]
-        if irid in cas_irrep_ncore:
-            ncore = cas_irrep_ncore[irid]
-        else:
-            ncore = 0
-        caslst.extend(idx[ncore:ncore+ncas])
+        irrep_ncas[irid] = n
+        count += n
+    if count != casscf.ncas:
+        raise ValueError('Active space size %d != specified active space %s'
+                         % (casscf.ncas, cas_irrep_nocc))
 
+    caslst = []
+    for ir in irreps:
+        nc = irrep_ncore[ir]
+        if ir in irrep_ncas:
+            no = nc + irrep_ncas[ir]
+        else:
+            no = nc
+        caslst.extend(orbidx_by_irrep[ir][nc:no])
+
+    logger.debug(casscf, 'ncore for each irreps %s', irrep_ncore)
+    logger.debug(casscf, 'ncas for each irreps %s', irrep_ncas)
+    logger.debug(casscf, 'caslst = %s', caslst)
     return sort_mo(casscf, mo_coeff, sorted(caslst), 0)
 
 

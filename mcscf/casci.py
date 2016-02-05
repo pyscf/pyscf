@@ -456,6 +456,9 @@ class CASCI(pyscf.lib.StreamObject):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        if self.mo_coeff is None:
+            log.warn('Orbital for CASCI is not specified.  You probably need '
+                     'call SCF.kernel() to initialize orbitals.')
         return self
 
     def get_hcore(self, mol=None):

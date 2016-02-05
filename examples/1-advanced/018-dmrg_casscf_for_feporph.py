@@ -8,8 +8,11 @@ from pyscf import gto
 from pyscf import mcscf, fci
 from pyscf import dmrgscf
 from pyscf import mrpt
-# Adjust mpirun flags to execute the calculation with multi-processor
-# Note DMRG-NEVPT2 requires about 10 GB memory per processor for this system
+#
+# Adjust mpi runtime schedular to execute the calculation with multi-processor
+#
+# NOTE DMRG-NEVPT2 requires about 10 GB memory per processor in this example
+#
 dmrgscf.settings.MPIPREFIX = 'mpirun -np 8'
 
 
@@ -17,11 +20,11 @@ dmrgscf.settings.MPIPREFIX = 'mpirun -np 8'
 Triplet and quintet energy gap of Iron-Porphyrin molecule using DMRG-CASSCF
 and DMRG-NEVPT2 methods.  DMRG is an approximate FCI solver.  It can be used
 to handle large active space.  This example is the next step to example
-017-dmet_cas_for_feporph.py
+018-dmet_cas_for_feporph.py
 '''
 
 #
-# Following 017-dmet_cas_for_feporph.py, we still use density matrix embedding
+# Following 018-dmet_cas_for_feporph.py, we still use density matrix embedding
 # theory (DMET) to generate CASSCF initial guess.  The active space includes
 # the Fe double d-shell, 4s shell, and the ligand N 2pz orbitals to describe
 # metal-ligand pi bond and pi backbond.
@@ -166,7 +169,7 @@ e_q = mc.e_tot  # -2244.90267106288
 cas_q = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 
 #
-# call DMRG-NEVPT2
+# call DMRG-NEVPT2 (about 2 days, 100 GB memory)
 #
 ept2_q = mrpt.nevpt2.sc_nevpt(mc)
 
@@ -205,7 +208,7 @@ e_t = mc.e_tot  # -2244.88920313881
 cas_t = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 
 #
-# call DMRG-NEVPT2
+# call DMRG-NEVPT2 (about 2 days, 100 GB memory)
 #
 ept2_t = mrpt.nevpt2.sc_nevpt(mc)
 
@@ -216,9 +219,8 @@ print('E(T) = %.15g  E(Q) = %.15g  gap = %.15g' % (e_t, e_q, e_t-e_q))
 s = reduce(numpy.dot, (cas_t.T, mol.intor('cint1e_ovlp_sph'), cas_q))
 print('Active space overlpa <T|Q> ~ %f' % numpy.linalg.det(s))
 
-print('NEVPT2: E(T) = %.15g  E(Q) = %.15g  gap = %.15g' %
-      (ept2_t, ept2_q, ept2_t-ept2_q))
-# E(T) =                    E(Q) =                    gap =                   
+print('NEVPT2: E(T) = %.15g  E(Q) = %.15g' % (ept2_t, ept2_q))
+# E(T) = -3.52155285166390  E(Q) = -3.46277436661638
 
 
 

@@ -6,8 +6,8 @@ from functools import reduce
 import numpy
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import chkfile
 from pyscf.scf import _vhf
+import pyscf.scf.chkfile
 
 
 def init_guess_by_minao(mol):
@@ -30,7 +30,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
 
     def fproj(mo):
         if project:
@@ -310,22 +310,22 @@ def analyze(mf, verbose=logger.DEBUG):
     log = logger.Logger(mf.stdout, verbose)
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
-    log.info('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
+    log.note('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
-    log.info('**** MO energy ****')
+    log.note('**** MO energy ****')
     for i in range(mo_energy[0].__len__()):
         if mo_occ[0][i] > 0:
-            log.info("alpha occupied MO #%d energy = %.15g occ= %g",
+            log.note("alpha occupied MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[0][i], mo_occ[0][i])
         else:
-            log.info("alpha virtual MO #%d energy = %.15g occ= %g",
+            log.note("alpha virtual MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[0][i], mo_occ[0][i])
     for i in range(mo_energy[1].__len__()):
         if mo_occ[1][i] > 0:
-            log.info("beta occupied MO #%d energy = %.15g occ= %g",
+            log.note("beta occupied MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[1][i], mo_occ[1][i])
         else:
-            log.info("beta virtual MO #%d energy = %.15g occ= %g",
+            log.note("beta virtual MO #%d energy = %.15g occ= %g",
                      i+1, mo_energy[1][i], mo_occ[1][i])
     if mf.verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients for alpha spin **')
@@ -352,19 +352,19 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     pop_b = numpy.einsum('ij->i', dm[1]*s)
     label = mol.spheric_labels(False)
 
-    log.info(' ** Mulliken pop alpha/beta **')
+    log.note(' ** Mulliken pop alpha/beta **')
     for i, s in enumerate(label):
-        log.info('pop of  %s %10.5f  / %10.5f',
+        log.note('pop of  %s %10.5f  / %10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
 
-    log.info(' ** Mulliken atomic charges  **')
+    log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
     for i, s in enumerate(label):
         chg[s[0]] += pop_a[i] + pop_b[i]
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         chg[ia] = mol.atom_charge(ia) - chg[ia]
-        log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
 
 def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG,
@@ -389,7 +389,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
 
-    log.info(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
+    log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 
 def map_rhf_to_uhf(rhf):
@@ -500,7 +500,7 @@ class UHF(hf.SCF):
                         n_b, e_sort_b[n_b])
         if self.verbose >= logger.DEBUG:
             logger.debug(self, '  mo_energy = %s', mo_energy[1])
-            numpy.set_printoptions()
+            numpy.set_printoptions(threshold=1000)
 
         if mo_coeff is not None:
             ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
@@ -533,9 +533,9 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_1e(mol)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def get_jk_(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
@@ -579,7 +579,8 @@ class UHF(hf.SCF):
             vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
         return vhf
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):

@@ -660,13 +660,13 @@ def analyze(mf, verbose=logger.DEBUG):
     else:
         log = logger.Logger(mf.stdout, verbose)
 
-    log.info('**** MO energy ****')
+    log.note('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info('occupied MO #%d energy= %.15g occ= %g',
+            log.note('occupied MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info('virtual MO #%d energy= %.15g occ= %g',
+            log.note('virtual MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients **')
@@ -698,18 +698,18 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij->i', (dm[0]+dm[1])*s).real
     label = mol.spheric_labels(False)
 
-    log.info(' ** Mulliken pop  **')
+    log.note(' ** Mulliken pop  **')
     for i, s in enumerate(label):
-        log.info('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
+        log.note('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
 
-    log.info(' ** Mulliken atomic charges  **')
+    log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
     for i, s in enumerate(label):
         chg[s[0]] += pop[i]
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         chg[ia] = mol.atom_charge(ia) - chg[ia]
-        log.info('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
 
@@ -1058,7 +1058,7 @@ class SCF(pyscf.lib.StreamObject):
         if self.verbose >= logger.DEBUG:
             numpy.set_printoptions(threshold=len(mo_energy))
             logger.debug(self, '  mo_energy = %s', mo_energy)
-            numpy.set_printoptions()
+            numpy.set_printoptions(threshold=1000)
         return mo_occ
 
     # full density matrix for RHF
@@ -1165,7 +1165,8 @@ class SCF(pyscf.lib.StreamObject):
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):

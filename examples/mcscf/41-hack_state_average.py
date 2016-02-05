@@ -12,9 +12,6 @@ states.  The following code is based on pyscf/mcscf/addons.py state_average_
 function
 '''
 
-# Mute warning msgs
-pyscf.gto.mole.check_sanity = lambda *args: None
-
 r = 1.8
 mol = pyscf.gto.Mole()
 mol.atom = [
@@ -77,7 +74,12 @@ class FakeCISolver(fcibase_class):
         multip = np.sqrt(ss+.25)*2
         return ss, multip
 
+
 mc = pyscf.mcscf.CASSCF(mf, 8, 8)
+
+# Mute warning msgs
+mc.check_sanity = lambda *args: None
+
 mc.verbose = 4
 mc.fcisolver = FakeCISolver()
 mc.kernel()
