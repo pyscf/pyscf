@@ -243,20 +243,20 @@ class StreamObject(object):
         return self.run_(*args, **kwargs)
     def run_(self, *args, **kwargs):
         self.set_(**kwargs)
-        self.kernel(*args, **kwargs)
+        self.kernel(*args)
         return self
 
     def set(self, **kwargs):
         return self.set(**kwargs)
     def set_(self, **kwargs):
         #if hasattr(self, '_keys'):
-        #    for k,v in kwargs:
+        #    for k,v in kwargs.iteritems():
         #        setattr(self, k, v)
         #        if k not in self._keys:
         #            sys.stderr.write('Warning: %s does not have attribute %s\n'
         #                             % (self.__class__, k))
         #else:
-        for k,v in kwargs:
+        for k,v in kwargs.iteritems():
             setattr(self, k, v)
         return self
 
