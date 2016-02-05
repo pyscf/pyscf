@@ -4,7 +4,6 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf

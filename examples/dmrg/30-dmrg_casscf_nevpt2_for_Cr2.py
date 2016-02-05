@@ -1,20 +1,18 @@
 #!/usr/bin/env python
-import numpy
+
 from pyscf import gto
 from pyscf import scf
-from pyscf import mcscf
 from pyscf.mrpt.nevpt2 import sc_nevpt
 from pyscf.dmrgscf.dmrgci import DMRGSCF
 
 #
-# This calculation requires about 10 GB memory per processor.
+# NEVPT2 calculation requires about 200 GB memory in total
 #
 
 b = 1.5
 mol = gto.Mole()
 mol.verbose = 5
 mol.output = 'cr2-%3.2f.out' % b
-mol.max_memory = 70000
 mol.atom = [
     ['Cr',(  0.000000,  0.000000, -b/2)],
     ['Cr',(  0.000000,  0.000000,  b/2)],
@@ -23,11 +21,16 @@ mol.basis = {'Cr': 'ccpvdz-dk'}
 mol.symmetry = True
 mol.build()
 
-m = scf.sfx2c1e(scf.RHF(mol))
-m.conv_tol = 1e-9
-m.chkfile = 'hf_chk-%s'%b
-m.level_shift = 0.5
-m.kernel()
+m = scf.sfx2c1e(scf.RHF(mol)).run(conv_tol=1e-9, chkfile='hf_chk-%s'%b, level_shift=0.5)
+#
+# Note: stream operations are used here.  This one line code is equivalent to
+# the following serial statements.
+#
+#m = scf.sfx2c1e(scf.RHF(mol))
+#m.conv_tol = 1e-9
+#m.chkfile = 'hf_chk-%s'%b
+#m.level_shift = 0.5
+#m.kernel()
 
 dm = m.make_rdm1()
 m.level_shift = 0

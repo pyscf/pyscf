@@ -1,11 +1,15 @@
 #!/usr/bin/env python
+#
+# Contributors:
+#       Qiming Sun <osirpt.sun@gmail.com>
+#
 
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import scf
 from pyscf import gto
-from pyscf import mcscf, fci
+from pyscf import mcscf
 from pyscf import dmrgscf
 from pyscf import mrpt
 #
@@ -157,7 +161,7 @@ mf = scf.fast_newton(mf)
 # 5 bath orbitals which have the strongest entanglement to impurity are
 # considered in active space.
 #
-mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(m, 20, 16))
+mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
 idx = [i for i,s in enumerate(mol.spheric_labels(1))
        if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
@@ -196,7 +200,7 @@ mf = scf.fast_newton(mf)
 # active space, the larger active space, which includes 4s orbitals, does not
 # have such issue on MCSCF wfn.
 #
-mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(m, 20, 16))
+mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
 idx = [i for i,s in enumerate(mol.spheric_labels(1))
        if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
 mo = dmet_cas(mc, mf.make_rdm1(), idx3d)

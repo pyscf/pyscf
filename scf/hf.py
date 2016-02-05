@@ -1194,6 +1194,10 @@ class SCF(pyscf.lib.StreamObject):
         import pyscf.scf.dfhf
         return pyscf.scf.dfhf.density_fit(self, auxbasis)
 
+    def x2c(self):
+        import pyscf.scf.x2c
+        return pyscf.scf.x2c.sfx2c1e(self)
+
     def update_(self, chkfile=None):
         return self.update_from_chk_(chkfile)
     def update_from_chk_(self, chkfile=None):

@@ -416,6 +416,13 @@ class UHF(hf.SCF):
     def analyze(self, verbose=logger.DEBUG):
         return analyze(self, verbose)
 
+    def x2c(self):
+        import pyscf.scf.x2c
+        x2chf = pyscf.scf.x2c.UHF(self.mol)
+        x2chf.__dict__.update(self.__dict__)
+        return x2chf
+
+
 class HF1e(UHF):
     def scf(self, *args):
         logger.info(self, '\n')

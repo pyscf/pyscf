@@ -5,12 +5,11 @@
 #       Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf import gto, scf, dft, mcscf
+from pyscf import gto, scf, mcscf
 from pyscf import tools
-from pyscf import mrpt
-from pyscf import dmrgscf
 
 mol = gto.Mole()
 mol.verbose = 4
@@ -45,15 +44,19 @@ mol.build()
 #
 # X2C correction for relativistic effects
 #
+# first pass, to generate initial guess
+#
 mf = scf.sfx2c(scf.UHF(mol))
 mf.chkfile = 'hs.chk'
 mf.level_shift = 0.1
 mf.conv_tol = 1e-2
 mf.kernel()
-
-mf2 = scf.newton(mf)
-mf2.conv_tol = 1e-12
-mf2.kernel()
+#
+# second pass to converge SCF calculation
+#
+mf = scf.newton(mf)
+mf.conv_tol = 1e-12
+mf.kernel()
 
 
 
@@ -149,7 +152,7 @@ print(numpy.linalg.norm(diff))
 #=============================
 # Natural orbitals
 # Lowdin basis X=S{-1/2}
-# psi = chi * C 
+# psi = chi * C
 #     = chi' * C'
 #     = chi*X*(X{-1}C')
 #=============================
@@ -332,7 +335,7 @@ vlmo = scdm(vOrbs, ova, aux)  # local "AOs" in external space
 # 3.3 Sorting each space (core, active, external) based on "orbital energy" to
 # prevent high-lying orbitals standing in valence space.
 #
-# Get <i|F|i> 
+# Get <i|F|i>
 def psort(ova, fav, coeff):
     # pT is density matrix, fav is Fock matrix
     # OCC-SORT
@@ -356,7 +359,6 @@ coeff = numpy.hstack((mo_c, mo_o, mo_v))
 #
 # Test orthogonality for the localize MOs as before
 #
-# CHECK
 diff = reduce(numpy.dot,(coeff.T,ova,coeff)) - numpy.identity(nb)
 print('diff=',numpy.linalg.norm(diff))
 tools.molden.from_mo(mol, fname+'_scdm.molden', coeff)
@@ -365,7 +367,7 @@ tools.molden.from_mo(mol, fname+'_scdm.molden', coeff)
 # Population analysis to confirm that our LMO (coeff) make sense
 #
 #==========================================
-# lowdin-pop of the obtained LMOs in OAOs 
+# lowdin-pop of the obtained LMOs in OAOs
 #==========================================
 lcoeff = s12.dot(coeff)
 # Orthogonality test
@@ -447,7 +449,7 @@ print('norb/nacte=',norb,[nalpha,nbeta])
 #settings.MPIPREFIX = 'srun'
 #settings.BLOCKSCRATCHDIR = '/scratch'
 
-from pyscf.dmrgscf.dmrgci import DMRGSCF
+from pyscf.dmrgscf.dmrgci import DMRGCI, DMRGSCF
 from pyscf.mrpt.nevpt2 import sc_nevpt
 
 #
@@ -456,7 +458,7 @@ from pyscf.mrpt.nevpt2 import sc_nevpt
 mol.build_(verbose=7, output = 'hs_dmrg.out')
 
 mf = scf.sfx2c1e(scf.RHF(mol))
-mc = DRMGSCF(mf, norb, [nalpha,nbeta])
+mc = DMRGSCF(mf, norb, [nalpha,nbeta])
 mc.chkfile = 'hs_mc.chk'
 mc.max_memory = 30000
 mc.fcisolver.maxM = 1000
