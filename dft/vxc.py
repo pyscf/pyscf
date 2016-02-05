@@ -4,7 +4,7 @@
 #
 
 '''
-XC functional, this is the interface to libxc
+XC functional, the interface to libxc
 '''
 
 import ctypes

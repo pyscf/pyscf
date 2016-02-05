@@ -218,9 +218,9 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
 
 # 2e AO integrals dot 2pdm
         de[k] -= numpy.einsum('xijkl,ijkl->x', eri0[:,p0:p1], dm2[p0:p1]) * 2
-        de[k] -= numpy.einsum('xijkl,jikl->x', eri0[:,p0:p1], dm2[:,p0:p1]) * 2
-        de[k] -= numpy.einsum('xijkl,klij->x', eri0[:,p0:p1], dm2[:,:,p0:p1]) * 2
-        de[k] -= numpy.einsum('xijkl,klji->x', eri0[:,p0:p1], dm2[:,:,:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xjikl,ijkl->x', eri0[:,p0:p1], dm2[:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xklij,ijkl->x', eri0[:,p0:p1], dm2[:,:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xlkij,ijkl->x', eri0[:,p0:p1], dm2[:,:,:,p0:p1]) * 2
 
     return de
 

@@ -6,7 +6,7 @@
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
-from pyscf import dmrgscf
+from pyscf.dmrgscf import dmrgci
 
 '''
 Block code for active space N-particle density matrices.
@@ -31,7 +31,7 @@ dm2 = mc.fcisolver.make_rdm12(0, mc.ncas, mc.nelecas)[1]
 dm3 = mc.fcisolver.make_rdm123(0, mc.ncas, mc.nelecas)[2]
 
 #
-# or computing DMs in one call
+# or computing DMs all together in one DMRG call
 #
 dm1, dm2 = mc.fcisolver.make_rdm12(0, mc.ncas, mc.nelecas)
 
