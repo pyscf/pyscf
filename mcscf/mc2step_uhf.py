@@ -49,13 +49,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         t3m = log.timer('update CAS DM', *t3m)
         for imicro in range(micro):
 
-            for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                                      eris, r0, conv_tol_grad, log):
-                break
+            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                        eris, r0, conv_tol_grad, log)
+            u, g_orb, njk = next(rota)
+            rota.close()
             ninner += njk
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
-            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = list(map(numpy.dot, mo, u))
@@ -64,14 +64,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g',
-                      imicro, de, norm_t, norm_gorb, norm_ddm)
+            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g',
+                      imicro, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < 1e-4 or abs(de) < tol*.8 or norm_gorb < conv_tol_grad*.8:
+            if norm_t < 1e-4 or norm_gorb < conv_tol_grad*.8:
                 break
 
         r0 = casscf.pack_uniq_var(u)

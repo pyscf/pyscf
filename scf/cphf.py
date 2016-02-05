@@ -16,6 +16,11 @@ from pyscf.lib import logger
 
 def solve(fvind, mo_energy, mo_occ, h1, s1=None,
           max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
+    '''
+    Args:
+        fvind : function
+            Given density matrix, compute (ij|kl)D_{lk}*2 - (ij|kl)D_{jk}
+    '''
     if s1 is None:
         return solve_nos1(fvind, mo_energy, mo_occ, h1,
                           max_cycle, tol, hermi, verbose)

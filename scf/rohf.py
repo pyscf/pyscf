@@ -11,9 +11,9 @@ from functools import reduce
 import numpy
 import pyscf.gto
 from pyscf.lib import logger
-from pyscf.scf import chkfile
 from pyscf.scf import hf
 from pyscf.scf import uhf
+import pyscf.scf.chkfile
 
 
 def init_guess_by_minao(mol):
@@ -24,13 +24,13 @@ def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
     return numpy.array((dm*.5, dm*.5))
 
-def init_guess_by_chkfile(mol, chk, project=True):
+def init_guess_by_chkfile(mol, chkfile, project=True):
     from pyscf.scf import addons
-    if isinstance(chk, pyscf.gto.Mole):
+    if isinstance(chkfile, pyscf.gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates.
-The first argument is chk file name.''')
-    chk_mol, scf_rec = chkfile.load_scf(chk)
+The first argument is chkfile file name.''')
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile)
 
     def fproj(mo):
         if project:
@@ -186,9 +186,9 @@ class ROHF(hf.RHF):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def eig(self, h, s):
         '''Solve the generalized eigenvalue problem for Roothan effective Fock

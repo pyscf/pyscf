@@ -230,14 +230,14 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
 
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           grad_hf=None, verbose=logger.INFO):
+           mf_grad=None, verbose=logger.INFO):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
     if eris is None: eris = ccsd._ERIS(mycc)
-    if grad_hf is None:
-        grad_hf = rhf_grad.Gradients(mycc._scf)
+    if mf_grad is None:
+        mf_grad = rhf_grad.Gradients(mycc._scf)
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time0 = time.clock(), time.time()
@@ -283,8 +283,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
 #TODO: pass hf_grad object to compute h1 and s1
     log.debug('h1 and JK1')
-    h1 = grad_hf.get_hcore(mol)
-    s1 = grad_hf.get_ovlp(mol)
+    h1 = mf_grad.get_hcore(mol)
+    s1 = mf_grad.get_ovlp(mol)
     zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
@@ -296,11 +296,11 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     # Hartree-Fock part contribution
     hf_dm1 = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
     dm1ao += hf_dm1
-    zeta += grad_hf.make_rdm1e(mycc.mo_energy, mycc.mo_coeff, mycc.mo_occ)
+    zeta += mf_grad.make_rdm1e(mycc.mo_energy, mycc.mo_coeff, mycc.mo_occ)
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = grad_hf.aorange_by_atom()
+    offsetdic = mf_grad.aorange_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -308,7 +308,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] =(numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
               + numpy.einsum('xji,ij->x', s1[:,p0:p1], im1[:,p0:p1]))
 # h[1] \dot DM, *2 for +c.c.,  contribute to f1
-        vrinv = grad_hf._grad_rinv(mol, ia)
+        vrinv = mf_grad._grad_rinv(mol, ia)
         de[k] +=(numpy.einsum('xij,ij->x', h1[:,p0:p1], dm1ao[p0:p1]  )
                + numpy.einsum('xji,ij->x', h1[:,p0:p1], dm1ao[:,p0:p1]))
         de[k] +=(numpy.einsum('xij,ij->x', vrinv, dm1ao)
@@ -553,7 +553,7 @@ if __name__ == '__main__':
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
     print(g1 + grad.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
@@ -575,7 +575,7 @@ if __name__ == '__main__':
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
     print(g1 + grad.grad_nuc(mol))
 #[[ 0.          0.         -0.07080036]
