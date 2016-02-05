@@ -349,7 +349,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class CASCI(object):
+class CASCI(pyscf.lib.StreamObject):
     '''CASCI
 
     Attributes:
@@ -456,6 +456,7 @@ class CASCI(object):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        return self
 
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
@@ -505,9 +506,7 @@ class CASCI(object):
         if ci0 is None:
             ci0 = self.ci
 
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
+        self.check_sanity()
         self.dump_flags()
 
         self.e_tot, self.e_cas, self.ci = \

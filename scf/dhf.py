@@ -17,8 +17,8 @@ import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import chkfile
 from pyscf.scf import _vhf
+import pyscf.scf.chkfile
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -142,7 +142,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
 
     if numpy.iscomplexobj(scf_rec['mo_coeff']):
         mo = scf_rec['mo_coeff']
@@ -294,14 +294,12 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def build_(self, mol=None):
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
+        self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
 

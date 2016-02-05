@@ -9,6 +9,7 @@ Non-relativistic
 
 import time
 import numpy
+import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
@@ -74,18 +75,21 @@ def get_hcore(mol):
 def get_ovlp(mol):
     return -mol.intor('cint1e_ipovlp_sph', comp=3)
 
-def get_veff(mf, mol, dm):
-    return get_coulomb_hf(mol, dm)
-def get_coulomb_hf(mol, dm):
-    '''NR Hartree-Fock Coulomb repulsion'''
-    #vj, vk = pyscf.scf.hf.get_vj_vk(pycint.nr_vhf_grad_o1, mol, dm)
-    #return vj - vk*.5
+def get_jk(mol, dm):
+    '''J = ((-nabla i) j| kl) D_lk
+    K = ((-nabla i) j| kl) D_jk
+    '''
     vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
                                ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
-    return -(vj - vk*.5)
+    return -vj, -vk
+
+def get_veff(mf_grad, mol, dm):
+    '''NR Hartree-Fock Coulomb repulsion'''
+    vj, vk = mf_grad.get_jk(mol, dm)
+    return vj - vk * .5
 
 def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''
@@ -109,7 +113,7 @@ def aorange_by_atom(mol):
     return aorange
 
 
-class Gradients(object):
+class Gradients(pyscf.lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
@@ -117,6 +121,8 @@ class Gradients(object):
         self.mol = scf_method.mol
         self._scf = scf_method
         self.chkfile = scf_method.chkfile
+        self.max_memory = self.mol.max_memory
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -125,6 +131,10 @@ class Gradients(object):
             log.warn(self, 'Ground state SCF is not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
+        log.info('chkfile = %s', self.chkfile)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, pyscf.lib.current_memory()[0])
+        return self
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -134,10 +144,31 @@ class Gradients(object):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
+    def get_jk(self, mol=None, dm=None, hermi=0):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self._scf.make_rdm1()
+        cpu0 = (time.clock(), time.time())
+        #TODO: direct_scf opt
+        vj, vk = get_jk(mol, dm)
+        logger.timer(self, 'vj and vk', *cpu0)
+        return vj, vk
+
+    def get_j(self, mol=None, dm=None, hermi=0):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self._scf.make_rdm1()
+        return -_vhf.direct_mapdm('cint2e_ip1_sph', 's2kl', 'lk->s1ij', dm, 3,
+                                  mol._atm, mol._bas, mol._env)
+
+    def get_k(self, mol=None, dm=None, hermi=0):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self._scf.make_rdm1()
+        return -_vhf.direct_mapdm('cint2e_ip1_sph', 's2kl', 'jk->s1il', dm, 3,
+                                  mol._atm, mol._bas, mol._env)
+
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self._scf.make_rdm1()
-        return get_coulomb_hf(mol, dm)
+        return get_veff(self, mol, dm)
 
     def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
         if mo_energy is None: mo_energy = self._scf.mo_energy
@@ -168,14 +199,18 @@ class Gradients(object):
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
-        if self.verbose >= logger.INFO:
-            self.dump_flags()
-        de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-           + self.grad_nuc(atmlst))
-        logger.note(self, '--------------')
-        logger.note(self, '           x                y                z')
         if atmlst is None:
             atmlst = range(self.mol.natm)
+
+        self.check_sanity()
+
+        if self.verbose >= logger.INFO:
+            self.dump_flags()
+
+        de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
+           + self.grad_nuc(atmlst=atmlst))
+        logger.note(self, '--------------')
+        logger.note(self, '           x                y                z')
         for k, ia in enumerate(atmlst):
             logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
                         self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
@@ -212,6 +247,7 @@ if __name__ == '__main__':
                  'O': '631g',}
     h2o.build()
     rhf = scf.RHF(h2o)
+    rhf.conv_tol = 1e-14
     rhf.scf()
     g = Gradients(rhf)
     print(g.grad())

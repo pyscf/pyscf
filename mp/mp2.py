@@ -113,7 +113,7 @@ def make_rdm2(mp, t2, verbose=logger.NOTE):
     return dm2
 
 
-class MP2(object):
+class MP2(pyscf.lib.StreamObject):
     def __init__(self, mf):
         self.mol = mf.mol
         self._scf = mf

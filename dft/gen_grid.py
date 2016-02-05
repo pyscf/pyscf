@@ -299,7 +299,7 @@ def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
 
 
 
-class Grids(object):
+class Grids(pyscf.lib.StreamObject):
     '''DFT mesh grids
 
     Attributes for Grids:
@@ -329,6 +329,7 @@ class Grids(object):
             | gen_grid.sg1_prune
             | gen_grid.nwchem_prune
             | gen_grid.treutler_prune
+            | None  (to switch off grid pruning)
 
         symmetry : bool
             whether to symmetrize mesh grids (TODO)
@@ -379,15 +380,17 @@ class Grids(object):
                         self.atomic_radii.__doc__)
         if self.atom_grid:
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
+        return self
 
-    def build_(self, mol=None):
-        return self.setup_grids_(mol)
     def setup_grids(self, mol=None):
-        return self.setup_grids_(mol)
+        return self.build_(mol)
     def setup_grids_(self, mol=None):
+        return self.build_(mol)
+    def build(self, mol=None):
+        return self.build_(mol)
+    def build_(self, mol=None):
         if mol is None: mol = self.mol
-        if self.verbose > logger.QUIET:
-            gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
         atom_grids_tab = self.gen_atomic_grids(mol, atom_grid=self.atom_grid,
                                                radi_method=self.radi_method,
                                                level=self.level,
@@ -400,7 +403,7 @@ class Grids(object):
 
     def kernel(self, mol=None):
         self.dump_flags()
-        return self.setup_grids_(mol)
+        return self.build_(mol)
 
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
                          level=None, prune_scheme=None):

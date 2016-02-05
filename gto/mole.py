@@ -12,6 +12,7 @@ import itertools
 import numpy
 import scipy.special
 import ctypes
+import pyscf.lib
 import pyscf.lib.parameters as param
 from pyscf.lib import logger
 from pyscf.gto import cmd_args
@@ -114,6 +115,7 @@ def cart2j_l(l):
     return c2spinor
 
 def atom_types(atoms, basis=None):
+    '''symmetry inequivalent atoms'''
     atmgroup = {}
     for ia, a in enumerate(atoms):
         if a[0] in atmgroup:
@@ -982,32 +984,6 @@ def is_same_mol(mol1, mol2):
     return True
 
 
-def check_sanity(obj, keysref, stdout=sys.stdout):
-    '''Check misinput of class attributes, check whether a class method is
-    overwritten.  It does not check the attributes which are prefixed with
-    "_".
-
-    Args:
-        obj : this object should have attribute _keys to store all the
-        name of the attributes of the object
-    '''
-    objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
-    keysub = set(objkeys) - set(keysref)
-    if keysub:
-        keyin = keysub.intersection(dir(obj.__class__))
-        if keyin:
-            msg = ('overwrite keys %s of %s\n' %
-                   (' '.join(keyin), str(obj.__class__)))
-            sys.stderr.write(msg)
-            stdout.write(msg)
-        keydiff = keysub - set(dir(obj.__class__))
-        if keydiff:
-            msg = ('%s has no attributes %s\n' %
-                   (str(obj.__class__), ' '.join(keydiff)))
-            sys.stderr.write(msg)
-            stdout.write(msg)
-
-
 # for _atm, _bas, _env
 CHARGE_OF  = 0
 PTR_COORD  = 1
@@ -1046,7 +1022,7 @@ NUC_GAUSS = 2
 # on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
 # set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
 #
-class Mole(object):
+class Mole(pyscf.lib.StreamObject):
     '''Basic class to hold molecular structure and global options
 
     Attributes:
@@ -1195,19 +1171,6 @@ class Mole(object):
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
 
-    def check_sanity(self, obj):
-        '''Check misinput of class attributes, check whether a class method is
-        overwritten.  It does not check the attributes which are prefixed with
-        "_".
-
-        Args:
-            obj : this object should have attribute _keys to store all the
-            name of the attributes of the object
-        '''
-        if hasattr(obj, '_keys'):
-            if self.verbose > logger.QUIET:
-                check_sanity(obj, obj._keys, self.stdout)
-
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
@@ -1227,6 +1190,8 @@ class Mole(object):
         return self
 
 #TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
+    def kernel(self, *args, **kwargs):
+        return self.build_(*args, **kwargs)
     def build(self, *args, **kwargs):
         return self.build_(*args, **kwargs)
     def build_(self, dump_input=True, parse_arg=True,
@@ -1294,7 +1259,7 @@ class Mole(object):
            and self.stdout.name != self.output:
             self.stdout = open(self.output, 'w')
 
-        self.check_sanity(self)
+        self.check_sanity()
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
@@ -1380,7 +1345,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         logger.debug3(self, 'ecpbas  = %s', str(self._ecpbas))
 
         self._built = True
-        #return self._atm, self._bas, self._env
+        return self
 
     def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
         return format_atom(atom, origin, axes, unit)
@@ -1510,6 +1475,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
         logger.info(self, 'CPU time: %12.2f', time.clock())
+        return self
 
     def set_common_origin_(self, coord):
         '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
@@ -1520,8 +1486,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> mol.set_common_orig_((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
+        return self
     def set_common_orig_(self, coord):
-        self.set_common_origin_(coord)
+        return self.set_common_origin_(coord)
 
     def set_rinv_origin_(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
@@ -1532,8 +1499,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> mol.set_rinv_orig_((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
+        return self
     def set_rinv_orig_(self, coord):
-        self.set_rinv_origin_(coord)
+        return self.set_rinv_origin_(coord)
 
     def set_nuc_mod_(self, atm_id, zeta):
         '''Change the nuclear charge distribution of the given atom ID.  The charge
@@ -1548,6 +1516,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         ptr = self._atm[atm_id,PTR_ZETA]
         self._env[ptr] = zeta
+        return self
 
     def set_rinv_zeta_(self, zeta):
         '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
@@ -1556,6 +1525,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         cint1e_rinv_* functions.  Make sure to set it back to 0 after using it!
         '''
         self._env[PTR_RINV_ZETA] = zeta
+        return self
+
+    def update_(self, chkfile):
+        return self.update_from_chk_(chkfile)
+    def update_from_chk_(self, chkfile):
+        import h5py
+        with h5py.File(chkfile, 'r') as fh5:
+            moldic = eval(fh5['mol'].value)
+            self.build(False, False, **moldic)
+        return self
 
 
 #######################################################

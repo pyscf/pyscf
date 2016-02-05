@@ -231,6 +231,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
+    conv_tol_ddm = conv_tol_grad * 3
     max_cycle_micro = micro
     conv = False
     totmicro = totinner = 0
@@ -308,7 +309,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol
-            and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_grad)):
+            and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_ddm)):
             conv = True
 
         if dump_chk:
@@ -421,10 +422,7 @@ class CASSCF(casci_uhf.CASCI):
         if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
-        self.mol.check_sanity(self)
+        self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \

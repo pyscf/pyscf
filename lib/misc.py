@@ -213,6 +213,94 @@ class omnimethod(object):
     def __get__(self, instance, owner):
         return functools.partial(self.func, instance)
 
+
+class StreamObject(object):
+    '''For most methods, there are three stream functions to pipe computing stream:
+
+    1 ``.set_`` function to update object attributes, eg
+    ``mf = scf.RHF(mol).set_(conv_tol=1e-5)`` is identical to proceed in two steps
+    ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
+
+    2 ``.run_`` function to execute the kenerl function (the function arguments
+    are passed to kernel function).  If keyword arguments is given, it will first
+    call ``.set_`` function to update object attributes then execute the kernel
+    function.  Eg
+    ``mf = scf.RHF(mol).run_(dm_init, conv_tol=1e-5)`` is identical to three steps
+    ``mf = scf.RHF(mol); mf.conv_tol=1e-5; mf.kernel(dm_init)``
+
+    3 ``.apply`` function to apply the given function/class to the current object
+    (function arguments and keyword arguments are passed to the given function).
+    Eg
+    ``mol.apply(scf.RHF).run_().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
+    ``mf = scf.RHF(mol); mf.kernel(); mcscf.CASSCF(mf, 6, 4, frozen=4)``
+    '''
+
+    verbose = 0
+    stdout = sys.stdout
+    _keys = set(['verbose', 'stdout'])
+
+    def run(self, *args, **kwargs):
+        return self.run_(*args, **kwargs)
+    def run_(self, *args, **kwargs):
+        self.set_(**kwargs)
+        self.kernel(*args, **kwargs)
+        return self
+
+    def set(self, **kwargs):
+        return self.set(**kwargs)
+    def set_(self, **kwargs):
+        #if hasattr(self, '_keys'):
+        #    for k,v in kwargs:
+        #        setattr(self, k, v)
+        #        if k not in self._keys:
+        #            sys.stderr.write('Warning: %s does not have attribute %s\n'
+        #                             % (self.__class__, k))
+        #else:
+        for k,v in kwargs:
+            setattr(self, k, v)
+        return self
+
+    def apply(self, fn, *args, **kwargs):
+        return fn(self, *args, **kwargs)
+
+#    def _format_args(self, args, kwargs, kernel_kw_lst):
+#        args1 = [kwargs.pop(k, v) for k, v in kernel_kw_lst]
+#        return args + args1[len(args):], kwargs
+
+    def check_sanity(self):
+        '''Check misinput of class attributes, check whether a class method is
+        overwritten.  It does not check the attributes which are prefixed with
+        "_".
+        '''
+        if (self.verbose > 0 and  # logger.QUIET
+            hasattr(self, '_keys')):
+            check_sanity(self, self._keys, self.stdout)
+        return self
+
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    '''Check misinput of class attributes, check whether a class method is
+    overwritten.  It does not check the attributes which are prefixed with
+    "_".
+    '''
+    objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
+    keysub = set(objkeys) - set(keysref)
+    if keysub:
+        class_attr = set(obj.__class__.__dict__)
+        keyin = keysub.intersection(class_attr)
+        if keyin:
+            msg = ('overwrite keys %s of %s\n' %
+                   (' '.join(keyin), obj.__class__))
+            sys.stderr.write(msg)
+            stdout.write(msg)
+        keydiff = keysub - class_attr
+        if keydiff:
+            msg = ('%s has no attributes %s\n' %
+                   (obj.__class__, ' '.join(keydiff)))
+            sys.stderr.write(msg)
+            stdout.write(msg)
+    return obj
+
+
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):
         print('base=30', i, j, j*(j+1)//2-i*(i+1)//2)

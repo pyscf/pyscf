@@ -228,12 +228,12 @@ class NMR(rhf_nmr.NMR):
     def dump_flags(self):
         rhf_nmr.NMR.dump_flags(self)
         logger.info(self, 'MB basis = %s', self.mb)
+        return self
 
     def shielding(self, mo1=None):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        self.check_sanity()
 
         facppm = 1e6/param.LIGHTSPEED**2
         t0 = (time.clock(), time.time())
@@ -311,7 +311,7 @@ class NMR(rhf_nmr.NMR):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return make_s10(mol, gauge_orig, mb=self.mb)
 
-    def _vind(self, mo1):
+    def get_vind(self, mo1):
         '''Induced potential'''
         mo_coeff = self._scf.mo_coeff
         mo_occ = self._scf.mo_occ
