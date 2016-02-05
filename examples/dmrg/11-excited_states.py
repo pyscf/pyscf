@@ -25,6 +25,13 @@ mol.build(
 m = scf.RHF(mol)
 m.kernel()
 
+
+##################################################
+#
+# State-average
+#
+##################################################
+
 #
 # Optimize orbitals with state-average DMRG-CASSCF
 #
@@ -45,3 +52,34 @@ e_0 = mc.kernel()[0]
 #
 dmrg_nevpt_e1 = sc_nevpt(mc, ci=mc.ci[0])
 dmrg_nevpt_e2 = sc_nevpt(mc, ci=mc.ci[1])
+print('DE = %.9g' % (e_0[1]+dmrg_nevpt_e2) - (e_0[0]+dmrg_nevpt_e1))
+
+
+
+##################################################
+#
+# State-specific
+#
+##################################################
+
+#
+# Optimize orbitals for first excited state
+#
+mc = dmrgscf.dmrgci.DMRGSCF(m, 8, 8)
+mc.state_specific_(1)
+e_0 = mc.kernel()[0]
+
+#
+# Run DMRGCI for 2 excited states
+#
+mc = mcscf.CASCI(m, 8, 8)
+mc.fcisolver = dmrgscf.drmgci.DMRGCI(mol, maxM=200)
+mc.fcisolver.nroots = 2
+e_0 = mc.kernel()[0]
+
+#
+# Computing NEVPT2 based on state-specific DMRG-CASCI calculation
+#
+dmrg_nevpt_e1 = sc_nevpt(mc, ci=mc.ci[0])
+dmrg_nevpt_e2 = sc_nevpt(mc, ci=mc.ci[1])
+print('DE = %.9g' % (e_0[1]+dmrg_nevpt_e2) - (e_0[0]+dmrg_nevpt_e1))

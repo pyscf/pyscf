@@ -499,7 +499,6 @@ def state_specific(casscf, state=1):
         def __init__(self):
             self.__dict__.update(fcibase.__dict__)
             self.nroots = state+1
-            self.davidson_only = 1
             self._civec = None
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
