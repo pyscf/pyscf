@@ -207,8 +207,8 @@ class Gradients(pyscf.lib.StreamObject):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-           + self.grad_nuc(atmlst=atmlst))
+        self.de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
+                  + self.grad_nuc(atmlst=atmlst))
         logger.note(self, '--------------')
         logger.note(self, '           x                y                z')
         for k, ia in enumerate(atmlst):
@@ -216,7 +216,7 @@ class Gradients(pyscf.lib.StreamObject):
                         self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
         logger.note(self, '--------------')
         logger.timer(self, 'SCF gradients', *cput0)
-        return de
+        return self.de
 
     def aorange_by_atom(self):
         return aorange_by_atom(self.mol)

@@ -40,3 +40,19 @@ mol = gto.M(
 #
 mf = scf.RHF(mol)
 print('E=%.15g' % mf.kernel())
+
+
+
+#
+# The above code can be simplified using stream operations.
+# There are three stream functions ".set", ".run", ".apply" to pipe computing
+# streams.  Stream operations allows us to write computing script in one line.
+#
+mf = gto.M(
+    atom = '''
+      O     0    0       0
+      h     0    -.757   .587
+     1      0    .757    .587''',
+    basis = '6-31g'
+).apply(scf.RHF).run()
+print('E=%.15g' % mf.e_tot)

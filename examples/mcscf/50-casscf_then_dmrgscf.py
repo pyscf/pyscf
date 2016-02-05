@@ -22,14 +22,20 @@ mol.build(
     symmetry = True,
 )
 m = scf.RHF(mol)
-m.scf()
+m.kernel()
 
-mc = mcscf.CASSCF(m, 6, 6)
-mc.max_cycle_macro = 5
-mc.max_cycle_micro = 1
-mc.conv_tol = 1e-5
-mc.conv_tol_grad = 1e-4
-mc.mc1step()
+mc = mcscf.CASSCF(m, 6, 6).set(max_cycle_macro=5, max_cycle_micro=1,
+                               conv_tol=1e-5, conv_tol_grad=1e-4).run()
+#
+# Note: the stream operations are applied in the above line.  This one line
+# code is equivalent to the following serial statements
+#
+#mc = mcscf.CASSCF(m, 6, 6)
+#mc.max_cycle_macro = 5
+#mc.max_cycle_micro = 1
+#mc.conv_tol = 1e-5
+#mc.conv_tol_grad = 1e-4
+#mc.kernel()
 mo = mc.mo_coeff
 
 mol.stdout.write('\n*********** Call DMRGSCF **********\n')
