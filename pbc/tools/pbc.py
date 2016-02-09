@@ -67,7 +67,7 @@ def fftk(f, gs, r, k):
 def ifftk(g, gs, r, k):
     '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
 
-    fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = [(1/Ng) \sum_G fk(k+G)e^{-iGr}] e^{ikr}
+    fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
     return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
 
@@ -270,17 +270,17 @@ def cutoff_to_gs(h, cutoff):
     '''
     grid_spacing = np.pi / np.sqrt(2 * cutoff)
 
-    print grid_spacing
-    print h
+    #print grid_spacing
+    #print h
 
     h0 = np.linalg.norm(h[:,0])
     h1 = np.linalg.norm(h[:,1])
     h2 = np.linalg.norm(h[:,2])
 
-    print h0, h1, h2
+    #print h0, h1, h2
     # number of grid points is 2gs+1 (~ 2 gs) along each direction
     gs = np.ceil([h0 / (2*grid_spacing),
                   h1 / (2*grid_spacing),
                   h2 / (2*grid_spacing)])
-    return gs
+    return gs.astype(int)
 
