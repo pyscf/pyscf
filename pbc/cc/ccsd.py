@@ -1,15 +1,18 @@
 import time
+import tempfile
 import numpy
 import numpy as np
+import h5py
 
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import lib as pbclib
 import pyscf.cc
 import pyscf.cc.ccsd
+from pyscf.cc.ccsd import _cp
 import pyscf.pbc.ao2mo
 from pyscf.pbc.cc import intermediates as imd
-from pyscf.pbc.lib.linalg_helper import davidson_nosymm
+from pyscf.pbc.lib.linalg_helper import eigs 
 
 #einsum = np.einsum
 einsum = pbclib.einsum
@@ -69,9 +72,9 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     #t1new = numpy.zeros_like(t1)
     #t2new = numpy.zeros_like(t2)
 
-    fov = fock[:nocc,nocc:].copy()
-    foo = fock[:nocc,:nocc].copy()
-    fvv = fock[nocc:,nocc:].copy()
+    fov = fock[:nocc,nocc:]
+    foo = fock[:nocc,:nocc]
+    fvv = fock[nocc:,nocc:]
 
     mo_e = eris.fock.diagonal()
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -91,13 +94,13 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Fvv -= fvv
     Foo -= foo
 
-    eris_oovo = -eris.ooov.transpose(0,1,3,2)
-    eris_ovvo = -eris.ovov.transpose(0,1,3,2)
-    eris_vvvo = eris.ovvv.transpose(2,3,1,0).conj()
+    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
+    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
+    eris_vvvo =   _cp(eris.ovvv).transpose(2,3,1,0).conj()
 
     # T1 equation
     # TODO: Does this need a conj()? Usually zero w/ canonical HF.
-    t1new = fov.copy() 
+    t1new = _cp(fov)
     t1new +=   einsum('ie,ae->ia',t1,Fvv)
     t1new += - einsum('ma,mi->ia',t1,Foo) 
     t1new +=   einsum('imae,me->ia',t2,Fov)
@@ -106,7 +109,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t1new += - 0.5*einsum('mnae,nmei->ia',t2,eris_oovo)
     # T2 equation
     # For conj(), see Hirata and Bartlett, Eq. (36) 
-    t2new = eris.oovv.copy().conj()
+    t2new = _cp(eris.oovv).conj()
     Ftmp = Fvv - 0.5*einsum('mb,me->be',t1,Fov)
     tmp = einsum('ijae,be->ijab',t2,Ftmp)
     t2new += (tmp - tmp.transpose(0,1,3,2))
@@ -135,7 +138,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 def energy(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
-    eris_oovv = eris.oovv.copy()
+    eris_oovv = _cp(eris.oovv)
     e = einsum('ia,ia', fock[:nocc,nocc:], t1)
     t1t1 = einsum('ia,jb->ijab',t1,t1)
     tau = t2 + 2*t1t1
@@ -190,9 +193,9 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         #t1 = eris.fock[:nocc,nocc:] / eia
         t2 = np.zeros((nocc,nocc,nvir,nvir), eris.dtype)
         self.emp2 = 0
-        foo = eris.fock[:nocc,:nocc].copy()
-        fvv = eris.fock[nocc:,nocc:].copy()
-        eris_oovv = eris.oovv.copy()
+        foo = eris.fock[:nocc,:nocc]
+        fvv = eris.fock[nocc:,nocc:]
+        eris_oovv = _cp(eris.oovv)
         eia = np.zeros((nocc,nvir))
         eijab = np.zeros((nocc,nocc,nvir,nvir))
         for i in range(nocc):
@@ -269,7 +272,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         Wovoo = imd.Wovoo(t1,t2,eris)
         Wvvvo = imd.Wvvvo(t1,t2,eris)
         # Additional intermediates
-        Woovv = eris.oovv.copy()
+        Woovv = _cp(eris.oovv)
         Wvoov =  Wovvo.transpose(1,0,3,2)
         Wovvv = -Wvovv.transpose(1,0,2,3)
         Woovo = -Wooov.transpose(0,1,3,2)
@@ -360,7 +363,8 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         Wvoov = imd.Wovvo(t1,t2,eris).transpose(1,0,3,2)
         Wovoo = imd.Wovoo(t1,t2,eris)
         Woooo = imd.Woooo(t1,t2,eris)
-        Woovv = eris.oovv.copy()
+        Woovv = eris.oovv
+        #Woovv = _cp(eris.oovv)
 
         # Eq. (8)
         Hr1 = (- einsum('mi,m->i',Foo,r1)
@@ -431,7 +435,8 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         Wvvvo = imd.Wvvvo(t1,t2,eris)
         Wovvo = imd.Wovvo(t1,t2,eris)
         Wvvvv = imd.Wvvvv(t1,t2,eris)
-        Woovv = eris.oovv.copy()
+        #Woovv = _cp(eris.oovv)
+        Woovv = eris.oovv
 
         # Eq. (30)
         Hr1 = ( einsum('ac,c->a',Fvv,r1)
@@ -479,9 +484,6 @@ class CCSD(pyscf.cc.ccsd.CCSD):
                     index += 1
         return vector
 
-def eigs(matvec, size, nroots):
-    return davidson_nosymm(matvec, size, nroots)
-
 
 class _ERIS:
     """_ERIS handler for PBCs."""
@@ -503,46 +505,86 @@ class _ERIS:
 
         nocc = cc.nocc()
         nmo = cc.nmo()
-        #nvir = nmo - nocc
-        #mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
-        #mem_now = pyscf.lib.current_memory()[0]
-        #
-        log = logger.Logger(cc.stdout, cc.verbose)
-        #if (method == 'incore' and cc._scf._eri is not None and
-        #    (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
+        nvir = nmo - nocc
+        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
+        mem_now = pyscf.lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize 
-        #print "mo_coeff ="
-        #print mo_coeff
         so_coeff = np.zeros((nmo/2,nmo), dtype=mo_coeff.dtype)
         so_coeff[:,::2] = so_coeff[:,1::2] = mo_coeff[:nmo/2,::2]
-        #print "so_coeff ="
-        #print so_coeff
-        # CHANGEME --- take .real at end, for now!
-        eri = pyscf.pbc.ao2mo.get_mo_eri(cc._scf.cell, (so_coeff,so_coeff),
-                                                       (so_coeff,so_coeff))
-                                                       #(so_coeff,so_coeff)).real
-        eri = eri.reshape((nmo,)*4)
-        eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0.
-        #print "ERI ="
-        #print eri
-        eri1 = eri - eri.transpose(0,3,2,1) 
-        eri1 = eri1.transpose(0,2,1,3) 
 
-        self.dtype = eri1.dtype
-        self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-        self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
-        self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-        self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-        self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
-        self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-        self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy() 
-        #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-        #self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-        #for i in range(nocc):
-        #    for j in range(nvir):
-        #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-        #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+        log = logger.Logger(cc.stdout, cc.verbose)
+        if (method == 'incore' and cc._scf._eri is not None and
+            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
+
+            eri = pyscf.pbc.ao2mo.general(cc._scf.cell, (so_coeff,so_coeff,
+                                                         so_coeff,so_coeff))
+                                                        #so_coeff,so_coeff)).real
+            eri = eri.reshape((nmo,)*4)
+            eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0.
+            #print "ERI ="
+            #print eri
+            eri1 = eri - eri.transpose(0,3,2,1) 
+            eri1 = eri1.transpose(0,2,1,3) 
+
+            self.dtype = eri1.dtype
+            self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+            self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+            self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+            self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+            self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+            self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+            self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy() 
+            #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+            #self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
+            #for i in range(nocc):
+            #    for j in range(nvir):
+            #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
+            #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+
+        else:
+            print "*** Using HDF5 ERI storage ***"
+            _tmpfile1 = tempfile.NamedTemporaryFile()
+            self.feri1 = h5py.File(_tmpfile1.name)
+            orbo = so_coeff[:,:nocc]
+            orbv = so_coeff[:,nocc:]
+            self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'c16')
+            self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), 'c16')
+            self.ovoo = self.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'c16')
+            self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'c16')
+            self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'c16')
+            self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'c16')
+
+            cput1 = time.clock(), time.time()
+            buf = pyscf.pbc.ao2mo.general(cc._scf.cell, (orbo,so_coeff,so_coeff,so_coeff))
+            buf = buf.reshape((nocc,nmo,nmo,nmo))
+            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            buf1 = buf - buf.transpose(0,3,2,1) 
+            buf1 = buf1.transpose(0,2,1,3) 
+            cput1 = log.timer_debug1('transforming oppp', *cput1)
+
+            self.dtype = buf1.dtype
+            self.oooo[:,:,:,:] = buf1[:,:nocc,:nocc,:nocc]
+            self.ooov[:,:,:,:] = buf1[:,:nocc,:nocc,nocc:]
+            self.ovoo[:,:,:,:] = buf1[:,nocc:,:nocc,:nocc]
+            self.oovv[:,:,:,:] = buf1[:,:nocc,nocc:,nocc:]
+            self.ovov[:,:,:,:] = buf1[:,nocc:,:nocc,nocc:]
+            self.ovvv[:,:,:,:] = buf1[:,nocc:,nocc:,nocc:]
+
+            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'c16')
+            for a in range(nvir):
+                orbva = orbv[:,a].reshape(-1,1)
+                buf = pyscf.pbc.ao2mo.general(cc._scf.cell, (orbva,orbv,orbv,orbv))
+                buf = buf.reshape((1,nvir,nvir,nvir))
+                if a%2 == 0:
+                    buf[0,1::2,:,:] = 0.
+                else:
+                    buf[0,0::2,:,:] = 0.
+                buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+                buf1 = buf - buf.transpose(0,3,2,1) 
+                buf1 = buf1.transpose(0,2,1,3) 
+                self.vvvv[a] = buf1[:]
+
+            cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
         log.timer('CCSD integral transformation', *cput0)
-

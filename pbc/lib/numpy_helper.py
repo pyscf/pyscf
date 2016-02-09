@@ -107,6 +107,9 @@ def einsum(idx_str, *tensors):
         print "Reshaping A as (-1,", inner_shape, ")"
         print "Reshaping B as (", inner_shape, ",-1)"
 
+    A = _cp(A)
+    B = _cp(B)
+
     At = A.transpose(new_orderA).reshape(-1,inner_shape)
     Bt = B.transpose(new_orderB).reshape(inner_shape,-1)
 
@@ -128,4 +131,8 @@ def einsum(idx_str, *tensors):
         new_orderCt.append(idxCt.index(idx))
 
     return np.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
+
+
+def _cp(a):
+    return np.array(a, copy=False, order='C')
 
