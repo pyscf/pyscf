@@ -17,8 +17,8 @@ import pyscf.dft.vxc
 from pyscf.tddft import rhf
 
 
-# dmai = (X+Y) in AO representation
-def _contract_xc_kernel(td, x_id, c_id, dmai, singlet=True, max_memory=2000):
+# dmvo = (X+Y) in AO representation
+def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
     mf = td._scf
     mol = td.mol
     ni = mf._numint
@@ -28,8 +28,8 @@ def _contract_xc_kernel(td, x_id, c_id, dmai, singlet=True, max_memory=2000):
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
 
-    # dmai ~ reduce(numpy.dot, (orbv, Xai, orbo.T))
-    dmai = (dmai + dmai.T) * .5 # because K_{ai,bj} == K_{ai,bj}
+    # dmvo ~ reduce(numpy.dot, (orbv, Xai, orbo.T))
+    dmvo = (dmvo + dmvo.T) * .5 # because K_{ai,bj} == K_{ai,bj}
 
     xctype = numint._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
@@ -52,7 +52,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmai, singlet=True, max_memory=2000):
                 frho = u_u + u_d
             else:
                 frho = u_u - u_d
-            rho1 = ni.eval_rho(mol, ao, dmai, non0tab, xctype)
+            rho1 = ni.eval_rho(mol, ao, dmvo, non0tab, xctype)
             aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1)
             v1ao += numint._dot_ao_ao(mol, aow, ao, nao, ip1-ip0, non0tab)
             rho1 = aow = None
@@ -85,7 +85,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmai, singlet=True, max_memory=2000):
 
             # rho1[0 ] = |b><j| z_{bj}
             # rho1[1:] = \nabla(|b><j|) z_{bj}
-            rho1 = ni.eval_rho(mol, ao, dmai, non0tab, 'GGA')
+            rho1 = ni.eval_rho(mol, ao, dmvo, non0tab, 'GGA')
             # sigma1 = \nabla(\rho_\alpha+\rho_\beta) dot \nabla(|b><j|) z_{bj}
             sigma1 = numpy.einsum('xi,xi->i', rho[1:], rho1[1:]) * 2
 
@@ -120,7 +120,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmai, singlet=True, max_memory=2000):
     return v1ao
 
 
-class TDA(rhf.TDHF):
+class TDA(rhf.TDA):
     # z_{ai} = X_{ai}
     def get_vind(self, z):
         mol = self.mol
@@ -131,32 +131,37 @@ class TDA(rhf.TDHF):
         orbo = mo_coeff[:,:nocc]
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         z = z.reshape(eai.shape)
-
-        mem_now = pyscf.lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.9-mem_now)
+        dmvo = reduce(numpy.dot, (orbv, z, orbo.T))
 
         x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
         hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
-        dmz = reduce(numpy.dot, (orbv, z, orbo.T))
-        v1ao = _contract_xc_kernel(self, x_code, c_code, dmz,
-                                   singlet=self.singlet, max_memory=max_memory)
 
-        dm = reduce(numpy.dot, (orbv, z, orbo.T))
         if abs(hyb) > 1e-10:
-            vj, vk = self._scf.get_jk(mol, dm, hermi=0)
-            v1ao += vj*2 - hyb * vk
+            vj, vk = self._scf.get_jk(mol, dmvo, hermi=0)
+            if self.singlet:
+                v1ao = vj*2 - hyb * vk
+            else:
+                v1ao = -hyb * vk
         else:
-            dm = dm + dm.T  # symmetrized to handle vj*2
-            vj = self._scf.get_j(mol, dm, hermi=1)
-            v1ao += vj
+            if self.singlet:
+                dm = dm + dm.T
+                vj = self._scf.get_j(mol, dm, hermi=1)
+                v1ao = vj
+            else:
+                v1ao = 0
+
+        if self.singlet:
+            mem_now = pyscf.lib.current_memory()[0]
+            max_memory = max(2000, self.max_memory*.9-mem_now)
+            v1ao += _contract_xc_kernel(self, x_code, c_code, dmvo,
+                                        singlet=self.singlet, max_memory=max_memory)
 
         v1vo = reduce(numpy.dot, (orbv.T, v1ao, orbo))
         v1vo = eai*z + v1vo
         return v1vo.ravel()
 
 
-#class TDRKS?
-class TDDFT(TDA):
+class TDDFT(rhf.TDHF):
     # z_{ai} = [(A-B)^{-1/2}(X+Y)]_{ai}
     def get_vind(self, z):
         mol = self.mol
@@ -167,29 +172,32 @@ class TDDFT(TDA):
         orbo = mo_coeff[:,:nocc]
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         dai = numpy.sqrt(eai) * z.reshape(eai.shape)
-
-        mem_now = pyscf.lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.9-mem_now)
+        dmvo = reduce(numpy.dot, (orbv, dai, orbo.T))
 
         x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
         hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
-        dmai = reduce(numpy.dot, (orbv, dai, orbo.T))
-        v1ao = _contract_xc_kernel(self, x_code, c_code, dmai,
-                                   singlet=self.singlet, max_memory=max_memory)
 
-        dm = reduce(numpy.dot, (orbv, dai, orbo.T))
         if abs(hyb) > 1e-10:
             raise NotImplementedError
-            #vj, vk = self._scf.get_jk(mol, (dm, dm.T), hermi=0)
-            #v1ao += (vj[0]+vj[1] - .5 * hyb * (vk[0]+vk[1])) * 2
-            vj, vk = self._scf.get_jk(mol, (dm, dm.T))
-            a, b = vj - .5 * hyb * vk
+            vj, vk = self._scf.get_jk(mol, (dmvo,dmvo.T), hermi=0)
+            if self.singlet:
+                v1ao = vj*2 - hyb * vk
+            else:
+                v1ao = -hyb * vk
         else:
-            dm = dm + dm.T  # dai*2 because of spin trace
-            vj = self._scf.get_j(mol, dm)
-            v1ao += vj
+            if self.singlet:
+                dm = dmvo + dmvo.T
+                vj = self._scf.get_j(mol, dm, hermi=1)
+                v1ao = vj * 2 # *2 for A+B and K_{ai,jb} in A == K_{ai,bj} in B
+            else:
+                v1ao = 0
 
-        v1ao *= 2  # *2 becauce A+B and K_{ai,jb} in A == K_{ai,bj} in B
+        if self.singlet:
+            mem_now = pyscf.lib.current_memory()[0]
+            max_memory = max(2000, self.max_memory*.9-mem_now)
+            v1xc = _contract_xc_kernel(self, x_code, c_code, dmvo,
+                                       singlet=self.singlet, max_memory=max_memory)
+            v1ao += v1xc * 2
 
         v1vo = reduce(numpy.dot, (orbv.T, v1ao, orbo))
         v1vo = numpy.sqrt(eai) * (eai*dai + v1vo)
@@ -206,11 +214,25 @@ class TDDFT(TDA):
     def kernel(self, x0=None):
         '''TDDFT diagonalization solver
         '''
-        w2, x1 = TDA.kernel(self, x0)
+        w2, x1 = rhf.TDHF.kernel(self, x0)
         self.e = numpy.sqrt(w2)
-        self.x = x1
-        self.y = x1
-        return self.e, x1
+
+        mo_energy = self._scf.mo_energy
+        nocc = (self._scf.mo_occ>0).sum()
+        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = numpy.sqrt(eai)
+        def norm_xy(w, z):
+            zp = eai * z[0].reshape(eai.shape)
+            zm = w/eai * z[0].reshape(eai.shape)
+            x = (zp + zm) * .5
+            y = (zp - zm) * .5
+            norm = 2*(pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2)
+            norm = 1/numpy.sqrt(norm)
+            return x*norm,y*norm
+
+        self.xy = [norm_xy(self.e[i], z) for i, z in enumerate(x1)]
+
+        return self.e, self.xy
 
 
 if __name__ == '__main__':
