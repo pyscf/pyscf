@@ -15,6 +15,10 @@ from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
 
+#
+# LR-TDHF TDA gradients
+#
+
 def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
            verbose=logger.INFO):
     mol = tdgrad.mol
@@ -113,7 +117,7 @@ class Gradients(object):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        log.info('******** %s gradients for %s ********',
+        log.info('******** LR %s gradients for %s ********',
                  self._td.__class__, self._td._scf.__class__)
         log.info('\n')
 
@@ -139,7 +143,7 @@ if __name__ == '__main__':
 
     mf = scf.RHF(mol)
     mf.scf()
-    td = pyscf.tddft.rhf.TDHF(mf)
+    td = pyscf.tddft.rhf.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
     #print e[0] + mf.e_tot

@@ -11,12 +11,19 @@
   - scalar relativistic DFT
   - density fitting DFT (up to ~5000 basis)
 
+* TDDFT
+  - TDA for TDHF
+  - TDA for TDDFT
+  - TDA gradients for TDHF and TDDFT
+
 * General CASCI/CASSCF solver (up to ~2500 basis)
   - State-average CASCI/CASSCF
+  - State-specific CASCI/CASSCF for excited states
   - Multiple roots CASCI
   - Support DMRG as plugin CI solver to do DMRG-CASSCF
   - Support FCIQMC as plugin CI solver to do FCIQMC-CASSCF
   - UHF-based UCASSCF
+  - Density-fitting CASSCF
 
 * MP2 (up to ~200 occupied, ~1000 virtual orbitals)
   - RHF-based MP2
@@ -37,10 +44,13 @@
 * Gradients
   - non-relativistic RHF gradients
   - 4-component DHF gradients
+  - non-relativistic DFT gradients
+  - non-relativistic CCSD gradients
 
 * NMR
   - non-relativistic RHF NMR shielding
   - 4-component DHF NMR shielding
+  - non-relativistic DFT NMR shielding
 
 * MRPT
   - Strongly contracted NEVPT2
@@ -53,6 +63,7 @@
   - 33 types of 2-electron spinor-GTO integrals
   - 4 types of 3-center 2-electron real-GTO integrals
   - 6 types of 3-center 2-electron spinor-GTO integrals
+  - General basis value evaluator (for numeric integration)
 
 * MO integrals
   - 2-electron integral transformation for any integrals provided by
@@ -65,6 +76,7 @@
   - Meta-Lowdin
   - Natural atomic orbital (NAO)
   - Intrinsic atomic orbital (IAO)
+  - Pipek-Mezey
 
 * D2h symmetry and linear molecule symmetry
   - Molecule symmetry detection

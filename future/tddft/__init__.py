@@ -14,7 +14,7 @@ def TDA(mf):
     if hasattr(mf, 'xc'):
         return rks.TDA(mf)
     else:
-        return rhf.TDHF(mf)
+        return rhf.TDA(mf)
 
 def TDDFT(mf):
     if hasattr(mf, 'xc'):
