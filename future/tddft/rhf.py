@@ -145,13 +145,13 @@ class TDHF(TDA):
         orbv = mo_coeff[:,nocc:]
         orbo = mo_coeff[:,:nocc]
         nz = len(xys)
-        dms = numpy.empty((nz*4,nao,nao))
+        dms = numpy.empty((nz*2,nao,nao))
         for i in range(nz):
             x, y = xys[i].reshape(2,nvir,nocc)
-            dms[i*4+0] = reduce(numpy.dot, (orbv, x, orbo.T))
-            dms[i*4+1] = reduce(numpy.dot, (orbv, y, orbo.T))
-            dms[i*4+2] = dms[i*4+1].T
-            dms[i*4+3] = dms[i*4+0].T
+            dmx = reduce(numpy.dot, (orbv, x, orbo.T))
+            dmy = reduce(numpy.dot, (orbv, y, orbo.T))
+            dms[i   ] = dmx + dmy.T  # AX + BY
+            dms[i+nz] = dms[i].T # = dmy + dmx.T  # AY + BX
         vj, vk = self._scf.get_jk(self.mol, dms, hermi=0)
 
         if self.singlet:
@@ -164,10 +164,9 @@ class TDHF(TDA):
         eai = eai.ravel()
         for i, z in enumerate(xys):
             x, y = z.reshape(2,-1)
-            vhf[i*4  ] += eai * x  # AX
-            vhf[i*4+1] += eai * y  # AY
-        #                  AX        BY         -BX       -AY
-        hx = numpy.hstack((vhf[0::4]+vhf[2::4], -vhf[3::4]-vhf[1::4]))
+            vhf[i   ] += eai * x  # AX
+            vhf[i+nz] += eai * y  # AY
+        hx = numpy.hstack((vhf[:nz], -vhf[nz:]))
         return hx.reshape(nz,-1)
 
     def get_precond(self, hdiag):
@@ -215,12 +214,12 @@ class TDHF(TDA):
                              max_space=self.max_space, pick=pickeig,
                              verbose=self.verbose)
         self.e = w
-        self.xy = []
-        for z in x1:
+        def norm_xy(z):
             x, y = z.reshape(2,nvir,nocc)
             norm = 2*(pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2)
             norm = 1/numpy.sqrt(norm)
-            self.xy.append((x*norm,y*norm))
+            return x*norm, y*norm
+        self.xy = [norm_xy(z) for z in x1]
 
         return self.e, self.xy
 RPA = TDHF
