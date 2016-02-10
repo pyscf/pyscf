@@ -5,7 +5,7 @@
 
 from pyscf.tddft import rks
 from pyscf.tddft import rhf
-from pyscf.tddft.rhf import TDHF
+from pyscf.tddft.rhf import TDHF, CIS, RPA
 
 def TD(mf):
     return TDDFT(mf)
@@ -18,6 +18,10 @@ def TDA(mf):
 
 def TDDFT(mf):
     if hasattr(mf, 'xc'):
-        return rks.TDDFT(mf)
+        import pyscf.dft.vxc
+        if pyscf.dft.vxc.is_hybrid_xc(mf.xc)
+            return rks.TDDFT(mf)
+        else:
+            return rks.TDDFTNoHybrid(mf)
     else:
         return rhf.TDHF(mf)

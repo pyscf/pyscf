@@ -10,6 +10,8 @@
 from functools import reduce
 import numpy
 import pyscf.lib
+from pyscf.tddft import davidson
+from pyscf.ao2mo import _ao2mo
 
 
 class TDA(pyscf.lib.StreamObject):
@@ -25,7 +27,7 @@ class TDA(pyscf.lib.StreamObject):
         self.singlet = True
         self.lindep = 1e-12
         self.level_shift = 0
-        self.max_space = 30
+        self.max_space = 40
         self.max_cycle = 100
         self.max_memory = mf.max_memory
         self.chkfile = mf.chkfile
@@ -58,118 +60,170 @@ class TDA(pyscf.lib.StreamObject):
             log.warn('Ground state SCF is not converged')
         log.info('\n')
 
-    # z_{ai} = X_{ai}
-    def get_vind(self, z):
-        mol = self.mol
+    def get_vind(self, zs):
+        '''Compute Ax'''
         mo_coeff = self._scf.mo_coeff
         mo_energy = self._scf.mo_energy
+        nao, nmo = mo_coeff.shape
         nocc = (self._scf.mo_occ>0).sum()
+        nvir = nmo - nocc
         orbv = mo_coeff[:,nocc:]
         orbo = mo_coeff[:,:nocc]
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        z = z.reshape(eai.shape)
-        dmvo = reduce(numpy.dot, (orbv, z, orbo.T))
-        vj, vk = self._scf.get_jk(mol, dmvo, hermi=0)
+        nz = len(zs)
+        dmvo = numpy.empty((nz,nao,nao))
+        for i, z in enumerate(zs):
+            dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
+        vj, vk = self._scf.get_jk(self.mol, dmvo, hermi=0)
 
         if self.singlet:
-            v1ao = vj*2 - vk
+            vhf = vj*2 - vk
         else:
-            v1ao = -vk
+            vhf = -vk
 
-        v1vo = reduce(numpy.dot, (orbv.T, v1ao, orbo))
-        v1vo = eai*z + v1vo
-        return v1vo.ravel()
+        #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
+        v1vo = _ao2mo.nr_e2_(vhf, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = eai.ravel()
+        for i, z in enumerate(zs):
+            v1vo[i] += eai * z
+        return v1vo.reshape(nz,-1)
 
-    def get_precond(self, eai):
+    def get_precond(self, hdiag):
         def precond(x, e, x0):
-            diagd = eai.ravel() - (e-self.level_shift)
+            diagd = hdiag - (e-self.level_shift)
             diagd[abs(diagd)<1e-8] = 1e-8
             return x/diagd
         return precond
+
+    def init_guess(self, eai, nstates=None):
+        if nstates is None:
+            nstates = self.nstates
+        nvir, nocc = eai.shape
+        nroot = min(3, nstates, nvir*nocc)
+        x0 = numpy.zeros((nroot, nvir*nocc))
+        idx = numpy.argsort(eai.ravel())
+        for i in range(nroot):
+            x0[i,idx[i]] = 1  # lowest excitations
+        return x0
 
     def kernel(self, x0=None):
         '''TDA diagonalization solver
         '''
         self.check_sanity()
 
-        mol = self.mol
-        mo_coeff = self._scf.mo_coeff
         mo_energy = self._scf.mo_energy
-        nao, nmo = mo_coeff.shape
         nocc = (self._scf.mo_occ>0).sum()
-        nvir = nmo - nocc
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        eai = eai.copy()
 
         if x0 is None:
-            nroot = min(3, self.nstates)
-            x0 = numpy.zeros((nroot, nvir*nocc))
-            idx = numpy.argsort(eai.ravel())
-            for i in range(nroot):
-                x0[i,idx[i]] = 1  # lowest excitations
+            x0 = self.init_guess(eai, self.nstates)
 
-        precond = self.get_precond(eai)
+        precond = self.get_precond(eai.ravel())
 
-        w, x1 = pyscf.lib.davidson(self.get_vind, x0, precond,
-                                   tol=self.conv_tol,
-                                   nroots=self.nstates, lindep=self.lindep,
-                                   max_space=self.max_space,
-                                   verbose=self.verbose)
-        self.e = w
+        self.e, x1 = pyscf.lib.davidson1(self.get_vind, x0, precond,
+                                         tol=self.conv_tol,
+                                         nroots=self.nstates, lindep=self.lindep,
+                                         max_space=self.max_space,
+                                         verbose=self.verbose)
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
-        if self.nstates == 1:
-            self.xy = [(x1.reshape(eai.shape)*numpy.sqrt(.5),0)]
-        else:
-            self.xy = [(xi.reshape(eai.shape)*numpy.sqrt(.5),0) for xi in x1]
+        self.xy = [(xi.reshape(eai.shape)*numpy.sqrt(.5),0) for xi in x1]
         return self.e, self.xy
 CIS = TDA
 
 
 class TDHF(TDA):
-    # z_{ai} = [(A-B)^{-1/2}(X+Y)]_{ai}
-    def get_vind(self, z):
-        mol = self.mol
+    def get_vind(self, xys):
+        '''
+        [ A  B][X]
+        [-B -A][Y]
+        '''
         mo_coeff = self._scf.mo_coeff
         mo_energy = self._scf.mo_energy
+        nao, nmo = mo_coeff.shape
         nocc = (self._scf.mo_occ>0).sum()
+        nvir = nmo - nocc
         orbv = mo_coeff[:,nocc:]
         orbo = mo_coeff[:,:nocc]
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        z = z.reshape(eai.shape)
-        dmvo = reduce(numpy.dot, (orbv, z, orbo.T))
+        nz = len(xys)
+        dms = numpy.empty((nz*4,nao,nao))
+        for i in range(nz):
+            x, y = xys[i].reshape(2,nvir,nocc)
+            dms[i*4+0] = reduce(numpy.dot, (orbv, x, orbo.T))
+            dms[i*4+1] = reduce(numpy.dot, (orbv, y, orbo.T))
+            dms[i*4+2] = dms[i*4+1].T
+            dms[i*4+3] = dms[i*4+0].T
+        vj, vk = self._scf.get_jk(self.mol, dms, hermi=0)
 
-        raise NotImplementedError
         if self.singlet:
-            vj, vk = self._scf.get_jk(mol, (dmvo, dmvo.T))
+            vhf = vj*2 - vk
+        else:
+            vhf = -vk
+        #vhf = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
+        vhf = _ao2mo.nr_e2_(vhf, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = eai.ravel()
+        for i, z in enumerate(xys):
+            x, y = z.reshape(2,-1)
+            vhf[i*4  ] += eai * x  # AX
+            vhf[i*4+1] += eai * y  # AY
+        #                  AX        BY         -BX       -AY
+        hx = numpy.hstack((vhf[0::4]+vhf[2::4], -vhf[3::4]-vhf[1::4]))
+        return hx.reshape(nz,-1)
 
-        else: # Triplet
-            pass
+    def get_precond(self, hdiag):
+        def precond(x, e, x0):
+            diagd = hdiag - (e-self.level_shift)
+            diagd[abs(diagd)<1e-8] = 1e-8
+            y = x.reshape(2,-1)/diagd
+            return y.reshape(-1)
+        return precond
 
-        return v1vo.ravel()
+    def init_guess(self, eai, nstates=None):
+        if nstates is None:
+            nstates = self.nstates
+        nov = eai.size
+        nroot = min(3, nstates, nov)
+        x0 = numpy.zeros((nroot, nov*2))
+        idx = numpy.argsort(eai.ravel())
+        for i in range(nroot):
+            x0[i,idx[i]] = 1  # lowest excitations
+        return x0
 
     def kernel(self, x0=None):
-        '''TDHF diagonalization solver
+        '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
-        w2, x1 = TDA.kernel(self, x0)
-        self.e = numpy.sqrt(w2)
+        self.check_sanity()
 
         mo_energy = self._scf.mo_energy
         nocc = (self._scf.mo_occ>0).sum()
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        eai = numpy.sqrt(eai)
-        def norm_xy(w, z):
-            zp = eai * z[0].reshape(eai.shape)
-            zm = w/eai * z[0].reshape(eai.shape)
-            x = (zp + zm) * .5
-            y = (zp - zm) * .5
+        nvir = eai.shape[0]
+
+        if x0 is None:
+            x0 = self.init_guess(eai, self.nstates)
+
+        precond = self.get_precond(eai.ravel())
+
+        # We only need positive eigenvalues
+        def pickeig(w, v, nroots):
+            realidx = numpy.where((w.imag == 0) & (w.real > 0))[0]
+            return realidx[w[realidx].real.argsort()[:nroots]]
+
+        w, x1 = davidson.eig(self.get_vind, x0, precond,
+                             tol=self.conv_tol,
+                             nroots=self.nstates, lindep=self.lindep,
+                             max_space=self.max_space, pick=pickeig,
+                             verbose=self.verbose)
+        self.e = w
+        self.xy = []
+        for z in x1:
+            x, y = z.reshape(2,nvir,nocc)
             norm = 2*(pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2)
             norm = 1/numpy.sqrt(norm)
-            return x*norm,y*norm
-
-        self.xy = [norm_xy(self.e[i], z) for i, z in enumerate(x1)]
+            self.xy.append((x*norm,y*norm))
 
         return self.e, self.xy
-
+RPA = TDHF
 
 
 if __name__ == '__main__':
@@ -195,3 +249,13 @@ if __name__ == '__main__':
     td.singlet = False
     print td.kernel()[0] * 27.2114
 # [ 11.01747918  11.01747918  13.16955056]
+
+    td = TDHF(mf)
+    td.verbose = 5
+    print td.kernel()[0] * 27.2114
+# [ 11.83487199  11.83487199  16.66309285]
+
+    td.singlet = False
+    print td.kernel()[0] * 27.2114
+# [ 10.8919234   10.8919234   12.63440705]
+
