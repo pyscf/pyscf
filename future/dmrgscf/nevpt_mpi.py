@@ -330,7 +330,8 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     env = os.environ
     envnew = {}
     for k in env:
-      if 'MPI_' not in k:
+      if 'MPI' not in k and 'SLURM' not in k:
+# remove PBS and SLURM environments to prevent Block running in MPI mode
         envnew[k] = os.environ[k]
 
 

@@ -460,11 +460,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    if hasattr(casscf.fcisolver, 'spin_square'):
-        ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-        log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
-    else:
-        log.info('CASCI E = %.15g', e_tot)
+    if log.verbose >= logger.INFO:
+        if hasattr(casscf.fcisolver, 'spin_square'):
+            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+            log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
+        else:
+            log.info('CASCI E = %.15g', e_tot)
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
@@ -556,15 +557,16 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         casdm1_prev = casdm1_last = casdm1
         log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        if hasattr(casscf.fcisolver, 'spin_square'):
-            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-            log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
-                 imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
-        else:
-            log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  ',
-                     imacro, njk, imicro, e_tot, e_tot-elast)
-        log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
-                 norm_gorb0, norm_gci, norm_ddm)
+        if log.verbose >= logger.INFO:
+            if hasattr(casscf.fcisolver, 'spin_square'):
+                ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
+                log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+                     imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
+            else:
+                log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  ',
+                         imacro, njk, imicro, e_tot, e_tot-elast)
+            log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
+                     norm_gorb0, norm_gci, norm_ddm)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol

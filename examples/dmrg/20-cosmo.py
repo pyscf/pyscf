@@ -75,7 +75,7 @@ mf = scf.fast_newton(mf)
 #
 # 1. Equilibrium solvation for ground state
 #
-# "sol.dm = None" allows the solvation relaxing to equilibruim wrt the system
+# "sol.dm = None" allows the solvent relaxing to equilibruim for the system
 # ground state
 #
 sol = cosmo.COSMO(mol)
@@ -116,7 +116,7 @@ print('Excitation E = %.9g' % (e_state1-e_state0))
 #
 # 1. Equilibrium solvation for excited state.
 #
-# "sol.dm = None" relaxes the solvent to equilibruim wrt excited state
+# "sol.dm = None" relaxes the solvent to equilibruim for excited state
 #
 sol = cosmo.COSMO(mol)
 sol.dm = None

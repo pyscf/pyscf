@@ -375,7 +375,7 @@ def is_hybrid_xc(xc_code):
             return xc_code
     else:
         if ',' in xc_code:
-            xc_code = xc_code.split(',', xc_code)[0]
+            xc_code = xc_code.split(',')[0]
 
         if 'XC_HYB_GGA_XC_'+xc_code in XC_CODES:
             return XC_CODES['XC_HYB_GGA_XC_'+xc_code]
