@@ -342,7 +342,10 @@ LDA_IDS = set((1,  2,  3,  4,  5,  6,  7,  8,  9, 10,
                30, 31, 50, 51,))
 
 def is_lda(xc_code):
-    xc_code = _format_code(xc_code)
+    if isinstance(xc_code, (tuple, list)):
+        xc_code = _format_code(xc_code[0])
+    else:
+        xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
         if xc_code in LDA_IDS:
             return xc_code
@@ -369,7 +372,10 @@ HYB_IDS = set((401, 402, 403, 404, 405, 406, 407, 408, 410, 411,
                448, 449, 450, 451, 452, 457, 458,))
 
 def is_hybrid_xc(xc_code):
-    xc_code = _format_code(xc_code)
+    if isinstance(xc_code, (tuple, list)):
+        xc_code = _format_code(xc_code[0])
+    else:
+        xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
         if xc_code in HYB_IDS:
             return xc_code
@@ -397,7 +403,10 @@ MGGA_IDS = set(( 64,  72, 73,  74,  75,  76,  77,  78,  201, 202,
                 445, 446, 447, 448, 449, 450, 451, 452, 457, 458,))
 
 def is_meta_gga(xc_code):
-    xc_code = _format_code(xc_code)
+    if isinstance(xc_code, (tuple, list)):
+        xc_code = _format_code(xc_code[0])
+    else:
+        xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
         if xc_code in MGGA_IDS:
             return xc_code
@@ -439,7 +448,10 @@ GGA_IDS = set(( 47,  48,  49,  52,  53,  54,  55,  56,  57,  58,
                456,))
 
 def is_gga(xc_code):
-    xc_code = _format_code(xc_code)
+    if isinstance(xc_code, (tuple, list)):
+        xc_code = _format_code(xc_code[0])
+    else:
+        xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
         if xc_code in GGA_IDS:
             return xc_code
@@ -470,7 +482,10 @@ X_AND_C_IDS = set(( 20,  65,  66,  67,  93,  94,  95,  96,  97, 146,
                    446, 447, 448, 449, 450, 451, 452, 457, 458,))
 
 def is_x_and_c(xc_code):
-    xc_code = _format_code(xc_code)
+    if isinstance(xc_code, (tuple, list)):
+        xc_code = _format_code(xc_code[0])
+    else:
+        xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
         if xc_code in X_AND_C_IDS:
             return xc_code
@@ -502,13 +517,18 @@ def _format_code(xc_code):
 def parse_xc_name(xc_name='LDA,VWN'):
     '''Convert the XC functional name to libxc library internal ID.
     '''
-    if ',' in xc_name:
-        x_code, c_code = xc_name.split(',')
-        x_code = _format_code(x_code)
-        c_code = _format_code(c_code)
+    if isinstance(xc_name, str):
+        if ',' in xc_name:
+            x_code, c_code = xc_name.split(',')
+            x_code = _format_code(x_code)
+            c_code = _format_code(c_code)
+        else:
+            x_code = _format_code(xc_name)
+            c_code = 0
+    elif isinstance(xc_name, int):
+        x_code, c_code = xc_name, 0
     else:
-        x_code = _format_code(xc_name)
-        c_code = 0
+        x_code, c_code = xc_name
 
     if isinstance(x_code, str):
         if x_code == 'LDA':

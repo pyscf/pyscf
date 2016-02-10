@@ -16,7 +16,7 @@ from pyscf.scf import cphf
 
 
 #
-# Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients # (XAX)^1
+# Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
 def kernel(td_grad, (x, y), singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
@@ -51,10 +51,9 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
     wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
     if singlet:
         veff = vj[1] * 2 - vk[1]
-        veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
     else:
         veff = -vk[1]
-        veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
+    veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
     wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
     wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
     veff = -vk[2]
@@ -100,11 +99,12 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
     vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T,
                                   dmzvom-dmzvom.T))
+    vj = vj.reshape(-1,3,nao,nao)
+    vk = vk.reshape(-1,3,nao,nao)
     if singlet:
         vhf1 = vj * 2 - vk
     else:
         vhf1 = numpy.vstack((vj[:2]*2-vk[:2], -vk[2:]))
-    vhf1 = vhf1.reshape(-1,3,nao,nao)
     time1 = log.timer('2e AO integral derivatives', *time1)
 
     if atmlst is None:
@@ -167,14 +167,16 @@ class Gradients(rhf_grad.Gradients):
         log.info('\n')
         return self
 
+    def grad_elec(self, xy, singlet, atmlst=None):
+        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+
     def kernel(self, xy=None, state=0, singlet=None, atmlst=None):
         cput0 = (time.clock(), time.time())
-        if atmlst is None:
-            atmlst = range(self.mol.natm)
         if xy is None: xy = self._td.xy[state]
         if singlet is None: singlet = self._td.singlet
+        if atmlst is None: atmlst = range(self.mol.natm)
         self.check_sanity()
-        de = kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+        de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
 
         logger.note(self, '--------------')
@@ -211,17 +213,16 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     #tdg.verbose = 5
     g1 = tdg.kernel(z[0])
-    print g1
+    print(g1)
 #[[ 0  0  -2.67023832e-01]
 # [ 0  0   2.67023832e-01]]
 
     td = pyscf.tddft.TDDFT(mf)
     td.nstates = 3
-    #td.singlet = False
     e, z = td.kernel()
     tdg = Gradients(td)
     g1 = tdg.kernel(state=0)
-    print g1
+    print(g1)
 # [[ 0  0  -2.71041021e-01]
 #  [ 0  0   2.71041021e-01]]
 
@@ -231,9 +232,9 @@ if __name__ == '__main__':
     e, z = td.kernel()
     tdg = Gradients(td)
     g1 = tdg.kernel(state=0)
-    print g1
-# 0.0002810490999962667
-    exit()
+    print(g1)
+# [[ 0  0  -2.81048403e-01]
+#  [ 0  0   2.81048403e-01]]
 
     td = pyscf.tddft.TDDFT(mf)
     td.nstates = 3
@@ -241,5 +242,7 @@ if __name__ == '__main__':
     e, z = td.kernel()
     tdg = Gradients(td)
     g1 = tdg.kernel(state=0)
-    print g1
-# 0.00028625150000038957
+    print(g1)
+# [[ 0  0  -2.86250870e-01]
+#  [ 0  0   2.86250870e-01]]
+

@@ -30,6 +30,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
     nao, nmo = mo_coeff.shape
     ndm = len(dmvo)
 
+    dmvo = numpy.asarray(dmvo)
     dmvo = (dmvo + dmvo.transpose(0,2,1)) * .5
 
     xctype = numint._xc_type(x_id, c_id)
@@ -174,6 +175,62 @@ class TDA(rhf.TDA):
         return v1vo.reshape(nz,-1)
 
 
+class TDDFT(rhf.TDHF):
+    def get_vind(self, xys):
+        '''
+        [ A  B][X]
+        [-B -A][Y]
+        '''
+        mo_coeff = self._scf.mo_coeff
+        mo_energy = self._scf.mo_energy
+        nao, nmo = mo_coeff.shape
+        nocc = (self._scf.mo_occ>0).sum()
+        nvir = nmo - nocc
+        orbv = mo_coeff[:,nocc:]
+        orbo = mo_coeff[:,:nocc]
+        nz = len(xys)
+        dms = numpy.empty((nz*2,nao,nao))
+        for i in range(nz):
+            x, y = xys[i].reshape(2,nvir,nocc)
+            dmx = reduce(numpy.dot, (orbv, x, orbo.T))
+            dmy = reduce(numpy.dot, (orbv, y, orbo.T))
+            dms[i   ] = dmx + dmy.T  # AX + BY
+            dms[i+nz] = dms[i].T # = dmy + dmx.T  # AY + BX
+
+        x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
+        hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+
+        if abs(hyb) > 1e-10:
+            vj, vk = self._scf.get_jk(self.mol, dms, hermi=0)
+            if self.singlet:
+                veff = vj * 2 - hyb * vk
+            else:
+                veff = -hyb * vk
+        else:
+            if self.singlet:
+                vj = self._scf.get_j(self.mol, dms, hermi=1)
+                veff = vj * 2
+            else:
+                veff = numpy.zeros((nz*2,nao,nao))
+
+        mem_now = pyscf.lib.current_memory()[0]
+        max_memory = max(2000, self.max_memory*.9-mem_now)
+        v1xc = _contract_xc_kernel(self, x_code, c_code, dms[:nz],
+                                   singlet=self.singlet, max_memory=max_memory)
+        veff[:nz] += v1xc
+        veff[nz:] += v1xc
+
+        veff = _ao2mo.nr_e2_(veff, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = eai.ravel()
+        for i, z in enumerate(xys):
+            x, y = z.reshape(2,-1)
+            veff[i   ] += eai * x  # AX
+            veff[i+nz] += eai * y  # AY
+        hx = numpy.hstack((veff[:nz], -veff[nz:]))
+        return hx.reshape(nz,-1)
+
+
 class TDDFTNoHybrid(TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
@@ -254,61 +311,6 @@ class TDDFTNoHybrid(TDA):
 
         return self.e, self.xy
 
-class TDDFT(rhf.TDHF):
-    def get_vind(self, xys):
-        '''
-        [ A  B][X]
-        [-B -A][Y]
-        '''
-        mo_coeff = self._scf.mo_coeff
-        mo_energy = self._scf.mo_energy
-        nao, nmo = mo_coeff.shape
-        nocc = (self._scf.mo_occ>0).sum()
-        nvir = nmo - nocc
-        orbv = mo_coeff[:,nocc:]
-        orbo = mo_coeff[:,:nocc]
-        nz = len(xys)
-        dms = numpy.empty((nz*2,nao,nao))
-        for i in range(nz):
-            x, y = xys[i].reshape(2,nvir,nocc)
-            dmx = reduce(numpy.dot, (orbv, x, orbo.T))
-            dmy = reduce(numpy.dot, (orbv, y, orbo.T))
-            dms[i   ] = dmx + dmy.T  # AX + BY
-            dms[i+nz] = dms[i].T # = dmy + dmx.T  # AY + BX
-
-        x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
-        hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
-
-        if abs(hyb) > 1e-10:
-            vj, vk = self._scf.get_jk(self.mol, dms, hermi=0)
-            if self.singlet:
-                veff = vj * 2 - hyb * vk
-            else:
-                veff = -hyb * vk
-        else:
-            if self.singlet:
-                vj = self._scf.get_j(self.mol, dms, hermi=1)
-                veff = vj * 2
-            else:
-                veff = 0
-
-        mem_now = pyscf.lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.9-mem_now)
-        v1xc = _contract_xc_kernel(self, x_code, c_code, dms[:nz],
-                                   singlet=self.singlet, max_memory=max_memory)
-        veff[:nz] += v1xc
-        veff[nz:] += v1xc
-
-        veff = _ao2mo.nr_e2_(veff, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        eai = eai.ravel()
-        for i, z in enumerate(xys):
-            x, y = z.reshape(2,-1)
-            veff[i   ] += eai * x  # AX
-            veff[i+nz] += eai * y  # AY
-        hx = numpy.hstack((veff[:nz], -veff[nz:]))
-        return hx.reshape(nz,-1)
-
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -330,7 +332,7 @@ if __name__ == '__main__':
     td = TDDFTNoHybrid(mf)
     td.verbose = 5
     td.nstates = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.74237664   9.74237664  14.85155348  30.35031573  30.35031573]
 
     mf = dft.RKS(mol)
@@ -339,7 +341,7 @@ if __name__ == '__main__':
     td = TDDFTNoHybrid(mf)
     td.nstates = 5
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.8221162    9.8221162   15.04101953  30.01385422  30.01385422]
 
 
@@ -349,7 +351,7 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.verbose = 5
     td.nstates = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.74237664   9.74237664  14.85155348  30.35031573  30.35031573]
 
     mf = dft.RKS(mol)
@@ -358,7 +360,7 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.nstates = 5
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.8221162    9.8221162   15.04101953  30.01385422  30.01385422]
 
     mf = dft.RKS(mol)
@@ -367,7 +369,7 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.nstates = 5
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [ 10.30905882  10.30905882  15.49864105  30.81478949  30.81478949]
 
     mf = dft.RKS(mol)
@@ -376,7 +378,7 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.nstates = 5
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.90274533   9.90274533  15.17706912  30.55785413  30.55785413]
 
 
@@ -386,7 +388,7 @@ if __name__ == '__main__':
     td = TDA(mf)
     td.nstates = 5
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.91680714   9.91680714  15.44064902  30.56325275  30.56325275]
 
     mf = dft.RKS(mol)
@@ -395,7 +397,7 @@ if __name__ == '__main__':
     td = TDA(mf)
     td.nstates = 5
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [ 10.32227199  10.32227199  15.75328791  30.82032753  30.82032753]
 
     mf = dft.RKS(mol)
@@ -403,6 +405,6 @@ if __name__ == '__main__':
     mf.scf()
     td = TDA(mf)
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [  9.68883108   9.68883108  15.07124069]
 

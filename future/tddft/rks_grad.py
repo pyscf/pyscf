@@ -11,16 +11,17 @@ from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.lib import logger
-from pyscf.dft import rks_grad
 from pyscf.dft import numint
 from pyscf.scf import cphf
+from pyscf.tddft import rks
+from pyscf.tddft import rhf_grad
 import pyscf.dft.vxc
 
 
 #
-# Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients # (XAX)^1
+# Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, (x, y), atmlst=None, singlet=True,
+def kernel(td_grad, (x, y), singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -53,31 +54,50 @@ def kernel(td_grad, (x, y), atmlst=None, singlet=True,
 
     x_code, c_code = pyscf.dft.vxc.parse_xc_name(mf.xc)
     hyb = mf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+    f1vo, f1oo, vxc1, k1ao = \
+            _contract_xc_kernel(td_grad, x_code, c_code, dmzvop,
+                                dmzoo, True, True, singlet, max_memory)
 
-    vj, vk = mf.get_jk(mol, (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T), hermi=0)
-    if singlet:
-        f1vo, f1oo, vxc1, k1ao = \
-                _contract_xc_kernel(td_grad, x_code, c_code, dmzvop,
-                                    dmzoo, True, True, singlet, max_memory)
-        veff0doo = vj[0] * 2 - hyb * vk[0] + f1oo[0] * 2 + 8*k1ao[0]
-        veff = vj[1] * 2 - hyb * vk[1] + f1vo[0] * 4
+    if abs(hyb) > 1e-10:
+        vj, vk = mf.get_jk(mol, (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T), hermi=0)
+        veff0doo = vj[0] * 2 - hyb * vk[0] + f1oo[0] + k1ao[0] * 2
+        wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
+        if singlet:
+            veff = vj[1] * 2 - hyb * vk[1] + f1vo[0] * 2
+        else:
+            veff = -hyb * vk[1]
         veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
+        wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
+        wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
+        veff = -hyb * vk[2]
+        veff0mom = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
+        wvo -= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy) * 2
+        wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
     else:
-        veff0doo = -hyb * vk[0]
-        veff = -hyb * vk[1]
+        vj = mf.get_j(mol, (dmzoo, dmzvop+dmzvop.T), hermi=1)
+        veff0doo = vj[0] * 2 + f1oo[0] + k1ao[0] * 2
+        wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
+        if singlet:
+            veff = vj[1] * 2 + f1vo[0] * 2
+        else:
+            veff = f1vo[0] * 2
         veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
-    wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
-    wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
-    wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
-    veff = -hyb * vk[2]
-    veff0mom = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
-    wvo -= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy) * 2
-    wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
-    def fvind(x):  # For singlet, closed shell ground state
+        wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
+        wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
+        veff0mom = numpy.zeros((nmo,nmo))
+    def fvind(x):
+# Cannot make call to ._td.get_vind because first order orbitals are solved
+# through closed shell ground state CPHF.
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc), orbo.T))
-        vj, vk = mf.get_jk(mol, (dm+dm.T))
-        vindxc = _get_vind_xc(td_grad, x_code, c_code, dm+dm.T, max_memory)
-        veff = vj * 2 - hyb * vk + vindxc*2
+# Call singlet XC kernel contraction, for closed shell ground state
+        vindxc = rks._contract_xc_kernel(td_grad._td, x_code, c_code,
+                                         [dm+dm.T], True, max_memory)
+        if abs(hyb) > 1e-10:
+            vj, vk = mf.get_jk(mol, (dm+dm.T))
+            veff = vj * 2 - hyb * vk + vindxc
+        else:
+            vj = mf.get_j(mol, (dm+dm.T))
+            veff = vj * 2 + vindxc
         return reduce(numpy.dot, (orbv.T, veff, orbo)).ravel()
     z1 = cphf.solve(fvind, mo_energy, mo_occ, wvo,
                     max_cycle=td_grad.max_cycle_cphf, tol=td_grad.conv_tol)[0]
@@ -85,13 +105,15 @@ def kernel(td_grad, (x, y), atmlst=None, singlet=True,
     time1 = log.timer('Z-vector using CPHF solver', *time0)
 
     z1ao  = reduce(numpy.dot, (orbv, z1, orbo.T))
-    vj, vk = mf.get_jk(mol, z1ao, hermi=0)
-    if singlet:
-        fxcz1 = _contract_xc_kernel(td_grad, x_code, c_code, z1ao, None,
-                                    False, False, singlet, max_memory)[0]
-        veff = vj * 2 - hyb * vk + fxcz1[0] * 2
+# Note Z-vector is always associated to singlet integrals.
+    fxcz1 = _contract_xc_kernel(td_grad, x_code, c_code, z1ao, None,
+                                False, False, True, max_memory)[0]
+    if abs(hyb) > 1e-10:
+        vj, vk = mf.get_jk(mol, z1ao, hermi=0)
+        veff = vj * 2 - hyb * vk + fxcz1[0]
     else:
-        veff = -hyb * vk
+        vj = mf.get_j(mol, z1ao, hermi=1)
+        veff = vj * 2 + fxcz1[0]
 
     im0 = numpy.zeros((nmo,nmo))
     im0[:nocc,:nocc] = reduce(numpy.dot, (orbo.T, veff0doo+veff, orbo))
@@ -117,19 +139,26 @@ def kernel(td_grad, (x, y), atmlst=None, singlet=True,
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
-    vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T,
-                                  dmzvom-dmzvom.T))
-    if singlet:
-        veff1 = vj * 2 - hyb * vk
-        veff1 = veff1.reshape(-1,3,nao,nao)
-        veff1[0] += vxc1[1:]
-        veff1[1] +=(f1oo[1:]*2 + fxcz1[1:]*2 + k1ao[1:]*8)*2 # *2 for dmz1doo+dmz1oo.T
-        veff1[2] += f1vo[1:] * 4
+    if abs(hyb) > 1e-10:
+        vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T,
+                                      dmzvom-dmzvom.T))
+        vj = vj.reshape(-1,3,nao,nao)
+        vk = vk.reshape(-1,3,nao,nao)
+        if singlet:
+            veff1 = vj * 2 - hyb * vk
+        else:
+            veff1 = numpy.vstack((vj[:2]*2-hyb*vk[:2], -hyb*vk[2:]))
     else:
-        raise NotImplementedError
-        veff1 = -hyb * vk
-        veff1 = veff1.reshape(-1,3,nao,nao)
-        veff1[0] += vxc1[1:]
+        vj = td_grad.get_j(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T))
+        vj = vj.reshape(-1,3,nao,nao)
+        veff1 = numpy.zeros((4,3,nao,nao))
+        if singlet:
+            veff1[:3] = vj * 2
+        else:
+            veff1[:2] = vj[:2] * 2
+    veff1[0] += vxc1[1:]
+    veff1[1] +=(f1oo[1:] + fxcz1[1:] + k1ao[1:]*2)*2 # *2 for dmz1doo+dmz1oo.T
+    veff1[2] += f1vo[1:] * 2
     time1 = log.timer('2e AO integral derivatives', *time1)
 
     if atmlst is None:
@@ -164,6 +193,7 @@ def kernel(td_grad, (x, y), atmlst=None, singlet=True,
     return de
 
 # xai, oovv in AO-representation
+# Note spin-trace are applied for fxc, kxc
 def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
                         with_kxc=True, singlet=True, max_memory=4000):
     mol = td_grad.mol
@@ -213,14 +243,13 @@ def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
             ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
             rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, non0tab, 'LDA')
             vxc, fxc, kxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=deriv)[1:]
-            #fxc1 = ni.eval_xc(x_id, c_id, (rho*.5,rho*.5), 1, deriv=2)[2][0]
-            #wfxc = (fxc1[:,0]+fxc1[:,1]) * weight*.5
 
-            rho1 = ni.eval_rho(mol, ao[0], dmvo, non0tab, 'LDA')
-            wfxc = fxc[0] * weight
-            aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho1)
-            for k in range(4):
-                f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
+            wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
+            if singlet:
+                rho1 = ni.eval_rho(mol, ao[0], dmvo, non0tab, 'LDA')
+                aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho1)
+                for k in range(4):
+                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
             if oovv is not None:
                 rho2 = ni.eval_rho(mol, ao[0], oovv, non0tab, 'LDA')
                 aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho2)
@@ -230,11 +259,13 @@ def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
                 aow = numpy.einsum('pi,p->pi', ao[0], vxc[0]*weight)
                 for k in range(4):
                     v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
-            if with_kxc:
+            if singlet and with_kxc:
                 aow = numpy.einsum('pi,p->pi', ao[0], kxc[0]*weight*rho1**2)
                 for k in range(4):
                     k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
-            vxc = fxc = kxc = None
+            vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
+        if singlet and with_kxc:
+            k1ao *= 4
 
     elif xctype == 'GGA':
         raise NotImplementedError('GGA')
@@ -247,74 +278,10 @@ def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
     if k1ao is not None: k1ao[1:] *= -1
     return f1vo, f1oo, v1ao, k1ao
 
-def _get_vind_xc(td_grad, x_id, c_id, dm, max_memory=2000):
-    mol = td_grad.mol
-    mf = td_grad._scf
-    ni = mf._numint
-    grids = mf.grids
 
-    mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
-    mo_occ = mf.mo_occ
-    nao, nmo = mo_coeff.shape
-    nocc = (mo_occ>0).sum()
-    orbv = mo_coeff[:,nocc:]
-    orbo = mo_coeff[:,:nocc]
-
-    dm = (dm + dm.T) * .5
-    fxcao = numpy.zeros((nao,nao))
-
-    xctype = numint._xc_type(x_id, c_id)
-    ngrids = len(grids.weights)
-    BLKSIZE = numint.BLKSIZE
-    max_memory = max_memory - 4*nao**2*8/1e6
-    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
-
-    if xctype == 'LDA':
-        buf = numpy.empty((4,blksize,nao))
-        for ip0, ip1 in numint.prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0tab = ni.non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0tab, out=buf)
-            rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, 'LDA')
-            fxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=2)[2]
-
-            rho1 = ni.eval_rho(mol, ao, dm, non0tab, xctype)
-            aow = numpy.einsum('pi,p->pi', ao, fxc[0]*weight*rho1)
-            fxcao += numint._dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
-
-    elif xctype == 'GGA':
-        raise NotImplementedError('GGA')
-    else:
-        raise NotImplementedError('meta-GGA')
-
-    return fxcao
-
-
-class Gradients(rks_grad.Gradients):
-    def __init__(self, td):
-        rks_grad.Gradients.__init__(self, td._scf)
-        self._td = td
-        self.max_cycle_cphf = 20
-        self.conv_tol = 1e-8
-
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
-        log.info('\n')
-        log.info('******** LR %s gradients for %s ********',
-                 self._td.__class__, self._td._scf.__class__)
-        log.info('CPHF conv_tol = %g', self.conv_tol)
-        log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        log.info('\n')
-        return self
-
-    def kernel(self, xy=None, state=0, singlet=True):
-        if xy is None: xy = self._td.xy[state]
-        self.check_sanity()
-        de = kernel(self, xy, singlet=singlet)
-        self.de = de + self.grad_nuc()
-        return self.de
+class Gradients(rhf_grad.Gradients):
+    def grad_elec(self, xy, singlet, atmlst=None):
+        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
 
 if __name__ == '__main__':
@@ -336,22 +303,43 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.xc = 1,0
     mf.grids.prune_scheme = False
+#    mf.grids.level = 6
     mf.scf()
 
     td = pyscf.tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(z[2])
+    g1 = tdg.kernel(state=2)
     print(g1)
-#[[ 0  0  -9.23916667e-02]
-# [ 0  0   9.23956206e-02]]
+# [[ 0  0  -9.23916667e-02]
+#  [ 0  0   9.23956206e-02]]
 
     td = pyscf.tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(z[2])
+    g1 = tdg.kernel(state=2)
     print(g1)
-#[[ 0  0  -1.31315477e-01]
-# [ 0  0   1.31319442e-01]]
+# [[ 0  0  -1.31315477e-01]
+#  [ 0  0   1.31319442e-01]]
+
+    td = pyscf.tddft.TDA(mf)
+    td.nstates = 3
+    td.singlet = False
+    e, z = td.kernel()
+    tdg = Gradients(td)
+    g1 = tdg.kernel(state=2)
+    print(g1)
+# [[ 0  0  -2.72555279e-01]
+#  [ 0  0   2.72555086e-01]]
+
+    td = pyscf.tddft.TDDFT(mf)
+    td.nstates = 3
+    td.singlet = False
+    e, z = td.kernel()
+    tdg = Gradients(td)
+    g1 = tdg.kernel(state=2)
+    print(g1)
+# [[ 0  0  -2.72555279e-01]
+#  [ 0  0   2.72555086e-01]]

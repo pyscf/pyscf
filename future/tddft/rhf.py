@@ -96,11 +96,10 @@ class TDA(pyscf.lib.StreamObject):
         return precond
 
     def init_guess(self, eai, nstates=None):
-        if nstates is None:
-            nstates = self.nstates
-        nvir, nocc = eai.shape
-        nroot = min(3, nstates, nvir*nocc)
-        x0 = numpy.zeros((nroot, nvir*nocc))
+        if nstates is None: nstates = self.nstates
+        nov = eai.size
+        nroot = min(nstates, nov)
+        x0 = numpy.zeros((nroot, nov))
         idx = numpy.argsort(eai.ravel())
         for i in range(nroot):
             x0[i,idx[i]] = 1  # lowest excitations
@@ -178,10 +177,9 @@ class TDHF(TDA):
         return precond
 
     def init_guess(self, eai, nstates=None):
-        if nstates is None:
-            nstates = self.nstates
+        if nstates is None: nstates = self.nstates
         nov = eai.size
-        nroot = min(3, nstates, nov)
+        nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov*2))
         idx = numpy.argsort(eai.ravel())
         for i in range(nroot):
@@ -242,19 +240,19 @@ if __name__ == '__main__':
     mf.scf()
     td = TDA(mf)
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [ 11.90276464  11.90276464  16.86036434]
 
     td.singlet = False
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [ 11.01747918  11.01747918  13.16955056]
 
     td = TDHF(mf)
     td.verbose = 5
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [ 11.83487199  11.83487199  16.66309285]
 
     td.singlet = False
-    print td.kernel()[0] * 27.2114
+    print(td.kernel()[0] * 27.2114)
 # [ 10.8919234   10.8919234   12.63440705]
 
