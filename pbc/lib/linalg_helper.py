@@ -8,6 +8,8 @@ Extension to scipy.linalg module developed for PBC branch.
 method = 'arnoldi'
 #method = 'davidson'
 
+VERBOSE = False
+
 def eigs(matvec,size,nroots,Adiag=None):
     '''Davidson diagonalization method to solve A c = E c 
     when A is not Hermitian.
@@ -35,10 +37,8 @@ def eigs(matvec,size,nroots,Adiag=None):
         return david.solve_iter()
 
 
-VERBOSE = False
-
 class Arnoldi(object):
-    def __init__(self,matr_multiply,xStart,inPreCon,nroots=1,tol=1e-6):
+    def __init__(self,matr_multiply,xStart,inPreCon,nroots=1,tol=1e-14):
         self.matrMultiply = matr_multiply
         self.size = xStart.shape[0]
         self.nEigen = min(nroots, self.size)
@@ -87,8 +87,8 @@ class Arnoldi(object):
 
                 self.totalIter += 1
                 self.currentSize += 1
-        print ""
-        print "Converged in %3d cycles" % self.totalIter
+        if VERBOSE:
+            print "\nConverged in %3d cycles" % self.totalIter
         self.constructAllSolV()
         return self.outeigs, self.outevecs
 
