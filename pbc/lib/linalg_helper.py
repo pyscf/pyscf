@@ -8,7 +8,7 @@ Extension to scipy.linalg module developed for PBC branch.
 method = 'arnoldi'
 #method = 'davidson'
 
-VERBOSE = True
+VERBOSE = False 
 
 def eigs(matvec,size,nroots,Adiag=None):
     '''Davidson diagonalization method to solve A c = E c
@@ -38,7 +38,7 @@ def eigs(matvec,size,nroots,Adiag=None):
 
 
 class Arnoldi(object):
-    def __init__(self,matr_multiply,xStart,inPreCon,nroots=1,tol=1e-8):
+    def __init__(self,matr_multiply,xStart,inPreCon,nroots=1,tol=1e-10):
         self.matrMultiply = matr_multiply
         self.size = xStart.shape[0]
         self.nEigen = min(nroots, self.size)
