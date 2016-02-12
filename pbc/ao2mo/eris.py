@@ -19,7 +19,7 @@ from pyscf.lib import logger
                = conj[ \sum_r e^{-iGr} j*(r) i(r) ]
 """
 
-def general(cell, mo_coeffs, kpts=None):
+def general(cell, mo_coeffs, kpts=None, compact=0):
     '''pyscf-style wrapper to get MO 2-el integrals.'''
     assert len(mo_coeffs) == 4
     if kpts is not None:
@@ -83,6 +83,7 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
         mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
+    mo_pairs_invR = np.einsum('rj,ri->rji', np.conj(mojR), moiR)
     mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
     mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
@@ -91,11 +92,11 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
             mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.gs,
                                                 coords, q)
             #mo_pairs_invG[:,i*nmoj+j] = ngs*tools.ifftk(mo_pairs_R[:,i,j], cell.gs,
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(mo_pairs_R[:,j,i], cell.gs,
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(mo_pairs_invR[:,j,i], cell.gs,
                                                            coords, -q))
     return mo_pairs_G, mo_pairs_invG
 
-def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=np.zeros(3), verbose=logger.DEBUG):
+def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.DEBUG):
     '''Assemble 4-index electron repulsion integrals.
 
     Returns:
@@ -110,6 +111,8 @@ def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=np.zeros(3), verbose=logge
 
     log.debug('Performing periodic ERI assembly of (%i, %i) ij,kl pairs',
               orb_pair_invG1.shape[1], orb_pair_G2.shape[1])
+    if q is None:
+        q = np.zeros(3)
     coulqG = tools.get_coulG(cell, q)
     ngs = orb_pair_invG1.shape[0]
     Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngs**2)

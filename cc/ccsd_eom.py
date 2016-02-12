@@ -10,7 +10,7 @@ from pyscf.lib import logger
 from pyscf.pbc import lib as pbclib
 import pyscf.cc
 import pyscf.cc.ccsd
-#from pyscf.cc.ccsd import _cp
+from pyscf.cc.ccsd import _cp
 from pyscf.cc import intermediates as imd
 from pyscf.pbc.lib.linalg_helper import eigs 
 
@@ -31,7 +31,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     elif t1 is None:
         nocc = cc.nocc()
         nvir = cc.nmo() - nocc
-        t1 = numpy.zeros((nocc,nvir))
+        t1 = numpy.zeros((nocc,nvir), eris.dtype)
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
 
@@ -93,12 +93,14 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Fvv -= fvv
     Foo -= foo
 
-    eris_oovo = -eris.ooov.transpose(0,1,3,2)
-    eris_ovvo = -eris.ovov.transpose(0,1,3,2)
-    eris_vvvo = -eris.ovvv.transpose(2,3,1,0)
+    # eris might be an HDF5 Dataset, so _cp to ndarray
+    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
+    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
+    eris_vvvo = - _cp(eris.ovvv).transpose(2,3,1,0).conj()
 
     # T1 equation
-    t1new = _cp(fov)
+    # TODO: Does this need a conj()? Usually zero w/ canonical HF.
+    t1new = fov.copy()
     t1new +=  einsum('ie,ae->ia',t1,Fvv)
     t1new += -einsum('ma,mi->ia',t1,Foo) 
     t1new +=  einsum('imae,me->ia',t2,Fov)
@@ -106,7 +108,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t1new += -0.5*einsum('imef,maef->ia',t2,eris.ovvv)
     t1new += -0.5*einsum('mnae,nmei->ia',t2,eris_oovo)
     # T2 equation
-    t2new = _cp(eris.oovv)
+    # For conj(), see Hirata and Bartlett, Eq. (36) 
+    t2new = np.array(eris.oovv, copy=True).conj()
     Ftmp = Fvv - 0.5*einsum('mb,me->be',t1,Fov)
     tmp = einsum('ijae,be->ijab',t2,Ftmp)
     t2new += (tmp - tmp.transpose(0,1,3,2))
@@ -138,10 +141,11 @@ def energy(cc, t1, t2, eris):
     e = einsum('ia,ia', fock[:nocc,nocc:], t1)
     t1t1 = einsum('ia,jb->ijab',t1,t1)
     tau = t2 + 2*t1t1
-    e += 0.25 * np.dot(tau.flatten(), eris.oovv.flatten())
-    #e += (0.25*np.einsum('ijab,ijab',t2,eris.oovv)
-    #      + 0.5*np.einsum('ia,jb,ijab',t1,t1,eris.oovv))
-    return e
+    eris_oovv = _cp(eris.oovv)
+    e += 0.25 * np.dot(tau.flatten(), eris_oovv.flatten())
+    #e += (0.25*np.einsum('ijab,ijab',t2,eris_oovv)
+    #      + 0.5*np.einsum('ia,jb,ijab',t1,t1,eris_oovv))
+    return e.real
 
 
 class CCSD(pyscf.cc.ccsd.CCSD):
@@ -175,7 +179,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         pyscf.cc.ccsd.CCSD.dump_flags(self)
         logger.info(self, '\n')
-        logger.info(self, '******** PBC CC flags ********')
+        logger.info(self, '******** EOM CC flags ********')
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -193,13 +197,14 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         eijab = np.zeros((nocc,nocc,nvir,nvir))
         for i in range(nocc):
             for a in range(nvir):
-                eia[i,a] = (foo[i,i] - fvv[a,a])
+                eia[i,a] = (foo[i,i] - fvv[a,a]).real
                 for j in range(nocc):
                     for b in range(nvir):
                         eijab[i,j,a,b] = ( foo[i,i] + foo[j,j]
-                                         - fvv[a,a] - fvv[b,b] )
+                                         - fvv[a,a] - fvv[b,b] ).real
                         t2[i,j,a,b] = eris.oovv[i,j,a,b]/eijab[i,j,a,b]
-        self.emp2 = 0.25*einsum('ijab,ijab',t2,eris.oovv)
+        eris_oovv = _cp(eris.oovv)
+        self.emp2 = 0.25*einsum('ijab,ijab',t2,eris_oovv.conj()).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
@@ -473,7 +478,8 @@ class CCSD(pyscf.cc.ccsd.CCSD):
 
 
 class _ERIS:
-    def __init__(self, cc, mo_coeff=None, method='incore'):
+    def __init__(self, cc, mo_coeff=None, method='incore', 
+                 ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
@@ -503,8 +509,7 @@ class _ERIS:
         if (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
 
-            eri = pyscf.ao2mo.outcore.general_iofree(
-                cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
+            eri = ao2mofn(cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
             eri = eri.reshape((nmo,)*4)
             eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0.
             eri1 = eri - eri.transpose(0,3,2,1) 
@@ -531,16 +536,17 @@ class _ERIS:
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = so_coeff[:,:nocc]
             orbv = so_coeff[:,nocc:]
-            self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
-            self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), 'f8')
-            self.ovoo = self.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8')
-            self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
-            self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
-            self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8')
+            if mo_coeff.dtype == np.complex: ds_type = 'c16'
+            else: ds_type = 'f8'
+            self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
+            self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
+            self.ovoo = self.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), ds_type)
+            self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
+            self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
+            self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
 
             cput1 = time.clock(), time.time()
-            buf = pyscf.ao2mo.outcore.general_iofree(
-                cc._scf.mol, (orbo,so_coeff,so_coeff,so_coeff), compact=0)
+            buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,so_coeff,so_coeff), compact=0)
             buf = buf.reshape((nocc,nmo,nmo,nmo))
             buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
             buf1 = buf - buf.transpose(0,3,2,1) 
@@ -555,11 +561,10 @@ class _ERIS:
             self.ovov[:,:,:,:] = buf1[:,nocc:,:nocc,nocc:]
             self.ovvv[:,:,:,:] = buf1[:,nocc:,nocc:,nocc:]
 
-            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
+            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
             for a in range(nvir):
                 orbva = orbv[:,a].reshape(-1,1)
-                buf = pyscf.ao2mo.outcore.general_iofree(
-                    cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
+                buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
                 buf = buf.reshape((1,nvir,nvir,nvir))
                 if a%2 == 0:
                     buf[0,1::2,:,:] = 0.
@@ -574,6 +579,3 @@ class _ERIS:
 
         log.timer('CCSD integral transformation', *cput0)
 
-
-def _cp(a):
-    return numpy.array(a, copy=True, order='C')
