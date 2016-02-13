@@ -517,7 +517,7 @@ def readEnergy(DMRGCI):
     if DMRGCI.nroots ==1:
         return calc_e[0]
     else:
-        return list(calc_e)
+        return numpy.asarray(calc_e)
 
 
 def DMRGSCF(mf, norb, nelec, *args, **kwargs):

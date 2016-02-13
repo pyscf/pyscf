@@ -244,8 +244,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     #        orbsym = orbsym[:ncas] + orbsym[ncas+num_of_orb_begin: ]
     #        norb = ncas + ncore + nvirt - num_of_orb_begin
     else :
-        print 'No job for this processor'
-        return
+        raise RuntimeError('No job for this processor.  It cause dead lock in comm.barrier')
 
 
     norb = ncas + num_of_orb_end - num_of_orb_begin

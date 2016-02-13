@@ -478,7 +478,7 @@ def Sij(mc, dms, eris, verbose=None):
     dm2 = dms['2']
     dm3 = dms['3']
     if mo_core.size ==0 :
-        return 0.0
+        return 0.0, 0
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
         h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
