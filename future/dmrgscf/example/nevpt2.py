@@ -7,8 +7,8 @@
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
-from pyscf.mrpt.nevpt2 import sc_nevpt
-from pyscf.dmrgscf.dmrgci import DMRGCI, DMRG_MPS_NEVPT
+from pyscf import mrpt
+from pyscf import dmrgscf
 
 '''
 DMRG-CASCI then DMRG-NEVPT2 calculation.
@@ -18,7 +18,7 @@ version (default) strictly follows the formula presented in JCP, 117(2002), 9138
 in which the 4-particle density matrix is explictly computed.  Typically 26
 orbitals is the upper limit of the slow version due to the large requirements
 on the memory usage.  The fast version employs the so called MPS-pertuber
-technique.  It is able to handle much larger systems, up to about 35 orbitals.
+technique.  It is able to handle much larger systems, up to about 30 orbitals.
 '''
 
 #
@@ -53,8 +53,8 @@ mc = mcscf.CASCI(m, 4, 4)
 mc.fcisolver.nroots = 2
 mc.casci()
 
-ci_nevpt_e1 = sc_nevpt(mc, ci=mc.ci[0])
-ci_nevpt_e2 = sc_nevpt(mc, ci=mc.ci[1])
+ci_nevpt_e1 = mrpt.sc_nevpt(mc, ci=mc.ci[0])
+ci_nevpt_e2 = mrpt.sc_nevpt(mc, ci=mc.ci[1])
 
 #
 # By default, the orbitals are canonicalized after calling CASCI solver.  Save
@@ -84,7 +84,7 @@ mc = mcscf.CASCI(m, 4, 4)
 # Use DMRGCI as the active space solver.  DMRGCI solver allows us to handle
 # ~ 50 active orbitals.
 #
-mc.fcisolver = DMRGCI(mol, maxM=200)
+mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=200)
 mc.fcisolver.nroots = 2
 #
 # Passing mc_orb to CASCI kernel function so that the CASCI calculation is
@@ -97,8 +97,8 @@ mc.kernel(mc_orb)
 # In current pyscf release, the default sc_nevpt function leads to the
 # DMRG-SC-NEVPT2 implementation based on the 4-particle density matrix.
 #
-dmrg_nevpt_e1 = sc_nevpt(mc,ci=mc.ci[0])
-dmrg_nevpt_e2 = sc_nevpt(mc,ci=mc.ci[1])
+dmrg_nevpt_e1 = mrpt.sc_nevpt(mc,ci=mc.ci[0])
+dmrg_nevpt_e2 = mrpt.sc_nevpt(mc,ci=mc.ci[1])
 
 
 
@@ -111,20 +111,15 @@ dmrg_nevpt_e2 = sc_nevpt(mc,ci=mc.ci[1])
 ##################################################
 
 #
-# The NEVPT2 calculate needs to be achieved in two steps: First call
-# DMRG_MPS_NEVPT function to initialize MPS-perturber, then compute the total
-# energy in sc_nevpt.  NOTE you need explicitly set the useMPS flag to tell
-# sc_nevpt function to execute the fast DMRG-NEVPT2 implementation.
+# Use compress_perturb function to initialize compressed perturber.
+# root=0 indicates that it's the perturber for ground state.
 #
-DMRG_MPS_NEVPT(mc, maxM=100, root=0)
-mps_nevpt_e1 = sc_nevpt(mc, ci=mc.ci[0], useMPS=True)
+mps_nevpt_e1 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=0))
 
 #
-# Compute NEVPT2 energy for second root.  NOTE the arguments root=1 of
-# DMRG_MPS_NEVPT and ci=mc.ci[1] of sc_nevpt have to be matched.
+# root=1 for first excited state.
 #
-DMRG_MPS_NEVPT(mc, maxM=100, root=1)
-mps_nevpt_e2 = sc_nevpt(mc, ci=mc.ci[1], useMPS=True)
+mps_nevpt_e1 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=1))
 
 
 print('CI NEVPT = %.15g %.15g  DMRG NEVPT = %.15g %.15g  MPS NEVPT = %.15g %.15g'

@@ -7,7 +7,7 @@
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
-from pyscf.dmrgscf.dmrgci import DMRGCI, DMRGSCF
+from pyscf.dmrgscf import DMRGCI, DMRGSCF
 from pyscf.mrpt.nevpt2 import sc_nevpt
 from pyscf import cosmo
 
