@@ -45,7 +45,7 @@ print('gradient integrals (d/dR i j|kl) have shape %s == (3,%dx%d,%dx%d)'
 
 
 #
-# Hessian integral have 9 components
+# Hessian integrals have 9 components
 #       1       d/dX  d/dX
 #       2       d/dX  d/dY
 #       3       d/dX  d/dZ

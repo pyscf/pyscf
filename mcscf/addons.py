@@ -474,11 +474,14 @@ def state_average(casscf, weights=(0.5,0.5)):
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
-        def spin_square(self, ci0, norb, nelec):
-            ss = fcibase_class.spin_square(self, ci0, norb, nelec)[0]
-            ss = numpy.einsum('i,i->', weights, ss)
-            multip = numpy.sqrt(ss+.25)*2
-            return ss, multip
+
+        if hasattr(fcibase_class, 'spin_square'):
+            def spin_square(self, ci0, norb, nelec):
+                ss = fcibase_class.spin_square(self, ci0, norb, nelec)[0]
+                ss = numpy.einsum('i,i->', weights, ss)
+                multip = numpy.sqrt(ss+.25)*2
+                return ss, multip
+
     return FakeCISolver()
 
 def state_average_(casscf, weights=(0.5,0.5)):
@@ -519,8 +522,11 @@ def state_specific(casscf, state=1):
                                         nroots=self.nroots, **kwargs)
             self._civec = c
             return e[state], c[state]
-        def spin_square(self, fcivec, norb, nelec):
-            return pyscf.fci.spin_op.spin_square0(fcivec, norb, nelec)
+
+        if hasattr(fcibase_class, 'spin_square'):
+            def spin_square(self, fcivec, norb, nelec):
+                return pyscf.fci.spin_op.spin_square0(fcivec, norb, nelec)
+
     return FakeCISolver()
 
 def state_specific_(casscf, state=1):

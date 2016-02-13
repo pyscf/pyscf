@@ -529,13 +529,6 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     if mc.chkfile == mc._scf._chkfile.name:
         # Do not delete chkfile after mcscf
         mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
-
-    def state_average_(self, weights=(0.5,0.5)):
-        self.fcisolver.nroots = len(weights)
-        self.fcisolver.weights = weights
-        return self
-    mc.state_average_ = state_average_
-    mc._keys = mc._keys.union(['state_average_'])
     return mc
 
 

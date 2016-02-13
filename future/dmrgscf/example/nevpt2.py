@@ -18,7 +18,7 @@ version (default) strictly follows the formula presented in JCP, 117(2002), 9138
 in which the 4-particle density matrix is explictly computed.  Typically 26
 orbitals is the upper limit of the slow version due to the large requirements
 on the memory usage.  The fast version employs the so called MPS-pertuber
-technique.  It is able to handle much larger systems, up to about 35 orbitals.
+technique.  It is able to handle much larger systems, up to about 30 orbitals.
 '''
 
 #
