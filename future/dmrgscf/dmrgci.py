@@ -48,11 +48,8 @@ class DMRGCI(pyscf.lib.StreamObject):
             
         weights : list of floats
             Use this attribute with "nroots" attribute to set state-average calculation.
-        force_restart : bool
-            To control whether to restart a DMRG calculation.  Note the other
-            attribute "restart" is created by the program internally.  Do *not*
-            set the attribute "restart" to force DMRG calculation restart.  It
-            maybe overwritten during calculation.
+        restart : bool
+            To control whether to restart a DMRG calculation.
         tol : float
             DMRG convergence tolerence
         maxM : int
@@ -109,7 +106,6 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.maxM = maxM
         self.startM =  None
         self.restart = False
-        self.force_restart = False
         self.nonspinAdapted = False
         self.scheduleSweeps = []
         self.scheduleMaxMs  = []
@@ -128,6 +124,9 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.generate_schedule()
         self.has_threepdm = False
         self.has_nevpt = False
+# This flag _restart is set by the program internally, to control when to make
+# Block restart calculation.
+        self._restart = False
 
         self._keys = set(self.__dict__.keys())
 
@@ -139,7 +138,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         if len(self.scheduleSweeps) == 0:
             startM = self.startM
             N_sweep = 0
-            if self.restart or self.force_restart :
+            if self.restart or self._restart :
                 Tol = self.tol / 10.0
             else:
                 Tol = 1.0e-4
@@ -185,7 +184,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         log.info('twodot_to_onedot = %d', self.twodot_to_onedot)
         log.info('tol = %g', self.tol)
         log.info('maxM = %d', self.maxM)
-        log.info('fullrestart = %s', str(self.restart or self.force_restart))
+        log.info('fullrestart = %s', str(self.restart or self._restart))
         log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
         log.info('wfnsym = %s', self.wfnsym)
         return self
@@ -296,7 +295,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         else:
             roots = range(self.nroots)
         if fciRestart is None:
-            fciRestart = self.restart or self.force_restart
+            fciRestart = self.restart or self._restart
 
         writeIntegralFile(self, h1e, eri, norb, nelec)
         writeDMRGConfFile(self, nelec, fciRestart)
@@ -348,9 +347,9 @@ class DMRGCI(pyscf.lib.StreamObject):
         def callback(envs):
             if (envs['norm_gorb'] < self.dmrg_switch_tol or
                 ('norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10)):
-                self.restart = True
+                self._restart = True
             else :
-                self.restart = False
+                self._restart = False
         return callback
 
 

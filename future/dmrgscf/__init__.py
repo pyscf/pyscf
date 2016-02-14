@@ -55,11 +55,8 @@ In DMRGCI object, you can set the following attributes to control Block program:
         
     weights : list of floats
         Use this attribute with "nroots" attribute to set state-average calculation.
-    force_restart : bool
-        To control whether to restart a DMRG calculation.  Note the other
-        attribute "restart" is created by the program internally.  Do *not*
-        set the attribute "restart" to force DMRG calculation restart.  It
-        maybe overwritten during calculation.
+    restart : bool
+        To control whether to restart a DMRG calculation.
     tol : float
         DMRG convergence tolerence
     maxM : int
