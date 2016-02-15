@@ -61,10 +61,8 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
     else:
-        #n, ks._exc, vx = numint.nr_rks_vxc(mol, ks.grids, x_code, c_code,
-        #                                   dm, hermi=hermi)
-        n, ks._exc, vx = ks._numint.nr_rks(mol, ks.grids, x_code, c_code,
-                                           dm, hermi=hermi)
+        n, ks._exc, vx = ks._numint.nr_rks_(mol, ks.grids, x_code, c_code, dm,
+                                            hermi=hermi)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -139,7 +137,7 @@ class RKS(pyscf.scf.hf.RHF):
                 | gen_grid.stratmann
                 | gen_grid.original_becke
 
-            grids.prune_scheme  scheme to reduce number of grids, can be one of
+            grids.prune  scheme to reduce number of grids, can be one of
                 | gen_grid.sg1_prune
                 | gen_grid.nwchem_prune
                 | gen_grid.treutler_prune
@@ -175,6 +173,10 @@ class RKS(pyscf.scf.hf.RHF):
         self.grids.dump_flags()
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+        '''Coulomb + XC functional
+
+        Refer to `pyscf.dft.rks.get_veff_` for full documentation
+        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         return get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
@@ -204,7 +206,10 @@ class ROKS(pyscf.scf.rohf.ROHF):
         self.grids.dump_flags()
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Coulomb + XC functional'''
+        '''Coulomb + XC functional
+
+        Refer to `pyscf.dft.uks.get_veff_` for full documentation
+        '''
         from pyscf.dft import uks
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()

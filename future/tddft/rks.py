@@ -25,6 +25,8 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
     ni = mf._numint
     grids = mf.grids
 
+    xctype = ni._xc_type(x_id, c_id)
+
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
@@ -32,21 +34,12 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
 
     dmvo = numpy.asarray(dmvo)
     dmvo = (dmvo + dmvo.transpose(0,2,1)) * .5
-
-    xctype = numint._xc_type(x_id, c_id)
-    ngrids = len(grids.weights)
-    BLKSIZE = numint.BLKSIZE
-    blksize = min(int(max_memory*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
-
     v1ao = numpy.zeros((ndm,nao,nao))
     if xctype == 'LDA':
-        buf = numpy.empty((blksize,nao))
         if singlet:
-            for ip0, ip1 in numint.prange(0, ngrids, blksize):
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0tab = ni.non0tab[ip0//BLKSIZE:]
-                ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0tab, out=buf)
+            ao_deriv = 0
+            for ao, non0tab, weight, coords \
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
                 rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, 'LDA')
                 rho *= .5  # alpha density
                 fxc = ni.eval_xc(x_id, c_id, (rho,rho), 1, deriv=2)[2]
@@ -55,7 +48,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
                 for i, dm in enumerate(dmvo):
                     rho1 = ni.eval_rho(mol, ao, dm, non0tab, xctype)
                     aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1)
-                    v1ao[i] += numint._dot_ao_ao(mol, aow, ao, nao, ip1-ip0, non0tab)
+                    v1ao[i] += numint._dot_ao_ao(mol, aow, ao, nao, weight.size, non0tab)
                     rho1 = aow = None
 
             for i in range(ndm):
@@ -65,12 +58,9 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
             pass
 
     elif xctype == 'GGA':
-        buf = numpy.empty((4,blksize,nao))
-        for ip0, ip1 in numint.prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0tab = ni.non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
+        ao_deriv = 1
+        for ao, non0tab, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
             rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, 'GGA')
             rho *= .5  # alpha density
             vxc, fxc = ni.eval_xc(x_id, c_id, (rho,rho), 1, deriv=2)[1:3]
@@ -105,7 +95,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
                     # second derivative of LYP functional in libxc library diverge
                     wv[rho[0] < 4.57e-11] = 0
                 aow = numpy.einsum('pi,p->pi', ao[0], wv)
-                v1ao[i] += numint._dot_ao_ao(mol, aow, ao[0], nao, ip1-ip0, non0tab)
+                v1ao[i] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, non0tab)
 
                 for k in range(3):
                     wv  = fgg * sigma1 * rho[1+k]
@@ -117,10 +107,10 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
                         # second derivative of LYP functional in libxc library diverge
                         wv[rho[0] < 4.57e-11] = 0
                     aow = numpy.einsum('ip,i->ip', ao[0], wv)
-                    #v1ao += numint._dot_ao_ao(mol, aow, ao[1+k], nao, ip1-ip0, non0tab)
-                    #v1ao += numint._dot_ao_ao(mol, ao[1+k], aow, nao, ip1-ip0, non0tab)
+                    #v1ao += numint._dot_ao_ao(mol, aow, ao[1+k], nao, weight.size, non0tab)
+                    #v1ao += numint._dot_ao_ao(mol, ao[1+k], aow, nao, weight.size, non0tab)
                     # v1ao+v1ao.T at the end
-                    v1ao[i] += 2*numint._dot_ao_ao(mol, aow, ao[1+k], nao, ip1-ip0, non0tab)
+                    v1ao[i] += 2*numint._dot_ao_ao(mol, aow, ao[1+k], nao, weight.size, non0tab)
                 aow = None
         for i in range(ndm):
             v1ao[i] = (v1ao[i] + v1ao[i].T) * .5

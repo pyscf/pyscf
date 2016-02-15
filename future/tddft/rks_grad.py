@@ -228,19 +228,16 @@ def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
     else:
         k1ao = None
 
-    xctype = numint._xc_type(x_id, c_id)
+    xctype = ni._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
     max_memory = max_memory - 4*nao**2*8/1e6
     blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
 
     if xctype == 'LDA':
-        buf = numpy.empty((4,blksize,nao))
-        for ip0, ip1 in numint.prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0tab = ni.non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
+        ao_deriv = 1
+        for ao, non0tab, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
             rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, non0tab, 'LDA')
             vxc, fxc, kxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=deriv)[1:]
 
@@ -249,20 +246,20 @@ def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
                 rho1 = ni.eval_rho(mol, ao[0], dmvo, non0tab, 'LDA')
                 aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho1)
                 for k in range(4):
-                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
+                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
             if oovv is not None:
                 rho2 = ni.eval_rho(mol, ao[0], oovv, non0tab, 'LDA')
                 aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho2)
                 for k in range(4):
-                    f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
+                    f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
             if with_vxc:
                 aow = numpy.einsum('pi,p->pi', ao[0], vxc[0]*weight)
                 for k in range(4):
-                    v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
+                    v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
             if singlet and with_kxc:
                 aow = numpy.einsum('pi,p->pi', ao[0], kxc[0]*weight*rho1**2)
                 for k in range(4):
-                    k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, ip1-ip0, non0tab)
+                    k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
             vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
         if singlet and with_kxc:
             k1ao *= 4
@@ -302,7 +299,7 @@ if __name__ == '__main__':
 
     mf = dft.RKS(mol)
     mf.xc = 1,0
-    mf.grids.prune_scheme = False
+    mf.grids.prune = False
 #    mf.grids.level = 6
     mf.scf()
 

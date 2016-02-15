@@ -4,11 +4,11 @@
 #
 
 import ctypes
-import time
 import numpy
 import scipy.linalg
 import pyscf.lib
 import pyscf.dft.vxc
+from pyscf.dft.vxc import eval_x, eval_c, eval_xc
 from pyscf.lib import logger
 
 libdft = pyscf.lib.load_library('libdft')
@@ -380,243 +380,6 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         raise NotImplementedError('meta-GGA')
     return mat + mat.T
 
-def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None,
-           _driver='VXCnr_eval_x'):
-    r'''Interface to call libxc library to evaluate exchange functional,
-    potential and functional derivatives.
-    
-    See also eval_xc function.
-    '''
-    if spin == 0:
-        rho_u = numpy.asarray(rho, order='C')
-        prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
-        prho_d = pyscf.lib.c_null_ptr()
-    else:
-        rho_u = numpy.asarray(rho[0], order='C')
-        rho_d = numpy.asarray(rho[1], order='C')
-        prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
-        prho_d = rho_d.ctypes.data_as(ctypes.c_void_p)
-
-    mgga = pyscf.dft.vxc.is_meta_gga(x_id)
-
-    if rho_u.ndim == 2:
-        ngrids = rho_u.shape[1]
-    else:
-        ngrids = len(rho_u)
-
-    if spin == 0:
-        nspin = 1
-        exc = numpy.empty(ngrids)
-        vxc = vrho = vsigma = vlapl = vtau = None
-        if deriv > 0:
-            if mgga:
-                vxc = numpy.zeros(4*ngrids)
-                vrho   = vxc[        :ngrids  ]
-                vsigma = vxc[ngrids  :ngrids*2]
-                vlapl  = vxc[ngrids*2:ngrids*3]
-                vtau   = vxc[ngrids*3:        ]
-            else:
-                vxc = numpy.zeros(2*ngrids)
-                vrho   = vxc[      :ngrids]
-                vsigma = vxc[ngrids:      ]
-            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            pvxc = pyscf.lib.c_null_ptr()
-        if deriv > 1:
-            if mgga:
-                fxc = numpy.zeros(10*ngrids)
-                v2rho2      = fxc[        :ngrids  ]
-                v2rhosigma  = fxc[ngrids  :ngrids*2]
-                v2sigma2    = fxc[ngrids*2:ngrids*3]
-                v2lapl2     = fxc[ngrids*3:ngrids*4]
-                vtau2       = fxc[ngrids*4:ngrids*5]
-                v2rholapl   = fxc[ngrids*5:ngrids*6]
-                v2rhotau    = fxc[ngrids*6:ngrids*7]
-                v2lapltau   = fxc[ngrids*7:ngrids*8]
-                v2sigmalapl = fxc[ngrids*8:ngrids*9]
-                v2sigmatau  = fxc[ngrids*9:        ]
-            else:
-                fxc = numpy.zeros(3*ngrids)
-                v2rho2      = fxc[        :ngrids  ]
-                v2rhosigma  = fxc[ngrids  :ngrids*2]
-                v2sigma2    = fxc[ngrids*2:        ]
-                v2lapl2   = vtau2       = v2rholapl  = v2rhotau = \
-                v2lapltau = v2sigmalapl = v2sigmatau = None
-            pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
-            fxc = (v2rho2   , v2rhosigma , v2sigma2  ,
-                   v2lapl2  , vtau2      , v2rholapl , v2rhotau,
-                   v2lapltau, v2sigmalapl, v2sigmatau,)
-        else:
-            fxc = None
-            pfxc = pyscf.lib.c_null_ptr()
-        if deriv > 2:
-            kxc = numpy.zeros(4*ngrids)
-            v3rho3      = kxc[        :ngrids  ]
-            v3rho2sigma = kxc[ngrids  :ngrids*2]
-            v3rhosigma2 = kxc[ngrids*2:ngrids*3]
-            v3sigma     = kxc[ngrids*3:        ]
-            pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
-            kxc = (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
-        else:
-            kxc = None
-            pkxc = pyscf.lib.c_null_ptr()
-    else:
-        nspin = 2
-        exc = numpy.zeros(ngrids)
-        vxc = vrho = vsigma = vlapl = vtau = None
-        if deriv > 0:
-            if mgga:
-                vxc = numpy.zeros(9*ngrids)
-                vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
-                vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
-                vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
-                vtau   = vxc[ngrids*7:        ].reshape(ngrids,2)
-            else:
-                vxc = numpy.zeros(5*ngrids)
-                vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
-                vsigma = vxc[ngrids*2:        ].reshape(ngrids,3)
-            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
-        else:
-            vxc = vrho = vsigma = vlapl = vtau = None
-            pvxc = pyscf.lib.c_null_ptr()
-        if deriv > 1:
-            if mgga:
-                fxc = numpy.zeros(45*ngrids)
-                v2rho2      = fxc[         :ngrids* 3].reshape(ngrids,3)
-                v2rhosigma  = fxc[ngrids* 3:ngrids* 9].reshape(ngrids,6)
-                v2sigma2    = fxc[ngrids* 9:ngrids*15].reshape(ngrids,6)
-                v2lapl2     = fxc[ngrids*15:ngrids*18].reshape(ngrids,3)
-                vtau2       = fxc[ngrids*18:ngrids*21].reshape(ngrids,3)
-                v2rholapl   = fxc[ngrids*21:ngrids*25].reshape(ngrids,4)
-                v2rhotau    = fxc[ngrids*25:ngrids*29].reshape(ngrids,4)
-                v2lapltau   = fxc[ngrids*29:ngrids*33].reshape(ngrids,4)
-                v2sigmalapl = fxc[ngrids*33:ngrids*39].reshape(ngrids,6)
-                v2sigmatau  = fxc[ngrids*39:         ].reshape(ngrids,6)
-            else:
-                fxc = numpy.zeros(15*ngrids)
-                v2rho2      = fxc[        :ngrids*3].reshape(ngrids,3)
-                v2rhosigma  = fxc[ngrids*3:ngrids*9].reshape(ngrids,6)
-                v2sigma2    = fxc[ngrids*9:        ].reshape(ngrids,6)
-                v2lapl2   = vtau2       = v2rholapl  = v2rhotau = \
-                v2lapltau = v2sigmalapl = v2sigmatau = None
-            pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
-            fxc = (v2rho2   , v2rhosigma , v2sigma2  ,
-                   v2lapl2  , vtau2      , v2rholapl , v2rhotau,
-                   v2lapltau, v2sigmalapl, v2sigmatau,)
-        else:
-            fxc = None
-            pfxc = pyscf.lib.c_null_ptr()
-        if deriv > 2:
-            kxc = numpy.zeros(35*ngrids)
-            v3rho3      = kxc[         :ngrids* 4].reshape(ngrids,4 )
-            v3rho2sigma = kxc[ngrids* 4:ngrids*13].reshape(ngrids,9 )
-            v3rhosigma2 = kxc[ngrids*13:ngrids*25].reshape(ngrids,12)
-            v3sigma     = kxc[ngrids*25:         ].reshape(ngrids,10)
-            pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
-            kxc = (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
-        else:
-            kxc = None
-            pkxc = pyscf.lib.c_null_ptr()
-    drv = getattr(libdft, _driver)
-    drv(ctypes.c_int(x_id), ctypes.c_int(nspin),
-        ctypes.c_int(relativity), ctypes.c_int(ngrids),
-        prho_u, prho_d,
-        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
-    return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
-
-def eval_c(c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    r'''Interface to call libxc library to evaluate correlation functional,
-    potential and functional derivatives.
-    
-    See also eval_xc function.
-    '''
-    return eval_x(c_id, rho, spin, relativity, deriv, verbose, 'VXCnr_eval_c')
-
-def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    r'''Interface to call libxc library to evaluate XC functional, potential
-    and functional derivatives.
-
-    Args:
-        x_id, c_id : int
-            Exchange/Correlation functional ID used by libxc library.
-            See pyscf/dft/vxc.py for more details.
-        rho : ndarray
-            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
-            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
-            where N is number of grids.
-            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
-            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
-            In spin unrestricted case,
-            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
-                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
-
-    Kwargs:
-        spin : int
-            spin polarized if spin > 0
-        relativity : int
-            No effects.
-        verbose : int or object of :class:`Logger`
-            No effects.
-
-    Returns:
-        ex, vxc, fxc, kxc
-
-        where
-
-        * vxc = (vrho, vsigma, vlapl, vtau) for unrestricted case
-        vrho[*,2]   = (u, d)
-        vsigma[*,3] = (uu, ud, dd)
-        vlapl[*,2]  = (u, d)
-        vtau[*,2]   = (u, d)
-
-        * vxc = (vrho[*], vsigma[*], vlapl[*], vtau[*]) for restricted case
-
-        * fxc(N*45) for unrestricted case:
-        | v2rho2[*,3]     = (u_u, u_d, d_d)
-        | v2rhosigma[*,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-        | v2sigma2[*,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
-        | v2lapl2[*,3]
-        | vtau2[*,3]
-        | v2rholapl[*,4]
-        | v2rhotau[*,4]
-        | v2lapltau[*,4]
-        | v2sigmalapl[*,6]
-        | v2sigmatau[*,6]
-
-        * fxc(N*10) for restricted case:
-        (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
-
-        * kxc(N*35) for unrestricted case:
-        | v3rho3[*,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-        | v3rho2sigma[*,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-        | v3rhosigma2[*,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-        | v3sigma[*,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
-
-        * kxc(N*4) for restricted case:
-        (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
-
-        see also libxc_itrf.c
-    '''
-    exc, (vrho, vsigma, vlapl, vtau), fxc, kxc = \
-            eval_x(x_id, rho, spin, relativity, deriv, verbose)
-    if c_id > 0:
-        ec, (vrhoc, vsigmac, vlaplc, vtauc), fc, kc = \
-                eval_c(c_id, rho, spin, relativity, deriv, verbose)
-        exc += ec
-        if vrho   is not None: vrho   += vrhoc
-        if vsigma is not None: vsigma += vsigmac
-        if vlapl  is not None: vlapl  += vlaplc
-        if vtau   is not None: vtau   += vtauc
-        if fxc is not None: # Note: inplace updates for fxc, kxc
-            for i, fxci in enumerate(fxc):
-                if fxci is not None:
-                    fxci += fc[i]
-        if kxc is not None:
-            for i, kxci in enumerate(kxc):
-                if kxci is not None:
-                    kxci += kc[i]
-    return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
-
 
 def _dot_ao_ao(mol, ao1, ao2, nao, ngrids, non0tab):
     '''return numpy.dot(ao1.T, ao2)'''
@@ -656,16 +419,19 @@ def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
 
 def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
+    ni = _NumInt()
+    ni.non0tab = ni.make_mask(mol, grids.coords)
     if spin == 0:
-        return nr_rks_vxc(_NumInt(), mol, grids, x_id, c_id, dm, spin, relativity,
-                          hermi, max_memory, verbose)
+        return nr_rks(ni, mol, grids, x_id, c_id, dm, relativity,
+                      hermi, max_memory, verbose)
     else:
-        return nr_uks_vxc(_NumInt(), mol, grids, x_id, c_id, dm, spin, relativity,
-                          hermi, max_memory, verbose)
+        return nr_uks(ni, mol, grids, x_id, c_id, dm, relativity,
+                      hermi, max_memory, verbose)
 
-def nr_rks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
-               max_memory=2000, verbose=None):
-    '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
+def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+           max_memory=2000, verbose=None):
+    '''Calculate RKS XC functional and potential matrix for given meshgrids
+    and a set of density matrices
 
     Args:
         ni : an instance of :class:`_NumInt`
@@ -681,16 +447,11 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
             Density matrix or multiple density matrices
 
     Kwargs:
-        spin : int
-            spin polarized if spin = 1
-        relativity : int
-            No effects.
         hermi : int
             No effects
         max_memory : int or float
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
-            No effects.
 
     Returns:
         nelec, excsum, vmat.
@@ -710,69 +471,53 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
     >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, x_id, c_id, dm)
     '''
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        nao = dms.shape[0]
-        dms = [dms]
-    else:
-        nao = dms[0].shape[0]
+    xctype = ni._xc_type(x_id, c_id)
+    frho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
 
-    xctype = _xc_type(x_id, c_id)
     ngrids = len(grids.weights)
-    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.int8)
     else:
         non0tab = ni.non0tab
 
-    nset = len(dms)
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
-    vmat = numpy.zeros_like(dms)
+    vmat = numpy.zeros((nset,nao,nao))
     if xctype == 'LDA':
-        buf = numpy.empty((blksize,nao))
-        for ip0 in range(0, ngrids, blksize):
-            ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0 = non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0, out=buf)
-            for idm, dm in enumerate(dms):
-                rho = ni.eval_rho(mol, ao, dm, non0, xctype)
-                exc, vxc = ni.eval_xc(x_id, c_id, rho,
-                                      spin, relativity, 1, verbose)[:2]
+        ao_deriv = 0
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+            for idm in range(nset):
+                rho = frho(idm, ao, mask, 'LDA')
+                exc, vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[:2]
                 vrho = vxc[0]
                 den = rho * weight
                 nelec[idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += (den * exc).sum()
+                # *.5 because vmat + vmat.T
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
-                vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0)
+                vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, weight.size, mask)
                 rho = exc = vxc = vrho = aow = None
     elif xctype == 'GGA':
-        buf = numpy.empty((4,blksize,nao))
-        for ip0 in range(0, ngrids, blksize):
-            ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0 = non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0, out=buf)
-            for idm, dm in enumerate(dms):
-                rho = ni.eval_rho(mol, ao, dm, non0, xctype)
-                exc, vxc = ni.eval_xc(x_id, c_id, rho,
-                                      spin, relativity, 1, verbose)[:2]
+        ao_deriv = 1
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+            for idm in range(nset):
+                rho = frho(idm, ao, mask, 'GGA')
+                exc, vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[:2]
                 vrho, vsigma = vxc[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += (den * exc).sum()
 # ref eval_mat function
                 wv = numpy.empty_like(rho)
                 wv[0]  = weight * vrho * .5
                 wv[1:] = rho[1:] * (weight * vsigma * 2)
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0)
+                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
                 rho = exc = vxc = vrho = vsigma = wv = aow = None
     else:
-        buf = numpy.empty((6,blksize,nao))
         raise NotImplementedError('meta-GGA')
 
     for i in range(nset):
@@ -783,8 +528,8 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
         vmat = vmat.reshape(nao,nao)
     return nelec, excsum, vmat
 
-def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
-               max_memory=2000, verbose=None):
+def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+           max_memory=2000, verbose=None):
     '''Calculate UKS XC functional and potential matrix for given meshgrids
     and a set of density matrices
 
@@ -796,7 +541,7 @@ def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
         x_id, c_id : int
             Exchange/Correlation functional ID used by libxc library.
             See pyscf/dft/vxc.py for more details.
-        dms : a list of 2D arrays
+        dm : a list of 2D arrays
             A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
 
     Kwargs:
@@ -812,41 +557,33 @@ def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
         excsum is the XC functional value.
         vmat is the XC potential matrix for (alpha,beta) spin.
     '''
-    assert(hermi == 1)
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        nao = dms.shape[0]
-        nset = 1
-        dms = [dms,dms]
-    else:
-        nao = dms[0].shape[0]
-        nset = len(dms) // 2
-
-    xctype = _xc_type(x_id, c_id)
+    xctype = ni._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
-# NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
-    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.int8)
     else:
         non0tab = ni.non0tab
 
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        frho_a, nset, nao = ni._gen_rho_evaluator(mol, dms*.5, hermi)
+        frho_b = frho_a
+    else:
+        nset = len(dms) // 2
+        frho_a, nset, nao = ni._gen_rho_evaluator(mol, dms[:nset], hermi)
+        frho_b, nset, nao = ni._gen_rho_evaluator(mol, dms[nset:], hermi)
+
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
     vmat = numpy.zeros((2,nset,nao,nao))
     if xctype == 'LDA':
-        buf = numpy.empty((blksize,nao))
-        for ip0, ip1 in prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0 = non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0, out=buf)
+        ao_deriv = 0
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
             for idm in range(nset):
-                dm_a = dms[idm]
-                dm_b = dms[nset+idm]
-                rho_a = ni.eval_rho(mol, ao, dm_a, non0, xctype)
-                rho_b = ni.eval_rho(mol, ao, dm_b, non0, xctype)
+                rho_a = frho_a(idm, ao, mask, xctype)
+                rho_b = frho_b(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(x_id, c_id, (rho_a, rho_b),
                                       1, relativity, 1, verbose)[:2]
                 vrho = vxc[0]
@@ -858,22 +595,17 @@ def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
                 excsum[idm] += (den*exc).sum()
 
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0])
-                vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0)
+                vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, weight.size, mask)
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1])
-                vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0)
+                vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, weight.size, mask)
                 rho_a = rho_b = exc = vxc = vrho = aow = None
     elif xctype == 'GGA':
-        buf = numpy.empty((4,blksize,nao))
-        for ip0, ip1 in prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0 = non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0, out=buf)
+        ao_deriv = 1
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
             for idm in range(nset):
-                dm_a = dms[idm]
-                dm_b = dms[nset+idm]
-                rho_a = ni.eval_rho(mol, ao, dm_a, non0, xctype)
-                rho_b = ni.eval_rho(mol, ao, dm_b, non0, xctype)
+                rho_a = frho_a(idm, ao, mask, xctype)
+                rho_b = frho_b(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(x_id, c_id, (rho_a, rho_b),
                                       1, relativity, 1, verbose)[:2]
                 vrho, vsigma = vxc[:2]
@@ -889,12 +621,12 @@ def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
                 wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
                 wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
                 wv[0]  = weight * vrho[:,1] * .5
                 wv[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
                 wv[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
                 rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')
@@ -908,271 +640,45 @@ def nr_uks_vxc(ni, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
         vmat = vmat.reshape(2,nao,nao)
     return nelec, excsum, vmat
 
+nr_rks_vxc = nr_rks
+nr_uks_vxc = nr_uks
+
 
 class _NumInt(object):
     def __init__(self):
         self.non0tab = None
 
-    def nr_vxc(self, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
-               max_memory=2000, verbose=None):
+    def nr_vxc_(self, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
+                max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix for given meshgrids
-        and a set of density matrices.  See :func:`nr_rks` and :func:`nr_uks`
+        and a set of density matrices.  See :func:`nr_rks_` and :func:`nr_uks_`
         for more details.
         '''
         if spin == 0:
-            return self.nr_rks(mol, grids, x_id, c_id, dm, relativity, hermi,
-                               max_memory, verbose)
+            return self.nr_rks_(mol, grids, x_id, c_id, dms, relativity, hermi,
+                                max_memory, verbose)
         else:
-            return self.nr_uks(mol, grids, x_id, c_id, dm, relativity, hermi,
-                               max_memory, verbose)
+            return self.nr_uks_(mol, grids, x_id, c_id, dms, relativity, hermi,
+                                max_memory, verbose)
+    nr_vxc = nr_vxc_
 
-    def nr_rks(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+    def nr_rks_(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
-        '''Calculate RKS XC functional and potential matrix for given meshgrids
-        and a set of density matrices
-
-        Args:
-            mol : an instance of :class:`Mole`
-
-            grids : an instance of :class:`Grids`
-                grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
-            x_id, c_id : int
-                Exchange/Correlation functional ID used by libxc library.
-                See pyscf/dft/vxc.py for more details.
-            dms : 2D array a list of 2D arrays
-                Density matrix or multiple density matrices
-
-        Kwargs:
-            hermi : int
-                No effects
-            max_memory : int or float
-                The maximum size of cache to use (in MB).
-            verbose : int or object of :class:`Logger`
-
-        Returns:
-            nelec, excsum, vmat.
-            nelec is the number of electrons generated by numerical integration.
-            excsum is the XC functional value.  vmat is the XC potential matrix in
-            2D array of shape (nao,nao) where nao is the number of AO functions.
-        '''
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
+        return nr_rks(self, mol, grids, x_id, c_id, dms, relativity, hermi,
+                      max_memory, verbose)
+    nr_rks_.__doc__ = nr_rks_vxc.__doc__
+    nr_rks = nr_rks_
 
-        if hermi != 1:
-            return nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
-                              0, relativity, hermi, max_memory, verbose)
-
-        natocc = []
-        natorb = []
-        if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-            e, c = scipy.linalg.eigh(dms)
-            natocc.append(e)
-            natorb.append(c)
-            nao = dms.shape[0]
-        else:
-            for dm in dms:
-                e, c = scipy.linalg.eigh(dm)
-                natocc.append(e)
-                natorb.append(c)
-            nao = dms[0].shape[0]
-
-        xctype = _xc_type(x_id, c_id)
-        ngrids = len(grids.weights)
-# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
-        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
-
-        nset = len(natocc)
-        nelec = numpy.zeros(nset)
-        excsum = numpy.zeros(nset)
-        vmat = numpy.zeros((nset,nao,nao))
-        if xctype == 'LDA':
-            buf = numpy.empty((blksize,nao))
-            for ip0, ip1 in prange(0, ngrids, blksize):
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0tab = self.non0tab[ip0//BLKSIZE:]
-                ao = self.eval_ao(mol, coords, deriv=0, non0tab=non0tab,
-                                  out=buf)
-                for idm in range(nset):
-                    rho = self.eval_rho2(mol, ao, natorb[idm], natocc[idm],
-                                         non0tab, xctype)
-                    exc, vxc = self.eval_xc(x_id, c_id, rho,
-                                            0, relativity, 1, verbose)[:2]
-                    vrho = vxc[0]
-                    den = rho * weight
-                    nelec[idm] += den.sum()
-                    excsum[idm] += (den * exc).sum()
-                    # *.5 because vmat + vmat.T
-                    aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
-                    vmat[idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
-                    rho = exc = vxc = vrho = aow = None
-        elif xctype == 'GGA':
-            buf = numpy.empty((4,blksize,nao))
-            for ip0, ip1 in prange(0, ngrids, blksize):
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0tab = self.non0tab[ip0//BLKSIZE:]
-                ao = self.eval_ao(mol, coords, deriv=1, non0tab=non0tab,
-                                  out=buf)
-                for idm in range(nset):
-                    rho = self.eval_rho2(mol, ao, natorb[idm], natocc[idm],
-                                         non0tab, xctype)
-                    exc, vxc = self.eval_xc(x_id, c_id, rho,
-                                            0, relativity, 1, verbose)[:2]
-                    vrho, vsigma = vxc[:2]
-                    den = rho[0] * weight
-                    nelec[idm] += den.sum()
-                    excsum[idm] += (den * exc).sum()
-# ref eval_mat function
-                    wv = numpy.empty_like(rho)
-                    wv[0]  = weight * vrho * .5
-                    wv[1:] = rho[1:] * (weight * vsigma * 2)
-                    aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
-                    rho = exc = vxc = vrho = vsigma = wv = aow = None
-        else:
-            raise NotImplementedError('meta-GGA')
-        for i in range(nset):
-            vmat[i] = vmat[i] + vmat[i].T
-        if nset == 1:
-            nelec = nelec[0]
-            excsum = excsum[0]
-            vmat = vmat.reshape(nao,nao)
-        return nelec, excsum, vmat
-
-    def nr_uks(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+    def nr_uks_(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
-        '''Calculate UKS XC functional and potential matrix for given meshgrids
-        and a set of density matrices
-
-        Args:
-            mol : an instance of :class:`Mole`
-
-            grids : an instance of :class:`Grids`
-                grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
-            x_id, c_id : int
-                Exchange/Correlation functional ID used by libxc library.
-                See pyscf/dft/vxc.py for more details.
-            dm : a list of 2D arrays
-                A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
-
-        Kwargs:
-            hermi : int
-                No effects
-            max_memory : int or float
-                The maximum size of cache to use (in MB).
-            verbose : int or object of :class:`Logger`
-
-        Returns:
-            nelec, excsum, vmat.
-            nelec is the number of (alpha,beta) electrons generated by numerical integration.
-            excsum is the XC functional value.
-            vmat is the XC potential matrix for (alpha,beta) spin.
-        '''
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
-
-        if hermi != 1:
-            return nr_uks_vxc(self, mol, grids, x_id, c_id, dms,
-                              mol.spin, relativity, hermi, max_memory, verbose)
-
-        natocc = []
-        natorb = []
-        if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-            e, c = scipy.linalg.eigh(dms)
-            natocc.append((e*.5,e*.5))
-            natorb.append((c,c))
-            nset = 1
-            nao = dms.shape[0]
-        else:
-            nset = len(dms) // 2
-            for idm in range(nset):
-                e_a, c_a = scipy.linalg.eigh(dms[idm])
-                e_b, c_b = scipy.linalg.eigh(dms[nset+idm])
-                natocc.append((e_a,e_b))
-                natorb.append((c_a,c_b))
-            nao = dms[0].shape[0]
-
-        xctype = _xc_type(x_id, c_id)
-        ngrids = len(grids.weights)
-# NOTE to index self.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
-        blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
-
-        nelec = numpy.zeros((2,nset))
-        excsum = numpy.zeros(nset)
-        vmat = numpy.zeros((2,nset,nao,nao))
-        if xctype == 'LDA':
-            buf = numpy.empty((blksize,nao))
-            for ip0, ip1 in prange(0, ngrids, blksize):
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0tab = self.non0tab[ip0//BLKSIZE:]
-                ao = self.eval_ao(mol, coords, deriv=0, non0tab=non0tab, out=buf)
-                for idm in range(nset):
-                    c_a, c_b = natorb[idm]
-                    e_a, e_b = natocc[idm]
-                    rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab, xctype)
-                    rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab, xctype)
-                    exc, vxc = self.eval_xc(x_id, c_id, (rho_a, rho_b),
-                                            1, relativity, 1, verbose)[:2]
-                    vrho = vxc[0]
-                    den = rho_a * weight
-                    nelec[0,idm] += den.sum()
-                    excsum[idm] += (den*exc).sum()
-                    den = rho_b * weight
-                    nelec[1,idm] += den.sum()
-                    excsum[idm] += (den*exc).sum()
-
-                    aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0])
-                    vmat[0,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
-                    aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1])
-                    vmat[1,idm] += _dot_ao_ao(mol, ao, aow, nao, ip1-ip0, non0tab)
-                    rho_a = rho_b = exc = vxc = vrho = aow = None
-        elif xctype == 'GGA':
-            buf = numpy.empty((4,blksize,nao))
-            for ip0, ip1 in prange(0, ngrids, blksize):
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0tab = self.non0tab[ip0//BLKSIZE:]
-                ao = self.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
-                for idm in range(nset):
-                    c_a, c_b = natorb[idm]
-                    e_a, e_b = natocc[idm]
-                    rho_a = self.eval_rho2(mol, ao, c_a, e_a, non0tab, xctype)
-                    rho_b = self.eval_rho2(mol, ao, c_b, e_b, non0tab, xctype)
-                    exc, vxc = self.eval_xc(x_id, c_id, (rho_a, rho_b),
-                                            1, relativity, 1, verbose)[:2]
-                    vrho, vsigma = vxc[:2]
-                    den = rho_a[0]*weight
-                    nelec[0,idm] += den.sum()
-                    excsum[idm] += (den*exc).sum()
-                    den = rho_b[0]*weight
-                    nelec[1,idm] += den.sum()
-                    excsum[idm] += (den*exc).sum()
-
-                    wv = numpy.empty_like(rho_a)
-                    wv[0]  = weight * vrho[:,0] * .5
-                    wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
-                    wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
-                    aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
-                    wv[0]  = weight * vrho[:,1] * .5
-                    wv[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
-                    wv[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
-                    aow = numpy.einsum('npi,np->pi', ao, wv)
-                    vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
-                    rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
-        else:
-            raise NotImplementedError('meta-GGA')
-
-        for i in range(nset):
-            vmat[0,i] = vmat[0,i] + vmat[0,i].T
-            vmat[1,i] = vmat[1,i] + vmat[1,i].T
-        if nset == 1:
-            nelec = nelec.reshape(2)
-            excsum = excsum[0]
-            vmat = vmat.reshape(2,nao,nao)
-        return nelec, excsum, vmat
+        return nr_uks(self, mol, grids, x_id, c_id, dms, relativity, hermi,
+                      max_memory, verbose)
+    nr_uks_.__doc__ = nr_uks_vxc.__doc__
+    nr_uks = nr_uks_
 
     def eval_ao(self, mol, coords, deriv=0, relativity=0, bastart=0,
                 bascount=None, non0tab=None, out=None, verbose=None):
@@ -1202,22 +708,71 @@ class _NumInt(object):
     def hybrid_coeff(self, x_id, spin=1):
         return pyscf.dft.vxc.hybrid_coeff(x_id, spin)
 
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    def block_loop(self, mol, grids, nao, deriv=0, max_memory=2000,
+                   non0tab=None, buf=None):
+        '''Define this macro to loop over grids by blocks.
+        '''
+        ngrids = grids.weights.size
+        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+# NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        blksize = min(int(max_memory*1e6/(comp*2*nao*8*BLKSIZE))*BLKSIZE, ngrids)
+        if non0tab is None:
+            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                                 dtype=numpy.int8)
+        if buf is None:
+            buf = numpy.empty((comp,blksize,nao))
+        for ip0 in range(0, ngrids, blksize):
+            ip1 = min(ngrids, ip0+blksize)
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao = self.eval_ao(mol, coords, deriv, non0tab=non0, out=buf)
+            yield ao, non0, weight, coords
 
-def _xc_type(x_id, c_id):
-    if pyscf.dft.vxc.is_lda(x_id) and pyscf.dft.vxc.is_lda(c_id):
-        xctype = 'LDA'
-    elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
-        xctype = 'MGGA'
-        raise NotImplementedError('meta-GGA')
-    else:
-        xctype = 'GGA'
-    return xctype
+    def _gen_rho_evaluator(self, mol, dms, hermi=1):
+        if hermi == 1:
+            natocc = []
+            natorb = []
+            if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+                e, c = scipy.linalg.eigh(dms)
+                natocc.append(e)
+                natorb.append(c)
+                nao = dms.shape[0]
+            else:
+                for dm in dms:
+                    e, c = scipy.linalg.eigh(dm)
+                    natocc.append(e)
+                    natorb.append(c)
+                nao = dms[0].shape[0]
+            ndms = len(natocc)
+            def feval_rho(idm, ao, non0tab, xctype):
+                return self.eval_rho2(mol, ao, natorb[idm], natocc[idm], non0tab, xctype)
+        else:
+            if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+                nao = dms.shape[0]
+                dms = [dms]
+            else:
+                nao = dms[0].shape[0]
+            ndms = len(dms)
+            def feval_rho(idm, ao, non0tab, xctype):
+                return self.eval_rho2(mol, ao, dms[idm], non0tab, xctype)
+        return feval_rho, ndms, nao
+
+
+    def _xc_type(self, x_id, c_id):
+        if (pyscf.dft.vxc.is_lda(x_id) and
+            (c_id == 0 or pyscf.dft.vxc.is_lda(c_id))):
+            xctype = 'LDA'
+        elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
+            xctype = 'MGGA'
+            raise NotImplementedError('meta-GGA')
+        else:
+            xctype = 'GGA'
+        return xctype
 
 
 if __name__ == '__main__':
+    import time
     from pyscf import gto
     from pyscf import dft
 
@@ -1228,13 +783,21 @@ if __name__ == '__main__':
         [1   , (0. , 0.757  , 0.587)] ],
         basis = '6311g*',)
     mf = dft.RKS(mol)
-    mf.grids.atom_grid = {"H": (100, 194), "O": (100, 194),},
+    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
     mf.grids.setup_grids()
     dm = mf.get_init_guess(key='minao')
 
     x_code, c_code = pyscf.dft.vxc.parse_xc_name(mf.xc)
-#res = vxc.nr_vxc(mol, mf.grids, x_code, c_code, dm, spin=1, relativity=0)
+    numpy.random.seed(1)
+    dm1 = numpy.random.random((dm.shape))
     print(time.clock())
-    res = nr_vxc(mol, mf.grids, x_code, c_code, dm, spin=mol.spin, relativity=0)
+    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, dm1, spin=0)
+    print(res[1] - -37.0917865313)
+    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, (dm1,dm1), spin=1)
+    print(res[1] - -92.4556499854)
+    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, dm, spin=0)
+    print(res[1] - -8.63131769633)
+    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, (dm,dm), spin=1)
+    print(res[1] - -21.5202633136)
     print(time.clock())
 
