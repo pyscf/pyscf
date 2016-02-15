@@ -247,7 +247,7 @@ class StreamObject(object):
         return self
 
     def set(self, **kwargs):
-        return self.set(**kwargs)
+        return self.set_(**kwargs)
     def set_(self, **kwargs):
         #if hasattr(self, '_keys'):
         #    for k,v in kwargs.iteritems():

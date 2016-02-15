@@ -5,11 +5,11 @@
 
 import numpy
 import pyscf.lib.logger as logger
-import pyscf.gto
 from pyscf import symm
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
+from pyscf import fci
 
 
 class CASSCF(mc1step.CASSCF):
@@ -17,6 +17,7 @@ class CASSCF(mc1step.CASSCF):
         assert(mf.mol.symmetry)
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
+        self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
                 callback=None):

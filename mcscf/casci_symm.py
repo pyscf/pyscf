@@ -4,13 +4,11 @@
 #
 
 import numpy
-import pyscf.lib
-import pyscf.gto
 from pyscf.lib import logger
 import pyscf.symm
 import pyscf.scf
-import pyscf.ao2mo
 from pyscf.mcscf import casci
+from pyscf import fci
 
 
 class CASCI(casci.CASCI):
@@ -20,6 +18,7 @@ class CASCI(casci.CASCI):
 #TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+        self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
 
     def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
