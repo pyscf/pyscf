@@ -906,6 +906,216 @@ def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
 
 
+def define_xc(ni, description):
+    '''Define the XC functional for numeric integration.  Rules to input
+    functional description:
+
+    * The given functional description must be a one-line string.
+    * The functional description is case-insensitive.
+    * The functional description string has two parts, separated by ",".  The
+      first part describes the exchange functional, the second is the correlation
+      functional.  If "," not appeared in string, entire string is considered as
+      X functional.  There is no way to neglect X functional (just apply C
+      functional)
+    * The functional name can be placed in arbitrary order.  Two name needs to
+      be separated by operations + or -.  Blank spaces are ignored.
+      NOTE the parser only reads operators + - *.  / is not in support.
+    * A functional name is associated with one factor.  If the factor is not
+      given, it is assumed equaling 1.
+    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
+      put in C functional part.
+    * Be careful with the libxc convention on GGA functional, in which the LDA
+      contribution is included.
+
+    Args:
+        ni : an instance of :class:`_NumInt`
+
+        description : str
+            A string to describe the linear combination of different XC functionals.
+            The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
+            If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Examples:
+
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
+    >>> mf = dft.RKS(mol)
+    >>> mf._numint = define_xc(mf._numint, '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN')
+    >>> mf.kernel()
+    -76.3783361189611
+    '''
+    return define_xc_(copy.copy(ni), description)
+
+def define_xc_(ni, description):
+    '''Define the XC functional for numeric integration.  Rules to input
+    functional description:
+
+    * The given functional description must be a one-line string.
+    * The functional description is case-insensitive.
+    * The functional description string has two parts, separated by ",".  The
+      first part describes the exchange functional, the second is the correlation
+      functional.  If "," not appeared in string, entire string is considered as
+      X functional.  There is no way to neglect X functional (just apply C
+      functional)
+    * The functional name can be placed in arbitrary order.  Two name needs to
+      be separated by operations + or -.  Blank spaces are ignored.
+      NOTE the parser only reads operators + - *.  / is not in support.
+    * A functional name is associated with one factor.  If the factor is not
+      given, it is assumed equaling 1.
+    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
+      put in C functional part.
+    * Be careful with the libxc convention on GGA functional, in which the LDA
+      contribution is included.
+
+    Args:
+        ni : an instance of :class:`_NumInt`
+
+        description : str
+            A string to describe the linear combination of different XC functionals.
+            The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
+            If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Examples:
+
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
+    >>> mf = dft.RKS(mol)
+    >>> define_xc_(mf._numint, '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN')
+    >>> mf.kernel()
+    -76.3783361189611
+    >>> define_xc_(mf._numint, 'LDA*.08 + .72*B88 + .2*HF, .81*LYP + .19*VWN')
+    >>> mf.kernel()
+    -76.3783361189611
+    '''
+    if ',' in description:
+        x_code, c_code = description.replace(' ','').upper().split(',')
+    else:
+        x_code, c_code = description.replace(' ','').upper(), ''
+
+    hyb = 0
+    acc = []
+# Split to terms for additions
+    tokens = [x for x in x_code.replace('-', '+-').split('+') if x]
+    for t in tokens:
+        if '*' in t:
+            fac, key = t.split('*')
+            if fac[0].isalpha():
+                fac, key = key, fac
+            fac = float(fac)
+        else:
+            fac, key = 1, t
+        if key == 'HF':
+            hyb = fac
+        else:
+            x_id = pyscf.dft.vxc.is_x_and_c(key)
+            if x_id is None:
+                x_id = pyscf.dft.vxc.convert_x_code(key)
+            acc.append((fac, eval_x, x_id))
+
+    tokens = [x for x in c_code.replace('-', '+-').split('+') if x]
+    for t in tokens:
+        if '*' in t:
+            fac, key = t.split('*')
+            if fac[0].isalpha():
+                fac, key = key, fac
+            fac = float(fac)
+        else:
+            fac, key = 1, t
+        c_id = pyscf.dft.vxc.convert_c_code(key)
+        acc.append((fac, eval_c, c_id))
+
+    # search for the highest XC funcitonal type
+    xctype = 'LDA'
+    for x in acc:
+        if is_lda(x[2]):
+            pass
+        elif is_meta_gga(x[2]):
+            xctype = 'MGGA'
+            raise NotImplementedError('meta-GGA')
+            break
+        else:
+            xctype = 'GGA'
+            break
+
+    def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
+        fac, fn, xcid = acc[0]
+        exc, (vrho, vsigma, vlapl, vtau), fxc, kxc = \
+                fn(xcid, rho, spin, relativity, deriv, verbose)
+        exc *= fac
+        if vrho   is not None: vrho   *= fac
+        if vsigma is not None: vsigma *= fac
+        if vlapl  is not None: vlapl  *= fac
+        if vtau   is not None: vtau   *= fac
+        if fxc is not None:
+            for i, fxci in enumerate(fxc):
+                if fxci is not None:
+                    fxci *= fac
+        if kxc is not None:
+            for i, kxci in enumerate(kxc):
+                if kxci is not None:
+                    kxci *= fac
+
+        for fac, fn, xcid in acc[1:]:
+            ec, (vrhoc, vsigmac, vlaplc, vtauc), fc, kc = \
+                    fn(xcid, rho, spin, relativity, deriv, verbose)
+            exc += fac*ec
+            if vrho   is not None: vrho   += fac*vrhoc
+            if vsigma is not None: vsigma += fac*vsigmac
+            if vlapl  is not None: vlapl  += fac*vlaplc
+            if vtau   is not None: vtau   += fac*vtauc
+            if fxc is not None: # Note: inplace updates for fxc, kxc
+                for i, fxci in enumerate(fxc):
+                    if fxci is not None:
+                        fxci += fac*fc[i]
+            if kxc is not None:
+                for i, kxci in enumerate(kxc):
+                    if kxci is not None:
+                        kxci += fac*kc[i]
+
+        return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
+
+    ni.eval_xc = eval_xc
+    ni.hybrid_coeff = lambda *args, **kwargs: hyb
+    ni._xc_type = lambda *args: xctype
+    return ni
+
+B3LYP5 = '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN'
+BLYP = 'B88,LYP'
+
+
+#####################
+
+# spin = 1, unpolarized; spin = 2, polarized
+def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, hermi=1,
+           verbose=None):
+    c_atm = numpy.array(mol._atm, dtype=numpy.int32)
+    c_bas = numpy.array(mol._bas, dtype=numpy.int32)
+    c_env = numpy.array(mol._env)
+    natm = ctypes.c_int(c_atm.shape[0])
+    nbas = ctypes.c_int(c_bas.shape[0])
+    exc = ctypes.c_double(0)
+    if not dm.flags.f_contiguous:
+        dm = dm.copy(order='F')
+    # data will write to triu in F-ordered array, which is tril of C-array
+    v = numpy.empty_like(dm, order='C')
+
+    libdft.VXCnr_vxc.restype = ctypes.c_double
+    nelec = libdft.VXCnr_vxc(ctypes.c_int(x_id), ctypes.c_int(c_id),
+                             ctypes.c_int(spin), ctypes.c_int(relativity),
+                             dm.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.byref(exc),
+                             v.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(grids.weights.size),
+                             grids.coords.ctypes.data_as(ctypes.c_void_p),
+                             grids.weights.ctypes.data_as(ctypes.c_void_p),
+                             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                             c_env.ctypes.data_as(ctypes.c_void_p))
+    if hermi == 1:
+        v = pyscf.lib.hermi_triu_(v, inplace=True)
+    else:
+        raise('anti-Hermitian is not supported')
+    return nelec, exc.value, v
+
+
 if __name__ == '__main__':
     from pyscf import gto, dft
     mol = gto.M(

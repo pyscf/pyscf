@@ -185,6 +185,11 @@ class RKS(pyscf.scf.hf.RHF):
         if h1e is None: h1e = self.get_hcore()
         return energy_elec(self, dm, h1e)
 
+    def define_xc_(self, description):
+        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
+        '''
+        pyscf.dft.vxc.define_xc_(self._numint, description)
+        return self
 
 class ROKS(pyscf.scf.rohf.ROHF):
     '''Restricted open-shell Kohn-Sham
@@ -219,6 +224,12 @@ class ROKS(pyscf.scf.rohf.ROHF):
         from pyscf.dft import uks
         if h1e is None: h1e = self.get_hcore()
         return uks.energy_elec(self, dm, h1e)
+
+    def define_xc_(self, description):
+        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
+        '''
+        pyscf.dft.vxc.define_xc_(self._numint, description)
+        return self
 
 
 if __name__ == '__main__':

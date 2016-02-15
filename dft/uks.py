@@ -106,6 +106,12 @@ class UKS(pyscf.scf.uhf.UHF):
         if h1e is None: h1e = self.get_hcore()
         return energy_elec(self, dm, h1e)
 
+    def define_xc_(self, description):
+        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
+        '''
+        pyscf.dft.vxc.define_xc_(self._numint, description)
+        return self
+
 
 
 if __name__ == '__main__':
