@@ -7,7 +7,7 @@ Version 1.1 alpha
 
 2016-02-08
 
-Pyscf is a python module for quantum chemistry program.  The module
+Pyscf is a python module for electronic structure theory.  The module
 aims to provide a simple, light-weight and efficient platform for
 quantum chemistry code developing and calculation.  The program is
 developed in the principle of

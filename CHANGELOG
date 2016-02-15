@@ -1,16 +1,18 @@
 Version 1.1 alpha (2016-2-8):
-* CCSD gradients
-* DMRG-NEVPT2 interface
-* DFT gradients
-* TDDFT and TDDFT gradients
-* DFT NMR
-* COSMO interface
-* QM/MM interface
-* Pipek-Mezey localization
-* DF-CASSCF
-* State-specific CASSCF for excited states
-* Stream operations: apply, run, set
-* General basis value evaluator
+* Added
+  - CCSD gradients
+  - DMRG-NEVPT2 interface
+  - DFT gradients
+  - TDDFT and TDDFT gradients
+  - DFT NMR
+  - COSMO interface
+  - QM/MM interface
+  - Pipek-Mezey localization
+  - DF-CASSCF
+  - State-specific CASSCF for excited states
+  - Stream operations: apply, run, set
+  - General basis value evaluator
+  - DMRG (Block) examples
 
 
 Version 1.0 (2015-10-8):
