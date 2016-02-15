@@ -5,35 +5,75 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os, sys
+'''
+DMRG solver for CASCI and CASSCF.
+'''
+
+import os
+import struct
 import time
 import tempfile
+from subprocess import check_call, CalledProcessError
 import numpy
 import pyscf.tools
-import pyscf.lib.logger as logger
+import pyscf.lib
+from pyscf.lib import logger
+from pyscf.lib import chkfile
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrg_sym
-from pyscf.dmrgscf.dmrg_sym import IRREP_MAP
-from pyscf.dmrgscf.nevpt_mpi import write_chk
-
-'''
-DMRG solver for CASSCF.
-
-DMRGCI.kernel function has a kerword fciRestart to control the Block solver
-restart from previous calculation
-'''
 
 try:
     from pyscf.dmrgscf import settings
 except ImportError:
-    msg = '''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py')
-    sys.stderr.write(msg)
+    import sys
+    sys.stderr.write('''settings.py not found.  Please create %s
+''' % os.path.join(os.path.dirname(__file__), 'settings.py'))
     raise ImportError
 
 
 
-class DMRGCI(object):
+class DMRGCI(pyscf.lib.StreamObject):
+    '''Block program interface and the object to hold Block program input parameters.
+
+    Attributes:
+        outputlevel : int
+            Noise level for Block program output.
+        maxIter : int
+
+        approx_maxIter : int
+            To control the DMRG-CASSCF approximate DMRG solver accuracy.
+        twodot_to_onedot : int
+            When to switch from two-dot algroithm to one-dot algroithm.
+        nroots : int
+            
+        weights : list of floats
+            Use this attribute with "nroots" attribute to set state-average calculation.
+        restart : bool
+            To control whether to restart a DMRG calculation.
+        tol : float
+            DMRG convergence tolerence
+        maxM : int
+            Bond dimension
+        scheduleSweeps, scheduleMaxMs, scheduleTols, scheduleNoises : list
+            DMRG sweep scheduler.  See also Block documentation
+        wfnsym : str or int
+            Wave function irrep label or irrep ID
+        orbsym : list of int
+            irrep IDs of each orbital
+        groupname : str
+            groupname, orbsym together can control whether to employ symmetry in
+            the calculation.  "groupname = None and orbsym = []" requires the
+            Block program using C1 symmetry.
+
+    Examples:
+
+    >>> mol = gto.M(atom='C 0 0 0; C 0 0 1')
+    >>> mf = scf.RHF(mol).run()
+    >>> mc = mcscf.CASCI(mf, 4, 4)
+    >>> mc.fcisolver = DMRGCI(mol)
+    >>> mc.kernel()
+    -74.379770619390698
+    '''
     def __init__(self, mol, maxM=None, tol=None):
         self.mol = mol
         self.verbose = mol.verbose
@@ -47,13 +87,12 @@ class DMRGCI(object):
         self.integralFile = "FCIDUMP"
         self.configFile = "dmrg.conf"
         self.outputFile = "dmrg.out"
-        self.twopdm = True
+        self._input_dir = '.'
         self.maxIter = 20
         self.approx_maxIter = 4
         self.twodot_to_onedot = 15
         self.dmrg_switch_tol = 1e-3
         self.nroots = 1
-        self.nevpt_state_num = 0
         self.weights = []
         self.wfnsym = 1
 
@@ -67,13 +106,12 @@ class DMRGCI(object):
             self.maxM = maxM
         self.startM =  None
         self.restart = False
-        self.force_restart = False
         self.nonspinAdapted = False
-        self.mps_nevpt = False
         self.scheduleSweeps = []
         self.scheduleMaxMs  = []
         self.scheduleTols   = []
         self.scheduleNoises = []
+        self.onlywriteIntegral = False
 
         self.orbsym = []
         if mol.symmetry:
@@ -81,49 +119,52 @@ class DMRGCI(object):
         else:
             self.groupname = None
 
+##################################################
+# don't modify the following attributes, they are not input options
         self.generate_schedule()
         self.has_threepdm = False
         self.has_nevpt = False
-        self.onlywriteIntegral = False
-        self.extraline = []
-        self.dmrg_switch_tol = 1.0e-3
+# This flag _restart is set by the program internally, to control when to make
+# Block restart calculation.
+        self._restart = False
 
         self._keys = set(self.__dict__.keys())
 
 
     def generate_schedule(self):
 
-        if self.startM == None:
+        if self.startM is None:
             self.startM = 25
         if len(self.scheduleSweeps) == 0:
             startM = self.startM
             N_sweep = 0
-            if self.restart or self.force_restart :
-                Tol = self.tol/10.0
+            if self.restart or self._restart :
+                Tol = self.tol / 10.0
             else:
                 Tol = 1.0e-4
             Noise = Tol
             while startM < self.maxM:
                 self.scheduleSweeps.append(N_sweep)
-                N_sweep +=2
+                N_sweep += 2
                 self.scheduleMaxMs.append(startM)
-                startM *=2
-                self.scheduleTols.append(Tol) 
-                self.scheduleNoises.append(Noise) 
+                startM *= 2
+                self.scheduleTols.append(Tol)
+                self.scheduleNoises.append(Noise)
             while Tol > self.tol:
                 self.scheduleSweeps.append(N_sweep)
-                N_sweep +=2
+                N_sweep += 2
                 self.scheduleMaxMs.append(self.maxM)
                 self.scheduleTols.append(Tol)
-                Tol /=10.0
+                Tol /= 10.0
                 self.scheduleNoises.append(0.0)
             self.scheduleSweeps.append(N_sweep)
-            N_sweep +=2
+            N_sweep += 2
             self.scheduleMaxMs.append(self.maxM)
             self.scheduleTols.append(self.tol)
             self.scheduleNoises.append(0.0)
-            self.twodot_to_onedot = N_sweep+2
-            self.maxIter = self.twodot_to_onedot+20
+            self.twodot_to_onedot = N_sweep + 2
+            self.maxIter = self.twodot_to_onedot + 20
+        return self
 
 
     def dump_flags(self, verbose=None):
@@ -143,32 +184,13 @@ class DMRGCI(object):
         log.info('twodot_to_onedot = %d', self.twodot_to_onedot)
         log.info('tol = %g', self.tol)
         log.info('maxM = %d', self.maxM)
-        log.info('fullrestart = %s', str(self.restart or self.force_restart))
+        log.info('fullrestart = %s', str(self.restart or self._restart))
         log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
         log.info('wfnsym = %s', self.wfnsym)
+        return self
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
-        nelectrons = 0
-        if isinstance(nelec, (int, numpy.integer)):
-            nelectrons = nelec
-        else:
-            nelectrons = nelec[0]+nelec[1]
-
-        import os
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.%d.%d.txt" %(state, state)), 'r')
-
-        twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        norb_read = int(f.readline().split()[0])
-        assert(norb_read == norb)
-
-        for line in f.readlines():
-            linesp = line.split()
-            twopdm[int(linesp[0]),int(linesp[3]),int(linesp[1]),int(linesp[2])] = 2.0*float(linesp[4])
-
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
-        onepdm /= (nelectrons-1)
-
-        return onepdm
+        return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -177,44 +199,34 @@ class DMRGCI(object):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        import os
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_twopdm.%d.%d.txt" %(state, state)), 'r')
-
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        norb_read = int(f.readline().split()[0])
-        assert(norb_read == norb)
+        file2pdm = "spatial_twopdm.%d.%d.txt" %(state, state)
+        with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
+            norb_read = int(f.readline().split()[0])
+            assert(norb_read == norb)
 
-        for line in f.readlines():
-            linesp = line.split()
-            twopdm[int(linesp[0]),int(linesp[3]),int(linesp[1]),int(linesp[2])] = 2.0*float(linesp[4])
+            for line in f:
+                linesp = line.split()
+                i, k, l, j = [int(x) for x in linesp[:4]]
+                twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
-        onepdm = numpy.einsum('ijkk->ij', twopdm)
+        onepdm = numpy.einsum('ikjj->ik', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
-    def make_rdm123(self, state, norb, nelec,  link_index=None, **kwargs):
-        import os
+    def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
-            self.twopdm = False
-            self.extraline.append('restart_threepdm')
-            if isinstance(nelec, (int, numpy.integer)):
-                neleca = nelec//2 + nelec%2
-                nelecb = nelec - neleca
-            else :
-                neleca, nelecb = nelec
-            writeDMRGConfFile(neleca, nelecb, True, self)
+            writeDMRGConfFile(self, nelec, self.approx_maxIter,
+                              with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
-                inFile = self.configFile
-                #inFile = os.path.join(self.scratchDirectory,self.configFile)
+                inFile = os.path.join(self._input_dir, self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
             executeBLOCK(self)
             if self.verbose >= logger.DEBUG1:
-                outFile = self.outputFile
-                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                outFile = os.path.join(self._input_dir, self.outputFile)
                 logger.debug1(self, open(outFile).read())
             self.has_threepdm = True
-            self.extraline.pop()
 
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
@@ -222,127 +234,106 @@ class DMRGCI(object):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.txt" %(state, state)), 'r')
-
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
-        norb_read = int(f.readline().split()[0])
-        assert(norb_read == norb)
+        file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
+        with open(os.path.join(self.scratchDirectory, "node0", file3pdm), "r") as f:
+            norb_read = int(f.readline().split()[0])
+            assert(norb_read == norb)
 
-        for line in f.readlines():
-            linesp = line.split()
-            threepdm[int(linesp[0]),int(linesp[1]),int(linesp[2]),int(linesp[3]),int(linesp[4]),int(linesp[5])] = float(linesp[6])
+            for line in f:
+                linesp = line.split()
+                i, j, k, l, m, n = [int(x) for x in linesp[:6]]
+                threepdm[i,j,k,l,m,n] = float(linesp[6])
 
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
         onepdm = numpy.einsum('ijjk->ik', twopdm)
         onepdm /= (nelectrons-1)
 
-        threepdm = numpy.einsum('jk,lm,in->ijklmn',numpy.identity(norb),numpy.identity(norb),onepdm)\
-                 + numpy.einsum('jk,miln->ijklmn',numpy.identity(norb),twopdm)\
-                 + numpy.einsum('lm,kijn->ijklmn',numpy.identity(norb),twopdm)\
-                 + numpy.einsum('jm,kinl->ijklmn',numpy.identity(norb),twopdm)\
-                 + numpy.einsum('mkijln->ijklmn',threepdm)
+        threepdm = numpy.einsum('mkijln->ijklmn',threepdm).copy()
+        threepdm += numpy.einsum('jk,lm,in->ijklmn',numpy.identity(norb),numpy.identity(norb),onepdm)
+        threepdm += numpy.einsum('jk,miln->ijklmn',numpy.identity(norb),twopdm)
+        threepdm += numpy.einsum('lm,kijn->ijklmn',numpy.identity(norb),twopdm)
+        threepdm += numpy.einsum('jm,kinl->ijklmn',numpy.identity(norb),twopdm)
 
-        twopdm = numpy.einsum('iklj->ijkl',twopdm) + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb))\
+        twopdm =(numpy.einsum('iklj->ijkl',twopdm)
+               + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
 
-    def nevpt_intermediate(self, type, norb, nelec, state, **kwargs):
-        import os
+    def nevpt_intermediate(self, tag, norb, nelec, state, **kwargs):
 
         if self.has_nevpt == False:
-            self.twopdm = False
-            self.extraline.append('restart_nevpt2_npdm')
-            if isinstance(nelec, (int, numpy.integer)):
-                neleca = nelec//2 + nelec%2
-                nelecb = nelec - neleca
-            else :
-                neleca, nelecb = nelec
-            writeDMRGConfFile(neleca, nelecb, True, self)
+            writeDMRGConfFile(self, nelec, True,
+                              with_2pdm=False, extraline=['restart_nevpt2_npdm'])
             if self.verbose >= logger.DEBUG1:
-                #inFile = os.path.join(self.scratchDirectory,self.configFile)
-                inFile = self.configFile
+                inFile = os.path.join(self._input_dir, self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
             executeBLOCK(self)
             if self.verbose >= logger.DEBUG1:
-                outFile = self.outputFile
-                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                outFile = os.path.join(self._input_dir, self.outputFile)
                 logger.debug1(self, open(outFile).read())
             self.has_nevpt = True
-            self.extraline.pop()
-
-        f = open(os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "%s_matrix.%d.%d.txt" %(type,state, state)), 'r')
 
         a16 = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
-        norb_read = int(f.readline().split()[0])
-        assert(norb_read == norb)
+        filename = "%s_matrix.%d.%d.txt" % (tag, state, state)
+        with open(os.path.join(self.scratchDirectory, "node0", filename), "r") as f:
+            norb_read = int(f.readline().split()[0])
+            assert(norb_read == norb)
 
-        for line in f.readlines():
-            linesp = line.split()
-            a16[int(linesp[0]),int(linesp[1]),int(linesp[2]),int(linesp[3]),int(linesp[4]),int(linesp[5])] = float(linesp[6])
+            for line in f:
+                linesp = line.split()
+                i, j, k, l, m, n = [int(x) for x in linesp[:6]]
+                a16[i,j,k,l,m,n] = float(linesp[6])
 
         return a16
 
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
-        if self.nroots==1:
+        if self.nroots == 1:
             roots = 0
         else:
             roots = range(self.nroots)
         if fciRestart is None:
-            fciRestart = self.restart or self.force_restart
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2 + nelec%2
-            nelecb = nelec - neleca
-        else :
-            neleca, nelecb = nelec
+            fciRestart = self.restart or self._restart
 
-        writeIntegralFile(h1e, eri, norb, neleca, nelecb, self)
-        writeDMRGConfFile(neleca, nelecb, fciRestart, self)
+        writeIntegralFile(self, h1e, eri, norb, nelec)
+        writeDMRGConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
-            inFile = self.configFile
-            #inFile = os.path.join(self.scratchDirectory,self.configFile)
+            inFile = os.path.join(self._input_dir, self.configFile)
             logger.debug1(self, 'Block Input conf')
             logger.debug1(self, open(inFile, 'r').read())
-        if self.onlywriteIntegral :
-            logger.info(self,'Only write integral')
+        if self.onlywriteIntegral:
+            logger.info(self, 'Only write integral')
             try:
                 calc_e = readEnergy(self)
             except IOError:
-                if self.nroots ==1:
+                if self.nroots == 1:
                     calc_e = 0.0
                 else :
                     calc_e = [0.0] * self.nroots
             return calc_e, roots
-            
+
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = self.outputFile
-            #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+            outFile = os.path.join(self._input_dir, self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
         return calc_e, roots
 
     def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
-        fciRestart = True 
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2 + nelec%2
-            nelecb = nelec - neleca
-        else :
-            neleca, nelecb = nelec
+        fciRestart = True
 
-        writeIntegralFile(h1e, eri, norb, neleca, nelecb, self)
-        writeDMRGConfFile(neleca, nelecb, fciRestart, self, True)
+        writeIntegralFile(self, h1e, eri, norb, nelec)
+        writeDMRGConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
-            inFile = self.configFile
-            #inFile = os.path.join(self.scratchDirectory,self.configFile)
+            inFile = os.path.join(self._input_dir, self.configFile)
             logger.debug1(self, 'Block Input conf')
             logger.debug1(self, open(inFile, 'r').read())
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = self.outputFile
-            #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+            outFile = os.path.join(self._input_dir, self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
@@ -356,9 +347,9 @@ class DMRGCI(object):
         def callback(envs):
             if (envs['norm_gorb'] < self.dmrg_switch_tol or
                 ('norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10)):
-                self.restart = True
+                self._restart = True
             else :
-                self.restart = False
+                self._restart = False
         return callback
 
 
@@ -372,18 +363,23 @@ def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
             schedule.append('twodot_to_onedot %i'%twodot_to_onedot)
         return '\n'.join(schedule)
     else:
-        
+
         return 'schedule default\nmaxM %s'%Ms[-1]
 
-def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
-    confFile = DMRGCI.configFile
-    #confFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
+def writeDMRGConfFile(DMRGCI, nelec, Restart,
+                      maxIter=None, with_2pdm=True, extraline=[]):
+    confFile = os.path.join(DMRGCI._input_dir, DMRGCI.configFile)
 
     f = open(confFile, 'w')
+    if isinstance(nelec, (int, numpy.integer)):
+        neleca = nelec//2 + nelec%2
+        nelecb = nelec - neleca
+    else :
+        neleca, nelecb = nelec
     f.write('nelec %i\n'%(neleca+nelecb))
     f.write('spin %i\n' %(neleca-nelecb))
     if isinstance(DMRGCI.wfnsym, str):
-        wfnsym = dmrg_sym.irrep_name2id(DMRGCI.mol.groupname, DMRGCI.wfnsym)
+        wfnsym = dmrg_sym.irrep_name2id(DMRGCI.groupname, DMRGCI.wfnsym)
     else:
         wfnsym = DMRGCI.wfnsym
     f.write('irrep %i\n' % wfnsym)
@@ -412,25 +408,23 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         f.write('fullrestart\n')
         f.write('onedot \n')
 
-    if DMRGCI.mol.symmetry:
+    if DMRGCI.groupname is not None:
         if DMRGCI.groupname.lower() == 'dooh':
             f.write('sym d2h\n' )
         elif DMRGCI.groupname.lower() == 'cooh':
             f.write('sym c2h\n' )
         else:
             f.write('sym %s\n' % DMRGCI.groupname.lower())
-    f.write('orbitals %s\n' % DMRGCI.integralFile)
-    #f.write('orbitals %s\n' % os.path.join(DMRGCI.scratchDirectory,
-    #                                       DMRGCI.integralFile))
-    if approx == True :
-        f.write('maxiter %i\n'%DMRGCI.approx_maxIter)
-    else :
-        f.write('maxiter %i\n'%DMRGCI.maxIter)
+    f.write('orbitals %s\n' % os.path.join(DMRGCI._input_dir,
+                                           DMRGCI.integralFile))
+    if maxIter is None:
+        maxIter = DMRGCI.maxIter
+    f.write('maxiter %i\n'%maxIter)
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
 
     f.write('outputlevel %s\n'%DMRGCI.outputlevel)
     f.write('hf_occ integral\n')
-    if(DMRGCI.twopdm):
+    if(with_2pdm):
         f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):
         f.write('nonspinAdapted\n')
@@ -444,85 +438,69 @@ def writeDMRGConfFile(neleca, nelecb, Restart, DMRGCI, approx= False):
         for weight in DMRGCI.weights:
             f.write('%f '%weight)
         f.write('\n')
-    for line in DMRGCI.extraline:
+    for line in extraline:
         f.write('%s\n'%line)
     f.close()
     #no reorder
     #f.write('noreorder\n')
 
-def writeIntegralFile(h1eff, eri_cas, ncas, neleca, nelecb, DMRGCI):
-    #integralFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.integralFile)
-    integralFile = DMRGCI.integralFile
-# ensure 4-fold symmetry
-    eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
-    if DMRGCI.mol.symmetry and DMRGCI.orbsym:
-        if DMRGCI.groupname.lower() == 'dooh':
-            orbsym = [IRREP_MAP['D2h'][i % 10] for i in DMRGCI.orbsym]
-        elif DMRGCI.groupname.lower() == 'cooh':
-            orbsym = [IRREP_MAP['C2h'][i % 10] for i in DMRGCI.orbsym]
-        else:
-            orbsym = [IRREP_MAP[DMRGCI.groupname][i] for i in DMRGCI.orbsym]
+def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec):
+    if isinstance(nelec, (int, numpy.integer)):
+        neleca = nelec//2 + nelec%2
+        nelecb = nelec - neleca
+    else :
+        neleca, nelecb = nelec
+    integralFile = os.path.join(DMRGCI._input_dir, DMRGCI.integralFile)
+    if DMRGCI.groupname is not None and DMRGCI.orbsym:
+        orbsym = dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym)
     else:
         orbsym = []
     if not os.path.exists(DMRGCI.scratchDirectory):
         os.makedirs(DMRGCI.scratchDirectory)
-    f = open(integralFile, 'w+')
+
+    eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
 
-#    f.write(' &FCI NORB= %i,NELEC= %i,MS2= %i,\n' %(ncas, neleca+nelecb, neleca-nelecb))
-#    f.write(' ORBSYM=%s\n')
-#    for i in range(ncas):
-#        f.write('1 ')
-#
-#    f.write('\nISYM=1\n')
-#    f.write('&END\n')
-#    index1 = 0
-#    for i in range(ncas):
-#        for j in range(i+1):
-#            index2=0
-#            for k in range(ncas):
-#                for l in range(k+1):
-#                    f.write('%18.10e %3i  %3i  %3i  %3i\n' %(eri_cas[index1,index2], i+1, j+1, k+1, l+1))
-#                    index2=index2+1
-#            index1=index1+1
-#    for i in range(ncas):
-#        for j in range(i+1):
-#            f.write('%18.10e %3i  %3i  %3i  %3i\n' %(h1eff[i,j], i+1, j+1, 0, 0))
-#
-#    f.close()
-
 
 def executeBLOCK(DMRGCI):
 
-    inFile = DMRGCI.configFile
-    outFile = DMRGCI.outputFile
-    #inFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.configFile)
-    #outFile = os.path.join(DMRGCI.scratchDirectory,DMRGCI.outputFile)
-    from subprocess import check_call
+    inFile  = os.path.join(DMRGCI._input_dir, DMRGCI.configFile)
+    outFile = os.path.join(DMRGCI._input_dir, DMRGCI.outputFile)
     try:
-        output = check_call("%s  %s  %s > %s"%(DMRGCI.mpiprefix, DMRGCI.executable, inFile, outFile), shell=True)
-    except ValueError:
-        print(output)
-        exit()
+        cmd = ' '.join((DMRGCI.mpiprefix, DMRGCI.executable, inFile))
+        cmd = "%s > %s" % (cmd, outFile)
+        check_call(cmd, shell=True)
+    except CalledProcessError as err:
+        logger.error(DMRGCI, cmd)
+        raise err
 
 def readEnergy(DMRGCI):
-    import struct, os
-    file1 = open(os.path.join('%s/%s/'%(DMRGCI.scratchDirectory,"node0"), "dmrg.e"),"rb")
+    file1 = open(os.path.join(DMRGCI.scratchDirectory, "node0", "dmrg.e"), "rb")
     format = ['d']*DMRGCI.nroots
     format = ''.join(format)
     calc_e = struct.unpack(format, file1.read())
     file1.close()
-    if DMRGCI.nroots ==1:
+    if DMRGCI.nroots == 1:
         return calc_e[0]
     else:
-        return list(calc_e)
+        return numpy.asarray(calc_e)
 
 
 def DMRGSCF(mf, norb, nelec, *args, **kwargs):
-    '''Wrapper for DMRG-SCF, to setup CASSCF object using the DMRG solver'''
+    '''Shortcut function to setup CASSCF using the DMRG solver.  The DMRG
+    solver is properly initialized in this function so that the 1-step
+    algorithm can applied with DMRG-CASSCF.
 
+    Examples:
+
+    >>> mol = gto.M(atom='C 0 0 0; C 0 0 1')
+    >>> mf = scf.RHF(mol).run()
+    >>> mc = DMRGSCF(mf, 4, 4)
+    >>> mc.kernel()
+    -74.414908818611522
+    '''
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol)
     mc.callback = mc.fcisolver.restart_scheduler_()
@@ -531,92 +509,6 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
         mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
     return mc
 
-
-def DMRG_MPS_NEVPT(mc, maxM = 500, root=0, nevptsolver=None, tol =1e-7):
-    import h5py
-    
-    if (isinstance(mc, basestring)):
-        fh5 = h5py.File(mc,'r')
-
-        mol = eval(fh5['mol'].value)
-        ncas = fh5['mc/ncas'].value
-        ncore = fh5['mc/ncore'].value
-        nvirt = fh5['mc/nvirt'].value
-        nelecas = fh5['mc/nelecas'].value
-        nroots = fh5['mc/nroots'].value
-        wfnsym = fh5['mc/wfnsym'].value
-        fh5.close()
-        mc_chk = mc
-    else :
-        mol = mc.mol
-        ncas = mc.ncas
-        ncore = mc.ncore
-        nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
-        nelecas = mc.nelecas
-        nroots = mc.fcisolver.nroots
-        wfnsym = mc.fcisolver.wfnsym
-        mc_chk = 'mc_chkfile'
-        write_chk(mc,root,mc_chk)
-        
-
-
-
-    if nevptsolver is None:
-        nevptsolver = DMRGCI(mol, maxM, tol)
-        nevptsolver.scheduleSweeps = [0, 4]
-        nevptsolver.scheduleMaxMs  = [maxM, maxM]               
-        nevptsolver.scheduleTols   = [0.0001, tol]
-        nevptsolver.scheduleNoises = [0.0001, 0.0]   
-        nevptsolver.twodot_to_onedot = 4
-        nevptsolver.maxIter = 6
-        nevptsolver.wfnsym = wfnsym
-    nevptsolver.twopdm = False
-    nevptsolver.nroots = nroots
-    scratch = nevptsolver.scratchDirectory
-    nevptsolver.scratchDirectory = ''
-
-
-    nevptsolver.extraline.append('fullrestart')
-    nevptsolver.extraline.append('nevpt_state_num %d'%root)
-    
-    writeDMRGConfFile(nelecas[0], nelecas[1], False, nevptsolver)
-    nevptsolver.scratchDirectory = scratch
-
-    if nevptsolver.verbose >= logger.DEBUG1:
-        inFile = nevptsolver.configFile
-        #inFile = os.path.join(self.scratchDirectory,self.configFile)
-        logger.debug1(nevptsolver, 'Block Input conf')
-        logger.debug1(nevptsolver, open(inFile, 'r').read())
-
-    t0 = (time.clock(), time.time())
-
-    from subprocess import check_call
-    import os
-    full_path = os.path.realpath(__file__)
-    check_call('%s %s/nevpt_mpi.py %s %s %s %s %s'%(nevptsolver.mpiprefix, os.path.dirname(full_path), mc_chk, nevptsolver.executable, nevptsolver.configFile,nevptsolver.outputFile, nevptsolver.scratchDirectory), shell=True)
-
-    if nevptsolver.verbose >= logger.DEBUG1:
-        logger.debug1(nevptsolver, open(os.path.join(nevptsolver.scratchDirectory, '0/dmrg.out')).read())
-
-    import h5py
-    fh5 = h5py.File('Perturbation_%d'%root,'r')
-    Vi_e  =  fh5['Vi/energy'].value      
-    Vr_e  =  fh5['Vr/energy'].value      
-    fh5.close()
-    logger.note(nevptsolver,'Nevpt Energy:')
-    logger.note(nevptsolver,'Sr Subspace:  E = %.14f'%( Vr_e))
-    logger.note(nevptsolver,'Si Subspace:  E = %.14f'%( Vi_e))
-
-    logger.timer(nevptsolver,'MPS NEVPT calculation time', *t0)
-
-
-
- #   if ci.verbose >= logger.DEBUG1:
- #       outFile = ci.outputFile
- #       logger.debug1(ci, open(outFile).read())
-    #calc_e = readEnergy(self)
-
-    #return calc_e, None
 
 
 if __name__ == '__main__':

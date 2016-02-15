@@ -593,7 +593,7 @@ class CASCI(pyscf.lib.StreamObject):
 
     def state_specific_(self, state=1):
         from pyscf.mcscf import addons
-        self.fcisolver = addons.state_specific_(self, state)
+        self.fcisolver = addons.state_specific(self, state)
         return self
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,

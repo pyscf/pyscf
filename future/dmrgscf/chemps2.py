@@ -69,7 +69,7 @@ class CheMPS2(object):
         Initializer = PyCheMPS2.PyInitialize()
         Initializer.Init()
 
-        if self.groupname:
+        if self.groupname is not None:
             groupNumber = GROUPNAME_ID[self.groupname]
         else:
             groupNumber = 0

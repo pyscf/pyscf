@@ -22,9 +22,9 @@ def IX_intermediates(cc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(cc)
     if d1 is None:
-        doo, dvv = ccsd_rdm.gamma1_intermediates(cc, t1, t2, l1, l2)
+        doo, dov, dvo, dvv = ccsd_rdm.gamma1_intermediates(cc, t1, t2, l1, l2)
     else:
-        doo, dvv = d1
+        doo, dov, dvo, dvv = d1
     if d2 is None:
 # Note gamma2 are in Chemist's notation
         d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
@@ -134,7 +134,10 @@ def response_dm1(cc, t1, t2, l1, l2, eris=None, IX=None):
     return dm1
 
 
-# Only works with canonical orbitals
+#
+# Note: only works with canonical orbitals
+# Non-canonical formula refers to JCP, 95, 2639
+#
 def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     if t1 is None: t1 = cc.t1
     if t2 is None: t2 = cc.t2
@@ -146,9 +149,10 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     mo_energy = cc.mo_energy
     nocc, nvir = t1.shape
     nao, nmo = mo_coeff.shape
-    doo, dvv = ccsd_rdm.gamma1_intermediates(cc, t1, t2, l1, l2)
+    d1 = ccsd_rdm.gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
-    Ioo, Ivv, Ivo, Xvo = IX_intermediates(cc, t1, t2, l1, l2, eris, (doo,dvv), d2)
+    Ioo, Ivv, Ivo, Xvo = IX_intermediates(cc, t1, t2, l1, l2, eris, d1, d2)
+    doo, dov, dvo, dvv = d1
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     dvvov = dovvv.transpose(2,3,0,1)
     dvvvv = pyscf.ao2mo.restore(1, dvvvv, nvir).reshape((nvir,)*4)
@@ -157,12 +161,14 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     dm1mo[:nocc,:nocc] = doo * 2
     dm1mo[nocc:,nocc:] = dvv * 2
     dm1ao = reduce(numpy.dot, (mo_coeff, dm1mo, mo_coeff.T))
+    dm0 = numpy.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)*2
     im1 = numpy.zeros_like(dm1ao)
     im1[:nocc,:nocc] = Ioo
     im1[nocc:,nocc:] = Ivv
     im1[nocc:,:nocc] = Ivo
     im1[:nocc,nocc:] = Ivo.T
     im1 = reduce(numpy.dot, (mo_coeff, im1, mo_coeff.T))
+    dme0 = grad.rhf.make_rdm1e(cc._scf.mo_energy, mo_coeff, cc._scf.mo_occ)
 
     h1 =-(mol.intor('cint1e_ipkin_sph', comp=3)
          +mol.intor('cint1e_ipnuc_sph', comp=3))
@@ -183,6 +189,10 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     for i in range(nocc):
         dm2[i,i,:,:] += dm1mo
         dm2[:,i,i,:] -= dm1mo * .5
+    for i in range(nocc):  # for HF gradeint
+        for j in range(nocc):
+            dm2[i,i,j,j] += 1
+            dm2[i,j,j,i] -= .5
     dm2 = numpy.einsum('pjkl,ip->ijkl', dm2, mo_coeff)
     dm2 = numpy.einsum('ipkl,jp->ijkl', dm2, mo_coeff)
     dm2 = numpy.einsum('ijpl,kp->ijkl', dm2, mo_coeff)
@@ -218,9 +228,17 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
 
 # 2e AO integrals dot 2pdm
         de[k] -= numpy.einsum('xijkl,ijkl->x', eri0[:,p0:p1], dm2[p0:p1]) * 2
-        de[k] -= numpy.einsum('xjikl,ijkl->x', eri0[:,p0:p1], dm2[:,p0:p1]) * 2
-        de[k] -= numpy.einsum('xklij,ijkl->x', eri0[:,p0:p1], dm2[:,:,p0:p1]) * 2
-        de[k] -= numpy.einsum('xlkij,ijkl->x', eri0[:,p0:p1], dm2[:,:,:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xijkl,jikl->x', eri0[:,p0:p1], dm2[:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xijkl,klij->x', eri0[:,p0:p1], dm2[:,:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xijkl,klji->x', eri0[:,p0:p1], dm2[:,:,:,p0:p1]) * 2
+
+# HF gradients, J1*2-K1 was merged into previous contraction to dm2
+        de[k] +=(numpy.einsum('xij,ij->x', h1[:,p0:p1], dm0[p0:p1])
+               + numpy.einsum('xji,ij->x', h1[:,p0:p1], dm0[:,p0:p1]))
+        de[k] +=(numpy.einsum('xij,ij->x', vrinv, dm0)
+               + numpy.einsum('xji,ij->x', vrinv, dm0))
+        de[k] -=(numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1])
+               + numpy.einsum('xji,ij->x', s1[:,p0:p1], dme0[:,p0:p1]))
 
     return de
 
@@ -316,11 +334,7 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
     g1 = kernel(mycc, t1, t2, l1, l2)
-    ghf = grad.RHF(mf).grad()
-    print('ghf')
-    print(ghf)
-    print('gcc')
-    print(ghf+g1)
+    print(g1+grad.rhf.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -341,12 +355,7 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
     g1 = kernel(mycc, t1, t2, l1, l2)
-    ghf = grad.RHF(mf).grad()
-    print('ghf')
-    print(ghf)
-    print('gcc')
-#[[ 0.          0.          0.01564366]
-# [ 0.          0.         -0.01564366]]
-    print(g1)
-    print('tot')
-    print(ghf+g1)
+    print(g1+grad.rhf.grad_nuc(mol))
+# [[ 0.          0.         -0.07080036]
+#  [ 0.          0.          0.07080036]]
+

@@ -43,7 +43,7 @@ e_0 = mc.kernel()[0]
 # Run DMRGCI for 2 excited states
 #
 mc = mcscf.CASCI(m, 8, 8)
-mc.fcisolver = dmrgscf.drmgci.DMRGCI(mol, maxM=200)
+mc.fcisolver = dmrgscf.dmrgci.DMRGCI(mol, maxM=200)
 mc.fcisolver.nroots = 2
 e_0 = mc.kernel()[0]
 
@@ -73,7 +73,7 @@ e_0 = mc.kernel()[0]
 # Run DMRGCI for 2 excited states
 #
 mc = mcscf.CASCI(m, 8, 8)
-mc.fcisolver = dmrgscf.drmgci.DMRGCI(mol, maxM=200)
+mc.fcisolver = dmrgscf.dmrgci.DMRGCI(mol, maxM=200)
 mc.fcisolver.nroots = 2
 e_0 = mc.kernel()[0]
 

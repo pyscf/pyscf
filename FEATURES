@@ -33,8 +33,13 @@
 * CCSD (up to ~100 occupied, ~800 virtual orbitals)
   - canonical CCSD
   - canonical CCSD lambda solver
-  - CCSD 1-particle density matrix, 2-particle density matrix
+  - CCSD 1-particle and 2-particle density matrices
   - CCSD gradients
+
+* CCSD(T)
+  - canonical CCSD(T)
+  - canonical density matrices
+  - canonical gradients
 
 * Full CI
   - Direct-CI solver for spin degenerated Hamiltonian
@@ -56,6 +61,9 @@
 
 * MRPT
   - Strongly contracted NEVPT2
+
+* Solvation effects
+  - COSMO model for Hartree-Fock, DFT, CASCI, CASSCF and DMRG-CASCI, DMRG-CASSCF
 
 * AO integrals
   - Interface to call Libcint library

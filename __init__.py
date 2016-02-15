@@ -127,7 +127,7 @@ Eg
 
 '''
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 import os
 from pyscf import gto
@@ -135,6 +135,5 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import ao2mo
 
-# modules in ./future are in test
 __path__.append(os.path.join(os.path.dirname(__file__), 'future'))
 __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))

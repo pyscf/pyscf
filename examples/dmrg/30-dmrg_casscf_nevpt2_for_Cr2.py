@@ -3,7 +3,7 @@
 from pyscf import gto
 from pyscf import scf
 from pyscf.mrpt.nevpt2 import sc_nevpt
-from pyscf.dmrgscf.dmrgci import DMRGSCF
+from pyscf.dmrgscf import DMRGSCF
 
 #
 # NEVPT2 calculation requires about 200 GB memory in total
@@ -51,3 +51,9 @@ mc.kernel(mo)
 # DMRG-NEVPT2
 #
 sc_nevpt(mc)
+
+#
+# The compressed-MPS-perturber DMRG-NEVPT2 is more efficient.
+#
+from pyscf.dmrgscf import compress_perturb
+sc_nevpt(compress_perturb(mc))
