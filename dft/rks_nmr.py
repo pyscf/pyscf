@@ -22,7 +22,7 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
     natocc, natorb = scipy.linalg.eigh(dm)
     nao = dm.shape[0]
 
-    xctype = numint._xc_type(x_id, c_id)
+    xctype = ni._xc_type(x_id, c_id)
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
     blksize = min(int(max_memory/12*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
@@ -30,31 +30,29 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
     vmat = numpy.zeros((3,nao,nao))
     if xctype == 'LDA':
         buf = numpy.empty((4,blksize,nao))
-        for ip0, ip1 in numint.prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0tab = ni.non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=0, non0tab=non0tab, out=buf)
+        ao_deriv = 0
+        for ao, non0tab, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
+                                 ni.non0tab, buf=buf):
             rho = ni.eval_rho2(mol, ao, natorb, natocc, non0tab, 'LDA')
             vxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=1)[1]
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao, weight*vrho)
             giao = mol.eval_gto('GTOval_ig_sph', coords, comp=3,
                                 non0tab=non0tab, out=buf[1:])
-            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, ip1-ip0, non0tab)
-            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, ip1-ip0, non0tab)
-            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, ip1-ip0, non0tab)
+            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, weight.size, non0tab)
+            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, weight.size, non0tab)
+            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, weight.size, non0tab)
             rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
         XX, XY, XZ = 0, 1, 2
         YX, YY, YZ = 3, 4, 5
         ZX, ZY, ZZ = 6, 7, 8
-        for ip0, ip1 in numint.prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0tab = ni.non0tab[ip0//BLKSIZE:]
-            ao = ni.eval_ao(mol, coords, deriv=1, non0tab=non0tab, out=buf)
+        ao_deriv = 1
+        for ao, non0tab, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
+                                 ni.non0tab, buf=buf):
             rho = ni.eval_rho2(mol, ao, natorb, natocc, non0tab, 'GGA')
             vxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=1)[1]
             vrho, vsigma = vxc[:2]
@@ -65,24 +63,24 @@ def _get_vxc_giao(ni, mol, grids, x_id, c_id, dm,
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
             giao = mol.eval_gto('GTOval_ig_sph', coords, 3,
                                 non0tab=non0tab, out=buf[4:])
-            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, ip1-ip0, non0tab)
-            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, ip1-ip0, non0tab)
-            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, ip1-ip0, non0tab)
+            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, weight.size, non0tab)
+            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, weight.size, non0tab)
+            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, weight.size, non0tab)
 
             giao = mol.eval_gto('GTOval_ipig_sph', coords, 9,
                                 non0tab=non0tab, out=buf[1:])
             aow = numpy.einsum('pi,p->pi', giao[XX], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YX], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZX], wv[3])
-            vmat[0] += numint._dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
+            vmat[0] += numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, non0tab)
             aow = numpy.einsum('pi,p->pi', giao[XY], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YY], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZY], wv[3])
-            vmat[1] += numint._dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
+            vmat[1] += numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, non0tab)
             aow = numpy.einsum('pi,p->pi', giao[XZ], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YZ], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZZ], wv[3])
-            vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, nao, ip1-ip0, non0tab)
+            vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, non0tab)
             rho = vxc = vrho = vsigma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')

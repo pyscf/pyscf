@@ -78,22 +78,12 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         return (mo_a, mo_b)
 
 def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=1):
-    if mo is None:
-        mo = casscf.mo_coeff
-    orbsym = pyscf.symm.label_orb_symm(casscf.mol, casscf.mol.irrep_id,
-                                                casscf.mol.symm_orb,
-                                                mo, s=casscf._scf.get_ovlp())
-    orbsym = orbsym[casscf.ncore:]
-    caslst = []
-    for k, v in cas_occ_num.iteritems():
-        orb_irrep = [ casscf.ncore + base + i for i in range(len(orbsym)) if orbsym[i]== symm.irrep_name2id(casscf.mol.groupname,k) ]
-        caslst.extend(orb_irrep[:v])
-    return caslst
+    raise RuntimeError('This function has been replaced by function caslst_by_irrep')
 
-def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
-                     cas_irrep_ncore=None, s=None):
-    '''Given number of active orbitals for each irrep, form the active space
-    wrt the indices of MOs
+def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
+                    cas_irrep_ncore=None, s=None, base=1):
+    '''Given number of active orbitals for each irrep, return the orbital
+    indices of active space
 
     Args:
         casscf : an :class:`CASSCF` or :class:`CASCI` object
@@ -116,9 +106,11 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             orbitals.
         s : ndarray
             overlap matrix
+        base : int
+            0-based (C-like) or 1-based (Fortran-like) caslst
 
     Returns:
-        sorted orbitals, ordered as [c,..,c,a,..,a,v,..,v]
+        A list of orbital indices
 
     Examples:
 
@@ -127,11 +119,8 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     >>> mf = scf.RHF(mol)
     >>> mf.kernel()
     >>> mc = mcscf.CASSCF(mf, 12, 4)
-    >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
-    >>> # identical to mo = sort_mo_by_irrep(mc, mf.mo_coeff, {2: 4, 3: 4, 6: 2, 7: 2})
-    >>> # identical to mo = sort_mo_by_irrep(mc, mf.mo_coeff, [0, 0, 4, 4, 0, 0, 2, 2])
-    >>> mc.kernel(mo)[0]
-    -108.162863845084
+    >>> mcscf.caslst_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
+    [5, 7, 8, 10, 11, 14, 15, 20, 25, 26, 31, 32]
     '''
     if s is None:
         s = casscf._scf.get_ovlp()
@@ -184,7 +173,54 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     logger.debug(casscf, 'ncore for each irreps %s', irrep_ncore)
     logger.debug(casscf, 'ncas for each irreps %s', irrep_ncas)
     logger.debug(casscf, 'caslst = %s', caslst)
-    return sort_mo(casscf, mo_coeff, sorted(caslst), 0)
+    return numpy.sort(numpy.asarray(caslst)) + base
+
+def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
+                     cas_irrep_ncore=None, s=None):
+    '''Given number of active orbitals for each irrep, construct the mo initial
+    guess for CASSCF
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+        cas_irrep_nocc : list or dict
+            Number of active orbitals for each irrep.  It can be a dict, eg
+            {'A1': 2, 'B2': 4} to indicate the active space size based on
+            irrep names, or {0: 2, 3: 4} for irrep Id,  or a list [2, 0, 0, 4]
+            (identical to {0: 2, 3: 4}) in which the list index is served as
+            the irrep Id.
+
+    Kwargs:
+        cas_irrep_ncore : list or dict
+            Number of closed shells for each irrep.  It can be a dict, eg
+            {'A1': 6, 'B2': 4} to indicate the closed shells based on
+            irrep names, or {0: 6, 3: 4} for irrep Id,  or a list [6, 0, 0, 4]
+            (identical to {0: 6, 3: 4}) in which the list index is served as
+            the irrep Id.  If cas_irrep_ncore is not given, the program
+            will generate a guess based on the lowest :attr:`CASCI.ncore`
+            orbitals.
+        s : ndarray
+            overlap matrix
+
+    Returns:
+        sorted orbitals, ordered as [c,..,c,a,..,a,v,..,v]
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvtz', symmetry=True, verbose=0)
+    >>> mf = scf.RHF(mol)
+    >>> mf.kernel()
+    >>> mc = mcscf.CASSCF(mf, 12, 4)
+    >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
+    >>> # identical to mo = sort_mo_by_irrep(mc, mf.mo_coeff, {2: 4, 3: 4, 6: 2, 7: 2})
+    >>> # identical to mo = sort_mo_by_irrep(mc, mf.mo_coeff, [0, 0, 4, 4, 0, 0, 2, 2])
+    >>> mc.kernel(mo)[0]
+    -108.162863845084
+    '''
+    caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
+                             cas_irrep_ncore, s, 0)
+    return sort_mo(casscf, mo_coeff, caslst, 0)
 
 
 def project_init_guess(casscf, init_mo, prev_mol=None):
@@ -599,3 +635,9 @@ if __name__ == '__main__':
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
     print(emc - -75.982520334896776)
+
+
+    mc = mcscf.CASSCF(m, 4, 4)
+    mc.verbose = 4
+    mc = state_specific_(mc, 2)
+    emc = mc.kernel()[0]

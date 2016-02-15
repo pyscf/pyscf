@@ -12,9 +12,10 @@
   - density fitting DFT (up to ~5000 basis)
 
 * TDDFT
-  - TDA for TDHF
-  - TDA for TDDFT
-  - TDA gradients for TDHF and TDDFT
+  - TDHF
+  - TDDFT
+  - TDHF gradients
+  - TDDFT gradients for LDA functional
 
 * General CASCI/CASSCF solver (up to ~2500 basis)
   - State-average CASCI/CASSCF
@@ -51,6 +52,7 @@
   - 4-component DHF gradients
   - non-relativistic DFT gradients
   - non-relativistic CCSD gradients
+  - non-relativistic TDHF and TDDFT gradients
 
 * NMR
   - non-relativistic RHF NMR shielding

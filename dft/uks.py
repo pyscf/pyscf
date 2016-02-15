@@ -28,7 +28,8 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
     x_code, c_code = pyscf.dft.vxc.parse_xc_name(ks.xc)
-    n, ks._exc, vx = ks._numint.nr_uks(mol, ks.grids, x_code, c_code, dm)
+    n, ks._exc, vx = ks._numint.nr_uks_(mol, ks.grids, x_code, c_code, dm,
+                                        hermi=hermi)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -93,7 +94,10 @@ class UKS(pyscf.scf.uhf.UHF):
         self.grids.dump_flags()
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Coulomb + XC functional'''
+        '''Coulomb + XC functional
+
+        Refer to `pyscf.dft.uks.get_veff_` for full documentation
+        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         return get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
@@ -101,6 +105,12 @@ class UKS(pyscf.scf.uhf.UHF):
     def energy_elec(self, dm, h1e=None, vhf=None):
         if h1e is None: h1e = self.get_hcore()
         return energy_elec(self, dm, h1e)
+
+    def define_xc_(self, description):
+        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
+        '''
+        pyscf.dft.vxc.define_xc_(self._numint, description)
+        return self
 
 
 

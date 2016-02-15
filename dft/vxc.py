@@ -7,8 +7,9 @@
 XC functional, the interface to libxc
 '''
 
+import copy
 import ctypes
-import re
+import numpy
 import pyscf.lib
 
 libdft = pyscf.lib.load_library('libdft')
@@ -490,7 +491,9 @@ def is_x_and_c(xc_code):
         if xc_code in X_AND_C_IDS:
             return xc_code
     else:
-        if 'XC_HYB_GGA_XC_'+xc_code in XC_CODES:
+        if 'HYB' in xc_code:
+            return XC_CODES[xc_code]
+        elif 'XC_HYB_GGA_XC_'+xc_code in XC_CODES:
             return XC_CODES['XC_HYB_GGA_XC_'+xc_code]
         elif 'XC_HYB_MGGA_XC_'+xc_code in XC_CODES:
             return XC_CODES['XC_HYB_MGGA_XC_'+xc_code]
@@ -531,57 +534,72 @@ def parse_xc_name(xc_name='LDA,VWN'):
         x_code, c_code = xc_name
 
     if isinstance(x_code, str):
-        if x_code == 'LDA':
-            x_code = 1
-        elif 'HYB' in x_code:
-            return XC_CODES[x_code], 0
-        elif 'XC_HYB_GGA_XC_'+x_code in XC_CODES:
-            return XC_CODES['XC_HYB_GGA_XC_'+x_code], 0
-        elif 'XC_HYB_MGGA_XC_'+x_code in XC_CODES:
-            return XC_CODES['XC_HYB_MGGA_XC_'+x_code], 0
-
-        elif 'XC_LDA_X_'+x_code in XC_CODES:
-            x_code = XC_CODES['XC_LDA_X_'+x_code]
-#        elif 'XC_LDA_K_'+x_code in XC_CODES:
-#            x_code = XC_CODES['XC_LDA_K_'+x_code]
-
-        elif 'XC_GGA_X_'+x_code in XC_CODES:
-            x_code = XC_CODES['XC_GGA_X_'+x_code]
-#        elif 'XC_GGA_K_'+x_code in XC_CODES:
-#            x_code = XC_CODES['XC_GGA_K_'+x_code]
-
-        elif 'XC_MGGA_X_'+x_code in XC_CODES:
-            x_code = XC_CODES['XC_MGGA_X_'+x_code]
-
-        elif 'XC_HYB_GGA_X_'+x_code in XC_CODES:
-            x_code = XC_CODES['XC_HYB_GGA_X_'+x_code]
-        elif 'XC_HYB_MGGA_X_'+x_code in XC_CODES:
-            x_code = XC_CODES['XC_HYB_MGGA_X_'+x_code]
-
-        elif 'XC_LDA_XC_'+x_code in XC_CODES:
-            return XC_CODES['XC_LDA_XC_'+x_code], 0
-        elif 'XC_GGA_XC_'+x_code in XC_CODES:
-            return XC_CODES['XC_GGA_XC_'+x_code], 0
-        elif 'XC_MGGA_XC_'+x_code in XC_CODES:
-            return XC_CODES['XC_MGGA_XC_'+x_code], 0
-
-        else:
-            raise KeyError('Unknown exchange functional %s' % x_code)
+        try:
+            x_code = convert_x_code(x_code)
+        except KeyError:
+            return convert_xc_code(x_code), 0
 
     if isinstance(c_code, str):
-        if 'XC_LDA_C_'+c_code in XC_CODES:
-            c_code = XC_CODES['XC_LDA_C_'+c_code]
-
-        elif 'XC_GGA_C_'+c_code in XC_CODES:
-            c_code = XC_CODES['XC_GGA_C_'+c_code]
-
-        elif 'XC_MGGA_C_'+c_code in XC_CODES:
-            c_code = XC_CODES['XC_MGGA_C_'+c_code]
-
-        else:
-            raise KeyError('Unknown correlation functional %s' % c_code)
+        c_code = convert_c_code(c_code)
 
     return x_code, c_code
+
+def convert_xc_code(x_code):
+    if 'XC_HYB_GGA_XC_'+x_code in XC_CODES:
+        return XC_CODES['XC_HYB_GGA_XC_'+x_code]
+    elif 'XC_HYB_MGGA_XC_'+x_code in XC_CODES:
+        return XC_CODES['XC_HYB_MGGA_XC_'+x_code]
+
+    elif 'XC_LDA_XC_'+x_code in XC_CODES:
+        return XC_CODES['XC_LDA_XC_'+x_code]
+    elif 'XC_GGA_XC_'+x_code in XC_CODES:
+        return XC_CODES['XC_GGA_XC_'+x_code]
+    elif 'XC_MGGA_XC_'+x_code in XC_CODES:
+        return XC_CODES['XC_MGGA_XC_'+x_code]
+    else:
+        raise KeyError('Unknown exchange functional %s' % x_code)
+
+def convert_x_code(x_code):
+    if x_code == 'LDA':
+        x_code = 1
+
+    elif 'XC_LDA_X_'+x_code in XC_CODES:
+        x_code = XC_CODES['XC_LDA_X_'+x_code]
+#    elif 'XC_LDA_K_'+x_code in XC_CODES:
+#        x_code = XC_CODES['XC_LDA_K_'+x_code]
+
+    elif 'XC_GGA_X_'+x_code in XC_CODES:
+        x_code = XC_CODES['XC_GGA_X_'+x_code]
+#    elif 'XC_GGA_K_'+x_code in XC_CODES:
+#        x_code = XC_CODES['XC_GGA_K_'+x_code]
+
+    elif 'XC_MGGA_X_'+x_code in XC_CODES:
+        x_code = XC_CODES['XC_MGGA_X_'+x_code]
+
+    elif 'XC_HYB_GGA_X_'+x_code in XC_CODES:
+        x_code = XC_CODES['XC_HYB_GGA_X_'+x_code]
+    elif 'XC_HYB_MGGA_X_'+x_code in XC_CODES:
+        x_code = XC_CODES['XC_HYB_MGGA_X_'+x_code]
+
+    else:
+        raise KeyError('Unknown exchange functional %s' % x_code)
+
+    return x_code
+
+def convert_c_code(c_code):
+    if 'XC_LDA_C_'+c_code in XC_CODES:
+        c_code = XC_CODES['XC_LDA_C_'+c_code]
+
+    elif 'XC_GGA_C_'+c_code in XC_CODES:
+        c_code = XC_CODES['XC_GGA_C_'+c_code]
+
+    elif 'XC_MGGA_C_'+c_code in XC_CODES:
+        c_code = XC_CODES['XC_MGGA_C_'+c_code]
+
+    else:
+        raise KeyError('Unknown correlation functional %s' % c_code)
+
+    return c_code
 
 
 def hybrid_coeff(xc_code, spin=1):
@@ -592,4 +610,530 @@ def hybrid_coeff(xc_code, spin=1):
     else:
         return 0
 
+def eval_x(x_id, rho, spin=0, relativity=0, deriv=1, verbose=None,
+           _driver='VXCnr_eval_x'):
+    r'''Interface to call libxc library to evaluate exchange functional,
+    potential and functional derivatives.
+    
+    See also eval_xc function.
+    '''
+    if spin == 0:
+        rho_u = numpy.asarray(rho, order='C')
+        prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
+        prho_d = pyscf.lib.c_null_ptr()
+    else:
+        rho_u = numpy.asarray(rho[0], order='C')
+        rho_d = numpy.asarray(rho[1], order='C')
+        prho_u = rho_u.ctypes.data_as(ctypes.c_void_p)
+        prho_d = rho_d.ctypes.data_as(ctypes.c_void_p)
 
+    mgga = is_meta_gga(x_id)
+
+    if rho_u.ndim == 2:
+        ngrids = rho_u.shape[1]
+    else:
+        ngrids = len(rho_u)
+
+    if spin == 0:
+        nspin = 1
+        exc = numpy.empty(ngrids)
+        vxc = vrho = vsigma = vlapl = vtau = None
+        if deriv > 0:
+            if mgga:
+                vxc = numpy.zeros(4*ngrids)
+                vrho   = vxc[        :ngrids  ]
+                vsigma = vxc[ngrids  :ngrids*2]
+                vlapl  = vxc[ngrids*2:ngrids*3]
+                vtau   = vxc[ngrids*3:        ]
+            else:
+                vxc = numpy.zeros(2*ngrids)
+                vrho   = vxc[      :ngrids]
+                vsigma = vxc[ngrids:      ]
+            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
+        else:
+            pvxc = pyscf.lib.c_null_ptr()
+        if deriv > 1:
+            if mgga:
+                fxc = numpy.zeros(10*ngrids)
+                v2rho2      = fxc[        :ngrids  ]
+                v2rhosigma  = fxc[ngrids  :ngrids*2]
+                v2sigma2    = fxc[ngrids*2:ngrids*3]
+                v2lapl2     = fxc[ngrids*3:ngrids*4]
+                vtau2       = fxc[ngrids*4:ngrids*5]
+                v2rholapl   = fxc[ngrids*5:ngrids*6]
+                v2rhotau    = fxc[ngrids*6:ngrids*7]
+                v2lapltau   = fxc[ngrids*7:ngrids*8]
+                v2sigmalapl = fxc[ngrids*8:ngrids*9]
+                v2sigmatau  = fxc[ngrids*9:        ]
+            else:
+                fxc = numpy.zeros(3*ngrids)
+                v2rho2      = fxc[        :ngrids  ]
+                v2rhosigma  = fxc[ngrids  :ngrids*2]
+                v2sigma2    = fxc[ngrids*2:        ]
+                v2lapl2   = vtau2       = v2rholapl  = v2rhotau = \
+                v2lapltau = v2sigmalapl = v2sigmatau = None
+            pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
+            fxc = (v2rho2   , v2rhosigma , v2sigma2  ,
+                   v2lapl2  , vtau2      , v2rholapl , v2rhotau,
+                   v2lapltau, v2sigmalapl, v2sigmatau,)
+        else:
+            fxc = None
+            pfxc = pyscf.lib.c_null_ptr()
+        if deriv > 2:
+            kxc = numpy.zeros(4*ngrids)
+            v3rho3      = kxc[        :ngrids  ]
+            v3rho2sigma = kxc[ngrids  :ngrids*2]
+            v3rhosigma2 = kxc[ngrids*2:ngrids*3]
+            v3sigma     = kxc[ngrids*3:        ]
+            pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
+            kxc = (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
+        else:
+            kxc = None
+            pkxc = pyscf.lib.c_null_ptr()
+    else:
+        nspin = 2
+        exc = numpy.zeros(ngrids)
+        vxc = vrho = vsigma = vlapl = vtau = None
+        if deriv > 0:
+            if mgga:
+                vxc = numpy.zeros(9*ngrids)
+                vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
+                vsigma = vxc[ngrids*2:ngrids*5].reshape(ngrids,3)
+                vlapl  = vxc[ngrids*5:ngrids*7].reshape(ngrids,2)
+                vtau   = vxc[ngrids*7:        ].reshape(ngrids,2)
+            else:
+                vxc = numpy.zeros(5*ngrids)
+                vrho   = vxc[        :ngrids*2].reshape(ngrids,2)
+                vsigma = vxc[ngrids*2:        ].reshape(ngrids,3)
+            pvxc = vxc.ctypes.data_as(ctypes.c_void_p)
+        else:
+            vxc = vrho = vsigma = vlapl = vtau = None
+            pvxc = pyscf.lib.c_null_ptr()
+        if deriv > 1:
+            if mgga:
+                fxc = numpy.zeros(45*ngrids)
+                v2rho2      = fxc[         :ngrids* 3].reshape(ngrids,3)
+                v2rhosigma  = fxc[ngrids* 3:ngrids* 9].reshape(ngrids,6)
+                v2sigma2    = fxc[ngrids* 9:ngrids*15].reshape(ngrids,6)
+                v2lapl2     = fxc[ngrids*15:ngrids*18].reshape(ngrids,3)
+                vtau2       = fxc[ngrids*18:ngrids*21].reshape(ngrids,3)
+                v2rholapl   = fxc[ngrids*21:ngrids*25].reshape(ngrids,4)
+                v2rhotau    = fxc[ngrids*25:ngrids*29].reshape(ngrids,4)
+                v2lapltau   = fxc[ngrids*29:ngrids*33].reshape(ngrids,4)
+                v2sigmalapl = fxc[ngrids*33:ngrids*39].reshape(ngrids,6)
+                v2sigmatau  = fxc[ngrids*39:         ].reshape(ngrids,6)
+            else:
+                fxc = numpy.zeros(15*ngrids)
+                v2rho2      = fxc[        :ngrids*3].reshape(ngrids,3)
+                v2rhosigma  = fxc[ngrids*3:ngrids*9].reshape(ngrids,6)
+                v2sigma2    = fxc[ngrids*9:        ].reshape(ngrids,6)
+                v2lapl2   = vtau2       = v2rholapl  = v2rhotau = \
+                v2lapltau = v2sigmalapl = v2sigmatau = None
+            pfxc = fxc.ctypes.data_as(ctypes.c_void_p)
+            fxc = (v2rho2   , v2rhosigma , v2sigma2  ,
+                   v2lapl2  , vtau2      , v2rholapl , v2rhotau,
+                   v2lapltau, v2sigmalapl, v2sigmatau,)
+        else:
+            fxc = None
+            pfxc = pyscf.lib.c_null_ptr()
+        if deriv > 2:
+            kxc = numpy.zeros(35*ngrids)
+            v3rho3      = kxc[         :ngrids* 4].reshape(ngrids,4 )
+            v3rho2sigma = kxc[ngrids* 4:ngrids*13].reshape(ngrids,9 )
+            v3rhosigma2 = kxc[ngrids*13:ngrids*25].reshape(ngrids,12)
+            v3sigma     = kxc[ngrids*25:         ].reshape(ngrids,10)
+            pkxc = kxc.ctypes.data_as(ctypes.c_void_p)
+            kxc = (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
+        else:
+            kxc = None
+            pkxc = pyscf.lib.c_null_ptr()
+    drv = getattr(libdft, _driver)
+    drv(ctypes.c_int(x_id), ctypes.c_int(nspin),
+        ctypes.c_int(relativity), ctypes.c_int(ngrids),
+        prho_u, prho_d,
+        exc.ctypes.data_as(ctypes.c_void_p), pvxc, pfxc, pkxc)
+    return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
+
+def eval_c(c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
+    r'''Interface to call libxc library to evaluate correlation functional,
+    potential and functional derivatives.
+    
+    See also eval_xc function.
+    '''
+    return eval_x(c_id, rho, spin, relativity, deriv, verbose, 'VXCnr_eval_c')
+
+def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
+    r'''Interface to call libxc library to evaluate XC functional, potential
+    and functional derivatives.
+
+    Args:
+        x_id, c_id : int
+            Exchange/Correlation functional ID used by libxc library.
+            See pyscf/dft/vxc.py for more details.
+        rho : ndarray
+            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
+            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
+            where N is number of grids.
+            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
+            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
+            In spin unrestricted case,
+            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
+                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
+
+    Kwargs:
+        spin : int
+            spin polarized if spin > 0
+        relativity : int
+            No effects.
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        ex, vxc, fxc, kxc
+
+        where
+
+        * vxc = (vrho, vsigma, vlapl, vtau) for unrestricted case
+        vrho[*,2]   = (u, d)
+        vsigma[*,3] = (uu, ud, dd)
+        vlapl[*,2]  = (u, d)
+        vtau[*,2]   = (u, d)
+
+        * vxc = (vrho[*], vsigma[*], vlapl[*], vtau[*]) for restricted case
+
+        * fxc(N*45) for unrestricted case:
+        | v2rho2[*,3]     = (u_u, u_d, d_d)
+        | v2rhosigma[*,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
+        | v2sigma2[*,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
+        | v2lapl2[*,3]
+        | vtau2[*,3]
+        | v2rholapl[*,4]
+        | v2rhotau[*,4]
+        | v2lapltau[*,4]
+        | v2sigmalapl[*,6]
+        | v2sigmatau[*,6]
+
+        * fxc(N*10) for restricted case:
+        (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
+
+        * kxc(N*35) for unrestricted case:
+        | v3rho3[*,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
+        | v3rho2sigma[*,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
+        | v3rhosigma2[*,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
+        | v3sigma[*,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+
+        * kxc(N*4) for restricted case:
+        (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
+
+        see also libxc_itrf.c
+    '''
+    if 0 and (c_id == 131 or x_id in (402, 404, 411, 416, 419)):
+        # second derivative of LYP functional in libxc library diverge
+        if spin == 0:
+            if rho.ndim == 2:
+                idx = rho[0] > 4.57e-11
+                ngrids = rho.shape[1]
+                rho = rho[:,idx]
+            else:
+                idx = rho > 4.57e-11
+                ngrids = len(rho)
+                rho = rho[idx]
+        else:
+            if rho[0].ndim == 2:
+                idx = (rho[0][0] > 4.57e-11) & (rho[1][0] > 4.57e-11)
+                ngrids = rho[0].shape[1]
+                rho = (rho[0][:,idx], rho[1][:,idx])
+            else:
+                idx = (rho[0] > 4.57e-11) & (rho[1] > 4.57e-11)
+                ngrids = len(rho[0])
+                rho = (rho[0][idx], rho[1][idx])
+
+        exc, (vrho, vsigma, vlapl, vtau), fxc, kxc = \
+                eval_x(x_id, rho, spin, relativity, deriv, verbose)
+        if c_id > 0:
+            ec, (vrhoc, vsigmac, vlaplc, vtauc), fc, kc = \
+                    eval_c(c_id, rho, spin, relativity, deriv, verbose)
+            exc += ec
+            if vrho   is not None: vrho   += vrhoc
+            if vsigma is not None: vsigma += vsigmac
+            if vlapl  is not None: vlapl  += vlaplc
+            if vtau   is not None: vtau   += vtauc
+            if fxc is not None: # Note: inplace updates for fxc, kxc
+                for i, fxci in enumerate(fxc):
+                    if fxci is not None:
+                        fxci += fc[i]
+            if kxc is not None:
+                for i, kxci in enumerate(kxc):
+                    if kxci is not None:
+                        kxci += kc[i]
+        def take(v):
+            if v is None:
+                return None
+            elif v.ndim == 1:
+                v1 = numpy.zeros(ngrids)
+            else:
+                v1 = numpy.zeros((ngrids,v.shape[1]))
+            v1[idx] = v
+            return v1
+        exc    = take(exc)
+        vrho   = take(vrho)
+        vsigma = take(vsigma)
+        vlapl  = take(vlapl)
+        vtau   = take(vtau)
+        if fxc is not None: fxc = [take(v) for v in fxc]
+        if kxc is not None: kxc = [take(v) for v in kxc]
+
+    else:
+
+        exc, (vrho, vsigma, vlapl, vtau), fxc, kxc = \
+                eval_x(x_id, rho, spin, relativity, deriv, verbose)
+        if c_id > 0:
+            ec, (vrhoc, vsigmac, vlaplc, vtauc), fc, kc = \
+                    eval_c(c_id, rho, spin, relativity, deriv, verbose)
+            exc += ec
+            if vrho   is not None: vrho   += vrhoc
+            if vsigma is not None: vsigma += vsigmac
+            if vlapl  is not None: vlapl  += vlaplc
+            if vtau   is not None: vtau   += vtauc
+            if fxc is not None: # Note: inplace updates for fxc, kxc
+                for i, fxci in enumerate(fxc):
+                    if fxci is not None:
+                        fxci += fc[i]
+            if kxc is not None:
+                for i, kxci in enumerate(kxc):
+                    if kxci is not None:
+                        kxci += kc[i]
+    return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
+
+
+def define_xc(ni, description):
+    '''Define the XC functional for numeric integration.  Rules to input
+    functional description:
+
+    * The given functional description must be a one-line string.
+    * The functional description is case-insensitive.
+    * The functional description string has two parts, separated by ",".  The
+      first part describes the exchange functional, the second is the correlation
+      functional.  If "," not appeared in string, entire string is considered as
+      X functional.  There is no way to neglect X functional (just apply C
+      functional)
+    * The functional name can be placed in arbitrary order.  Two name needs to
+      be separated by operations + or -.  Blank spaces are ignored.
+      NOTE the parser only reads operators + - *.  / is not in support.
+    * A functional name is associated with one factor.  If the factor is not
+      given, it is assumed equaling 1.
+    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
+      put in C functional part.
+    * Be careful with the libxc convention on GGA functional, in which the LDA
+      contribution is included.
+
+    Args:
+        ni : an instance of :class:`_NumInt`
+
+        description : str
+            A string to describe the linear combination of different XC functionals.
+            The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
+            If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Examples:
+
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
+    >>> mf = dft.RKS(mol)
+    >>> mf._numint = define_xc(mf._numint, '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN')
+    >>> mf.kernel()
+    -76.3783361189611
+    '''
+    return define_xc_(copy.copy(ni), description)
+
+def define_xc_(ni, description):
+    '''Define the XC functional for numeric integration.  Rules to input
+    functional description:
+
+    * The given functional description must be a one-line string.
+    * The functional description is case-insensitive.
+    * The functional description string has two parts, separated by ",".  The
+      first part describes the exchange functional, the second is the correlation
+      functional.  If "," not appeared in string, entire string is considered as
+      X functional.  There is no way to neglect X functional (just apply C
+      functional)
+    * The functional name can be placed in arbitrary order.  Two name needs to
+      be separated by operations + or -.  Blank spaces are ignored.
+      NOTE the parser only reads operators + - *.  / is not in support.
+    * A functional name is associated with one factor.  If the factor is not
+      given, it is assumed equaling 1.
+    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
+      put in C functional part.
+    * Be careful with the libxc convention on GGA functional, in which the LDA
+      contribution is included.
+
+    Args:
+        ni : an instance of :class:`_NumInt`
+
+        description : str
+            A string to describe the linear combination of different XC functionals.
+            The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
+            If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Examples:
+
+    >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
+    >>> mf = dft.RKS(mol)
+    >>> define_xc_(mf._numint, '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN')
+    >>> mf.kernel()
+    -76.3783361189611
+    >>> define_xc_(mf._numint, 'LDA*.08 + .72*B88 + .2*HF, .81*LYP + .19*VWN')
+    >>> mf.kernel()
+    -76.3783361189611
+    '''
+    if ',' in description:
+        x_code, c_code = description.replace(' ','').upper().split(',')
+    else:
+        x_code, c_code = description.replace(' ','').upper(), ''
+
+    hyb = 0
+    acc = []
+# Split to terms for additions
+    tokens = [x for x in x_code.replace('-', '+-').split('+') if x]
+    for t in tokens:
+        if '*' in t:
+            fac, key = t.split('*')
+            if fac[0].isalpha():
+                fac, key = key, fac
+            fac = float(fac)
+        else:
+            fac, key = 1, t
+        if key == 'HF':
+            hyb = fac
+        else:
+            x_id = pyscf.dft.vxc.is_x_and_c(key)
+            if x_id is None:
+                x_id = pyscf.dft.vxc.convert_x_code(key)
+            acc.append((fac, eval_x, x_id))
+
+    tokens = [x for x in c_code.replace('-', '+-').split('+') if x]
+    for t in tokens:
+        if '*' in t:
+            fac, key = t.split('*')
+            if fac[0].isalpha():
+                fac, key = key, fac
+            fac = float(fac)
+        else:
+            fac, key = 1, t
+        c_id = pyscf.dft.vxc.convert_c_code(key)
+        acc.append((fac, eval_c, c_id))
+
+    # search for the highest XC funcitonal type
+    xctype = 'LDA'
+    for x in acc:
+        if is_lda(x[2]):
+            pass
+        elif is_meta_gga(x[2]):
+            xctype = 'MGGA'
+            raise NotImplementedError('meta-GGA')
+            break
+        else:
+            xctype = 'GGA'
+            break
+
+    def eval_xc(x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
+        fac, fn, xcid = acc[0]
+        exc, (vrho, vsigma, vlapl, vtau), fxc, kxc = \
+                fn(xcid, rho, spin, relativity, deriv, verbose)
+        exc *= fac
+        if vrho   is not None: vrho   *= fac
+        if vsigma is not None: vsigma *= fac
+        if vlapl  is not None: vlapl  *= fac
+        if vtau   is not None: vtau   *= fac
+        if fxc is not None:
+            for i, fxci in enumerate(fxc):
+                if fxci is not None:
+                    fxci *= fac
+        if kxc is not None:
+            for i, kxci in enumerate(kxc):
+                if kxci is not None:
+                    kxci *= fac
+
+        for fac, fn, xcid in acc[1:]:
+            ec, (vrhoc, vsigmac, vlaplc, vtauc), fc, kc = \
+                    fn(xcid, rho, spin, relativity, deriv, verbose)
+            exc += fac*ec
+            if vrho   is not None: vrho   += fac*vrhoc
+            if vsigma is not None: vsigma += fac*vsigmac
+            if vlapl  is not None: vlapl  += fac*vlaplc
+            if vtau   is not None: vtau   += fac*vtauc
+            if fxc is not None: # Note: inplace updates for fxc, kxc
+                for i, fxci in enumerate(fxc):
+                    if fxci is not None:
+                        fxci += fac*fc[i]
+            if kxc is not None:
+                for i, kxci in enumerate(kxc):
+                    if kxci is not None:
+                        kxci += fac*kc[i]
+
+        return exc, (vrho, vsigma, vlapl, vtau), fxc, kxc
+
+    ni.eval_xc = eval_xc
+    ni.hybrid_coeff = lambda *args, **kwargs: hyb
+    ni._xc_type = lambda *args: xctype
+    return ni
+
+B3LYP5 = '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN'
+BLYP = 'B88,LYP'
+
+
+#####################
+
+# spin = 1, unpolarized; spin = 2, polarized
+def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, hermi=1,
+           verbose=None):
+    c_atm = numpy.array(mol._atm, dtype=numpy.int32)
+    c_bas = numpy.array(mol._bas, dtype=numpy.int32)
+    c_env = numpy.array(mol._env)
+    natm = ctypes.c_int(c_atm.shape[0])
+    nbas = ctypes.c_int(c_bas.shape[0])
+    exc = ctypes.c_double(0)
+    if not dm.flags.f_contiguous:
+        dm = dm.copy(order='F')
+    # data will write to triu in F-ordered array, which is tril of C-array
+    v = numpy.empty_like(dm, order='C')
+
+    libdft.VXCnr_vxc.restype = ctypes.c_double
+    nelec = libdft.VXCnr_vxc(ctypes.c_int(x_id), ctypes.c_int(c_id),
+                             ctypes.c_int(spin), ctypes.c_int(relativity),
+                             dm.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.byref(exc),
+                             v.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(grids.weights.size),
+                             grids.coords.ctypes.data_as(ctypes.c_void_p),
+                             grids.weights.ctypes.data_as(ctypes.c_void_p),
+                             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                             c_env.ctypes.data_as(ctypes.c_void_p))
+    if hermi == 1:
+        v = pyscf.lib.hermi_triu_(v, inplace=True)
+    else:
+        raise('anti-Hermitian is not supported')
+    return nelec, exc.value, v
+
+
+if __name__ == '__main__':
+    from pyscf import gto, dft
+    mol = gto.M(
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6311g*',)
+    mf = dft.RKS(mol)
+    mf.xc = 'b88,lyp'
+    eref = mf.kernel()
+
+    mf = dft.RKS(mol)
+    mf._numint = define_xc(mf._numint, BLYP)
+    e1 = mf.kernel()
+    print(e1 - eref)
+
+    mf = dft.RKS(mol)
+    mf._numint = define_xc(mf._numint, B3LYP5)
+    e1 = mf.kernel()
+    print(e1 - -76.4102717186263)
