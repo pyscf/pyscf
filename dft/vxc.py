@@ -5,6 +5,7 @@
 
 '''
 XC functional, the interface to libxc
+(http://www.tddft.org/programs/octopus/wiki/index.php/Libxc)
 '''
 
 import copy
@@ -344,7 +345,7 @@ LDA_IDS = set((1,  2,  3,  4,  5,  6,  7,  8,  9, 10,
 
 def is_lda(xc_code):
     if isinstance(xc_code, (tuple, list)):
-        xc_code = _format_code(xc_code[0])
+        xc_code = is_lda(xc_code[0]) and is_lda(xc_code[1])
     else:
         xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
@@ -405,7 +406,7 @@ MGGA_IDS = set(( 64,  72, 73,  74,  75,  76,  77,  78,  201, 202,
 
 def is_meta_gga(xc_code):
     if isinstance(xc_code, (tuple, list)):
-        xc_code = _format_code(xc_code[0])
+        xc_code = is_meta_gga(xc_code[0]) or is_meta_gga(xc_code[1])
     else:
         xc_code = _format_code(xc_code)
     if isinstance(xc_code, int):
@@ -1005,9 +1006,9 @@ def define_xc_(ni, description):
         if key == 'HF':
             hyb = fac
         else:
-            x_id = pyscf.dft.vxc.is_x_and_c(key)
+            x_id = is_x_and_c(key)
             if x_id is None:
-                x_id = pyscf.dft.vxc.convert_x_code(key)
+                x_id = convert_x_code(key)
             acc.append((fac, eval_x, x_id))
 
     tokens = [x for x in c_code.replace('-', '+-').split('+') if x]
@@ -1019,7 +1020,7 @@ def define_xc_(ni, description):
             fac = float(fac)
         else:
             fac, key = 1, t
-        c_id = pyscf.dft.vxc.convert_c_code(key)
+        c_id = convert_c_code(key)
         acc.append((fac, eval_c, c_id))
 
     # search for the highest XC funcitonal type
@@ -1081,39 +1082,6 @@ B3LYP5 = '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN'
 BLYP = 'B88,LYP'
 
 
-#####################
-
-# spin = 1, unpolarized; spin = 2, polarized
-def nr_vxc(mol, grids, x_id, c_id, dm, spin=1, relativity=0, hermi=1,
-           verbose=None):
-    c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-    c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-    c_env = numpy.array(mol._env)
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-    exc = ctypes.c_double(0)
-    if not dm.flags.f_contiguous:
-        dm = dm.copy(order='F')
-    # data will write to triu in F-ordered array, which is tril of C-array
-    v = numpy.empty_like(dm, order='C')
-
-    libdft.VXCnr_vxc.restype = ctypes.c_double
-    nelec = libdft.VXCnr_vxc(ctypes.c_int(x_id), ctypes.c_int(c_id),
-                             ctypes.c_int(spin), ctypes.c_int(relativity),
-                             dm.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.byref(exc),
-                             v.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(grids.weights.size),
-                             grids.coords.ctypes.data_as(ctypes.c_void_p),
-                             grids.weights.ctypes.data_as(ctypes.c_void_p),
-                             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                             c_env.ctypes.data_as(ctypes.c_void_p))
-    if hermi == 1:
-        v = pyscf.lib.hermi_triu_(v, inplace=True)
-    else:
-        raise('anti-Hermitian is not supported')
-    return nelec, exc.value, v
 
 
 if __name__ == '__main__':
