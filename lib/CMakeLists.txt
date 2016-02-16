@@ -1,10 +1,10 @@
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O2 -funroll-loops")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG -ffast-math -fno-strict-overflow -fomit-frame-pointer")
+set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
   set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
 endif()
 
@@ -53,8 +53,7 @@ include_directories(${PROJECT_SOURCE_DIR} ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE
 
 include(ExternalProject)
 # remove the following comment for if ... eles, to bypass the compilation of libcint
-#if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
-#else()
+#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
     GIT_TAG origin/master
@@ -82,10 +81,8 @@ add_subdirectory(cc)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
-if (${DISABLE_DFT})
-else()
-if (EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
-else()
+if(NOT DISABLE_DFT)
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
   ExternalProject_Add(libxc
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
@@ -93,6 +90,17 @@ else()
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
           --enable-shared LIBS=-lm
+  )
+endif()
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h")
+  ExternalProject_Add(xcfun
+    GIT_REPOSITORY https://github.com/sunqm/xcfun.git
+    GIT_TAG origin/master
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+            -DXC_MAX_ORDER=4 -DXCFUN_ENABLE_TESTS=0
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
   )
 endif()
 add_subdirectory(dft)
