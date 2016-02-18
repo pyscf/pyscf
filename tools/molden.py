@@ -13,8 +13,10 @@ from pyscf import gto
 
 
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
-                  occ=None):
+                  occ=None, ignore_h=False):
     import pyscf.symm
+    if ignore_h:
+        mol, mo_coeff = remove_high_l(mol, mo_coeff)
     aoidx = order_ao_index(mol)
     nmo = mo_coeff.shape[1]
     if symm is None:
@@ -37,43 +39,57 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
             fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
 def from_mo(mol, outfile, mo_coeff, spin='Alpha', symm=None, ene=None,
-            occ=None):
+            occ=None, ignore_h=False):
     with open(outfile, 'w') as f:
-        header(mol, f)
-        orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ)
+        header(mol, f, ignore_h)
+        orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ, ignore_h)
 
 
-def from_scf(mf, filename):
+def from_scf(mf, filename, ignore_h=False):
     dump_scf(mf, filename)
-def dump_scf(mf, filename):
+def dump_scf(mf, filename, ignore_h=False):
     import pyscf.scf
+    mol = mf.mol
+    mo_coeff = mf.mo_coeff
     with open(filename, 'w') as f:
-        header(mf.mol, f)
+        header(mol, f, ignore_h)
         if isinstance(mf, pyscf.scf.uhf.UHF) or 'UHF' == mf.__class__.__name__:
-            orbital_coeff(mf.mol, f, mf.mo_coeff[0], spin='Alpha',
-                          ene=mf.mo_energy[0], occ=mf.mo_occ[0])
-            orbital_coeff(mf.mol, f, mf.mo_coeff[1], spin='Beta',
-                          ene=mf.mo_energy[1], occ=mf.mo_occ[1])
+            orbital_coeff(mol, f, mo_coeff[0], spin='Alpha',
+                          ene=mf.mo_energy[0], occ=mf.mo_occ[0],
+                          ignore_h=ignore_h)
+            orbital_coeff(mol, f, mo_coeff[1], spin='Beta',
+                          ene=mf.mo_energy[1], occ=mf.mo_occ[1],
+                          ignore_h=ignore_h)
         else:
             orbital_coeff(mf.mol, f, mf.mo_coeff,
-                          ene=mf.mo_energy, occ=mf.mo_occ)
+                          ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
 
-def from_chkfile(outfile, chkfile, key='scf/mo_coeff'):
+def from_chkfile(outfile, chkfile, key='scf/mo_coeff', ignore_h=False):
     import pyscf.scf
     with open(outfile, 'w') as f:
-        mol, mf = pyscf.scf.chkfile.load_scf(chkfile)
-        header(mol, f)
-        ene = mf['mo_energy']
-        occ = mf['mo_occ']
         if key == 'scf/mo_coeff':
+            mol, mf = pyscf.scf.chkfile.load_scf(chkfile)
+            header(mol, f, ignore_h)
+            ene = mf['mo_energy']
+            occ = mf['mo_occ']
             mo = mf['mo_coeff']
         else:
-            mo = mf[key]
+            mol = pyscf.scf.chkfile.load_mol(chkfile)
+            header(mol, f, ignore_h)
+            dat = pyscf.scf.chkfile.load(chkfile, key.split('/')[0])
+            if 'mo_energy' in dat:
+                ene = dat['mo_energy']
+            else:
+                ene = None
+            occ = dat['mo_occ']
+            mo = dat['mo_coeff']
         if occ.ndim == 2:
-            orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0])
-            orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1])
+            orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0],
+                         ignore_h=ignore_h)
+            orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1],
+                         ignore_h=ignore_h)
         else:
-            orbital_coeff(mol, f, mo, ene=ene, occ=occ)
+            orbital_coeff(mol, f, mo, ene=ene, occ=occ, ignore_h=ignore_h)
 
 def parse(moldenfile):
     return load(moldenfile)
@@ -185,7 +201,9 @@ def first_token(stream, key):
 def _d2e(token):
     return token.replace('D', 'e').replace('d', 'e')
 
-def header(mol, fout):
+def header(mol, fout, ignore_h=False):
+    if ignore_h:
+        mol = remove_high_l(mol)
     fout.write('''[Molden Format]
 [Atoms] (AU)\n''')
     for ia in range(mol.natm):
@@ -260,6 +278,38 @@ def order_ao_index(mol, cart=False):
                     idx.extend(range(off,off+l*2+1))
                 off += l * 2 + 1
     return idx
+
+def remove_high_l(mol, mo_coeff=None):
+    '''Remove high angular momentum (l >= 5) functions before dumping molden file.
+    If molden function raised error message ``RuntimeError l=5 is not supported``,
+    you can use this function to format orbitals.
+    
+    Note the formated orbitals may have normalization problem.  Some visualization
+    tool will complain about the orbital normalization error.
+
+    Examples:
+
+    >>> mol1, orb1 = remove_high_l(mol, mf.mo_coeff)
+    >>> molden.from_mo(mol1, outputfile, orb1)
+    '''
+    pmol = mol.copy()
+    pmol.basis = {}
+    for symb, bas in mol._basis.iteritems():
+        pmol.basis[symb] = [b for b in bas if b[0] <= 4]
+    pmol.build(0, 0)
+    if mo_coeff is None:
+        return pmol
+    else:
+        k = 0
+        idx = []
+        for ib in range(mol.nbas):
+            l = mol.bas_angular(ib)
+            nc = mol.bas_nctr(ib)
+            if l <= 4:
+                idx.append(range(k, k+(l*2+1)*nc))
+                k += (l*2+1) * nc
+        idx = numpy.hstack(idx)
+        return pmol, mo_coeff[idx]
 
 
 
