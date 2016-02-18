@@ -449,7 +449,7 @@ print('norb/nacte=',norb,[nalpha,nbeta])
 #settings.MPIPREFIX = 'srun'
 #settings.BLOCKSCRATCHDIR = '/scratch'
 
-from pyscf.dmrgscf.dmrgci import DMRGCI, DMRGSCF
+from pyscf.dmrgscf import DMRGCI, DMRGSCF
 from pyscf.mrpt.nevpt2 import sc_nevpt
 
 #
@@ -499,11 +499,14 @@ mc.casci(mo)
 #
 # DMRG-NEVPT2
 #
-# There is a fast DMRG-NEVPT2 implementation.  See also the example
-# pyscf/examples/dmrg/02-dmrg_nevpt2.py
-#
 sc_nevpt(mc)
 
+#
+# There is also a fast DMRG-NEVPT2 implementation.  See also the example
+# pyscf/examples/dmrg/02-dmrg_nevpt2.py
+#
+from pyscf.dmrgscf import compress_perturb
+sc_nevpt(compress_perturb(mc))
 
 ##################################################
 #

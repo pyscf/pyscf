@@ -40,22 +40,25 @@ class UKS(pyscf.scf.uhf_symm.UHF):
         if h1e is None: h1e = self.get_hcore()
         return uks.energy_elec(self, dm, h1e)
 
+    def define_xc_(self, description):
+        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
+        '''
+        pyscf.dft.vxc.define_xc_(self._numint, description)
+        return self
+
 
 
 if __name__ == '__main__':
     from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 7
-    mol.output = 'out_uks'
 
     mol.atom.extend([['He', (0.,0.,0.)], ])
     mol.basis = { 'He': 'cc-pvdz'}
     mol.symmetry = 1
-    #mol.grids = { 'He': (10, 14),}
     mol.build()
 
     m = UKS(mol)
-    m.xc = 'LDA,VWN_RPA'
     m.xc = 'b3lyp'
     print(m.scf())
 

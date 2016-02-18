@@ -423,7 +423,7 @@ class CASCI(pyscf.lib.StreamObject):
             assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
         #self.fcisolver = fci.direct_spin0.FCISolver(mol)
-        self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1])
+        self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1], False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 50
@@ -593,7 +593,7 @@ class CASCI(pyscf.lib.StreamObject):
 
     def state_specific_(self, state=1):
         from pyscf.mcscf import addons
-        self.fcisolver = addons.state_specific_(self, state)
+        self.fcisolver = addons.state_specific(self, state)
         return self
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,

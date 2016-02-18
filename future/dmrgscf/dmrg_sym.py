@@ -1,4 +1,10 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import pyscf.symm
+
 IRREP_MAP = {'D2h': (1,         # Ag
                      4,         # B1g
                      6,         # B2g
@@ -36,3 +42,15 @@ def irrep_name2id(gpname, symb):
     else:
         gpname = pyscf.symm.std_symb(gpname)
     return IRREP_MAP[gpname][irrep_id]
+
+def convert_orbsym(gpname, orbsym):
+    '''Convert orbital symmetry irrep_id to Block internal irrep_id
+    '''
+    if gpname.lower() == 'dooh':
+        orbsym = [IRREP_MAP['D2h'][i % 10] for i in orbsym]
+    elif gpname.lower() == 'cooh':
+        orbsym = [IRREP_MAP['C2h'][i % 10] for i in orbsym]
+    else:
+        gpname = pyscf.symm.std_symb(gpname)
+        orbsym = [IRREP_MAP[gpname][i] for i in orbsym]
+    return orbsym

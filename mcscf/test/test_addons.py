@@ -5,6 +5,7 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
+from pyscf import fci
 
 b = 1.4
 mol = gto.Mole()
@@ -49,7 +50,7 @@ class KnowValues(unittest.TestCase):
 #TODO:        self.assertAlmostEqual(numpy.linalg.norm(mocc2), 2.59144951056707/numpy.sqrt(2), 7)
 
     def test_get_fock(self):
-        f1 = reduce(numpy.dot, (mcr.mo_coeff.T, mcscf.addons.get_fock(mcr), mcr.mo_coeff))
+        f1 = mcscf.addons.get_fock(mcr)
         self.assertTrue(numpy.allclose(f1, f1.T))
         self.assertAlmostEqual(numpy.linalg.norm(f1), 23.597476504476919, 7)
 #TODO:        f1 = mcscf.addons.get_fock(mcu)
@@ -109,6 +110,20 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(mo0, mo1))
         self.assertTrue(numpy.allclose(mo0, mo2))
         self.assertTrue(numpy.allclose(mo0, mo3))
+
+    def test_state_average(self):
+        mc = mcscf.CASSCF(mfr, 4, 4)
+        mc.fcisolver = fci.solver(mol, singlet=False)
+        mc.state_average_((.64,.36))
+        e = mc.kernel()[0]
+        self.assertAlmostEqual(e, -108.83342083775061, 7)
+
+    def test_state_specific(self):
+        mc = mcscf.CASSCF(mfr, 4, 4)
+        mc.fcisolver = fci.solver(mol, singlet=False)
+        mc.state_specific_(state=1)
+        e = mc.kernel()[0]
+        self.assertAlmostEqual(e, -108.70065770892457, 7)
 
     def test_project_init_guess(self):
         print('todo test_project_init_guess')

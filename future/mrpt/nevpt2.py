@@ -478,7 +478,7 @@ def Sij(mc, dms, eris, verbose=None):
     dm2 = dms['2']
     dm3 = dms['3']
     if mo_core.size ==0 :
-        return 0.0
+        return 0.0, 0
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
         h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
@@ -560,10 +560,34 @@ def Sir(mc, dms, eris, verbose=None):
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
-def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
-    '''Strongly contracted NEVPT2'''
-    if ci is None:
-        ci=mc.ci
+def sc_nevpt(mc, ci=None, verbose=None):
+    '''Strongly contracted NEVPT2
+
+    Args:
+        mc : CASCI/CASSCF object
+
+    Kwargs:
+        ci : 2D float array
+            CI wave function.  If not given, the lowest CI root of CASCI/CASSCF
+            object will be used.
+
+    Examples:
+
+    >>> mf = gto.M('N 0 0 0; N 0 0 1.4', basis='6-31g').apply(scf.RHF).run()
+    >>> mc = mcscf.CASSCF(mf, 4, 4).run()
+    >>> sc_nevpt(mc)
+    -0.14058324991532101
+    '''
+    compressed_mps = False
+    if hasattr(mc, 'compressed') and mc.compressed:
+        # for compressed MPS perturber
+        ci = mc.root
+        compressed_mps = True
+    elif ci is None:
+        if mc.fcisolver.nroots == 1:
+            ci = mc.ci
+        else:
+            ci = mc.ci[0]
     #mc.cas_natorb(ci=ci)
 
     if isinstance(verbose, logger.Logger):
@@ -575,7 +599,7 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
 
     #By defaut, mc is canonicalized for the first root.
     #For SC-NEVPT based on compressed MPS perturber functions, the mc was already canonicalized.
-    if mc.fcisolver.nroots > 1 and not useMPS:
+    if (mc.fcisolver.nroots > 1 and not compressed_mps):
         mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=ci,verbose=log)
 
 
@@ -583,9 +607,6 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         logger.info(mc, 'DMRG-NEVPT')
         dm1, dm2, dm3 = mc.fcisolver.make_rdm123(ci,mc.ncas,mc.nelecas,None)
     else:
-        if useMPS:
-            logger.error(mc,"MPS nevpt only used for DMRG calculation")
-            exit()
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
                                            ci, ci, mc.ncas, mc.nelecas)
     dm4 = None
@@ -613,15 +634,15 @@ def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
         dms['f3ac'] = f3ac
     time1 = log.timer('eri-4pdm contraction', *time1)
 
-    if useMPS:
+    if compressed_mps:
         fh5 = h5py.File('Perturbation_%d'%ci,'r')
-        e_Si     =   fh5['Vi/energy'].value    
-        #The definition of norm changed. 
-        #However, there is no need to print out it. 
+        e_Si     =   fh5['Vi/energy'].value
+        #The definition of norm changed.
+        #However, there is no need to print out it.
         #Only perturbation energy is wanted.
-        norm_Si  =   fh5['Vi/norm'].value       
-        e_Sr     =   fh5['Vr/energy'].value     
-        norm_Sr  =   fh5['Vr/norm'].value       
+        norm_Si  =   fh5['Vi/norm'].value
+        e_Sr     =   fh5['Vr/energy'].value
+        norm_Sr  =   fh5['Vr/norm'].value
         fh5.close()
         logger.note(mc, "Sr    (-1)'  E = %.14f",  e_Sr  )
         logger.note(mc, "Si    (+1)'  E = %.14f",  e_Si  )
