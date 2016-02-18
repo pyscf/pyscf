@@ -120,20 +120,18 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
 
         # Ground state gradients
         # h1ao*2 for +c.c, oo0*2 for doubly occupied orbitals
-        e1  = numpy.einsum('xpq,pq->x', h1ao, oo0) * 4
+        de[k] = numpy.einsum('xpq,pq->x', h1ao, oo0) * 4
 
-        e1 += numpy.einsum('xpq,pq->x', h1ao, dmz1doo)
-        e1 += numpy.einsum('xqp,pq->x', h1ao, dmz1doo)
-        e1 -= numpy.einsum('xpq,pq->x', s1[:,p0:p1], im0[p0:p1])
-        e1 -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
+        de[k] += numpy.einsum('xpq,pq->x', h1ao, dmz1doo)
+        de[k] += numpy.einsum('xqp,pq->x', h1ao, dmz1doo)
+        de[k] -= numpy.einsum('xpq,pq->x', s1[:,p0:p1], im0[p0:p1])
+        de[k] -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 
-        e1 += numpy.einsum('xij,ij->x', vhf1[1,:,p0:p1], oo0[p0:p1])
-        e1 += numpy.einsum('xij,ij->x', vhf1[2,:,p0:p1], dmzvop[p0:p1,:]) * 2
-        e1 += numpy.einsum('xij,ij->x', vhf1[3,:,p0:p1], dmzvom[p0:p1,:]) * 2
-        e1 += numpy.einsum('xji,ij->x', vhf1[2,:,p0:p1], dmzvop[:,p0:p1]) * 2
-        e1 -= numpy.einsum('xji,ij->x', vhf1[3,:,p0:p1], dmzvom[:,p0:p1]) * 2
-
-        de[k] = e1
+        de[k] += numpy.einsum('xij,ij->x', vhf1[1,:,p0:p1], oo0[p0:p1])
+        de[k] += numpy.einsum('xij,ij->x', vhf1[2,:,p0:p1], dmzvop[p0:p1,:]) * 2
+        de[k] += numpy.einsum('xij,ij->x', vhf1[3,:,p0:p1], dmzvom[p0:p1,:]) * 2
+        de[k] += numpy.einsum('xji,ij->x', vhf1[2,:,p0:p1], dmzvop[:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xji,ij->x', vhf1[3,:,p0:p1], dmzvom[:,p0:p1]) * 2
 
     log.timer('TDHF nuclear gradients', *time0)
     return de

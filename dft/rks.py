@@ -11,7 +11,6 @@ import time
 import numpy
 from pyscf.lib import logger
 import pyscf.scf
-import pyscf.dft.vxc
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
@@ -55,14 +54,12 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         ks.grids.setup_grids_()
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
-    x_code, c_code = pyscf.dft.vxc.parse_xc_name(ks.xc)
-    hyb = ks._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+    hyb = ks._numint.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
 
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_rks_(mol, ks.grids, x_code, c_code, dm,
-                                            hermi=hermi)
+        n, ks._exc, vx = ks._numint.nr_rks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -185,6 +182,9 @@ class RKS(pyscf.scf.hf.RHF):
         if h1e is None: h1e = self.get_hcore()
         return energy_elec(self, dm, h1e)
 
+    def define_xc_(self, description):
+        self.xc = description
+        return self
 
 class ROKS(pyscf.scf.rohf.ROHF):
     '''Restricted open-shell Kohn-Sham
@@ -220,17 +220,28 @@ class ROKS(pyscf.scf.rohf.ROHF):
         if h1e is None: h1e = self.get_hcore()
         return uks.energy_elec(self, dm, h1e)
 
+    def define_xc_(self, description):
+        self.xc = description
+        return self
+
 
 if __name__ == '__main__':
     from pyscf import gto
+    from pyscf.dft import xcfun
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'#'out_rks'
 
     mol.atom.extend([['He', (0.,0.,0.)], ])
     mol.basis = { 'He': 'cc-pvdz'}
+    #mol.grids = { 'He': (10, 14),}
     mol.build()
 
     m = RKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf()) # -2.90705411168
+    m.xc = 'b88,lyp'
+    print(m.scf())  # -2.8978518405
+
+    m = RKS(mol)
+    m._numint.libxc = xcfun
+    m.xc = 'b88,lyp'
+    print(m.scf())  # -2.8978518405

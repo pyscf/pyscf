@@ -13,7 +13,6 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
 from pyscf.dft import numint
-import pyscf.dft.vxc
 
 
 def get_veff_(ks_grad, mol, dm):
@@ -27,12 +26,11 @@ def get_veff_(ks_grad, mol, dm):
     grids = mf.grids
     if mf._numint.non0tab is None:
         mf._numint.non0tab = mf._numint.make_mask(mol, mf.grids.coords)
-    x_code, c_code = pyscf.dft.vxc.parse_xc_name(mf.xc)
-    hyb = mf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+    hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
 
     mem_now = pyscf.lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
-    vxc = _get_vxc(mf._numint, mol, mf.grids, x_code, c_code, dm,
+    vxc = _get_vxc(mf._numint, mol, mf.grids, mf.xc, dm,
                    max_memory=max_memory, verbose=ks_grad.verbose)
     nao = vxc.shape[-1]
     vxc = vxc.reshape(-1,nao,nao)
@@ -48,8 +46,16 @@ def get_veff_(ks_grad, mol, dm):
     return vhf + vxc
 
 
-def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+def _get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
              max_memory=2000, verbose=None):
+    if isinstance(relativity, (list, tuple, numpy.ndarray)):
+        import warnings
+        xc_code = '%s, %s' % (xc_code, dms)
+        dms = relativity
+        with warnings.catch_warnings():
+            warnings.simplefilter("once")
+            warnings.warn('API updates: the 5th argument c_id is decoreated '
+                          'and will be removed in future release.\n')
     natocc = []
     natorb = []
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -64,55 +70,56 @@ def _get_vxc(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
             natorb.append(c)
         nao = dms[0].shape[0]
 
-    xctype = ni._xc_type(x_id, c_id)
+    xctype = ni._xc_type(xc_code)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
 
     nset = len(natocc)
     vmat = numpy.zeros((nset,3,nao,nao))
     if xctype == 'LDA':
         ao_deriv = 1
-        for ao, non0tab, weight, coords \
+        for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
             for idm in range(nset):
-                rho = ni.eval_rho2(mol, ao[0], natorb[idm], natocc[idm], non0tab, xctype)
-                vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[1]
+                rho = make_rho(idm, ao[0], mask, 'LDA')
+                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
                 vrho = vxc[0]
                 aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
-                vmat[idm,0] += numint._dot_ao_ao(mol, ao[1], aow, nao, weight.size, non0tab)
-                vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, weight.size, non0tab)
-                vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, weight.size, non0tab)
+                vmat[idm,0] += numint._dot_ao_ao(mol, ao[1], aow, nao, weight.size, mask)
+                vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, weight.size, mask)
+                vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, weight.size, mask)
                 rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
         XX, XY, XZ = 4, 5, 6
         YX, YY, YZ = 5, 7, 8
         ZX, ZY, ZZ = 6, 8, 9
         ao_deriv = 2
-        for ao, non0tab, weight, coords \
+        for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
             for idm in range(nset):
-                rho = ni.eval_rho2(mol, ao, natorb[idm], natocc[idm], non0tab, xctype)
-                vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[1]
+                rho = make_rho(idm, ao, mask, 'GGA')
+                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
                 vrho, vsigma = vxc[:2]
                 wv = numpy.empty_like(rho)
                 wv[0]  = weight * vrho
                 wv[1:] = rho[1:] * (weight * vsigma * 2)
 
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                vmat[idm,0] += numint._dot_ao_ao(mol, ao[1], aow, nao, weight.size, non0tab)
-                vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, weight.size, non0tab)
-                vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, weight.size, non0tab)
+                vmat[idm,0] += numint._dot_ao_ao(mol, ao[1], aow, nao, weight.size, mask)
+                vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, weight.size, mask)
+                vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, weight.size, mask)
 
                 aow = numpy.einsum('pi,p->pi', ao[XX], wv[1])
                 aow+= numpy.einsum('pi,p->pi', ao[XY], wv[2])
                 aow+= numpy.einsum('pi,p->pi', ao[XZ], wv[3])
-                vmat[idm,0] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, non0tab)
+                vmat[idm,0] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
                 aow = numpy.einsum('pi,p->pi', ao[YX], wv[1])
                 aow+= numpy.einsum('pi,p->pi', ao[YY], wv[2])
                 aow+= numpy.einsum('pi,p->pi', ao[YZ], wv[3])
-                vmat[idm,1] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, non0tab)
+                vmat[idm,1] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
                 aow = numpy.einsum('pi,p->pi', ao[ZX], wv[1])
                 aow+= numpy.einsum('pi,p->pi', ao[ZY], wv[2])
                 aow+= numpy.einsum('pi,p->pi', ao[ZZ], wv[3])
-                vmat[idm,2] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, non0tab)
+                vmat[idm,2] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
                 rho = vxc = vrho = vsigma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')
@@ -156,26 +163,27 @@ if __name__ == '__main__':
     print mf.scf()
     g = Gradients(mf)
     print(g.grad())
-#[[ -1.20185763e-15   5.85017075e-16   2.10514006e-02]
-# [ -1.51765862e-17   2.82055434e-02  -1.05252592e-02]
-# [ -1.00778811e-16  -2.82055434e-02  -1.05252592e-02]]
+#[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
+# [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]
+# [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
 
     #mf.grids.level = 6
     mf.xc = 'b88,p86'
     print mf.scf()
     g = Gradients(mf)
     print(g.grad())
-#[[ -6.53044528e-16   1.61440998e-15   2.44607362e-02]
-# [  2.99909644e-16   2.73756804e-02  -1.22322688e-02]
-# [ -2.24487619e-16  -2.73756804e-02  -1.22322688e-02]]
+#[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
+# [  4.36709255e-18   2.73690416e-02  -1.22232039e-02]
+# [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
 
-    mf.xc = 'b3lyp'
+    mf.xc = 'b3lypg'
     print mf.scf()
     g = Gradients(mf)
     print(g.grad())
-#[[ -3.44790653e-16  -2.31083509e-15   1.21670343e-02]
-# [  7.15579513e-17   2.11176116e-02  -6.08866586e-03]
-# [ -6.40735965e-17  -2.11176116e-02  -6.08866586e-03]]
+#[[ -3.59411142e-16  -2.68753987e-16   1.21557501e-02]
+# [  4.04977877e-17   2.11112794e-02  -6.08181640e-03]
+# [  1.52600378e-16  -2.11112794e-02  -6.08181640e-03]]
+
 
     mol = gto.Mole()
     mol.atom = [
@@ -190,14 +198,14 @@ if __name__ == '__main__':
     mf.kernel()
     print(Gradients(mf).grad())
 # sum over z direction non-zero, due to meshgrid response?
-#[[ -3.01281832e-17  -2.88065811e-17  -2.69065384e-03]
-# [  3.04095683e-16   5.85874058e-16   2.72243724e-03]]
+#[[ 0  0  -2.68934738e-03]
+# [ 0  0   2.69333577e-03]]
     mf = dft.RKS(mol)
     mf.grids.prune = None
     mf.grids.level = 6
     mf.conv_tol = 1e-15
     mf.kernel()
     print(Gradients(mf).grad())
-#[[  5.02557583e-18   6.72559117e-17  -2.68931547e-03]
-# [  1.14142464e-16  -6.66172332e-16   2.68911282e-03]]
+#[[ 0  0  -2.68931547e-03]
+# [ 0  0   2.68911282e-03]]
 

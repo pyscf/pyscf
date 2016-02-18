@@ -8,24 +8,30 @@
 #
 
 import time
+import copy
 from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.dft import numint
+from pyscf import dft
 from pyscf.tddft import rhf
 from pyscf.ao2mo import _ao2mo
-import pyscf.dft.vxc
 
 
 # dmvo = (X+Y) in AO representation
-def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
+def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
     mf = td._scf
     mol = td.mol
-    ni = mf._numint
     grids = mf.grids
 
-    xctype = ni._xc_type(x_id, c_id)
+    ni = copy.copy(mf._numint)
+    try:
+        ni.libxc = dft.xcfun
+        xctype = ni._xc_type(xc_code)
+    except ImportError, KeyError:
+        ni.libxc = dft.libxc
+        xctype = ni._xc_type(xc_code)
 
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
@@ -38,17 +44,17 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
     if xctype == 'LDA':
         if singlet:
             ao_deriv = 0
-            for ao, non0tab, weight, coords \
+            for ao, mask, weight, coords \
                     in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
-                rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, 'LDA')
+                rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'LDA')
                 rho *= .5  # alpha density
-                fxc = ni.eval_xc(x_id, c_id, (rho,rho), 1, deriv=2)[2]
+                fxc = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[2]
                 u_u, u_d, d_d = v2rho2 = fxc[0].T
                 frho = u_u + u_d
                 for i, dm in enumerate(dmvo):
-                    rho1 = ni.eval_rho(mol, ao, dm, non0tab, xctype)
+                    rho1 = ni.eval_rho(mol, ao, dm, mask, xctype)
                     aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1)
-                    v1ao[i] += numint._dot_ao_ao(mol, aow, ao, nao, weight.size, non0tab)
+                    v1ao[i] += numint._dot_ao_ao(mol, aow, ao, nao, weight.size, mask)
                     rho1 = aow = None
 
             for i in range(ndm):
@@ -59,11 +65,11 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
 
     elif xctype == 'GGA':
         ao_deriv = 1
-        for ao, non0tab, weight, coords \
+        for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
-            rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, 'GGA')
+            rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'GGA')
             rho *= .5  # alpha density
-            vxc, fxc = ni.eval_xc(x_id, c_id, (rho,rho), 1, deriv=2)[1:3]
+            vxc, fxc = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[1:3]
 
             vsigma = vxc[1].T
             u_u, u_d, d_d = fxc[0].T  # v2rho2
@@ -83,7 +89,7 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
             for i, dm in enumerate(dmvo):
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
-                rho1 = ni.eval_rho(mol, ao, dm, non0tab, 'GGA')
+                rho1 = ni.eval_rho(mol, ao, dm, mask, 'GGA')
                 # sigma1 = \nabla(\rho_\alpha+\rho_\beta) dot \nabla(|b><j|) z_{bj}
                 # *2 for alpha + beta
                 sigma1 = numpy.einsum('xi,xi->i', rho[1:], rho1[1:]) * 2
@@ -91,11 +97,8 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
                 wv  = frho * rho1[0]
                 wv += frhogamma * sigma1
                 wv *= weight
-                if c_id == 131 or x_id in (402, 404, 411, 416, 419):
-                    # second derivative of LYP functional in libxc library diverge
-                    wv[rho[0] < 4.57e-11] = 0
                 aow = numpy.einsum('pi,p->pi', ao[0], wv)
-                v1ao[i] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, non0tab)
+                v1ao[i] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
 
                 for k in range(3):
                     wv  = fgg * sigma1 * rho[1+k]
@@ -103,14 +106,11 @@ def _contract_xc_kernel(td, x_id, c_id, dmvo, singlet=True, max_memory=2000):
                     wv *= 2 # *2 because \nabla\rho = \nabla(\rho_\alpha+\rho_\beta)
                     wv += fgamma * rho1[1+k]
                     wv *= weight
-                    if c_id == 131 or x_id in (402, 404, 411, 416, 419):
-                        # second derivative of LYP functional in libxc library diverge
-                        wv[rho[0] < 4.57e-11] = 0
                     aow = numpy.einsum('ip,i->ip', ao[0], wv)
-                    #v1ao += numint._dot_ao_ao(mol, aow, ao[1+k], nao, weight.size, non0tab)
-                    #v1ao += numint._dot_ao_ao(mol, ao[1+k], aow, nao, weight.size, non0tab)
+                    #v1ao += numint._dot_ao_ao(mol, aow, ao[1+k], nao, weight.size, mask)
+                    #v1ao += numint._dot_ao_ao(mol, ao[1+k], aow, nao, weight.size, mask)
                     # v1ao+v1ao.T at the end
-                    v1ao[i] += 2*numint._dot_ao_ao(mol, aow, ao[1+k], nao, weight.size, non0tab)
+                    v1ao[i] += 2*numint._dot_ao_ao(mol, aow, ao[1+k], nao, weight.size, mask)
                 aow = None
         for i in range(ndm):
             v1ao[i] = (v1ao[i] + v1ao[i].T) * .5
@@ -137,12 +137,11 @@ class TDA(rhf.TDA):
         for i, z in enumerate(zs):
             dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
 
-        x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
-        hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        hyb = self._scf._numint.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
 
         mem_now = pyscf.lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
-        v1ao = _contract_xc_kernel(self, x_code, c_code, dmvo,
+        v1ao = _contract_xc_kernel(self, self._scf.xc, dmvo,
                                    singlet=self.singlet, max_memory=max_memory)
 
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
@@ -187,8 +186,7 @@ class TDDFT(rhf.TDHF):
             dms[i   ] = dmx + dmy.T  # AX + BY
             dms[i+nz] = dms[i].T # = dmy + dmx.T  # AY + BX
 
-        x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
-        hyb = self._scf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+        hyb = self._scf._numint.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
 
         if abs(hyb) > 1e-10:
             vj, vk = self._scf.get_jk(self.mol, dms, hermi=0)
@@ -205,7 +203,7 @@ class TDDFT(rhf.TDHF):
 
         mem_now = pyscf.lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
-        v1xc = _contract_xc_kernel(self, x_code, c_code, dms[:nz],
+        v1xc = _contract_xc_kernel(self, self._scf.xc, dms[:nz],
                                    singlet=self.singlet, max_memory=max_memory)
         veff[:nz] += v1xc
         veff[nz:] += v1xc
@@ -248,10 +246,9 @@ class TDDFTNoHybrid(TDA):
         else:
             v1ao = 0
 
-        x_code, c_code = pyscf.dft.vxc.parse_xc_name(self._scf.xc)
         mem_now = pyscf.lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
-        v1xc = _contract_xc_kernel(self, x_code, c_code, dmvo,
+        v1xc = _contract_xc_kernel(self, self._scf.xc, dmvo,
                                    singlet=self.singlet, max_memory=max_memory)
         v1ao += v1xc
 
@@ -266,7 +263,7 @@ class TDDFTNoHybrid(TDA):
     def kernel(self, x0=None):
         '''TDDFT diagonalization solver
         '''
-        if pyscf.dft.vxc.is_hybrid_xc(self._scf.xc):
+        if self._scf._numint.libxc.is_hybrid_xc(self._scf.xc):
             raise RuntimeError('%s cannot be applied with hybrid functional'
                                % self.__class__)
 
@@ -398,3 +395,30 @@ if __name__ == '__main__':
     print(td.kernel()[0] * 27.2114)
 # [  9.68883108   9.68883108  15.07124069]
 
+#NOTE b3lyp by libxc is quite different to b3lyp from xcfun
+    dft.numint._NumInt.libxc = dft.xcfun
+    mf = dft.RKS(mol)
+    mf.xc = 'b3lyp'
+    mf.scf()
+    td = TDDFT(mf)
+    td.nstates = 5
+    td.verbose = 5
+    print(td.kernel()[0] * 27.2114)
+# [  9.88975514   9.88975514  15.16643994  30.55289462  30.55289462]
+
+    mf = dft.RKS(mol)
+    mf.xc = 'b3lyp'
+    mf.scf()
+    td = TDA(mf)
+    td.nstates = 5
+    td.verbose = 5
+    print(td.kernel()[0] * 27.2114)
+# [  9.90383269   9.90383269  15.43035113  30.55830068  30.55830068]
+
+    mf = dft.RKS(mol)
+    mf.xc = 'lda,vwn'
+    mf.scf()
+    td = TDA(mf)
+    td.verbose = 5
+    print(td.kernel()[0] * 27.2114)
+# [  9.68883108   9.68883108  15.07124069]

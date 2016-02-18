@@ -17,19 +17,20 @@ mol.basis = 'ccpvtz'
 mol.build()
 mf = dft.RKS(mol)
 mf.grids.atom_grid = {"H": (50, 110)}
-mf.grids.setup_grids_()
+mf.prune = None
+mf.grids.build()
 nao = mol.nao_nr()
 
 class KnowValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
-        self.assertEqual(non0.sum(), 181911)
+        self.assertEqual(non0.sum(), 93442)
         self.assertAlmostEqual(numpy.dot(non0.ravel(),
                                          numpy.cos(numpy.arange(non0.size))),
-                               107.69227300597809, 9)
+                               -7.719100771397839, 9)
         self.assertAlmostEqual(numpy.dot(numpy.cos(non0).ravel(),
                                          numpy.cos(numpy.arange(non0.size))),
-                               -48.536221663504378, 9)
+                               4.7271626964386755, 9)
 
     def test_dot_ao_dm(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)

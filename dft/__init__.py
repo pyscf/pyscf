@@ -1,5 +1,12 @@
 import sys
-from pyscf.dft import vxc
+try:
+    from pyscf.dft import libxc
+except ImportError:
+    pass
+try:
+    from pyscf.dft import xcfun
+except ImportError:
+    pass
 from pyscf.dft import rks
 from pyscf.dft import uks
 from pyscf.dft import rks_symm
@@ -7,13 +14,6 @@ from pyscf.dft import uks_symm
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.df import density_fit
-
-# register the XC keywords in module
-curmod = sys.modules[__name__]
-for k,v in vxc.XC_CODES.iteritems():
-    setattr(curmod, k, v)
-del(k)
-del(v)
 
 
 def RKS(mol, *args):

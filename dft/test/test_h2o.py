@@ -56,30 +56,30 @@ class KnowValues(unittest.TestCase):
         method.xc = 'xlyp'
         self.assertAlmostEqual(method.scf(), -76.4174879445209, 9)
 
-    def test_nr_b3lyp(self):
+    def test_nr_b3lypg(self):
         method = dft.RKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
-    def test_nr_b3lyp_direct(self):
+    def test_nr_b3lypg_direct(self):
         method = dft.RKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.radi_method = dft.radi.gauss_chebyshev
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 9)
         method.direct_scf = False
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 9)
 
-    def test_nr_ub3lyp(self):
+    def test_nr_ub3lypg(self):
         method = dft.UKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
     def test_nr_uks_lsda(self):
@@ -92,21 +92,21 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350995324984709, 9)
 
-    def test_nr_uks_b3lyp(self):
+    def test_nr_uks_b3lypg(self):
         mol1 = h2o.copy()
         mol1.charge = 1
         mol1.spin = 1
         mol1.build(0, 0)
         method = dft.UKS(mol1)
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.927304010489976, 9)
 
-    def test_nr_uks_b3lyp_direct(self):
+    def test_nr_uks_b3lypg_direct(self):
         method = dft.UKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
@@ -122,24 +122,24 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350333965173704, 9)
 
-    def test_nr_roks_b3lyp(self):
+    def test_nr_roks_b3lypg(self):
         mol1 = h2o.copy()
         mol1.charge = 1
         mol1.spin = 1
         mol1.build(0, 0)
         method = dft.ROKS(mol1)
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 9)
 
-    def test_nr_roks_b3lyp_direct(self):
+    def test_nr_roks_b3lypg_direct(self):
         mol1 = h2o.copy()
         mol1.charge = 1
         mol1.spin = 1
         mol1.build(0, 0)
         method = dft.ROKS(mol1)
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
         method.grids.prune = dft.gen_grid.treutler_prune
@@ -182,30 +182,30 @@ class KnowValues(unittest.TestCase):
         method.xc = 'xlyp'
         self.assertAlmostEqual(method.scf(), -76.4174879445209, 9)
 
-    def test_nr_symm_b3lyp(self):
+    def test_nr_symm_b3lypg(self):
         method = dft.RKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
-    def test_nr_symm_b3lyp_direct(self):
+    def test_nr_symm_b3lypg_direct(self):
         method = dft.RKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.radi_method = dft.radi.gauss_chebyshev
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 9)
         method.direct_scf = False
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 9)
 
-    def test_nr_symm_ub3lyp(self):
+    def test_nr_symm_ub3lypg(self):
         method = dft.UKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
     def test_nr_symm_uks_lsda(self):
@@ -218,21 +218,21 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350995324984709, 9)
 
-    def test_nr_symm_uks_b3lyp(self):
+    def test_nr_symm_uks_b3lypg(self):
         mol1 = h2osym.copy()
         mol1.charge = 1
         mol1.spin = 1
         mol1.build(0, 0)
         method = dft.UKS(mol1)
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.927304010489976, 9)
 
-    def test_nr_symm_uks_b3lyp_direct(self):
+    def test_nr_symm_uks_b3lypg_direct(self):
         method = dft.UKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
@@ -248,24 +248,24 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350333965173704, 9)
 
-    def test_nr_symm_roks_b3lyp(self):
+    def test_nr_symm_roks_b3lypg(self):
         mol1 = h2osym.copy()
         mol1.charge = 1
         mol1.spin = 1
         mol1.build(0, 0)
         method = dft.ROKS(mol1)
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 9)
 
-    def test_nr_symm_roks_b3lyp_direct(self):
+    def test_nr_symm_roks_b3lypg_direct(self):
         mol1 = h2osym.copy()
         mol1.charge = 1
         mol1.spin = 1
         mol1.build(0, 0)
         method = dft.ROKS(mol1)
-        method.xc = 'b3lyp'
+        method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
         method.grids.prune = dft.gen_grid.treutler_prune

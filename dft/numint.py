@@ -7,8 +7,7 @@ import ctypes
 import numpy
 import scipy.linalg
 import pyscf.lib
-import pyscf.dft.vxc
-from pyscf.dft.vxc import eval_x, eval_c, eval_xc
+from pyscf.dft import libxc
 from pyscf.lib import logger
 
 libdft = pyscf.lib.load_library('libdft')
@@ -417,18 +416,27 @@ def _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab):
                         mol._env.ctypes.data_as(ctypes.c_void_p))
     return vm
 
-def nr_vxc(mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
+def nr_vxc(mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
+    if isinstance(spin, (list, tuple, numpy.ndarray)):
+# shift the old args (..., x_id, c_id, dm, spin, ..)
+        import warnings
+        xc_code = '%s, %s' % (xc_code, dm)
+        dm, spin = spin, relativity
+        with warnings.catch_warnings():
+            warnings.simplefilter("once")
+            warnings.warn('API updates: the 4th argument c_id is decoreated '
+                          'and will be removed in future release.\n')
     ni = _NumInt()
     ni.non0tab = ni.make_mask(mol, grids.coords)
     if spin == 0:
-        return nr_rks(ni, mol, grids, x_id, c_id, dm, relativity,
+        return nr_rks(ni, mol, grids, xc_code, dm, relativity,
                       hermi, max_memory, verbose)
     else:
-        return nr_uks(ni, mol, grids, x_id, c_id, dm, relativity,
+        return nr_uks(ni, mol, grids, xc_code, dm, relativity,
                       hermi, max_memory, verbose)
 
-def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids
     and a set of density matrices
@@ -440,9 +448,9 @@ def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
 
         grids : an instance of :class:`Grids`
             grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
-        x_id, c_id : int
-            Exchange/Correlation functional ID used by libxc library.
-            See pyscf/dft/vxc.py for more details.
+        xc_code : str
+            XC functional description.
+            See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
         dms : 2D array a list of 2D arrays
             Density matrix or multiple density matrices
 
@@ -466,13 +474,20 @@ def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
     >>> grids = dft.gen_grid.Grids(mol)
     >>> grids.coords = numpy.random.random((100,3))  # 100 random points
     >>> grids.weights = numpy.random.random(100)
-    >>> x_id, c_id = dft.vxc.parse_xc_name('lda,vwn')
     >>> dm = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
-    >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, x_id, c_id, dm)
+    >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, 'lda,vwn', dm)
     '''
+    if isinstance(relativity, (list, tuple, numpy.ndarray)):
+        import warnings
+        xc_code = '%s, %s' % (xc_code, dms)
+        dms = relativity
+        with warnings.catch_warnings():
+            warnings.simplefilter("once")
+            warnings.warn('API updates: the 5th argument c_id is decoreated '
+                          'and will be removed in future release.\n')
 
-    xctype = ni._xc_type(x_id, c_id)
-    frho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
+    xctype = ni._xc_type(xc_code)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
 
     ngrids = len(grids.weights)
     if ni.non0tab is None:
@@ -489,8 +504,8 @@ def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
             for idm in range(nset):
-                rho = frho(idm, ao, mask, 'LDA')
-                exc, vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[:2]
+                rho = make_rho(idm, ao, mask, 'LDA')
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
                 vrho = vxc[0]
                 den = rho * weight
                 nelec[idm] += den.sum()
@@ -504,8 +519,8 @@ def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
             for idm in range(nset):
-                rho = frho(idm, ao, mask, 'GGA')
-                exc, vxc = ni.eval_xc(x_id, c_id, rho, 0, relativity, 1, verbose)[:2]
+                rho = make_rho(idm, ao, mask, 'GGA')
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
                 vrho, vsigma = vxc[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
@@ -528,7 +543,7 @@ def nr_rks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         vmat = vmat.reshape(nao,nao)
     return nelec, excsum, vmat
 
-def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
            max_memory=2000, verbose=None):
     '''Calculate UKS XC functional and potential matrix for given meshgrids
     and a set of density matrices
@@ -538,9 +553,9 @@ def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
 
         grids : an instance of :class:`Grids`
             grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
-        x_id, c_id : int
-            Exchange/Correlation functional ID used by libxc library.
-            See pyscf/dft/vxc.py for more details.
+        xc_code : str
+            XC functional description.
+            See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
         dm : a list of 2D arrays
             A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
 
@@ -557,8 +572,16 @@ def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         excsum is the XC functional value.
         vmat is the XC potential matrix for (alpha,beta) spin.
     '''
+    if isinstance(relativity, (list, tuple, numpy.ndarray)):
+        import warnings
+        xc_code = '%s, %s' % (xc_code, dms)
+        dms = relativity
+        with warnings.catch_warnings():
+            warnings.simplefilter("once")
+            warnings.warn('API updates: the 5th argument c_id is decoreated '
+                          'and will be removed in future release.\n')
 
-    xctype = ni._xc_type(x_id, c_id)
+    xctype = ni._xc_type(xc_code)
     ngrids = len(grids.weights)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
@@ -567,12 +590,12 @@ def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         non0tab = ni.non0tab
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        frho_a, nset, nao = ni._gen_rho_evaluator(mol, dms*.5, hermi)
-        frho_b = frho_a
+        make_rhoa, nset, nao = ni._gen_rho_evaluator(mol, dms*.5, hermi)
+        make_rhob = make_rhoa
     else:
         nset = len(dms) // 2
-        frho_a, nset, nao = ni._gen_rho_evaluator(mol, dms[:nset], hermi)
-        frho_b, nset, nao = ni._gen_rho_evaluator(mol, dms[nset:], hermi)
+        make_rhoa, nset, nao = ni._gen_rho_evaluator(mol, dms[:nset], hermi)
+        make_rhob, nset, nao = ni._gen_rho_evaluator(mol, dms[nset:], hermi)
 
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
@@ -582,9 +605,9 @@ def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
             for idm in range(nset):
-                rho_a = frho_a(idm, ao, mask, xctype)
-                rho_b = frho_b(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(x_id, c_id, (rho_a, rho_b),
+                rho_a = make_rhoa(idm, ao, mask, xctype)
+                rho_b = make_rhob(idm, ao, mask, xctype)
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
                                       1, relativity, 1, verbose)[:2]
                 vrho = vxc[0]
                 den = rho_a * weight
@@ -604,9 +627,9 @@ def nr_uks(ni, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
             for idm in range(nset):
-                rho_a = frho_a(idm, ao, mask, xctype)
-                rho_b = frho_b(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(x_id, c_id, (rho_a, rho_b),
+                rho_a = make_rhoa(idm, ao, mask, xctype)
+                rho_b = make_rhob(idm, ao, mask, xctype)
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
                                       1, relativity, 1, verbose)[:2]
                 vrho, vsigma = vxc[:2]
                 den = rho_a[0]*weight
@@ -645,37 +668,43 @@ nr_uks_vxc = nr_uks
 
 
 class _NumInt(object):
+    '''libxc is the default xc functional evaluator.  Change the default one
+    by setting
+    _NumInt.libxc = dft.xcfun
+    '''
+    libxc = libxc
+
     def __init__(self):
         self.non0tab = None
 
-    def nr_vxc_(self, mol, grids, x_id, c_id, dms, spin=0, relativity=0, hermi=1,
+    def nr_vxc_(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix for given meshgrids
         and a set of density matrices.  See :func:`nr_rks_` and :func:`nr_uks_`
         for more details.
         '''
         if spin == 0:
-            return self.nr_rks_(mol, grids, x_id, c_id, dms, relativity, hermi,
+            return self.nr_rks_(mol, grids, xc_code, dms, relativity, hermi,
                                 max_memory, verbose)
         else:
-            return self.nr_uks_(mol, grids, x_id, c_id, dms, relativity, hermi,
+            return self.nr_uks_(mol, grids, xc_code, dms, relativity, hermi,
                                 max_memory, verbose)
     nr_vxc = nr_vxc_
 
-    def nr_rks_(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+    def nr_rks_(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
-        return nr_rks(self, mol, grids, x_id, c_id, dms, relativity, hermi,
+        return nr_rks(self, mol, grids, xc_code, dms, relativity, hermi,
                       max_memory, verbose)
     nr_rks_.__doc__ = nr_rks_vxc.__doc__
     nr_rks = nr_rks_
 
-    def nr_uks_(self, mol, grids, x_id, c_id, dms, relativity=0, hermi=1,
+    def nr_uks_(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
-        return nr_uks(self, mol, grids, x_id, c_id, dms, relativity, hermi,
+        return nr_uks(self, mol, grids, xc_code, dms, relativity, hermi,
                       max_memory, verbose)
     nr_uks_.__doc__ = nr_uks_vxc.__doc__
     nr_uks = nr_uks_
@@ -696,26 +725,16 @@ class _NumInt(object):
     def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
-    def eval_xc(self, x_id, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
-        return eval_xc(x_id, c_id, rho, spin, relativity, deriv, verbose)
-
-    def eval_x(self, x_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
-        return eval_x(x_id, rho, spin, relativity, deriv, verbose)
-
-    def eval_c(self, c_id, rho, spin=0, relativity=0, deriv=1, verbose=None):
-        return eval_c(c_id, rho, spin, relativity, deriv, verbose)
-
-    def hybrid_coeff(self, x_id, spin=1):
-        return pyscf.dft.vxc.hybrid_coeff(x_id, spin)
-
     def block_loop(self, mol, grids, nao, deriv=0, max_memory=2000,
-                   non0tab=None, buf=None):
+                   non0tab=None, blksize=None, buf=None):
         '''Define this macro to loop over grids by blocks.
         '''
         ngrids = grids.weights.size
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
-        blksize = min(int(max_memory*1e6/(comp*2*nao*8*BLKSIZE))*BLKSIZE, ngrids)
+        if blksize is None:
+            blksize = min(int(max_memory*1e6/(comp*2*nao*8*BLKSIZE))*BLKSIZE, ngrids)
+            blksize = max(blksize, BLKSIZE)
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                                  dtype=numpy.int8)
@@ -745,7 +764,7 @@ class _NumInt(object):
                     natorb.append(c)
                 nao = dms[0].shape[0]
             ndms = len(natocc)
-            def feval_rho(idm, ao, non0tab, xctype):
+            def make_rho(idm, ao, non0tab, xctype):
                 return self.eval_rho2(mol, ao, natorb[idm], natocc[idm], non0tab, xctype)
         else:
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -754,16 +773,23 @@ class _NumInt(object):
             else:
                 nao = dms[0].shape[0]
             ndms = len(dms)
-            def feval_rho(idm, ao, non0tab, xctype):
+            def make_rho(idm, ao, non0tab, xctype):
                 return self.eval_rho2(mol, ao, dms[idm], non0tab, xctype)
-        return feval_rho, ndms, nao
+        return make_rho, ndms, nao
 
+####################
 
-    def _xc_type(self, x_id, c_id):
-        if (pyscf.dft.vxc.is_lda(x_id) and
-            (c_id == 0 or pyscf.dft.vxc.is_lda(c_id))):
+    def hybrid_coeff(self, xc_code, spin=1):
+        return self.libxc.hybrid_coeff(xc_code, spin)
+
+    def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+        return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv, verbose)
+
+    def _xc_type(self, xc_code):
+        libxc = self.libxc
+        if libxc.is_lda(xc_code):
             xctype = 'LDA'
-        elif pyscf.dft.vxc.is_meta_gga(x_id) or pyscf.dft.vxc.is_meta_gga(c_id):
+        elif libxc.is_meta_gga(xc_code):
             xctype = 'MGGA'
             raise NotImplementedError('meta-GGA')
         else:
@@ -784,20 +810,19 @@ if __name__ == '__main__':
         basis = '6311g*',)
     mf = dft.RKS(mol)
     mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
+    mf.grids.prune = None
     mf.grids.setup_grids()
     dm = mf.get_init_guess(key='minao')
 
-    x_code, c_code = pyscf.dft.vxc.parse_xc_name(mf.xc)
     numpy.random.seed(1)
     dm1 = numpy.random.random((dm.shape))
     print(time.clock())
-    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, dm1, spin=0)
-    print(res[1] - -37.0917865313)
-    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, (dm1,dm1), spin=1)
-    print(res[1] - -92.4556499854)
-    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, dm, spin=0)
-    print(res[1] - -8.63131769633)
-    res = mf._numint.nr_vxc(mol, mf.grids, x_code, c_code, (dm,dm), spin=1)
-    print(res[1] - -21.5202633136)
+    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm1, spin=0)
+    print(res[1] - -37.08079395351452)
+    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm1,dm1), spin=1)
+    print(res[1] - -92.42828116583394)
+    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm, spin=0)
+    print(res[1] - -8.631329952248500)
+    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm,dm), spin=1)
+    print(res[1] - -21.52029393479996)
     print(time.clock())
-

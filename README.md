@@ -44,7 +44,7 @@ Installation
 * Use Intel MKL as BLAS library.  cmake with options
   `-DBLA_VENDOR=Intel10_64lp_seq`
 
-        BLA_VENDOR=Intel10_64lp_seq cmake ..
+        cmake -DBLA_VENDOR=Intel10_64lp_seq ..
 
   If cmake is still not able to find MKL, just define BLAS_LIBRARIES in CMakeLists.txt
 

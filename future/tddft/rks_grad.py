@@ -7,15 +7,16 @@
 #
 
 import time
+import copy
 from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.scf import cphf
+from pyscf import dft
 from pyscf.tddft import rks
 from pyscf.tddft import rhf_grad
-import pyscf.dft.vxc
 
 
 #
@@ -52,10 +53,9 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
     mem_now = pyscf.lib.current_memory()[0]
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
-    x_code, c_code = pyscf.dft.vxc.parse_xc_name(mf.xc)
-    hyb = mf._numint.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+    hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
     f1vo, f1oo, vxc1, k1ao = \
-            _contract_xc_kernel(td_grad, x_code, c_code, dmzvop,
+            _contract_xc_kernel(td_grad, mf.xc, dmzvop,
                                 dmzoo, True, True, singlet, max_memory)
 
     if abs(hyb) > 1e-10:
@@ -90,7 +90,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
 # through closed shell ground state CPHF.
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc), orbo.T))
 # Call singlet XC kernel contraction, for closed shell ground state
-        vindxc = rks._contract_xc_kernel(td_grad._td, x_code, c_code,
+        vindxc = rks._contract_xc_kernel(td_grad._td, mf.xc,
                                          [dm+dm.T], True, max_memory)
         if abs(hyb) > 1e-10:
             vj, vk = mf.get_jk(mol, (dm+dm.T))
@@ -106,7 +106,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
 
     z1ao  = reduce(numpy.dot, (orbv, z1, orbo.T))
 # Note Z-vector is always associated to singlet integrals.
-    fxcz1 = _contract_xc_kernel(td_grad, x_code, c_code, z1ao, None,
+    fxcz1 = _contract_xc_kernel(td_grad, mf.xc, z1ao, None,
                                 False, False, True, max_memory)[0]
     if abs(hyb) > 1e-10:
         vj, vk = mf.get_jk(mol, z1ao, hermi=0)
@@ -194,12 +194,19 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
 
 # xai, oovv in AO-representation
 # Note spin-trace are applied for fxc, kxc
-def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
-                        with_kxc=True, singlet=True, max_memory=4000):
+def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
+                        with_kxc=True, singlet=True, max_memory=2000):
     mol = td_grad.mol
     mf = td_grad._scf
-    ni = mf._numint
     grids = mf.grids
+
+    ni = copy.copy(mf._numint)
+    try:
+        ni.libxc = dft.xcfun
+        xctype = ni._xc_type(xc_code)
+    except ImportError, KeyError:
+        ni.libxc = dft.libxc
+        xctype = ni._xc_type(xc_code)
 
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -228,18 +235,15 @@ def _contract_xc_kernel(td_grad, x_id, c_id, xai, oovv=None, with_vxc=True,
     else:
         k1ao = None
 
-    xctype = ni._xc_type(x_id, c_id)
-    ngrids = len(grids.weights)
-    BLKSIZE = numint.BLKSIZE
+    xctype = ni._xc_type(xc_code)
     max_memory = max_memory - 4*nao**2*8/1e6
-    blksize = min(int(max_memory/6*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
 
     if xctype == 'LDA':
         ao_deriv = 1
         for ao, non0tab, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
             rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, non0tab, 'LDA')
-            vxc, fxc, kxc = ni.eval_xc(x_id, c_id, rho, 0, deriv=deriv)[1:]
+            vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
             wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
             if singlet:
@@ -298,7 +302,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.RKS(mol)
-    mf.xc = 1,0
+    mf.xc = 'LDA'
     mf.grids.prune = False
 #    mf.grids.level = 6
     mf.scf()
@@ -328,8 +332,8 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=2)
     print(g1)
-# [[ 0  0  -2.72555279e-01]
-#  [ 0  0   2.72555086e-01]]
+# [[ 0  0  -2.72555315e-01]
+#  [ 0  0   2.72559322e-01]]
 
     td = pyscf.tddft.TDDFT(mf)
     td.nstates = 3
@@ -338,5 +342,6 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=2)
     print(g1)
-# [[ 0  0  -2.72555279e-01]
-#  [ 0  0   2.72555086e-01]]
+# [[ 0  0  -2.72555315e-01]
+#  [ 0  0   2.72559322e-01]]
+
