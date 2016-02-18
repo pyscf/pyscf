@@ -60,7 +60,7 @@ to improve the performance,  eg MKL (it can provide 10 times speedup in
 many modules)::
 
   $ cd pyscf/lib/build
-  $ BLA_VENDOR=Intel10_64lp_seq cmake ..
+  $ cmake -DBLA_VENDOR=Intel10_64lp_seq ..
   $ make
 
 You can link to other BLAS libraries by setting ``BLA_VENDOR``, eg

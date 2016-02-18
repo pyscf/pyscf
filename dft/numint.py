@@ -7,7 +7,6 @@ import ctypes
 import numpy
 import scipy.linalg
 import pyscf.lib
-from pyscf.dft import libxc
 from pyscf.lib import logger
 
 libdft = pyscf.lib.load_library('libdft')
@@ -45,7 +44,7 @@ def eval_ao(mol, coords, deriv=0, relativity=0, bastart=0, bascount=None,
 
     Returns:
         2D array of shape (N,nao) for AO values if deriv = 0.
-        Or 3D array of shape (*,N,nao) for AO values and AO derivatives if deriv > 0.
+        Or 3D array of shape (:,N,nao) for AO values and AO derivatives if deriv > 0.
         In the 3D array, the first (N,nao) elements are the AO values,
         followed by (3,N,nao) for x,y,z compoents;
         Then 2nd derivatives (6,N,nao) for xx, xy, xz, yy, yz, zz;
@@ -339,8 +338,6 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
-        verbose : int or object of :class:`Logger`
-            No effects.
 
     Returns:
         XC potential matrix in 2D array of shape (nao,nao) where nao is the
@@ -459,7 +456,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             No effects
         max_memory : int or float
             The maximum size of cache to use (in MB).
-        verbose : int or object of :class:`Logger`
 
     Returns:
         nelec, excsum, vmat.
@@ -564,7 +560,6 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             No effects
         max_memory : int or float
             The maximum size of cache to use (in MB).
-        verbose : int or object of :class:`Logger`
 
     Returns:
         nelec, excsum, vmat.
@@ -672,6 +667,7 @@ class _NumInt(object):
     by setting
     _NumInt.libxc = dft.xcfun
     '''
+    from pyscf.dft import libxc
     libxc = libxc
 
     def __init__(self):
@@ -784,6 +780,7 @@ class _NumInt(object):
 
     def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv, verbose)
+    eval_xc.__doc__ = libxc.eval_xc.__doc__
 
     def _xc_type(self, xc_code):
         libxc = self.libxc

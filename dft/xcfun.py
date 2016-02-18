@@ -152,13 +152,14 @@ def parse_xc(description):
     * The functional description string has two parts, separated by ",".  The
       first part describes the exchange functional, the second is the correlation
       functional.
-      - If "," not appeared in string, the entire string is considered as
-        X functional.
+
+      - If "," not appeared in string, the entire string is considered as X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
+
     * The functional name can be placed in arbitrary order.  Two name needs to
-      be separated by operators + or -.  Blank spaces are ignored.
-      NOTE the parser only reads operators + - *.  / is not in support.
+      be separated by operators "+" or "-".  Blank spaces are ignored.
+      NOTE the parser only reads operators "+" "-" "*".  / is not in support.
     * A functional name is associated with one factor.  If the factor is not
       given, it is assumed equaling 1.
     * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
@@ -237,13 +238,14 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
       first part describes the exchange functional, the second is the correlation
       functional.  If "," not appeared in string, entire string is considered as
       functional.
-      - If "," not appeared in string, the entire string is considered as
-        X functional.
+
+      - If "," not appeared in string, the entire string is considered as X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
+
     * The functional name can be placed in arbitrary order.  Two name needs to
-      be separated by operators + or -.  Blank spaces are ignored.
-      NOTE the parser only reads operators + - *.  / is not in support.
+      be separated by operators "+" or "-".  Blank spaces are ignored.
+      NOTE the parser only reads operators "+" "-" "*".  / is not in support.
     * A functional name is associated with one factor.  If the factor is not
       given, it is assumed equaling 1.
     * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
@@ -279,37 +281,37 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
         where
 
-        * vxc = (vrho, vsigma, vlapl, vtau) for unrestricted case
-        vrho[*,2]   = (u, d)
-        vsigma[*,3] = (uu, ud, dd)
-        vlapl[*,2]  = (u, d)
-        vtau[*,2]   = (u, d)
+        * vxc = (vrho, vsigma, vlapl, vtau) for restricted case
 
-        * vxc = (vrho[*], vsigma[*], vlapl[*], vtau[*]) for restricted case
+        * vxc for unrestricted case
+          | vrho[:,2]   = (u, d)
+          | vsigma[:,3] = (uu, ud, dd)
+          | vlapl[:,2]  = (u, d)
+          | vtau[:,2]   = (u, d)
 
-        * fxc(N*45) for unrestricted case:
-        | v2rho2[*,3]     = (u_u, u_d, d_d)
-        | v2rhosigma[*,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-        | v2sigma2[*,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
-        | v2lapl2[*,3]
-        | vtau2[*,3]
-        | v2rholapl[*,4]
-        | v2rhotau[*,4]
-        | v2lapltau[*,4]
-        | v2sigmalapl[*,6]
-        | v2sigmatau[*,6]
+        * fxc for restricted case:
+          (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
 
-        * fxc(N*10) for restricted case:
-        (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
+        * fxc for unrestricted case:
+          | v2rho2[:,3]     = (u_u, u_d, d_d)
+          | v2rhosigma[:,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
+          | v2sigma2[:,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
+          | v2lapl2[:,3]
+          | vtau2[:,3]
+          | v2rholapl[:,4]
+          | v2rhotau[:,4]
+          | v2lapltau[:,4]
+          | v2sigmalapl[:,6]
+          | v2sigmatau[:,6]
 
-        * kxc(N*35) for unrestricted case:
-        | v3rho3[*,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-        | v3rho2sigma[*,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-        | v3rhosigma2[*,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-        | v3sigma[*,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+        * kxc for restricted case:
+          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
 
-        * kxc(N*4) for restricted case:
-        (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
+        * kxc for unrestricted case:
+          | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
+          | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
+          | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
+          | v3sigma[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
 
         see also libxc_itrf.c
     '''

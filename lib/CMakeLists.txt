@@ -95,8 +95,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND NOT DISABLE_LIBXC)
           --enable-shared LIBS=-lm
   )
 endif()
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND NOT DISABLE_XCFUN)
-  ExternalProject_Add(xcfun
+message("DISABLE_XCFUN  ${DISABLE_XCFUN}")
+if(NOT DISABLE_XCFUN)
+  ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/sunqm/xcfun.git
     GIT_TAG origin/master
     PREFIX ${PROJECT_BINARY_DIR}/deps
