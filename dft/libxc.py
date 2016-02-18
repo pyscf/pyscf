@@ -342,7 +342,9 @@ XC_CODES = {
 #
 'LDA'           : 1 ,
 'SLATER'        : 1 ,
+'VWN5'          : 'VWN' ,
 'BLYP'          : 'B88,LYP',
+'BP86'          : 'B88,P86',
 'B3LYP'         : 'B3LYP5',  # VWN5 version
 'B3LYP5'        : '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN',
 'B3LYPG'        : 402,  # VWN3, used by Gaussian

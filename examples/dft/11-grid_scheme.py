@@ -10,7 +10,7 @@ By default, the DFT grid employs
 * Bragg radius for atom
 * Treutler-Ahlrichs radial grids
 * Becke partition for grid weight
-* Treutler-Ahlrichs pruning scheme
+* NWChem pruning scheme
 * mesh grids
   ===================================
   Elements  radial part  angular part

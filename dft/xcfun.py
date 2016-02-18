@@ -61,8 +61,8 @@ XC_CODES = {
 'B88'           :  2,  # BECKEX
 'LYP'           :  6,  # LYP correlation
 'P86'           : None,
-'BP86'          : None,
 'BLYP'          : 'BECKEX + P86',
+'BP86'          : None,
 'BPW91'         : 'BECKEX + PW91C',
 'BPW92'         : 'BECKEX + PW92C',
 'OLYP'          : '2.4832*SLATER - 1.43169*OPTX + LYP',  # CPL, 341, 319
@@ -74,7 +74,8 @@ XC_CODES = {
 'B3PW91'        : None,
 'B3P86'         : None,
 # Note, use VWN5 for B3LYP. It is different to the libxc default B3LYP
-'B3LYP'         : '.2*HF + .08*SLATER + .72*BECKE + .81*LYP + .19*VWN5',
+'B3LYP'         : 'B3LYP5',
+'B3LYP5'        : '.2*HF + .08*SLATER + .72*BECKE + .81*LYP + .19*VWN5',
 'B3LYPG'        : None, # B3LYP-VWN3 used by Gaussian and libxc
 'O3LYP'         : '.1161*HF + .1129*SLATER + .8133*OPTX + .81*LYP + .19*VWN5',  # Mol. Phys. 99 607
 'CAMB3LYP'      : None,
