@@ -12,7 +12,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #enable_language(Fortran)
 find_package(BLAS REQUIRED)
-if (BLA_VENDOR MATCHES "Intel*")
+if(BLA_VENDOR MATCHES "Intel*")
   if (${DISABLE_AVX})
     find_library(BLAS_mkl_def_LIBRARY
       NAMES mkl_def
@@ -59,7 +59,7 @@ include(ExternalProject)
     GIT_TAG origin/master
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR> -DBLA_VENDOR=${BLA_VENDOR}
   )
 #endif()
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
@@ -81,8 +81,11 @@ add_subdirectory(cc)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
+option(DISABLE_LIBXC 0)
+option(DISABLE_XCFUN 0)
+
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND NOT DISABLE_LIBXC)
   ExternalProject_Add(libxc
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
@@ -92,7 +95,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h")
           --enable-shared LIBS=-lm
   )
 endif()
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND NOT DISABLE_XCFUN)
   ExternalProject_Add(xcfun
     GIT_REPOSITORY https://github.com/sunqm/xcfun.git
     GIT_TAG origin/master

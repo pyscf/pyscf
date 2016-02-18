@@ -8,38 +8,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <xc.h>
-
-//double xc_hyb_exx_coef(xc_func_type *);
-
-double VXChybrid_coeff(int xc_id, int spin)
-{
-        xc_func_type func;
-        double factor;
-        if(xc_func_init(&func, xc_id, spin) != 0){
-                fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
-        }
-        switch(func.info->family)
-        {
-                case XC_FAMILY_HYB_GGA:
-                case XC_FAMILY_HYB_MGGA:
-                        factor = xc_hyb_exx_coef(&func);
-                        break;
-                default:
-                        factor = 0;
-        }
-
-        xc_func_end(&func);
-        return factor;
-}
+#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 /* Extracted from comments of libxc:gga.c
  
     sigma_st          = grad rho_s . grad rho_t
     zk                = energy density per unit particle
  
-    vrho_s            = d zk / d rho_s
+    vrho_s            = d n*zk / d rho_s
     vsigma_st         = d n*zk / d sigma_st
     
     v2rho2_st         = d^2 n*zk / d rho_s d rho_t
@@ -83,9 +61,9 @@ double VXChybrid_coeff(int xc_id, int spin)
  * In spin restricted case (spin == 1), rho_u is assumed to be the
  * spin-free quantities, rho_d is not used.
  */
-static int _eval_xc(xc_func_type *func_x, int spin, int np,
-                    double *rho_u, double *rho_d,
-                    double *ex, double *vxc, double *fxc, double *kxc)
+static void _eval_xc(xc_func_type *func_x, int spin, int np,
+                     double *rho_u, double *rho_d,
+                     double *ex, double *vxc, double *fxc, double *kxc)
 {
         int i;
         double *rho, *sigma, *lapl, *tau;
@@ -111,6 +89,7 @@ static int _eval_xc(xc_func_type *func_x, int spin, int np,
         case XC_FAMILY_LDA:
                 // ex is the energy density
                 // NOTE libxc library added ex/ec into vrho/vcrho
+                // vrho = rho d ex/d rho + ex, see work_lda.c:L73
                 if (spin == XC_POLARIZED) {
                         rho = malloc(sizeof(double) * np*2);
                         for (i = 0; i < np; i++) {
@@ -292,45 +271,241 @@ static int _eval_xc(xc_func_type *func_x, int spin, int np,
                         func_x->info->number, func_x->info->name);
                 exit(1);
         }
-        return 1;
 }
 
-int VXCnr_eval_x(int x_id, int spin, int relativity, int np,
-                 double *rho_u, double *rho_d,
-                 double *ex, double *vxc, double *fxc, double *kxc)
+double LIBXC_hybrid_coeff(int xc_id, int spin)
 {
-        xc_func_type func_x = {};
-        if (xc_func_init(&func_x, x_id, spin) != 0) {
-                fprintf(stderr, "X functional %d not found\n", x_id);
+        xc_func_type func;
+        double factor;
+        if(xc_func_init(&func, xc_id, spin) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
                 exit(1);
         }
-#if defined XC_SET_RELATIVITY
-        xc_lda_x_set_params(&func_x, relativity);
-#endif
-        _eval_xc(&func_x, spin, np, rho_u, rho_d, ex, vxc, fxc, kxc);
-        xc_func_end(&func_x);
-        return 1;
+        switch(func.info->family)
+        {
+                case XC_FAMILY_HYB_GGA:
+                case XC_FAMILY_HYB_MGGA:
+                        factor = xc_hyb_exx_coef(&func);
+                        break;
+                default:
+                        factor = 0;
+        }
+
+        xc_func_end(&func);
+        return factor;
 }
 
-int VXCnr_eval_c(int c_id, int spin, int relativity, int np,
-                 double *rho_u, double *rho_d,
-                 double *ex, double *vxc, double *fxc, double *kxc)
+
+/*
+ * XC_FAMILY_LDA           1
+ * XC_FAMILY_GGA           2
+ * XC_FAMILY_MGGA          4
+ * XC_FAMILY_LCA           8
+ * XC_FAMILY_OEP          16
+ * XC_FAMILY_HYB_GGA      32
+ * XC_FAMILY_HYB_MGGA     64
+ */
+int LIBXC_xc_type(int fn_id)
 {
-        int not0 = 1;
-        xc_func_type func_c = {};
-        if (xc_func_init(&func_c, c_id, spin) != 0) {
-                fprintf(stderr, "C functional %d not found\n", c_id);
+        xc_func_type func;
+        if (xc_func_init(&func, fn_id, 1) != 0) {
+                fprintf(stderr, "XC functional %d not found\n", fn_id);
                 exit(1);
         }
-        if (!(func_c.info->family == XC_FAMILY_HYB_GGA ||
-              func_c.info->family == XC_FAMILY_HYB_MGGA)) {
-                not0 = 0;
-#if defined XC_SET_RELATIVITY
-        xc_lda_x_set_params(&func_c, relativity);
-#endif
-                _eval_xc(&func_c, spin, np, rho_u, rho_d, ex, vxc, fxc, kxc);
+        int type = func.info->family;
+        xc_func_end(&func);
+        return type;
+}
+
+static int xc_output_length(nvar, deriv)
+{
+        int i;
+        int len = 1.;
+        for (i = 1; i <= nvar; i++) {
+                len *= deriv + i;
+                len /= i;
         }
-        xc_func_end(&func_c);
-        return not0;
+        return len;
+}
+
+int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
+{
+        int i;
+        int nvar = 1;
+        xc_func_type func;
+        for (i = 0; i < nfn; i++) {
+                if (xc_func_init(&func, fn_id[i], spin) != 0) {
+                        fprintf(stderr, "XC functional %d not found\n",
+                                fn_id[i]);
+                        exit(1);
+                }
+                if (fac[i] > 1e-14 || fac[i] < -1e-14) {
+                        if (spin == XC_POLARIZED) {
+                                switch (func.info->family) {
+                                case XC_FAMILY_LDA:
+                                        nvar = MAX(nvar, 2);
+                                        break;
+                                case XC_FAMILY_GGA:
+                                case XC_FAMILY_HYB_GGA:
+                                        nvar = MAX(nvar, 5);
+                                        break;
+                                case XC_FAMILY_MGGA:
+                                case XC_FAMILY_HYB_MGGA:
+                                        nvar = MAX(nvar, 9);
+                                }
+                        } else {
+                                switch (func.info->family) {
+                                case XC_FAMILY_GGA:
+                                case XC_FAMILY_HYB_GGA:
+                                        nvar = MAX(nvar, 2);
+                                        break;
+                                case XC_FAMILY_MGGA:
+                                case XC_FAMILY_HYB_MGGA:
+                                        nvar = MAX(nvar, 4);
+                                }
+                        }
+                }
+        }
+        xc_func_end(&func);
+        return nvar;
+}
+
+static void axpy(double *dst, double *src, double fac,
+                 int np, int ndst, int nsrc)
+{
+        int i, j;
+        for (j = 0; j < nsrc; j++) {
+                for (i = 0; i < np; i++) {
+                        dst[j*np+i] += fac * src[i*nsrc+j];
+                }
+        }
+}
+
+static void merge_xc(double *dst, double *ebuf, double *vbuf,
+                     double *fbuf, double *kbuf, double fac,
+                     int np, int ndst, int spin, int type)
+{
+        const int seg0 [] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+        // LDA             |  |
+        // GGA             |     |
+        // MGGA            |           |
+        const int vseg1[] = {2, 3, 2, 2};
+        // LDA             |  |
+        // GGA             |        |
+        // MGGA            |                             |
+        const int fseg1[] = {3, 6, 6, 3, 3, 4, 4, 4, 6, 6};
+        // LDA             |  |
+        // GGA             |           |
+        const int kseg1[] = {4, 9,12,10};
+        int vsegtot, fsegtot, ksegtot;
+        const int *vseg, *fseg, *kseg;
+        if (spin == XC_POLARIZED) {
+                vseg = vseg1;
+                fseg = fseg1;
+                kseg = kseg1;
+        } else {
+                vseg = seg0;
+                fseg = seg0;
+                kseg = seg0;
+        }
+
+        switch (type) {
+        case XC_FAMILY_LDA:
+                vsegtot = 1;
+                fsegtot = 1;
+                ksegtot = 1;
+                break;
+        case XC_FAMILY_GGA:
+        case XC_FAMILY_HYB_GGA:
+                vsegtot = 2;
+                fsegtot = 3;
+                ksegtot = 4;
+                break;
+        case XC_FAMILY_MGGA:
+        case XC_FAMILY_HYB_MGGA:
+                vsegtot = 4;
+                fsegtot = 10;
+                ksegtot = 0;
+        }
+
+        int i;
+        axpy(dst, ebuf, fac, np, ndst, 1);
+        dst += np;
+
+        if (vbuf != NULL) {
+                for (i = 0; i < vsegtot; i++) {
+                        axpy(dst, vbuf, fac, np, ndst, vseg[i]);
+                        dst += np * vseg[i];
+                        vbuf += np * vseg[i];
+                }
+        }
+
+        if (fbuf != NULL) {
+                for (i = 0; i < fsegtot; i++) {
+                        axpy(dst, fbuf, fac, np, ndst, fseg[i]);
+                        dst += np * fseg[i];
+                        fbuf += np * fseg[i];
+                }
+        }
+
+        if (kbuf != NULL) {
+                for (i = 0; i < ksegtot; i++) {
+                        axpy(dst, kbuf, fac, np, ndst, kseg[i]);
+                        dst += np * kseg[i];
+                        kbuf += np * kseg[i];
+                }
+        }
+}
+
+void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
+                   int spin, int deriv, int np,
+                   double *rho_u, double *rho_d, double *output)
+{
+        assert(deriv <= 3);
+        int nvar = LIBXC_input_length(nfn, fn_id, fac, spin);
+        int outlen = xc_output_length(nvar, deriv);
+        memset(output, 0, sizeof(double) * np*outlen);
+
+        double *ebuf = malloc(sizeof(double) * np);
+        double *vbuf = NULL;
+        double *fbuf = NULL;
+        double *kbuf = NULL;
+        if (deriv > 0) {
+                vbuf = malloc(sizeof(double) * np*7);
+        }
+        if (deriv > 1) {
+                fbuf = malloc(sizeof(double) * np*28);
+        }
+        if (deriv > 2) {  // *84 if mgga kxc available
+                kbuf = malloc(sizeof(double) * np*35);
+        }
+
+        int i;
+        xc_func_type func;
+        for (i = 0; i < nfn; i++) {
+                if (xc_func_init(&func, fn_id[i], spin) != 0) {
+                        fprintf(stderr, "XC functional %d not found\n",
+                                fn_id[i]);
+                        exit(1);
+                }
+#if defined XC_SET_RELATIVITY
+                xc_lda_x_set_params(&func, relativity);
+#endif
+                _eval_xc(&func, spin, np, rho_u, rho_d, ebuf, vbuf, fbuf, kbuf);
+                merge_xc(output, ebuf, vbuf, fbuf, kbuf, fac[i],
+                         np, outlen, spin, func.info->family);
+        }
+        xc_func_end(&func);
+
+        free(ebuf);
+        if (deriv > 0) {
+                free(vbuf);
+        }
+        if (deriv > 1) {
+                free(fbuf);
+        }
+        if (deriv > 2) {
+                free(kbuf);
+        }
 }
 
