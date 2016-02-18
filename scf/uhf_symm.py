@@ -375,6 +375,7 @@ class UHF(uhf.UHF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
+    @pyscf.lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ

@@ -4,7 +4,7 @@
 #
 
 '''
-Non-relativistic Restricted Kohn-Sham
+Non-relativistic restricted Kohn-Sham
 '''
 
 import time
@@ -15,7 +15,7 @@ from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
 
-def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
 
     .. note::
@@ -49,9 +49,12 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
         matrix Veff = J + Vxc.  Veff can be a list matrices, if the input
         dm is a list of density matrices.
     '''
+    if mol is None: mol = ks.mol
+    if dm is None: dm = ks.make_rdm1()
+
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
-        ks.grids.setup_grids_()
+        ks.grids.build_()
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
@@ -91,7 +94,7 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     return vhf + vx
 
 
-def energy_elec(ks, dm, h1e):
+def energy_elec(ks, dm, h1e=None, vhf=None):
     r'''Electronic part of RKS energy.
 
     Args:
@@ -105,6 +108,8 @@ def energy_elec(ks, dm, h1e):
     Returns:
         RKS electronic energy and the 2-electron part contribution
     '''
+    if h1e is None:
+        h1e = ks.get_hcore()
     e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
     tot_e = e1 + ks._ecoul + ks._exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', ks._ecoul, ks._exc)
@@ -169,56 +174,8 @@ class RKS(pyscf.scf.hf.RHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Coulomb + XC functional
-
-        Refer to `pyscf.dft.rks.get_veff_` for full documentation
-        '''
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        return get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
-
-    def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = self.get_hcore()
-        return energy_elec(self, dm, h1e)
-
-    def define_xc_(self, description):
-        self.xc = description
-        return self
-
-class ROKS(pyscf.scf.rohf.ROHF):
-    '''Restricted open-shell Kohn-Sham
-    See pyscf/dft/rks.py RKS class for the usage of the attributes'''
-    def __init__(self, mol):
-        pyscf.scf.rohf.ROHF.__init__(self, mol)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(mol)
-##################################################
-# don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids'])
-
-    def dump_flags(self):
-        pyscf.scf.rohf.ROHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
-
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Coulomb + XC functional
-
-        Refer to `pyscf.dft.uks.get_veff_` for full documentation
-        '''
-        from pyscf.dft import uks
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        return uks.get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
-
-    def energy_elec(self, dm, h1e=None, vhf=None):
-        from pyscf.dft import uks
-        if h1e is None: h1e = self.get_hcore()
-        return uks.energy_elec(self, dm, h1e)
+    get_veff = get_veff_
+    energy_elec = energy_elec
 
     def define_xc_(self, description):
         self.xc = description

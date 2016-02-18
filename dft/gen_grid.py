@@ -388,6 +388,8 @@ class Grids(pyscf.lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
+    def build(self, mol=None):
+        return self.build_(mol)
     def build_(self, mol=None):
         if mol is None: mol = self.mol
         self.check_sanity()
@@ -400,14 +402,14 @@ class Grids(pyscf.lib.StreamObject):
                                    self.becke_scheme)
         pyscf.lib.logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
-    build = build_
-    setup_grids = build_
-    setup_grids_ = build_
+    setup_grids = build
+    setup_grids_ = build
 
     def kernel(self, mol=None):
         self.dump_flags()
         return self.build_(mol)
 
+    @pyscf.lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
                          level=None, prune=None):
         ''' See gen_grid.gen_atomic_grids function'''
@@ -417,6 +419,7 @@ class Grids(pyscf.lib.StreamObject):
         if prune is None: prune = self.prune
         return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
 
+    @pyscf.lib.with_doc(gen_partition.__doc__)
     def gen_partition(self, mol, atom_grids_tab, atomic_radii=None,
                       becke_scheme=original_becke):
         ''' See gen_grid.gen_partition function'''

@@ -3,6 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Some hacky functions
+'''
+
 import os, sys
 import tempfile
 import shutil
@@ -10,10 +14,6 @@ import functools
 import math
 import ctypes
 import numpy
-
-'''
-Some hacky functions
-'''
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -299,6 +299,14 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
             sys.stderr.write(msg)
             stdout.write(msg)
     return obj
+
+def with_doc(doc):
+    '''Use this decorator to add doc string for function
+    '''
+    def make_fn(fn):
+        fn.__doc__ = doc
+        return fn
+    return make_fn
 
 
 if __name__ == '__main__':

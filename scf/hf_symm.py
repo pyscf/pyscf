@@ -3,6 +3,16 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Non-relativistic restricted Hartree Fock with symmetry.
+
+The symmetry are not handled in a separate data structure.  Note that during
+the SCF iteration,  the orbitals are grouped in terms of symmetry irreps.
+But the orbitals in the result are sorted based on the orbital energies.
+Function symm.label_orb_symm can be used to detect the symmetry of the
+molecular orbitals.
+'''
+
 import time
 from functools import reduce
 import numpy
@@ -13,17 +23,6 @@ from pyscf import symm
 from pyscf.scf import hf
 from pyscf.scf import rohf
 from pyscf.scf import chkfile
-
-
-'''
-Non-relativistic restricted Hartree Fock with symmetry.
-
-The symmetry are not handled in a separate data structure.  Note that during
-the SCF iteration,  the orbitals are grouped in terms of symmetry irreps.
-But the orbitals in the result are sorted based on the orbital energies.
-Function symm.label_orb_symm can be used to detect the symmetry of the
-molecular orbitals.
-'''
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
 
@@ -176,6 +175,10 @@ class RHF(hf.RHF):
 
 #TODO: force E1gx/E1gy ... use the same coefficients
     def eig(self, h, s):
+        '''Solve generalized eigenvalue problem, for each irrep.  The
+        eigenvalues and eigenvectors are not sorted to ascending order.
+        Instead, they are grouped based on irreps.
+        '''
         nirrep = self.mol.symm_orb.__len__()
         h = symm.symmetrize_matrix(h, self.mol.symm_orb)
         s = symm.symmetrize_matrix(s, self.mol.symm_orb)
@@ -273,6 +276,7 @@ class RHF(hf.RHF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
+    @pyscf.lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ

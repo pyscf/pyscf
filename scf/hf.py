@@ -160,7 +160,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 
-def energy_elec(mf, dm, h1e=None, vhf=None):
+def energy_elec(mf, dm=None, h1e=None, vhf=None):
     r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
     HF potential
 
@@ -172,10 +172,9 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     Args:
         mf : an instance of SCF class
 
+    Kwargs:
         dm : 2D ndarray
             one-partical density matrix
-
-    Kwargs:
         h1e : 2D ndarray
             Core hamiltonian
         vhf : 2D ndarray
@@ -194,6 +193,7 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     >>> scf.hf.energy_elec(mf, dm)
     (-1.5176090667746334, 0.60917167853723675)
     '''
+    if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
@@ -202,11 +202,11 @@ def energy_elec(mf, dm, h1e=None, vhf=None):
     return e1+e_coul, e_coul
 
 
-def energy_tot(mf, dm, h1e=None, vhf=None):
+def energy_tot(mf, dm=None, h1e=None, vhf=None):
     r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
     See :func:`scf.hf.energy_elec` for the electron part
     '''
-    return energy_elec(mf, h1e, vhf, dm)[0] + mf.mol.energy_nuc()
+    return mf.energy_elec(dm, h1e, vhf)[0] + mf.mol.energy_nuc()
 
 
 def get_hcore(mol):
@@ -594,7 +594,7 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
 def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''F = h^{core} + V^{HF}
 
     Args:
@@ -617,6 +617,13 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         level_shift_factor : float or int
             Level shift (in AU) for virtual space.  Default is 0.
     '''
+    if diis_start_cycle is None:
+        diis_start_cycle = mf.diis_start_cycle
+    if level_shift_factor is None:
+        level_shift_factor = mf.level_shift
+    if damp_factor is None:
+        damp_factor = mf.damp
+
     f = h1e + vhf
     if 0 <= cycle < diis_start_cycle-1:
         f = damping(s1e, dm*.5, f, damp_factor)
@@ -713,9 +720,6 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     return pop, chg
 
 
-def mulliken_pop_meta_lowdin_ao(mol, dm, verbose=logger.DEBUG,
-                                pre_orth_method='ANO', s=None):
-    return mulliken_meta(mol, dm, verbose, pre_orth_method, s)
 def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
@@ -758,6 +762,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
 
     log.info(' ** Mulliken pop on meta-lowdin orthogonal AOs  **')
     return mulliken_pop(mol, dm, numpy.eye(orth_coeff.shape[0]), log)
+mulliken_pop_meta_lowdin_ao = mulliken_meta
 
 
 def eig(h, s):
@@ -933,6 +938,7 @@ class SCF(pyscf.lib.StreamObject):
         return self
 
 
+    @pyscf.lib.with_doc(eig.__doc__)
     def eig(self, h, s):
         return eig(h, s)
 
@@ -944,23 +950,16 @@ class SCF(pyscf.lib.StreamObject):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
+    # Keep both get_fock and get_fock_, needed by COSMO module
+    @pyscf.lib.with_doc(get_fock_.__doc__)
     def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                  diis_start_cycle=None, level_shift_factor=None,
                  damp_factor=None):
         return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
                               diis_start_cycle, level_shift_factor, damp_factor)
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None,
-                  damp_factor=None):
-        if diis_start_cycle is None:
-            diis_start_cycle = self.diis_start_cycle
-        if level_shift_factor is None:
-            level_shift_factor = self.level_shift
-        if damp_factor is None:
-            damp_factor = self.damp
-        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
-                         diis_start_cycle, level_shift_factor, damp_factor)
+    get_fock_ = get_fock_
 
+    @pyscf.lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
@@ -973,15 +972,18 @@ class SCF(pyscf.lib.StreamObject):
                                        envs['e_tot'], envs['mo_energy'],
                                        envs['mo_coeff'], envs['mo_occ'])
 
+    @pyscf.lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
         return init_guess_by_minao(mol)
 
+    @pyscf.lib.with_doc(init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from superpostion of atomic densties.')
         return init_guess_by_atom(mol)
 
+    @pyscf.lib.with_doc(init_guess_by_1e.__doc__)
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
@@ -991,6 +993,7 @@ class SCF(pyscf.lib.StreamObject):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
+    @pyscf.lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=True):
         if isinstance(chkfile, pyscf.gto.Mole):
             raise RuntimeError('''
@@ -1000,6 +1003,7 @@ class SCF(pyscf.lib.StreamObject):
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
     def from_chk(self, chkfile=None, project=True):
         return self.init_guess_by_chkfile(chkfile, project)
+    from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
@@ -1062,21 +1066,15 @@ class SCF(pyscf.lib.StreamObject):
         return mo_occ
 
     # full density matrix for RHF
+    @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return make_rdm1(mo_coeff, mo_occ)
 
-    def energy_elec(self, dm=None, h1e=None, vhf=None):
-        if dm is None: dm = self.make_rdm1()
-        return energy_elec(self, dm, h1e, vhf)
+    energy_elec = energy_elec
+    energy_tot = energy_tot
 
-    def energy_tot(self, dm=None, h1e=None, vhf=None):
-        if dm is None: dm = self.make_rdm1()
-        return self.energy_elec(dm, h1e, vhf)[0] + self.mol.energy_nuc()
-
-    def kernel(self, dm0=None):
-        return self.scf(dm0)
     def scf(self, dm0=None):
         '''main routine for SCF
 
@@ -1097,7 +1095,7 @@ class SCF(pyscf.lib.StreamObject):
         '''
         cput0 = (time.clock(), time.time())
 
-        self.build(self.mol)
+        self.build_(self.mol)
         self.dump_flags()
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -1107,6 +1105,9 @@ class SCF(pyscf.lib.StreamObject):
         logger.timer(self, 'SCF', *cput0)
         self._finalize_()
         return self.e_tot
+    def kernel(self, dm0=None):
+        return self.scf(dm0)
+    kernel.__doc__ = scf.__doc__
 
     def _finalize_(self):
         if self.converged:
@@ -1124,12 +1125,8 @@ class SCF(pyscf.lib.StreamObject):
         opt.direct_scf_tol = self.direct_scf_tol
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
-        return self.get_jk_(mol, dm, hermi)
+    @pyscf.lib.with_doc(get_jk.__doc__)
     def get_jk_(self, mol=None, dm=None, hermi=1):
-        '''Compute J, K matrices for the given density matrix.
-        See :func:`scf.hf.get_jk`
-        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
@@ -1138,6 +1135,9 @@ class SCF(pyscf.lib.StreamObject):
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
+    def get_jk(self, mol=None, dm=None, hermi=1):
+        return self.get_jk_(mol, dm, hermi)
+    get_jk.__doc__ = get_jk_.__doc__
 
     def get_j(self, mol=None, dm=None, hermi=1):
         '''Compute J matrix for the given density matrix.
@@ -1149,12 +1149,9 @@ class SCF(pyscf.lib.StreamObject):
         '''
         return self.get_jk(mol, dm, hermi)[1]
 
+    @pyscf.lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Hartree-Fock potential matrix for the given density matrix.
-        See :func:`scf.hf.get_veff`
-
-        Note the effects of :attr:`SCF.direct_scf` on this function
-        '''
+# Be carefule with the effects of :attr:`SCF.direct_scf` on this function
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
@@ -1165,16 +1162,19 @@ class SCF(pyscf.lib.StreamObject):
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
 
+    @pyscf.lib.with_doc(analyze.__doc__)
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
+    @pyscf.lib.with_doc(mulliken_pop.__doc__)
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
+    @pyscf.lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
@@ -1185,6 +1185,7 @@ class SCF(pyscf.lib.StreamObject):
         return self.mulliken_meta(*args, **kwargs)
     def pop(self, *args, **kwargs):
         return self.mulliken_meta(*args, **kwargs)
+    pop.__doc__ = mulliken_meta.__doc__
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
@@ -1259,12 +1260,9 @@ class RHF(SCF):
 # Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
 
+    @pyscf.lib.with_doc(get_jk.__doc__)
     def get_jk_(self, mol=None, dm=None, hermi=1):
-        '''Hartree-Fock potential matrix for the given density matrix.
-        See :func:`scf.hf.get_veff`
-
-        Note the incore version, which initializes an _eri array in memory.
-        '''
+# Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
@@ -1279,10 +1277,8 @@ class RHF(SCF):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
+    @pyscf.lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Hartree-Fock potential matrix for the given density matrix.
-        See :func:`scf.hf.get_veff`
-        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if (self._eri is not None or not self.direct_scf or

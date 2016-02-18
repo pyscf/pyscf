@@ -365,6 +365,30 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     return (numpy.vstack((atm1,atm2)), numpy.vstack((bas1,bas2)),
             numpy.hstack((env1,env2)))
 
+def conc_mol(mol1, mol2):
+    '''Concatenate two Mole objects.
+    '''
+    mol3 = Mole()
+    mol3._atm, mol3._bas, mol3._env = \
+            conc_env(mol1._atm, mol1._bas, mol1._env,
+                     mol2._atm, mol2._bas, mol2._env)
+    mol3.natm = len(mol3._atm)
+    mol3.nbas = len(mol3._bas)
+    mol3.verbose = mol1.verbose
+    mol3.output = mol1.output
+    mol3.max_memory = mol1.max_memory
+    mol3.light_speed = mol1.light_speed
+    mol3.charge = mol1.charge + mol2.charge
+    mol3.spin = mol1.spin + mol2.spin
+    mol3.nelectron = mol1.nelectron + mol2.nelectron
+    mol3.symmetry = False
+    mol3.symmetry_subgroup = None
+    mol3._atom = mol1._atom + mol2._atom
+    mol3.unit = mol1.unit
+    mol3._basis = mol2._basis.copy()
+    mol3._basis.update(mol1._basis)
+    return mol3
+
 # <bas-of-mol1|intor|bas-of-mol2>
 def intor_cross(intor, mol1, mol2, comp=1):
     r'''1-electron integrals from two molecules like
@@ -1181,8 +1205,8 @@ class Mole(pyscf.lib.StreamObject):
     def copy(self):
         return copy(self)
 
-    def pack(self):
-        return pack(self)
+    pack = pack
+    @pyscf.lib.with_doc(unpack.__doc__)
     def unpack(self, moldic):
         return unpack(moldic)
     def unpack_(self, moldic):
@@ -1190,10 +1214,6 @@ class Mole(pyscf.lib.StreamObject):
         return self
 
 #TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
-    def kernel(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
-    def build(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
     def build_(self, dump_input=True, parse_arg=True,
                verbose=None, output=None, max_memory=None,
                atom=None, basis=None, unit=None, nucmod=None, ecp=None,
@@ -1346,19 +1366,30 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         self._built = True
         return self
+    def kernel(self, *args, **kwargs):
+        return self.build_(*args, **kwargs)
+    def build(self, *args, **kwargs):
+        return self.build_(*args, **kwargs)
+    kernel.__doc__ = build_.__doc__
+    build.__doc__ = build_.__doc__
 
+    @pyscf.lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
         return format_atom(atom, origin, axes, unit)
 
+    @pyscf.lib.with_doc(format_basis.__doc__)
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
 
+    @pyscf.lib.with_doc(format_ecp.__doc__)
     def format_ecp(self, ecp_tab):
         return format_ecp(ecp_tab)
 
+    @pyscf.lib.with_doc(expand_etb.__doc__)
     def expand_etb(self, l, n, alpha, beta):
         return expand_etb(l, n, alpha, beta)
 
+    @pyscf.lib.with_doc(expand_etbs.__doc__)
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
 
@@ -1381,6 +1412,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def tot_electrons(self):
         return tot_electrons(self)
 
+    @pyscf.lib.with_doc(gto_norm.__doc__)
     def gto_norm(self, l, expnt):
         return gto_norm(l, expnt)
 
@@ -1780,31 +1812,20 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return len_cart(self._bas[bas_id,ANG_OF])
 
 
-    def npgto_nr(self):
-        return npgto_nr(self)
+    npgto_nr = npgto_nr
 
-    def nao_nr(self):
-        return nao_nr(self)
+    nao_nr = nao_nr
+    nao_2c = nao_2c
 
-    def nao_nr_range(self, bas_id0, bas_id1):
-        return nao_nr_range(self, bas_id0, bas_id1)
+    nao_nr_range = nao_nr_range
+    nao_2c_range = nao_2c_range
 
-    def nao_2c(self):
-        return nao_2c(self)
-
-    def nao_2c_range(self, bas_id0, bas_id1):
-        return nao_2c_range(self, bas_id0, bas_id1)
-
-    def ao_loc_nr(self):
-        return ao_loc_nr(self)
-
-    def ao_loc_2c(self):
-        return ao_loc_2c(self)
+    ao_loc_nr = ao_loc_nr
+    ao_loc_2c = ao_loc_2c
 
     def tmap(self):
         return time_reversal_map(self)
-    def time_reversal_map(self):
-        return time_reversal_map(self)
+    time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               bras=None, kets=None):
@@ -1946,10 +1967,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return self.intor(intor, comp=comp, hermi=0, aosym=aosym, out=out,
                           bras=bras, kets=kets)
 
+    @pyscf.lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=1):
         return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
                                           self._env, comp)
 
+    @pyscf.lib.with_doc(eval_gto.eval_gto.__doc__)
     def eval_gto(self, eval_name, coords,
                  comp=1, bastart=0, bascount=None, non0tab=None, out=None):
         return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
@@ -1958,22 +1981,23 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def energy_nuc(self):
         return energy_nuc(self)
     def get_enuc(self):
-        return energy_nuc(self)
+        return self.energy_nuc()
 
+    @pyscf.lib.with_doc(cart_labels.__doc__)
     def cart_labels(self, fmt=False):
         return cart_labels(self, fmt)
 
+    @pyscf.lib.with_doc(spheric_labels.__doc__)
     def spheric_labels(self, fmt=False):
         return spheric_labels(self, fmt)
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
 
-    def search_ao_nr(self, atm_id, l, m, atmshell):
-        return search_ao_nr(self, atm_id, l, m, atmshell)
-    def search_ao_r(self, atm_id, l, m, kappa, atmshell):
-        return search_ao_r(self, atm_id, l, m, kappa, atmshell)
+    search_ao_nr =  search_ao_nr
+    search_ao_r = search_ao_r
 
+    @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
         return spinor_labels(self)
 

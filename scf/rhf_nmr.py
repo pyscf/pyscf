@@ -271,9 +271,9 @@ class NMR(pyscf.lib.StreamObject):
         mo_coeff = self._scf.mo_coeff
         mo_occ = self._scf.mo_occ
         dm1 = self.make_rdm1_1(mo1, mo_coeff, mo_occ)
-        direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
+        #direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
         v_ao = self._scf.get_veff(self.mol, dm1, hermi=2)
-        self._scf.direct_scf = direct_scf_bak
+        #self._scf.direct_scf = direct_scf_bak
         return _mat_ao2mo(v_ao, mo_coeff, mo_occ)
 
 

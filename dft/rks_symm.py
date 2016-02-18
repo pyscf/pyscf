@@ -31,20 +31,8 @@ class RKS(pyscf.scf.hf_symm.RHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        return rks.get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
-
-    def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = self.get_hcore()
-        return rks.energy_elec(self, dm, h1e)
-
-    def define_xc_(self, description):
-        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
-        '''
-        pyscf.dft.vxc.define_xc_(self._numint, description)
-        return self
+    get_veff = rks.get_veff_
+    energy_elec = rks.energy_elec
 
 
 class ROKS(pyscf.scf.hf_symm.ROHF):
@@ -63,21 +51,8 @@ class ROKS(pyscf.scf.hf_symm.ROHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Coulomb + XC functional'''
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        return uks.get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
-
-    def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = self.get_hcore()
-        return uks.energy_elec(self, dm, h1e)
-
-    def define_xc_(self, description):
-        '''Refer to `pyscf.dft.vxc.define_xc_` for full documentation
-        '''
-        pyscf.dft.vxc.define_xc_(self._numint, description)
-        return self
+    get_veff = uks.get_veff_
+    energy_elec = uks.energy_elec
 
 
 if __name__ == '__main__':
@@ -92,4 +67,5 @@ if __name__ == '__main__':
 
     m = RKS(mol)
     m.xc = 'b3lyp'
-    print(m.scf())
+    print(m.scf())  # -2.89992555753
+

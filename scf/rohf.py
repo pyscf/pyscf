@@ -10,6 +10,7 @@ Restricted Open-shell Hartree-Fock
 from functools import reduce
 import numpy
 import pyscf.gto
+import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
@@ -110,6 +111,11 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     return f
 
 def get_grad(mo_coeff, mo_occ, fock=None):
+    '''ROHF gradients is the off-diagonal block [co + cv + ov], where
+    [ cc co cv ]
+    [ oc oo ov ]
+    [ vc vo vv ]
+    '''
     occidxa = numpy.where(mo_occ>0)[0]
     occidxb = numpy.where(mo_occ==2)[0]
     viridxa = numpy.where(mo_occ==0)[0]
@@ -125,6 +131,8 @@ def get_grad(mo_coeff, mo_occ, fock=None):
     return g[mask]
 
 def make_rdm1(mo_coeff, mo_occ):
+    '''One-particle densit matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
+    '''
     mo_a = mo_coeff[:,mo_occ>0]
     mo_b = mo_coeff[:,mo_occ==2]
     dm_a = numpy.dot(mo_a, mo_a.T)
@@ -212,12 +220,15 @@ class ROHF(hf.RHF):
         mo_coeff[:,ncore:] = mopen[:,idx]
         return mo_energy, mo_coeff
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None,
-                  damp_factor=None):
-        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
-                         diis_start_cycle, level_shift_factor, damp_factor)
+    @pyscf.lib.with_doc(get_fock_.__doc__)
+    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
+        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
+                              diis_start_cycle, level_shift_factor, damp_factor)
+    get_fock_ = get_fock_
 
+    @pyscf.lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
@@ -260,19 +271,17 @@ class ROHF(hf.RHF):
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
+    @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-    def energy_elec(self, dm=None, h1e=None, vhf=None):
-        return energy_elec(self, dm, h1e, vhf)
+    energy_elec = energy_elec
 
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
+    @pyscf.lib.with_doc(uhf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
-        for the given density matrix.  See :func:`scf.uhf.get_veff`.
-        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:

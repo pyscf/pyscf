@@ -886,13 +886,8 @@ class CASSCF(casci.CASCI):
         dr = self.unpack_uniq_var(dx)
         return numpy.dot(u0, expmat(dr))
 
-    def gen_g_hop(self, *args):
-        return gen_g_hop(self, *args)
-
-    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, r0,
-                      conv_tol_grad, verbose):
-        return rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, r0,
-                             conv_tol_grad, verbose)
+    gen_g_hop = gen_g_hop
+    rotate_orb_cc = rotate_orb_cc
 
     def update_ao2mo(self, mo):
         raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')

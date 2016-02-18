@@ -13,19 +13,19 @@ Features
     * Full CI
     * MP2
     * SC-NEVPT2
-    * CCSD
-    * CCSD lambda
-    * EOM-CCSD
+    * CCSD and CCSD(T)
     * Density fitting
     * relativistic correction
     * General integral transformation
-    * Gradient
+    * Gradients
     * NMR
     * TDDFT
 2. Interface to integral package `Libcint <https://github.com/sunqm/libcint>`_
 3. Interface to DMRG `CheMPS2 <https://github.com/SebWouters/CheMPS2>`_
 4. Interface to DMRG `Block <https://github.com/sanshar/Block>`_
 5. Interface to FCIQMC `NECI <https://github.com/ghb24/NECI_STABLE>`_
+6. Interface to XC functional library `XCFun <https://github.com/dftlibs/xcfun>`_
+7. Interface to XC functional library `Libxc <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc>`_
 
 
 How to use
