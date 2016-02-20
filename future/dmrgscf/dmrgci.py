@@ -121,12 +121,12 @@ class DMRGCI(pyscf.lib.StreamObject):
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.generate_schedule()
         self.has_threepdm = False
         self.has_nevpt = False
 # This flag _restart is set by the program internally, to control when to make
 # Block restart calculation.
         self._restart = False
+        self.generate_schedule()
 
         self._keys = set(self.__dict__.keys())
 
