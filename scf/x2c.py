@@ -14,7 +14,7 @@ from pyscf.scf import dhf
 from pyscf.scf import _vhf
 
 
-EXP_DROP = 1.
+EXP_DROP = .2
 
 def sfx2c1e(mf):
     '''Spin-free X2C.
