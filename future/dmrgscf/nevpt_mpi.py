@@ -245,7 +245,7 @@ def compress_perturb(mc, maxM=500, root=0, tol=1e-7):
     >>> mrpt.sc_nevpt2(compress_perturb(mc))
     -74.379770619390698
     '''
-    dmrgpt = Nevpt2(mc)
+    dmrgpt = Nevpt2(mc,maxM,root,tol)
     dmrgpt.build()
     return dmrgpt
 
