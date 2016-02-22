@@ -428,6 +428,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     _bas = []
     _env = []
     for b in basis_add:
+        if not b:  # == []
+            continue
         angl = b[0]
         assert(angl < 8)
         if angl in [6, 7]:
