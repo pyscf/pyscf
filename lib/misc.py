@@ -285,7 +285,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(obj.__class__.__dict__)
+        class_attr = set(dir(obj))
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('overwrite keys %s of %s\n' %
@@ -294,11 +294,19 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
             stdout.write(msg)
         keydiff = keysub - class_attr
         if keydiff:
-            msg = ('%s has no attributes %s\n' %
+            msg = ('%s does not have attributes %s\n' %
                    (obj.__class__, ' '.join(keydiff)))
             sys.stderr.write(msg)
             stdout.write(msg)
     return obj
+
+def with_doc(doc):
+    '''Use this decorator to add doc string for function
+    '''
+    def make_fn(fn):
+        fn.__doc__ = doc
+        return fn
+    return make_fn
 
 
 if __name__ == '__main__':

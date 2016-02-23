@@ -821,7 +821,8 @@ class CASSCF(casci.CASCI):
         if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, self.e_cas, self.ci, \

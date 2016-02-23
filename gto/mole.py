@@ -1261,7 +1261,8 @@ class Mole(pyscf.lib.StreamObject):
            and self.stdout.name != self.output:
             self.stdout = open(self.output, 'w')
 
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])

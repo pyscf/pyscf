@@ -233,7 +233,8 @@ class NMR(rhf_nmr.NMR):
     def shielding(self, mo1=None):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         facppm = 1e6/param.LIGHTSPEED**2
         t0 = (time.clock(), time.time())

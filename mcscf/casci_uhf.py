@@ -210,7 +210,8 @@ class CASCI(pyscf.lib.StreamObject):
         if ci0 is None:
             ci0 = self.ci
 
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         self.dump_flags()
 
         self.e_tot, e_cas, self.ci = \

@@ -198,7 +198,8 @@ class UHF(hf.SCF):
         return self
 
     def build_(self, mol=None):
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
 

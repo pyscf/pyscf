@@ -202,8 +202,8 @@ class Gradients(pyscf.lib.StreamObject):
         if atmlst is None:
             atmlst = range(self.mol.natm)
 
-        self.check_sanity()
-
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         if self.verbose >= logger.INFO:
             self.dump_flags()
 

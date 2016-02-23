@@ -4,8 +4,8 @@
 #
 
 import numpy
-import pyscf.lib.logger as logger
 from pyscf import symm
+from pyscf.lib import logger
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
@@ -40,7 +40,8 @@ class CASSCF(mc1step.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
         if (hasattr(self.fcisolver, 'wfnsym') and
