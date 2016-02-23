@@ -159,7 +159,7 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
 
 
     dmrgci.writeDMRGConfFile(nevptsolver, nelecas, True,
-                             extraline=('nevpt_state_num %d'%root))
+                             extraline=['nevpt_state_num %d'%root])
     nevptsolver.scratchDirectory = scratch
 
     if nevptsolver.verbose >= logger.DEBUG1:
