@@ -28,7 +28,6 @@ def general(cell, mo_coeffs, kpts=None, compact=0):
 
 def get_mo_eri(cell, mo_coeffs, kpts=None):
     '''Convenience function to return MO 2-el integrals.'''
-
     mo_coeff12 = mo_coeffs[:2]
     mo_coeff34 = mo_coeffs[2:]
     if kpts is None:
@@ -37,9 +36,13 @@ def get_mo_eri(cell, mo_coeffs, kpts=None):
         kpts12 = kpts[:2]
         kpts34 = kpts[2:]
         q = kpts12[0] - kpts12[1]
+        #q = kpts34[1] - kpts34[0]
+    if q is None:
+        q = np.zeros(3)
+
     mo_pairs12_kG, mo_pairs12_invkG = get_mo_pairs_G(cell, mo_coeff12, kpts12)
     mo_pairs34_kG, mo_pairs34_invkG = get_mo_pairs_G(cell, mo_coeff34, kpts34, q)
-    return assemble_eri(cell, mo_pairs12_invkG, mo_pairs34_kG, q)
+    return assemble_eri(cell, mo_pairs12_kG, mo_pairs34_invkG, q)
 
 def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all MO pairs.
@@ -58,8 +61,8 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     coords = gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
-        aoR = eval_ao(cell, coords) 
-        ngs = aoR.shape[0] 
+        aoR = eval_ao(cell, coords)
+        ngs = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -73,9 +76,9 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     else:
         if q is None:
             q = kpts[1]-kpts[0]
-        aoR_ki = eval_ao(cell, coords, kpt=kpts[0]) 
-        aoR_kj = eval_ao(cell, coords, kpt=kpts[1]) 
-        ngs = aoR_ki.shape[0] 
+        aoR_ki = eval_ao(cell, coords, kpt=kpts[0])
+        aoR_kj = eval_ao(cell, coords, kpt=kpts[1])
+        ngs = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -83,7 +86,6 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
         mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_invR = np.einsum('rj,ri->rji', np.conj(mojR), moiR)
     mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
     mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
@@ -91,9 +93,9 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
         for j in xrange(nmoj):
             mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.gs,
                                                 coords, q)
-            #mo_pairs_invG[:,i*nmoj+j] = ngs*tools.ifftk(mo_pairs_R[:,i,j], cell.gs,
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(mo_pairs_invR[:,j,i], cell.gs,
-                                                           coords, -q))
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.gs,
+                                                                   coords, -q))
+
     return mo_pairs_G, mo_pairs_invG
 
 def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.DEBUG):
@@ -113,7 +115,8 @@ def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.DEBUG
               orb_pair_invG1.shape[1], orb_pair_G2.shape[1])
     if q is None:
         q = np.zeros(3)
-    coulqG = tools.get_coulG(cell, q)
+
+    coulqG = tools.get_coulG(cell, -1.0*q)
     ngs = orb_pair_invG1.shape[0]
     Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngs**2)
     eri = np.einsum('gm,gn->mn',orb_pair_invG1, Jorb_pair_G2)

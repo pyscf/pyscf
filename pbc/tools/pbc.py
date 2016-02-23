@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg
-
+from pyscf import lib
 
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
@@ -88,6 +88,21 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
 
     '''
     kG = k + cell.Gv
+
+    ############################################################################
+    # Here we 'wrap around' the high frequency k+G vectors into their lower
+    # frequency counterparts.  Important if you want the gamma point and k-point
+    # answers to agree
+    ############################################################################
+    boxEdge       = np.dot(2.*np.pi*np.diag(cell.gs+0.5),np.linalg.inv(cell._h))
+    reducedCoords = np.dot(kG,np.linalg.inv(boxEdge))
+    factor        = np.trunc(reducedCoords)
+    kG -= 2.*np.dot(np.sign(factor),boxEdge)
+    ############################################################################
+    # End of 'wrap around'
+    ############################################################################
+
+
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
     try:
@@ -208,7 +223,7 @@ def get_KLMN(cell,kpts):
     KLMN[K,L,M] gives index of N that satifies
     momentum conservation
 
-       G(K) - G(L) = G(M) - G(N)
+       G(K) - G(L) = - G(M) + G(N)
 
     This is used for symmetry e.g. integrals of the form
 
@@ -223,24 +238,17 @@ def get_KLMN(cell,kpts):
     for K, kvK in enumerate(kpts):
         for L, kvL in enumerate(kpts):
             for M, kvM in enumerate(kpts):
+                # Here we find where kvN = kvM + kvL - kvK (mod K)
+                temp = range(-1,2)
+                xyz = lib.cartesian_prod((temp,temp,temp))
                 found = 0
-                kvMLK = kvM + kvL - kvK
+                kvMLK = kvK - kvL + kvM
                 kvN = kvMLK
-                finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                 kpts > kvN - 1.e-12).sum(axis=1)==3)
-                # You want to make sure the k-point is the same in all 3 indices as kvN
-                if len(finder[0]) > 0:
-                    KLMN[K, L, M] = finder[0][0]
-                    found = 1
-                    continue
-
-                # If we didn't find the vector before, here we find where kvN = kvM + kvL - kvK (mod K)
-                for mod in xrange(6):
-                    pn = (-1.)**mod
-                    kval = kvecs[ ( mod // 2 ) ]
-                    kvN = kvMLK + pn*kval
-                    finder =  np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                      kpts > kvN - 1.e-12).sum(axis=1)==3)
+                for ishift in xrange(len(xyz)):
+                    kvN = kvMLK + np.dot(xyz[ishift],kvecs)
+                    finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
+                                                     kpts > kvN - 1.e-12).sum(axis=1)==3)
+                    # You want to make sure the k-point is the same in all 3 indices as kvN
                     if len(finder[0]) > 0:
                         KLMN[K, L, M] = finder[0][0]
                         found = 1
