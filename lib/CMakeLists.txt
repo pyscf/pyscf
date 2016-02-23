@@ -81,8 +81,8 @@ add_subdirectory(cc)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
-option(ENABLE_LIBXC 1)
-option(ENABLE_XCFUN 1)
+option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
+option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 
 if(NOT DISABLE_DFT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
