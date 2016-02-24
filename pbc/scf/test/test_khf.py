@@ -29,8 +29,10 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def test_kpt_vs_supercell(self):
-        ngs = 8
-        #ngs = 4
+        # For large ngs, agreement is always achieved
+        # ngs = 8
+        # For small ngs, agreement only achieved if "wrapping" k-k'+G in get_coulG
+        ngs = 4
         nk = (3, 1, 1)
         cell = make_primitive_cell(ngs)
         print "cell gs =", cell.gs
@@ -60,6 +62,5 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ekpt, esup, 8)
 
 if __name__ == '__main__':
-    print("Full Tests for pbc.dft.krks")
+    print("Full Tests for pbc.scf.khf")
     unittest.main()
-
