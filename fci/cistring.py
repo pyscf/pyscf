@@ -49,8 +49,10 @@ def gen_strings4orblist(orb_list, nelec):
     return strings
 
 def num_strings(n, m):
-    return math.factorial(n) \
-            // (math.factorial(n-m)*math.factorial(m))
+    if m < 0 or m > n:
+        return 0
+    else:
+        return math.factorial(n) // (math.factorial(n-m)*math.factorial(m))
 
 def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:

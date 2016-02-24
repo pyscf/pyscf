@@ -245,7 +245,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     return airrep ^ birrep
 
 
-def des_a(ci0, norb, nelec, ap_id):
+def des_a(ci0, norb, (neleca,nelecb), ap_id):
     r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
     the N-electron wavefunction.
 
@@ -258,8 +258,8 @@ def des_a(ci0, norb, nelec, ap_id):
             CI coefficients, row for alpha strings and column for beta strings.
         norb : int
             Number of orbitals.
-        nelec : int or 2-item list
-            Number of electrons, or 2-item list for (alpha, beta) electrons
+        (neleca,nelecb) : (int,int)
+            Number of (alpha, beta) electrons of the input CI function
         ap_id : int
             Orbital index (0-based), for the annihilation operator
 
@@ -267,11 +267,8 @@ def des_a(ci0, norb, nelec, ap_id):
         2D array, row for alpha strings and column for beta strings.  Note it
         has different number of rows to the input CI coefficients
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
-
+    if neleca <= 0:
+        return numpy.zeros((0, ci0.shape[1]))
     des_index = cistring.gen_des_str_index(range(norb), neleca)
     na_ci1 = cistring.num_strings(norb, neleca-1)
     ci1 = numpy.zeros((na_ci1, ci0.shape[1]))
@@ -285,7 +282,7 @@ def des_a(ci0, norb, nelec, ap_id):
     ci1[addr_ci1] = sign.reshape(-1,1) * ci0[addr_ci0]
     return ci1
 
-def des_b(ci0, norb, nelec, ap_id):
+def des_b(ci0, norb, (neleca,nelecb), ap_id):
     r'''Construct (N-1)-electron wavefunction by removing a beta electron from
     N-electron wavefunction.
 
@@ -294,8 +291,8 @@ def des_b(ci0, norb, nelec, ap_id):
             CI coefficients, row for alpha strings and column for beta strings.
         norb : int
             Number of orbitals.
-        nelec : int or 2-item list
-            Number of electrons, or 2-item list for (alpha, beta) electrons
+        (neleca,nelecb) : (int,int)
+            Number of (alpha, beta) electrons of the input CI function
         ap_id : int
             Orbital index (0-based), for the annihilation operator
 
@@ -303,10 +300,8 @@ def des_b(ci0, norb, nelec, ap_id):
         2D array, row for alpha strings and column for beta strings. Note it
         has different number of columns to the input CI coefficients.
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    if nelecb <= 0:
+        return numpy.zeros((ci0.shape[0], 0))
     des_index = cistring.gen_des_str_index(range(norb), nelecb)
     nb_ci1 = cistring.num_strings(norb, nelecb-1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
@@ -321,7 +316,7 @@ def des_b(ci0, norb, nelec, ap_id):
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
-def cre_a(ci0, norb, nelec, ap_id):
+def cre_a(ci0, norb, (neleca,nelecb), ap_id):
     r'''Construct (N+1)-electron wavefunction by adding an alpha electron in
     the N-electron wavefunction.
 
@@ -334,8 +329,8 @@ def cre_a(ci0, norb, nelec, ap_id):
             CI coefficients, row for alpha strings and column for beta strings.
         norb : int
             Number of orbitals.
-        nelec : int or 2-item list
-            Number of electrons, or 2-item list for (alpha, beta) electrons
+        (neleca,nelecb) : (int,int)
+            Number of (alpha, beta) electrons of the input CI function
         ap_id : int
             Orbital index (0-based), for the creation operator
 
@@ -343,10 +338,8 @@ def cre_a(ci0, norb, nelec, ap_id):
         2D array, row for alpha strings and column for beta strings. Note it
         has different number of rows to the input CI coefficients.
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    if neleca >= norb:
+        return numpy.zeros((0, ci0.shape[1]))
     cre_index = cistring.gen_cre_str_index(range(norb), neleca)
     na_ci1 = cistring.num_strings(norb, neleca+1)
     ci1 = numpy.zeros((na_ci1, ci0.shape[1]))
@@ -360,7 +353,7 @@ def cre_a(ci0, norb, nelec, ap_id):
 
 # construct (N+1)-electron wavefunction by adding a beta electron to
 # N-electron wavefunction:
-def cre_b(ci0, norb, nelec, ap_id):
+def cre_b(ci0, norb, (neleca,nelecb), ap_id):
     r'''Construct (N+1)-electron wavefunction by adding a beta electron in
     the N-electron wavefunction.
 
@@ -369,8 +362,8 @@ def cre_b(ci0, norb, nelec, ap_id):
             CI coefficients, row for alpha strings and column for beta strings.
         norb : int
             Number of orbitals.
-        nelec : int or 2-item list
-            Number of electrons, or 2-item list for (alpha, beta) electrons
+        (neleca,nelecb) : (int,int)
+            Number of (alpha, beta) electrons of the input CI function
         ap_id : int
             Orbital index (0-based), for the creation operator
 
@@ -378,10 +371,8 @@ def cre_b(ci0, norb, nelec, ap_id):
         2D array, row for alpha strings and column for beta strings. Note it
         has different number of columns to the input CI coefficients.
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    if nelecb >= norb:
+        return numpy.zeros((ci0.shape[0], 0))
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)
     nb_ci1 = cistring.num_strings(norb, nelecb+1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
