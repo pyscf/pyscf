@@ -89,19 +89,14 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     '''
     kG = k + cell.Gv
 
-    ############################################################################
     # Here we 'wrap around' the high frequency k+G vectors into their lower
     # frequency counterparts.  Important if you want the gamma point and k-point
     # answers to agree
-    ############################################################################
-    boxEdge       = np.dot(2.*np.pi*np.diag(cell.gs+0.5),np.linalg.inv(cell._h))
-    reducedCoords = np.dot(kG,np.linalg.inv(boxEdge))
-    factor        = np.trunc(reducedCoords)
-    kG -= 2.*np.dot(np.sign(factor),boxEdge)
-    ############################################################################
-    # End of 'wrap around'
-    ############################################################################
-
+    box_edge = np.dot(2.*np.pi*np.diag(cell.gs+0.5), np.linalg.inv(cell._h))
+    reduced_coords = np.dot(kG, np.linalg.inv(box_edge))
+    factor = np.trunc(reduced_coords)
+    kG -= 2.*np.dot(np.sign(factor), box_edge)
+    # Done wrapping.
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
 

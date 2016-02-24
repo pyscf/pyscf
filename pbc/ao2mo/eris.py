@@ -40,11 +40,115 @@ def get_mo_eri(cell, mo_coeffs, kpts=None):
     if q is None:
         q = np.zeros(3)
 
-    mo_pairs12_kG, mo_pairs12_invkG = get_mo_pairs_G(cell, mo_coeff12, kpts12)
-    mo_pairs34_kG, mo_pairs34_invkG = get_mo_pairs_G(cell, mo_coeff34, kpts34, q)
+    mo_pairs12_kG = get_mo_pairs_G(cell, mo_coeff12, kpts12)
+    mo_pairs34_invkG = get_mo_pairs_invG(cell, mo_coeff34, kpts34, q)
     return assemble_eri(cell, mo_pairs12_kG, mo_pairs34_invkG, q)
 
 def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
+    '''Calculate forward (G|ij) FFT of all MO pairs.
+
+    TODO: - Implement simplifications for real orbitals.
+
+    Args:
+        mo_coeff: length-2 list of (nao,nmo) ndarrays
+            The two sets of MO coefficients to use in calculating the
+            product |ij).
+
+    Returns:
+        mo_pairs_G : (ngs, nmoi*nmoj) ndarray
+            The FFT of the real-space MO pairs.
+    '''
+    coords = gen_uniform_grids(cell)
+    if kpts is None:
+        q = np.zeros(3)
+        aoR = eval_ao(cell, coords)
+        ngs = aoR.shape[0]
+
+        if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
+            nmoi = nmoj = mo_coeffs[0].shape[1]
+            moiR = mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+        else:
+            nmoi = mo_coeffs[0].shape[1]
+            nmoj = mo_coeffs[1].shape[1]
+            moiR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[1])
+
+    else:
+        if q is None:
+            q = kpts[1]-kpts[0]
+        aoR_ki = eval_ao(cell, coords, kpt=kpts[0])
+        aoR_kj = eval_ao(cell, coords, kpt=kpts[1])
+        ngs = aoR_ki.shape[0]
+
+        nmoi = mo_coeffs[0].shape[1]
+        nmoj = mo_coeffs[1].shape[1]
+        moiR = np.einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
+        mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
+
+    #mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
+    mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
+
+    for i in xrange(nmoi):
+        for j in xrange(nmoj):
+            mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.gs,
+                                                coords, q)
+
+    return mo_pairs_G
+
+def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
+    '''Calculate "inverse" (ij|G) FFT of all MO pairs.
+
+    TODO: - Implement simplifications for real orbitals.
+
+    Args:
+        mo_coeff: length-2 list of (nao,nmo) ndarrays
+            The two sets of MO coefficients to use in calculating the
+            product |ij).
+
+    Returns:
+        mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
+            The inverse FFTs of the real-space MO pairs.
+    '''
+    coords = gen_uniform_grids(cell)
+    if kpts is None:
+        q = np.zeros(3)
+        aoR = eval_ao(cell, coords)
+        ngs = aoR.shape[0]
+
+        if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
+            nmoi = nmoj = mo_coeffs[0].shape[1]
+            moiR = mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+        else:
+            nmoi = mo_coeffs[0].shape[1]
+            nmoj = mo_coeffs[1].shape[1]
+            moiR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[1])
+
+    else:
+        if q is None:
+            q = kpts[1]-kpts[0]
+        aoR_ki = eval_ao(cell, coords, kpt=kpts[0])
+        aoR_kj = eval_ao(cell, coords, kpt=kpts[1])
+        ngs = aoR_ki.shape[0]
+
+        nmoi = mo_coeffs[0].shape[1]
+        nmoj = mo_coeffs[1].shape[1]
+        moiR = np.einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
+        mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
+
+    #mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
+    mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
+
+    for i in xrange(nmoi):
+        for j in xrange(nmoj):
+            mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.gs,
+                                                           coords, -q))
+
+    return mo_pairs_invG
+
+def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
     '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all MO pairs.
 
     TODO: - Implement simplifications for real orbitals.
