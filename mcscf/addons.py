@@ -239,9 +239,9 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     Kwargs:
         prev_mol : an instance of :class:`Mole`
-            If given, the inital guess orbitals are expanded on the geometry
-            specified by prev_mol.  Otherwise, the orbitals are expanded on
-            current geometry specified by casscf.mol
+            If given, the inital guess orbitals are associated to the geometry
+            and basis of prev_mol.  Otherwise, the orbitals are based of
+            the geometry and basis of casscf.mol
 
     Returns:
         New orthogonal initial guess orbitals with the core taken from
@@ -278,10 +278,14 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         nocc = ncore + casscf.ncas
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
-        idx = numpy.argsort(numpy.einsum('ij,ij->i', s1, s1))
-        logger.debug(casscf, 'Core indices %s', str(numpy.sort(idx[-ncore:])))
+        s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
+        coreocc = numpy.einsum('ij,ji->i', s1, numpy.linalg.solve(s1core, s1.T))
+        nmo = mfmo.shape[1]
+        coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
+        logger.debug(casscf, 'Core indices %s', coreidx)
+        logger.debug(casscf, 'Core components %s', coreocc[coreidx])
         # take HF core
-        mocore = mfmo[:,numpy.sort(idx[-ncore:])]
+        mocore = mfmo[:,coreidx]
 
         # take projected CAS space
         mocas = init_mo[:,ncore:nocc] \
@@ -289,9 +293,10 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
 
         # remove core and active space from rest
-        mou = init_mo[:,nocc:] \
-            - reduce(numpy.dot, (mocc, mocc.T, s, init_mo[:,nocc:]))
-        mo = lo.orth.vec_lowdin(numpy.hstack((mocc, mou)), s)
+        rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
+        restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
+        restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
+        mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
 
         if casscf.verbose >= logger.DEBUG:
             s1 = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))

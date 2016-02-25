@@ -8,9 +8,9 @@ import copy
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib.logger as logger
 import pyscf.gto
 import pyscf.scf
+from pyscf.lib import logger
 from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc_ao2mo_uhf
@@ -422,7 +422,8 @@ class CASSCF(casci_uhf.CASCI):
         if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \

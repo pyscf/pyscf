@@ -81,11 +81,11 @@ add_subdirectory(cc)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
-option(DISABLE_LIBXC 0)
-option(DISABLE_XCFUN 0)
+option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
+option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND NOT DISABLE_LIBXC)
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
   ExternalProject_Add(libxc
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
@@ -95,10 +95,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND NOT DISABLE_LIBXC)
           --enable-shared LIBS=-lm
   )
 endif()
-message("DISABLE_XCFUN  ${DISABLE_XCFUN}")
-if(NOT DISABLE_XCFUN)
+if(ENABLE_XCFUN)
   ExternalProject_Add(libxcfun
-    GIT_REPOSITORY https://github.com/sunqm/xcfun.git
+    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG origin/master
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps

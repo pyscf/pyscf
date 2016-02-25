@@ -8,6 +8,10 @@ import numpy
 import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
+try:
+    from pyscf.dft import libxc
+except (ImportError, OSError):
+    from pyscf.dft import xcfun as libxc
 
 libdft = pyscf.lib.load_library('libdft')
 OCCDROP = 1e-12
@@ -667,7 +671,6 @@ class _NumInt(object):
     by setting
     _NumInt.libxc = dft.xcfun
     '''
-    from pyscf.dft import libxc
     libxc = libxc
 
     def __init__(self):

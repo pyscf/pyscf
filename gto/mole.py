@@ -452,6 +452,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     _bas = []
     _env = []
     for b in basis_add:
+        if not b:  # == []
+            continue
         angl = b[0]
         assert(angl < 8)
         if angl in [6, 7]:
@@ -1279,7 +1281,8 @@ class Mole(pyscf.lib.StreamObject):
            and self.stdout.name != self.output:
             self.stdout = open(self.output, 'w')
 
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])

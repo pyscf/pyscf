@@ -182,7 +182,8 @@ class NMR(pyscf.lib.StreamObject):
     def shielding(self, mo1=None):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         facppm = 1e6/param.LIGHTSPEED**2
         msc_para, para_vir, para_occ = [x*facppm for x in self.para_(mo10=mo1)]

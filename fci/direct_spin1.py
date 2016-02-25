@@ -21,6 +21,7 @@ import scipy.linalg
 import pyscf.lib
 import pyscf.gto
 import pyscf.ao2mo
+from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 
@@ -436,7 +437,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if max_cycle is None: max_cycle = fci.max_cycle
     if max_space is None: max_space = fci.max_space
     if max_memory is None: max_memory = fci.max_memory
-    if verbose is None: verbose = pyscf.lib.logger.Logger(fci.stdout, fci.verbose)
+    if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
@@ -480,7 +481,7 @@ class FCISolver(pyscf.lib.StreamObject):
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
-            self.verbose = pyscf.lib.logger.NOTE
+            self.verbose = logger.NOTE
         else:
             self.stdout = mol.stdout
             self.verbose = mol.verbose
@@ -504,7 +505,7 @@ class FCISolver(pyscf.lib.StreamObject):
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
-        log = pyscf.lib.logger.Logger(self.stdout, verbose)
+        log = logger.Logger(self.stdout, verbose)
         log.info('******** %s flags ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
@@ -554,7 +555,8 @@ class FCISolver(pyscf.lib.StreamObject):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                           tol, lindep, max_cycle, max_space, nroots,
                           davidson_only, pspace_size, **kwargs)

@@ -19,6 +19,7 @@ import scipy.linalg
 import pyscf.lib
 import pyscf.gto
 import pyscf.ao2mo
+from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import direct_spin1
@@ -321,7 +322,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if max_cycle is None: max_cycle = fci.max_cycle
     if max_space is None: max_space = fci.max_space
     if max_memory is None: max_memory = fci.max_memory
-    if verbose is None: verbose = pyscf.lib.logger.Logger(fci.stdout, fci.verbose)
+    if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
@@ -362,7 +363,8 @@ class FCISolver(direct_spin1.FCISolver):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
                            davidson_only, pspace_size, **kwargs)

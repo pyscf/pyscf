@@ -1,11 +1,11 @@
 import sys
 try:
     from pyscf.dft import libxc
-except ImportError:
+except (ImportError, OSError):
     pass
 try:
     from pyscf.dft import xcfun
-except ImportError:
+except (ImportError, OSError):
     pass
 from pyscf.dft import rks
 from pyscf.dft import roks

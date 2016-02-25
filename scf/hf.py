@@ -909,7 +909,8 @@ class SCF(pyscf.lib.StreamObject):
         return self.build_(mol)
     def build_(self, mol=None):
         if mol is None: mol = self.mol
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         if (self.direct_scf and not mol.incore_anyway and
             not self._is_mem_enough()):
 # Should I lazy initialize direct SCF?

@@ -190,7 +190,7 @@ class FCISolver(direct_spin0.FCISolver):
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
         direct_spin0.FCISolver.dump_flags(self, verbose)
-        log = pyscf.lib.logger.Logger(self.stdout, verbose)
+        log = logger.Logger(self.stdout, verbose)
         if isinstance(self.wfnsym, str):
             log.info('specified CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.integer)):
@@ -245,7 +245,8 @@ class FCISolver(direct_spin0.FCISolver):
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
         else:
             wfnsym_bak = None
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,

@@ -392,7 +392,8 @@ class Grids(pyscf.lib.StreamObject):
         return self.build_(mol)
     def build_(self, mol=None):
         if mol is None: mol = self.mol
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         atom_grids_tab = self.gen_atomic_grids(mol, atom_grid=self.atom_grid,
                                                radi_method=self.radi_method,
                                                level=self.level,

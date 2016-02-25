@@ -29,7 +29,7 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
     try:
         ni.libxc = dft.xcfun
         xctype = ni._xc_type(xc_code)
-    except ImportError, KeyError:
+    except (ImportError, KeyError, NotImplementedError):
         ni.libxc = dft.libxc
         xctype = ni._xc_type(xc_code)
 

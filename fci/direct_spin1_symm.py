@@ -281,7 +281,8 @@ class FCISolver(direct_spin1.FCISolver):
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
         else:
             wfnsym_bak = None
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,

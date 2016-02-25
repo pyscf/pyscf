@@ -121,12 +121,12 @@ class DMRGCI(pyscf.lib.StreamObject):
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.generate_schedule()
         self.has_threepdm = False
         self.has_nevpt = False
 # This flag _restart is set by the program internally, to control when to make
 # Block restart calculation.
         self._restart = False
+        self.generate_schedule()
 
         self._keys = set(self.__dict__.keys())
 
@@ -216,7 +216,7 @@ class DMRGCI(pyscf.lib.StreamObject):
 
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
-            writeDMRGConfFile(self, nelec, self.approx_maxIter,
+            writeDMRGConfFile(self, nelec, True, self.approx_maxIter,
                               with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
                 inFile = os.path.join(self._input_dir, self.configFile)

@@ -299,7 +299,8 @@ class UHF(hf.SCF):
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def build_(self, mol=None):
-        self.check_sanity()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
 
