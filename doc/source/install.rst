@@ -122,3 +122,14 @@ PySCF has an interface to call FCIQMC solver NECI
 create a config file future/fciqmc/settings.py to store the path where
 NECI was installed.
 
+Libxc
+-----
+
+Xcfun
+-----
+
+COSMO
+-----
+
+QM/MM
+-----

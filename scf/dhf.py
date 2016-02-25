@@ -414,7 +414,8 @@ class UHF(hf.SCF):
         self._finalize_()
         return self.e_tot
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
     def x2c(self):

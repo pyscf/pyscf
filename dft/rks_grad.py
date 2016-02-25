@@ -15,9 +15,11 @@ from pyscf.scf import rhf_grad
 from pyscf.dft import numint
 
 
-def get_veff_(ks_grad, mol, dm):
+def get_veff_(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional
     '''
+    if mol is None: mol = ks_grad.mol
+    if dm is None: dm = ks_grad._scf.make_rdm1()
     t0 = (time.clock(), time.time())
 
     mf = ks_grad._scf
@@ -30,8 +32,8 @@ def get_veff_(ks_grad, mol, dm):
 
     mem_now = pyscf.lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
-    vxc = _get_vxc(mf._numint, mol, mf.grids, mf.xc, dm,
-                   max_memory=max_memory, verbose=ks_grad.verbose)
+    vxc = get_vxc(mf._numint, mol, mf.grids, mf.xc, dm,
+                  max_memory=max_memory, verbose=ks_grad.verbose)
     nao = vxc.shape[-1]
     vxc = vxc.reshape(-1,nao,nao)
     t0 = logger.timer(ks_grad, 'vxc', *t0)
@@ -46,8 +48,8 @@ def get_veff_(ks_grad, mol, dm):
     return vhf + vxc
 
 
-def _get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
-             max_memory=2000, verbose=None):
+def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
+            max_memory=2000, verbose=None):
     if isinstance(relativity, (list, tuple, numpy.ndarray)):
         import warnings
         xc_code = '%s, %s' % (xc_code, dms)
@@ -138,10 +140,8 @@ class Gradients(rhf_grad.Gradients):
                         'Call mf.grids.run(prune=False) to mute grid pruning',
                         self._scf.grids.prune)
         return self
-    def get_veff(self, mol=None, dm=None):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
-        return get_veff_(self, mol, dm)
+
+    get_veff = get_veff_
 
 
 if __name__ == '__main__':

@@ -15,15 +15,18 @@ from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
 
-def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
+def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
     :func:`get_veff_` fore more details'''
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+    if mol is None: mol = self.mol
+    if dm is None:
+        dm = ks.make_rdm1()
+    elif isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5,dm*.5))
     nset = len(dm) // 2
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
-        ks.grids.setup_grids_()
+        ks.grids.build_()
         t0 = logger.timer(ks, 'seting up grids', *t0)
 
     n, ks._exc, vx = ks._numint.nr_uks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
@@ -65,7 +68,9 @@ def get_veff_(ks, mol, dm, dm_last=0, vhf_last=0, hermi=1):
     return vhf + vx
 
 
-def energy_elec(ks, dm, h1e):
+def energy_elec(ks, dm, h1e=None, vhf=None):
+    if h1e is None:
+        h1e = ks.get_hcore()
     e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
     tot_e = e1 + ks._ecoul + ks._exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', ks._ecoul, ks._exc)
@@ -91,23 +96,12 @@ class UKS(pyscf.scf.uhf.UHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Coulomb + XC functional
-
-        Refer to `pyscf.dft.uks.get_veff_` for full documentation
-        '''
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        return get_veff_(self, mol, dm, dm_last, vhf_last, hermi)
-
-    def energy_elec(self, dm, h1e=None, vhf=None):
-        if h1e is None: h1e = self.get_hcore()
-        return energy_elec(self, dm, h1e)
+    get_veff = get_veff_
+    energy_elec = energy_elec
 
     def define_xc_(self, description):
         self.xc = description
         return self
-
 
 
 if __name__ == '__main__':
@@ -122,7 +116,6 @@ if __name__ == '__main__':
     mol.build()
 
     m = UKS(mol)
-    m.xc = 'LDA,VWN_RPA'
     m.xc = 'b3lyp'
-    print(m.scf())
+    print(m.scf())  # -2.89992555753
 

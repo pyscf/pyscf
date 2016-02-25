@@ -1,22 +1,14 @@
-pyscf
+PySCF
 =====
 
 Python module for quantum chemistry
 
-Version 1.1 alpha
-
 2016-02-08
 
-Pyscf is a python module for electronic structure theory.  The module
-aims to provide a simple, light-weight and efficient platform for
-quantum chemistry code developing and calculation.  The program is
-developed in the principle of
-
-* Easy to install, to use, to extend and to be embedded;
-* Minimal requirements on libraries (No Boost, MPI) and computing
-  resources (perhaps losing efficiency to reduce I/O);
-* 90/10 Python/C, only computational hot spots were written in C;
-* 90/10 functional/OOP, unless performance critical, functions are pure.
+* [Release 1.1 alpha](../../releases/latest)
+* [Changelog](../master/CHANGELOG)
+* [Documentation](http://www.pyscf.org) [PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf)
+* [Installation](#installation)
 
 
 Installation
@@ -75,25 +67,6 @@ Installation
           GIT_REPOSITORY https://github.com/sunqm/qcint.git
           ...
 
-
-Adding new features
--------------------
-For developrs who has interests to add new features in this program,
-there are few rules to follow
-
-* Code at least should work under python-2.7, gcc-4.8.
-* Not enforced
-  - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
-  - Following C89 standard for C code;
-  - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
-  - Avoid using other program language, to keep package light-weight
-
-
-Documentation
--------------
-
-There is an online documentation  http://www.pyscf.org.  And you can
-also download the PDF version from  http://www.pyscf.org/PySCF-1.0.pdf
 
 
 Known problems

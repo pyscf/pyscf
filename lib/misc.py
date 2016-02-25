@@ -3,6 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Some hacky functions
+'''
+
 import os, sys
 import tempfile
 import shutil
@@ -10,10 +14,6 @@ import functools
 import math
 import ctypes
 import numpy
-
-'''
-Some hacky functions
-'''
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -239,16 +239,21 @@ class StreamObject(object):
     stdout = sys.stdout
     _keys = set(['verbose', 'stdout'])
 
-    def run(self, *args, **kwargs):
-        return self.run_(*args, **kwargs)
     def run_(self, *args, **kwargs):
+        '''Call the kernel function of current object.  `args` will be passed
+        to kernel function.  `kwargs` will be used to update the attributes of
+        current object.
+        '''
         self.set_(**kwargs)
         self.kernel(*args)
         return self
+    def run(self, *args, **kwargs):
+        return self.run_(*args, **kwargs)
+    run.__doc__ = run_.__doc__
 
-    def set(self, **kwargs):
-        return self.set_(**kwargs)
     def set_(self, **kwargs):
+        '''Update the attributes of the current object.
+        '''
         #if hasattr(self, '_keys'):
         #    for k,v in kwargs.iteritems():
         #        setattr(self, k, v)
@@ -259,8 +264,13 @@ class StreamObject(object):
         for k,v in kwargs.iteritems():
             setattr(self, k, v)
         return self
+    def set(self, **kwargs):
+        return self.set_(**kwargs)
+    set.__doc__ = set_.__doc__
 
     def apply(self, fn, *args, **kwargs):
+        '''Apply the fn to rest arguments:  return fn(*args, **kwargs)
+        '''
         return fn(self, *args, **kwargs)
 
 #    def _format_args(self, args, kwargs, kernel_kw_lst):

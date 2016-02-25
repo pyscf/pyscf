@@ -16,7 +16,7 @@ from pyscf.scf import rhf_nmr
 from pyscf.dft import numint
 
 
-def _get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
+def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
     if isinstance(max_memory, (list, tuple, numpy.ndarray)):
         import warnings
         xc_code = '%s, %s' % (xc_code, dms)
@@ -118,9 +118,9 @@ class NMR(rhf_nmr.NMR):
 
             mem_now = pyscf.lib.current_memory()[0]
             max_memory = max(2000, self._scf.max_memory*.9-mem_now)
-            h1 += _get_vxc_giao(self._scf._numint, mol, self._scf.grids,
-                                self._scf.xc, dm0, max_memory=max_memory,
-                                verbose=self._scf.verbose)
+            h1 += get_vxc_giao(self._scf._numint, mol, self._scf.grids,
+                               self._scf.xc, dm0, max_memory=max_memory,
+                               verbose=self._scf.verbose)
 
             if abs(hyb) > 1e-10:
                 vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)

@@ -8,6 +8,7 @@ try:
 except (ImportError, OSError):
     pass
 from pyscf.dft import rks
+from pyscf.dft import roks
 from pyscf.dft import uks
 from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
@@ -21,7 +22,7 @@ def RKS(mol, *args):
         return uks.UKS(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
-            return rks.ROKS(mol, *args)
+            return roks.ROKS(mol, *args)
         else:
             return rks.RKS(mol, *args)
     else:
@@ -34,7 +35,7 @@ def ROKS(mol, *args):
     if mol.nelectron == 1:
         return uks.UKS(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
-        return rks.ROKS(mol, *args)
+        return roks.ROKS(mol, *args)
     else:
         return rks_symm.ROKS(mol, *args)
 

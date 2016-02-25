@@ -8,8 +8,6 @@ Code standard
 
 * Code at least should work under python-2.7, gcc-4.8.
 
-  - it'd be better compatibile with Python 2.6 - 3.4
-
 * 90/10 functional/OOP, unless performance critical, functions are pure.
 
 * 90/10 Python/C, only computational hot spots were written in C.
@@ -24,12 +22,16 @@ Code standard
 
   - Do **not** use other program languages (to keep the package light-weight).
 
-* Using ctypes to interface C/python functions (no cython)
-
 * Loose-coupling principle
 
   - Reinventing-wheel is accepted (to reduce the entanglement to the
     rest of the package).
+
+* Not enforced but recommended
+  - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
+  - Following C89 standard for C code;
+  - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
+
 
 Name rules
 ----------

@@ -708,19 +708,23 @@ class _NumInt(object):
     nr_uks_.__doc__ = nr_uks_vxc.__doc__
     nr_uks = nr_uks_
 
+    @pyscf.lib.with_doc(eval_ao.__doc__)
     def eval_ao(self, mol, coords, deriv=0, relativity=0, bastart=0,
                 bascount=None, non0tab=None, out=None, verbose=None):
         return eval_ao(mol, coords, deriv, relativity, bastart, bascount,
                        non0tab, out, verbose)
 
+    @pyscf.lib.with_doc(make_mask.__doc__)
     def make_mask(self, mol, coords, relativity=0, bastart=0, bascount=None,
                   verbose=None):
         return make_mask(mol, coords, relativity, bastart, bascount, verbose)
 
+    @pyscf.lib.with_doc(eval_rho2.__doc__)
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   verbose=None):
         return eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
 
+    @pyscf.lib.with_doc(eval_rho.__doc__)
     def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
@@ -811,7 +815,7 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
     mf.grids.prune = None
-    mf.grids.setup_grids()
+    mf.grids.build_()
     dm = mf.get_init_guess(key='minao')
 
     numpy.random.seed(1)

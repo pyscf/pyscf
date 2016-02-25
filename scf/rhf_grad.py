@@ -122,6 +122,8 @@ class Gradients(pyscf.lib.StreamObject):
         self._scf = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
+
+        self.de = numpy.zeros((0,3))
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
@@ -144,6 +146,7 @@ class Gradients(pyscf.lib.StreamObject):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
+    @pyscf.lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self._scf.make_rdm1()
@@ -207,8 +210,8 @@ class Gradients(pyscf.lib.StreamObject):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        self.de =(self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-                  + self.grad_nuc(atmlst=atmlst))
+        de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
+        self.de = de = de + self.grad_nuc(atmlst=atmlst)
         logger.note(self, '--------------')
         logger.note(self, '           x                y                z')
         for k, ia in enumerate(atmlst):

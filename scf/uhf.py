@@ -4,6 +4,7 @@
 import time
 from functools import reduce
 import numpy
+import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
@@ -145,7 +146,13 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return vhf
 
 def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    if diis_start_cycle is None:
+        diis_start_cycle = mf.diis_start_cycle
+    if level_shift_factor is None:
+        level_shift_factor = mf.level_shift
+    if damp_factor is None:
+        damp_factor = mf.damp
     f = h1e + vhf
     if f.ndim == 2:
         f = (f, f)
@@ -173,12 +180,13 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
                       fockb[viridxb[:,None],occidxb].reshape(-1)))
     return g.reshape(-1)
 
-def energy_elec(mf, dm, h1e=None, vhf=None):
+def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
 
     Returns:
         Hartree-Fock electronic energy and the 2-electron part contribution
     '''
+    if dm is None: dm = mf.make_rdm1()
     if h1e is None:
         h1e = mf.get_hcore()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -367,9 +375,6 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
 
-def mulliken_pop_meta_lowdin_ao(mol, dm_ao, verbose=logger.DEBUG,
-                                pre_orth_method='ANO', s=None):
-    return mulliken_meta(mol, dm_ao, verbose, pre_orth_method, s)
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
@@ -391,6 +396,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
+mulliken_pop_meta_lowdin_ao = mulliken_meta
 
 def map_rhf_to_uhf(rhf):
     '''Take the settings from RHF object'''
@@ -442,17 +448,7 @@ class UHF(hf.SCF):
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None,
-                  damp_factor=None):
-        if diis_start_cycle is None:
-            diis_start_cycle = self.diis_start_cycle
-        if level_shift_factor is None:
-            level_shift_factor = self.level_shift
-        if damp_factor is None:
-            damp_factor = self.damp
-        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
-                         diis_start_cycle, level_shift_factor, damp_factor)
+    get_fock_ = get_fock_
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
@@ -509,6 +505,7 @@ class UHF(hf.SCF):
             logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
+    @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -516,9 +513,7 @@ class UHF(hf.SCF):
             mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-    def energy_elec(self, dm=None, h1e=None, vhf=None):
-        if dm is None: dm = self.make_rdm1()
-        return energy_elec(self, dm, h1e, vhf)
+    energy_elec = energy_elec
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -554,16 +549,8 @@ class UHF(hf.SCF):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
+    @pyscf.lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Hartree-Fock potential matrix for the given density matrices.
-        See :func:`scf.uhf.get_veff`
-
-        Args:
-            mol : an instance of :class:`Mole`
-
-            dm : a list of ndarrays
-                A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
-        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -596,6 +583,7 @@ class UHF(hf.SCF):
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
+    @pyscf.lib.with_doc(spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],

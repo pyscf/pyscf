@@ -284,7 +284,8 @@ class UHF(hf.SCF):
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return dhf.analyze(self, verbose)
 
 
