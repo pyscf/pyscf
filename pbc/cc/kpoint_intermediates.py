@@ -14,19 +14,24 @@ einsum = pbclib.einsum
 
 ### Section (a)
 
-def make_tau(t2, t1a, t1b, fac=1, out=None):
-    nkpts = t1a.shape[0]
+def make_tau(cc, t2, t1a, t1b, fac=1., out=None):
+    nkpts, nocc, nvir = t1a.shape
     tau1 = t2.copy()
+    KLMN = tools.get_KLMN(cc._scf.cell,cc._kpts)
     for ki in range(nkpts):
-        ka = ki
-        for kj in range(nkpts):
-            kb = kj
-            tmp = einsum('ia,jb->ijab',t1a[ki,:,:],t1b[kj,:,:])
-            if ki == kj:
-                tmp = tmp - tmp.transpose(1,0,2,3) - tmp.transpose(0,1,3,2) + tmp.transpose(1,0,3,2)
-            else:
-                tmp = tmp + tmp.transpose(1,0,3,2)
-            tau1[ki,kj,ka,:,:,:,:] += fac*0.5*tmp[:,:,:,:]
+        for ka in range(nkpts):
+            for kj in range(nkpts):
+                    kb = KLMN[ki,ka,kj]
+                    tmp = numpy.zeros((nocc,nocc,nvir,nvir),dtype=t2.dtype)
+                    if ki == ka and kj == kb:
+                        tmp += einsum('ia,jb->ijab',t1a[ki,:,:],t1b[kj,:,:])
+                    if ki == kb and kj == ka:
+                        tmp -= einsum('ib,ja->ijab',t1a[ki,:,:],t1b[kj,:,:])
+                    if kj == ka and ki == kb:
+                        tmp -= einsum('ja,ib->ijab',t1a[kj,:,:],t1b[ki,:,:])
+                    if kj == kb and ki == ka:
+                        tmp += einsum('jb,ia->ijab',t1a[kj,:,:],t1b[ki,:,:])
+                    tau1[ki,kj,ka,:,:,:,:] += fac*0.5*tmp[:,:,:,:]
     return tau1
 
 def cc_Fvv(cc,t1,t2,eris):
@@ -35,7 +40,7 @@ def cc_Fvv(cc,t1,t2,eris):
     fvv = eris.fock[:,nocc:,nocc:].copy()
     # <o(k1)v(k2)||v(k3)v(k4)> = <v(k2)o(k1)||v(k4)v(k3)> = -<v(k2)o(k1)||v(k3)v(k4)>
     eris_vovv = - eris.ovvv.transpose(1,0,2,4,3,5,6)
-    tau_tilde = make_tau(t2,t1,t1,fac=0.5)
+    tau_tilde = make_tau(cc,t2,t1,t1,fac=0.5)
     Fae = numpy.zeros(shape=fvv.shape,dtype=t1.dtype) #initializing...
     KLMN = tools.get_KLMN(cc._scf.cell,cc._kpts)
     for ka in range(nkpts):
@@ -49,11 +54,11 @@ def cc_Fvv(cc,t1,t2,eris):
                                                eris.oovv[km,kn,ka,:,:,:,:] )
     return Fae
 
-def cc_Foo(t1,t2,eris):
+def cc_Foo(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
     fov = eris.fock[:,:nocc,nocc:].copy()
     foo = eris.fock[:,:nocc,:nocc].copy()
-    tau_tilde = make_tau(t2,t1,t1,fac=0.5)
+    tau_tilde = make_tau(cc,t2,t1,t1,fac=0.5)
     Fmi = numpy.zeros(shape=foo.shape,dtype=t1.dtype) #initializing...
     for km in range(nkpts):
         Fmi[km,:,:] += foo[km,:,:]
@@ -65,7 +70,7 @@ def cc_Foo(t1,t2,eris):
                                         eris.oovv[km,kn,ke,:,:,:,:])
     return Fmi
 
-def cc_Fov(t1,t2,eris):
+def cc_Fov(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
     fov = eris.fock[:,:nocc,nocc:].copy()
     Fme = numpy.zeros(shape=fov.shape,dtype=t1.dtype)
@@ -78,7 +83,7 @@ def cc_Fov(t1,t2,eris):
 
 def cc_Woooo(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
-    tau = make_tau(t2,t1,t1)
+    tau = make_tau(cc,t2,t1,t1)
     Wmnij = eris.oooo.copy()
     KLMN = tools.get_KLMN(cc._scf.cell,cc._kpts)
     for km in range(nkpts):
@@ -108,16 +113,18 @@ def cc_Woooo(cc,t1,t2,eris):
 
 def cc_Wvvvv(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
-    eris_vovv = - eris.ovvv.transpose(1,0,2,4,3,5,6) #changed this line
-    tau = make_tau(t2,t1,t1)
+    eris_vovv = - eris.ovvv.transpose(1,0,2,4,3,5,6)
+    tau = make_tau(cc,t2,t1,t1)
     Wabef = eris.vvvv.copy()
     KLMN = tools.get_KLMN(cc._scf.cell,cc._kpts)
     for ka in range(nkpts):
         for kb in range(nkpts):
-            tmp = einsum('xmb,yamef->yxabef',t1[:,:,:],eris_vovv[ka,kb,:,:,:,:,:])
-            tmp = tmp - tmp.transpose(1,0,3,2,4,5)
             for ke in range(nkpts):
-                Wabef[ka,kb,ke,:,:,:,:]+= - tmp[ka,kb,:,:,:,:]
+                km = kb
+                tmp  = einsum('mb,amef->abef',t1[kb,:,:],eris_vovv[ka,km,ke,:,:,:,:])
+                km = ka
+                tmp -= einsum('ma,bmef->abef',t1[ka,:,:],eris_vovv[kb,km,ke,:,:,:,:])
+                Wabef[ka,kb,ke,:,:,:,:] += - tmp[:,:,:,:]
                 # km + kn - ka = kb
                 # => kn = ka - km + kb
                 for km in range(nkpts):
@@ -145,12 +152,14 @@ def cc_Wovvo(cc,t1,t2,eris):
         for kb in range(nkpts):
             for ke in range(nkpts):
                 kj = KLMN[km,ke,kb]
-                Wmbej[km,kb,ke,:,:,:,:] +=  einsum('jf,mbef->mbej',t1[kj,:,:],eris.ovvv[km,kb,ke,:,:,:,:])
-                Wmbej[km,kb,ke,:,:,:,:] += -einsum('nb,mnej->mbej',t1[kb,:,:],eris_oovo[km,kb,ke,:,:,:,:])
+                Wmbej[km,kb,ke,:,:,:,:] +=      einsum('jf,mbef->mbej',t1[kj,:,:],eris.ovvv[km,kb,ke,:,:,:,:])
+                Wmbej[km,kb,ke,:,:,:,:] += -1.0*einsum('nb,mnej->mbej',t1[kb,:,:],eris_oovo[km,kb,ke,:,:,:,:])
                 for kn in range(nkpts):
+                    kf = KLMN[km,ke,kn]
                     Wmbej[km,kb,ke,:,:,:,:] += -0.5*einsum('jnfb,mnef->mbej',
-                            t2[kn,kj,kb,:,:,:,:],eris.oovv[km,kn,ke,:,:,:,:])
-                    Wmbej[km,kb,ke,:,:,:,:] += -einsum('jf,nb,mnef->mbej',t1[kj,:,:],t1[kn,:,:],
+                            t2[kj,kn,kf,:,:,:,:],eris.oovv[km,kn,ke,:,:,:,:])
+                    if kn == kb and kf == kj:
+                        Wmbej[km,kb,ke,:,:,:,:] += -1.0*einsum('jf,nb,mnef->mbej',t1[kj,:,:],t1[kn,:,:],
                             eris.oovv[km,kn,ke,:,:,:,:])
     return Wmbej
 
@@ -171,12 +180,12 @@ def Fov(t1,t2,eris):
     return Fme
 
 def Woooo(t1,t2,eris):
-    tau = make_tau(t2,t1,t1)
+    tau = make_tau(cc,t2,t1,t1)
     Wmnij = cc_Woooo(t1,t2,eris) + 0.25*einsum('ijef,mnef->mnij',tau,eris.oovv)
     return Wmnij
 
 def Wvvvv(t1,t2,eris):
-    tau = make_tau(t2,t1,t1)
+    tau = make_tau(cc,nt2,t1,t1)
     Wabef = cc_Wvvvv(t1,t2,eris) + 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
     return Wabef
 
@@ -202,7 +211,7 @@ def Wovoo(t1,t2,eris):
             - einsum('ie,njbf,mnef->mbij',t1,t2,eris.oovv) )
     FFov = Fov(t1,t2,eris)
     WWoooo = Woooo(t1,t2,eris)
-    tau = make_tau(t2,t1,t1)
+    tau = make_tau(cc,t2,t1,t1)
     Wmbij = ( eris.ovoo - einsum('me,ijbe->mbij',FFov,t2)
               - einsum('nb,mnij->mbij',t1,WWoooo)
               + 0.5 * einsum('mbef,ijef->mbij',eris.ovvv,tau)
@@ -219,7 +228,7 @@ def Wvvvo(t1,t2,eris):
             - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
     FFov = Fov(t1,t2,eris)
     WWvvvv = Wvvvv(t1,t2,eris)
-    tau = make_tau(t2,t1,t1)
+    tau = make_tau(cc,t2,t1,t1)
     Wabei = ( eris_vvvo - einsum('me,miab->abei',FFov,t2)
                     + einsum('if,abef->abei',t1,WWvvvv)
                     + 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)

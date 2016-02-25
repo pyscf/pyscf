@@ -52,9 +52,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     nkpts, nocc, nvir = t1.shape
     eold = 0
     eccsd = 0
-#
-#  TODO add diis..
-#
+
     if cc.diis:
         adiis = pyscf.lib.diis.DIIS(cc, cc.diis_file)
         adiis.space = cc.diis_space
@@ -67,9 +65,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
-#
-#  TODO add diis..
-#
+
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, energy(cc, t1, t2, eris)
@@ -119,25 +115,12 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     #eia = mo_e[:nocc,None] - mo_e[None,nocc:]
     #eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
 
-#
-#
-#  START : USED FOR CHECKING
-#
-#
-    #t1 *= 0.0
-    #t2 *= 0.0
-#
-#
-#  END : USED FOR CHECKING
-#
-#
-
-    tau = imdk.make_tau(t2,t1,t1)
+    tau = imdk.make_tau(cc,t2,t1,t1)
 
     ### From eom-cc hackathon code ###
     Fvv = imdk.cc_Fvv(cc,t1,t2,eris)
-    Foo = imdk.cc_Foo(t1,t2,eris)
-    Fov = imdk.cc_Fov(t1,t2,eris)
+    Foo = imdk.cc_Foo(cc,t1,t2,eris)
+    Fov = imdk.cc_Fov(cc,t1,t2,eris)
     Woooo = imdk.cc_Woooo(cc,t1,t2,eris)
     Wvvvv = imdk.cc_Wvvvv(cc,t1,t2,eris)
     Wovvo = imdk.cc_Wovvo(cc,t1,t2,eris)
@@ -191,11 +174,11 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         for ka in xrange(nkpts):
             kb   = KLMN[ki,ka,kj]  # chemist's notation for momentum conserving t2(ki,kj,ka,kb)
 
-            Ftmp = Fvv[kb,:,:] - 0.0*0.5*einsum('mb,me->be',t1[kb,:,:],Fov[kb,:,:])
+            Ftmp = Fvv[kb,:,:] - 0.5*einsum('mb,me->be',t1[kb,:,:],Fov[kb,:,:])
             tmp = einsum('ijae,be->ijab',t2[ki,kj,ka,:,:,:,:],Ftmp)
             t2new[ki,kj,ka,:,:,:,:] += tmp
 
-            Ftmp = Fvv[ka,:,:] - 0.0*0.5*einsum('ma,me->ae',t1[ka,:,:],Fov[ka,:,:])
+            Ftmp = Fvv[ka,:,:] - 0.5*einsum('ma,me->ae',t1[ka,:,:],Fov[ka,:,:])
             tmp = einsum('ijbe,ae->ijab',t2[ki,kj,kb,:,:,:,:],Ftmp)
             t2new[ki,kj,ka,:,:,:,:] -= tmp
 #
@@ -209,28 +192,41 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             tmp = einsum('jmab,mi->ijab',t2[kj,ki,ka,:,:,:,:],Ftmp)
             t2new[ki,kj,ka,:,:,:,:] += tmp
 #
-            #t2new[kj,ki,ka,:,:,:,:] += tmp.transpose(1,0,2,3)
+#            #t2new[kj,ki,ka,:,:,:,:] += tmp.transpose(1,0,2,3)
+#
+#
+            for km in xrange(nkpts):
+                # Wminj
+                #     - km - kn + ka + kb = 0
+                # =>  kn = ka - km + kb
+                kn = KLMN[ka,km,kb]
+                t2new[ki,kj,ka,:,:,:,:] += \
+                        0.5*einsum('mnab,mnij->ijab',tau[km,kn,ka,:,:,:,:],
+                                                   Woooo[km,kn,ki,:,:,:,:])
+                ke = km
+                t2new[ki,kj,ka,:,:,:,:] += \
+                        0.5*einsum('ijef,abef->ijab',tau[ki,kj,ke,:,:,:,:],
+                                                   Wvvvv[ka,kb,ke,:,:,:,:])
 
+                # Wmbej
+                #     - km - kb + ke + kj = 0
+                #  => ke = km - kj + kb
+                ke = KLMN[km,kj,kb]
+                tmp = einsum('imae,mbej->ijab',t2[ki,km,ka,:,:,:,:],
+                        Wovvo[km,kb,ke,:,:,:,:])
 
-#            for km in xrange(nkpts):
-##                #     km - ka + kn = kb
-##                # =>  kn = kb - km + ka
-##                kn = KLMN[kb,km,ka]
-##                t2new[ki,kj,ka,:,:,:,:] += (
-##                        0.5*einsum('mnab,mnij->ijab',tau[km,kn,ka,:,:,:,:],
-##                                                   Woooo[km,kn,ki,:,:,:,:])
-##                      + 0.5*einsum('ijef,abef->ijab',tau[ki,kj,km,:,:,:,:],
-##                                                   Wvvvv[ka,kb,km,:,:,:,:]) )
-##
-#                ke = KLMN[ki,ka,km]
-#                tmp = 0.0*einsum('imae,mbej->ijab',t2[ki,km,ka,:,:,:,:],
-#                        Wovvo[km,kb,ke,:,:,:,:])
-#                tmp -= einsum('ie,ma,mbej->ijab',t1[ki,:,:],t1[km,:,:],
-#                         eris_ovvo[km,kb,ke,:,:,:,:])
-#                t2new[ki,kj,ka,:,:,:,:] += tmp
-#                #t2new[ki,kj,kb,:,:,:,:] -= tmp.transpose(0,1,3,2)
-#                #t2new[kj,ki,ka,:,:,:,:] -= tmp.transpose(1,0,2,3)
-#                #t2new[kj,ki,kb,:,:,:,:] += tmp.transpose(1,0,3,2)
+                #     - km - kb + ke + kj = 0
+                # =>  ke = km - kj + kb
+                #
+                # t[i,e] => ki = ke
+                # t[m,a] => km = ka
+                if km == ka and ke == ki:
+                    tmp -= 1.0*einsum('ie,ma,mbej->ijab',t1[ki,:,:],t1[km,:,:],
+                          eris_ovvo[km,kb,ke,:,:,:,:])
+                t2new[ki,kj,ka,:,:,:,:] += tmp
+                t2new[ki,kj,kb,:,:,:,:] -= tmp.transpose(0,1,3,2)
+                t2new[kj,ki,ka,:,:,:,:] -= tmp.transpose(1,0,2,3)
+                t2new[kj,ki,kb,:,:,:,:] += tmp.transpose(1,0,3,2)
 
             ke = ki
             tmp = einsum('ie,abej->ijab',t1[ki,:,:],eris_vvvo[ka,kb,ke,:,:,:,:])
@@ -503,31 +499,6 @@ class _ERIS:
         log.timer('CCSD integral transformation', *cput0)
 
 
-
-def make_primitive_cell(ngs):
-    from ase.lattice import bulk
-    ase_atom = bulk('C', 'diamond', a=3.5668)
-
-    cell = pbcgto.Cell()
-    #cell.unit = 'A'
-    #cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    #cell.h = ase_atom.cell
-
-    L = 5.0
-    cell.unit = 'B'
-    cell.h = ((L,0,0),(0,L,0),(0,0,L))
-    cell.atom = [['Be', (L/2.,L/2.,L/2.)], ]
-    #cell.atom = [['Be', (0.0,0.0,0.0)], ]
-
-    cell.basis = 'gth-szv'
-    #cell.basis = 'sto-3g'
-    cell.pseudo = 'gth-pade'
-    cell.gs = numpy.array([ngs,ngs,ngs])
-
-    #cell.verbose = 4
-    cell.build()
-    return cell
-
 def check_antisymm_12( cc, kpts, integrals ):
     KLMN = tools.get_KLMN(cc._scf.cell,cc._kpts)
     nkpts = len(kpts)
@@ -565,34 +536,4 @@ def check_antisymm_34( cc, kpts, integrals ):
                                 print "AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s
                                 diff = max(diff,cdiff)
     print "antisymmetrization : max diff = %.15g" % diff
-
-
-if __name__ == '__main__':
-    #ngs = 4
-    #nk = (3, 1, 1)
-    #cell = make_primitive_cell(ngs)
-    #print "cell gs =", cell.gs
-    #scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
-    #print "reduced k-points =", scaled_kpts
-    #abs_kpts = cell.get_abs_kpts(scaled_kpts)
-    #kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
-    #kmf.verbose = 7
-    ##kmf.conv_tol=1e-15
-    #ekpt = kmf.scf()
-
-    #print ""
-    #print "*********************************"
-    #print "STARTING CCSD                    "
-    #print "*********************************"
-    #print ""
-
-    #cc = CCSD(kmf,abs_kpts)
-    #cc.verbose = 7
-    #cc.conv_tol=1e-8
-    #ecc, t1, t2 = cc.kernel()
-
-    ngs = 1; nk = (3, 1, 1); cell = make_primitive_cell(ngs); scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk);abs_kpts = cell.get_abs_kpts(scaled_kpts);kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None); kmf.conv_tol=1e-13; kmf.verbose=7; ekpt = kmf.scf();
-    cc = CCSD(kmf,abs_kpts); cc.verbose = 7; cc.conv_tol=1e-13
-    eris = cc.ao2mo()
-    ecc, t1, t2 = cc.kernel(eris=eris)
 
