@@ -544,24 +544,35 @@ class _ERIS:
             self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
+            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
 
             cput1 = time.clock(), time.time()
-            buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,so_coeff,so_coeff), compact=0)
-            buf = buf.reshape((nocc,nmo,nmo,nmo))
+            # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
+            buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
+            buf = buf.reshape((nocc,nmo,nocc,nmo))
             buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
-            buf1 = buf - buf.transpose(0,3,2,1) 
+            buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
-            cput1 = log.timer_debug1('transforming oppp', *cput1)
-
+            buf1 = buf1.astype(cc._scf._dtype)
+            cput1 = log.timer_debug1('transforming oopq', *cput1)
             self.dtype = buf1.dtype
-            self.oooo[:,:,:,:] = buf1[:,:nocc,:nocc,:nocc]
-            self.ooov[:,:,:,:] = buf1[:,:nocc,:nocc,nocc:]
-            self.ovoo[:,:,:,:] = buf1[:,nocc:,:nocc,:nocc]
-            self.oovv[:,:,:,:] = buf1[:,:nocc,nocc:,nocc:]
-            self.ovov[:,:,:,:] = buf1[:,nocc:,:nocc,nocc:]
-            self.ovvv[:,:,:,:] = buf1[:,nocc:,nocc:,nocc:]
+            self.oooo[:,:,:,:] = buf1[:,:,:nocc,:nocc]
+            self.ooov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
+            self.oovv[:,:,:,:] = buf1[:,:,nocc:,nocc:]
 
-            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
+            cput1 = time.clock(), time.time()
+            # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
+            buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
+            buf = buf.reshape((nocc,nmo,nvir,nmo))
+            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            buf1 = buf - buf.transpose(0,3,2,1)
+            buf1 = buf1.transpose(0,2,1,3) 
+            buf1 = buf1.astype(cc._scf._dtype)
+            cput1 = log.timer_debug1('transforming ovpq', *cput1)
+            self.ovoo[:,:,:,:] = buf1[:,:,:nocc,:nocc]
+            self.ovov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
+            self.ovvv[:,:,:,:] = buf1[:,:,nocc:,nocc:]
+
             for a in range(nvir):
                 orbva = orbv[:,a].reshape(-1,1)
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
@@ -573,6 +584,7 @@ class _ERIS:
                 buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
                 buf1 = buf - buf.transpose(0,3,2,1) 
                 buf1 = buf1.transpose(0,2,1,3) 
+                buf1 = buf1.astype(cc._scf._dtype)
                 self.vvvv[a] = buf1[:]
 
             cput1 = log.timer_debug1('transforming vvvv', *cput1)

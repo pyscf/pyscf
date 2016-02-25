@@ -12,7 +12,7 @@ import scipy.linalg
 from scipy.optimize import newton
 
 from pyscf.lib import logger
-from pyscf import ao2mo
+import pyscf.ao2mo
 
 
 def kernel(gw, so_energy, so_coeff, verbose=logger.NOTE):
@@ -39,7 +39,11 @@ def kernel(gw, so_energy, so_coeff, verbose=logger.NOTE):
             sigma_c_ppw, sigma_x_ppw = sigma(gw, p, p, omega, e_rpa, t_rpa)
             sigma_ppw = sigma_c_ppw + sigma_x_ppw
             return omega - gw.e_mf[p] - (sigma_ppw.real - gw.v_mf[p,p])
-        egw[p/2] = newton(quasiparticle, gw.e_mf[p], tol=1e-6)
+        try:
+            egw[p/2] = newton(quasiparticle, gw.e_mf[p], tol=1e-6, maxiter=100)
+        except RuntimeError:
+            print "Newton-Raphson unconverged, setting GW eval to MF eval."
+            egw[p/2] = gw.e_mf[p]
         print egw[p/2]
     print "done."
 
@@ -217,7 +221,8 @@ def is_positive_def(A):
 
 
 class GW(object):
-    def __init__(self, mf, screening='TDH', eta=1e-2):
+    def __init__(self, mf, ao2mofn=pyscf.ao2mo.outcore.general_iofree,
+                 screening='TDH', eta=1e-2):
         assert screening in ('TDH', 'TDHF', 'TDDFT')
         self.mol = mf.mol
         self._scf = mf
@@ -243,12 +248,13 @@ class GW(object):
             b[:,0::2] = b[:,1::2] = mf.mo_coeff
             self.v_mf = 0.5 * reduce(np.dot, (b.T, v_mf, b))
             self.v_mf[::2,1::2] = self.v_mf[1::2,::2] = 0
-            eri = ao2mo.outcore.general_iofree(mf.mol, (b,b,b,b),
-                                               compact=False).reshape(nso,nso,nso,nso)
+            eri = ao2mofn(mf.mol, (b,b,b,b),
+                          compact=False).reshape(nso,nso,nso,nso)
             eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0
             # Integrals are in "chemist's notation"
             # eri[i,j,k,l] = (ij|kl) = \int i(1) j(1) 1/r12 k(r2) l(r2)
-            self.eri = eri
+            print "Imag part of ERIs =", np.linalg.norm(eri.imag)
+            self.eri = eri.real
         else:
             # ROHF or UHF, these are already spin-orbitals
             print "\n*** Only supporting restricted calculations right now! ***\n"
@@ -258,8 +264,8 @@ class GW(object):
             self.e_mf = mf.mo_energy
             b = mf.mo_coeff
             self.v_mf = reduce(np.dot, (b.T, v_mf, b))
-            eri = ao2mo.outcore.general_iofree(mf.mol, (b,b,b,b),
-                                               compact=False).reshape(nso,nso,nso,nso)
+            eri = ao2mofn(mf.mol, (b,b,b,b),
+                          compact=False).reshape(nso,nso,nso,nso)
             self.eri = eri
 
         print "There are %d spin-orbitals"%(self.nso)
