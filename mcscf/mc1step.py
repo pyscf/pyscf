@@ -459,13 +459,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     ncas = casscf.ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    if log.verbose >= logger.INFO:
-        if hasattr(casscf.fcisolver, 'spin_square'):
-            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-            log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
-        else:
-            log.info('CASCI E = %.15g', e_tot)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
@@ -508,15 +502,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             if isinstance(gci, numpy.ndarray):
-                norm_gci = numpy.linalg.norm(gci)
+                norm_gci = '%4.3g' % numpy.linalg.norm(gci)
             else:
-                norm_gci = -1
+                norm_gci = None
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
             t3m = log.timer('update CAS DM', *t3m)
             log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  '
-                      '|g[c]|= %4.3g  |ddm|= %4.3g',
+                      '|g[c]|= %s  |ddm|= %4.3g',
                       imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
@@ -551,22 +545,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         t2m = log.timer('update eri', *t3m)
 
         elast = e_tot
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
-        log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        if log.verbose >= logger.INFO:
-            if hasattr(casscf.fcisolver, 'spin_square'):
-                ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-                log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
-                     imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
-            else:
-                log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  ',
-                         imacro, njk, imicro, e_tot, e_tot-elast)
-            log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
-                     norm_gorb0, norm_gci, norm_ddm)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol
@@ -845,15 +828,55 @@ class CASSCF(casci.CASCI):
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
                            mc2step.kernel)
 
-    def casci(self, mo_coeff, ci0=None, eris=None):
+    def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         if eris is None:
             import copy
             fcasci = copy.copy(self)
             fcasci.ao2mo = self.get_h2cas
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
-        log = logger.Logger(self.stdout, self.verbose)
-        return casci.kernel(fcasci, mo_coeff, ci0=ci0, verbose=log)
+
+        if isinstance(verbose, logger.Logger):
+            log = verbose
+        else:
+            if verbose is None:
+                verbose = self.verbose
+            log = logger.Logger(self.stdout, verbose)
+
+        e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        if envs is not None and log.verbose >= logger.INFO:
+            log.debug('CAS space CI energy = %.15g', e_ci)
+
+            if hasattr(self.fcisolver,'spin_square'):
+                ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+            else:
+                ss = None
+
+            if 'imicro' in envs:  # Within CASSCF iteration
+                if ss is None:
+                    log.info('macro iter %d (%d JK  %d micro), '
+                             'CASSCF E = %.15g  dE = %.8g',
+                             envs['imacro'], envs['njk'], envs['imicro']+1,
+                             e_tot, e_tot-envs['elast'])
+                else:
+                    log.info('macro iter %d (%d JK  %d micro), '
+                             'CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+                             envs['imacro'], envs['njk'], envs['imicro']+1,
+                             e_tot, e_tot-envs['elast'], ss[0])
+                if 'norm_gci' in envs:
+                    log.info('               |grad[o]|= %4.3g  '
+                             '|grad[c]|= %s  |ddm|= %4.3g',
+                             envs['norm_gorb'],
+                             envs['norm_gci'], envs['norm_ddm'])
+                else:
+                    log.info('               |grad[o]|= %4.3g  |ddm|= %4.3g',
+                             envs['norm_gorb'], envs['norm_ddm'])
+            else:  # Initialization step
+                if ss is None:
+                    log.info('CASCI E = %.15g', e_tot)
+                else:
+                    log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
+        return e_tot, e_ci, fcivec
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
         nocc = ncore + ncas
@@ -887,16 +910,12 @@ class CASSCF(casci.CASCI):
         dr = self.unpack_uniq_var(dx)
         return numpy.dot(u0, expmat(dr))
 
-    def gen_g_hop(self, *args):
-        return gen_g_hop(self, *args)
-
-    def rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, r0,
-                      conv_tol_grad, verbose):
-        return rotate_orb_cc(self, mo, fcasdm1, fcasdm2, eris, r0,
-                             conv_tol_grad, verbose)
+    gen_g_hop = gen_g_hop
+    rotate_orb_cc = rotate_orb_cc
 
     def update_ao2mo(self, mo):
-        raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')
+        raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '
+                                 'Use .ao2mo method instead')
 
     def ao2mo(self, mo):
 #        nmo = mo.shape[1]
