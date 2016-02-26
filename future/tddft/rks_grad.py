@@ -12,9 +12,10 @@ from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.lib import logger
-from pyscf.dft import numint
-from pyscf.scf import cphf
 from pyscf import dft
+from pyscf.dft import numint
+from pyscf.dft import rks_grad
+from pyscf.scf import cphf
 from pyscf.tddft import rks
 from pyscf.tddft import rhf_grad
 
@@ -65,7 +66,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
         if singlet:
             veff = vj[1] * 2 - hyb * vk[1] + f1vo[0] * 2
         else:
-            veff = -hyb * vk[1]
+            veff = -hyb * vk[1] + f1vo[0] * 2
         veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
         wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
@@ -200,12 +201,15 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     mf = td_grad._scf
     grids = mf.grids
 
-    ni = copy.copy(mf._numint)
-    try:
-        ni.libxc = dft.xcfun
-        xctype = ni._xc_type(xc_code)
-    except ImportError, KeyError:
-        ni.libxc = dft.libxc
+    if rks.USE_XCFUN:
+        ni = copy.copy(mf._numint)
+        try:
+            ni.libxc = dft.xcfun
+            xctype = ni._xc_type(xc_code)
+        except ImportError, KeyError:
+            ni.libxc = dft.libxc
+            xctype = ni._xc_type(xc_code)
+    else:
         xctype = ni._xc_type(xc_code)
 
     mo_coeff = mf.mo_coeff
@@ -235,41 +239,104 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     else:
         k1ao = None
 
-    xctype = ni._xc_type(xc_code)
-    max_memory = max_memory - 4*nao**2*8/1e6
-
     if xctype == 'LDA':
         ao_deriv = 1
-        for ao, non0tab, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
-            rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, non0tab, 'LDA')
-            vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
+        if singlet:
+            for ao, mask, weight, coords \
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
+                vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
-            wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
-            if singlet:
-                rho1 = ni.eval_rho(mol, ao[0], dmvo, non0tab, 'LDA')
+                wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
+                rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, 'LDA')
                 aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho1)
                 for k in range(4):
-                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
-            if oovv is not None:
-                rho2 = ni.eval_rho(mol, ao[0], oovv, non0tab, 'LDA')
-                aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho2)
-                for k in range(4):
-                    f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
-            if with_vxc:
-                aow = numpy.einsum('pi,p->pi', ao[0], vxc[0]*weight)
-                for k in range(4):
-                    v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
-            if singlet and with_kxc:
-                aow = numpy.einsum('pi,p->pi', ao[0], kxc[0]*weight*rho1**2)
-                for k in range(4):
-                    k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, non0tab)
-            vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
-        if singlet and with_kxc:
-            k1ao *= 4
+                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                if oovv is not None:
+                    rho2 = ni.eval_rho(mol, ao[0], oovv, mask, 'LDA')
+                    aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho2)
+                    for k in range(4):
+                        f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                if with_vxc:
+                    aow = numpy.einsum('pi,p->pi', ao[0], vxc[0]*weight)
+                    for k in range(4):
+                        v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                if with_kxc:
+                    aow = numpy.einsum('pi,p->pi', ao[0], kxc[0]*weight*rho1**2)
+                    for k in range(4):
+                        k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
+            if with_kxc:  # for (rho1*2)^2, *2 for alpha+beta in singlet
+                k1ao *= 4
+
+        else:
+            raise NotImplementedError('LDA triplet')
 
     elif xctype == 'GGA':
-        raise NotImplementedError('GGA')
+        if singlet:
+            def gga_sum_(vmat, ao, wv, mask):
+                aow  = numpy.einsum('pi,p->pi', ao[0], wv[0]*.5)
+                aow += numpy.einsum('npi,np->pi', ao[1:4], wv[1:])
+                tmp = numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+                vmat[0] += tmp + tmp.T
+                vmat[1:] += rks_grad._gga_grad_sum(mol, ao, wv, mask)
+
+            ao_deriv = 2
+            for ao, mask, weight, coords \
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'GGA')
+                vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
+
+                vrho, vgamma = vxc[:2]
+                frr, frg, fgg = fxc[:3]
+
+                rho1 = ni.eval_rho(mol, ao, dmvo, mask, 'GGA') * 2  # *2 for alpha + beta
+                sigma1 = numpy.einsum('xi,xi->i', rho[1:], rho1[1:])
+                wv = numpy.empty_like((rho))
+                wv[0]  = frr * rho1[0]
+                wv[0] += frg * sigma1 * 2
+                wv[1:]  = (fgg * sigma1 * 4 + frg * rho1[0] * 2) * rho[1:]
+                wv[1:] += vgamma * rho1[1:] * 2
+                wv *= weight
+                gga_sum_(f1vo, ao, wv, mask)
+
+                if oovv is not None:
+                    rho2 = ni.eval_rho(mol, ao, oovv, mask, 'GGA') * 2
+                    sigma2 = numpy.einsum('xi,xi->i', rho[1:], rho2[1:])
+                    wv[0]  = frr * rho2[0]
+                    wv[0] += frg * sigma2 * 2
+                    wv[1:]  = (fgg * sigma2 * 4 + frg * rho2[0] * 2) * rho[1:]
+                    wv[1:] += vgamma * rho2[1:] * 2
+                    wv *= weight
+                    gga_sum_(f1oo, ao, wv, mask)
+                if with_vxc:
+                    wv[0]  = vrho
+                    wv[1:] = 2 * vgamma * rho[1:]
+                    wv *= weight
+                    gga_sum_(v1ao, ao, wv, mask)
+                if with_kxc:
+                    frrr, frrg, frgg, fggg = kxc
+                    r1r1 = rho1[0]**2
+                    s1s1 = sigma1**2
+                    r1s1 = rho1[0] * sigma1
+                    sigma2 = numpy.einsum('xi,xi->i', rho1[1:], rho1[1:])
+                    wv[0]  = frrr * r1r1
+                    wv[0] += 4 * frrg * r1s1
+                    wv[0] += 4 * frgg * s1s1
+                    wv[0] += 2 * frg * sigma2
+                    wv[1:]  = 2 * frrg * r1r1 * rho[1:]
+                    wv[1:] += 8 * frgg * r1s1 * rho[1:]
+                    wv[1:] += 4 * frg * rho1[0] * rho1[1:]
+                    wv[1:] += 4 * fgg * sigma2 * rho[1:]
+                    wv[1:] += 8 * fgg * sigma1 * rho1[1:]
+                    wv[1:] += 8 * fggg * s1s1 * rho[1:]
+                    wv *= weight
+                    gga_sum_(k1ao, ao, wv, mask)
+                vxc = fxc = kxc = rho = rho1 = rho2 = sigma1 = sigma2 = None
+
+        else:
+            raise NotImplementedError('GGA triplet')
+
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -307,15 +374,6 @@ if __name__ == '__main__':
 #    mf.grids.level = 6
     mf.scf()
 
-    td = pyscf.tddft.TDA(mf)
-    td.nstates = 3
-    e, z = td.kernel()
-    tdg = Gradients(td)
-    g1 = tdg.kernel(state=2)
-    print(g1)
-# [[ 0  0  -9.23916667e-02]
-#  [ 0  0   9.23956206e-02]]
-
     td = pyscf.tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
@@ -325,23 +383,26 @@ if __name__ == '__main__':
 # [[ 0  0  -1.31315477e-01]
 #  [ 0  0   1.31319442e-01]]
 
+    mf = dft.RKS(mol)
+    mf.xc = 'b3lyp'
+    mf.grids.prune = False
+    mf.scf()
+
     td = pyscf.tddft.TDA(mf)
     td.nstates = 3
-    td.singlet = False
     e, z = td.kernel()
     tdg = Gradients(td)
     g1 = tdg.kernel(state=2)
     print(g1)
-# [[ 0  0  -2.72555315e-01]
-#  [ 0  0   2.72559322e-01]]
+# [[ 0  0  -1.21504524e-01]
+#  [ 0  0   1.21505341e-01]]
 
-    td = pyscf.tddft.TDDFT(mf)
-    td.nstates = 3
-    td.singlet = False
-    e, z = td.kernel()
-    tdg = Gradients(td)
-    g1 = tdg.kernel(state=2)
-    print(g1)
-# [[ 0  0  -2.72555315e-01]
-#  [ 0  0   2.72559322e-01]]
-
+#    td = pyscf.tddft.TDA(mf)
+#    td.nstates = 3
+#    td.singlet = False
+#    e, z = td.kernel()
+#    tdg = Gradients(td)
+#    g1 = tdg.kernel(state=2)
+#    print(g1)
+## [[ 0  0  -0.3633334]
+##  [ 0  0   0.3633334]]

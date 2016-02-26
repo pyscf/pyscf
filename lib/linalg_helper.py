@@ -3,6 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Extension to scipy.linalg module
+'''
+
 import sys
 import tempfile
 from functools import reduce
@@ -11,10 +15,6 @@ import scipy.linalg
 import h5py
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
-
-'''
-Extension to scipy.linalg module
-'''
 
 def safe_eigh(h, s, lindep=1e-15):
     '''Solve generalized eigenvalue problem  h v = w s v.

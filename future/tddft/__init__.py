@@ -18,8 +18,7 @@ def TDA(mf):
 
 def TDDFT(mf):
     if hasattr(mf, 'xc'):
-        import pyscf.dft.vxc
-        if pyscf.dft.vxc.is_hybrid_xc(mf.xc):
+        if mf._numint.libxc.is_hybrid_xc(mf.xc):
             return rks.TDDFT(mf)
         else:
             return rks.TDDFTNoHybrid(mf)
