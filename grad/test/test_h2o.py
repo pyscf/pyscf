@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import unittest
-from pyscf import scf
-from pyscf import gto
+import numpy
+from pyscf import gto, scf, dft
 from pyscf import grad
 
 h2o = gto.Mole()
@@ -55,6 +55,30 @@ class KnowValues(unittest.TestCase):
         mycc.solve_lambda()
         g1 = grad.ccsd.kernel(mycc)
         self.assertAlmostEqual(finger(g1), 10.021170039808055, 9)
+
+    def test_rks_lda(self):
+        mf = dft.RKS(h2o)
+        mf.grids.prune = None
+        mf.run(conv_tol=1e-15, xc='lda,vwn')
+        g = grad.RKS(mf)
+        g1 = g.grad()
+        self.assertAlmostEqual(finger(g1), 0.098438461959390822, 9)
+
+    def test_rks_bp86(self):
+        mf = dft.RKS(h2o)
+        mf.grids.prune = None
+        mf.run(conv_tol=1e-15, xc='b88,p86')
+        g = grad.RKS(mf)
+        g1 = g.grad()
+        self.assertAlmostEqual(finger(g1), 0.10362532283229957, 9)
+
+    def test_rks_b3lypg(self):
+        mf = dft.RKS(h2o)
+        mf.grids.prune = None
+        mf.run(conv_tol=1e-15, xc='b3lypg')
+        g = grad.RKS(mf)
+        g1 = g.grad()
+        self.assertAlmostEqual(finger(g1), 0.066541921001296467, 9)
 
 
 if __name__ == "__main__":

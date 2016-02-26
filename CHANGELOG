@@ -13,6 +13,8 @@ Version 1.1 alpha (2016-2-8):
   - Stream operations: apply, run, set
   - General basis value evaluator
   - DMRG (Block) examples
+* Modify
+  - Default DFT grids schemes (grid density, prune etc)
 
 
 Version 1.0 (2015-10-8):

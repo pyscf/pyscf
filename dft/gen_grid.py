@@ -62,15 +62,8 @@ LEBEDEV_NGRID = numpy.asarray((
 # SG0
 # S. Chien and P. Gill,  J. Comput. Chem. 27 (2006) 730-739.
 
-# P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
-SG1RADII = numpy.array((
-    0,
-    1.0000,                                                 0.5882,
-    3.0769, 2.0513, 1.5385, 1.2308, 1.0256, 0.8791, 0.7692, 0.6838,
-    4.0909, 3.1579, 2.5714, 2.1687, 1.8750, 1.6514, 1.4754, 1.3333))
 
-
-def sg1_prune(nuc, rads, n_ang):
+def sg1_prune(nuc, rads, n_ang, radii=radi.SG1RADII):
     '''SG1, CPL, 209, 506
 
     Args:
@@ -82,6 +75,10 @@ def sg1_prune(nuc, rads, n_ang):
 
         n_ang : int
             Max number of grids over angular part.
+
+    Kwargs:
+        radii : 1D array
+            radii (in Bohr) for atoms in periodic table
 
     Returns:
         A list has the same length as rads. The list element is the number of
@@ -95,14 +92,14 @@ def sg1_prune(nuc, rads, n_ang):
         (0.1667, 0.5, 0.9, 3.5),
         (0.1   , 0.4, 0.8, 2.5)))
     if nuc <= 2:  # H, He
-        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
+        place = ((rads/radii[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
     elif nuc <= 10:  # Li - Ne
-        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
+        place = ((rads/radii[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
     else:
-        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
+        place = ((rads/radii[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
     return leb_ngrid[place]
 
-def nwchem_prune(nuc, rads, n_ang):
+def nwchem_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
     '''NWChem
 
     Args:
@@ -114,6 +111,10 @@ def nwchem_prune(nuc, rads, n_ang):
 
         n_ang : int
             Max number of grids over angular part.
+
+    Kwargs:
+        radii : 1D array
+            radii (in Bohr) for atoms in periodic table
 
     Returns:
         A list has the same length as rads. The list element is the number of
@@ -135,17 +136,17 @@ def nwchem_prune(nuc, rads, n_ang):
         leb_l = numpy.array([1, 3, idx-1, idx, idx-1])
 
     if nuc <= 2:  # H, He
-        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
+        place = ((rads/radii[nuc]).reshape(-1,1) > alphas[0]).sum(axis=1)
     elif nuc <= 10:  # Li - Ne
-        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
+        place = ((rads/radii[nuc]).reshape(-1,1) > alphas[1]).sum(axis=1)
     else:
-        place = ((rads/SG1RADII[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
+        place = ((rads/radii[nuc]).reshape(-1,1) > alphas[2]).sum(axis=1)
     angs = leb_l[place]
     angs = leb_ngrid[angs]
     return angs
 
 # Prune scheme JCP 102, 346
-def treutler_prune(nuc, rads, n_ang):
+def treutler_prune(nuc, rads, n_ang, radii=None):
     '''Treutler-Ahlrichs
 
     Args:
@@ -209,7 +210,7 @@ def original_becke(g):
     return g1
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
-                     level=3, prune=nwchem_prune):
+                     level=3, prune=nwchem_prune, atomic_radii=None):
     '''Generate number of radial grids and angular grids for the given molecule.
 
     Returns:
@@ -240,7 +241,10 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             # rad_weight *= atomic_scale
 
             if callable(prune):
-                angs = prune(chg, rad, n_ang)
+                if atomic_radii is None:
+                    angs = prune(chg, rad, n_ang)
+                else:
+                    angs = prune(chg, rad, n_ang, atomic_radii)
             else:
                 angs = [n_ang] * n_rad
             pyscf.lib.logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
@@ -263,15 +267,18 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
     return atom_grids_tab
 
 
-def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
+def gen_partition(mol, atom_grids_tab,
+                  radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
                   becke_scheme=original_becke):
     '''Generate the mesh grid coordinates and weights for DFT numerical integration.
-    We can change atomic_radii_adjust becke_scheme to generate different meshgrid.
+    We can change radii_adjust, becke_scheme functions to generate different meshgrid.
 
     Returns:
         grid_coord and grid_weight arrays.  grid_coord array has shape (N,3);
         weight 1D array has N elements.
     '''
+    if radii_adjust is not None:
+        atomic_radii_adjust = radii_adjust(mol, atomic_radii)
     atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
     atm_dist = radi._inter_distance(mol)
     def gen_grid_partition(coords):
@@ -284,7 +291,7 @@ def gen_partition(mol, atom_grids_tab, atomic_radii_adjust=None,
         for i in range(mol.natm):
             for j in range(i):
                 g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
-                if callable(atomic_radii_adjust):
+                if radii_adjust is not None:
                     g = atomic_radii_adjust(i, j, g)
                 g = becke_scheme(g)
                 pbecke[i] *= .5 * (1-g)
@@ -312,17 +319,20 @@ class Grids(pyscf.lib.StreamObject):
         level : int (0 - 6)
             big number for large mesh grids, default is 3
 
-        atomic_radii : function or None
-            can be one of
-            | radi.treutler_atomic_radii_adjust(mol, radi.BRAGG_RADII)
-            | radi.treutler_atomic_radii_adjust(mol, radi.COVALENT_RADII)
-            | radi.becke_atomic_radii_adjust(mol, radi.BRAGG_RADII)
-            | radi.becke_atomic_radii_adjust(mol, radi.COVALENT_RADII)
+        atomic_radii : 1D array
+            Default is radi.BRAGG_RADII
+
+        radii_adjust : function or None
+            Function to adjust atomic radii, can be one of
+            | radi.treutler_atomic_radii_adjust
+            | radi.becke_atomic_radii_adjust
             | None,          to switch off atomic radii adjustment
 
         radi_method : function(n) => (rad_grids, rad_weights)
             scheme for radial grids, can be one of
             | radi.treutler
+            | radi.delley
+            | radi.mura_knowles
             | radi.gauss_chebyshev
 
         becke_scheme : function(v) => array_like_v
@@ -345,6 +355,13 @@ class Grids(pyscf.lib.StreamObject):
             Eg, grids.atom_grid = {'H': (20,110)} will generate 20 radial
             grids and 110 angular grids for H atom.
 
+        level : int
+            To control the number of radial and angular grids.  The default
+            level 3 corresponds to
+            (50,302) for H, He;
+            (75,302) for second row;
+            (80~105,434) for rest.
+
         Examples:
 
         >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
@@ -356,10 +373,11 @@ class Grids(pyscf.lib.StreamObject):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.atomic_radii = radi.treutler_atomic_radii_adjust(mol, radi.BRAGG_RADII)
-        #self.atomic_radii = radi.becke_atomic_radii_adjust(mol, radi.BRAGG_RADII)
-        #self.atomic_radii = radi.becke_atomic_radii_adjust(mol, radi.COVALENT_RADII)
-        #self.atomic_radii = None # to switch off atomic radii adjustment
+        self.atomic_radii = radi.BRAGG_RADII
+        #self.atomic_radii = radi.COVALENT_RADII
+        self.radii_adjust = radi.treutler_atomic_radii_adjust
+        #self.radii_adjust = radi.becke_atomic_radii_adjust
+        #self.radii_adjust = None # to switch off atomic radii adjustment
         self.radi_method = radi.treutler
         #self.radi_method = radi.gauss_chebyshev
         #self.becke_scheme = stratmann
@@ -381,9 +399,9 @@ class Grids(pyscf.lib.StreamObject):
         logger.info(self, 'pruning grids: %s', self.prune)
         logger.info(self, 'grids dens level: %d', self.level)
         logger.info(self, 'symmetrized grids: %d', self.symmetry)
-        if self.atomic_radii is not None:
-            logger.info(self, 'atom radii adjust function: %s',
-                        self.atomic_radii.__doc__)
+        if self.radii_adjust is not None:
+            logger.info(self, 'atomic radii adjust function: %s',
+                        self.radii_adjust.__doc__)
         if self.atom_grid:
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
@@ -399,7 +417,8 @@ class Grids(pyscf.lib.StreamObject):
                                                level=self.level,
                                                prune=self.prune)
         self.coords, self.weights = \
-                self.gen_partition(mol, atom_grids_tab, self.atomic_radii,
+                self.gen_partition(mol, atom_grids_tab,
+                                   self.radii_adjust, self.atomic_radii,
                                    self.becke_scheme)
         pyscf.lib.logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
@@ -412,19 +431,21 @@ class Grids(pyscf.lib.StreamObject):
 
     @pyscf.lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
-                         level=None, prune=None):
+                         level=None, prune=None, atomic_radii=None):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = mol.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
-        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
+        return gen_atomic_grids(mol, atom_grid, self.radi_method, level,
+                                prune, atomic_radii)
 
     @pyscf.lib.with_doc(gen_partition.__doc__)
-    def gen_partition(self, mol, atom_grids_tab, atomic_radii=None,
+    def gen_partition(self, mol, atom_grids_tab,
+                      radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
                       becke_scheme=original_becke):
         ''' See gen_grid.gen_partition function'''
-        return gen_partition(mol, atom_grids_tab, atomic_radii,
+        return gen_partition(mol, atom_grids_tab, radii_adjust, atomic_radii,
                              becke_scheme)
 
     @property
