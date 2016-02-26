@@ -34,12 +34,12 @@ class KnowValues(unittest.TestCase):
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]
-        self.assertAlmostEqual(finger(e), -0.17323104957458663, 3)
-        self.assertAlmostEqual(finger(v[0]), 0.35833073697102674, 3)
-        self.assertAlmostEqual(finger(v[1]), 139.38989136986777, 3)
-        self.assertAlmostEqual(finger(f[0]), 1130279.4081989136, 1)
-        self.assertAlmostEqual(finger(f[1]), -2257802.6403745515, 2)
-        self.assertAlmostEqual(finger(f[2]), 0, 3)
+        self.assertAlmostEqual(numpy.dot(rho[0],e), -62.114577198931428, 9)
+        self.assertAlmostEqual(numpy.dot(rho[0],v[0]), -81.771672134676805, 9)
+        self.assertAlmostEqual(numpy.dot(rho[0],v[1]), 27.485383952241612, 9)
+        self.assertAlmostEqual(numpy.dot(rho[0],f[0]), 186.8238053926263, 2)
+        self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2422871100111, 9)
+        self.assertAlmostEqual(finger(f[2]), 0, 5)
 
 if __name__ == "__main__":
     print("Test libxc")

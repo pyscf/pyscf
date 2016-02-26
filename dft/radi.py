@@ -10,7 +10,7 @@ from pyscf.lib.parameters import BOHR
 
 #########################
 # JCP 41 3199 (1964).
-BRAGG_RADII = 1/BOHR * numpy.array((
+BRAGG_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
         0.35,                                     1.40,             # 1s
         1.45, 1.05, 0.85, 0.70, 0.65, 0.60, 0.50, 1.50,             # 2s2p
         1.80, 1.50, 1.25, 1.10, 1.00, 1.00, 1.00, 1.80,             # 3s3p
@@ -40,7 +40,7 @@ BRAGG_RADII = 1/BOHR * numpy.array((
 #       Jorge Echeverria, Eduard Cremades, Flavia Barragan and Santiago
 #       Alvarez.  Covalent radii revisited. Dalton Trans., 2008, 2832-2838,
 #       doi:10.1039/b801115j
-COVALENT_RADII = 1/BOHR * numpy.array((
+COVALENT_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
         0.31,                                     0.28,             # 1s
         1.28, 0.96, 0.84, 0.73, 0.71, 0.66, 0.57, 0.58,             # 2s2p
         1.66, 1.41, 1.21, 1.11, 1.07, 1.05, 1.02, 1.06,             # 3s3p
@@ -153,7 +153,7 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
 
-    rad = numpy.array([atomic_radii[mol.atom_charge(ia)-1]
+    rad = numpy.array([atomic_radii[mol.atom_charge(ia)]
                        for ia in range(mol.natm)])
     rr = rad.reshape(-1,1)/rad
     a = .25 * (rr.T - rr)
@@ -167,7 +167,7 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)-1]
+    rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)]
                                   for ia in range(mol.natm)]))
     rr = rad.reshape(-1,1)/rad
     a = .25 * (rr.T - rr)

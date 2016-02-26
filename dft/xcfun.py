@@ -61,7 +61,7 @@ XC_CODES = {
 'B88'           :  2,  # BECKEX
 'LYP'           :  6,  # LYP correlation
 'P86'           : None,
-'BLYP'          : 'BECKEX + P86',
+'BLYP'          : 'BECKEX + LYP',
 'BP86'          : None,
 'BPW91'         : 'BECKEX + PW91C',
 'BPW92'         : 'BECKEX + PW92C',
