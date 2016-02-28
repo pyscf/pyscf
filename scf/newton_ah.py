@@ -46,9 +46,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc'):
         if APPROX_XC_HESSIAN:
-            from pyscf.dft import vxc
-            x_code = vxc.parse_xc_name(mf.xc)[0]
-            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+            hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
         else:
             save_for_dft = [None, None]  # (dm, veff)
 
@@ -112,9 +110,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc'):
         if APPROX_XC_HESSIAN:
-            from pyscf.dft import vxc
-            x_code = vxc.parse_xc_name(mf.xc)[0]
-            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+            hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
         else:
             save_for_dft = [None, None]  # (dm, veff)
     def h_op(x):
@@ -207,9 +203,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc'):
         if APPROX_XC_HESSIAN:
-            from pyscf.dft import vxc
-            x_code = vxc.parse_xc_name(mf.xc)[0]
-            hyb = vxc.hybrid_coeff(x_code, spin=(mol.spin>0)+1)
+            hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
         else:
             save_for_dft = [None, None]  # (dm, veff)
     def h_op(x):
