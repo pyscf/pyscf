@@ -279,7 +279,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
-        coreocc = numpy.einsum('ij,ji->i', s1, numpy.linalg.solve(s1core, s1.T))
+        coreocc = numpy.einsum('ij,ji->i', s1, pyscf.lib.cho_solve(s1core, s1.T))
         nmo = mfmo.shape[1]
         coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
         logger.debug(casscf, 'Core indices %s', coreidx)

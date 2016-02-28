@@ -483,6 +483,13 @@ def dsolve(aop, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot,
     return xtrial
 
 
+def cho_solve(a, b):
+    '''Solve ax = b, where a is hermitian matrix
+    '''
+    l = scipy.linalg.cho_factor(a)
+    return scipy.linalg.cho_solve(l, b)
+
+
 class _Xlist(list):
     def __init__(self):
         self._fd = tempfile.NamedTemporaryFile()

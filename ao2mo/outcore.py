@@ -28,7 +28,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
         erifile : str or h5py File or h5py Group object
             To store the transformed integrals, in HDF5 format.
 
-    Kwargs
+    Kwargs:
         dataname : str
             The dataset name in the erifile (ref the hierarchy of HDF5 format
             http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
@@ -57,8 +57,6 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
-        verbose : int
-            Print level
         max_memory : float or int
             The maximum size of cache to use (in MB), large cache may **not**
             improve performance.
@@ -147,8 +145,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
-        verbose : int
-            Print level
         max_memory : float or int
             The maximum size of cache to use (in MB), large cache may **not**
             improve performance.
