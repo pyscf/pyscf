@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -213,18 +214,17 @@ def super_cell(cell, ncopy):
     return supcell
 
 
-def get_KLMN(cell,kpts):
-    '''Get array KLMN where for gs indices, K, L, M,
-    KLMN[K,L,M] gives index of N that satifies
-    momentum conservation
+def get_kconserv(cell, kpts):
+    '''Get the momentum conservation array for a set of k-points.
+    
+    Given k-point indices (k, l, m) the array kconserv[k,l,m] returns 
+    the index n that satifies momentum conservation,
 
-       G(K) - G(L) = - G(M) + G(N)
+       k(k) - k(l) = - k(m) + k(n)
 
     This is used for symmetry e.g. integrals of the form
-
-    [\phi*[K](1) \phi[L](1) | \phi*[M](2) \phi[N](2)]
-
-    are zero unless N satisfies the above.
+        [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)]
+    are zero unless n satisfies the above.
     '''
     nkpts = kpts.shape[0]
     KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
@@ -243,14 +243,14 @@ def get_KLMN(cell,kpts):
                     kvN = kvMLK + np.dot(xyz[ishift],kvecs)
                     finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
                                                      kpts > kvN - 1.e-12).sum(axis=1)==3)
-                    # You want to make sure the k-point is the same in all 3 indices as kvN
+                    # The k-point should be the same in all 3 indices as kvN
                     if len(finder[0]) > 0:
                         KLMN[K, L, M] = finder[0][0]
                         found = 1
                         break
 
                 if found == 0:
-                    print "get_klmn is screwing up again!"
+                    print "** ERROR: Problem in get_kconserv. Quitting."
                     print kvMLK
                     sys.exit()
     return KLMN
