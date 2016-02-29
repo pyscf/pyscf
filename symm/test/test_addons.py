@@ -39,6 +39,16 @@ class KnowValues(unittest.TestCase):
                                   numpy.random.random((mf.mo_coeff.shape)))
         self.assertAlmostEqual(numpy.linalg.norm(c), 10.148003411042838)
 
+    def test_symmetrize_space(self):
+        from pyscf import gto, symm, scf
+        mol = gto.M(atom = 'C  0  0  0; H  1  1  1; H -1 -1  1; H  1 -1 -1; H -1  1 -1',
+                    basis = 'sto3g', verbose=0)
+        mf = scf.RHF(mol).run()
+        mol.build(0, 0, symmetry='D2')
+        mo = symm.symmetrize_space(mol, mf.mo_coeff)
+        irreps = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo)
+        self.assertEqual(irreps, ['A','A','A','B1','B1','B2','B2','B3','B3'])
+
     def test_route(self):
         orbsym = [0, 3, 0, 2, 5, 6]
         res = addons.route(7, 3, orbsym)
