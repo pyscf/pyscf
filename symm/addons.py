@@ -160,6 +160,7 @@ def symmetrize_space(mol, mo, s=None):
     '''
     if s is None:
         s = mol.intor_symmetric('cint1e_ovlp_sph')
+    nmo = mo.shape[1]
     mo_s = numpy.dot(mo.T, s)
     mo1 = []
     for i, ir in enumerate(mol.irrep_id):
@@ -170,10 +171,13 @@ def symmetrize_space(mol, mo, s=None):
         e, u = scipy.linalg.eigh(numpy.dot(moso, sc))
         mo1.append(numpy.dot(mo, u[:,e>1e-6]))
     mo1 = numpy.hstack(mo1)
-    if mo1.shape[1] != mo.shape[1]:
-        raise RuntimeError('The input orbital space is not symmetrized.\n It is '
-                           'probably because the input mol and orbitals are of '
-                           'different orientation.')
+    if mo1.shape[1] != nmo:
+        raise ValueError('The input orbital space is not symmetrized.\n It is '
+                         'probably because the input mol and orbitals are of '
+                         'different orientation.')
+    snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
+    if snorm > 1e-6:
+        raise ValueError('Orbitals are not orthogonalized')
     return mo1
 
 def std_symb(gpname):

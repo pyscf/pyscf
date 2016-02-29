@@ -75,7 +75,7 @@ def label_symmetry_(mc, mo_coeff):
                                               mc.mol.symm_orb, mo_coeff, s=s)
     except ValueError:
         logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
-        mo_coeff = pyscf.symm.symmetrize_orb(mc.mol, mo_coeff, s=s)
+        mo_coeff = pyscf.symm.symmetrize_space(mc.mol, mo_coeff, s=s)
         diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
         mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
         mc.orbsym = pyscf.symm.label_orb_symm(mc.mol, irrep_name,
