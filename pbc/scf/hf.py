@@ -705,7 +705,7 @@ class RHF(pyscf.scf.hf.RHF):
         return self.init_guess_by_chkfile(chk, project)
 
     def _safe_cast(self, a):
-        if self._dtype == np.complex:
+        if self._dtype == np.complex128:
             return a
         else:
             return a.real
