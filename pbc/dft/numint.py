@@ -379,11 +379,11 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
             excsum += (den*exc).sum()
 
         if kpt_band is None:
-            vmat += ni.eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
-                                xctype=xctype, verbose=verbose)
+            vmat = vmat + ni.eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
+                                      xctype=xctype, verbose=verbose)
         else:
-            vmat += eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
-                             xctype=xctype, verbose=verbose)
+            vmat = vmat + eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
+                                   xctype=xctype, verbose=verbose)
 
     return nelec, excsum, vmat
 

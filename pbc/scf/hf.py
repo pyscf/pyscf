@@ -562,9 +562,10 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self.analytic_int:
             logger.info(self, "Using analytic integrals")
-            return scfint.get_hcore(cell, kpt).astype(self._dtype)
+            h = scfint.get_hcore(cell, kpt)
         else:
-            return get_hcore(cell, kpt).astype(self._dtype)
+            h = get_hcore(cell, kpt)
+        return self._safe_cast(h)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -572,9 +573,10 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self.analytic_int:
             logger.info(self, "Using analytic integrals")
-            return scfint.get_ovlp(cell, kpt).astype(self._dtype)
+            s = scfint.get_ovlp(cell, kpt)
         else:
-            return get_ovlp(cell, kpt).astype(self._dtype)
+            s = get_ovlp(cell, kpt)
+        return self._safe_cast(s)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         return self.get_jk_(cell, dm, hermi, kpt, kpt_band)
@@ -606,7 +608,7 @@ class RHF(pyscf.scf.hf.RHF):
         #        self.opt = self.init_direct_scf(cell)
         #    vj, vk = get_jk(cell, dm, hermi, self.opt, kpt)
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj.astype(self._dtype), vk.astype(self._dtype)
+        return self._safe_cast(vj), self._safe_cast(vk)
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute J matrix for the given density matrix.
@@ -618,12 +620,12 @@ class RHF(pyscf.scf.hf.RHF):
         cpu0 = (time.clock(), time.time())
         vj = get_j(cell, dm, hermi, self.opt, kpt, kpt_band)
         logger.timer(self, 'vj', *cpu0)
-        return vj.astype(self._dtype)
+        return self._safe_cast(vj)
 
     def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute K matrix for the given density matrix.
         '''
-        return self.get_jk(cell, dm, hermi, kpt, kpt_band)[1].astype(self._dtype)
+        return self._safe_cast(self.get_jk(cell, dm, hermi, kpt, kpt_band)[1])
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpt_band=None):
@@ -667,7 +669,7 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
 
-        return vj.astype(self._dtype), vk.astype(self._dtype)
+        return self._safe_cast(vj), self._safe_cast(vk)
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
         etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
@@ -702,3 +704,8 @@ class RHF(pyscf.scf.hf.RHF):
     def from_chk(self, chk=None, project=True):
         return self.init_guess_by_chkfile(chk, project)
 
+    def _safe_cast(self, a):
+        if self._dtype == np.complex:
+            return a
+        else:
+            return a.real

@@ -336,12 +336,12 @@ class KRHF(pbchf.RHF):
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
-        return get_hcore(self, cell, kpts).astype(self._dtype)
+        return self._safe_cast(get_hcore(self, cell, kpts))
 
     def get_ovlp(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
-        return get_ovlp(self, cell, kpts).astype(self._dtype)
+        return self._safe_cast(get_ovlp(self, cell, kpts))
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
         # Must use 'kpt' kwarg
@@ -352,7 +352,7 @@ class KRHF(pbchf.RHF):
         cpu0 = (time.clock(), time.time())
         vj = get_j(self, cell, dm_kpts, kpts, kpt_band)
         logger.timer(self, 'vj', *cpu0)
-        return vj.astype(self._dtype)
+        return self._safe_cast(vj)
 
     def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
         # Must use 'kpt' kwarg
@@ -363,7 +363,7 @@ class KRHF(pbchf.RHF):
         cpu0 = (time.clock(), time.time())
         vj, vk = get_jk(self, cell, dm_kpts, kpts, kpt_band)
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj.astype(self._dtype), vk.astype(self._dtype)
+        return self._safe_cast(vj), self._safe_cast(vk)
 
     def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
                   diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -377,7 +377,7 @@ class KRHF(pbchf.RHF):
 
         f = get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
                       diis_start_cycle, level_shift_factor, damp_factor)
-        return f.astype(self._dtype) 
+        return self._safe_cast(f)
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpt_band=None):
@@ -410,7 +410,7 @@ class KRHF(pbchf.RHF):
             grad = pyscf.scf.hf.RHF.get_grad(self,
                         mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:], fock[k,:,:])
             grad_kpts = np.hstack((grad_kpts, grad))
-        return grad_kpts.astype(self._dtype) 
+        return self._safe_cast(grad_kpts)
 
     def eig(self, h_kpts, s_kpts):
         nkpts = len(h_kpts)
@@ -478,7 +478,7 @@ class KRHF(pbchf.RHF):
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
             mo_occ_kpts = self.mo_occ
 
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts).astype(self._dtype) 
+        return self._safe_cast(make_rdm1(mo_coeff_kpts, mo_occ_kpts))
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         '''Following pyscf.scf.hf.energy_elec()
@@ -516,8 +516,9 @@ class KRHF(pbchf.RHF):
         fock = pbchf.get_hcore(cell, kpt_band) \
                 + self.get_veff(kpts=kpts, kpt_band=kpt_band)
         s1e = pbchf.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = pyscf.scf.hf.eig(fock.astype(self._dtype), 
-                                               s1e.astype(self._dtype))
+        fock = self._safe_cast(fock)
+        s1e = self._safe_cast(s1e)
+        mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
         return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True):
