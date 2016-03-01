@@ -112,6 +112,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.scheduleTols   = []
         self.scheduleNoises = []
         self.onlywriteIntegral = False
+        self.block_extra_keyword = [] #For Block advanced user only.
 
         self.orbsym = []
         if mol.symmetry:
@@ -120,7 +121,8 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.groupname = None
 
 ##################################################
-# don't modify the following attributes, they are not input options
+# don't modify the following attributes, if you do not finish part of calculation, which can be reused. 
+
         self.has_threepdm = False
         self.has_nevpt = False
 # This flag _restart is set by the program internally, to control when to make
@@ -438,6 +440,8 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         for weight in DMRGCI.weights:
             f.write('%f '%weight)
         f.write('\n')
+    for line in DMRGCI.block_extra_keyword:
+        f.write('%s\n'%line)
     for line in extraline:
         f.write('%s\n'%line)
     f.close()

@@ -599,7 +599,8 @@ def sc_nevpt(mc, ci=None, verbose=None):
 
     #By defaut, mc is canonicalized for the first root.
     #For SC-NEVPT based on compressed MPS perturber functions, the mc was already canonicalized.
-    if (mc.fcisolver.nroots > 1 and not compressed_mps):
+    if (mc.fcisolver.nroots > 1 ):
+    #if (mc.fcisolver.nroots > 1 and not compressed_mps):
         mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=ci,verbose=log)
 
 

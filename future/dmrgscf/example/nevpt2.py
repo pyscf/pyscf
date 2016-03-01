@@ -119,7 +119,7 @@ mps_nevpt_e1 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=0))
 #
 # root=1 for first excited state.
 #
-mps_nevpt_e1 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=1))
+mps_nevpt_e2 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=1))
 
 
 print('CI NEVPT = %.15g %.15g  DMRG NEVPT = %.15g %.15g  MPS NEVPT = %.15g %.15g'

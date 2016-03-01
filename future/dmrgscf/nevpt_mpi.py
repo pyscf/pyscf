@@ -141,8 +141,8 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
         wfnsym = mc.fcisolver.wfnsym
-    mc_chk = 'mc_chkfile'
-    write_chk(mc, root, mc_chk)
+        mc_chk = 'mc_chkfile'
+        write_chk(mc, root, mc_chk)
 
     if nevptsolver is None:
         nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
@@ -158,8 +158,8 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
     nevptsolver.scratchDirectory = ''
 
 
-    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, True,
-                             extraline=['nevpt_state_num %d'%root])
+    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, True, with_2pdm=False,
+                             extraline=['fullrestart','nevpt_state_num %d'%root])
     nevptsolver.scratchDirectory = scratch
 
     if nevptsolver.verbose >= logger.DEBUG1:
