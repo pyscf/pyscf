@@ -1,5 +1,6 @@
 import numpy as np
 import re
+from pyscf import lib
 
 DEBUG = False
 
@@ -130,7 +131,8 @@ def einsum(idx_str, *tensors):
     for idx in idxC:
         new_orderCt.append(idxCt.index(idx))
 
-    return np.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
+    #return np.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
+    return lib.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
 
 
 def _cp(a):
