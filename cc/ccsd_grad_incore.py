@@ -305,7 +305,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mf_grad.aorange_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]

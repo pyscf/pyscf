@@ -363,7 +363,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mf_grad.aorange_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     max_memory1 = max_memory - lib.current_memory()[0]
     blksize = max(1, int(max_memory1*1e6/8/(nao**3*2.5)))
     ioblksize = fdm2['dm2/0'].shape[-1]

@@ -167,9 +167,18 @@ def symmetrize_space(mol, mo, s=None):
         csym = mol.symm_orb[i]
         moso = numpy.dot(mo_s, csym)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
-        sc = pyscf.lib.cho_solve(ovlpso, moso.T)
-        e, u = scipy.linalg.eigh(numpy.dot(moso, sc))
-        mo1.append(numpy.dot(mo, u[:,e>1e-6]))
+
+# excluding orbitals which are already symmetrized
+        diag = numpy.einsum('ik,ki->i', moso, pyscf.lib.cho_solve(ovlpso, moso.T))
+        idx = abs(1-diag) < 1e-8
+        orb_exclude = mo[:,idx]
+        mo1.append(orb_exclude)
+        moso1 = moso[~idx]
+        dm = numpy.dot(moso1.T, moso1)
+
+        if dm.trace() > 1e-8:
+            e, u = scipy.linalg.eigh(dm, ovlpso)
+            mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
         raise ValueError('The input orbital space is not symmetrized.\n It is '

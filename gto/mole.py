@@ -999,6 +999,23 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:                return ibf + (atmshell-l1-1)*degen + (degen+m)
 #TODO:        ibf += degen
 
+def offset_nr_by_atom(mol):
+    '''For each atom, (first-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''
+    aorange = []
+    p0 = p1 = 0
+    b0 = b1 = 0
+    ia0 = 0
+    for ib in range(mol.nbas):
+        if ia0 != mol.bas_atom(ib):
+            aorange.append((b0, ib, p0, p1))
+            ia0 = mol.bas_atom(ib)
+            p0 = p1
+            b0 = ib
+        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
+    aorange.append((b0, mol.nbas, p0, p1))
+    return aorange
+
 #FIXME:
 def is_same_mol(mol1, mol2):
     if mol1._atom.__len__() != mol2._atom.__len__():
@@ -1314,10 +1331,13 @@ class Mole(pyscf.lib.StreamObject):
                                                    self._basis):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self._atom, self._basis)
-                    sys.stderr.write('Warn: unable to identify input symmetry %s, '
-                                     'use %s instead.\n' %
-                                     (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                    _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
+                    _atom = '\n'.join([str(a) for a in _atom])
+                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
+                                         'It is recommended to use symmetry="%s" with '
+                                         'geometry (unit="Bohr")\n%s' %
+                                         (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \
                         pyscf.symm.detect_symm(self._atom, self._basis)
@@ -1997,8 +2017,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
 
-    search_ao_nr =  search_ao_nr
+    search_ao_nr = search_ao_nr
     search_ao_r = search_ao_r
+
+    offset_nr_by_atom = offset_nr_by_atom
 
     @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):

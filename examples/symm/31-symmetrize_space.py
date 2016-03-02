@@ -14,7 +14,8 @@ mol = gto.M(atom = '''C  0  0  0
                       H -1 -1  1
                       H  1 -1 -1
                       H -1  1 -1''',
-            basis = 'sto3g')
+            basis = 'sto3g',
+            verbose = 0)
 mf = scf.RHF(mol).run()
 mo = mf.mo_coeff
 
@@ -35,10 +36,16 @@ mol.build(0, 0, symmetry='D2')
 try:
     irrep_ids = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo)
 except ValueError:
-    print('The orbital symmetry cannot be labelled because the some '
+    print('The orbital symmetry cannot be labelled because some '
           'degenerated orbitals are not symmetrized.\n'
           'Degenerated HOMO energy: %s' % mf.mo_energy[2:5])
 
-mo = symm.symmetrize_space(mol, mo)
-irrep_ids = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo)
-print('Orbital symmetry: %s' % irrep_ids)
+nocc = mol.nelectron // 2
+occ_orb = symm.symmetrize_space(mol, mo[:,:nocc])
+irrep_ids = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, occ_orb)
+print('Occupied orbital symmetry: %s' % irrep_ids)
+
+virt_orb = symm.symmetrize_space(mol, mo[:,nocc:])
+irrep_ids = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, virt_orb)
+print('Virtual orbital symmetry: %s' % irrep_ids)
+
