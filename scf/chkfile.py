@@ -12,11 +12,15 @@ from pyscf.lib.chkfile import load_mol, save_mol
 def load_scf(chkfile):
     return load_mol(chkfile), load(chkfile, 'scf')
 
-def dump_scf(mol, chkfile, e_tot, mo_energy, mo_coeff, mo_occ):
+def dump_scf(mol, chkfile, e_tot, mo_energy, mo_coeff, mo_occ,
+             overwrite_mol=True):
     '''save temporary results'''
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile) as fh5:
             if 'mol' not in fh5:
+                fh5['mol'] = format(mol.pack())
+            elif overwrite_mol:
+                del(fh5['mol'])
                 fh5['mol'] = format(mol.pack())
             if 'scf' in fh5:
                 del(fh5['scf'])

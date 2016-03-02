@@ -733,7 +733,8 @@ class CASSCF(casci_uhf.CASCI):
 
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
                            mo, self.ncore, self.ncas, mo_occ, mo_energy,
-                           envs['e_ci'], civec)
+                           envs['e_ci'], civec, overwrite_mol=False)
+        return self
 
 
 # to avoid calculating AO integrals

@@ -118,7 +118,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     logger.info(mf, 'init E= %.15g', e_tot)
 
     if dump_chk:
-        # dump mol after reading initialized DM
+        # Explicit overwrite the mol object in chkfile
         pyscf.scf.chkfile.save_mol(mol, mf.chkfile)
 
     scf_conv = False
@@ -971,7 +971,9 @@ class SCF(pyscf.lib.StreamObject):
         if self.chkfile:
             pyscf.scf.chkfile.dump_scf(self.mol, self.chkfile,
                                        envs['e_tot'], envs['mo_energy'],
-                                       envs['mo_coeff'], envs['mo_occ'])
+                                       envs['mo_coeff'], envs['mo_occ'],
+                                       overwrite_mol=False)
+        return self
 
     @pyscf.lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
@@ -1117,6 +1119,7 @@ class SCF(pyscf.lib.StreamObject):
             logger.note(self, 'SCF not converge.')
             logger.note(self, 'SCF energy = %.15g after %d cycles',
                         self.e_tot, self.max_cycle)
+        return self
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol

@@ -367,9 +367,9 @@ class UHF(uhf.UHF):
         self.mo_occ[1][:nocc_b] = 1
         self.mo_occ[1][nocc_b:] = 0
         if self.chkfile:
-            chkfile.dump_scf(self.mol, self.chkfile,
-                             self.e_tot, self.mo_energy,
-                             self.mo_coeff, self.mo_occ)
+            chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
+                             self.mo_coeff, self.mo_occ, overwrite_mol=True)
+        return self
 
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose

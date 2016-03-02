@@ -18,7 +18,8 @@ def load_mcscf(chkfile):
 
 def dump_mcscf(mc, chkfile=None, key='mcscf',
                e_tot=None, mo_coeff=None, ncore=None, ncas=None,
-               mo_occ=None, mo_energy=None, e_cas=None, ci_vector=None):
+               mo_occ=None, mo_energy=None, e_cas=None, ci_vector=None,
+               overwrite_mol=True):
     '''Save CASCI/CASSCF calculation results or intermediates in chkfile.
     '''
     if chkfile is None: chkfile = mc.chkfile
@@ -46,23 +47,27 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
 
     if h5py.is_hdf5(chkfile):
         fh5 = h5py.File(chkfile)
-        if 'mcscf' in fh5:
-            del(fh5['mcscf'])
+        if key in fh5:
+            del(fh5[key])
     else:
         fh5 = h5py.File(chkfile, 'w')
+
     if 'mol' not in fh5:
         fh5['mol'] = format(mc.mol.pack())
+    elif overwrite_mol:
+        del(fh5['mol'])
+        fh5['mol'] = format(mc.mol.pack())
 
-    fh5['mcscf/mo_coeff'] = mo_coeff
+    fh5[key+'/mo_coeff'] = mo_coeff
 
-    def store(key, val):
+    def store(subkey, val):
         if val is not None:
-            fh5[key] = val
-    store('mcscf/e_tot', e_tot)
-    store('mcscf/e_cas', e_cas)
-    store('mcscf/ci', ci_vector)
-    store('mcscf/ncore', ncore)
-    store('mcscf/ncas', ncas)
-    store('mcscf/mo_occ', mo_occ)
-    store('mcscf/mo_energy', mo_energy)
+            fh5[key+'/'+subkey] = val
+    store('e_tot', e_tot)
+    store('e_cas', e_cas)
+    store('ci', ci_vector)
+    store('ncore', ncore)
+    store('ncas', ncas)
+    store('mo_occ', mo_occ)
+    store('mo_energy', mo_energy)
     fh5.close()
