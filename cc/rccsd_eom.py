@@ -480,11 +480,10 @@ class _ERIS:
         mem_now = pyscf.lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        #if (method == 'incore' and cc._scf._eri is not None and
-        #    (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
-        if True:
-
+        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory) 
+            or cc.mol.incore_anyway):
             eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
+            if mo_coeff.dtype == np.float: eri = eri.real
             eri = eri.reshape((nmo,)*4)
             # <ij|kl> = (ik|jl)
             eri = eri.transpose(0,2,1,3) 
@@ -514,66 +513,4 @@ class _ERIS:
             #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
             #self.vvvv = pyscf.ao2mo.restore(4, eri[nocc:,nocc:,nocc:,nocc:], nvir)
 
-        else:
-            print "*** Using HDF5 ERI storage ***"
-            _tmpfile1 = tempfile.NamedTemporaryFile()
-            self.feri = h5py.File(_tmpfile1.name)
-            orbo = so_coeff[:,:nocc]
-            orbv = so_coeff[:,nocc:]
-            if mo_coeff.dtype == np.complex: ds_type = 'c16'
-            else: ds_type = 'f8'
-            self.oooo = self.feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
-            self.ooov = self.feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
-            self.ovoo = self.feri.create_dataset('ovoo', (nocc,nvir,nocc,nocc), ds_type)
-            self.oovv = self.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
-            self.ovov = self.feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
-            self.ovvv = self.feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
-            self.vvvv = self.feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-
-            cput1 = time.clock(), time.time()
-            # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
-            buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
-            buf = buf.reshape((nocc,nmo,nocc,nmo))
-            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
-            buf1 = buf - buf.transpose(0,3,2,1)
-            buf1 = buf1.transpose(0,2,1,3) 
-            buf1 = buf1.astype(cc._scf._dtype)
-            cput1 = log.timer_debug1('transforming oopq', *cput1)
-            self.dtype = buf1.dtype
-            self.oooo[:,:,:,:] = buf1[:,:,:nocc,:nocc]
-            self.ooov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
-            self.oovv[:,:,:,:] = buf1[:,:,nocc:,nocc:]
-
-            cput1 = time.clock(), time.time()
-            # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
-            buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
-            buf = buf.reshape((nocc,nmo,nvir,nmo))
-            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
-            buf1 = buf - buf.transpose(0,3,2,1)
-            buf1 = buf1.transpose(0,2,1,3) 
-            buf1 = buf1.astype(cc._scf._dtype)
-            cput1 = log.timer_debug1('transforming ovpq', *cput1)
-            self.ovoo[:,:,:,:] = buf1[:,:,:nocc,:nocc]
-            self.ovov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
-            self.ovvv[:,:,:,:] = buf1[:,:,nocc:,nocc:]
-
-            for a in range(nvir):
-                orbva = orbv[:,a].reshape(-1,1)
-                buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
-                buf = buf.reshape((1,nvir,nvir,nvir))
-                if a%2 == 0:
-                    buf[0,1::2,:,:] = 0.
-                else:
-                    buf[0,0::2,:,:] = 0.
-                buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
-                buf1 = buf - buf.transpose(0,3,2,1) 
-                buf1 = buf1.transpose(0,2,1,3) 
-                buf1 = buf1.astype(cc._scf._dtype)
-                self.vvvv[a] = buf1[:]
-
-            cput1 = log.timer_debug1('transforming vvvv', *cput1)
-
         log.timer('CCSD integral transformation', *cput0)
-
-def finger(a):
-    return abs(a).sum()

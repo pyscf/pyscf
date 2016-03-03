@@ -170,6 +170,9 @@ class CCSD(pyscf.cc.ccsd.CCSD):
             mo_occ[0:mf.mol.nelectron] = 1
 
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        # Spin-orbital CCSD needs a stricter tolerance
+        self.conv_tol = 1e-8
+        self.conv_tol_normt = 1e-6
 
     def nocc(self):
         # Spin orbitals
@@ -506,10 +509,10 @@ class _ERIS:
         so_coeff[:,::2] = so_coeff[:,1::2] = mo_coeff[:nmo/2,::2]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and cc._scf._eri is not None and
-            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
-
+        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory) 
+            or cc.mol.incore_anyway):
             eri = ao2mofn(cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
+            if mo_coeff.dtype == np.float: eri = eri.real
             eri = eri.reshape((nmo,)*4)
             eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0.
             eri1 = eri - eri.transpose(0,3,2,1) 
@@ -549,11 +552,11 @@ class _ERIS:
             cput1 = time.clock(), time.time()
             # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
+            if mo_coeff.dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nocc,nmo))
             buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
             buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
-            buf1 = buf1.astype(cc._scf._dtype)
             cput1 = log.timer_debug1('transforming oopq', *cput1)
             self.dtype = buf1.dtype
             self.oooo[:,:,:,:] = buf1[:,:,:nocc,:nocc]
@@ -563,11 +566,11 @@ class _ERIS:
             cput1 = time.clock(), time.time()
             # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
+            if mo_coeff.dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nvir,nmo))
             buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
             buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
-            buf1 = buf1.astype(cc._scf._dtype)
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
             self.ovoo[:,:,:,:] = buf1[:,:,:nocc,:nocc]
             self.ovov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
@@ -576,6 +579,7 @@ class _ERIS:
             for a in range(nvir):
                 orbva = orbv[:,a].reshape(-1,1)
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
+                if mo_coeff.dtype == np.float: buf = buf.real
                 buf = buf.reshape((1,nvir,nvir,nvir))
                 if a%2 == 0:
                     buf[0,1::2,:,:] = 0.
@@ -584,7 +588,6 @@ class _ERIS:
                 buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
                 buf1 = buf - buf.transpose(0,3,2,1) 
                 buf1 = buf1.transpose(0,2,1,3) 
-                buf1 = buf1.astype(cc._scf._dtype)
                 self.vvvv[a] = buf1[:]
 
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
