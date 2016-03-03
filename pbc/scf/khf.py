@@ -251,7 +251,7 @@ class KRHF(pbchf.RHF):
             self.kpts = np.zeros((1,3))
         else:
             self.kpts = kpts
-        if len(kpts) == 1 and np.allclose(self.kpts[0], np.zeros(3)):
+        if len(self.kpts) == 1 and np.allclose(self.kpts[0], np.zeros(3)):
             self._dtype = np.float64
         else:
             self._dtype = np.complex128
