@@ -95,8 +95,10 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     # answers to agree
     box_edge = np.dot(2.*np.pi*np.diag(cell.gs+0.5), np.linalg.inv(cell._h))
     reduced_coords = np.dot(kG, np.linalg.inv(box_edge))
+    equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
     factor = np.trunc(reduced_coords)
     kG -= 2.*np.dot(np.sign(factor), box_edge)
+    kG[equal2boundary] = [0.0, 0.0, 0.0]
     # Done wrapping.
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
@@ -139,6 +141,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         maxqv = abs(mf.exx_q).max(axis=0)
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG += mf.exx_vq[qidx] * is_lt_maxqv
+
+    coulG[ coulG == np.inf ] = 0.0
 
     return coulG
 
@@ -216,8 +220,8 @@ def super_cell(cell, ncopy):
 
 def get_kconserv(cell, kpts):
     '''Get the momentum conservation array for a set of k-points.
-    
-    Given k-point indices (k, l, m) the array kconserv[k,l,m] returns 
+
+    Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
     the index n that satifies momentum conservation,
 
        k(k) - k(l) = - k(m) + k(n)
