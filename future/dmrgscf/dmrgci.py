@@ -112,7 +112,6 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.scheduleTols   = []
         self.scheduleNoises = []
         self.onlywriteIntegral = False
-        self.block_extra_keyword = [] #For Block advanced user only.
 
         self.orbsym = []
         if mol.symmetry:
@@ -123,6 +122,9 @@ class DMRGCI(pyscf.lib.StreamObject):
 ##################################################
 # don't modify the following attributes, if you do not finish part of calculation, which can be reused. 
 
+        #DO NOT CHANGE these parameters, unless you know the code in details
+        self.twopdm = True #By default, 2rdm is calculated after the calculations of wave function.
+        self.block_extra_keyword = [] #For Block advanced user only.
         self.has_threepdm = False
         self.has_nevpt = False
 # This flag _restart is set by the program internally, to control when to make
@@ -426,7 +428,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
 
     f.write('outputlevel %s\n'%DMRGCI.outputlevel)
     f.write('hf_occ integral\n')
-    if(with_2pdm):
+    if(with_2pdm and DMRGCI.twopdm):
         f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):
         f.write('nonspinAdapted\n')

@@ -90,7 +90,6 @@ these keywords.
 
 from pyscf.dmrgscf import dmrgci
 from pyscf.dmrgscf.dmrgci import DMRGCI, DMRGSCF
-from pyscf.dmrgscf.nevpt_mpi import compress_perturb
 
 from pyscf.dmrgscf import chemps2
 from pyscf.dmrgscf.chemps2 import CheMPS2
