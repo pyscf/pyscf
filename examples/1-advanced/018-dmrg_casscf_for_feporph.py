@@ -214,7 +214,7 @@ cas_t = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 #
 # call DMRG-NEVPT2 (about 2 days, 100 GB memory)
 #
-ept2_t = mrpt.nevpt2.sc_nevpt(mc)
+ept2_t = mrpt.NEVPT(mc).kernel()
 
 print('E(T) = %.15g  E(Q) = %.15g  gap = %.15g' % (e_t, e_q, e_t-e_q))
 # E(T) = -2244.88920313881  E(Q) = -2244.90267106288  gap = 0.0134679240700279
