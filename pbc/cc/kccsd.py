@@ -81,6 +81,7 @@ def energy(cc, t1, t2, eris):
             t1t1[ki,kj,ka,:,:,:,:] = einsum('ia,jb->ijab',t1[ki,:,:],t1[kj,:,:])
     tau = t2 + 2*t1t1
     e += 0.25 * numpy.dot(tau.flatten(), eris_oovv.flatten())
+    e /= nkpts
     #e += (0.25*einsum('ijab,ijab',t2,eris_oovv)
     #      + 0.5*einsum('ia,jb,ijab',t1,t1,eris_oovv))
     print "Energy Real / Imaginary = %.15g %.15g" % (e.real, e.imag)
@@ -344,6 +345,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
 
         t2 = numpy.conj(t2)
         self.emp2 = 0.25*numpy.einsum('pqrijab,pqrijab',t2,eris_oovv).real
+        self.emp2 /= nkpts
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         logger.timer(self, 'init mp2', *time0)
         print "MP2 energy =", self.emp2
@@ -447,7 +449,7 @@ class _ERIS:
                                         rspq = eri[kr,ks,kp,r,s,p,q]
                                         diff = numpy.linalg.norm(pqrs - rspq).real
                                         if diff > 1e-5:
-                                            print "** Warning: ERI diff at ", 
+                                            print "** Warning: ERI diff at ",
                                             print "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s
                                         maxdiff = max(maxdiff,diff)
             print "Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff

@@ -6,7 +6,7 @@ DEBUG = False
 
 def einsum(idx_str, *tensors):
     """Perform a more efficient einsum via reshaping to a matrix multiply.
-    
+
     Current differences compared to np.einsum:
     This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
     and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
@@ -132,7 +132,7 @@ def einsum(idx_str, *tensors):
         new_orderCt.append(idxCt.index(idx))
 
     #return np.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
-    return lib.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
+    return lib.zdot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
 
 
 def _cp(a):
