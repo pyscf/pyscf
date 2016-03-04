@@ -24,8 +24,7 @@ technique.  It is able to handle much larger systems, up to about 30 orbitals.
 #
 # One can adjust the processor numbers for Block code on the runtime.
 #
-from pyscf.dmrgscf import settings
-settings.MPIPREFIX ='mpirun -n 3'
+dmrgscf.settings.MPIPREFIX ='mpirun -n 3'
 
 b = 1.4
 mol = gto.Mole()

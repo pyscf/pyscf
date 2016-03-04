@@ -88,7 +88,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(norm, 0.074269050656629421, 7)
 
     def test_energy(self):
-        e = nevpt2.sc_nevpt(mc)
+        e = nevpt2.NEVPT(mc).kernel()
         self.assertAlmostEqual(e, -0.10315217594326213, 7)
 
     def test_energy1(self):
@@ -104,7 +104,7 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASCI(m, 6, 8)
         mc.fcisolver.conv_tol = 1e-16
         mc.kernel()
-        e = nevpt2.sc_nevpt(mc)
+        e = nevpt2.NEVPT(mc).kernel()
         self.assertAlmostEqual(e, -0.16978532268234559, 6)
 
 
