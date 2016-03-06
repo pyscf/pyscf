@@ -182,7 +182,8 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
             ijkoff = ao_loc[bstart] * (ao_loc[bstart]+1) // 2 * naoaux
         _ri.nr_auxe2(int3c, basrange,
                      atm, bas, env, aosym, comp, cintopt, buf, ijkoff,
-                     nao, nao, naoaux, ao_loc[bstart:bend+1], ao_loc, kloc)
+                     ao_loc[bend]-ao_loc[bstart],
+                     nao, naoaux, ao_loc[bstart:bend+1], ao_loc, kloc)
         for icomp in range(comp):
             if comp == 1:
                 label = '%s/%d'%(dataname,istep)
