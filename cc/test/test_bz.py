@@ -42,7 +42,7 @@ class KnowValues(unittest.TestCase):
         mcc.kernel()
         self.assertTrue(numpy.allclose(mcc.t2,mcc.t2.transpose(1,0,3,2)))
         self.assertAlmostEqual(mcc.ecc, -0.5690403273511450, 8)
-        self.assertAlmostEqual(abs(mcc.t2).sum(), 92.61277290776878, 6)
+        self.assertAlmostEqual(abs(mcc.t2).sum(), 92.612789226948451, 6)
 
 
 if __name__ == "__main__":

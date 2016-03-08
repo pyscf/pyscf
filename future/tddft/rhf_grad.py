@@ -109,7 +109,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mol.nr_offset_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]

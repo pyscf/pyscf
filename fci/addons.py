@@ -245,7 +245,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     return airrep ^ birrep
 
 
-def des_a(ci0, norb, (neleca,nelecb), ap_id):
+def des_a(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
     the N-electron wavefunction.
 
@@ -267,6 +267,7 @@ def des_a(ci0, norb, (neleca,nelecb), ap_id):
         2D array, row for alpha strings and column for beta strings.  Note it
         has different number of rows to the input CI coefficients
     '''
+    neleca, nelecb = neleca_nelecb
     if neleca <= 0:
         return numpy.zeros((0, ci0.shape[1]))
     des_index = cistring.gen_des_str_index(range(norb), neleca)
@@ -282,7 +283,7 @@ def des_a(ci0, norb, (neleca,nelecb), ap_id):
     ci1[addr_ci1] = sign.reshape(-1,1) * ci0[addr_ci0]
     return ci1
 
-def des_b(ci0, norb, (neleca,nelecb), ap_id):
+def des_b(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N-1)-electron wavefunction by removing a beta electron from
     N-electron wavefunction.
 
@@ -300,6 +301,7 @@ def des_b(ci0, norb, (neleca,nelecb), ap_id):
         2D array, row for alpha strings and column for beta strings. Note it
         has different number of columns to the input CI coefficients.
     '''
+    neleca, nelecb = neleca_nelecb
     if nelecb <= 0:
         return numpy.zeros((ci0.shape[0], 0))
     des_index = cistring.gen_des_str_index(range(norb), nelecb)
@@ -316,7 +318,7 @@ def des_b(ci0, norb, (neleca,nelecb), ap_id):
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
-def cre_a(ci0, norb, (neleca,nelecb), ap_id):
+def cre_a(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N+1)-electron wavefunction by adding an alpha electron in
     the N-electron wavefunction.
 
@@ -338,6 +340,7 @@ def cre_a(ci0, norb, (neleca,nelecb), ap_id):
         2D array, row for alpha strings and column for beta strings. Note it
         has different number of rows to the input CI coefficients.
     '''
+    neleca, nelecb = neleca_nelecb
     if neleca >= norb:
         return numpy.zeros((0, ci0.shape[1]))
     cre_index = cistring.gen_cre_str_index(range(norb), neleca)
@@ -353,7 +356,7 @@ def cre_a(ci0, norb, (neleca,nelecb), ap_id):
 
 # construct (N+1)-electron wavefunction by adding a beta electron to
 # N-electron wavefunction:
-def cre_b(ci0, norb, (neleca,nelecb), ap_id):
+def cre_b(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N+1)-electron wavefunction by adding a beta electron in
     the N-electron wavefunction.
 
@@ -371,6 +374,7 @@ def cre_b(ci0, norb, (neleca,nelecb), ap_id):
         2D array, row for alpha strings and column for beta strings. Note it
         has different number of columns to the input CI coefficients.
     '''
+    neleca, nelecb = neleca_nelecb
     if nelecb >= norb:
         return numpy.zeros((ci0.shape[0], 0))
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)

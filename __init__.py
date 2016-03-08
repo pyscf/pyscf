@@ -14,6 +14,8 @@ Features
     * MP2
     * SC-NEVPT2
     * CCSD and CCSD(T)
+    * CCSD lambda
+    * EOM-CCSD
     * Density fitting
     * relativistic correction
     * General integral transformation
@@ -132,10 +134,11 @@ __version__ = '1.1'
 import os
 import numpy
 if numpy.__version__ <= '1.8.0':
-    raise SystemError("You're using an old version of Numpy (%s). " % numpy.__version__
+    raise SystemError("You're using an old version of Numpy (%s). "
                       "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
-                      "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy.")
+                      "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
+                      numpy.__version__)
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf

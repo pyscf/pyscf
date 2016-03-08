@@ -7,6 +7,7 @@ import sys
 import time
 import tempfile
 import ctypes
+from functools import reduce
 import numpy
 import h5py
 import pyscf.lib
@@ -31,7 +32,7 @@ def density_fit(casscf, auxbasis='weigend'):
     may NOT execute the density fitting for 2e integral transformation.
     If the underlying meanfield object is density-fitting SCF (self._scf._tag_df is True),
     the 2e integral will be transformed using density fitting method.
-    Otherwise, the exact 2e integral transformation will be called.
+    Otherwise, the exact 4-center 2e integral transformation will be called.
 
     Args:
         casscf : an CASSCF object
@@ -62,11 +63,21 @@ def density_fit(casscf, auxbasis='weigend'):
             else:
                 self._cderi = None
             self._naoaux = None
+# _tag_df to indicate whether the CASSCF instance is a density-fitting object.
+# Note depending on the underlying _scf method, this density_fit(CASSCF) can
+# be either exact CASSCF (with approximate orbital hessian) or pure DF-CASSCF
+# (if the _scf.get_jk function computes JK matrix using density fitting).
+# Be very cautious to set this parameter:  because JK are called through the
+# underlying _scf method, the integral transformation needs to be consistent.
+            if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+                self._tag_df = self._scf._tag_df
+            else:
+                self._tag_df = False
             self._keys = self._keys.union(['auxbasis'])
 
         def dump_flags(self):
             casscf.__class__.dump_flags(self)
-            if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+            if self._tag_df:
                 logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
             elif 'CASSCF' in str(casscf.__class__):
                 logger.info(self, 'CASSCF: density fitting for orbital hessian')
@@ -75,7 +86,7 @@ def density_fit(casscf, auxbasis='weigend'):
             return ao2mo_(self, mo_coeff)
 
         def get_h2eff(self, mo_coeff=None):  # For CASCI
-            if hasattr(self._scf, '_tag_df') and self._scf._tag_df:
+            if self._tag_df:
                 return ao2mo_aaaa(self, mo_coeff)
             else:
                 return casscf.get_h2eff(mo_coeff)
@@ -96,11 +107,11 @@ def ao2mo_(casscf, mo):
     if log.verbose >= logger.DEBUG1:
         t1 = log.timer('Generate density fitting integrals', *t0)
 
-    if hasattr(casscf._scf, '_tag_df') and casscf._scf._tag_df:
+    if hasattr(casscf, '_tag_df') and casscf._tag_df:
         eris = _ERIS(casscf, mo)
     else:
-        # Only approximate the orbital rotation, call the 4-center integral
-        # transformation.  CASSCF is exact.
+# Only approximate the orbital rotation, call the 4-center integral
+# transformation.  CASSCF is exact.
         eris = mc_ao2mo._ERIS(casscf, mo, 'incore', level=2)
 
         t0 = (time.clock(), time.time())

@@ -219,7 +219,7 @@ def parse_xc(description):
                 fn_ids.append(key)
                 facs.append(val)
                 n += 1
-        return zip(fn_ids, facs)
+        return list(zip(fn_ids, facs))
 
     for token in x_code.replace('-', '+-').split('+'):
         parse_token(token, 'X')
@@ -480,9 +480,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         ngrids = len(rho_u)
 
-    fn_ids = numpy.asarray([x[0] for x in fn_facs], dtype=numpy.int32)
-    facs = numpy.asarray([x[1] for x in fn_facs], dtype=numpy.float)
-    if all((is_lda(int(x)) for x in fn_ids)):  # LDA
+    fn_ids = [x[0] for x in fn_facs]
+    facs   = [x[1] for x in fn_facs]
+    if all((is_lda(x) for x in fn_ids)):  # LDA
         if spin == 0:
             nvar = 1
         else:
@@ -493,13 +493,13 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 2
         else:
             nvar = 5
-    outlen = (math.factorial(nvar+deriv) /
+    outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
     outbuf = numpy.empty((ngrids,outlen))
 
-    _itrf.XCFUN_eval_xc(ctypes.c_int(fn_ids.size),
-                        fn_ids.ctypes.data_as(ctypes.c_void_p),
-                        facs.ctypes.data_as(ctypes.c_void_p),
+    n = len(fn_ids)
+    _itrf.XCFUN_eval_xc(ctypes.c_int(n),
+                        (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
                         ctypes.c_int(spin),
                         ctypes.c_int(deriv), ctypes.c_int(ngrids),
                         rho_u.ctypes.data_as(ctypes.c_void_p),

@@ -121,7 +121,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(msym)
         mf.max_memory = 100
         mf.kernel()
-        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.DFCASSCF(mf, 4, 4)
         eri0 = numpy.dot(mf._cderi.T, mf._cderi)
         nmo = mc.mo_coeff.shape[1]
         ncore = mc.ncore

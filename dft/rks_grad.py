@@ -160,7 +160,7 @@ if __name__ == '__main__':
     h2o.build()
     mf = dft.RKS(h2o)
     mf.conv_tol = 1e-15
-    print mf.scf()
+    print(mf.scf())
     g = Gradients(mf)
     print(g.grad())
 #[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
@@ -169,7 +169,7 @@ if __name__ == '__main__':
 
     #mf.grids.level = 6
     mf.xc = 'b88,p86'
-    print mf.scf()
+    print(mf.scf())
     g = Gradients(mf)
     print(g.grad())
 #[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
@@ -177,7 +177,7 @@ if __name__ == '__main__':
 # [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
 
     mf.xc = 'b3lypg'
-    print mf.scf()
+    print(mf.scf())
     g = Gradients(mf)
     print(g.grad())
 #[[ -3.59411142e-16  -2.68753987e-16   1.21557501e-02]

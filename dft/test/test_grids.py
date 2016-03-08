@@ -60,8 +60,8 @@ class KnowValues(unittest.TestCase):
 
         grid.prune = gen_grid.nwchem_prune
         coord, weight = grid.setup_grids()
-        self.assertAlmostEqual(numpy.linalg.norm(coord), 166.41909217472616, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 707.32093809462719, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(coord), 149.55023044392638, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(weight), 586.36841824004455, 9)
 
 
 if __name__ == "__main__":

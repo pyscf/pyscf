@@ -115,7 +115,7 @@ class CASSCF(mc1step.CASSCF):
 def _symmetrize(mat, orbsym, groupname):
     mat1 = numpy.zeros_like(mat)
     orbsym = numpy.array(orbsym)
-    for i0 in set(orbsym):
+    for i0 in sorted(set(orbsym)):
         lst = numpy.where(orbsym == i0)[0]
         mat1[lst[:,None],lst] = mat[lst[:,None],lst]
     return mat1

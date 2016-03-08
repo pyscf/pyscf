@@ -1464,11 +1464,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
             head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
-            branch = os.path.basename(open(head, 'r').read().splitlines()[0])
+            with open(head, 'r') as f:
+                branch = os.path.basename(f.read().splitlines()[0])
             # or command(git log -1 --pretty=%H)
             head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
-            with open(head, 'r') as fin:
-                self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
+            with open(head, 'r') as f:
+                self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
             self.stdout.write('\n')
         except IOError:
             pass
@@ -2029,7 +2030,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def spinor_labels(self):
         return spinor_labels(self)
 
-_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.iteritems())
+_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
 def _rm_digit(symb):
     if symb.isalpha():

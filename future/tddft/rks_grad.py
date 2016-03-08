@@ -23,8 +23,9 @@ from pyscf.tddft import rhf_grad
 #
 # Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, (x, y), singlet=True, atmlst=None,
+def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
+    x, y = x_y
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -164,7 +165,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mol.nr_offset_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -201,12 +202,12 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     mf = td_grad._scf
     grids = mf.grids
 
+    ni = copy.copy(mf._numint)
     if rks.USE_XCFUN:
-        ni = copy.copy(mf._numint)
         try:
             ni.libxc = dft.xcfun
             xctype = ni._xc_type(xc_code)
-        except ImportError, KeyError:
+        except (ImportError, KeyError, NotImplementedError):
             ni.libxc = dft.libxc
             xctype = ni._xc_type(xc_code)
     else:

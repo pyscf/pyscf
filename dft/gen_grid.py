@@ -253,7 +253,7 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             angs = numpy.array(angs)
             coords = []
             vol = []
-            for n in set(angs):
+            for n in sorted(set(angs)):
                 grid = numpy.empty((n,4))
                 libdft.MakeAngularGrid(grid.ctypes.data_as(ctypes.c_void_p),
                                        ctypes.c_int(n))

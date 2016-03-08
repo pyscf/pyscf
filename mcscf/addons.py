@@ -137,7 +137,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
 
     irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
     if cas_irrep_ncore is not None:
-        for k, n in cas_irrep_ncore.iteritems():
+        for k, n in cas_irrep_ncore.items():
             if isinstance(k, str):
                 irid = symm.irrep_name2id(casscf.mol.groupname, k)
             else:
@@ -150,7 +150,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                                if n > 0])
     irrep_ncas = {}
     count = 0
-    for k, n in cas_irrep_nocc.iteritems():
+    for k, n in cas_irrep_nocc.items():
         if isinstance(k, str):
             irid = symm.irrep_name2id(casscf.mol.groupname, k)
         else:

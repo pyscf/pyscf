@@ -58,7 +58,7 @@ def eig(mat, orbsym):
     norb = mat.shape[0]
     e = numpy.zeros(norb)
     c = numpy.zeros((norb,norb))
-    for i0 in set(orbsym):
+    for i0 in sorted(set(orbsym)):
         lst = numpy.where(orbsym == i0)[0]
         if len(lst) > 0:
             w, v = pyscf.scf.hf.eig(mat[lst[:,None],lst], None)

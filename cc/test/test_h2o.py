@@ -18,7 +18,7 @@ mol.basis = {'H': 'cc-pvdz',
              'O': 'cc-pvdz',}
 mol.build()
 mf = scf.RHF(mol)
-mf.conv_tol = 1e-14
+mf.conv_tol_grad = 1e-8
 ehf = mf.kernel()
 
 
@@ -29,18 +29,18 @@ class KnowValues(unittest.TestCase):
         mcc.conv_tol_normt = 1e-7
         eris = mcc.ao2mo()
         emp2, t1, t2 = mcc.init_amps(eris)
-        self.assertAlmostEqual(abs(t2).sum(), 4.9556571218177, 12)
-        self.assertAlmostEqual(emp2, -0.2040199672883385, 12)
+        self.assertAlmostEqual(abs(t2).sum(), 4.9556571211255909, 10)
+        self.assertAlmostEqual(emp2, -0.2040199672883385, 10)
         t1, t2 = cc.ccsd.update_amps(mcc, t1, t2, eris)
-        self.assertAlmostEqual(abs(t1).sum(), 0.0475038989126  , 12)
-        self.assertAlmostEqual(abs(t2).sum(), 5.401823846018721, 12)
+        self.assertAlmostEqual(abs(t1).sum(), 0.0475038989126, 10)
+        self.assertAlmostEqual(abs(t2).sum(), 5.4018238455030, 10)
         self.assertAlmostEqual(cc.ccsd.energy(mcc, t1, t2, eris),
-                               -0.208967840546667, 12)
+                               -0.208967840546667, 10)
         t1, t2 = cc.ccsd.update_amps(mcc, t1, t2, eris)
         self.assertAlmostEqual(cc.ccsd.energy(mcc, t1, t2, eris),
-                               -0.212173678670510, 12)
-        self.assertAlmostEqual(abs(t1).sum(), 0.05470123093500083, 12)
-        self.assertAlmostEqual(abs(t2).sum(), 5.5605208391876539, 12)
+                               -0.212173678670510, 10)
+        self.assertAlmostEqual(abs(t1).sum(), 0.05470123093500083, 10)
+        self.assertAlmostEqual(abs(t2).sum(), 5.5605208386554716, 10)
 
         mcc.kernel()
         self.assertTrue(numpy.allclose(mcc.t2,mcc.t2.transpose(1,0,3,2)))
@@ -96,7 +96,7 @@ class KnowValues(unittest.TestCase):
         mcc.kernel()
         mcc.solve_lambda()
         self.assertAlmostEqual(numpy.linalg.norm(mcc.l1), 0.01326267012100099, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(mcc.l2), 0.21257560224233527, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(mcc.l2), 0.21257559872380857, 9)
 
     def test_ccsd_rdm(self):
         mcc = cc.ccsd.CC(mf)
@@ -106,8 +106,8 @@ class KnowValues(unittest.TestCase):
         mcc.solve_lambda()
         dm1 = mcc.make_rdm1()
         dm2 = mcc.make_rdm2()
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4225909673029618, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.072866588576396, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227836730016374, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074629443311355, 9)
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

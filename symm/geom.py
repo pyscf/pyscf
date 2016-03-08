@@ -430,7 +430,7 @@ class SymmSys(object):
                         maybe_mirrorx.append(numpy.cross(zaxis, r1[i1]+r1[i2]))
 
         possible_cn = []
-        for n in set(maybe_cn):
+        for n in sorted(set(maybe_cn)):
             for i in range(2, n+1):
                 if n % i == 0:
                     possible_cn.append(i)
@@ -593,10 +593,9 @@ def _pesudo_vectors(vs):
     # ensure z component > 0
     vs[vs[:,2]<0] *= -1
     # if z component == 0, ensure y component > 0
-    vs[numpy.logical_and(vs[:,1]<0, idz0)] *= -1
+    vs[(vs[:,1]<0) & idz0] *= -1
     # if y and z component == 0, ensure x component > 0
-    idx = numpy.logical_and(idy0, idz0)
-    vs[numpy.logical_and(vs[:,0]<0, idx)] *= -1
+    vs[(vs[:,0]<0) & idy0 & idz0] *= -1
     return vs
 
 

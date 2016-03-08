@@ -4,6 +4,7 @@
 #
 
 import time
+from functools import reduce
 import numpy
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step

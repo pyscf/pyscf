@@ -167,7 +167,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     log.debug('erifile %.8g MB, IO buf size %.8g MB',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     if log.verbose >= logger.DEBUG1:
-        log.debug1('shranges = %s', list(shranges))
+        log.debug1('shranges = %s', shranges)
     cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
     for istep, sh_range in enumerate(shranges):
@@ -346,7 +346,7 @@ def _guess_shell_ranges(mol, buflen, aosym):
         bufrows.append(nao*nao-ij_start)
 
     # for each buffer, sh_ranges record (start, end, bufrow)
-    sh_ranges = zip(ish_seg[:-1], ish_seg[1:], bufrows)
+    sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
     return sh_ranges
 
 def _stand_sym_code(sym):

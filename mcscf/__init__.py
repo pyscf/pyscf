@@ -164,7 +164,6 @@ from pyscf.mcscf import chkfile
 
 def CASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
-    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -173,14 +172,7 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
-        mf1 = scf.RHF(mf.mol)
-        mf1.__dict__.update(mf.__dict__)
-        mf1.mo_energy = mf.mo_energy[0]
-        mf1.mo_coeff  = mf.mo_coeff[0]
-        mf1.mo_occ    = mf.mo_occ[0]
-        mf = mf1
-
+    mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
@@ -201,14 +193,7 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
-        mf1 = scf.RHF(mf.mol)
-        mf1.__dict__.update(mf.__dict__)
-        mf1.mo_energy = mf.mo_energy[0]
-        mf1.mo_coeff  = mf.mo_coeff[0]
-        mf1.mo_occ    = mf.mo_occ[0]
-        mf = mf1
-
+    mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
     else:
@@ -246,19 +231,49 @@ def UCASSCF(mf, ncas, nelecas, **kwargs):
 def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
     if not hasattr(mf, '_tag_df') or not mf._tag_df:
         from pyscf.lib import logger
-        logger.warn(mf, 'DFCASSCF: the first argument%s is not density-fitting SCF object. '
+        logger.warn(mf, 'DFCASSCF: the first argument %s is not density-fitting SCF object. '
                     'Only orbital hessian are computed with density-fitting integrals. '
                     'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
                     mf.__class__)
-    mc = CASSCF(mf, ncas, nelecas, **kwargs)
+    mf = _convert_to_rhf(mf, False)
+    if mf.mol.symmetry:
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
+    else:
+        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
     return density_fit(mc, auxbasis)
 
 def DFCASCI(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
     if not hasattr(mf, '_tag_df') or not mf._tag_df:
         from pyscf.lib import logger
-        logger.warn(mf, 'DFCASCI: the first argument%s is not density-fitting SCF object. '
+        logger.warn(mf, 'DFCASCI: the first argument %s is not density-fitting SCF object. '
                     'Only orbital hessian are computed with density-fitting integrals. '
                     'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
                     mf.__class__)
-    mc = CASCI(mf, ncas, nelecas, **kwargs)
+    mf = _convert_to_rhf(mf, False)
+    if mf.mol.symmetry:
+        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
+    else:
+        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
     return density_fit(mc, auxbasis)
+
+def _convert_to_rhf(mf, convert_df=True):
+    from pyscf import scf
+    if (mf.__class__.__name__ in ('UHF', 'UKS') or
+        (convert_df and hasattr(mf, '_tag_df') and mf._tag_df)):
+        mf1 = scf.RHF(mf.mol)
+        mf1.__dict__.update(mf.__dict__)
+        mf1.mo_energy = mf.mo_energy[0]
+        mf1.mo_coeff  = mf.mo_coeff[0]
+        mf1.mo_occ    = mf.mo_occ[0]
+        if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
+            from pyscf.lib import logger
+            logger.warn(mf, 'CASSCF: The first argument %s is a density-fitting SCF object. '
+                        'Its orbitals are taken as the initial guess of CASSCF. '
+                        'The CASSCF object is an exact solver (no approximated integrals).\n'
+                        'If you need pure DF-CASSCF (with approximate 2e integrals), '
+                        'please initialize the CASSCF method with mcscf.DFCASSCF function.',
+                        mf.__class__)
+            mf1._tag_df = False
+        return mf1
+    else:
+        return mf

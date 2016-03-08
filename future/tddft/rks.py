@@ -29,8 +29,8 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
     mol = td.mol
     grids = mf.grids
 
+    ni = copy.copy(mf._numint)
     if USE_XCFUN:
-        ni = copy.copy(mf._numint)
         try:
             ni.libxc = dft.xcfun
             xctype = ni._xc_type(xc_code)

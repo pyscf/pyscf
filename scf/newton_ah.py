@@ -439,7 +439,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         chkfile.save_mol(mol, mf.chkfile)
 
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
-    u, g_orb, jkcount = rotaiter.next()
+    u, g_orb, jkcount = next(rotaiter)
     jktot = jkcount
     cput1 = log.timer('initializing second order scf', *cput0)
 
@@ -657,7 +657,8 @@ def newton(mf):
                                         numpy.dot(u0[1], expmat(dr[1]))))
 
             def update_mo_coeff(self, mo_coeff, u):
-                return numpy.array(map(numpy.dot, mo_coeff, u))
+                return numpy.asarray((numpy.dot(mo_coeff[0], u[0]),
+                                      numpy.dot(mo_coeff[1], u[1])))
 
             def get_mo_energy(self, fock, s1e, dm):
                 return self.eig(fock, s1e)
