@@ -7,7 +7,7 @@ import tempfile
 import numpy
 import h5py
 import pyscf.lib
-import pyscf.lib.logger as logger
+from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
 # default ioblk_size is 256 MB

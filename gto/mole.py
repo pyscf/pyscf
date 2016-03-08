@@ -728,7 +728,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
              for b in range(bas_id0, bas_id1)])
     return nao_id0, nao_id0+n
 
-def ao_loc_nr(mol):
+def ao_loc_nr(mol, cart=False):
     '''Offset of every shell in the spherical basis function spectrum
 
     Returns:
@@ -740,12 +740,14 @@ def ao_loc_nr(mol):
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
-    off = 0
-    ao_loc = []
-    for i in range(len(mol._bas)):
-        ao_loc.append(off)
-        off += (mol.bas_angular(i) * 2 + 1) * mol.bas_nctr(i)
-    ao_loc.append(off)
+    if cart:
+        l = mol._bas[:,ANG_OF]
+        dims = (l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]
+    else:
+        dims = (mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]
+    ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
+    ao_loc[0] = 0
+    dims.cumsum(dtype=numpy.int32, out=ao_loc[1:])
     return ao_loc
 
 def ao_loc_2c(mol):
@@ -1000,7 +1002,8 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:        ibf += degen
 
 def offset_nr_by_atom(mol):
-    '''For each atom, (first-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''Non-relativistic AO offset for each atom
+    (first-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
     '''
     aorange = []
     p0 = p1 = 0
