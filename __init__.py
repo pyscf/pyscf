@@ -132,9 +132,10 @@ __version__ = '1.1'
 import os
 import numpy
 if numpy.__version__ <= '1.8.0':
-    raise SystemError("You're using an old version of Numpy (%s). \n" % numpy.__version__
-                      "It is recommended to upgrad to numpy 1.8.0 or newer. \n"
-                      "Some modules (DFT, CC, MRPT) may be affected by the bug in old numpy.")
+    raise SystemError("You're using an old version of Numpy (%s). " % numpy.__version__
+                      "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
+                      "You still can use all features of PySCF with the old numpy by removing this warning msg. "
+                      "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy.")
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
