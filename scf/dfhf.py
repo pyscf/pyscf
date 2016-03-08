@@ -18,7 +18,7 @@ from pyscf.ao2mo import _ao2mo
 OCCDROP = 1e-12
 BLOCKDIM = 240
 
-def density_fit(mf, auxbasis='weigend'):
+def density_fit(mf, auxbasis='weigend+etb'):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
 
@@ -26,7 +26,10 @@ def density_fit(mf, auxbasis='weigend'):
         mf : an SCF object
 
     Kwargs:
-        auxbasis : str
+        auxbasis : str or basis dict
+            Same format to the input attribute mol.basis.
+            The default basis 'weigend+etb' means weigend-coulomb-fit basis
+            for light elements and even-tempered basis for heavy elements.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -90,18 +93,15 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         nao = mol.nao_nr()
         nao_pair = nao*(nao+1)//2
-        auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
-        mf._naoaux = auxmol.nao_nr()
-        if (nao_pair*mf._naoaux*8/1e6*2+pyscf.lib.current_memory()[0]
-            < mf.max_memory*.8):
+        max_memory = (mf.max_memory - pyscf.lib.current_memory()[0]) * .8
+        if (nao_pair*nao*3*8/1e6*2 < max_memory):
             mf._cderi = df.incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
                                                verbose=log)
         else:
             mf._cderi = tempfile.NamedTemporaryFile()
             df.outcore.cholesky_eri(mol, mf._cderi.name, auxbasis=mf.auxbasis,
                                     verbose=log)
-#            if (nao_pair*mf._naoaux*8/1e6+pyscf.lib.current_memory()[0]
-#                < mf.max_memory*.9):
+#            if (nao_pair*nao*3*8/1e6 < mf.max_memory):
 #                with df.load(mf._cderi) as feri:
 #                    cderi = numpy.asarray(feri)
 #                mf._cderi = cderi

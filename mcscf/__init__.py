@@ -228,7 +228,7 @@ def UCASSCF(mf, ncas, nelecas, **kwargs):
         raise RuntimeError('First argument needs to be UHF object')
     return mc
 
-def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
+def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend+etb', **kwargs):
     if not hasattr(mf, '_tag_df') or not mf._tag_df:
         from pyscf.lib import logger
         logger.warn(mf, 'DFCASSCF: the first argument %s is not density-fitting SCF object. '
@@ -242,7 +242,7 @@ def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
         mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
     return density_fit(mc, auxbasis)
 
-def DFCASCI(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
+def DFCASCI(mf, ncas, nelecas, auxbasis='weigend+etb', **kwargs):
     if not hasattr(mf, '_tag_df') or not mf._tag_df:
         from pyscf.lib import logger
         logger.warn(mf, 'DFCASCI: the first argument %s is not density-fitting SCF object. '

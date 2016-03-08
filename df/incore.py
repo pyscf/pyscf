@@ -13,17 +13,21 @@ import pyscf.lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import _ri
+from pyscf.df import addons
 
 libri = pyscf.lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
-def format_aux_basis(mol, auxbasis='weigend'):
+def format_aux_basis(mol, auxbasis='weigend+etb'):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
     the basis sets
     '''
     pmol = copy.copy(mol)  # just need shallow copy
-    if isinstance(auxbasis, str):
+
+    if auxbasis == 'weigend+etb':
+        pmol._basis = pmol.format_basis(addons.aug_etb_for_weigend(mol))
+    elif isinstance(auxbasis, str):
         uniq_atoms = set([a[0] for a in mol._atom])
         pmol._basis = pmol.format_basis(dict([(a, auxbasis)
                                               for a in uniq_atoms]))
@@ -92,7 +96,7 @@ def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
     return eri
 
 
-def cholesky_eri(mol, auxbasis='weigend', verbose=0):
+def cholesky_eri(mol, auxbasis='weigend+etb', verbose=0):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous

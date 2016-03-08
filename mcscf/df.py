@@ -24,7 +24,7 @@ from pyscf import df
 # auxiliary basis is required for mean-field and CASSCF, in most scenario, we
 # do not need this "density_fit" function to generate the DF-CASSCF object.
 
-def density_fit(casscf, auxbasis='weigend'):
+def density_fit(casscf, auxbasis='weigend+etb'):
     '''For the given CASSCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
     
@@ -38,7 +38,10 @@ def density_fit(casscf, auxbasis='weigend'):
         casscf : an CASSCF object
 
     Kwargs:
-        auxbasis : str
+        auxbasis : str or basis dict
+            Same format to the input attribute mol.basis.
+            The default basis 'weigend+etb' means weigend-coulomb-fit basis
+            for light elements and even-tempered basis for heavy elements.
 
     Returns:
         An CASSCF object with a modified J, K matrix constructor which uses density

@@ -26,7 +26,7 @@ libri = pyscf.lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
-def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=None,
+def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
                  int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
                  ioblk_size=256, verbose=0):
     '''3-center 2-electron AO integrals
@@ -106,7 +106,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
     return erifile
 
 # store cderi in blocks
-def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
+def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
                    int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph',
                    comp=1, ioblk_size=256, verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
@@ -200,7 +200,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     return erifile
 
 
-def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=None,
+def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
             int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
             max_memory=2000, ioblk_size=256, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.

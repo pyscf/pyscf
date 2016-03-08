@@ -365,7 +365,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
         if numpy.iscomplexobj(mo):
-            raise RuntimeError('TODO: project DHF orbital to RHF orbital')
+            raise NotImplementedError('TODO: project DHF orbital to RHF orbital')
         dm = make_rdm1(fproj(mo), mo_occ)
     else:  # UHF
         mo = scf_rec['mo_coeff']
@@ -389,7 +389,7 @@ def get_init_guess(mol, key='minao'):
     elif key.lower() == 'atom':
         return init_guess_by_atom(mol)
     elif key.lower() == 'chkfile':
-        raise RuntimeError('Call pyscf.scf.hf.init_guess_by_chkfile instead')
+        raise DeprecationWarning('Call pyscf.scf.hf.init_guess_by_chkfile instead')
     else:
         return init_guess_by_minao(mol)
 
@@ -999,7 +999,7 @@ class SCF(pyscf.lib.StreamObject):
     @pyscf.lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=True):
         if isinstance(chkfile, pyscf.gto.Mole):
-            raise RuntimeError('''
+            raise TypeError('''
     You see this error message because of the API updates.
     The first argument is chkfile name.''')
         if chkfile is None: chkfile = self.chkfile
@@ -1195,7 +1195,7 @@ class SCF(pyscf.lib.StreamObject):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis='weigend'):
+    def density_fit(self, auxbasis='weigend+etb'):
         import pyscf.scf.dfhf
         return pyscf.scf.dfhf.density_fit(self, auxbasis)
 

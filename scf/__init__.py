@@ -157,15 +157,15 @@ def DHF(mol, *args):
 def X2C(mol, *args):
     return x2c.UHF(mol, *args)
 
-def density_fit(mf, auxbasis='weigend'):
+def density_fit(mf, auxbasis='weigend+etb'):
     return mf.density_fit(auxbasis)
 
 def newton(mf):
     '''augmented hessian for Newton Raphson'''
     return newton_ah.newton(mf)
 
-def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
-                **newton_kwargs):
+def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
+                auxbasis='weigend+etb', **newton_kwargs):
     '''Wrap function to quickly setup and call Newton solver.
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
     ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.

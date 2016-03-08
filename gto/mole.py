@@ -327,8 +327,7 @@ def expand_etbs(etbs):
     >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
-    basis = [expand_etb(*etb) for etb in etbs]
-    return list(itertools.chain.from_iterable(basis))
+    return sum([expand_etb(*etb) for etb in etbs], [])
 
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):
@@ -455,9 +454,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         if not b:  # == []
             continue
         angl = b[0]
-        assert(angl < 8)
-        if angl in [6, 7]:
-            print('libcint may have large error for ERI of i function')
+        #if angl in [6, 7]:
+        #    print('libcint may have large error for ERI of i function')
         if isinstance(b[1], int):
             kappa = b[1]
             b_coeff = numpy.array(b[2:])
