@@ -303,8 +303,6 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nao = CINTtot_cgto_spinor(bas, nbas);
-        double complex *v_priv;
-        int i, j, ij;
         int *ao_loc = malloc(sizeof(int)*(nbas+1));
         int *tao = malloc(sizeof(int)*nao);
         struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao, ao_loc, tao};
@@ -316,10 +314,10 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
 
 #pragma omp parallel default(none) \
         shared(intor, fdot, fjk, \
-               dms, vjk, n_dm, ncomp, nbas, cintopt, vhfopt, envs) \
-        private(ij, i, j, v_priv)
+               dms, vjk, n_dm, ncomp, nbas, cintopt, vhfopt, envs)
         {
-                v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
+                int i, j, ij;
+                double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
                 memset(v_priv, 0, sizeof(double complex)*nao*nao*n_dm*ncomp);
 #pragma omp for nowait schedule(dynamic)
                 for (ij = 0; ij < nbas*nbas; ij++) {
