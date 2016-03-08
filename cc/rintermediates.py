@@ -1,6 +1,7 @@
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import lib as pbclib
+from pyscf.cc.ccsd import _cp
 
 #einsum = np.einsum
 einsum = pbclib.einsum
@@ -26,7 +27,7 @@ def cc_Foo(t1,t2,eris):
 def cc_Fvv(t1,t2,eris):
     nocc, nvir = t1.shape
     fvv = eris.fock[nocc:,nocc:]
-    Fac = fvv.copy() 
+    Fac = fvv.copy()
     Fac += -einsum('klcd,klad->ac',2*eris.oovv,t2)
     Fac += -einsum('kldc,klad->ac', -eris.oovv,t2)
     Fac += -einsum('klcd,ka,ld->ac',2*eris.oovv,t1,t1)
@@ -36,7 +37,7 @@ def cc_Fvv(t1,t2,eris):
 def cc_Fov(t1,t2,eris):
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]
-    Fkc = fov.copy() 
+    Fkc = fov.copy()
     Fkc += einsum('klcd,ld->kc',2*eris.oovv,t1)
     Fkc += einsum('kldc,ld->kc', -eris.oovv,t1)
     return Fkc
@@ -75,7 +76,7 @@ def cc_Wvvvv(t1,t2,eris):
     Wabcd += einsum('akcd,kb->abcd',eris.vovv,-t1)
     Wabcd += einsum('kbcd,ka->abcd',eris.ovvv,-t1)
 
-    ## Fast 
+    ## Fast
     #nocc,nvir = t1.shape
     #Wabcd = np.empty((nvir,)*4)
     #for a in range(nvir):
@@ -104,84 +105,86 @@ def cc_Wvovo(t1,t2,eris):
     Wakci -= einsum('lkcd,id,la->akci',eris.oovv,t1,t1)
     return Wakci
 
-#def cc_Woooo(t1,t2,eris):
-#    tau = make_tau(t2,t1,t1)
-#    tmp = einsum('je,mnie->mnij',t1,eris.ooov)
-#    Wmnij = eris.oooo + tmp - tmp.transpose(0,1,3,2)
-#    Wmnij += 0.25*einsum('ijef,mnef->mnij',tau,eris.oovv)
-#    return Wmnij
-#
-#def cc_Wvvvv(t1,t2,eris):
-#    eris_vovv = _cp(eris.ovvv).transpose(1,0,3,2)
-#    tau = make_tau(t2,t1,t1)
-#    tmp = einsum('mb,amef->abef',t1,eris_vovv)
-#    Wabef = eris.vvvv - tmp + tmp.transpose(1,0,2,3)
-#    Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
-#    return Wabef
-#
-#def cc_Wovvo(t1,t2,eris):
-#    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-#    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
-#    Wmbej = eris_ovvo.copy()
-#    Wmbej +=  einsum('jf,mbef->mbej',t1,eris.ovvv)
-#    Wmbej += -einsum('nb,mnej->mbej',t1,eris_oovo)
-#    Wmbej += -0.5*einsum('jnfb,mnef->mbej',t2,eris.oovv)
-#    Wmbej += -einsum('jf,nb,mnef->mbej',t1,t1,eris.oovv)
-#    return Wmbej
-#
-#def Woooo(t1,t2,eris):
-#    tau = make_tau(t2,t1,t1)
-#    Wmnij = cc_Woooo(t1,t2,eris) + 0.25*einsum('ijef,mnef->mnij',tau,eris.oovv)
-#    return Wmnij
-#
-#def Wvvvv(t1,t2,eris):
-#    tau = make_tau(t2,t1,t1)
-#    Wabef = cc_Wvvvv(t1,t2,eris) + 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
-#    return Wabef
-#
-#def Wovvo(t1,t2,eris):
-#    Wmbej = cc_Wovvo(t1,t2,eris) - 0.5*einsum('jnfb,mnef->mbej',t2,eris.oovv)
-#    return Wmbej
-#
-## Indices in the following can be safely permuted.
-#
-#def Wooov(t1,t2,eris):
-#    Wmnie = eris.ooov + einsum('if,mnfe->mnie',t1,eris.oovv)
-#    return Wmnie
-#
-#def Wvovv(t1,t2,eris):
-#    eris_vovv = - _cp(eris.ovvv).transpose(1,0,2,3)
-#    Wamef = eris_vovv - einsum('na,nmef->amef',t1,eris.oovv)
-#    return Wamef
-#
-#def Wovoo(t1,t2,eris):
-#    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-#    tmp1 = einsum('mnie,jnbe->mbij',eris.ooov,t2)
-#    tmp2 = ( einsum('ie,mbej->mbij',t1,eris_ovvo)
-#            - einsum('ie,njbf,mnef->mbij',t1,t2,eris.oovv) )
-#    FFov = Fov(t1,t2,eris)
-#    WWoooo = Woooo(t1,t2,eris)
-#    tau = make_tau(t2,t1,t1)
-#    Wmbij = ( eris.ovoo - einsum('me,ijbe->mbij',FFov,t2)
-#              - einsum('nb,mnij->mbij',t1,WWoooo)
-#              + 0.5 * einsum('mbef,ijef->mbij',eris.ovvv,tau)
-#              + tmp1 - tmp1.transpose(0,1,3,2)
-#              + tmp2 - tmp2.transpose(0,1,3,2) )
-#    return Wmbij
-#
-#def Wvvvo(t1,t2,eris):
-#    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-#    eris_vvvo = - _cp(eris.ovvv).transpose(2,3,1,0).conj()
-#    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
-#    tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
-#    tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
-#            - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
-#    FFov = Fov(t1,t2,eris)
-#    WWvvvv = Wvvvv(t1,t2,eris)
-#    tau = make_tau(t2,t1,t1)
-#    Wabei = ( eris_vvvo - einsum('me,miab->abei',FFov,t2)
-#                    + einsum('if,abef->abei',t1,WWvvvv)
-#                    + 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)
-#                    - tmp1 + tmp1.transpose(1,0,2,3)
-#                    - tmp2 + tmp2.transpose(1,0,2,3) )
-#    return Wabei
+# Indices in the following can be safely permuted.
+
+def Wooov(t1,t2,eris):
+    Wklid = eris.ooov + einsum('ic,klcd->klid',t1,eris.oovv)
+    return Wklid
+
+def Wvovv(t1,t2,eris):
+    eris_vovv = np.array(eris.ovvv).transpose(1,0,3,2)
+    Walcd = eris_vovv - einsum('ka,klcd->alcd',t1,eris.oovv)
+    return Walcd
+
+def W1ovvo(t1,t2,eris):
+    Wkaci = np.array(eris.voov).transpose(1,0,3,2)
+    Wkaci += 2.*einsum('klcd,ilad->kaci',eris.oovv,t2)
+    Wkaci +=   -einsum('klcd,liad->kaci',eris.oovv,t2)
+    Wkaci +=   -einsum('kldc,ilad->kaci',eris.oovv,t2)
+    return Wkaci
+
+def W2ovvo(t1,t2,eris):
+    Wkaci = einsum('la,lkic->kaci',-t1,Wooov(t1,t2,eris))
+    Wkaci += einsum('akdc,id->kaci',eris.vovv,t1)
+    return Wkaci
+
+def Wovvo(t1,t2,eris):
+    Wkaci = W1ovvo(t1,t2,eris) + W2ovvo(t1,t2,eris)
+    return Wkaci
+
+def W1ovov(t1,t2,eris):
+    Wkbid = np.array(eris.ovov, copy=True)
+    Wkbid += -einsum('klcd,ilcb->kbid',eris.oovv,t2)
+    return Wkbid
+
+def W2ovov(t1,t2,eris):
+    Wkbid = einsum('klid,lb->kbid',Wooov(t1,t2,eris),-t1)
+    Wkbid += einsum('bkdc,ic->kbid',eris.vovv,t1)
+    return Wkbid
+
+def Wovov(t1,t2,eris):
+    return W1ovov(t1,t2,eris) + W2ovov(t1,t2,eris)
+
+def Woooo(t1,t2,eris):
+    Wklij = np.array(eris.oooo, copy=True)
+    Wklij += einsum('klcd,ijcd->klij',eris.oovv,t2)
+    Wklij += einsum('klcd,ic,jd->klij',eris.oovv,t1,t1)
+    Wklij += einsum('klid,jd->klij',eris.ooov,t1)
+    Wklij += einsum('lkjc,ic->klij',eris.ooov,t1)
+    return Wklij
+
+def Wvvvv(t1,t2,eris):
+    Wabcd = np.array(eris.vvvv, copy=True)
+    Wabcd += einsum('klcd,klab->abcd',eris.oovv,t2)
+    Wabcd += einsum('klcd,ka,lb->abcd',eris.oovv,t1,t1)
+    Wabcd += einsum('alcd,lb->abcd',eris.vovv,-t1)
+    Wabcd += einsum('bkdc,ka->abcd',eris.vovv,-t1)
+    return Wabcd
+
+def Wvvvo(t1,t2,eris):
+    Wabcj = np.array(eris.vovv).transpose(2,3,0,1).conj()
+    Wabcj += einsum('abcd,jd->abcj',Wvvvv(t1,t2,eris),t1)
+    Wabcj += einsum('alcj,lb->abcj',W1ovov(t1,t2,eris).transpose(1,0,3,2),-t1)
+    Wabcj += einsum('kbcj,ka->abcj',W1ovvo(t1,t2,eris),-t1)
+    Wabcj += einsum('alcd,ljdb->abcj',eris.vovv,2.*t2)
+    Wabcj += einsum('alcd,ljbd->abcj',eris.vovv,  -t2)
+    Wabcj += einsum('aldc,ljdb->abcj',eris.vovv,  -t2)
+    Wabcj += einsum('bkdc,jkda->abcj',eris.vovv,  -t2)
+    Wabcj += einsum('lkjc,lkba->abcj',eris.ooov,t2)
+    Wabcj += einsum('lkjc,lb,ka->abcj',eris.ooov,t1,t1)
+    Wabcj += einsum('kc,kjab->abcj',-cc_Fov(t1,t2,eris),t2)
+    return Wabcj
+
+def Wovoo(t1,t2,eris):
+    Wkbij = np.array(eris.oovo).transpose(3,2,1,0).conj()
+    Wkbij += einsum('kbid,jd->kbij',W1ovov(t1,t2,eris), t1)
+    Wkbij += einsum('klij,lb->kbij',Woooo(t1,t2,eris),-t1)
+    Wkbij += einsum('kbcj,ic->kbij',W1ovvo(t1,t2,eris),t1)
+    Wkbij += einsum('klid,ljdb->kbij', 2.*eris.ooov,t2)
+    Wkbij += einsum('klid,jldb->kbij',   -eris.ooov,t2)
+    Wkbij += einsum('lkid,ljdb->kbij',   -eris.ooov,t2)
+    Wkbij += einsum('bkdc,jidc->kbij',eris.vovv,t2)
+    Wkbij += einsum('bkdc,jd,ic->kbij',eris.vovv,t1,t1)
+    Wkbij += einsum('lkjc,libc->kbij',   -eris.ooov,t2)
+    Wkbij += einsum('kc,ijcb->kbij',cc_Fov(t1,t2,eris),t2)
+    return Wkbij
