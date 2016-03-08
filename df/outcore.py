@@ -145,14 +145,14 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
     if 'ssc' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, _ri._cgto_cart(bas))
+        ao_loc = _ri.make_loc(0, mol.nbas, bas)
+        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas, True)
     elif 'cart' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, _ri._cgto_cart(bas))
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, _ri._cgto_cart(bas))
+        ao_loc = _ri.make_loc(0, mol.nbas, bas, True)
+        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas, True)
     else:
-        ao_loc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, _ri._cgto_spheric(bas))
+        ao_loc = _ri.make_loc(0, mol.nbas, bas)
+        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas)
     nao = ao_loc[-1] - ao_loc[0]
     naoaux = kloc[-1] - kloc[0]
 

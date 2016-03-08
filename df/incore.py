@@ -47,9 +47,9 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                       auxmol._atm, auxmol._bas, auxmol._env)
     if 'cart' in intor:
-        iloc = jloc = _ri.make_loc(0, mol.nbas, _ri._cgto_cart(bas))
+        iloc = jloc = _ri.make_loc(0, mol.nbas, bas, True)
     else:
-        iloc = jloc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
+        iloc = jloc = _ri.make_loc(0, mol.nbas, bas)
     if mol1 is None:
         basrange = (0, mol.nbas, 0, mol.nbas, mol.nbas, auxmol.nbas)
     else:
@@ -58,7 +58,7 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
                                           mol1._atm, mol1._bas, mol1._env)
         basrange = (0, mol.nbas, mol.nbas+auxmol.nbas, mol1.nbas,
                     mol.nbas, auxmol.nbas)
-        jloc = _ri.make_loc(0, mol1.nbas, _ri._cgto_spheric(mol1._bas))
+        jloc = _ri.make_loc(0, mol1.nbas, mol1._bas)
     eri = _ri.nr_auxe2(intor, basrange,
                        atm, bas, env, aosym, comp, iloc=iloc, jloc=jloc)
     return eri

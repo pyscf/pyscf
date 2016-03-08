@@ -26,17 +26,17 @@ def nr_auxe2(intor, basrange, atm, bas, env,
     nbas = ctypes.c_int(len(bas))
     i0, ic, j0, jc, k0, kc = basrange
     if 'ssc' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, _cgto_spheric(bas))
-        if jloc is None: jloc = make_loc(j0, jc, _cgto_spheric(bas))
-        if kloc is None: kloc = make_loc(k0, kc, _cgto_cart(bas))
+        if iloc is None: iloc = make_loc(i0, ic, bas)
+        if jloc is None: jloc = make_loc(j0, jc, bas)
+        if kloc is None: kloc = make_loc(k0, kc, bas, True)
     elif 'cart' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, _cgto_cart(bas))
-        if jloc is None: jloc = make_loc(j0, jc, _cgto_cart(bas))
-        if kloc is None: kloc = make_loc(k0, kc, _cgto_cart(bas))
+        if iloc is None: iloc = make_loc(i0, ic, bas, True)
+        if jloc is None: jloc = make_loc(j0, jc, bas, True)
+        if kloc is None: kloc = make_loc(k0, kc, bas, True)
     else:
-        if iloc is None: iloc = make_loc(i0, ic, _cgto_spheric(bas))
-        if jloc is None: jloc = make_loc(j0, jc, _cgto_spheric(bas))
-        if kloc is None: kloc = make_loc(k0, kc, _cgto_spheric(bas))
+        if iloc is None: iloc = make_loc(i0, ic, bas)
+        if jloc is None: jloc = make_loc(j0, jc, bas)
+        if kloc is None: kloc = make_loc(k0, kc, bas)
     if naoi is None:
         naoi = iloc[-1] - iloc[0]
     if naoj is None:
@@ -86,18 +86,13 @@ def totcart(bas):
             bas[:,gto.NCTR_OF]).sum()
 def totspheric(bas):
     return ((bas[:,gto.ANG_OF]*2+1) * bas[:,gto.NCTR_OF]).sum()
-def make_loc(shl0, shlc, num_cgto):
+def make_loc(shl0, shlc, bas, cart=False):
+    l = bas[shl0:shl0+shlc,gto.ANG_OF]
+    if cart:
+        dims = (l+1)*(l+2)//2 * bas[shl0:shl0+shlc,gto.NCTR_OF]
+    else:
+        dims = (l*2+1) * bas[shl0:shl0+shlc,gto.NCTR_OF]
     loc = numpy.empty(shlc+1, dtype=numpy.int32)
-    off = 0
-    for k, i in enumerate(range(shl0, shl0+shlc)):
-        loc[k] = off
-        off += num_cgto(i)
-    loc[shlc] = off
+    loc[0] = 0
+    dims.cumsum(dtype=numpy.int32, out=loc[1:])
     return loc
-def _cgto_spheric(bas):
-    return lambda i: (bas[i,gto.ANG_OF]*2+1) * bas[i,gto.NCTR_OF]
-def _cgto_cart(bas):
-    def fcart(i):
-        l = bas[i,gto.ANG_OF]
-        return (l+1)*(l+2)//2 * bas[i,gto.NCTR_OF]
-    return fcart
