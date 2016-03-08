@@ -45,12 +45,12 @@ class KnowValues(unittest.TestCase):
 #        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.0355530265140636, 9)
 
     def test_scf(self):
-        self.assertAlmostEqual(mf.e_tot, -76.081567943868265, 9)
+        self.assertAlmostEqual(mf.e_tot, -76.081567907064198, 9)
 
     def test_rhf(self):
         mf = scf.dhf.RHF(mol)
         mf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(mf.scf(), -76.081567943868265, 9)
+        self.assertAlmostEqual(mf.scf(), -76.081567907064198, 9)
 
     def test_get_veff(self):
         n4c = mol.nao_2c() * 2
@@ -58,7 +58,7 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((n4c,n4c))+numpy.random.random((n4c,n4c))*1j
         dm = dm + dm.T.conj()
         v = mf.get_veff(mol, dm)
-        self.assertAlmostEqual(finger(v), 7.3813090193359159+27.82445191743636j, 9)
+        self.assertAlmostEqual(finger(v), 7.3813090307732097+27.824451883003945j, 9)
 
     def test_gaunt(self):
         mol = gto.M(
