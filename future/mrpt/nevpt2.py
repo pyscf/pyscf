@@ -557,19 +557,35 @@ def Sir(mc, dms, eris, verbose=None):
     return _norm_to_energy(norm, h, -diff)
 
 
-class NEVPT():
+class NEVPT(pyscf.lib.StreamObject):
+    '''Strongly contracted NEVPT2
+
+    Attributes:
+        root : int
+            To control which state to compute if multiple roots or state-average
+            wfn were calculated in CASCI/CASSCF
+        compressed_mps : bool
+            compressed MPS perturber method for DMRG-SC-NEVPT2
+
+    Examples:
+
+    >>> mf = gto.M('N 0 0 0; N 0 0 1.4', basis='6-31g').apply(scf.RHF).run()
+    >>> mc = mcscf.CASSCF(mf, 4, 4).run()
+    >>> NEVPT(mc).kernel()
+    -0.14058324991532101
+    '''
     def __init__(self, mc, root=0):
         self.__dict__.update(mc.__dict__)
         self._mc = mc
         self.root = root
-        self.verbose = mc.verbose
-        self.onerdm = numpy.zeros((mc.mo_coeff.shape))
-        if mc.fcisolver.nroots == 1:
-            self.ci = mc.ci
-        else:
-            self.ci = mc.ci[root]
         self.compressed_mps = False
+
+##################################################
+# don't modify the following attributes, they are not input options
         self.canonicalized = False
+        nao,nmo = mc.mo_coeff.shape
+        self.onerdm = numpy.zeros((nao,nao))
+        self._keys = set(self.__dict__.keys())
 
     def get_hcore(self):
         return self._mc.get_hcore()
@@ -583,6 +599,15 @@ class NEVPT():
 
     def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
         return self._mc.h1e_for_cas(mo_coeff, ncas, ncore)
+
+    def load_ci(self, root=None):
+        '''Hack me to load CI wfn from disk'''
+        if root is None:
+            root = self.root
+        if self._mc.fcisolver.nroots == 1:
+            return self._mc.ci
+        else:
+            return self._mc.ci[root]
 
 
     def for_dmrg(self):
@@ -620,14 +645,14 @@ class NEVPT():
         #By defaut, _mc is canonicalized for the first root.
         #For SC-NEVPT based on compressed MPS perturber functions, the _mc was already canonicalized.
         if (not self.canonicalized):
-            self.mo_coeff,_, self.mo_energy = self.canonicalize(self.mo_coeff,ci=self.ci,verbose=self.verbose)
+            self.mo_coeff,_, self.mo_energy = self.canonicalize(self.mo_coeff,ci=self.load_ci(),verbose=self.verbose)
 
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             logger.info(self, 'DMRG-NEVPT')
-            dm1, dm2, dm3 = self.fcisolver.make_rdm123(self.ci,self.ncas,self.nelecas,None)
+            dm1, dm2, dm3 = self.fcisolver.make_rdm123(self.load_ci(),self.ncas,self.nelecas,None)
         else:
             dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
-                                               self.ci, self.ci, self.ncas, self.nelecas)
+                                               self.load_ci(), self.load_ci(), self.ncas, self.nelecas)
         dm4 = None
 
         dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
@@ -643,9 +668,9 @@ class NEVPT():
             link_indexa = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[0])
             link_indexb = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[1])
             aaaa = eris['ppaa'][self.ncore:nocc,self.ncore:nocc].copy()
-            f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, self.ci, self.ncas,
+            f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, self.load_ci(), self.ncas,
                                  self.nelecas, (link_indexa,link_indexb))
-            f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, self.ci, self.ncas,
+            f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, self.load_ci(), self.ncas,
                                  self.nelecas, (link_indexa,link_indexb))
             dms['f3ca'] = f3ca
             dms['f3ac'] = f3ac
@@ -665,10 +690,10 @@ class NEVPT():
             logger.note(self, "Si    (+1)'  E = %.14f",  e_Si  )
 
         else:
-            norm_Sr   , e_Sr    = Sr(self, self.ci, dms, eris)
+            norm_Sr   , e_Sr    = Sr(self, self.load_ci(), dms, eris)
             logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
             time1 = log.timer("space Sr (-1)'", *time1)
-            norm_Si   , e_Si    = Si(self, self.ci, dms, eris)
+            norm_Si   , e_Si    = Si(self, self.load_ci(), dms, eris)
             logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )
             time1 = log.timer("space Si (+1)'", *time1)
         norm_Sijrs, e_Sijrs = Sijrs(self, eris)
@@ -700,24 +725,18 @@ class NEVPT():
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
-def sc_nevpt_(mc, ci, onerdm, verbose):
-    '''Strongly contracted NEVPT2
-
-    Args:
-        mc : CASCI/CASSCF object
-
-    Kwargs:
-        ci : 2D float array
-            CI wave function.  If not given, the lowest CI root of CASCI/CASSCF
-            object will be used.
-
-    Examples:
-
-    >>> mf = gto.M('N 0 0 0; N 0 0 1.4', basis='6-31g').apply(scf.RHF).run()
-    >>> mc = mcscf.CASSCF(mf, 4, 4).run()
-    >>> sc_nevpt(mc)
-    -0.14058324991532101
-    '''
+def sc_nevpt(mc, ci=None, verbose=None):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("once")
+        warnings.warn('API updates: function sc_nevpt is deprecated feature. '
+                      'It will be removed in future release.\n'
+                      'It is recommended to run NEVPT2 with new function '
+                      'mrpt.NEVPT(mc).kernel()')
+        if ci is not None:
+            warnings.warn('API updates: The kwarg "ci" has no effects. '
+                          'Use mrpt.NEVPT(mc,root=?) for excited state.')
+    return NEVPT(mc).kernel()
 
 
 
