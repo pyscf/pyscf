@@ -165,12 +165,15 @@ def newton(mf):
     return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
-                auxbasis='weigend+etb', **newton_kwargs):
+                auxbasis=None, **newton_kwargs):
     '''Wrap function to quickly setup and call Newton solver.
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
     ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.
     '''
     from pyscf.lib import logger
+    from pyscf import df
+    if auxbasis is None:
+        auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
     mf1 = density_fit(newton(mf), auxbasis)
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])

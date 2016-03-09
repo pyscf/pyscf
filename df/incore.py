@@ -26,7 +26,7 @@ def format_aux_basis(mol, auxbasis='weigend+etb'):
     pmol = copy.copy(mol)  # just need shallow copy
 
     if auxbasis == 'weigend+etb':
-        pmol._basis = pmol.format_basis(addons.aug_etb_for_weigend(mol))
+        pmol._basis = pmol.format_basis(addons.aug_etb_for_dfbasis(mol))
     elif isinstance(auxbasis, str):
         uniq_atoms = set([a[0] for a in mol._atom])
         pmol._basis = pmol.format_basis(dict([(a, auxbasis)

@@ -39,50 +39,50 @@ msym.scf()
 
 class KnowValues(unittest.TestCase):
     def test_mc1step_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 4, 4))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc2step_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 4, 4))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc1step_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 6, 6))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_mc2step_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 6, 6))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_mc1step_symm_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 4, 4))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc2step_symm_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 4, 4))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc1step_symm_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 6, 6))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_mc2step_symm_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 6, 6))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
@@ -111,7 +111,7 @@ class KnowValues(unittest.TestCase):
 #    def test_casci_uhf(self):
 #        mf = scf.UHF(mol)
 #        mf.scf()
-#        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
+#        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4))
 #        emc = mc.mc1step()[0]
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 #        emc = mc.mc2step()[0]
