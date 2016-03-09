@@ -701,15 +701,17 @@ class _ERIS:
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
+            max_memory = max(2000,cc.max_memory-pyscf.lib.current_memory()[0])
             self.feri2 = h5py.File(_tmpfile2.name, 'w')
-            pyscf.ao2mo.full(cc.mol, orbv, self.feri2, verbose=log)
+            pyscf.ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
             self.vvvv = self.feri2['eri_mo']
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             tmpfile3 = tempfile.NamedTemporaryFile()
             with h5py.File(tmpfile3.name, 'w') as feri:
+                max_memory = max(2000, cc.max_memory-pyscf.lib.current_memory()[0])
                 pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
-                                    feri, verbose=log)
+                                    feri, max_memory=max_memory, verbose=log)
                 cput1 = log.timer_debug1('transforming oppp', *cput1)
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))

@@ -698,64 +698,40 @@ def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
     max_aobuf = max(1, max_aobuf)
     ao_loc = mol.ao_loc_nr()
 
-    accum = []
+    lstdij = []
 
     if aosym in ('s4', 's2kl'):
         for i in range(mol.nbas):
             di = ao_loc[i+1] - ao_loc[i]
             for j in range(i):
                 dj = ao_loc[j+1] - ao_loc[j]
-                accum.append(di*dj)
-            accum.append(di*(di+1)//2)
+                lstdij.append(di*dj)
+            lstdij.append(di*(di+1)//2)
     else:
         for i in range(mol.nbas):
             di = ao_loc[i+1] - ao_loc[i]
             for j in range(mol.nbas):
                 dj = ao_loc[j+1] - ao_loc[j]
-                accum.append(di*dj)
+                lstdij.append(di*dj)
 
-    ijsh_range = []
-    buflen = 0
-    ij_start = 0
-    for ij, dij in enumerate(accum):
-        buflen += dij
-        if buflen > max_iobuf and buflen > dij:
-# to fill each iobuf, AO integrals may need to be fill to aobuf several times
-            if max_aobuf < buflen-dij:
-                ijdiv = []
-                n0 = ij_start
-                aobuf = 0
-                for n in range(ij_start, ij):
-                    aobuf += accum[n]
-                    if aobuf > max_aobuf and aobuf > accum[n]:
-                        ijdiv.append((n0, n, aobuf-accum[n]))
-                        n0 = n
-                        aobuf = accum[n]
-                ijdiv.append((n0, ij, aobuf))
+    def div_shls(ijstart, ij_max, bufsize):
+        ij_now = ijstart + 1
+        grouped = [(ijstart, ij_now, lstdij[ijstart])]
+        while ij_now < ij_max:
+            ijstart, ijstop, buflen = grouped[-1]
+            dij = lstdij[ij_now]
+            if buflen + dij > bufsize:
+                grouped.append((ij_now, ij_now+1, dij))
             else:
-                ijdiv = [(ij_start, ij, buflen-dij)]
+                grouped[-1] = (ijstart, ij_now+1, buflen+dij)
+            ij_now += 1
+        return grouped
+    ijsh_range = div_shls(0, len(lstdij), max_iobuf)
 
-            ijsh_range.append((ij_start, ij, buflen-dij, ijdiv))
-
-            ij_start = ij
-            buflen = dij
-
-    ij = len(accum)
-
-    if max_aobuf < buflen:
-        ijdiv = []
-        n0 = ij_start
-        aobuf = 0
-        for n in range(ij_start, ij):
-            aobuf += accum[n]
-            if aobuf > max_aobuf:
-                ijdiv.append((n0, n, aobuf-accum[n]))
-                n0 = n
-                aobuf = accum[n]
-        ijdiv.append((n0, ij, aobuf))
-    else:
-        ijdiv = [(ij_start, ij, buflen)]
-    ijsh_range.append((ij_start, ij, buflen, ijdiv))
+    def div_each_iobuf(ijstart, ijstop, buflen):
+# to fill each iobuf, AO integrals may need to be fill to aobuf several times
+        return (ijstart, ijstop, buflen, div_shls(ijstart, ijstop, max_aobuf))
+    ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]
     return ijsh_range
 
 def _stand_sym_code(sym):
