@@ -436,7 +436,7 @@ def damping(s, d, f, factor):
 
 # full density matrix for RHF
 def make_rdm1(mo_coeff, mo_occ):
-    '''One-particle densit matrix
+    '''One-particle density matrix
 
     Args:
         mo_coeff : 2D ndarray
