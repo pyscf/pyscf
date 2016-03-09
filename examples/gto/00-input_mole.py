@@ -128,7 +128,7 @@ mol.basis = '6-31g'
 # environment, it can simply be achieved, e.g.
 mol.basis = dict([(a, 'sto-3g') for a in pyscf.lib.parameters.NUC.keys()])
 mol.basis['C'] = '6-31g'
-# where pyscf.lib.parameters.NUC.keys() returns all atomci symbols.
+# where pyscf.lib.parameters.NUC.keys() returns all atomic symbols.
 # However, the functions basis.load and basis.parse are defined for other good
 # reason.  Since the basis-name input method only assigns the basis set
 # according to the associated atomic symbol,  basis.load and basis.parse can

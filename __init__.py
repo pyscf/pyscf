@@ -132,8 +132,9 @@ Eg
 __version__ = '1.1'
 
 import os
+from distutils.version import LooseVersion
 import numpy
-if numpy.__version__ <= '1.8.0':
+if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
     raise SystemError("You're using an old version of Numpy (%s). "
                       "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
