@@ -6,11 +6,7 @@
 from pyscf import gto, scf, mcscf
 
 '''
-Density fitting for orbital optimzation.
-
-Note mcscf.density_fit function follows the same convention of decoration
-ordering which is applied in the SCF decoration.  See pyscf/mcscf/df.py for
-more details and pyscf/example/scf/23-decorate_scf.py as an exmple.
+Approximate CASSCF orbital hessian with density fitting integrals
 '''
 
 mol = gto.Mole()
@@ -35,20 +31,8 @@ mf = scf.RHF(mol)
 mf.conv_tol = 1e-8
 e = mf.kernel()
 
-#
-# DFCASSCF uses density-fitting 2e integrals overall, regardless the
-# underlying mean-filed object
-#
-mc = mcscf.DFCASSCF(mf, 6, 6)
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 6, 6))
 mo = mc.sort_mo([17,20,21,22,23,30])
 mc.kernel(mo)
-print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
-
-#
-# Assign DF basis
-#
-mc = mcscf.DFCASSCF(mf, 6, 6, auxbasis='ccpvtzfit')
-mo = mc.sort_mo([17,20,21,22,23,30])
-mc.kernel(mo)
-print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
+print('E(CAS) = %.12f, ref = -230.848493421389' % mc.e_tot)
 

@@ -184,7 +184,6 @@ RCASSCF = CASSCF
 
 def CASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
-    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
