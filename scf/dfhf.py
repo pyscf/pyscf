@@ -105,6 +105,8 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 #                with df.load(mf._cderi) as feri:
 #                    cderi = numpy.asarray(feri)
 #                mf._cderi = cderi
+        if mf.verbose >= logger.DEBUG1:
+            t1 = log.timer('Generate density fitting integrals', *t0)
     if mf._naoaux is None:
 # By overwriting mf._cderi, one can provide the Cholesky integrals for "DF/RI" calculation
         with df.load(mf._cderi) as feri:

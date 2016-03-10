@@ -159,7 +159,7 @@ from pyscf.mcscf import addons
 from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step_uhf
 from pyscf.mcscf.addons import *
-from pyscf.mcscf.df import density_fit
+from pyscf.mcscf import df
 from pyscf.mcscf import chkfile
 
 def CASSCF(mf, ncas, nelecas, **kwargs):
@@ -184,7 +184,6 @@ RCASSCF = CASSCF
 
 def CASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
-    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -228,33 +227,22 @@ def UCASSCF(mf, ncas, nelecas, **kwargs):
         raise RuntimeError('First argument needs to be UHF object')
     return mc
 
-def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend+etb', **kwargs):
-    if not hasattr(mf, '_tag_df') or not mf._tag_df:
-        from pyscf.lib import logger
-        logger.warn(mf, 'DFCASSCF: the first argument %s is not density-fitting SCF object. '
-                    'Only orbital hessian are computed with density-fitting integrals. '
-                    'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
-                    mf.__class__)
+def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
     mf = _convert_to_rhf(mf, False)
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
         mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
-    return density_fit(mc, auxbasis)
+    return df.density_fit(mc, auxbasis)
 
-def DFCASCI(mf, ncas, nelecas, auxbasis='weigend+etb', **kwargs):
-    if not hasattr(mf, '_tag_df') or not mf._tag_df:
-        from pyscf.lib import logger
-        logger.warn(mf, 'DFCASCI: the first argument %s is not density-fitting SCF object. '
-                    'Only orbital hessian are computed with density-fitting integrals. '
-                    'JK matrix and 2e MO integrals are computed with exact 2e integrals.',
-                    mf.__class__)
+def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
     mf = _convert_to_rhf(mf, False)
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
     else:
         mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
-    return density_fit(mc, auxbasis)
+    return df.density_fit(mc, auxbasis)
+
 
 def _convert_to_rhf(mf, convert_df=True):
     from pyscf import scf
@@ -268,12 +256,29 @@ def _convert_to_rhf(mf, convert_df=True):
         if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
             from pyscf.lib import logger
             logger.warn(mf, 'CASSCF: The first argument %s is a density-fitting SCF object. '
-                        'Its orbitals are taken as the initial guess of CASSCF. '
-                        'The CASSCF object is an exact solver (no approximated integrals).\n'
+                        'Its orbitals are taken as the initial guess of CASSCF.\n'
+                        'The CASSCF object is the normal solver (no approximated integrals).'
                         'If you need pure DF-CASSCF (with approximate 2e integrals), '
-                        'please initialize the CASSCF method with mcscf.DFCASSCF function.',
+                        'please create the CASSCF object with mcscf.DFCASSCF function.',
                         mf.__class__)
             mf1._tag_df = False
         return mf1
     else:
         return mf
+
+approx_hessian = df.approx_hessian
+
+def density_fit(mc, auxbasis=None):
+    if hasattr(mc._scf, '_tag_df') and mc._scf._tag_df:
+        return df.density_fit(mc, auxbasis)
+    else:
+        from pyscf.lib import logger
+        logger.warn(mc, 'NOTE: approx_hessian function is available for DF orbital hessian!\n'
+                    'The CASSCF object is built on normal SCF object %s '
+                    '(without density fitting).  Currently, this density_fit '
+                    'function will call approx_hessian to approximate orbital '
+                    'hessian for backward compatibility.\n'
+                    'In the future release, it will be removed and the '
+                    'density_fit function will only generate DF-CASSCF method.',
+                    mc._scf.__class__)
+        return approx_hessian(mc, auxbasis)
