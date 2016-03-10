@@ -582,6 +582,7 @@ class NEVPT(pyscf.lib.StreamObject):
 
 ##################################################
 # don't modify the following attributes, they are not input options
+        self.e_corr = None
         self.canonicalized = False
         nao,nmo = mc.mo_coeff.shape
         self.onerdm = numpy.zeros((nao,nao))
@@ -718,6 +719,8 @@ class NEVPT(pyscf.lib.StreamObject):
         nevpt_e  = e_Sr + e_Si + e_Sijrs + e_Sijr + e_Srsi + e_Srs + e_Sij + e_Sir
         logger.note(self, "Nevpt2 Energy = %.15f", nevpt_e)
         log.timer('SC-NEVPT2', *time0)
+
+        self.e_corr = nevpt_e
         return nevpt_e
 
 

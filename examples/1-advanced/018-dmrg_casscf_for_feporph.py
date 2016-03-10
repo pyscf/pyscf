@@ -175,7 +175,7 @@ cas_q = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 #
 # call DMRG-NEVPT2 (about 2 days, 100 GB memory)
 #
-ept2_q = mrpt.nevpt2.sc_nevpt(mc)
+ept2_q = mrpt.NEVPT(mc).kernel()
 
 
 

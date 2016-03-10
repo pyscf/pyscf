@@ -125,6 +125,7 @@ class MP2(pyscf.lib.StreamObject):
         self.nmo = len(mf.mo_energy)
 
         self.emp2 = None
+        self.e_corr = None
         self.t2 = None
 
     def kernel(self, mo_energy=None, mo_coeff=None):
@@ -140,6 +141,7 @@ class MP2(pyscf.lib.StreamObject):
         self.emp2, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
+        self.e_corr = self.emp2
         return self.emp2, self.t2
 
     # return eri_ovov array[nocc*nvir,nocc*nvir]

@@ -43,10 +43,9 @@ m = scf.RHF(mol)
 m.kernel()
 
 #
-# FCI-based CASCI + NEVPT2. Two roots are computed.  So CASCI attribute mc.ci
-# holds the two CI wave functions.  They need to be passed to sc_nevpt
-# function to control the state-specific NEVPT2 calculation.  By default the
-# lowest root will be computed.
+# FCI-based CASCI + NEVPT2.  Two roots are computed.  mc.ci holds the two CI
+# wave functions.  Root ID needs to be specified for the state-specific NEVPT2
+# calculation.  By default the lowest root is computed.
 #
 mc = mcscf.CASCI(m, 4, 4)
 mc.fcisolver.nroots = 2
@@ -93,8 +92,7 @@ mc.fcisolver.nroots = 2
 mc.kernel(mc_orb)
 
 #
-# In current pyscf release, the default sc_nevpt function leads to the
-# DMRG-SC-NEVPT2 implementation based on the 4-particle density matrix.
+# The default DMRG-SC-NEVPT2 implementation is based on the 4-particle density matrix.
 #
 dmrg_nevpt_e1 = mrpt.NEVPT(mc,root=0).kernel()
 dmrg_nevpt_e2 = mrpt.NEVPT(mc,root=1).kernel()

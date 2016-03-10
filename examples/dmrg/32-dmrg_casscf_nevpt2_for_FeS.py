@@ -450,7 +450,7 @@ print('norb/nacte=',norb,[nalpha,nbeta])
 #settings.BLOCKSCRATCHDIR = '/scratch'
 
 from pyscf.dmrgscf import DMRGCI, DMRGSCF
-from pyscf.mrpt.nevpt2 import sc_nevpt
+from pyscf import mrpt
 
 #
 # Redirect output to another file
@@ -471,8 +471,8 @@ mc.mc1step(orbs)
 # CASCI-NEVPT2
 #
 # If DMRG-CASSCF was finished without any problems (eg convergence, wall time
-# limits on cluster etc),  one can simply continue with DMRG-NEVPT2 like
-#       sc_nevpt(mc)
+# limits on cluster etc),  one can simply continue with DMRG-NEVPT2
+#       mrpt.NEVPT(mc).kernel()
 #
 # But it's highly possible that one needs to restore the calculation from
 # previous work.  The following is an example to restore the calculation.
@@ -499,14 +499,14 @@ mc.casci(mo)
 #
 # DMRG-NEVPT2
 #
-sc_nevpt(mc)
+mrpt.NEVPT(mc).kernel()
 
 #
 # There is also a fast DMRG-NEVPT2 implementation.  See also the example
 # pyscf/examples/dmrg/02-dmrg_nevpt2.py
 #
 from pyscf.dmrgscf import compress_perturb
-sc_nevpt(compress_perturb(mc))
+mrpt.NEVPT(mc).compress_approx().kernel()
 
 ##################################################
 #

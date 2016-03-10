@@ -8,7 +8,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import dmrgscf
-from pyscf.mrpt.nevpt2 import sc_nevpt
+from pyscf import mrpt
 
 '''
 DMRG-CASCI then DMRG-NEVPT2 calculation for excited states.
@@ -50,8 +50,8 @@ e_0 = mc.kernel()[0]
 #
 # Computing NEVPT2 based on state-specific DMRG-CASCI calculation
 #
-dmrg_nevpt_e1 = sc_nevpt(mc, ci=mc.ci[0])
-dmrg_nevpt_e2 = sc_nevpt(mc, ci=mc.ci[1])
+dmrg_nevpt_e1 = mrpt.NEVPT(mc, root=0).kernel()
+dmrg_nevpt_e2 = mrpt.NEVPT(mc, root=1).kernel()
 print('DE = %.9g' % (e_0[1]+dmrg_nevpt_e2) - (e_0[0]+dmrg_nevpt_e1))
 
 
@@ -80,6 +80,6 @@ e_0 = mc.kernel()[0]
 #
 # Computing NEVPT2 based on state-specific DMRG-CASCI calculation
 #
-dmrg_nevpt_e1 = sc_nevpt(mc, ci=mc.ci[0])
-dmrg_nevpt_e2 = sc_nevpt(mc, ci=mc.ci[1])
+dmrg_nevpt_e1 = mrpt.NEVPT(mc, root=0).kernel()
+dmrg_nevpt_e2 = mrpt.NEVPT(mc, root=1).kernel()
 print('DE = %.9g' % (e_0[1]+dmrg_nevpt_e2) - (e_0[0]+dmrg_nevpt_e1))

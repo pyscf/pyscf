@@ -8,7 +8,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf.dmrgscf import DMRGCI, DMRGSCF
-from pyscf.mrpt.nevpt2 import sc_nevpt
+from pyscf import mrpt
 from pyscf import cosmo
 
 '''
@@ -101,8 +101,8 @@ mc.fcisolver = DMRGCI(mol)
 mc.fcisolver.nroots = 2
 mc.kernel(mo)
 
-e_state0 = mc.e_tot[0] + sc_nevpt(mc, ci=mc.ci[0])
-e_state1 = mc.e_tot[1] + sc_nevpt(mc, ci=mc.ci[1])
+e_state0 = mc.e_tot[0] + mrpt.NEVPT(mc, root=0).kernel()
+e_state1 = mc.e_tot[1] + mrpt.NEVPT(mc, root=1).kernel()
 print('Excitation E = %.9g' % (e_state1-e_state0))
 
 
@@ -126,7 +126,7 @@ mc.state_specific_(1)
 mo = mc.sort_mo_by_irrep({'Ag':2, 'B1g':1, 'B2g':1, 'B3g':1})
 mc.kernel(mo)
 mo = mc.mo_coeff
-e_state1 = mc.e_tot + sc_nevpt(mc)
+e_state1 = mc.e_tot + mrpt.NEVPT(mc).kernel()
 
 #
 # 2. Frozen excited state solvation for ground state
@@ -135,5 +135,5 @@ sol.dm = sol._dm_guess
 mc = cosmo.cosmo_(mcscf.CASCI(mf, 5, 6), sol)
 mc.fcisolver = DMRGCI(mol)
 mc.kernel(mo)
-e_state0 = mc.e_tot + sc_nevpt(mc)
+e_state0 = mc.e_tot + mrpt.NEVPT(mc).kernel()
 print('Emission E = %.9g' % (e_state1-e_state0))
