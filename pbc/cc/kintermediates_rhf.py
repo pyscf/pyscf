@@ -52,8 +52,8 @@ def cc_Fvv(cc,t1,t2,eris):
 
 def cc_Fov(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
-    fov = eris.fock[:,:nocc,nocc:]
-    Fkc = fov.copy()
+    Fkc = np.empty((nkpts,nocc,nvir),dtype=t2.dtype)
+    Fkc[:] = eris.fock[:,:nocc,nocc:].copy()
     for kk in range(nkpts):
         for kl in range(nkpts):
             Fkc[kk] += einsum('klcd,ld->kc',2*eris.oovv[kk,kl,kk],t1[kl])

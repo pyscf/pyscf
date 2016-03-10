@@ -103,7 +103,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     # T1 equation
     # TODO: Check this conj(). Hirata and Bartlett has
     # f_{vo}(a,i), which should be equal to f_{ov}^*(i,a)
-    t1new = fov.conj().copy()
+    t1new = np.empty((nkpts,nocc,nvir),dtype=t1.dtype) 
+    t1new[:] = fov[:].conj().copy()
     for ka in range(nkpts):
         ki = ka
         # kc == ki; kk == ka
