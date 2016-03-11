@@ -3,6 +3,7 @@ import tempfile
 import numpy
 import numpy as np
 import h5py
+import kpoint_helper
 
 import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
@@ -103,7 +104,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     # T1 equation
     # TODO: Check this conj(). Hirata and Bartlett has
     # f_{vo}(a,i), which should be equal to f_{ov}^*(i,a)
-    t1new = np.empty((nkpts,nocc,nvir),dtype=t1.dtype) 
+    t1new = np.empty((nkpts,nocc,nvir),dtype=t1.dtype)
     t1new[:] = fov[:].conj().copy()
     for ka in range(nkpts):
         ki = ka
@@ -275,7 +276,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, abs_kpts, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
         self._kpts = abs_kpts
-        nkpts = len(self._kpts)
+        self.nkpts = len(self._kpts)
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
 
     def dump_flags(self):
@@ -366,6 +367,220 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def update_amps(self, t1, t2, eris, max_memory=2000):
         return update_amps(self, t1, t2, eris, max_memory)
 
+    def ipccsd(self, nroots=2*4):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        nkpts = self.nkpts
+        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
+        for kshift in range(nkpts):
+            self.kshift = kshift
+            evals, evecs = eigs(self.ipccsd_matvec, size, nroots)
+            np.set_printoptions(precision=16)
+            print "kshift evals : ", evals[:nroots]
+        return evals.real[:nroots], evecs
+
+    def ipccsd_matvec(self, vector):
+    ########################################################
+    # FOLLOWING:                                           #
+    # Z. Tu, F. Wang, and X. Li                            #
+    # J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)        #
+    ########################################################
+        r1,r2 = self.vector_to_amplitudes_ip(vector)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        nkpts = self.nkpts
+        kshift = self.kshift
+        kconserv = tools.get_kconserv(self._scf.cell, self._kpts)
+
+        Lvv = imdk.Lvv(self,t1,t2,eris)
+        Loo = imdk.Loo(self,t1,t2,eris)
+        Fov = imdk.cc_Fov(self,t1,t2,eris)
+        Wooov = imdk.Wooov(self,t1,t2,eris)
+        Wovvo = imdk.Wovvo(self,t1,t2,eris)
+        Wovoo = imdk.Wovoo(self,t1,t2,eris)
+        Woooo = imdk.Woooo(self,t1,t2,eris)
+        Wovov = imdk.Wovov(self,t1,t2,eris)
+        Woovv = eris.oovv
+
+        Hr1 = -einsum('ki,k->i',Loo[kshift],r1)
+        for kl in range(nkpts):
+            Hr1 += 2.*einsum('ld,ild->i',Fov[kl],r2[kshift,kl])
+            Hr1 +=   -einsum('ld,lid->i',Fov[kl],r2[kl,kshift])
+            for kk in range(nkpts):
+                kd = kconserv[kk,kshift,kl]
+                Hr1 += -2.*einsum('klid,kld->i',Wooov[kk,kl,kshift],r2[kk,kl])
+                Hr1 +=     einsum('lkid,kld->i',Wooov[kl,kk,kshift],r2[kk,kl])
+
+        Hr2 = np.zeros(r2.shape,dtype=t1.dtype)
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                kb = kconserv[ki,kshift,kj]
+                Hr2[ki,kj] += einsum('bd,ijd->ijb',Lvv[kb],r2[ki,kj])
+                Hr2[ki,kj] -= einsum('li,ljb->ijb',Loo[ki],r2[ki,kj])
+                Hr2[ki,kj] -= einsum('lj,ilb->ijb',Loo[kj],r2[ki,kj])
+                Hr2[ki,kj] -= einsum('kbij,k->ijb',Wovoo[kshift,kb,ki],r1)
+                for kl in range(nkpts):
+                    kk = kconserv[ki,kl,kj]
+                    Hr2[ki,kj] += einsum('klij,klb->ijb',Woooo[kk,kl,ki],r2[kk,kl])
+                    kd = kconserv[kl,kj,kb]
+                    Hr2[ki,kj] += 2.*einsum('lbdj,ild->ijb',Wovvo[kl,kb,kd],r2[ki,kl])
+                    Hr2[ki,kj] += -einsum('lbdj,lid->ijb',Wovvo[kl,kb,kd],r2[kl,ki])
+                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',Wovov[kl,kb,kj],r2[ki,kl]) #typo in nooijen's paper
+                    kd = kconserv[kl,ki,kb]
+                    Hr2[ki,kj] += -einsum('lbid,ljd->ijb',Wovov[kl,kb,ki],r2[kl,kj])
+                    for kk in range(nkpts):
+                        kc = kshift
+                        kd = kconserv[kl,kc,kk]
+                        tmp = ( 2.*einsum('lkdc,kld->c',Woovv[kl,kk,kd],r2[kk,kl])
+                                  -einsum('kldc,kld->c',Woovv[kk,kl,kd],r2[kk,kl]) )
+                        Hr2[ki,kj] += -einsum('c,ijcb->ijb',tmp,t2[ki,kj,kshift])
+
+        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        return vector
+
+    def vector_to_amplitudes_ip(self,vector):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        nkpts = self.nkpts
+
+        r1 = vector[:nocc].copy()
+        r2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), vector.dtype)
+        index = nocc
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                for i in range(nocc):
+                    for j in range(nocc):
+                        for a in range(nvir):
+                            r2[ki,kj,i,j,a] =  vector[index]
+                            index += 1
+        return [r1,r2]
+
+    def amplitudes_to_vector_ip(self,r1,r2):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        nkpts = self.nkpts
+        size = nocc + nkpts*nkpts*nocc*nocc*nvir
+
+        vector = np.zeros((size), r1.dtype)
+        vector[:nocc] = r1.copy()
+        index = nocc
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                for i in range(nocc):
+                    for j in range(nocc):
+                        for a in range(nvir):
+                            vector[index] = r2[ki,kj,i,j,a]
+                            index += 1
+        return vector
+
+    def eaccsd(self, nroots=2*4):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        nkpts = self.nkpts
+        size =  nvir + nkpts*nkpts*nocc*nvir*nvir
+        for kshift in range(nkpts):
+            self.kshift = kshift
+            evals, evecs = eigs(self.eaccsd_matvec, size, nroots)
+            np.set_printoptions(precision=16)
+            print "kshift evals : ", evals[:nroots]
+        return evals.real[:nroots], evecs
+
+    def eaccsd_matvec(self, vector):
+    ########################################################
+    # FOLLOWING:                                           #
+    # M. Nooijen and R. J. Bartlett,                       #
+    # J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)        #
+    ########################################################
+        r1,r2 = self.vector_to_amplitudes_ea(vector)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        nkpts = self.nkpts
+        kshift = self.kshift
+        kconserv = tools.get_kconserv(self._scf.cell, self._kpts)
+
+        Lvv = imdk.Lvv(self,t1,t2,eris)
+        Loo = imdk.Loo(self,t1,t2,eris)
+        Fov = imdk.cc_Fov(self,t1,t2,eris)
+        Wvovv = imdk.Wvovv(self,t1,t2,eris)
+        Wvvvo = imdk.Wvvvo(self,t1,t2,eris)
+        Wovvo = imdk.Wovvo(self,t1,t2,eris)
+        Wvvvv = imdk.Wvvvv(self,t1,t2,eris)
+        Woovv = eris.oovv
+        Wovov = imdk.Wovov(self,t1,t2,eris)
+
+        Hr1 = einsum('ac,c->a',Lvv[kshift],r1)
+        for kl in range(nkpts):
+            Hr1 += 2.*einsum('ld,lad->a',Fov[kl],r2[kl,kshift])
+            Hr1 +=   -einsum('ld,lda->a',Fov[kl],r2[kl,kl])
+            for kc in range(nkpts):
+                kd = kconserv[kshift,kc,kl]
+                Hr1 +=  2.*einsum('alcd,lcd->a',Wvovv[kshift,kl,kc],r2[kl,kc])
+                Hr1 +=    -einsum('aldc,lcd->a',Wvovv[kshift,kl,kd],r2[kl,kc])
+
+        Hr2 = np.zeros(r2.shape,dtype=t1.dtype)
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = kconserv[kshift,ka,kj]
+                Hr2[kj,ka] += einsum('abcj,c->jab',Wvvvo[ka,kb,kshift],r1)
+                Hr2[kj,ka] -= einsum('lj,lab->jab',Loo[kj],r2[kj,ka])
+                Hr2[kj,ka] += einsum('ac,jcb->jab',Lvv[ka],r2[kj,ka])
+                Hr2[kj,ka] += einsum('bd,jad->jab',Lvv[kb],r2[kj,ka])
+                for kd in range(nkpts):
+                    kc = kconserv[ka,kd,kb]
+                    Hr2[kj,ka] += einsum('abcd,jcd->jab',Wvvvv[ka,kb,kc],r2[kj,kc])
+                    kl = kconserv[kd,kb,kj]
+                    Hr2[kj,ka] += 2.*einsum('lbdj,lad->jab',Wovvo[kl,kb,kd],r2[kl,ka])
+                    #Wvovo[kb,kl,kd,kj] <= Wovov[kl,kb,kj,kd].transpose(1,0,3,2)
+                    Hr2[kj,ka] += -einsum('bldj,lad->jab',Wovov[kl,kb,kj].transpose(1,0,3,2),r2[kl,ka])
+                    #Wvoov[kb,kl,kj,kd] <= Wovvo[kl,kb,kd,kj].transpose(1,0,3,2)
+                    Hr2[kj,ka] += -einsum('bljd,lda->jab',Wovvo[kl,kb,kd].transpose(1,0,3,2),r2[kl,kd])
+                    kl = kconserv[kd,ka,kj]
+                    #Wvovo[ka,kl,kd,kj] <= Wovov[kl,ka,kj,kd].transpose(1,0,3,2)
+                    Hr2[kj,ka] += -einsum('aldj,ldb->jab',Wovov[kl,ka,kj].transpose(1,0,3,2),r2[kl,kd])
+                    for kc in range(nkpts):
+                        kk = kshift
+                        kl = kconserv[kc,kk,kd]
+                        tmp = ( 2.*einsum('klcd,lcd->k',Woovv[kk,kl,kc],r2[kl,kc])
+                                  -einsum('kldc,lcd->k',Woovv[kk,kl,kd],r2[kl,kc]) )
+                        Hr2[kj,ka] += -einsum('k,kjab->jab',tmp,t2[kshift,kj,ka])
+
+        vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        return vector
+
+    def vector_to_amplitudes_ea(self,vector):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        nkpts = self.nkpts
+
+        r1 = vector[:nvir].copy()
+        r2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), vector.dtype)
+        index = nvir
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                for j in range(nocc):
+                    for a in range(nvir):
+                        for b in range(nvir):
+                            r2[kj,ka,j,a,b] = vector[index]
+                            index += 1
+        return [r1,r2]
+
+    def amplitudes_to_vector_ea(self,r1,r2):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        nkpts = self.nkpts
+        size = nvir + nkpts*nkpts*nocc*nvir*nvir
+
+        vector = np.zeros((size), r1.dtype)
+        vector[:nvir] = r1.copy()
+        index = nvir
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                for j in range(nocc):
+                    for a in range(nvir):
+                        for b in range(nvir):
+                            vector[index] = r2[kj,ka,j,a,b]
+                            index += 1
+        return vector
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
@@ -403,6 +618,7 @@ class _ERIS:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             kconserv = tools.get_kconserv(cc._scf.cell,cc._kpts)
+            pqr_list = kpoint_helper.unique_pqr_list(cc._scf.cell,cc._kpts)
 
             eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
             for kp in range(nkpts):
@@ -465,3 +681,127 @@ class _ERIS:
 
 
         log.timer('CCSD integral transformation', *cput0)
+
+def print_james_header():
+    print ""
+    print " ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
+    print " You are now about to use the kpointified/restrictified version "
+    print " of eom-ccsd                                                    "
+    print "                                           -James               "
+    print " ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
+    print ""
+    return
+
+def print_james_ascii():
+    print "\
+NmmmmmmddddddddddddmmmmmNNNNNNNNNNNNNNNNNNmmmmmddddddddddddmmmmmddhhhyyyyyyyyyyyyyyyyyhhmmNmmddmmmmm\n\
+mmmmmmmddddddddmmmmmmmmNNNNNNNNNNNNNmmmmddhhhhhhhhhhhdddddddddhhhhyyyyyyyyyyyyyyyyyyyyhhmmmmmmdddddd\n\
+mmmmmmmdddddddmmmmmmmmmmmmNNNNNNNNNmmdhysyyyyyhhhhddddddddddhhhyyyyyyyyyyyyyyyyyyyyyyyhhmmmmdddddddm\n\
+mmmmmmmmmddddddmmmmmmmmmmmmmmNNNNmddyyssyyyhhhhdddmmmmmmmmmmddddhhhhhhhhhyyyyyyyyyyyyyhhmmmddddddddd\n\
+mmmmmmmmmmddddmmmmmmmmmmmmNNNNNmmhysssyyhhhhhddddmmmNmmmdmmmmmmmmmmmmddddhhhyyyyyyyyyyhhmmmddhhddddd\n\
+mmmmmmmdddmmmmmmmmmmmmmmmmNNNNmdhyysyyhhhhhdddddmmmmmmmmmmmmmmmmmNNmmmmmmddhhyyyyyyyyyhhmmmmdddddddd\n\
+mmdddddmmmddmmmmmmmmmmmmmmNNmddyyyyyhhhhhhhdddmmmmmmmmmmmmmmmmmmmmNmmmmmmmmdhhhyyyyyyyhhmmmmmddddddd\n\
+ddhhhddmmmmmmmmmmmmmmmmmmmmdhyyyyyyyhhddhhddddddmmmmmmmmmmmmmmmmmmmmmmmmmmmmdhhyyhhhyyhhmmmmdddddddd\n\
+ddhddddmmmmmmmmmmmmmmmddddhhyyyyyyhhhhdhhhdddddddddddddddddddddmmmmmmmmmmmmmddhhyyyyyyhhmmmddddddddd\n\
+dddddddmmmmmmmmmmmmdddddhhyyyssyyhhdddhhhhhddddhhhhhdhhhhhhyyyhhdddmmmmmmmNNmmdhhhhhyyhhmmmmdddddddd\n\
+ddddddmmmmmmmmmmmddddhhhyyyyyyyhhhdddhhhhhhdhhhyyyyyyhhhhhhhhhhhdddmmmmmmmNNmmmddhhhhyhhmmNmmmmmmmmd\n\
+ddhhhddmmmmmmmmddddddhhyhhyhhhhhhhhhhhhhhhhhhyyyyyyyyyyyhhhyyyhhhhhddddmmmmmmmmmdddddhhhmmNmmmmmmmmm\n\
+hhdhhdmmmmmmdddddddhhhhhyyhhhhhhhhhhhhyhhyyyyyssssssyyyssssoooooooosssyyhhddmmmmmdddddddmmmmmddddddd\n\
+yhhhhddmmddmddhhhhhhhhhhyydhhhhhhyyyyyyyyssysssoooossssoo++++++++++++ooossyhddddddddddddmmmmmmdddddd\n\
+oossohdmmmddhddddhhdhhhhhhdhhhyyyyysyyyyssssssooosooso+++//////////+++++oossyhddddddddddmmmmmddddddd\n\
+...--oyddddhddddhhhhhhhhhhhhyyysssyyyyyhhhyyysooooo++////://////////////++oossyhdddddddddddddddddddd\n\
+     +sddddhddhhhddhhhhhhhyyyyyyssyyhhhhhhhysooo++////::::::::::://:://///+++osyydddddmmmmdddhhhdddd\n\
+     +odhhhhhhhhdddhhyhhyyyyyyyyysyyhddddhyoo++/////::::::::::::::::::::////++osshhdddddmmmdhhhhhhhh\n\
+     /ohhhhhhhhhdddhhyyyssyyhhhyyyyhddddyso+//:---/:-----::::::::::::::://///++ooyyhhdddmmmddhhhhhhh\n\
+     /ohhhhhhhhhhddhysssyyhhdddyysyhddys+++//:----:--------::::::::::::://////++ossyyhddmmmddhhhhhhh\n\
+    `/ohhhhhhhhhhddyyoosyhdddhhsshhdys///++::.--------------:::::::::::::://///++ooosyhdmmddhhhhhhhh\n\
+ ``..+ohhdddhhhhyhhysosshhdddyyyhdys/:////:---------.--------::::::::::::://///++ooooshdmmmddhhhhhhh\n\
+`....+ohddddhhhyyyhsssyhdddhhhhhhs+/:://:::-------::--------::::::::::::://///++ossosshdmmmmmhhhhhhh\n\
+````.+oddddddhyysyyssyhdddyyhhhso//:://::::------::::-------::::::::::::::////+oossssyhdmmNmmhhhhhhh\n\
+--.-:osddddddhyysssssyhdhhsyyss+/::::::::::---------------:::::::::::::://////+oossyyyhdmmNmmddhhhhh\n\
+///++yhmmmddhhyyyyysyyhhyyooooo//////::::::::-------------::::--::::://///////+oossyyhddmmNmmddhhhdd\n\
+hhhhhddddmdhhhyyyyysyyyyoo++o++/////////://::::-----------------::://+++++oo++ooossyhhddmmmmmddhdddd\n\
+ddhhhdddddhhhhyyyyysssso++++++++++oooooooooooo++//:::--------://++oosssyyyyyyyyyysyyhdddddmmmmdddddd\n\
+ssooshdmddhyhhyyhyyssso++++oosssssssoossosssssssso++//::---::/++osssssssooooossyyyyyhdhhhhddmddddddd\n\
+ooooshdddhhhddhhhhhyyso++++osssoo++++++++++oooooooo++//:::::/+ooooooooo+++++/++osyyyyhhyhhdddhhyyyyy\n\
+ooooohdmddhhddhhdhhhyso+++ooo+++++++++oooooooooo+++++//::::/++ooooooooooooooooooossyyhhhddmddhhyyyhh\n\
+ssssshddddddddddhhhhyso+++++///++ooooosyhys//++o+++++//:::/+oooo+++++yyhso++sss++oosyhhdmmmmdhhhhhhh\n\
+sssssdddddddmmdhyhhhyoo++///::/++ooo++osyo+::/+++/++++/:::/+oooo+//::ssso+++ssso+++oyhddNNNmddhhhhhh\n\
+ssssshddmmmddddhhyyhyso+///::::///++//////////++//++++//:://+ooo++////////++++++///+syddNNNmdddddddh\n\
+ssosshdmmdddsssydyyhyso+++/::::::::/::::::/://///+++++//:::/++oo++/////////////////+syddNmmddddddddd\n\
+ooooohdmddhy//+shyyhyyoo++/:::::::::::::::::::///++++///:::/++ooo++///:::::::://///oshddmmmddddddddd\n\
+oosoohdmddyy:::+oyhhhyso++//::::::::::::::::::///+/++////://++oo++///:::::::::::://oshddmmmddddddddd\n\
+ooooohdmmdhh//://syhhhyso+//::::::::::-----::::///++++//////++ooo+///:::::::::::://oyhdmmmmdddddddhh\n\
+oossshdmmdddo+///ssddhyyoo///::::::--------::://++++++///:::/+oo++//::::::::::::://oyhmmmmmddddddhhh\n\
+ooossddmmdmmys///+odhhysoo///:::::----------://++++++/:::-:://+o+++::::::::::::://+oydddmmmdhddddhhh\n\
+//+ooddmmdmmhy+//++hhyssoo///:::::----------://++++++//::::://+++++::::---::::::/++syyyhmmmddddddddd\n\
+///++yhmmmmmdhoo+//osysooo////:::::-----::-:://++++++++++///+++++++/::----::::://+ossoyymmmddddddddd\n\
+/////+ohdmmmddhys++osyssoo+////:::::--:::::////++++++++++++++++++++//::--:::::///+osooyhNmmddddddddd\n\
+//////+sydmmmmmddhhddhysoo/////::::-:://:////////+///////////+++++++//:::::::://+ooyyyhdNmmddddddddd\n\
+++++++++shdmmmmmmmmNmdhyoo/////:::::://///+++///////:///////////++++++//::::::/++oshhhhdNmmddddddddd\n\
+ooooooooshdmmmmmmmmNmmhyoo/////::-:::///+//////////:::///////////++++++/////://++oshhhhdmmmddddddddd\n\
+oooooooosydmmmmmmmmmmmdhso+////::--::://++++++++++///////////////++++++////////++sshhhhdmmmddddddhdd\n\
+oooooooosydmmmmmmmmmmmdhss++/////:--:::///+oooooooooo++++++++++oooooo+////////+++syhhhhdmmmddddhhhhh\n\
+ooooooo+sddmmmmmmmmmmmddyso+/////::---::://++o+++++++////+++++ooooooo////:://++ooyyhhhhdmmddhhhsyyyy\n\
+ooooooooymmmmmmmmmmmmNmdysso+++//:::--:::///////////::::::////++++++///:::///+ooohhhhhhdmmddhhhyyhhh\n\
+oooooooyhmmmmmmmmmmmmNmdsssso++/////:://////////////:::::///////+++/////////++osyhhhhhddmmmddhhhhdhh\n\
+ooooossddmmmmmmmmmmdmmmdsossooo++/////////////:://///////////////////++/++++oosyhhhhhhhdmmmddddddddd\n\
+ooooohhmmmmmmmmmmmmmmmdhoo+osss++++///++//////::::::///////////////++++++++osyyyyhhhyyhdmmdhyhhhhhhh\n\
+ooossdmmmmmmmmmmmmmdhsoooo/+oooooo++++++////////::::::///////////+++++oooooosyyyyhhyyyhdmdhyshhyyyyy\n\
+oossydmddmmmmmdmmddo+:+ooo///++oosoo+++++++///////:::::::://////++++++osssso//+yhhhhhhhhmmdhhhhyyyyy\n\
+ssyyydmmmmmmmmmmdys+++syo++////++oooooooo+++//////::::::://///++++ooosssssso::/oshhhhhhhmmmdhdhyyyyy\n\
+yyyyydmmmmmdmmmdysooossso+////////+oossoooo++++///////////////+++ooosssooooooo++oyyhhyhhmmmdhddhhhhh\n\
+yyyyydmmmmmmmmdyo++osyss++//////////+ooooooooo+++/////+++++++++ooosssoo++ooosso+/ssyyyhhmmmddddhdddd\n\
+yyyyydmmmmmmmmdy+++oosss++///////:////++++oooooooooo+oooooooooossssso+++++ooyss++ooyyyhhmmmddddddddd\n\
+yyyyymmmmdddmdhs///ooooo///////::::///+///++++++oossssssssoooooossso+//+++oossso++osyyhhmmmddddddddd\n\
+    "
+    return
+
+def print_tim_ascii():
+    print "\n\
+                                       .-/+ossyyyyssssooo+/-.`                                      \n\
+                                 ./oydmmmmmdhddhhhddddhdmNNNNNmyo:`                                 \n\
+                             -+ymNNNNmmddhhhdhyhhhhhhdmNNNmmNNNNNdso/:-                             \n\
+                         `-omNMMNNmmmdhddddddmmNNNNNNMMMMNNNNNNNmmysosmNy/`                         \n\
+                       -+syymmmdmmmddddmNNNNNmmNMMMMMMMMMMMMMMNNNmdyssdMMNNy:                       \n\
+                    `/yhdddmmmmmmmmddmmNNMMNmmmNMMMMMMMMMMMMMMMMMNNmdyhNMMMMMm+`                    \n\
+                  `/shdNNmddddddmmmNNNNNNNNmmmNNNNMNNMMMMMMMMNNNNNNNNmmmNMMMMMMNs.                  \n\
+                `+mNNNNNmmdddmmddmmmmNNNNNNNmNNNNNNNNMMMMMNNNNNNNNNNNNNmmNNMMMMMMNo`                \n\
+               .sNMMNNNmmddddmmmmddddmmmNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNmmmNMMMMMMMm:               \n\
+             `/oyNMMNNmddhdmmddmddddmmmmNNNNNNNNNNNNNNNNNNNmmNNNNNNNNNmmNmmNMMMMMMMMNs`             \n\
+            .sysymMMmdyyhhhdmmmmddmmmNNNmmmmNmmNmmmmmdmdddddmmNNNNNNNmmmmNmmNMMMMMMMMMd-            \n\
+           -mdysydMMmhyyyhddddmmmmmmmNNNmmddddddmmmmhysssssshmNNNNNNmNmmmmmmNMMMMMMMMMMm:           \n\
+          -mNmhyyhMMmhyyyhddddddmmmmmmdhyssoooosyyyyoo++++oooydmmmmmmmNmmmmNNNMMMMMMMMMMN:          \n\
+         .hmdddhhydyshhhdddddhhddddhyso+++////++++o++++++++++oyddmmmmmmNmmNNNNMMMMMMMMMMMN-         \n\
+        `sddhso+/:::+yydddddhyhysoo+++/////////://////////++/+oshdmmmmmmmmmNNNMMMMMMMMMMMMm`        \n\
+        /hhhyso+//:::/sdmmmhyss+//+///://:::::-:://///////////+oshdmmmmmmmNNNNMMMMMMMMMMMMMy        \n\
+       .hdddhhhhdddhysydmmmyso+/////::::::::::::::::::////////++oyhmmmmmNNNNNNdNMMMMMMMMMMMN:       \n\
+       smddddhhhdmmdddddmmmyo+//////:::::::::::::::::::////////++oydmmmmNNNNdyosdMMMMMMMMMMMh       \n\
+      .mmmmmmddyyyyyyyhhhmms++////////:::::::::::::::::://///////++shmmNNNmdyoooyMMMMMMMMMMMN.      \n\
+      :NNNNNNmmysoooooosyddo++////::::::::::::----::::::///////////+ohmNNmdyo+++yMMMMMMMMMMMM+      \n\
+      oNmmmmmmmmdhhysssyydms++//:::---:::::::::-:://++ooo++/////////+shmNmys+o++hMMMMMMMMMMMMy      \n\
+      ymmmmmmmmmmmNmmmmmmmmy++/:::::::::::://+osyhhhyyssssoo++//////+oyhmd+o/+/omMMMMMMMMMMMMd      \n\
+      ymmmmmmmdddhdNNNNNNNNmoooosssoo++//++osyyhddddyyyyysoo++++++/+++oydh/+//+yMMMMMMMMMMMMMd      \n\
+      sddhhyssoooohNNNNmmmdNyhhhhhddhyysso+ossyyhdddyssysso++//+++++++oydh+//+sNMMMMMMMMMNNNNh      \n\
+      :oo++++++++odNMMNmdhhmmssshdmmyoshho:/ossssssssooso+//:://///+++osyyo+sdNMMMMMMMMNNMMMMs      \n\
+      .+++++++oooshNMMMmdmNNNsosyyyysssss/::/+oooo++++++/::::::////++ooosyyymMMMMMMMMMMMMMMMM/      \n\
+       +ossyhddmmdmMMMMMNMNMNdo+++oooo++o/:::///++/////:::--::////+++oossyyymMMMMMMMMNNNNNMMN`      \n\
+       +mmmdhyssoohNMMMMMMMMMNo////////++/:::///+++ooo++//::////+++++oosyysydNNMMMMMMMmNNNMMs       \n\
+       `oooo+++++odMMMMMMMMNNNy//::///+o+/::///////oooooooo++++++++++oosyyssyyhdmMMMMMMNNMMm.       \n\
+        .+oooooosydMMMNNmdhyyNd////+++o+////://++osso++++ooooo++++++oosyyyssyo:/sdNMMMMMMMN+        \n\
+         /yyhdmNNNmddhyyssssymNs++++oosso+++++sssso+/+++oosysso+++++ossyyysssy//::/sdmmmNNy         \n\
+         `hNNmdhyyysyysssssssyhy++ooossssoooosssssooo+sosyhoooo++++oossyyoosss/://:-.-///+`         \n\
+          `osssssssssssssssssssssoooosssssyhsssoo///+osyys+++oo++ooosyyyoooss+-:://::-.--           \n\
+           `/ssssooosssssyyyyyyyhyo++ooosshdhso+ooossysso++++o+oosssyyyoooosso:-::/::::.            \n\
+             :ossssyyyyyyyyhhhhhhhyo++++ooosyysyssssoo+++++++oosssyyhysoooosso::-::/::.             \n\
+              -oyyyyyyhhhhhhhhhhhy+--:+oo+++oossssoo++++++++oosssyyyysoooooooo::::-::.              \n\
+               `/yhhhhhhhhhhhhhho----``-/+++++++++++/////+++osyyyyyysoo+ooooso+-::-.                \n\
+                 .ohhhhhhhhhyo+:.---:.```.-++++/////////+oosyyhyysssooooooooooo--.`                 \n\
+                   .ohhhs+:......-:--.`````/oo++//++++++osyhhyyssoooooooooooooo-`                   \n\
+                     .-.....``..------..`.`.+yooooossssyyhhyyssoooooooooosoo+:`                     \n\
+                         ````..--------..`..-sdyssssyssssssssooooooooo++oo/.                        \n\
+                            ``.:-:-.-.---..``:sdysooooooooooosssoooo+++:-`                          \n\
+                               `.----..---.`-//+so+osoo++++++ooooo+:-`                              \n\
+                                   ```...-./o//::--:/yyo++++//:-.`                                  \n\
+                                           .....```.`.:.```                                         "
+    return
