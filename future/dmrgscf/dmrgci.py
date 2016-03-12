@@ -220,7 +220,7 @@ class DMRGCI(pyscf.lib.StreamObject):
 
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
-            writeDMRGConfFile(self, nelec, True, self.approx_maxIter,
+            writeDMRGConfFile(self, nelec, True,
                               with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
                 inFile = os.path.join(self._input_dir, self.configFile)
@@ -330,7 +330,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         fciRestart = True
 
         writeIntegralFile(self, h1e, eri, norb, nelec)
-        writeDMRGConfFile(self, nelec, fciRestart)
+        writeDMRGConfFile(self, nelec, fciRestart, self.approx_maxIter)
         if self.verbose >= logger.DEBUG1:
             inFile = os.path.join(self._input_dir, self.configFile)
             logger.debug1(self, 'Block Input conf')
