@@ -83,8 +83,11 @@ def pre_orth_project_ano(mol, basname):
         ano = pyscf.scf.addons.project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
         c = rm_ano.copy()
-        for l in range(4):
+        for l in range(param.L_MAX):
             idx  = numpy.asarray(search_atm_l(atm, l))
+            if len(idx) == 0:
+                break
+
             idxp = numpy.asarray(search_atm_l(atmp, l))
             if len(idx) > len(idxp) > 0:
 # For angular l, first place the projected ANO, then the rest AOs.
