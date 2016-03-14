@@ -8,7 +8,7 @@ import h5py
 from pyscf import gto, df, scf
 
 '''
-Input 3-center integrals for SCF module by overwriting the _cderi attribute.
+Input Cholesky decomposed integrals for SCF module by overwriting the _cderi attribute.
 '''
 
 mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz')
