@@ -84,7 +84,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < 1e-4 or abs(de) < tol*.8 or norm_gorb < conv_tol_grad*.4:
+            if norm_t < 1e-4 or abs(de) < tol*.4 or norm_gorb < conv_tol_grad*.2:
                 break
 
         r0 = casscf.pack_uniq_var(u)

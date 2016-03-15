@@ -277,7 +277,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < 1e-4 or
-                (norm_gorb < conv_tol_grad*.8 and norm_ddm < conv_tol_ddm)):
+                (norm_gorb < conv_tol_grad*.8 and norm_ddm < conv_tol_ddm*.4)):
                 break
 
         rota.close()
@@ -322,7 +322,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
 
 class CASSCF(casci_uhf.CASCI):
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
         self.max_stepsize = .03
@@ -375,7 +375,7 @@ class CASSCF(casci_uhf.CASCI):
         if self.ncore[0] != self.ncore[1]:
             log.warn('converge might be slow since num alpha core %d != num beta core %d',
                      self.ncore[0], self.ncore[1])
-        if self.frozen:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max. macro cycles = %d', self.max_cycle_macro)
         log.info('max. micro cycles = %d', self.max_cycle_micro)
@@ -484,7 +484,7 @@ class CASSCF(casci_uhf.CASCI):
         mask[nocc:,:nocc] = True
         if self.internal_rotation:
             raise NotImplementedError('internal_rotation')
-        if frozen:
+        if frozen is not None:
             if isinstance(frozen, (int, numpy.integer)):
                 mask[:frozen] = mask[:,:frozen] = False
             else:

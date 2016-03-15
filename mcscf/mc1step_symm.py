@@ -13,7 +13,7 @@ from pyscf import fci
 
 
 class CASSCF(mc1step.CASSCF):
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         assert(mf.mol.symmetry)
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)

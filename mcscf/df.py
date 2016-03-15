@@ -110,7 +110,8 @@ def density_fit(casscf, auxbasis=None):
 
 # Modify get_veff for JK matrix of core densityBecause get_h1eff calls self.get_veff to generate core JK
         def get_veff(self, mol=None, dm=None, hermi=1):
-            return dfhf.get_jk_(self, mol, dm, hermi=hermi)
+            vj, vk = dfhf.get_jk_(self, mol, dm, hermi=hermi)
+            return vj-vk*.5
 
 # We don't modify self._scf because it changes self.h1eff function.
 # We only need approximate jk for self.update_jk_in_ah
@@ -369,7 +370,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = density_fit(mcscf.CASSCF(m, 6, 4))
+    mc = approx_hessian(mcscf.CASSCF(m, 6, 4))
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     emc = mc.kernel(mo)[0]
@@ -377,7 +378,7 @@ if __name__ == '__main__':
     #-76.0267656731 -76.0873922924 -0.0606266193028
     print(emc - -76.0873923174, emc - -76.0926176464)
 
-    mc = density_fit(mcscf.CASSCF(m, 6, (3,1)))
+    mc = approx_hessian(mcscf.CASSCF(m, 6, (3,1)))
     mc.verbose = 4
     emc = mc.mc2step(mo)[0]
     print(emc - -75.7155632535814)
