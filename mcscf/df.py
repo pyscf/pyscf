@@ -197,6 +197,7 @@ def approx_hessian(casscf, auxbasis=None):
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
             bufs1 = numpy.empty((dfhf.BLOCKDIM,nmo,nmo))
+            t1 = t0
             with df.load(self._cderi) as feri:
                 for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
                     eri1 = numpy.asarray(feri[b0:b1], order='C')
