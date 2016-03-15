@@ -1,3 +1,4 @@
+import sys
 import time
 import tempfile
 import numpy
@@ -69,6 +70,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     return conv, eccsd, t1, t2
 
 
+@profile
 def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
@@ -99,7 +101,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Loo -= foo
     Lvv -= fvv
 
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = cc.kconserv
 
     # T1 equation
     # TODO: Check this conj(). Hirata and Bartlett has
@@ -230,7 +232,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         t1new[ki] /= eia[ki]
 
     eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -244,13 +245,14 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                 t2new[ki,kj,ka] /= eijab[ki,kj,ka]
 
     time0 = log.timer_debug1('update t1 t2', *time0)
+#    sys.exit("exiting for testing...")
 
     return t1new, t2new
 
 
 def energy(cc, t1, t2, eris):
     nkpts, nocc, nvir = t1.shape
-    kconserv = tools.get_kconserv(cc._scf.cell,cc._kpts)
+    kconserv = cc.kconserv
     fock = eris.fock
     e = 0.0 + 1j*0.0
     for ki in range(nkpts):
@@ -277,6 +279,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def __init__(self, mf, abs_kpts, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
         self._kpts = abs_kpts
         self.nkpts = len(self._kpts)
+        self.kconserv = tools.get_kconserv(mf.cell, abs_kpts)
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
 
     def dump_flags(self):
@@ -299,7 +302,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
-        kconserv = tools.get_kconserv(self._scf.cell,self._kpts)
+        kconserv = self.kconserv
         for ki in range(nkpts):
           for kj in range(nkpts):
             for ka in range(nkpts):
@@ -390,7 +393,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         t1,t2,eris = self.t1, self.t2, self.eris
         nkpts = self.nkpts
         kshift = self.kshift
-        kconserv = tools.get_kconserv(self._scf.cell, self._kpts)
+        kconserv = self.kconserv
 
         Lvv = imdk.Lvv(self,t1,t2,eris)
         Loo = imdk.Loo(self,t1,t2,eris)
@@ -496,7 +499,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         t1,t2,eris = self.t1, self.t2, self.eris
         nkpts = self.nkpts
         kshift = self.kshift
-        kconserv = tools.get_kconserv(self._scf.cell, self._kpts)
+        kconserv = self.kconserv
 
         Lvv = imdk.Lvv(self,t1,t2,eris)
         Loo = imdk.Loo(self,t1,t2,eris)
@@ -617,19 +620,33 @@ class _ERIS:
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
-            kconserv = tools.get_kconserv(cc._scf.cell,cc._kpts)
-            pqr_list = kpoint_helper.unique_pqr_list(cc._scf.cell,cc._kpts)
+            kconserv = cc.kconserv
+            khelper = kpoint_helper.unique_pqr_list(cc._scf.cell,cc._kpts)
+            unique_klist = khelper.get_uniqueList()
+            nUnique_klist = khelper.nUnique
 
             eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
+
+            #
+            #
+            # Looping over unique list of k-vectors
+            #
+            #
+            for pqr in range(nUnique_klist):
+                kp, kq, kr = unique_klist[pqr]
+                ks = kconserv[kp,kq,kr]
+                eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
+                            (mo_coeff[kp,:,:],mo_coeff[kq,:,:],mo_coeff[kr,:,:],mo_coeff[ks,:,:]),
+                            (cc._kpts[kp],cc._kpts[kq],cc._kpts[kr],cc._kpts[ks]))
+                eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
+                eri[kp,kq,kr] = eri_kpt.copy()
+
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
-                        ks = kconserv[kp,kq,kr]
-                        eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
-                                    (mo_coeff[kp,:,:],mo_coeff[kq,:,:],mo_coeff[kr,:,:],mo_coeff[ks,:,:]),
-                                    (cc._kpts[kp],cc._kpts[kq],cc._kpts[kr],cc._kpts[ks]))
-                        eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
-                        eri[kp,kq,kr] = eri_kpt.copy()
+                        ikp, ikq, ikr = khelper.get_irrVec(kp,kq,kr)
+                        irr_eri = eri[ikp,ikq,ikr]
+                        eri[kp,kq,kr] = khelper.transform_irr2full(irr_eri,kp,kq,kr)
 
             # Checking some things...
             maxdiff = 0.0
@@ -678,7 +695,6 @@ class _ERIS:
             self.oovo = eri[:,:,:,:nocc,:nocc,nocc:,:nocc].copy() / nkpts
             self.vvov = eri[:,:,:,nocc:,nocc:,:nocc,nocc:].copy() / nkpts
             self.vooo = eri[:,:,:,nocc:,:nocc,:nocc,:nocc].copy() / nkpts
-
 
         log.timer('CCSD integral transformation', *cput0)
 
