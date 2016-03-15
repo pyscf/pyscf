@@ -6,7 +6,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import dmrgscf
-from pyscf.mrpt import nevpt2
+from pyscf import mrpt
 dmrgscf.settings.MPIPREFIX = 'mpirun -n 4'
 
 b = 1.4
@@ -25,11 +25,11 @@ mc.kernel()
 
 class KnowValues(unittest.TestCase):
     def test_nevpt2_with_4pdm(self):
-        e = nevpt2.sc_nevpt(mc)
+        e = mrpt.NEVPT(mc).kernel()
         self.assertAlmostEqual(e, -0.14058373193902649, 6)
 
     def test_nevpt2_without_4pdm(self):
-        e = nevpt2.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100))
+        e = mrpt.NEVPT(mc).compress_approx(maxM=5000).kernel()
         self.assertAlmostEqual(e, -0.14058405242161856, 6)
 
 if __name__ == "__main__":
