@@ -246,22 +246,27 @@ def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
 
 def _convert_to_rhf(mf, convert_df=True):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('UHF', 'UKS') or
-        (convert_df and hasattr(mf, '_tag_df') and mf._tag_df)):
+    if (mf.__class__.__name__ in ('UHF', 'UKS')):
+        # convert to RHF
         mf1 = scf.RHF(mf.mol)
         mf1.__dict__.update(mf.__dict__)
         mf1.mo_energy = mf.mo_energy[0]
         mf1.mo_coeff  = mf.mo_coeff[0]
         mf1.mo_occ    = mf.mo_occ[0]
-        if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
-            from pyscf.lib import logger
-            logger.warn(mf, 'CASSCF: The first argument %s is a density-fitting SCF object. '
-                        'Its orbitals are taken as the initial guess of CASSCF.\n'
-                        'The CASSCF object is the normal solver (no approximated integrals).'
-                        'If you need pure DF-CASSCF (with approximate 2e integrals), '
-                        'please create the CASSCF object with mcscf.DFCASSCF function.',
-                        mf.__class__)
-            mf1._tag_df = False
+        mf = mf1
+
+    # Avoid doing density fitting
+    if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
+        mf1 = scf.RHF(mf.mol)
+        mf1.__dict__.update(mf.__dict__)
+        from pyscf.lib import logger
+        logger.warn(mf, 'CASSCF: The first argument %s is a density-fitting SCF object. '
+                    'Its orbitals are taken as the initial guess of CASSCF.\n'
+                    'The CASSCF object is the normal solver (no approximated integrals).'
+                    'If you need pure DF-CASSCF (with approximate 2e integrals), '
+                    'please create the CASSCF object with mcscf.DFCASSCF function.',
+                    mf.__class__)
+        mf1._tag_df = False
         return mf1
     else:
         return mf
