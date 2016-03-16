@@ -14,7 +14,8 @@ Input Cholesky decomposed integrals for CASSCF
 mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz')
 
 #
-# Integrals in memory
+# Integrals in memory. The size of the integral array is (M,N*(N+1)/2), where
+# the last two AO indices are compressed due to the symmetry
 #
 int3c = df.incore.cholesky_eri(mol, auxbasis='ccpvdz-fit')
 mf = scf.density_fit(scf.RHF(mol))
