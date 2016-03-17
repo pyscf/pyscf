@@ -70,7 +70,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     return conv, eccsd, t1, t2
 
 
-@profile
+#@profile
 def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
@@ -114,37 +114,36 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         t1new[ka] += -2.*einsum('kc,ka,ic->ia',fov[ki],t1[ka],t1[ki])
         t1new[ka] += einsum('ac,ic->ia',Fvv[ka],t1[ki])
         t1new[ka] += -einsum('ki,ka->ia',Foo[ki],t1[ka])
+
+        tau_term = np.empty((nkpts,nocc,nocc,nvir,nvir),dtype=t1.dtype)
+        for kk in range(nkpts):
+            tau_term[kk] = 2*t2[kk,ki,kk] - t2[ki,kk,kk].transpose(1,0,2,3)
+        tau_term[ka] += einsum('ic,ka->kica',t1[ki],t1[ka])
+
         for kk in range(nkpts):
             kc = kk
-            t1new[ka] +=  einsum('kc,kica->ia',Fov[kc],2*t2[kk,ki,kc])
-            t1new[ka] +=  einsum('kc,ikca->ia',Fov[kc], -t2[ki,kk,kc])
+            t1new[ka] += einsum('kc,kica->ia',Fov[kc],tau_term[kk])
 
-            # NOTE: can move this summation out of kk ...
-            if kk == ka:
-                t1new[ka] +=  einsum('kc,ic,ka->ia',Fov[kc],t1[ki],t1[ka])
             t1new[ka] +=  einsum('akic,kc->ia',2*eris.voov[ka,kk,ki],t1[kc])
             t1new[ka] +=  einsum('akci,kc->ia', -eris.vovo[ka,kk,kc],t1[kc])
 
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kk]
-                t1new[ka] +=  einsum('akcd,ikcd->ia',2*eris.vovv[ka,kk,kc],t2[ki,kk,kc])
-                t1new[ka] +=  einsum('akdc,ikcd->ia', -eris.vovv[ka,kk,kd],t2[ki,kk,kc])
-                # NOTE: can move these 2 summations out of kc
 
+                Svovv = 2*eris.vovv[ka,kk,kc] - eris.vovv[ka,kk,kd].transpose(0,1,3,2)
+                tau_term_1 = t2[ki,kk,kc].copy()
                 if ki == kc and kk == kd:
-                    t1new[ka] +=  einsum('akcd,ic,kd->ia',2*eris.vovv[ka,kk,ki],t1[ki],t1[kk])
-                    t1new[ka] +=  einsum('akdc,ic,kd->ia', -eris.vovv[ka,kk,kk],t1[ki],t1[kk])
+                    tau_term_1 += einsum('ic,kd->ikcd',t1[ki],t1[kk])
+                t1new[ka] += einsum('akcd,ikcd->ia',Svovv,tau_term_1)
 
                 # kk - ki + kl = kc
                 #  => kl = ki - kk + kc
                 kl = kconserv[ki,kk,kc]
-                t1new[ka] += -einsum('klic,klac->ia',2*eris.ooov[kk,kl,ki],t2[kk,kl,ka])
-                t1new[ka] += -einsum('klci,klac->ia', -eris.oovo[kk,kl,kc],t2[kk,kl,ka])
-
-                # NOTE: can move these 2 summations out of kk
+                Sooov = 2*eris.ooov[kk,kl,ki] - eris.ooov[kl,kk,ki].transpose(1,0,2,3)
+                tau_term_1 = t2[kk,kl,ka].copy()
                 if kk == ka and kl == kc:
-                    t1new[ka] += -einsum('klic,ka,lc->ia',2*eris.ooov[ka,kc,ki],t1[ka],t1[kc])
-                    t1new[ka] += -einsum('klci,ka,lc->ia', -eris.oovo[ka,kc,kc],t1[ka],t1[kc])
+                    tau_term_1 += einsum('ka,lc->klac',t1[ka],t1[kc])
+                t1new[ka] += -einsum('klic,klac->ia',Sooov,tau_term_1)
 
     # T2 equation
     # For conj(), see Hirata and Bartlett, Eq. (36)
@@ -165,9 +164,10 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kb]
-                t2new[ki,kj,ka] += einsum('abcd,ijcd->ijab',Wvvvv[ka,kb,kc],t2[ki,kj,kc])
+                tau_term = t2[ki,kj,kc].copy()
                 if ki == kc and kj == kd:
-                    t2new[ki,kj,ka] += einsum('abcd,ic,jd->ijab',Wvvvv[ka,kb,ki],t1[ki],t1[kj])
+                    tau_term += einsum('ic,jd->ijcd',t1[ki],t1[kj])
+                t2new[ki,kj,ka] += einsum('abcd,ijcd->ijab',Wvvvv[ka,kb,kc],tau_term)
 
             t2new[ki,kj,ka] += einsum('ac,ijcb->ijab',Lvv[ka],t2[ki,kj,ka])
             #P(ij)P(ab)
@@ -199,13 +199,17 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
             for kk in range(nkpts):
                 kc = kconserv[ka,ki,kk]
-                tmp = 2*einsum('akic,kjcb->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kc]) - \
-                        einsum('akci,kjcb->ijab',Wvovo[ka,kk,kc],t2[kk,kj,kc])
+                tmp_voov = 2.*Wvoov[ka,kk,ki] - Wvovo[ka,kk,kc].transpose(0,1,3,2)
+                tmp = einsum('akic,kjcb->ijab',tmp_voov,t2[kk,kj,kc])
+                #tmp = 2*einsum('akic,kjcb->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kc]) - \
+                #        einsum('akci,kjcb->ijab',Wvovo[ka,kk,kc],t2[kk,kj,kc])
                 t2new[ki,kj,ka] += tmp
                 #P(ij)P(ab)
                 kc = kconserv[kb,kj,kk]
-                tmp = 2*einsum('bkjc,kica->ijab',Wvoov[kb,kk,kj],t2[kk,ki,kc]) - \
-                        einsum('bkcj,kica->ijab',Wvovo[kb,kk,kc],t2[kk,ki,kc])
+                tmp_voov = 2.*Wvoov[kb,kk,kj] - Wvovo[kb,kk,kc].transpose(0,1,3,2)
+                tmp = einsum('bkjc,kica->ijab',tmp_voov,t2[kk,ki,kc])
+                #tmp = 2*einsum('bkjc,kica->ijab',Wvoov[kb,kk,kj],t2[kk,ki,kc]) - \
+                #        einsum('bkcj,kica->ijab',Wvovo[kb,kk,kc],t2[kk,ki,kc])
                 t2new[ki,kj,ka] += tmp
 
                 kc = kconserv[ka,ki,kk]
@@ -231,18 +235,14 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                 eia[ki,i,a] = foo[ki,i,i] - fvv[ki,a,a]
         t1new[ki] /= eia[ki]
 
-    eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
     for ki in range(nkpts):
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[ki,ka,kj]
-                for i in range(nocc):
-                    for a in range(nvir):
-                        for j in range(nocc):
-                            for b in range(nvir):
-                                eijab[ki,kj,ka,i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
-                                                          - fvv[ka,a,a] - fvv[kb,b,b] )
-                t2new[ki,kj,ka] /= eijab[ki,kj,ka]
+      for kj in range(nkpts):
+        for ka in range(nkpts):
+            kb = kconserv[ki,ka,kj]
+            eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
+            ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+            t2new[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 #    sys.exit("exiting for testing...")
@@ -280,6 +280,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self._kpts = abs_kpts
         self.nkpts = len(self._kpts)
         self.kconserv = tools.get_kconserv(mf.cell, abs_kpts)
+        self.khelper  = kpoint_helper.unique_pqr_list(mf.cell, abs_kpts)
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
 
     def dump_flags(self):
@@ -307,16 +308,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
           for kj in range(nkpts):
             for ka in range(nkpts):
                 kb = kconserv[ki,ka,kj]
-                for i in range(nocc):
-                    for a in range(nvir):
-                        #eia[i,a] = foo[ki,i,i] - fvv[ka,a,a]
-                        for j in range(nocc):
-                            for b in range(nvir):
-                                eijab[i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
-                                                 - fvv[ka,a,a] - fvv[kb,b,b] ).real
-                                woovv[ki,kj,ka,i,j,a,b] = (2*eris_oovv[ki,kj,ka,i,j,a,b] - eris_oovv[ki,kj,kb,i,j,b,a])
-                                t2   [ki,kj,ka,i,j,a,b] = eris_oovv[ki,kj,ka,i,j,a,b] / eijab[i,j,a,b]
-
+                eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
+                ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+                eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
+                t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
 
         t2 = numpy.conj(t2)
         self.emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
@@ -586,6 +582,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector
 
 class _ERIS:
+    #@profile
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
@@ -621,7 +618,7 @@ class _ERIS:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             kconserv = cc.kconserv
-            khelper = kpoint_helper.unique_pqr_list(cc._scf.cell,cc._kpts)
+            khelper = cc.khelper #kpoint_helper.unique_pqr_list(cc._scf.cell,cc._kpts)
             unique_klist = khelper.get_uniqueList()
             nUnique_klist = khelper.nUnique
 
