@@ -114,19 +114,18 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 
     if len(dms) == 0:
         return [], []
-
+    elif isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        nset = 1
+        dms = [dms]
+    else:
+        nset = len(dms)
+    nao = dms[0].shape[0]
     cderi = mf._cderi
-    nao_pair_size = numpy.asarray(cderi[0]).size  # for lower-tri part
-    nao = int(numpy.sqrt(nao_pair_size*2))
+
     fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        dms = [dms]
-        nset = 1
-    else:
-        nset = len(dms)
     vj = numpy.zeros((nset,nao,nao))
     vk = numpy.zeros((nset,nao,nao))
 
