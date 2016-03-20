@@ -717,7 +717,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
     if SINGULAR_IDS.intersection(fn_ids) and deriv > 1:
-        non0idx = (rho_u[0] > 4.6e-11) & (rho_d[0] > 4.6e-11)
+        non0idx = (rho_u[0] > 5e-11) & (rho_d[0] > 5e-11)
         rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
         rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
         outbuf = numpy.empty((outlen,non0idx.sum()))
