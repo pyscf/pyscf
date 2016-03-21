@@ -617,6 +617,19 @@ class NEVPT(pyscf.lib.StreamObject):
         return self
 
     def compress_approx(self,maxM=500, compress_schedule=None, tol=1e-7, stored_integral =False):
+        '''SC-NEVPT2 with compressed perturber
+
+        Kwargs :
+            maxM : int
+                DMRG bond dimension
+
+        Examples:
+
+        >>> mf = gto.M('N 0 0 0; N 0 0 1.4', basis='6-31g').apply(scf.RHF).run()
+        >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
+        >>> NEVPT(mc, root=0).compress_approx(maxM=100).kernel()
+        -0.14058324991532101
+        '''
         #TODO
         #Some preprocess for compressed perturber
         if hasattr(self.fcisolver, 'nevpt_intermediate'):

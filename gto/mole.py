@@ -1000,8 +1000,8 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:        ibf += degen
 
 def offset_nr_by_atom(mol):
-    '''Non-relativistic AO offset for each atom
-    (first-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''Non-relativistic AO offset for each atom.  Return a list, each item
+    of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
     '''
     aorange = []
     p0 = p1 = 0

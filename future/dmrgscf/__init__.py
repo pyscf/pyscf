@@ -23,7 +23,7 @@ Simple usage::
     >>> mc = dmrgscf.DMRGSCF(mf, 4, 4)
     >>> mc.kernel()
     -75.3374492511669
-    >>> mrpt.sc_nevpt(dmrgscf.compress_perturb(mc))
+    >>> mrpt.NEVPT(mc).compress_approx().kernel()
     -0.10474250075684
 
     >>> mc = mcscf.CASSCF(mf, 4, 4)
@@ -38,7 +38,7 @@ Block
 -----
 :class:`DMRGCI` is the main object to hold Block input parameters and results.
 :func:`DMRGSCF` is a shortcut function quickly setup DMRG-CASSCF calculation.
-:func:`compress_perturb` initialized compressed MPS perturber for NEVPT2
+:func:`compress_approx` initializes the compressed MPS perturber for NEVPT2
 calculation.
 
 In DMRGCI object, you can set the following attributes to control Block program:

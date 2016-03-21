@@ -28,7 +28,7 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
         ks.grids.build_()
-        t0 = logger.timer(ks, 'seting up grids', *t0)
+        t0 = logger.timer(ks, 'setting up grids', *t0)
 
     n, ks._exc, vx = ks._numint.nr_uks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
