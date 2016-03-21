@@ -513,21 +513,8 @@ class CASSCF(casci_uhf.CASCI):
         if isinstance(u0, int) and u0 == 1:
             u0 = (1,1)
         dr = self.unpack_uniq_var(dx)
-        if self.frozen is not None:
-            nmo = dr[0].shape[0]
-            if isinstance(self.frozen, (int, numpy.integer)):
-                idx = numpy.arange(self.frozen, nmo)
-            else:
-                idx = numpy.setdiff1d(numpy.arange(nmo), self.frozen)
-            ua = numpy.eye(nmo)
-            ub = numpy.eye(nmo)
-            ua[idx[:,None],idx] = expmat(dr[0][idx[:,None],idx])
-            ub[idx[:,None],idx] = expmat(dr[1][idx[:,None],idx])
-            ua = numpy.dot(u0[0], na)
-            ub = numpy.dot(u0[1], nb)
-        else:
-            ua = numpy.dot(u0[0], mc1step.expmat(dr[0]))
-            ub = numpy.dot(u0[1], mc1step.expmat(dr[1]))
+        ua = numpy.dot(u0[0], mc1step.expmat(dr[0]))
+        ub = numpy.dot(u0[1], mc1step.expmat(dr[1]))
         return (ua, ub)
 
     def gen_g_hop(self, *args):

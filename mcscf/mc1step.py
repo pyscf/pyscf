@@ -908,17 +908,7 @@ class CASSCF(casci.CASCI):
 
     def update_rotate_matrix(self, dx, u0=1):
         dr = self.unpack_uniq_var(dx)
-        if self.frozen is not None:
-            nmo = dr.shape[0]
-            if isinstance(self.frozen, (int, numpy.integer)):
-                idx = numpy.arange(self.frozen, nmo)
-            else:
-                idx = numpy.setdiff1d(numpy.arange(nmo), self.frozen)
-            u1 = numpy.eye(nmo)
-            u1[idx[:,None],idx] = expmat(dr[idx[:,None],idx])
-        else:
-            u1 = expmat(dr)
-        return numpy.dot(u0, u1)
+        return numpy.dot(u0, expmat(dr))
 
     gen_g_hop = gen_g_hop
     rotate_orb_cc = rotate_orb_cc
