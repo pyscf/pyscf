@@ -460,8 +460,8 @@ def _default_rad(nuc, level=3):
     '''Number of radial grids '''
     tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
     #           Period    1   2   3   4   5   6   7         # level
-    grids = numpy.array((( 20, 30, 35, 45, 50, 55, 60),     # 0
-                         ( 30, 45, 50, 60, 65, 70, 75),     # 1
+    grids = numpy.array((( 10, 15, 20, 30, 35, 40, 50),     # 0
+                         ( 30, 40, 50, 60, 65, 70, 75),     # 1
                          ( 40, 60, 65, 75, 80, 85, 90),     # 2
                          ( 50, 75, 80, 90, 95,100,105),     # 3
                          ( 60, 90, 95,105,110,115,120),     # 4
@@ -478,7 +478,7 @@ def _default_ang(nuc, level=3):
     the order and the number of angular grids'''
     tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
     #           Period    1   2   3   4   5   6   7         # level
-    order = numpy.array(((15, 17, 17, 17, 17, 17, 17 ),     # 0
+    order = numpy.array(((11, 15, 17, 17, 17, 17, 17 ),     # 0
                          (17, 23, 23, 23, 23, 23, 23 ),     # 1
                          (23, 29, 29, 29, 29, 29, 29 ),     # 2
                          (29, 29, 35, 35, 35, 35, 35 ),     # 3

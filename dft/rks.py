@@ -51,6 +51,10 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        nset = 1
+    else:
+        nset = len(dm)
 
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
@@ -67,30 +71,43 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         t0 = logger.timer(ks, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:
-        vj = ks.get_j(mol, dm, hermi)
-    elif (ks._eri is not None or ks._is_mem_enough() or not ks.direct_scf):
-        vj, vk = ks.get_jk(mol, dm, hermi)
-    else:
-        if (ks.direct_scf and isinstance(vhf_last, numpy.ndarray) and
-            hasattr(ks, '_dm_last')):
+        if (ks._eri is not None or not ks.direct_scf or
+            not hasattr(ks, '_dm_last') or
+            not isinstance(vhf_last, numpy.ndarray)):
+            vhf = vj = ks.get_j(mol, dm, hermi)
+        else:
             ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
-            vj, vk = ks.get_jk(mol, ddm, hermi=hermi)
+            vj = ks.get_j(mol, ddm, hermi)
+            vj += ks._vj_last
+            ks._dm_last = dm
+            vhf = ks._vj_last = vj
+    else:
+        if (ks._eri is not None or not ks.direct_scf or
+            not hasattr(ks, '_dm_last') or
+            not isinstance(vhf_last, numpy.ndarray)):
+            vj, vk = ks.get_jk(mol, dm, hermi)
+        else:
+            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
+            vj, vk = ks.get_jk(mol, ddm, hermi)
             vj += ks._vj_last
             vk += ks._vk_last
-        else:
-            vj, vk = ks.get_jk(mol, dm, hermi)
-        ks._dm_last = dm
-        ks._vj_last, ks._vk_last = vj, vk
-
-    if abs(hyb) > 1e-10:
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            ks._exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
+            ks._dm_last = dm
+            ks._vj_last, ks._vk_last = vj, vk
         vhf = vj - vk * (hyb * .5)
-    else:
-        vhf = vj
 
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        if nset == 1:
+            ks._exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
+
+    if nset == 1:
         ks._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
+
+    if ks.small_rho_cutoff > 1e-20 and nset == 1:
+        # Filter grids the first time setup grids
+        idx = numint.large_rho_indices(mol, dm, ks._numint, ks.grids,
+                                       ks.small_rho_cutoff)
+        ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
+        ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
+        ks._numint.non0tab = None
     return vhf + vx
 
 
@@ -160,14 +177,7 @@ class RKS(pyscf.scf.hf.RHF):
     '''
     def __init__(self, mol):
         pyscf.scf.hf.RHF.__init__(self, mol)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(mol)
-##################################################
-# don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids'])
+        _dft_common_init_(self)
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
@@ -180,6 +190,17 @@ class RKS(pyscf.scf.hf.RHF):
     def define_xc_(self, description):
         self.xc = description
         return self
+
+def _dft_common_init_(mf):
+    mf.xc = 'LDA,VWN'
+    mf.grids = gen_grid.Grids(mf.mol)
+    mf.small_rho_cutoff = 1e-12  # Use rho to filter grids
+##################################################
+# don't modify the following attributes, they are not input options
+    mf._ecoul = 0
+    mf._exc = 0
+    mf._numint = numint._NumInt()
+    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
 
 if __name__ == '__main__':

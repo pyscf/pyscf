@@ -410,11 +410,6 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         }
 
         switch (type) {
-        case XC_FAMILY_LDA:
-                vsegtot = 1;
-                fsegtot = 1;
-                ksegtot = 1;
-                break;
         case XC_FAMILY_GGA:
         case XC_FAMILY_HYB_GGA:
                 vsegtot = 2;
@@ -426,6 +421,11 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
                 vsegtot = 4;
                 fsegtot = 10;
                 ksegtot = 0;
+                break;
+        default: //case XC_FAMILY_LDA:
+                vsegtot = 1;
+                fsegtot = 1;
+                ksegtot = 1;
         }
 
         int i;
