@@ -2,6 +2,7 @@
 
 import unittest
 import numpy
+import scipy.linalg
 from pyscf import gto
 from pyscf import scf
 from pyscf import df
@@ -130,6 +131,20 @@ class KnowValues(unittest.TestCase):
         eris = mc.ao2mo(mc.mo_coeff)
         self.assertTrue(numpy.allclose(eri0[:,:,ncore:nocc,ncore:nocc], eris.ppaa))
         self.assertTrue(numpy.allclose(eri0[:,ncore:nocc,:,ncore:nocc], eris.papa))
+
+    def test_assign_cderi(self):
+        nao = molsym.nao_nr()
+        w, u = scipy.linalg.eigh(mol.intor('cint2e_sph', aosym='s4'))
+        idx = w > 1e-9
+
+        mf = scf.density_fit(scf.RHF(molsym))
+        mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
+        mf.kernel()
+
+        mc = mcscf.DFCASSCF(mf, 8, 8)
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.98924594072399, 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")

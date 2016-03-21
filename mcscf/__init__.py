@@ -262,9 +262,9 @@ def _convert_to_rhf(mf, convert_df=True):
         from pyscf.lib import logger
         logger.warn(mf, 'CASSCF: The first argument %s is a density-fitting SCF object. '
                     'Its orbitals are taken as the initial guess of CASSCF.\n'
-                    'The CASSCF object is the normal solver (no approximated integrals).'
-                    'If you need pure DF-CASSCF (with approximate 2e integrals), '
-                    'please create the CASSCF object with mcscf.DFCASSCF function.',
+                    'The CASSCF object is the normal solver (no approximated integrals). '
+                    'mcscf.DFCASSCF is the function to create density fitting CASSCF '
+                    '(with approximate 2e integrals).',
                     mf.__class__)
         mf1._tag_df = False
         return mf1
