@@ -1,9 +1,6 @@
-import sys
 import time
-import tempfile
 import numpy
 import numpy as np
-import h5py
 import kpoint_helper
 
 import pyscf.pbc.tools.pbc as tools
@@ -13,7 +10,6 @@ from pyscf.lib import logger
 from pyscf.pbc import lib as pbclib
 import pyscf.cc
 import pyscf.cc.ccsd
-from pyscf.cc.ccsd import _cp
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 

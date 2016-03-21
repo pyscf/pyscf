@@ -1,6 +1,5 @@
 import numpy as np
-import pyscf.pbc.tools as tools
-from pyscf import lib
+#from pyscf import lib
 from pyscf.pbc import lib as pbclib
 
 #einsum = np.einsum
@@ -91,13 +90,8 @@ def Lvv(cc,t1,t2,eris):
 def cc_Woooo(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
     kconserv = cc.kconserv
-    khelper = cc.khelper
-    unique_klist = khelper.get_sym2_uniqueList()
-    nUnique_klist = khelper.sym2_nUnique
 
     Wklij = np.array(eris.oooo, copy=True)
-    #for pqr in range(nUnique_klist):
-    #    kk, kl, ki = unique_klist[pqr]
     for kk in range(nkpts):
         for kl in range(kk+1):
             for ki in range(nkpts):
@@ -308,9 +302,6 @@ def W2ovvo(cc,t1,t2,eris):
     return Wkaci
 
 def Wovvo(cc,t1,t2,eris):
-    nkpts, nocc, nvir = t1.shape
-    kconserv = cc.kconserv
-
     return W1ovvo(cc,t1,t2,eris) + W2ovvo(cc,t1,t2,eris)
 
 def W1ovov(cc,t1,t2,eris):
@@ -344,8 +335,6 @@ def W2ovov(cc,t1,t2,eris):
     return Wkbid
 
 def Wovov(cc,t1,t2,eris):
-    nkpts, nocc, nvir = t1.shape
-    kconserv = cc.kconserv
     return W1ovov(cc,t1,t2,eris) + W2ovov(cc,t1,t2,eris)
 
 def Woooo(cc,t1,t2,eris):
