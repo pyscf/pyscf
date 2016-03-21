@@ -1,9 +1,13 @@
 import numpy as np
 
+from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft.gen_grid import gen_uniform_grids
 from pyscf.pbc.dft.numint import eval_ao
 from pyscf.pbc import tools
 from pyscf.lib import logger
+
+#einsum = np.einsum
+einsum = pbclib.einsum
 
 """
     (ij|kl) = \int dr1 dr2 i*(r1) j(r1) v(r12) k*(r2) l(r2)
@@ -66,12 +70,12 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
-            moiR = mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            moiR = mojR = einsum('ri,ia->ra', aoR, mo_coeffs[0])
         else:
             nmoi = mo_coeffs[0].shape[1]
             nmoj = mo_coeffs[1].shape[1]
-            moiR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
-            mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[1])
+            moiR = einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            mojR = einsum('ri,ia->ra', aoR, mo_coeffs[1])
 
     else:
         if q is None:
@@ -82,10 +86,10 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
-        moiR = np.einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
-        mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
+        moiR = einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
+        mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
-    #mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
+    #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
     mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
     for i in xrange(nmoi):
@@ -118,12 +122,12 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
-            moiR = mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            moiR = mojR = einsum('ri,ia->ra', aoR, mo_coeffs[0])
         else:
             nmoi = mo_coeffs[0].shape[1]
             nmoj = mo_coeffs[1].shape[1]
-            moiR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
-            mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[1])
+            moiR = einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            mojR = einsum('ri,ia->ra', aoR, mo_coeffs[1])
 
     else:
         if q is None:
@@ -134,10 +138,10 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
-        moiR = np.einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
-        mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
+        moiR = einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
+        mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
-    #mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
+    #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
     mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
     for i in xrange(nmoi):
@@ -170,12 +174,12 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
-            moiR = mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            moiR = mojR = einsum('ri,ia->ra', aoR, mo_coeffs[0])
         else:
             nmoi = mo_coeffs[0].shape[1]
             nmoj = mo_coeffs[1].shape[1]
-            moiR = np.einsum('ri,ia->ra', aoR, mo_coeffs[0])
-            mojR = np.einsum('ri,ia->ra', aoR, mo_coeffs[1])
+            moiR = einsum('ri,ia->ra', aoR, mo_coeffs[0])
+            mojR = einsum('ri,ia->ra', aoR, mo_coeffs[1])
 
     else:
         if q is None:
@@ -186,8 +190,8 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
-        moiR = np.einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
-        mojR = np.einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
+        moiR = einsum('ri,ia->ra', aoR_ki, mo_coeffs[0])
+        mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
     mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
@@ -223,7 +227,7 @@ def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.DEBUG
     coulqG = tools.get_coulG(cell, -1.0*q)
     ngs = orb_pair_invG1.shape[0]
     Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngs**2)
-    eri = np.einsum('gm,gn->mn',orb_pair_invG1, Jorb_pair_G2)
+    eri = einsum('gm,gn->mn',orb_pair_invG1, Jorb_pair_G2)
     return eri
 
 def get_ao_pairs_G(cell):
