@@ -177,6 +177,16 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     mf1 = density_fit(newton(mf), auxbasis)
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
+    if hasattr(mf, 'grids'):
+        import copy
+        from pyscf.dft import gen_grid
+        approx_grids = gen_grid.Grids(mf.mol)
+        approx_grids.verbose = 0
+        approx_grids.level = 0
+        mf1.grids = approx_grids
+
+        approx_numint = copy.copy(mf._numint)
+        mf1._numint = approx_numint
 
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
@@ -185,10 +195,20 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
         logger.note(mf, '========================================================')
         mf0 = density_fit(mf, auxbasis)
-        mf0.conv_tol = .1
+        mf0.conv_tol = .25
         if mf0.level_shift == 0:
-            mf0.level_shift = .2
+            mf0.level_shift = .3
+        if hasattr(mf, 'grids'):
+            mf0.grids = approx_grids
+            mf0._numint = approx_numint
+# Note: by setting small_rho_cutoff, dft.get_veff_ function may overwrite
+# approx_grids and approx_numint.  It will further changes the corresponding
+# mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
+# dft.get_veff_ are not executed so that more grid points may be found in
+# approx_grids.
+            mf0.small_rho_cutoff = 1e-6
         mf0.kernel()
+
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ

@@ -102,6 +102,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     s1e = mf.get_ovlp(mol)
 
     cond = numpy.linalg.cond(s1e)
+    logger.debug(mf, 'cond(S) = %.9g' % cond)
     if cond*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', cond)
@@ -646,11 +647,11 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     Returns:
         Gradients in MO representation.  It's a num_occ*num_vir vector.
     '''
-    occidx = numpy.where(mo_occ> 0)[0]
-    viridx = numpy.where(mo_occ==0)[0]
+    occidx = mo_occ > 0
+    viridx = ~occidx
 
     fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
-    g = fock[viridx[:,None],occidx] * 2
+    g = fock[viridx.reshape(-1,1) & occidx] * 2
     return g.reshape(-1)
 
 
@@ -776,15 +777,14 @@ def eig(h, s):
     return e, c
 
 
+############
+# For orbital rotation
 def uniq_var_indices(mo_occ):
-    occaidx = mo_occ>0
-    occbidx = mo_occ==2
-    virbidx = numpy.logical_not(occbidx)
-    openidx = numpy.where(mo_occ==1)[0]
-
-    mask = virbidx[:,None]&occaidx
-    if len(openidx) > 0:
-        mask[openidx[:,None],openidx] = False
+    occidxa = mo_occ>0
+    occidxb = mo_occ==2
+    viridxa = ~occidxa
+    viridxb = ~occidxb
+    mask = (viridxa[:,None] & occidxa) | (viridxb[:,None] & occidxb)
     return mask
 
 def pack_uniq_var(x1, mo_occ):
@@ -798,6 +798,7 @@ def unpack_uniq_var(dx, mo_occ):
     x1 = numpy.zeros((nmo,nmo))
     x1[idx] = dx
     return x1 - x1.T
+############
 
 
 

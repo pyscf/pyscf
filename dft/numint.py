@@ -997,6 +997,42 @@ def nr_fxc(mol, grids, xc_code, dm0, dms, spin0, relativity=0, hermi=1,
                           hermi, rho0, vxc, fxc, max_memory, verbose)
 
 
+def cache_xc_kernel_(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
+                     max_memory=2000):
+    '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
+    DFT hessian module etc.
+    '''
+    if ni.non0tab is None:
+        ni.non0tab = ni.make_mask(mol, grids.coords)
+
+    xctype = ni._xc_type(xc_code)
+    if xctype == 'LDA':
+        ao_deriv = 0
+    elif xctype == 'GGA':
+        ao_deriv = 1
+    else:
+        raise NotImplementedError('meta-GGA')
+
+    if spin == 0:
+        nao = mo_coeff.shape[0]
+        rho = []
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+            rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
+        rho = numpy.hstack(rho)
+    else:
+        nao = mo_coeff[0].shape[0]
+        rhoa = []
+        rhob = []
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
+            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
+        rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
+    vxc, fxc = ni.eval_xc(xc_code, rho, spin, 0, 2, 0)[1:3]
+    return rho, vxc, fxc
+
+
 def large_rho_indices(mol, dm, ni, grids, cutoff=1e-12, max_memory=2000):
     '''Indices of density which are larger than given cutoff
     '''
@@ -1054,6 +1090,8 @@ class _NumInt(object):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     nr_fxc = nr_fxc
+    cache_xc_kernel_ = cache_xc_kernel_
+    cache_xc_kernel  = cache_xc_kernel_
 
     @pyscf.lib.with_doc(eval_ao.__doc__)
     def eval_ao(self, mol, coords, deriv=0, relativity=0, bastart=0,
