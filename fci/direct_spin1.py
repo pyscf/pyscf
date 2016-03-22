@@ -24,6 +24,7 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
+from pyscf.fci import spin_op
 
 libfci = pyscf.lib.load_library('libfci')
 
@@ -343,6 +344,8 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return dm1, dm2
 
 def get_init_guess(norb, nelec, nroots, hdiag):
+    '''Initial guess is the single Slater determinant
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -519,18 +522,23 @@ class FCISolver(pyscf.lib.StreamObject):
         return self
 
 
+    @pyscf.lib.with_doc(absorb_h1e.__doc__)
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
+    @pyscf.lib.with_doc(make_hdiag.__doc__)
     def make_hdiag(self, h1e, eri, norb, nelec):
         return make_hdiag(h1e, eri, norb, nelec)
 
+    @pyscf.lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
         return pspace(h1e, eri, norb, nelec, hdiag, np)
 
+    @pyscf.lib.with_doc(contract_1e.__doc__)
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
+    @pyscf.lib.with_doc(contract_2e.__doc__)
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
@@ -549,6 +557,7 @@ class FCISolver(pyscf.lib.StreamObject):
             return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                        self.level_shift)
 
+    @pyscf.lib.with_doc(get_init_guess.__doc__)
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)
 
@@ -561,44 +570,58 @@ class FCISolver(pyscf.lib.StreamObject):
                           tol, lindep, max_cycle, max_space, nroots,
                           davidson_only, pspace_size, **kwargs)
 
+    @pyscf.lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def spin_square(self, fcivec, norb, nelec):
-        from pyscf.fci import spin_op
         if self.nroots == 1:
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
             ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
             return [x[0] for x in ss], [x[1] for x in ss]
+    spin_square.__doc__ = spin_op.spin_square0.__doc__
 
+    @pyscf.lib.with_doc(make_rdm1s.__doc__)
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(make_rdm12s.__doc__)
     def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12s(fcivec, norb, nelec, link_index, reorder)
 
+    @pyscf.lib.with_doc(make_rdm12.__doc__)
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
     def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
-        return make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
+        r'''Spin traced 2-particle density matrice
 
+        NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but
+        stored as [p,r,q,s]
+        '''
+        return self.make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
+
+    @pyscf.lib.with_doc(make_rdm1s.__doc__)
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(trans_rdm1.__doc__)
     def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(trans_rdm12s.__doc__)
     def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
                      reorder=True):
         return trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
 
+    @pyscf.lib.with_doc(trans_rdm12.__doc__)
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)

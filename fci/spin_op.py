@@ -6,7 +6,6 @@ from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.fci import cistring
-from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
 
 librdm = pyscf.lib.load_library('libfci')
@@ -62,6 +61,7 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     function can compute the expectation value spin square operator for
     UHF-FCI wavefunction
     '''
+    from pyscf.fci import direct_spin1
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
