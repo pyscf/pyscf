@@ -27,13 +27,13 @@ def run(b, dm, mo, ci=None):
     mol.basis = 'cc-pVTZ'
     mol.symmetry = 1
     mol.build()
-    m = scf.RHF(mol)
-    m.level_shift_factor = .4
-    m.max_cycle = 100
-    m.conv_tol = 1e-9
-    ehf.append(m.scf(dm))
+    mf = scf.RHF(mol)
+    mf.level_shift_factor = .4
+    mf.max_cycle = 100
+    mf.conv_tol = 1e-9
+    ehf.append(mf.scf(dm))
 
-    mc = mcscf.CASSCF(m, 12, 12)
+    mc = mcscf.CASSCF(mf, 12, 12)
     mc.fcisolver.conv_tol = 1e-9
     if mo is None:
         # the initial guess for b = 1.5
@@ -41,12 +41,12 @@ def run(b, dm, mo, ci=None):
         ncas = {'A1g':2, 'A1u':2,
                 'E1ux':1, 'E1uy':1, 'E1gx':1, 'E1gy':1,
                 'E2ux':1, 'E2uy':1, 'E2gx':1, 'E2gy':1}
-        mo = mcscf.sort_mo_by_irrep(mc, m.mo_coeff, ncas, ncore)
+        mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, ncas, ncore)
     else:
         mo = mcscf.project_init_guess(mc, mo)
     emc.append(mc.kernel(mo)[0])
     mc.analyze()
-    return m.make_rdm1(), mc.mo_coeff, mc.ci
+    return mf.make_rdm1(), mc.mo_coeff, mc.ci
 
 dm = mo = ci = None
 for b in numpy.arange(1.5, 3.01, .1):

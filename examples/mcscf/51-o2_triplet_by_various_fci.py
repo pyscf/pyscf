@@ -19,20 +19,20 @@ mol.basis = 'cc-pvdz'
 mol.spin = 2
 mol.build()
 
-m = scf.RHF(mol)
-m.kernel()
+mf = scf.RHF(mol)
+mf.kernel()
 
 #
 # Default CASSCF
 #
-mc = mcscf.CASSCF(m, 4, (4,2))
+mc = mcscf.CASSCF(mf, 4, (4,2))
 emc1 = mc.kernel()[0]
 print('* Triplet, using default CI solver, E = %.15g' % emc1)
 
 #
 # fcisolver is fci.direct_spin1
 #
-mc = mcscf.CASSCF(m, 4, 6)
+mc = mcscf.CASSCF(mf, 4, 6)
 # change the CAS space FCI solver. e.g. to DMRG, FCIQMC
 mc.fcisolver = fci.direct_spin1
 emc1 = mc.kernel()[0]
@@ -42,10 +42,10 @@ print('* Triplet,  using fci.direct_spin1 solver, E = %.15g' % emc1)
 # fcisolver is fci.direct_spin0
 #
 mol.build(False, False, spin=0)
-m = scf.RHF(mol)
-m.kernel()
+mf = scf.RHF(mol)
+mf.kernel()
 
-mc = mcscf.CASSCF(m, 6, 6)
+mc = mcscf.CASSCF(mf, 6, 6)
 mc.fcisolver = fci.direct_spin0
 caspace = [6,7,8,9,10,12]
 mo = mc.sort_mo(caspace)

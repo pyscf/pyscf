@@ -49,7 +49,7 @@ m.kernel()
 #
 mc = mcscf.CASCI(m, 4, 4)
 mc.fcisolver.nroots = 2
-mc.casci()
+mc.kernel()
 
 ci_nevpt_e1 = mrpt.NEVPT(mc, root=0).kernel()
 ci_nevpt_e2 = mrpt.NEVPT(mc, root=1).kernel()
