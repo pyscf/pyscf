@@ -308,7 +308,7 @@ static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1,
         }
 }
 
-void axpy2d(double *out, double *in, int count, int no, int ni)
+static void axpy2d(double *out, double *in, int count, int no, int ni)
 {
         int i, j;
         for (i = 0; i < count; i++) {
@@ -492,9 +492,15 @@ void FCImake_hdiag_uhf(double *hdiag, double *h1e_a, double *h1e_b,
                        int norb, int nstra, int nstrb, int nocca, int noccb,
                        int *occslista, int *occslistb)
 {
+#pragma omp parallel default(none) \
+                shared(hdiag, h1e_a, h1e_b, \
+                       jdiag_aa, jdiag_ab, jdiag_bb, kdiag_aa, kdiag_bb, \
+                       norb, nstra, nstrb, nocca, noccb, occslista, occslistb)
+{
         int ia, ib, j, j0, k0, jk, jk0;
         double e1, e2;
         int *paocc, *pbocc;
+#pragma omp for schedule(static)
         for (ia = 0; ia < nstra; ia++) {
                 paocc = occslista + ia * nocca;
                 for (ib = 0; ib < nstrb; ib++) {
@@ -526,6 +532,7 @@ void FCImake_hdiag_uhf(double *hdiag, double *h1e_a, double *h1e_b,
                         hdiag[ia*nstrb+ib] = e1 + e2 * .5;
                 }
         }
+}
 }
 
 void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
@@ -587,13 +594,17 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                           uint64_t *stra, uint64_t *strb,
                           int norb, int np)
 {
+        const int d2 = norb * norb;
+        const int d3 = norb * norb * norb;
+#pragma omp parallel default(none) \
+                shared(h0, h1e_a, h1e_b, g2e_aa, g2e_ab, g2e_bb, \
+                       stra, strb, norb, np)
+{
         int i, j, k, pi, pj, pk, pl;
         int n1da, n1db;
-        int d2 = norb * norb;
-        int d3 = norb * norb * norb;
         uint64_t da, db, str1;
         double tmp;
-
+#pragma omp for schedule(dynamic)
         for (i = 0; i < np; i++) {
         for (j = 0; j < i; j++) {
                 da = stra[i] ^ stra[j];
@@ -684,6 +695,7 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         } break;
                 }
         } }
+}
 }
 
 void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,

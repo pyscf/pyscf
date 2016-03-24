@@ -179,7 +179,13 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
     nb = cistring.num_strings(norb, nelecb)
-    addr = numpy.argsort(hdiag)[:np]
+    if hdiag.size < np:
+        addr = numpy.arange(hdiag.size)
+    else:
+        try:
+            addr = numpy.argpartition(hdiag, np)[:np]
+        except AttributeError:
+            addr = numpy.argsort(hdiag)[:np]
     addra = addr // nb
     addrb = addr % nb
     stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
