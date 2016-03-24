@@ -346,20 +346,22 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         g_kf1, gorb_update, h_op, h_diag = \
                 casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
         g_kf1 = gorb_update(u)
-        if (numpy.linalg.norm(g_kf1-g_kf) > norm_gkf*casscf.ah_grad_trust_region):
-            log.debug('    Rejct keyframe |g|= %4.3g  |g_last| = %4.3f',
-                      numpy.linalg.norm(g_kf1), norm_gkf)
-            break
-        norm_gkf = numpy.linalg.norm(g_kf1)
+        norm_gkf1 = numpy.linalg.norm(g_kf1)
         norm_dg = numpy.linalg.norm(g_kf1-g_orb)
-        kf_compensate = norm_dg / norm_gorb
         log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
-                  norm_gkf, norm_dg)
+                  norm_gkf1, norm_dg)
+        if (norm_dg > norm_gorb*casscf.ah_grad_trust_region and
+            norm_gorb > conv_tol_grad*.4):  # More iters when approaching local minimum
+            log.debug('    Rejct keyframe |g|= %4.3g  |g_last| = %4.3g',
+                      norm_gkf1, norm_gorb)
+            break
+        kf_compensate = norm_dg / norm_gorb
         t3m = log.timer('gen h_op', *t3m)
         g_orb = g_kf = g_kf1
-        norm_gorb = norm_gkf
+        norm_gorb = norm_gkf = norm_gkf1
         x0_guess = dxi
         jkcount += 1
+        ah_start_cycle = 0
 
 
 def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
@@ -714,14 +716,14 @@ class CASSCF(casci.CASCI):
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
         self.ah_start_tol = 1.5
-        self.ah_start_cycle = 2
+        self.ah_start_cycle = 3
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
 # ah_grad_trust_region allow gradients increase for AH optimization
-        self.ah_grad_trust_region = 2.0
+        self.ah_grad_trust_region = 3.0
         self.ah_decay_rate = .8
         self.grad_update_dep = 1
         self.ci_update_dep = 2
