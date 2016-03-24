@@ -252,13 +252,13 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
     if x0_guess is None:
         x0_guess = g_orb
     ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
+    #ah_start_cycle = max(casscf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
+    ah_start_cycle = casscf.ah_start_cycle
     while True:
         # increase the AH accuracy when approach convergence
         ah_start_tol = (numpy.log(norm_gorb+conv_tol_grad) -
                         numpy.log(min(norm_gorb,conv_tol_grad))) * 1.5 * norm_gorb
         ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
-        #ah_start_cycle = max(casscf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
-        ah_start_cycle = casscf.ah_start_cycle
         log.debug('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
                   ah_start_tol, ah_start_cycle, max_cycle)
         g_orb0 = g_orb
@@ -351,7 +351,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
                   norm_gkf1, norm_dg)
         if (norm_dg > norm_gorb*casscf.ah_grad_trust_region and
-            norm_gorb > conv_tol_grad*.4):  # More iters when approaching local minimum
+            norm_gorb > conv_tol_grad*.4):  # More iters when close to local minimum
             log.debug('    Rejct keyframe |g|= %4.3g  |g_last| = %4.3g',
                       norm_gkf1, norm_gorb)
             break
@@ -361,7 +361,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         norm_gorb = norm_gkf = norm_gkf1
         x0_guess = dxi
         jkcount += 1
-        ah_start_cycle = 0
+        ah_start_cycle -= 1
 
 
 def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
@@ -521,7 +521,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < conv_tol_grad or
                 (norm_gorb < conv_tol_grad*.4 and
-                 (norm_ddm < conv_tol_ddm*.4 or norm_ddm_micro < conv_tol_ddm*.2))):
+                 (norm_ddm < conv_tol_ddm*.4 or norm_ddm_micro < conv_tol_ddm*.4))):
                 break
 
         rota.close()
