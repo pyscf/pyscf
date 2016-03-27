@@ -4,7 +4,7 @@ import unittest
 import numpy
 import scipy.linalg
 from pyscf import gto
-from pyscf import scf
+from pyscf import scf, dft
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -127,6 +127,18 @@ class KnowValues(unittest.TestCase):
         mf.get_occ = scf.addons.float_occ(mf)
         self.assertAlmostEqual(mf.scf(), -37.590712883365917, 9)
 
+    def test_mom_occ(self):
+        mf = dft.UKS(mol)
+        mf.xc = 'b3lyp'
+        mf.scf()
+        mo0 = mf.mo_coeff
+        occ = mf.mo_occ
+        occ[0][4] = 0.
+        occ[0][5] = 1.
+        mf.get_occ = scf.addons.mom_occ(mf, mo0, occ)
+        dm = mf.make_rdm1(mo0, occ)
+        self.assertAlmostEqual(mf.scf(dm), -76.0606858736708, 9)
+        self.assertTrue(numpy.allclose(mf.mo_occ[0][:6], [1,1,1,1,0,1]))
 
 if __name__ == "__main__":
     print("Full Tests for addons")
