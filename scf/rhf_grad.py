@@ -24,7 +24,7 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     h1 = grad_mf.get_hcore(mol)
     s1 = grad_mf.get_ovlp(mol)
-    dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
+    dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
     t0 = (time.clock(), time.time())
     log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
@@ -32,11 +32,11 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     log.timer('gradients of 2e part', *t0)
 
     f1 = h1 + vhf
-    dme0 = grad_mf.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
+    dme0 = grad_mf.make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = grad_mf.aorange_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -96,21 +96,6 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     mo0 = mo_coeff[:,mo_occ>0]
     mo0e = mo0 * (mo_energy[mo_occ>0] * mo_occ[mo_occ>0])
     return numpy.dot(mo0e, mo0.T.conj())
-
-def aorange_by_atom(mol):
-    aorange = []
-    p0 = p1 = 0
-    b0 = b1 = 0
-    ia0 = 0
-    for ib in range(mol.nbas):
-        if ia0 != mol.bas_atom(ib):
-            aorange.append((b0, ib, p0, p1))
-            ia0 = mol.bas_atom(ib)
-            p0 = p1
-            b0 = ib
-        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
-    aorange.append((b0, mol.nbas, p0, p1))
-    return aorange
 
 
 class Gradients(pyscf.lib.StreamObject):
@@ -220,9 +205,6 @@ class Gradients(pyscf.lib.StreamObject):
         logger.note(self, '--------------')
         logger.timer(self, 'SCF gradients', *cput0)
         return self.de
-
-    def aorange_by_atom(self):
-        return aorange_by_atom(self.mol)
 
 
 if __name__ == '__main__':

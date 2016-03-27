@@ -25,40 +25,44 @@ class KnowValues(unittest.TestCase):
     def test_nr_lda_common_gauge(self):
         mf = dft.RKS(mol)
         mf.conv_tol_grad = 1e-6
+        mf.grids.prune = False
         mf.xc = 'lda,vwn'
         mf.scf()
         m = nmr.RKS(mf)
         m.gauge_orig = (1,1,1)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 13.746716596160255, 7)
+        self.assertAlmostEqual(finger(msc), 13.743109885011432, 7)
 
     def test_nr_b3lyp_common_gauge(self):
         mf = dft.RKS(mol)
         mf.conv_tol_grad = 1e-6
-        mf.xc = 'b3lyp'
+        mf.grids.prune = False
+        mf.xc = 'b3lypg'
         mf.scf()
         m = nmr.RKS(mf)
         m.gauge_orig = (1,1,1)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 15.208617349962076, 7)
+        self.assertAlmostEqual(finger(msc), 15.205571299799631, 7)
 
     def test_nr_lda_giao(self):
         mf = dft.RKS(mol)
         mf.conv_tol_grad = 1e-6
+        mf.grids.prune = False
         mf.xc = 'lda,vwn'
         mf.scf()
         m = nmr.RKS(mf)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 58.258284484160477, 7)
+        self.assertAlmostEqual(finger(msc), 58.250320885937683, 7)
 
     def test_nr_b3lyp_giao(self):
         mf = dft.RKS(mol)
         mf.conv_tol_grad = 1e-6
-        mf.xc = 'b3lyp'
+        mf.grids.prune = False
+        mf.xc = 'b3lypg'
         mf.scf()
         m = nmr.RKS(mf)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 54.531980590047993, 7)
+        self.assertAlmostEqual(finger(msc), 54.526985564166701, 7)
 
 
 

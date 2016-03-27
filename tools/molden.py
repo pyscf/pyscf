@@ -294,7 +294,7 @@ def remove_high_l(mol, mo_coeff=None):
     '''
     pmol = mol.copy()
     pmol.basis = {}
-    for symb, bas in mol._basis.iteritems():
+    for symb, bas in mol._basis.items():
         pmol.basis[symb] = [b for b in bas if b[0] <= 4]
     pmol.build(0, 0)
     if mo_coeff is None:

@@ -2,7 +2,7 @@
 
 from pyscf import gto
 from pyscf import scf
-from pyscf.mrpt.nevpt2 import sc_nevpt
+from pyscf import mrpt
 from pyscf.dmrgscf import DMRGSCF
 
 #
@@ -50,10 +50,10 @@ mc.kernel(mo)
 #
 # DMRG-NEVPT2
 #
-sc_nevpt(mc)
+mrpt.NEVPT(mc).kernel()
 
 #
 # The compressed-MPS-perturber DMRG-NEVPT2 is more efficient.
 #
-from pyscf.dmrgscf import compress_perturb
-sc_nevpt(compress_perturb(mc))
+from pyscf.dmrgscf import compress_approx
+mrpt.NEVPT(mc).compress_approx()

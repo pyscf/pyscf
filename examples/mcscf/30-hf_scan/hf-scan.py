@@ -32,18 +32,18 @@ def run(b, dm, mo):
     mol.basis = {'F': 'cc-pvdz',
                  'H': 'cc-pvdz',}
     mol.build()
-    m = scf.RHF(mol)
-    ehf.append(m.scf(dm))
+    mf = scf.RHF(mol)
+    ehf.append(mf.scf(dm))
 
-    mc = mcscf.CASSCF(m, 6, 6)
+    mc = mcscf.CASSCF(mf, 6, 6)
     if mo is None:
         # initial guess for b = 0.7
-        mo = mcscf.sort_mo(mc, m.mo_coeff, [3,4,5,6,8,9])
+        mo = mcscf.sort_mo(mc, mf.mo_coeff, [3,4,5,6,8,9])
     else:
         mo = mcscf.project_init_guess(mc, mo)
     e1 = mc.mc1step(mo)[0]
     emc.append(e1)
-    return m.make_rdm1(), mc.mo_coeff
+    return mf.make_rdm1(), mc.mo_coeff
 
 dm = mo = None
 for b in numpy.arange(0.7, 4.01, 0.1):

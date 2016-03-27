@@ -120,7 +120,7 @@ def write_chk(mc,root,chkfile):
     logger.timer(mc,'Write MPS NEVPT integral', *t0)
 
 
-def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
+def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
     if (isinstance(mc, str)):
         mol = chkfile.load_mol(mc)
 
@@ -141,8 +141,8 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
         wfnsym = mc.fcisolver.wfnsym
-    mc_chk = 'mc_chkfile'
-    write_chk(mc, root, mc_chk)
+        mc_chk = 'nevpt_perturb_integral'
+        write_chk(mc, root, mc_chk)
 
     if nevptsolver is None:
         nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
@@ -153,13 +153,16 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nevptsolver.twodot_to_onedot = 4
         nevptsolver.maxIter = 6
         nevptsolver.wfnsym = wfnsym
+        nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
+    from pyscf.dmrgscf import settings
+    nevptsolver.exectuable = settings.BLOCKEXE_COMPRESS_NEVPT
     scratch = nevptsolver.scratchDirectory
     nevptsolver.scratchDirectory = ''
 
 
-    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, True,
-                             extraline=['nevpt_state_num %d'%root])
+    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, True, with_2pdm=False,
+                             extraline=['fullrestart','nevpt_state_num %d'%root])
     nevptsolver.scratchDirectory = scratch
 
     if nevptsolver.verbose >= logger.DEBUG1:
@@ -176,7 +179,7 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
                     nevptsolver.configFile,
                     nevptsolver.outputFile,
                     nevptsolver.scratchDirectory))
-    logger.debug(nevptsolver, 'DMRG_MPS_NEVPT cmd %s', cmd)
+    logger.debug(nevptsolver, 'DMRG_COMPRESS_NEVPT cmd %s', cmd)
 
     try:
         output = subprocess.check_call(cmd, shell=True)
@@ -197,57 +200,6 @@ def DMRG_MPS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
 
     logger.timer(nevptsolver,'MPS NEVPT calculation time', *t0)
 
-
-# TODO: Merge with mrpt.Nevpt2 class
-class Nevpt2(casci.CASCI):
-    def __init__(self, mc, maxM=500, root=0, tol=1e-7):
-        self.__dict__.update(mc.__dict__)
-        nevptsolver = dmrgci.DMRGCI(mc.mol, maxM, tol)
-        nevptsolver.scheduleSweeps = [0, 4]
-        nevptsolver.scheduleMaxMs  = [maxM, maxM]
-        nevptsolver.scheduleTols   = [0.0001, tol]
-        nevptsolver.scheduleNoises = [0.0001, 0.0]
-        nevptsolver.twodot_to_onedot = 4
-        nevptsolver.maxIter = 6
-        nevptsolver.wfnsym = mc.fcisolver.wfnsym
-        nevptsolver.nroots = mc.fcisolver.nroots
-        self.nevptsolver = nevptsolver
-        self.chkfile = 'mc_chkfile'
-        self._mcscf = mc
-
-        self.root = root
-        self.compressed = False
-
-    def build(self):
-        DMRG_MPS_NEVPT(self._mcscf, self.nevptsolver.maxM, self.root,
-                       self.nevptsolver, self.nevptsolver.tol)
-        self.compressed = True
-        return self
-
-def compress_perturb(mc, maxM=500, root=0, tol=1e-7):
-    '''Function to apply compressed MPS perturber for DMRG-NEVPT2.  This
-    function returns a fake CASCI object in which compressed-MPS was
-    initialized.  This fake CASCI object can be directly pass to sc_nevpt2
-    function as regular CASCI/CASSCF object.
-
-    Kwargs:
-        maxM : int
-            Bond dimension
-        root : int
-            Which state to compute
-
-    Examples:
-
-    >>> from pyscf import gto, scf, dmrgscf, mrpt
-    >>> mol = gto.M(atom='C 0 0 0; C 0 0 1', basis='6-31g')
-    >>> mf = scf.RHF(mol).run()
-    >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
-    >>> mrpt.sc_nevpt2(compress_perturb(mc))
-    -74.379770619390698
-    '''
-    dmrgpt = Nevpt2(mc,maxM,root,tol)
-    dmrgpt.build()
-    return dmrgpt
 
 
 def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):

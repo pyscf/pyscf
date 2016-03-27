@@ -154,13 +154,14 @@ def log(rec, msg, *args):
 def error(rec, msg, *args):
     if rec.verbose >= ERROR:
         flush(rec, 'Error: '+msg, *args)
-    sys.stderr.write('Error: ' + (msg%args) + '\n')
+    #if rec.stdout is not sys.stdout:
+        sys.stderr.write('Error: ' + (msg%args) + '\n')
 
 def warn(rec, msg, *args):
     if rec.verbose >= WARN:
         flush(rec, 'Warn: '+msg, *args)
-    #if rec.stdout is not sys.stdout:
-        sys.stderr.write('Warn: ' + (msg%args) + '\n')
+        if rec.stdout is not sys.stdout:
+            sys.stderr.write('Warn: ' + (msg%args) + '\n')
 
 def info(rec, msg, *args):
     if rec.verbose >= INFO:

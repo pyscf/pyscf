@@ -23,8 +23,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     ncore = casscf.ncore
     ncas = casscf.ncas
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E = %.15g', e_tot)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if ncas == nmo:
         return True, e_tot, e_ci, fcivec, mo
 
@@ -40,7 +39,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
     for imacro in range(macro):
-        ninner = 0
+        njk = 0
         t3m = t2m
         casdm1_old = casdm1
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
@@ -51,9 +50,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
 
             rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
                                         eris, r0, conv_tol_grad, log)
-            u, g_orb, njk = next(rota)
+            u, g_orb, njk1 = next(rota)
             rota.close()
-            ninner += njk
+            njk += njk1
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
             t3m = log.timer('orbital rotation', *t3m)
@@ -75,15 +74,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
                 break
 
         r0 = casscf.pack_uniq_var(u)
-        totinner += ninner
+        totinner += njk
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, ninner, imicro+1, e_tot, e_tot-elast)
-        log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
-                 norm_gorb, norm_ddm)
-        log.debug('CAS space CI energy = %.15g', e_ci)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 

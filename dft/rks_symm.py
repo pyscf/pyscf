@@ -19,12 +19,7 @@ class RKS(pyscf.scf.hf_symm.RHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
         pyscf.scf.hf_symm.RHF.__init__(self, mol)
-        self._ecoul = 0
-        self._exc = 0
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(mol)
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         pyscf.scf.hf_symm.RHF.dump_flags(self)
@@ -39,12 +34,7 @@ class ROKS(pyscf.scf.hf_symm.ROHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
         pyscf.scf.hf_symm.ROHF.__init__(self, mol)
-        self._ecoul = 0
-        self._exc = 0
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(mol)
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         pyscf.scf.hf_symm.ROHF.dump_flags(self)
@@ -58,7 +48,8 @@ class ROKS(pyscf.scf.hf_symm.ROHF):
 if __name__ == '__main__':
     from pyscf import gto
     mol = gto.Mole()
-    mol.verbose = 7
+    mol.verbose = 2
+    mol.output = '/dev/null'
 
     mol.atom.extend([['He', (0.,0.,0.)], ])
     mol.basis = { 'He': 'cc-pvdz'}

@@ -345,6 +345,8 @@ XC_CODES = {
 'VWN5'          : 'VWN' ,
 'BLYP'          : 'B88,LYP',
 'BP86'          : 'B88,P86',
+'PBE0'          : 406,
+'PBE1PBE'       : 406,
 'B3LYP'         : 'B3LYP5',  # VWN5 version
 'B3LYP5'        : '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN',
 'B3LYPG'        : 402,  # VWN3, used by Gaussian
@@ -579,7 +581,7 @@ def parse_xc(description):
                 fn_ids.append(key)
                 facs.append(val)
                 n += 1
-        return zip(fn_ids, facs)
+        return list(zip(fn_ids, facs))
 
     for token in x_code.replace('-', '+-').split('+'):
         parse_token(token, possible_x_for)
@@ -695,14 +697,14 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         rho_d = rho_d.reshape(1,-1)
     ngrids = rho_u.shape[1]
 
-    fn_ids = numpy.asarray([x[0] for x in fn_facs], dtype=numpy.int32)
-    facs = numpy.asarray([x[1] for x in fn_facs], dtype=numpy.float)
-    if all((is_lda(int(x)) for x in fn_ids)):
+    fn_ids = [x[0] for x in fn_facs]
+    facs   = [x[1] for x in fn_facs]
+    if all((is_lda(x) for x in fn_ids)):
         if spin == 0:
             nvar = 1
         else:
             nvar = 2
-    elif any((is_meta_gga(int(x)) for x in fn_ids)):
+    elif any((is_meta_gga(x) for x in fn_ids)):
         if spin == 0:
             nvar = 4
         else:
@@ -712,19 +714,19 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 2
         else:
             nvar = 5
-    outlen = (math.factorial(nvar+deriv) /
+    outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
     if SINGULAR_IDS.intersection(fn_ids) and deriv > 1:
-        non0idx = (rho_u[0] > 4.6e-11) & (rho_d[0] > 4.6e-11)
+        non0idx = (rho_u[0] > 5e-11) & (rho_d[0] > 5e-11)
         rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
         rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
         outbuf = numpy.empty((outlen,non0idx.sum()))
     else:
         outbuf = numpy.empty((outlen,ngrids))
 
-    _itrf.LIBXC_eval_xc(ctypes.c_int(fn_ids.size),
-                        fn_ids.ctypes.data_as(ctypes.c_void_p),
-                        facs.ctypes.data_as(ctypes.c_void_p),
+    n = len(fn_ids)
+    _itrf.LIBXC_eval_xc(ctypes.c_int(n),
+                        (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
                         ctypes.c_int(nspin),
                         ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
                         rho_u.ctypes.data_as(ctypes.c_void_p),

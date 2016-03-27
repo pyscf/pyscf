@@ -13,6 +13,7 @@ from pyscf.lib import logger
 import pyscf.scf
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
+from pyscf.dft import rks
 
 
 def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -27,7 +28,7 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
         ks.grids.build_()
-        t0 = logger.timer(ks, 'seting up grids', *t0)
+        t0 = logger.timer(ks, 'setting up grids', *t0)
 
     n, ks._exc, vx = ks._numint.nr_uks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
@@ -37,34 +38,48 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     hyb = libxc.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
 
     if abs(hyb) < 1e-10:
-        vj = ks.get_j(mol, dm, hermi)
-    elif (ks._eri is not None or ks._is_mem_enough() or not ks.direct_scf):
-        vj, vk = ks.get_jk(mol, dm, hermi)
-    else:
-        if (ks.direct_scf and isinstance(vhf_last, numpy.ndarray) and
-            hasattr(ks, '_dm_last')):
-            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
-            vj, vk = ks.get_jk(mol, ddm, hermi=hermi)
-            vj += ks._vj_last
-            vk += ks._vk_last
+        if (ks._eri is not None or not ks.direct_scf or
+            not hasattr(ks, '_dm_last') or
+            not isinstance(vhf_last, numpy.ndarray)):
+            vj = ks.get_j(mol, dm, hermi)
         else:
-            vj, vk = ks.get_jk(mol, dm, hermi)
-        ks._dm_last = dm
-        ks._vj_last, ks._vk_last = vj, vk
-
-    if abs(hyb) > 1e-10:
-        if nset == 1:
-            ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0])
-                        +numpy.einsum('ij,ji', dm[1], vk[1])) * .5 * hyb
-        vhf = pyscf.scf.uhf._makevhf(vj, vk*hyb, nset)
-    else:
+            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
+            vj = ks.get_j(mol, ddm, hermi)
+            vj += ks._vj_last
+            ks._dm_last = dm
+            ks._vj_last = vj
         if nset == 1:
             vhf = vj[0] + vj[1]
         else:
             vhf = vj[:nset] + vj[nset:]
         vhf = numpy.array((vhf,vhf))
+    else:
+        if (ks._eri is not None or not ks.direct_scf or
+            not hasattr(ks, '_dm_last') or
+            not isinstance(vhf_last, numpy.ndarray)):
+            vj, vk = ks.get_jk(mol, dm, hermi)
+        else:
+            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
+            vj, vk = ks.get_jk(mol, ddm, hermi)
+            vj += ks._vj_last
+            vk += ks._vk_last
+            ks._dm_last = dm
+            ks._vj_last, ks._vk_last = vj, vk
+        vhf = pyscf.scf.uhf._makevhf(vj, vk*hyb, nset)
+
+        if nset == 1:
+            ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
+                       numpy.einsum('ij,ji', dm[1], vk[1])) * .5 * hyb
     if nset == 1:
         ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
+
+    if ks.small_rho_cutoff > 1e-20 and nset == 1:
+        # Filter grids the first time setup grids
+        idx = numint.large_rho_indices(mol, dm[0]+dm[1], ks._numint, ks.grids,
+                                       ks.small_rho_cutoff)
+        ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
+        ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
+        ks._numint.non0tab = None
     return vhf + vx
 
 
@@ -82,14 +97,7 @@ class UKS(pyscf.scf.uhf.UHF):
     See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol):
         pyscf.scf.uhf.UHF.__init__(self, mol)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(mol)
-##################################################
-# don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         pyscf.scf.uhf.UHF.dump_flags(self)

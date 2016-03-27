@@ -102,6 +102,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     s1e = mf.get_ovlp(mol)
 
     cond = numpy.linalg.cond(s1e)
+    logger.debug(mf, 'cond(S) = %.9g' % cond)
     if cond*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', cond)
@@ -118,7 +119,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     logger.info(mf, 'init E= %.15g', e_tot)
 
     if dump_chk:
-        # dump mol after reading initialized DM
+        # Explicit overwrite the mol object in chkfile
         pyscf.scf.chkfile.save_mol(mol, mf.chkfile)
 
     scf_conv = False
@@ -365,7 +366,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
         if numpy.iscomplexobj(mo):
-            raise RuntimeError('TODO: project DHF orbital to RHF orbital')
+            raise NotImplementedError('TODO: project DHF orbital to RHF orbital')
         dm = make_rdm1(fproj(mo), mo_occ)
     else:  # UHF
         mo = scf_rec['mo_coeff']
@@ -389,7 +390,7 @@ def get_init_guess(mol, key='minao'):
     elif key.lower() == 'atom':
         return init_guess_by_atom(mol)
     elif key.lower() == 'chkfile':
-        raise RuntimeError('Call pyscf.scf.hf.init_guess_by_chkfile instead')
+        raise DeprecationWarning('Call pyscf.scf.hf.init_guess_by_chkfile instead')
     else:
         return init_guess_by_minao(mol)
 
@@ -436,7 +437,7 @@ def damping(s, d, f, factor):
 
 # full density matrix for RHF
 def make_rdm1(mo_coeff, mo_occ):
-    '''One-particle densit matrix
+    '''One-particle density matrix
 
     Args:
         mo_coeff : 2D ndarray
@@ -646,11 +647,11 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     Returns:
         Gradients in MO representation.  It's a num_occ*num_vir vector.
     '''
-    occidx = numpy.where(mo_occ> 0)[0]
-    viridx = numpy.where(mo_occ==0)[0]
+    occidx = mo_occ > 0
+    viridx = ~occidx
 
     fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
-    g = fock[viridx[:,None],occidx] * 2
+    g = fock[viridx.reshape(-1,1) & occidx] * 2
     return g.reshape(-1)
 
 
@@ -776,15 +777,14 @@ def eig(h, s):
     return e, c
 
 
+############
+# For orbital rotation
 def uniq_var_indices(mo_occ):
-    occaidx = mo_occ>0
-    occbidx = mo_occ==2
-    virbidx = numpy.logical_not(occbidx)
-    openidx = numpy.where(mo_occ==1)[0]
-
-    mask = virbidx[:,None]&occaidx
-    if len(openidx) > 0:
-        mask[openidx[:,None],openidx] = False
+    occidxa = mo_occ>0
+    occidxb = mo_occ==2
+    viridxa = ~occidxa
+    viridxb = ~occidxb
+    mask = (viridxa[:,None] & occidxa) | (viridxb[:,None] & occidxb)
     return mask
 
 def pack_uniq_var(x1, mo_occ):
@@ -798,6 +798,7 @@ def unpack_uniq_var(dx, mo_occ):
     x1 = numpy.zeros((nmo,nmo))
     x1[idx] = dx
     return x1 - x1.T
+############
 
 
 
@@ -971,7 +972,9 @@ class SCF(pyscf.lib.StreamObject):
         if self.chkfile:
             pyscf.scf.chkfile.dump_scf(self.mol, self.chkfile,
                                        envs['e_tot'], envs['mo_energy'],
-                                       envs['mo_coeff'], envs['mo_occ'])
+                                       envs['mo_coeff'], envs['mo_occ'],
+                                       overwrite_mol=False)
+        return self
 
     @pyscf.lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
@@ -997,7 +1000,7 @@ class SCF(pyscf.lib.StreamObject):
     @pyscf.lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=True):
         if isinstance(chkfile, pyscf.gto.Mole):
-            raise RuntimeError('''
+            raise TypeError('''
     You see this error message because of the API updates.
     The first argument is chkfile name.''')
         if chkfile is None: chkfile = self.chkfile
@@ -1117,6 +1120,7 @@ class SCF(pyscf.lib.StreamObject):
             logger.note(self, 'SCF not converge.')
             logger.note(self, 'SCF energy = %.15g after %d cycles',
                         self.e_tot, self.max_cycle)
+        return self
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
@@ -1192,7 +1196,7 @@ class SCF(pyscf.lib.StreamObject):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis='weigend'):
+    def density_fit(self, auxbasis='weigend+etb'):
         import pyscf.scf.dfhf
         return pyscf.scf.dfhf.density_fit(self, auxbasis)
 

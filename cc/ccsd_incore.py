@@ -373,6 +373,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._conv = False
         self.emp2 = None
         self.ecc = None
+        self.e_corr = None
         self.t1 = None
         self.t2 = None
         self.l1 = None

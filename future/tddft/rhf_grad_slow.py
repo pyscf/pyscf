@@ -54,7 +54,7 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = rhf_grad.aorange_by_atom(mol)
+    offsetdic = mol.offset_nr_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]

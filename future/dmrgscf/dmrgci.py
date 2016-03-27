@@ -120,7 +120,11 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.groupname = None
 
 ##################################################
-# don't modify the following attributes, they are not input options
+# don't modify the following attributes, if you do not finish part of calculation, which can be reused. 
+
+        #DO NOT CHANGE these parameters, unless you know the code in details
+        self.twopdm = True #By default, 2rdm is calculated after the calculations of wave function.
+        self.block_extra_keyword = [] #For Block advanced user only.
         self.has_threepdm = False
         self.has_nevpt = False
 # This flag _restart is set by the program internally, to control when to make
@@ -216,7 +220,7 @@ class DMRGCI(pyscf.lib.StreamObject):
 
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
-            writeDMRGConfFile(self, nelec, True, self.approx_maxIter,
+            writeDMRGConfFile(self, nelec, True,
                               with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
                 inFile = os.path.join(self._input_dir, self.configFile)
@@ -326,7 +330,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         fciRestart = True
 
         writeIntegralFile(self, h1e, eri, norb, nelec)
-        writeDMRGConfFile(self, nelec, fciRestart)
+        writeDMRGConfFile(self, nelec, fciRestart, self.approx_maxIter)
         if self.verbose >= logger.DEBUG1:
             inFile = os.path.join(self._input_dir, self.configFile)
             logger.debug1(self, 'Block Input conf')
@@ -424,7 +428,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
 
     f.write('outputlevel %s\n'%DMRGCI.outputlevel)
     f.write('hf_occ integral\n')
-    if(with_2pdm):
+    if(with_2pdm and DMRGCI.twopdm):
         f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):
         f.write('nonspinAdapted\n')
@@ -438,6 +442,8 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         for weight in DMRGCI.weights:
             f.write('%f '%weight)
         f.write('\n')
+    for line in DMRGCI.block_extra_keyword:
+        f.write('%s\n'%line)
     for line in extraline:
         f.write('%s\n'%line)
     f.close()

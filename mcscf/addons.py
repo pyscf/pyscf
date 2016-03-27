@@ -137,7 +137,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
 
     irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
     if cas_irrep_ncore is not None:
-        for k, n in cas_irrep_ncore.iteritems():
+        for k, n in cas_irrep_ncore.items():
             if isinstance(k, str):
                 irid = symm.irrep_name2id(casscf.mol.groupname, k)
             else:
@@ -150,7 +150,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                                if n > 0])
     irrep_ncas = {}
     count = 0
-    for k, n in cas_irrep_nocc.iteritems():
+    for k, n in cas_irrep_nocc.items():
         if isinstance(k, str):
             irid = symm.irrep_name2id(casscf.mol.groupname, k)
         else:
@@ -279,7 +279,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         mo0core = init_mo[:,:ncore]
         s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
         s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
-        coreocc = numpy.einsum('ij,ji->i', s1, numpy.linalg.solve(s1core, s1.T))
+        coreocc = numpy.einsum('ij,ji->i', s1, pyscf.lib.cho_solve(s1core, s1.T))
         nmo = mfmo.shape[1]
         coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
         logger.debug(casscf, 'Core indices %s', coreidx)

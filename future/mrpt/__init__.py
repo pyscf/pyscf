@@ -1,4 +1,7 @@
 from pyscf.mrpt import nevpt2
-from pyscf.mrpt.nevpt2 import sc_nevpt
+from pyscf.mrpt.nevpt2 import NEVPT
 
-NEVPT2 = nevpt2.kernel
+#TODO: remove it in future release
+from pyscf.mrpt.nevpt2 import sc_nevpt
+NEVPT2 = sc_nevpt
+

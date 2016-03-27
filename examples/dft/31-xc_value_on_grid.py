@@ -5,7 +5,7 @@ from pyscf import gto, dft
 from pyscf.dft import numint
 
 '''
-Evaluate exchange-correlation functional and itr potential on given grid
+Evaluate exchange-correlation functional and its potential on given grid
 coordinates.
 '''
 

@@ -290,6 +290,7 @@ class UHF(hf.SCF):
 
 
 def _uncontract_mol(mol, xuncontract=False):
+    '''mol._basis + uncontracted steep functions'''
     pmol = mol.copy()
     _bas = []
     _env = []

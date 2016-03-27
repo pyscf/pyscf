@@ -5,6 +5,7 @@
 
 import time
 import tempfile
+from functools import reduce
 import numpy
 import h5py
 from pyscf import lib
@@ -417,6 +418,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._conv = False
         self.emp2 = None
         self.ecc = None
+        self.e_corr = None
         self.t1 = None
         self.t2 = None
         self.l1 = None
@@ -492,6 +494,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                        tol=self.conv_tol,
                        tolnormt=self.conv_tol_normt,
                        max_memory=self.max_memory, verbose=self.verbose)
+        self.e_corr = self.ecc
         if self._conv:
             logger.info(self, 'CCSD converged')
         else:
@@ -700,15 +703,17 @@ class _ERIS:
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
+            max_memory = max(2000,cc.max_memory-pyscf.lib.current_memory()[0])
             self.feri2 = h5py.File(_tmpfile2.name, 'w')
-            pyscf.ao2mo.full(cc.mol, orbv, self.feri2, verbose=log)
+            pyscf.ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
             self.vvvv = self.feri2['eri_mo']
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             tmpfile3 = tempfile.NamedTemporaryFile()
             with h5py.File(tmpfile3.name, 'w') as feri:
+                max_memory = max(2000, cc.max_memory-pyscf.lib.current_memory()[0])
                 pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
-                                    feri, verbose=log)
+                                    feri, max_memory=max_memory, verbose=log)
                 cput1 = log.timer_debug1('transforming oppp', *cput1)
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))

@@ -12,6 +12,7 @@ import pyscf.scf
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf.dft.uks import get_veff_, energy_elec
+from pyscf.dft import rks
 
 
 class ROKS(pyscf.scf.rohf.ROHF):
@@ -19,14 +20,7 @@ class ROKS(pyscf.scf.rohf.ROHF):
     See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol):
         pyscf.scf.rohf.ROHF.__init__(self, mol)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(mol)
-##################################################
-# don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         pyscf.scf.rohf.ROHF.dump_flags(self)

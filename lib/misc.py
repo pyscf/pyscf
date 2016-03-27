@@ -255,13 +255,13 @@ class StreamObject(object):
         '''Update the attributes of the current object.
         '''
         #if hasattr(self, '_keys'):
-        #    for k,v in kwargs.iteritems():
+        #    for k,v in kwargs.items():
         #        setattr(self, k, v)
         #        if k not in self._keys:
         #            sys.stderr.write('Warning: %s does not have attribute %s\n'
         #                             % (self.__class__, k))
         #else:
-        for k,v in kwargs.iteritems():
+        for k,v in kwargs.items():
             setattr(self, k, v)
         return self
     def set(self, **kwargs):
@@ -295,10 +295,10 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(dir(obj))
+        class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
-            msg = ('overwrite keys %s of %s\n' %
+            msg = ('Overwrite keys %s of %s\n' %
                    (' '.join(keyin), obj.__class__))
             sys.stderr.write(msg)
             stdout.write(msg)

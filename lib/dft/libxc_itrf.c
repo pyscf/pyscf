@@ -365,8 +365,8 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                                 }
                         }
                 }
+                xc_func_end(&func);
         }
-        xc_func_end(&func);
         return nvar;
 }
 
@@ -383,7 +383,7 @@ static void axpy(double *dst, double *src, double fac,
 
 static void merge_xc(double *dst, double *ebuf, double *vbuf,
                      double *fbuf, double *kbuf, double fac,
-                     int np, int ndst, int spin, int type)
+                     int np, int ndst, int nvar, int spin, int type)
 {
         const int seg0 [] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         // LDA             |  |
@@ -410,11 +410,6 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         }
 
         switch (type) {
-        case XC_FAMILY_LDA:
-                vsegtot = 1;
-                fsegtot = 1;
-                ksegtot = 1;
-                break;
         case XC_FAMILY_GGA:
         case XC_FAMILY_HYB_GGA:
                 vsegtot = 2;
@@ -426,32 +421,40 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
                 vsegtot = 4;
                 fsegtot = 10;
                 ksegtot = 0;
+                break;
+        default: //case XC_FAMILY_LDA:
+                vsegtot = 1;
+                fsegtot = 1;
+                ksegtot = 1;
         }
 
         int i;
+        size_t offset;
         axpy(dst, ebuf, fac, np, ndst, 1);
-        dst += np;
 
         if (vbuf != NULL) {
+                offset = np;
                 for (i = 0; i < vsegtot; i++) {
-                        axpy(dst, vbuf, fac, np, ndst, vseg[i]);
-                        dst += np * vseg[i];
+                        axpy(dst+offset, vbuf, fac, np, ndst, vseg[i]);
+                        offset += np * vseg[i];
                         vbuf += np * vseg[i];
                 }
         }
 
         if (fbuf != NULL) {
+                offset = np * xc_output_length(nvar, 1);
                 for (i = 0; i < fsegtot; i++) {
-                        axpy(dst, fbuf, fac, np, ndst, fseg[i]);
-                        dst += np * fseg[i];
+                        axpy(dst+offset, fbuf, fac, np, ndst, fseg[i]);
+                        offset += np * fseg[i];
                         fbuf += np * fseg[i];
                 }
         }
 
         if (kbuf != NULL) {
+                offset = np * xc_output_length(nvar, 2);
                 for (i = 0; i < ksegtot; i++) {
-                        axpy(dst, kbuf, fac, np, ndst, kseg[i]);
-                        dst += np * kseg[i];
+                        axpy(dst+offset, kbuf, fac, np, ndst, kseg[i]);
+                        offset += np * kseg[i];
                         kbuf += np * kseg[i];
                 }
         }
@@ -493,9 +496,9 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
 #endif
                 _eval_xc(&func, spin, np, rho_u, rho_d, ebuf, vbuf, fbuf, kbuf);
                 merge_xc(output, ebuf, vbuf, fbuf, kbuf, fac[i],
-                         np, outlen, spin, func.info->family);
+                         np, outlen, nvar, spin, func.info->family);
+                xc_func_end(&func);
         }
-        xc_func_end(&func);
 
         free(ebuf);
         if (deriv > 0) {

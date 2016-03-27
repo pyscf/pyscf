@@ -205,6 +205,7 @@ void FCIcre_str_index(int *link_index, int norb, int na, int nocc,
                         if (!(str0 & (1ULL<<i))) {
                                 str1 = str0 | (1ULL<<i);
                                 tab[k*4+0] = i;
+                                tab[k*4+1] = 0;
                                 tab[k*4+2] = FCIstr2addr(norb, nocc+1, str1);
                                 if (FCIpopcount_1(str0>>(i+1)) % 2) {
                                         tab[k*4+3] = -1;
@@ -232,6 +233,7 @@ void FCIdes_str_index(int *link_index, int norb, int na, int nocc,
                 for (i = 0; i < norb; i++) {
                         if (str0 & (1ULL<<i)) {
                                 str1 = str0 ^ (1ULL<<i);
+                                tab[k*4+0] = 0;
                                 tab[k*4+1] = i;
                                 tab[k*4+2] = FCIstr2addr(norb, nocc-1, str1);
                                 if (FCIpopcount_1(str0>>(i+1)) % 2) {

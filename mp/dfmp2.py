@@ -57,7 +57,7 @@ class MP2(object):
         if hasattr(mf, 'auxbasis'):
             self.auxbasis = mf.auxbasis
         else:
-            self.auxbasis = 'weigend'
+            self.auxbasis = 'weigend+etb'
         self._cderi = None
         self.ioblk = 256
 

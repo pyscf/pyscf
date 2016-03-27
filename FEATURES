@@ -5,17 +5,20 @@
   - 4-component relativistic Dirac-Hartree-Fock
   - density fitting HF (up to ~5000 basis)
   - Second order SCF
+  - General JK contraction function
 
 * DFT (up to ~3000 basis)
   - Non-relativistic restricted, restricted open-shell, unrestricted Kohn-Sham
   - scalar relativistic DFT
   - density fitting DFT (up to ~5000 basis)
+  - General XC functional evaluator (for Libxc or XcFun)
+  - General AO evaluator
 
 * TDDFT
   - TDHF
   - TDDFT
   - TDHF gradients
-  - TDDFT gradients for LDA functional
+  - TDDFT gradients
 
 * General CASCI/CASSCF solver (up to ~2500 basis)
   - State-average CASCI/CASSCF
@@ -53,6 +56,10 @@
   - non-relativistic DFT gradients
   - non-relativistic CCSD gradients
   - non-relativistic TDHF and TDDFT gradients
+
+* Hessian
+  - non-relativistic RHF hessian
+  - non-relativistic RKS hessian
 
 * NMR
   - non-relativistic RHF NMR shielding
@@ -93,6 +100,7 @@
   - Symmetry adapted basis
   - Label orbital symmetry on the fly
   - Change symmetry information on the fly
+  - Function to symmetrize given orbital space
 
 * Tools
   - fcidump

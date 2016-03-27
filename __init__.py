@@ -14,6 +14,8 @@ Features
     * MP2
     * SC-NEVPT2
     * CCSD and CCSD(T)
+    * CCSD lambda
+    * EOM-CCSD
     * Density fitting
     * relativistic correction
     * General integral transformation
@@ -112,7 +114,7 @@ For most methods, there are three stream functions to pipe computing stream:
 ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
 ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
 
-2 ``.run`` function to execute the kenerl function (the function arguments
+2 ``.run`` function to execute the kernel function (the function arguments
 are passed to kernel function).  If keyword arguments is given, it will first
 call ``.set`` function to update object attributes then execute the kernel
 function.  Eg
@@ -130,6 +132,14 @@ Eg
 __version__ = '1.1'
 
 import os
+from distutils.version import LooseVersion
+import numpy
+if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
+    raise SystemError("You're using an old version of Numpy (%s). "
+                      "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
+                      "You still can use all features of PySCF with the old numpy by removing this warning msg. "
+                      "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
+                      numpy.__version__)
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf

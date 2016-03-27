@@ -5,8 +5,8 @@
 import time
 import tempfile
 from functools import reduce
+import warnings
 import numpy
-
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf import ao2mo
@@ -125,6 +125,7 @@ class MP2(pyscf.lib.StreamObject):
         self.nmo = len(mf.mo_energy)
 
         self.emp2 = None
+        self.e_corr = None
         self.t2 = None
 
     def kernel(self, mo_energy=None, mo_coeff=None):
@@ -140,6 +141,7 @@ class MP2(pyscf.lib.StreamObject):
         self.emp2, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
+        self.e_corr = self.emp2
         return self.emp2, self.t2
 
     # return eri_ovov array[nocc*nvir,nocc*nvir]
@@ -154,12 +156,14 @@ class MP2(pyscf.lib.StreamObject):
         cv = mo_coeff[:,nocc:]
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
+        if mem_now < mem_basic:
+            warnings.warn('%s: Not enough memory. Available mem %s MB, required mem %s MB\n' %
+                          (self.ao2mo, mem_now, mem_basic))
         if (self._scf._eri is not None and
             mem_incore+mem_now < self.max_memory or
             self.mol.incore_anyway):
             if self._scf._eri is None:
-                from pyscf.scf import _vhf
-                eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+                eri = self.intor('cint2e_sph', aosym='s8')
             else:
                 eri = self._scf._eri
             eri = ao2mo.incore.general(eri, (co,cv,co,cv))
@@ -167,8 +171,7 @@ class MP2(pyscf.lib.StreamObject):
             max_memory = max(2000, self.max_memory*.9-mem_now)
             erifile = tempfile.NamedTemporaryFile()
             ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
-                                  max_memory=max_memory-mem_basic,
-                                  verbose=self.verbose)
+                                  max_memory=max_memory, verbose=self.verbose)
             eri = erifile
         time1 = log.timer('Integral transformation', *time0)
         return ao2mo.load(eri)

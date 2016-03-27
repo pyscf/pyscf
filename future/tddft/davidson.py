@@ -83,39 +83,48 @@ def dgeev(abop, x0, precond, type=1, tol=1e-14, max_cycle=50, max_space=12,
                 qs.append(xi/norm)
         return qs
 
-    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
-        xt = [x0]
-    else:
-        xt = qr(x0)
-    axt, bxt = abop(xt)
-    max_cycle = min(max_cycle,xt[0].size)
-
-    max_space = max_space + nroots * 2
-    if max_memory*1e6/xt[0].nbytes/2 > max_space+nroots*2:
-        xs = []
-        ax = []
-        bx = []
-        _incore = True
-    else:
-        xs = linalg_helper._Xlist()
-        ax = linalg_helper._Xlist()
-        bx = linalg_helper._Xlist()
-        _incore = False
-
     toloose = numpy.sqrt(tol) * 1e-2
 
-    for i,xi in enumerate(xt):
-        xs.append(xi)
-        ax.append(axt[i])
-        bx.append(bxt[i])
-    space = len(xs)
-    head = 0
-
+    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
+        x0 = [x0]
+    max_cycle = min(max_cycle, x0[0].size)
+    max_space = max_space + nroots * 2
+    # max_space*3 for holding ax, bx and xs, nroots*3 for holding axt, bxt and xt
+    _incore = max_memory*1e6/x0[0].nbytes > max_space*3+nroots*3
     heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     seff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
-    e = numpy.zeros(nroots)
+    fresh_start = True
+
     for icyc in range(max_cycle):
+        if fresh_start:
+            if _incore:
+                xs = []
+                ax = []
+                bx = []
+            else:
+                xs = linalg_helper._Xlist()
+                ax = linalg_helper._Xlist()
+                bx = linalg_helper._Xlist()
+            space = 0
+# Orthogonalize xt space because the basis of subspace xs must be orthogonal
+# but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
+            xt, x0 = qr(x0), None
+            e = numpy.zeros(nroots)
+            fresh_start = False
+        elif len(xt) > 1:
+            xt = qr(xt)
+            xt = xt[:40]  # 40 trial vectors at most
+
+        axt, bxt = abop(xt)
+        if type > 1:
+            axt = abop(bxt)[0]
+        for k, xi in enumerate(xt):
+            xs.append(xt[k])
+            ax.append(axt[k])
+            bx.append(bxt[k])
         rnow = len(xt)
+        head, space = space, space+rnow
+
         if type == 1:
             for i in range(space):
                 if head <= i < head+rnow:
@@ -227,38 +236,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-14, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max(dx_norm), e, de[ide], norm)
 
-        if space+len(xt) > max_space:
-            if _incore:
-                xs = []
-                ax = []
-                bx = []
-            else:
-                xs = linalg_helper._Xlist()
-                ax = linalg_helper._Xlist()
-                bx = linalg_helper._Xlist()
-# Orthogonalize xt space because the basis of subspace xs must be orthogonal
-# but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
-            xt, x0 = qr(x0), None
-            space = head = 0
-            e = numpy.zeros(nroots)
-        elif len(xt) > 1:
-            xt = qr(xt)
-            xt = xt[:40]  # 40 trial vectors at most
-
-        head = space
-        axt, bxt = abop(xt)
-        if type > 1:
-            axt = abop(bxt)[0]
-        for k, xi in enumerate(xt):
-            if head + k >= space:
-                xs.append(xt[k])
-                ax.append(axt[k])
-                bx.append(bxt[k])
-            else:
-                xs[head+k] = xt[k]
-                ax[head+k] = axt[k]
-                bx[head+k] = bxt[k]
-        space += len(xt)
+        fresh_start = fresh_start or (space+len(xt) > max_space)
 
         if callable(callback):
             callback(locals())
@@ -302,35 +280,42 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                 qs.append(xi/norm)
         return qs
 
-    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
-        xt = [x0]
-    else:
-        xt = qr(x0)
-    axt = aop(xt)
-    max_cycle = min(max_cycle,xt[0].size)
-
-    max_space = max_space + nroots * 2
-    if max_memory*1e6/xt[0].nbytes/2 > max_space+nroots*2:
-        xs = []
-        ax = []
-        _incore = True
-    else:
-        xs = linalg_helper._Xlist()
-        ax = linalg_helper._Xlist()
-        _incore = False
-
     toloose = numpy.sqrt(tol) * 1e-2
 
-    for i,xi in enumerate(xt):
-        xs.append(xi)
-        ax.append(axt[i])
-    space = len(xs)
-    head = 0
-
+    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
+        x0 = [x0]
+    max_cycle = min(max_cycle, x0[0].size)
+    max_space = max_space + nroots * 2
+    # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
+    _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*2
     heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
-    e = numpy.zeros(nroots)
+    fresh_start = True
+
     for icyc in range(max_cycle):
+        if fresh_start:
+            if _incore:
+                xs = []
+                ax = []
+            else:
+                xs = linalg_helper._Xlist()
+                ax = linalg_helper._Xlist()
+            space = 0
+# Orthogonalize xt space because the basis of subspace xs must be orthogonal
+# but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
+            xt, x0 = qr(x0), None
+            e = numpy.zeros(nroots)
+            fresh_start = False
+        elif len(xt) > 1:
+            xt = qr(xt)
+            xt = xt[:40]  # 40 trial vectors at most
+
+        axt = aop(xt)
+        for k, xi in enumerate(xt):
+            xs.append(xt[k])
+            ax.append(axt[k])
         rnow = len(xt)
+        head, space = space, space+rnow
+
         for i in range(rnow):
             for k in range(rnow):
                 heff[head+k,head+i] = dot(xt[k].conj(), axt[i])
@@ -399,8 +384,8 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                 xt[k] = None
         xt = [xi for xi in xt if xi is not None]
         for i in range(space):
+            xsi = xs[i]
             for xi in xt:
-                xsi = xs[i]
                 xi -= xsi * numpy.dot(xi, xsi)
         norm_min = 1
         for i,xi in enumerate(xt):
@@ -417,32 +402,7 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max(dx_norm), e, de[ide], norm_min)
 
-        if space+len(xt) > max_space:
-            if _incore:
-                xs = []
-                ax = []
-            else:
-                xs = linalg_helper._Xlist()
-                ax = linalg_helper._Xlist()
-# Orthogonalize xt space because the basis of subspace xs must be orthogonal
-# but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
-            xt, x0 = qr(x0), None
-            space = head = 0
-            e = numpy.zeros(nroots)
-        elif len(xt) > 1:
-            xt = qr(xt)
-            xt = xt[:40]  # 40 trial vectors at most
-
-        head = space
-        axt = aop(xt)
-        for k, xi in enumerate(xt):
-            if head + k >= space:
-                xs.append(xt[k])
-                ax.append(axt[k])
-            else:
-                xs[head+k] = xt[k]
-                ax[head+k] = axt[k]
-        space += len(xt)
+        fresh_start = fresh_start or (space+len(xt) > max_space)
 
         if callable(callback):
             callback(locals())

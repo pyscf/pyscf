@@ -430,7 +430,7 @@ class SymmSys(object):
                         maybe_mirrorx.append(numpy.cross(zaxis, r1[i1]+r1[i2]))
 
         possible_cn = []
-        for n in set(maybe_cn):
+        for n in sorted(set(maybe_cn)):
             for i in range(2, n+1):
                 if n % i == 0:
                     possible_cn.append(i)

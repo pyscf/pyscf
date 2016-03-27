@@ -26,6 +26,7 @@ from pyscf.fci import direct_spin1
 
 libfci = pyscf.lib.load_library('libfci')
 
+@pyscf.lib.with_doc(direct_spin1.contract_1e.__doc__)
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     assert(fcivec.flags.c_contiguous)
     if link_index is None:
@@ -56,6 +57,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 # the input fcivec should be symmetrized
+@pyscf.lib.with_doc(direct_spin1.contract_2e.__doc__)
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     assert(fcivec.flags.c_contiguous)
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -78,9 +80,9 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
     return pyscf.lib.transpose_sum(ci1, inplace=True)
 
-def absorb_h1e(*args, **kwargs):
-    return direct_spin1.absorb_h1e(*args, **kwargs)
+absorb_h1e = direct_spin1.absorb_h1e
 
+@pyscf.lib.with_doc(direct_spin1.make_hdiag.__doc__)
 def make_hdiag(h1e, eri, norb, nelec):
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
@@ -106,6 +108,7 @@ def make_hdiag(h1e, eri, norb, nelec):
     hdiag = pyscf.lib.transpose_sum(hdiag, inplace=True) * .5
     return hdiag.ravel()
 
+@pyscf.lib.with_doc(direct_spin1.pspace.__doc__)
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2
@@ -147,18 +150,21 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   davidson_only, pspace_size, **kwargs)
 
 # dm_pq = <|p^+ q|>
+@pyscf.lib.with_doc(direct_spin1.make_rdm1.__doc__)
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
     return rdm1 * 2
 
 # alpha and beta 1pdm
+@pyscf.lib.with_doc(direct_spin1.make_rdm1s.__doc__)
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
     return (rdm1, rdm1)
 
 # Chemist notation
+@pyscf.lib.with_doc(direct_spin1.make_rdm12.__doc__)
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     #dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_spin0', fcivec, fcivec,
     #                          norb, nelec, link_index, 1)
@@ -171,6 +177,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     return dm1, dm2
 
 # dm_pq = <I|p^+ q|J>
+@pyscf.lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
@@ -185,11 +192,13 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
                           norb, nelec, link_index)
     return rdm1a, rdm1b
 
+@pyscf.lib.with_doc(direct_spin1.trans_rdm1.__doc__)
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
 # dm_pq,rs = <I|p^+ q r^+ s|J>
+@pyscf.lib.with_doc(direct_spin1.trans_rdm12.__doc__)
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_sf', cibra, ciket,
                               norb, nelec, link_index, 2)
@@ -342,9 +351,6 @@ def _check_(c):
 
 class FCISolver(direct_spin1.FCISolver):
 
-    def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
-        return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
-
     def make_hdiag(self, h1e, eri, norb, nelec):
         return make_hdiag(h1e, eri, norb, nelec)
 
@@ -381,11 +387,9 @@ class FCISolver(direct_spin1.FCISolver):
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(make_rdm12.__doc__)
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
-
-    def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
-        return make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
 
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
@@ -393,6 +397,7 @@ class FCISolver(direct_spin1.FCISolver):
     def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(trans_rdm12.__doc__)
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)

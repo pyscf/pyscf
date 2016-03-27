@@ -55,7 +55,7 @@ def aux_e1(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
     pass
 
 
-def cholesky_eri(mol, auxbasis='weigend', aosym='s1', verbose=0):
+def cholesky_eri(mol, auxbasis='weigend+etb', aosym='s1', verbose=0):
     t0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose

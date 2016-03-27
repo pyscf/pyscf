@@ -13,7 +13,7 @@ from pyscf import fci
 
 
 class CASSCF(mc1step.CASSCF):
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         assert(mf.mol.symmetry)
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
@@ -63,32 +63,13 @@ class CASSCF(mc1step.CASSCF):
         self._finalize_()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
-    def gen_g_hop(self, mo, u, casdm1, casdm2, eris):
-        casdm1 = _symmetrize(casdm1, self.orbsym[self.ncore:self.ncore+self.ncas],
-                             self.mol.groupname)
-        g_orb, gorb_op, h_op, h_diag = \
-                mc1step.gen_g_hop(self, mo, u, casdm1, casdm2, eris)
-        g_orb = _symmetrize(self.unpack_uniq_var(g_orb), self.orbsym,
-                            self.mol.groupname)
-        h_diag = _symmetrize(self.unpack_uniq_var(h_diag), self.orbsym,
-                             self.mol.groupname)
-        def sym_h_op(x):
-            hx = h_op(x)
-            hx = _symmetrize(self.unpack_uniq_var(hx), self.orbsym,
-                             self.mol.groupname)
-            return self.pack_uniq_var(hx)
-        def sym_gorb_op(x):
-            g = gorb_op(x)
-            g = _symmetrize(self.unpack_uniq_var(g), self.orbsym,
-                            self.mol.groupname)
-            return self.pack_uniq_var(g)
-        return self.pack_uniq_var(g_orb), sym_gorb_op, sym_h_op, \
-               self.pack_uniq_var(h_diag)
-
-    def update_rotate_matrix(self, dx, u0=1):
-        dr = self.unpack_uniq_var(dx)
-        dr = _symmetrize(dr, self.orbsym, self.mol.groupname)
-        return numpy.dot(u0, mc1step.expmat(dr))
+    def uniq_var_indices(self, nmo, ncore, ncas, frozen):
+        mask = mc1step.CASSCF.uniq_var_indices(self, nmo, ncore, ncas, frozen)
+# Call _symmetrize function to remove the symmetry forbidden matrix elements
+# (by setting their mask value to 0 in _symmetrize).  Then pack_uniq_var and
+# unpack_uniq_var function only operates on those symmetry allowed matrix
+# elements.
+        return _symmetrize(mask, self.orbsym, self.mol.groupname)
 
     def _eig(self, mat, b0, b1):
         return casci_symm.eig(mat, numpy.array(self.orbsym[b0:b1]))
@@ -114,10 +95,9 @@ class CASSCF(mc1step.CASSCF):
 
 def _symmetrize(mat, orbsym, groupname):
     mat1 = numpy.zeros_like(mat)
-    orbsym = numpy.array(orbsym)
-    for i0 in set(orbsym):
-        lst = numpy.where(orbsym == i0)[0]
-        mat1[lst[:,None],lst] = mat[lst[:,None],lst]
+    orbsym = numpy.asarray(orbsym)
+    allowed = orbsym.reshape(-1,1) == orbsym
+    mat1[allowed] = mat[allowed]
     return mat1
 
 

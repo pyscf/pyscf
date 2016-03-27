@@ -327,8 +327,7 @@ def expand_etbs(etbs):
     >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
-    basis = [expand_etb(*etb) for etb in etbs]
-    return list(itertools.chain.from_iterable(basis))
+    return sum([expand_etb(*etb) for etb in etbs], [])
 
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):
@@ -455,9 +454,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         if not b:  # == []
             continue
         angl = b[0]
-        assert(angl < 8)
-        if angl in [6, 7]:
-            print('libcint may have large error for ERI of i function')
+        #if angl in [6, 7]:
+        #    print('libcint may have large error for ERI of i function')
         if isinstance(b[1], int):
             kappa = b[1]
             b_coeff = numpy.array(b[2:])
@@ -728,7 +726,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
              for b in range(bas_id0, bas_id1)])
     return nao_id0, nao_id0+n
 
-def ao_loc_nr(mol):
+def ao_loc_nr(mol, cart=False):
     '''Offset of every shell in the spherical basis function spectrum
 
     Returns:
@@ -740,12 +738,14 @@ def ao_loc_nr(mol):
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
-    off = 0
-    ao_loc = []
-    for i in range(len(mol._bas)):
-        ao_loc.append(off)
-        off += (mol.bas_angular(i) * 2 + 1) * mol.bas_nctr(i)
-    ao_loc.append(off)
+    if cart:
+        l = mol._bas[:,ANG_OF]
+        dims = (l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]
+    else:
+        dims = (mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]
+    ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
+    ao_loc[0] = 0
+    dims.cumsum(dtype=numpy.int32, out=ao_loc[1:])
     return ao_loc
 
 def ao_loc_2c(mol):
@@ -998,6 +998,24 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:            else:
 #TODO:                return ibf + (atmshell-l1-1)*degen + (degen+m)
 #TODO:        ibf += degen
+
+def offset_nr_by_atom(mol):
+    '''Non-relativistic AO offset for each atom.  Return a list, each item
+    of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''
+    aorange = []
+    p0 = p1 = 0
+    b0 = b1 = 0
+    ia0 = 0
+    for ib in range(mol.nbas):
+        if ia0 != mol.bas_atom(ib):
+            aorange.append((b0, ib, p0, p1))
+            ia0 = mol.bas_atom(ib)
+            p0 = p1
+            b0 = ib
+        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
+    aorange.append((b0, mol.nbas, p0, p1))
+    return aorange
 
 #FIXME:
 def is_same_mol(mol1, mol2):
@@ -1443,11 +1461,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
             head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
-            branch = os.path.basename(open(head, 'r').read().splitlines()[0])
+            with open(head, 'r') as f:
+                branch = os.path.basename(f.read().splitlines()[0])
             # or command(git log -1 --pretty=%H)
             head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
-            with open(head, 'r') as fin:
-                self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
+            with open(head, 'r') as f:
+                self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
             self.stdout.write('\n')
         except IOError:
             pass
@@ -1999,14 +2018,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
 
-    search_ao_nr =  search_ao_nr
+    search_ao_nr = search_ao_nr
     search_ao_r = search_ao_r
+
+    offset_nr_by_atom = offset_nr_by_atom
 
     @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
         return spinor_labels(self)
 
-_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.iteritems())
+_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
 def _rm_digit(symb):
     if symb.isalpha():

@@ -8,7 +8,7 @@ import pyscf.lib
 from pyscf import gto
 from pyscf.dft import radi
 
-libecp = gto.moleintor._cint
+libecp = gto.moleintor.libcgto
 
 mol = gto.M(atom='''
             Na 0.5 0.5 0.
@@ -360,7 +360,7 @@ def ang_nuc_part(l, rij):
         return omega_xyz * 0.488602511902919921
     else:
         omega = numpy.empty((2*l+1))
-        fc2s = gto.moleintor._cint.CINTc2s_ket_sph
+        fc2s = libecp.CINTc2s_ket_sph
         fc2s(omega.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1),
              omega_xyz.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return omega
@@ -382,7 +382,7 @@ def c2s_bra(l, gcart):
     else:
         m = gcart.shape[1]
         gsph = numpy.empty((l*2+1,m))
-        fc2s = gto.moleintor._cint.CINTc2s_ket_sph
+        fc2s = libecp.CINTc2s_ket_sph
         fc2s(gsph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(m),
              gcart.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return gsph
@@ -393,8 +393,8 @@ class KnowValues(unittest.TestCase):
         bessel1 = numpy.empty(8)
         for i,x in enumerate(rs):
             bessel0 = scipy.special.sph_in(7, x)[0] * numpy.exp(-x)
-            gto.moleintor._cint.ECPsph_ine(bessel1.ctypes.data_as(ctypes.c_void_p),
-                                           ctypes.c_int(7), ctypes.c_double(x))
+            libecp.ECPsph_ine(bessel1.ctypes.data_as(ctypes.c_void_p),
+                              ctypes.c_int(7), ctypes.c_double(x))
             self.assertTrue(numpy.allclose(bessel0, bessel1))
 
     def test_gauss_chebyshev(self):
@@ -410,11 +410,11 @@ class KnowValues(unittest.TestCase):
     def test_rad_part(self):
         rs, ws = radi.gauss_chebyshev(99)
         ur0 = rad_part(mol, mol._ecpbas, rs)
-        ecpshls = numpy.asarray(range(len(mol._ecpbas)) + [-1], dtype=numpy.int32)
+        ecpshls = numpy.array(numpy.append(numpy.arange(len(mol._ecpbas)),-1), dtype=numpy.int32)
         ur1 = numpy.empty_like(ur0)
         libecp.ECPrad_part(ur1.ctypes.data_as(ctypes.c_void_p),
                            rs.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(len(rs)),
+                           ctypes.c_int(len(rs)), ctypes.c_int(1),
                            ecpshls.ctypes.data_as(ctypes.c_void_p),
                            mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
                            mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
@@ -447,7 +447,7 @@ class KnowValues(unittest.TestCase):
                                   ctypes.c_int(ish), ctypes.c_int(lc),
                                   ctypes.c_double(rc),
                                   rs.ctypes.data_as(ctypes.c_void_p),
-                                  ctypes.c_int(len(rs)),
+                                  ctypes.c_int(len(rs)), ctypes.c_int(1),
                                   mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                   mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                                   mol._env.ctypes.data_as(ctypes.c_void_p))
@@ -473,8 +473,7 @@ class KnowValues(unittest.TestCase):
                                 ctypes.c_int(len(mol._ecpbas)),
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                                mol._env.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_void_p())
+                                mol._env.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(mat0, mat1))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
@@ -515,13 +514,13 @@ class KnowValues(unittest.TestCase):
         ur = rad_part(mol, mol._ecpbas, rs) * ws
         def gen_type1_rad(li):
             rad_all0 = type1_rad_part(li, k, aij, ur, rs)
-            rad_all1 = numpy.empty_like(rad_all0)
+            rad_all1 = numpy.zeros_like(rad_all0)
             libecp.type1_rad_part(rad_all1.ctypes.data_as(ctypes.c_void_p),
                                   ctypes.c_int(li),
                                   ctypes.c_double(k), ctypes.c_double(aij),
                                   ur.ctypes.data_as(ctypes.c_void_p),
                                   rs.ctypes.data_as(ctypes.c_void_p),
-                                  ctypes.c_int(len(rs)))
+                                  ctypes.c_int(len(rs)), ctypes.c_int(1))
             self.assertTrue(numpy.allclose(rad_all0, rad_all1))
         for l in range(13):
             gen_type1_rad(l)
@@ -546,8 +545,7 @@ class KnowValues(unittest.TestCase):
                                 ctypes.c_int(len(mol._ecpbas)),
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                                mol._env.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_void_p())
+                                mol._env.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(mat0, mat1))
         for i in range(mol.nbas):
             for j in range(mol.nbas):

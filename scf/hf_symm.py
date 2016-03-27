@@ -268,9 +268,9 @@ class RHF(hf.RHF):
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
         if self.chkfile:
-            chkfile.dump_scf(self.mol, self.chkfile,
-                             self.e_tot, self.mo_energy,
-                             self.mo_coeff, self.mo_occ)
+            chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
+                             self.mo_coeff, self.mo_occ, overwrite_mol=False)
+        return self
 
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
@@ -585,9 +585,9 @@ class ROHF(rohf.ROHF):
         self.mo_occ[ncore:nocc] = 1
         self.mo_occ[nocc:] = 0
         if self.chkfile:
-            chkfile.dump_scf(self.mol, self.chkfile,
-                             self.e_tot, self.mo_energy,
-                             self.mo_coeff, self.mo_occ)
+            chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
+                             self.mo_coeff, self.mo_occ, overwrite_mol=False)
+        return self
 
     def analyze(self, verbose=logger.DEBUG):
         from pyscf.tools import dump_mat

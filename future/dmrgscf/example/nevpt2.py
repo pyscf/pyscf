@@ -24,8 +24,7 @@ technique.  It is able to handle much larger systems, up to about 30 orbitals.
 #
 # One can adjust the processor numbers for Block code on the runtime.
 #
-#from pyscf.dmrgscf import settings
-#settings.MPIPREFIX ='mpirun -n 3'
+dmrgscf.settings.MPIPREFIX ='mpirun -n 3'
 
 b = 1.4
 mol = gto.Mole()
@@ -44,17 +43,16 @@ m = scf.RHF(mol)
 m.kernel()
 
 #
-# FCI-based CASCI + NEVPT2. Two roots are computed.  So CASCI attribute mc.ci
-# holds the two CI wave functions.  They need to be passed to sc_nevpt
-# function to control the state-specific NEVPT2 calculation.  By default the
-# lowest root will be computed.
+# FCI-based CASCI + NEVPT2.  Two roots are computed.  mc.ci holds the two CI
+# wave functions.  Root ID needs to be specified for the state-specific NEVPT2
+# calculation.  By default the lowest root is computed.
 #
 mc = mcscf.CASCI(m, 4, 4)
 mc.fcisolver.nroots = 2
-mc.casci()
+mc.kernel()
 
-ci_nevpt_e1 = mrpt.sc_nevpt(mc, ci=mc.ci[0])
-ci_nevpt_e2 = mrpt.sc_nevpt(mc, ci=mc.ci[1])
+ci_nevpt_e1 = mrpt.NEVPT(mc, root=0).kernel()
+ci_nevpt_e2 = mrpt.NEVPT(mc, root=1).kernel()
 
 #
 # By default, the orbitals are canonicalized after calling CASCI solver.  Save
@@ -94,11 +92,10 @@ mc.fcisolver.nroots = 2
 mc.kernel(mc_orb)
 
 #
-# In current pyscf release, the default sc_nevpt function leads to the
-# DMRG-SC-NEVPT2 implementation based on the 4-particle density matrix.
+# The default DMRG-SC-NEVPT2 implementation is based on the 4-particle density matrix.
 #
-dmrg_nevpt_e1 = mrpt.sc_nevpt(mc,ci=mc.ci[0])
-dmrg_nevpt_e2 = mrpt.sc_nevpt(mc,ci=mc.ci[1])
+dmrg_nevpt_e1 = mrpt.NEVPT(mc,root=0).kernel()
+dmrg_nevpt_e2 = mrpt.NEVPT(mc,root=1).kernel()
 
 
 
@@ -114,12 +111,12 @@ dmrg_nevpt_e2 = mrpt.sc_nevpt(mc,ci=mc.ci[1])
 # Use compress_perturb function to initialize compressed perturber.
 # root=0 indicates that it's the perturber for ground state.
 #
-mps_nevpt_e1 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=0))
+mps_nevpt_e1 = mrpt.NEVPT(mc,root=0).compress_approx(maxM=100).kernel()
 
 #
 # root=1 for first excited state.
 #
-mps_nevpt_e1 = mrpt.sc_nevpt(dmrgscf.compress_perturb(mc, maxM=100, root=1))
+mps_nevpt_e2 = mrpt.NEVPT(mc,root=1).compress_approx(maxM=100).kernel()
 
 
 print('CI NEVPT = %.15g %.15g  DMRG NEVPT = %.15g %.15g  MPS NEVPT = %.15g %.15g'

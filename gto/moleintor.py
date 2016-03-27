@@ -496,7 +496,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return mole.len_spinor(l,k) * bas[basid,NCTR_OF]
     if '3c' in intor_name:
         assert(len(shls) == 3)
-        #di, dj, dk = map(num_cgto_of, shls)
+        #di, dj, dk = [num_cgto_of(x) for x in shls]
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
         l = bas[shls[2],ANG_OF]
@@ -517,7 +517,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.transpose(3,0,1,2)
     elif '2c' in intor_name:
         assert(len(shls) == 2)
-        #di, dj = map(num_cgto_of, shls)
+        #di, dj = [num_cgto_of(x) for x in shls]
         #buf = numpy.empty((di,dj,comp), dtype, order='F')
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
@@ -534,7 +534,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.transpose(2,0,1)
     elif '2e' in intor_name:
         assert(len(shls) == 4)
-        di, dj, dk, dl = map(num_cgto_of, shls)
+        di, dj, dk, dl = [num_cgto_of(x) for x in shls]
         buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
@@ -548,7 +548,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.transpose(4,0,1,2,3)
     elif '1e' in intor_name:
         assert(len(shls) == 2)
-        di, dj = map(num_cgto_of, shls)
+        di, dj = [num_cgto_of(x) for x in shls]
         buf = numpy.empty((di,dj,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),

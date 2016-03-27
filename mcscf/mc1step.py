@@ -459,13 +459,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     ncas = casscf.ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    if log.verbose >= logger.INFO:
-        if hasattr(casscf.fcisolver, 'spin_square'):
-            ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-            log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
-        else:
-            log.info('CASCI E = %.15g', e_tot)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
@@ -508,15 +502,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
             if isinstance(gci, numpy.ndarray):
-                norm_gci = numpy.linalg.norm(gci)
+                norm_gci = '%4.3g' % numpy.linalg.norm(gci)
             else:
-                norm_gci = -1
+                norm_gci = None
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
             t3m = log.timer('update CAS DM', *t3m)
             log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  '
-                      '|g[c]|= %4.3g  |ddm|= %4.3g',
+                      '|g[c]|= %s  |ddm|= %4.3g',
                       imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
@@ -525,7 +519,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < conv_tol_grad or
                 (norm_gorb < conv_tol_grad*.4 and
-                 (norm_ddm < conv_tol_ddm or norm_ddm_micro < conv_tol_ddm*.1))):
+                 (norm_ddm < conv_tol_ddm*.4 or norm_ddm_micro < conv_tol_ddm*.2))):
                 break
 
         rota.close()
@@ -551,22 +545,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         t2m = log.timer('update eri', *t3m)
 
         elast = e_tot
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
-        log.debug('CAS space CI energy = %.15g', e_ci)
         log.timer('CASCI solver', *t2m)
-        if log.verbose >= logger.INFO:
-            if hasattr(casscf.fcisolver, 'spin_square'):
-                ss = casscf.fcisolver.spin_square(fcivec, ncas, casscf.nelecas)
-                log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
-                     imacro, njk, imicro, e_tot, e_tot-elast, ss[0])
-            else:
-                log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g  ',
-                         imacro, njk, imicro, e_tot, e_tot-elast)
-            log.info('               |grad[o]|= %4.3g  |grad[c]|= %4.3g  |ddm|= %4.3g',
-                     norm_gorb0, norm_gci, norm_ddm)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         if (abs(e_tot - elast) < tol
@@ -696,7 +679,7 @@ class CASSCF(casci.CASCI):
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=[]):
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
@@ -772,7 +755,7 @@ class CASSCF(casci.CASCI):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        if self.frozen:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
         log.info('max_cycle_micro = %d', self.max_cycle_micro)
@@ -845,15 +828,60 @@ class CASSCF(casci.CASCI):
         return self.kernel(mo_coeff, ci0, macro, micro, callback,
                            mc2step.kernel)
 
-    def casci(self, mo_coeff, ci0=None, eris=None):
+    def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         if eris is None:
             import copy
             fcasci = copy.copy(self)
             fcasci.ao2mo = self.get_h2cas
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
-        log = logger.Logger(self.stdout, self.verbose)
-        return casci.kernel(fcasci, mo_coeff, ci0=ci0, verbose=log)
+
+        if isinstance(verbose, logger.Logger):
+            log = verbose
+        else:
+            if verbose is None:
+                verbose = self.verbose
+            log = logger.Logger(self.stdout, verbose)
+
+        e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        if not isinstance(e_ci, (float, numpy.number)):
+            raise RuntimeError('Multiple roots are detected in fcisolver.  '
+                               'CASSCF does not know which state to optimize.\n'
+                               'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
+
+        if envs is not None and log.verbose >= logger.INFO:
+            log.debug('CAS space CI energy = %.15g', e_ci)
+
+            if hasattr(self.fcisolver,'spin_square'):
+                ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+            else:
+                ss = None
+
+            if 'imicro' in envs:  # Within CASSCF iteration
+                if ss is None:
+                    log.info('macro iter %d (%d JK  %d micro), '
+                             'CASSCF E = %.15g  dE = %.8g',
+                             envs['imacro'], envs['njk'], envs['imicro']+1,
+                             e_tot, e_tot-envs['elast'])
+                else:
+                    log.info('macro iter %d (%d JK  %d micro), '
+                             'CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
+                             envs['imacro'], envs['njk'], envs['imicro']+1,
+                             e_tot, e_tot-envs['elast'], ss[0])
+                if 'norm_gci' in envs:
+                    log.info('               |grad[o]|= %4.3g  '
+                             '|grad[c]|= %s  |ddm|= %4.3g',
+                             envs['norm_gorb'],
+                             envs['norm_gci'], envs['norm_ddm'])
+                else:
+                    log.info('               |grad[o]|= %4.3g  |ddm|= %4.3g',
+                             envs['norm_gorb'], envs['norm_ddm'])
+            else:  # Initialization step
+                if ss is None:
+                    log.info('CASCI E = %.15g', e_tot)
+                else:
+                    log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
+        return e_tot, e_ci, fcivec
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
         nocc = ncore + ncas
@@ -862,7 +890,7 @@ class CASSCF(casci.CASCI):
         mask[nocc:,:nocc] = True
         if self.internal_rotation:
             mask[ncore:nocc,ncore:nocc][numpy.tril_indices(ncas,-1)] = True
-        if frozen:
+        if frozen is not None:
             if isinstance(frozen, (int, numpy.integer)):
                 mask[:frozen] = mask[:,:frozen] = False
             else:
@@ -891,7 +919,8 @@ class CASSCF(casci.CASCI):
     rotate_orb_cc = rotate_orb_cc
 
     def update_ao2mo(self, mo):
-        raise RuntimeError('update_ao2mo was obseleted since pyscf v1.0.  Use .ao2mo method instead')
+        raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '
+                                 'Use .ao2mo method instead')
 
     def ao2mo(self, mo):
 #        nmo = mo.shape[1]
@@ -1118,7 +1147,7 @@ class CASSCF(casci.CASCI):
             mo_energy = 'None'
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
                            mo, self.ncore, self.ncas, mo_occ, mo_energy,
-                           envs['e_ci'], civec)
+                           envs['e_ci'], civec, overwrite_mol=False)
         return self
 
     def update_(self, chkfile=None):
