@@ -138,7 +138,43 @@ def follow_state_(mf, occorb=None):
     mf.get_occ = follow_state_(mf, occorb)
     return mf.get_occ
 
+def mom_occ(mf, occorb, setocc):
+    '''Use maximum overlap method to determine occupation number for each orbital in every
+    iteration.'''
+    assert(isinstance(mf, pyscf.scf.uhf.UHF))
+    coef_occ_a = occorb[0][:,setocc[0]>0]
+    coef_occ_b = occorb[1][:,setocc[1]>0]
+    def get_occ(mo_energy, mo_coeff=None): 
+        mo_occ = numpy.zeros_like(mo_energy)
+        nocc_a = int(numpy.sum(setocc[0]))
+        nocc_b = int(numpy.sum(setocc[1]))
+        s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0]))
+        s_b = reduce(numpy.dot, (coef_occ_b.T, mf.get_ovlp(), mo_coeff[1]))
+        #choose a subset of mo_coeff, which maximizes <old|now>
+        idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))
+        idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))
+        mo_occ[0][idx_a[-nocc_a:]] = 1.
+        mo_occ[1][idx_b[-nocc_b:]] = 1.
 
+        if mf.verbose >= logger.INFO: 
+            logger.info(mf, ' New alpha occ pattern: %s', mo_occ[0]) 
+            logger.info(mf, ' New beta occ pattern: %s', mo_occ[1]) 
+        if mf.verbose >= logger.DEBUG:
+            logger.info(mf, ' Current alpha mo_energy(sorted) = %s', mo_energy[0]) 
+            logger.info(mf, ' Current beta mo_energy(sorted) = %s', mo_energy[1])
+
+        if (int(numpy.sum(mo_occ[0])) != nocc_a):
+            log.error(self, 'mom alpha electron occupation numbers do not match: %d, %d', 
+                      nocc_a, int(numpy.sum(mo_occ[0])))
+        if (int(numpy.sum(mo_occ[1])) != nocc_b):
+            log.error(self, 'mom alpha electron occupation numbers do not match: %d, %d', 
+                      nocc_b, int(numpy.sum(mo_occ[1])))
+
+        return mo_occ
+    return get_occ
+def mom_occ_(mf, occorb=None, setocc=None):
+    mf.get_occ = mom_occ_(mf, occorb, setocc)
+    return mf.get_occ
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients

@@ -68,7 +68,7 @@ def get_init_guess(mol, key='minao'):
         return init_guess_by_minao(mol)
 
 def make_rdm1(mo_coeff, mo_occ):
-    '''One-particle densit matrix
+    '''One-particle density matrix
 
     Returns:
         A list of 2D ndarrays for alpha and beta spins
