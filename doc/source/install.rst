@@ -5,8 +5,8 @@ Installation
 
 You may already have `cmake <http://www.cmake.org>`_,
 `numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
-and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use pip
-to install numpy, scipy and h5py::
+and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use
+``python-pypi`` to install numpy, scipy and h5py::
 
   $ pip install --target=/path/to/python/libs numpy
   $ pip install --target=/path/to/python/libs scipy
@@ -25,11 +25,11 @@ Now you need build the C extensions in :file:`pyscf/lib`::
   $ make
 
 It will automatically download the analytical GTO integral library
-``libcint`` https://github.com/sunqm/libcint.git and the DFT
-exchange correlation functional library ``libxc``
-http://www.tddft.org/programs/Libxc.  Finally, to make Python find pyscf
-package, add the **parent directory** of pyscf to :code:`PYTHONPATH`,
-e.g. assuming pyscf is put in ``/home/abc``::
+``libcint`` https://github.com/sunqm/libcint.git and the DFT exchange
+correlation functional library `libxc <http://www.tddft.org/programs/Libxc>_`
+and `xcfun <https://github.com/dftlibs/xcfun.git>_`.  Finally, to make Python
+be able to find pyscf package, add the **parent directory** of pyscf to
+:code:`PYTHONPATH`, e.g. assuming pyscf is put in ``/home/abc``::
 
   export PYTHONPATH=/home/abc:$PYTHONPATH
 
@@ -64,13 +64,13 @@ many modules)::
   $ make
 
 You can link to other BLAS libraries by setting ``BLA_VENDOR``, eg
-``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``.  Please refer to `cmake
-mannual <http://www.cmake.org/cmake/help/v3.0/module/FindBLAS.html>`_
-for more details of the use of ``FindBLAS`` macro.
+``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``.  Please refer to `cmake mannual
+<http://www.cmake.org/cmake/help/v3.0/module/FindBLAS.html>`_ for more details
+of the use of ``FindBLAS`` macro.
 
-If the cmake ``BLA_VENDOR`` cannot detect the right BLAS library as you
-expected, you can simply assign the libraries to the variable
-``BLAS_LIBRARIES`` in :file:`lib/CMakeLists.txt`::
+If the cmake ``BLA_VENDOR`` cannot find the right BLAS library as you expected,
+you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
+:file:`lib/CMakeLists.txt`::
 
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
@@ -133,3 +133,6 @@ COSMO
 
 QM/MM
 -----
+
+XianCI
+------

@@ -1314,10 +1314,12 @@ class Mole(pyscf.lib.StreamObject):
                                                    self._basis):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self._atom, self._basis)
-                    sys.stderr.write('Warn: unable to identify input symmetry %s, '
-                                     'use %s instead.\n' %
-                                     (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                    _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
+                    _atom = '\n'.join([str(a) for a in _atom])
+                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
+                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
+                                         (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \
                         pyscf.symm.detect_symm(self._atom, self._basis)
@@ -1832,11 +1834,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               bras=None, kets=None):
-        '''One-electron integral generator.
+        '''Integral generator.
 
         Args:
             intor : str
-                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                Name of the 1e or 2e AO integrals.  Ref to :func:`getints` for the
                 complete list of available 1-electron integral names
 
         Kwargs:

@@ -42,8 +42,8 @@ It's very possible that you put ``/home/abc/pyscf`` in :code:`PYTHONPATH`.
 You need to remove the ``/pyscf`` in that string and try
 ``import pyscf`` in the python shell again.
 
-.. note::  The quick setup will not provide the best performance.
-  Please refer to :ref:`installing` for the optimized libraries.
+.. note::  The quick setup does not provide the best performance.
+  Please see :ref:`installing` for the optimized libraries.
 
 
 A simple example

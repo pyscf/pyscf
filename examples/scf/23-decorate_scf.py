@@ -67,7 +67,7 @@ print('E = %.12f, ref = -76.026765673091' % energy)
 
 #
 # 4. Newton method for non-relativistic HF with density fitting for orbital
-# hessian of newton solver.  Note the anwser is equivalent to case 3, but the
+# hessian of newton solver.  Note the answer is equal to case 3, but the
 # solver "mf" is different.
 #
 mf = scf.density_fit(scf.newton(scf.RHF(mol)))

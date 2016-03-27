@@ -7,8 +7,9 @@ Python module for quantum chemistry
 
 * [Release 1.1 alpha](../../releases/latest)
 * [Changelog](../master/CHANGELOG)
-* [Documentation](http://www.pyscf.org) [PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf)
+* [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
+* [Features](../master/FEATURES)
 
 
 Installation

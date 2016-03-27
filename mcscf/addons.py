@@ -27,7 +27,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
 
     Kwargs:
         base : int
-            0-based (C-like) or 1-based (Fortran-like) caslst
+            0-based (C-style) or 1-based (Fortran-style) caslst
 
     Returns:
         An reoreded mo_coeff, which put the orbitals given by caslst in the CAS space
