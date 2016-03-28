@@ -276,21 +276,24 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     def project(mfmo, init_mo, ncore, s):
         nocc = ncore + casscf.ncas
-        mo0core = init_mo[:,:ncore]
-        s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
-        s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
-        coreocc = numpy.einsum('ij,ji->i', s1, pyscf.lib.cho_solve(s1core, s1.T))
-        nmo = mfmo.shape[1]
-        coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
-        logger.debug(casscf, 'Core indices %s', coreidx)
-        logger.debug(casscf, 'Core components %s', coreocc[coreidx])
-        # take HF core
-        mocore = mfmo[:,coreidx]
+        if ncore > 0
+            mo0core = init_mo[:,:ncore]
+            s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
+            s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
+            coreocc = numpy.einsum('ij,ji->i', s1, pyscf.lib.cho_solve(s1core, s1.T))
+            nmo = mfmo.shape[1]
+            coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
+            logger.debug(casscf, 'Core indices %s', coreidx)
+            logger.debug(casscf, 'Core components %s', coreocc[coreidx])
+            # take HF core
+            mocore = mfmo[:,coreidx]
 
-        # take projected CAS space
-        mocas = init_mo[:,ncore:nocc] \
-              - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
-        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
+            # take projected CAS space
+            mocas = init_mo[:,ncore:nocc] \
+                  - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
+            mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
+        else:
+            mocc = init_mo[:,:nocc]
 
         # remove core and active space from rest
         if mocc.shape[1] < mfmo.shape[1]:
