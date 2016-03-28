@@ -531,17 +531,18 @@ def newton(mf):
                             mol.symm_orb, mo_coeff, s=self.get_ovlp())
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
-            def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                         diis_start_cycle=None, level_shift_factor=None,
-                         damp_factor=None):
+            def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                          diis_start_cycle=None, level_shift_factor=None,
+                          damp_factor=None):
                 fock = h1e + vhf
-                self._focka_ao, self._fockb_ao = fock  # needed by ._scf.eig
+                self._scf._focka_ao, self._scf._fockb_ao = fock  # needed by ._scf.eig
                 self._dm_ao = dm  # needed by .eig
                 return fock
+            get_fock = get_fock_
 
             def eig(self, fock, s1e):
                 dm = self._dm_ao
-                fc = (self._focka_ao + self._fockb_ao) * .5
+                fc = (self._scf._focka_ao + self._scf._fockb_ao) * .5
 # Projector for core, open-shell, and virtual
                 nao = s1e.shape[0]
                 pc = numpy.dot(dm[1], s1e)
@@ -550,8 +551,8 @@ def newton(mf):
                 f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
                 f += reduce(numpy.dot, (po.T, fc, po)) * .5
                 f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-                f += reduce(numpy.dot, (po.T, self._fockb_ao, pc))
-                f += reduce(numpy.dot, (po.T, self._focka_ao, pv))
+                f += reduce(numpy.dot, (po.T, self._scf._fockb_ao, pc))
+                f += reduce(numpy.dot, (po.T, self._scf._focka_ao, pv))
                 f += reduce(numpy.dot, (pv.T, fc, pc))
                 f = f + f.T
                 return self._scf.eig(f, s1e)

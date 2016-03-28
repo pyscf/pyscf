@@ -268,7 +268,7 @@ class KnowValues(unittest.TestCase):
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
-    def test_nr_fast_newton(self):
+    def test_nr_uks_fast_newton(self):
         mol = gto.M(
             verbose = 5,
             output = '/dev/null',
@@ -279,6 +279,7 @@ class KnowValues(unittest.TestCase):
             basis = '6-31g',
             charge = 1,
             spin = 1,
+            symmetry = 1,
         )
         mf = dft.UKS(mol)
         mf.xc = 'b3lyp'
@@ -287,6 +288,24 @@ class KnowValues(unittest.TestCase):
 
         mf1 = scf.fast_newton(dft.UKS(mol), dm0=mf.make_rdm1())
         self.assertAlmostEqual(mf1.e_tot, -75.351012848127667, 9)
+
+    def test_nr_roks_fast_newton(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ],
+            basis = '6-31g',
+            charge = 1,
+            spin = 1,
+            symmetry = 1,
+        )
+        mf = dft.RKS(mol)
+        mf.xc = 'b3lyp'
+        mf1 = scf.fast_newton(mf)
+        self.assertAlmostEqual(mf1.e_tot, -75.893123033348587, 9)
 
     def test_uks_gen_g_hop(self):
         mol = gto.M(
