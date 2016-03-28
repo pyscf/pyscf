@@ -21,6 +21,16 @@ mf = scf.UHF(mol)
 mf.conv_tol = 1e-14
 mf.scf()
 
+n2sym = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = '''
+        N     0    0    0
+        N     0    0    1''',
+    symmetry = 1,
+    basis = 'cc-pvdz')
+n2mf = scf.RHF(n2sym).set(conv_tol=1e-10).run()
+
 
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
@@ -81,16 +91,74 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mf.scf(), -75.010623169610966, 9)
 
     def test_n2_symm(self):
-        pmol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''
-                N     0    0    0
-                N     0    0    1''',
-            symmetry = 1,
-            basis = 'cc-pvdz')
-        mf = scf.uhf_symm.UHF(pmol)
+        mf = scf.uhf_symm.UHF(n2sym)
         self.assertAlmostEqual(mf.scf(), -108.9298383856092, 9)
+
+        pmol = n2sym.copy()
+        pmol.charge = 1
+        pmol.spin = 1
+        pmol.nelectron -= 1
+        mf = scf.uhf_symm.UHF(pmol)
+        self.assertAlmostEqual(mf.scf(), -108.34691774091894, 9)
+
+    def test_n2_symm_uhf_fixnocc(self):
+        pmol = n2sym.copy()
+        pmol.charge = 1
+        pmol.spin = 1
+        pmol.nelectron -= 1
+        mf = scf.uhf_symm.UHF(pmol)
+        mf.irrep_nelec = {'A1g':6, 'A1u':3, 'E1ux':2, 'E1uy':2}
+        self.assertAlmostEqual(mf.scf(), -108.22558478425401, 9)
+        mf.irrep_nelec = {'A1g':(3,3), 'A1u':(2,1), 'E1ux':(1,1), 'E1uy':(1,1)}
+        self.assertAlmostEqual(mf.scf(), -108.22558478425401, 9)
+
+    def test_uhf_get_occ(self):
+        mol = gto.M(verbose=7, output='/dev/null').set(nelectron=8, spin=2)
+        mf = scf.uhf.UHF(mol)
+        energy = numpy.array(([-10, -1, 1, -2, 0, -3], [8, 2, 4, 3, 0, 5]))
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                                       ([1, 1, 0, 1, 1, 1], [0, 1, 0, 1, 1, 0])))
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        pmol.symmetry = False
+        mf = scf.UHF(pmol).set(verbose = 0)
+        energy = numpy.array([[34, 2 , 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7],
+                              [29, 26, 13, 54, 18, 78, 85, 49, 84, 62, 42, 74, 20, 61, 51, 34, 2 , 33, 52, 3]])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                [[0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+                 [0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1]]))
+
+    def test_uhf_symm_get_occ(self):
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        mf = scf.UHF(pmol).set(verbose = 0)
+        orbsym = numpy.array([[0 , 5 , 0 , 5 , 6 , 7 , 0 , 2 , 3 , 5 , 0 , 6 , 7 , 0 , 2 , 3 , 5 , 10, 11, 5],
+                              [5 , 0 , 6 , 7 , 5 , 10, 11, 0 , 5 , 0 , 5 , 5 , 6 , 7 , 0 , 2 , 3 , 0 , 2 , 3]])
+        energy = numpy.array([[34, 2 , 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7],
+                              [29, 26, 13, 54, 18, 78, 85, 49, 84, 62, 42, 74, 20, 61, 51, 34, 2 , 33, 52, 3]])
+        mf.irrep_nelec = {'A1g':7, 'A1u':3, 'E1ux':2, 'E1uy':2}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [[1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1],
+                 [0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]]))
+        mf.irrep_nelec = {'A1g':(5,2), 'A1u':(1,2)}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [[1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+                 [1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1]]))
+        mf.irrep_nelec = {'E1ux':2, 'E1uy':2}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [[0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+                 [0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1]]))
+        mf.irrep_nelec = {}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [[0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+                 [0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1]]))
+
+    def test_uhf_symm_dump_flags(self):
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        mf = scf.UHF(pmol).set(verbose = 0)
+        mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
+        self.assertRaises(ValueError, mf.dump_flags)
 
 
 if __name__ == "__main__":

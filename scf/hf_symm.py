@@ -191,20 +191,25 @@ class RHF(hf.RHF):
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
         '''
+        if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        if (mo_coeff is not None and
-            mo_coeff.shape[0] != mo_coeff.shape[1]):  # due to linear-dep
-            orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
-                                         mo_coeff, self.get_ovlp(), False)
-            orbsym = numpy.asarray(orbsym)
+        if orbsym is None:
+            if (mo_coeff is not None and
+                mo_coeff.shape[0] != mo_coeff.shape[1]):  # due to linear-dep
+                orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                             mo_coeff, self.get_ovlp(), False)
+                orbsym = numpy.asarray(orbsym)
+            else:
+                orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                          for i, ir in enumerate(mol.irrep_id)]
+                orbsym = numpy.hstack(orbsym)
         else:
-            orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
-                      for i, ir in enumerate(mol.irrep_id)]
-            orbsym = numpy.hstack(orbsym)
+            orbsym = numpy.asarray(orbsym)
+        assert(mo_energy.size == orbsym.size)
 
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = []
@@ -229,7 +234,7 @@ class RHF(hf.RHF):
             mo_occ[occ_idx] = 2
 
         vir_idx = (mo_occ==0)
-        if self.verbose >= logger.INFO or numpy.count_nonzero(vir_idx) > 0:
+        if self.verbose >= logger.INFO and numpy.count_nonzero(vir_idx) > 0:
             ehomo = max(mo_energy[mo_occ>0 ])
             elumo = min(mo_energy[mo_occ==0])
             noccs = []
@@ -340,43 +345,9 @@ class ROHF(rohf.ROHF):
         self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
+        from pyscf.scf import uhf_symm
         rohf.ROHF.dump_flags(self)
-        logger.info(self, '%s with symmetry adapted basis',
-                    self.__class__.__name__)
-#TODO: improve the sainity check
-        float_irname = []
-        fix_na = 0
-        fix_nb = 0
-        for irname in self.mol.irrep_name:
-            if irname in self.irrep_nelec:
-                if isinstance(self.irrep_nelec[irname], (int, numpy.integer)):
-                    nb = self.irrep_nelec[irname] // 2
-                    fix_na += self.irrep_nelec[irname] - nb
-                    fix_nb += nb
-                else:
-                    fix_na += self.irrep_nelec[irname][0]
-                    fix_nb += self.irrep_nelec[irname][1]
-            else:
-                float_irname.append(irname)
-        float_irname = set(float_irname)
-        if fix_na+fix_nb > 0:
-            logger.info(self, 'fix %d electrons in irreps: %s',
-                        fix_na+fix_nb, str(self.irrep_nelec.items()))
-            if ((fix_na+fix_nb > self.mol.nelectron) or
-                (fix_na>self.nelec[0]) or (fix_nb>self.nelec[1]) or
-                (fix_na+self.nelec[1]>self.mol.nelectron) or
-                (fix_nb+self.nelec[0]>self.mol.nelectron)):
-                logger.error(self, 'electron number error in irrep_nelec %s',
-                             self.irrep_nelec.items())
-                raise ValueError('irrep_nelec')
-        if float_irname:
-            logger.info(self, '%d free electrons in irreps %s',
-                        self.mol.nelectron-fix_na-fix_nb,
-                        ' '.join(float_irname))
-        elif fix_na+fix_nb != self.mol.nelectron:
-            logger.error(self, 'electron number error in irrep_nelec %s',
-                         self.irrep_nelec.items())
-            raise ValueError('irrep_nelec')
+        uhf_symm.dump_flags(self)
 
     def build_(self, mol=None):
         # specify alpha,beta for same irreps
@@ -457,7 +428,7 @@ class ROHF(rohf.ROHF):
         f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
         return f
 
-    def get_occ(self, mo_energy=None, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if self._mo_ea is None:
@@ -467,14 +438,18 @@ class ROHF(rohf.ROHF):
             mo_eb = self._mo_eb
         nmo = mo_ea.size
         mo_occ = numpy.zeros(nmo)
-        if mo_coeff is not None and mo_coeff.shape[0] != mo_coeff.shape[1]:
-            orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
-                                         mo_coeff, self.get_ovlp(), False)
-            orbsym = numpy.asarray(orbsym)
+        if orbsym is None:
+            if mo_coeff is not None and mo_coeff.shape[0] != mo_coeff.shape[1]:
+                orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                             mo_coeff, self.get_ovlp(), False)
+                orbsym = numpy.asarray(orbsym)
+            else:
+                orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                          for i, ir in enumerate(mol.irrep_id)]
+                orbsym = numpy.hstack(orbsym)
         else:
-            orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
-                      for i, ir in enumerate(mol.irrep_id)]
-            orbsym = numpy.hstack(orbsym)
+            orbsym = numpy.asarray(orbsym)
+        assert(mo_energy.size == orbsym.size)
 
         float_idx = []
         neleca_fix = 0
@@ -509,6 +484,7 @@ class ROHF(rohf.ROHF):
 
         ncore = self.nelec[1]
         nocc  = self.nelec[0]
+        nopen = nocc - ncore
         vir_idx = (mo_occ==0)
         if self.verbose >= logger.INFO and nocc < nmo and ncore > 0:
             ehomo = max(mo_energy[mo_occ> 0])

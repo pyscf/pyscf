@@ -143,6 +143,43 @@ def map_rhf_to_uhf(rhf):
     '''Take the settings from RHF object'''
     return uhf.map_rhf_to_uhf(rhf)
 
+def dump_flags(mf):
+    logger.info(mf, '%s with symmetry adapted basis',
+                mf.__class__.__name__)
+    float_irname = []
+    fix_na = 0
+    fix_nb = 0
+    for irname in mf.mol.irrep_name:
+        if irname in mf.irrep_nelec:
+            if isinstance(mf.irrep_nelec[irname], (int, numpy.integer)):
+                nelecb = mf.irrep_nelec[irname] // 2
+                neleca = mf.irrep_nelec[irname] - nelecb
+            else:
+                neleca, nelecb = mf.irrep_nelec[irname]
+            fix_na += neleca
+            fix_nb += nelecb
+        else:
+            float_irname.append(irname)
+    float_irname = set(float_irname)
+    if fix_na+fix_nb > 0:
+        logger.info(mf, 'fix %d electrons in irreps: %s',
+                    fix_na+fix_nb, str(mf.irrep_nelec.items()))
+        if ((fix_na+fix_nb > mf.mol.nelectron) or
+            (fix_na>mf.nelec[0]) or (fix_nb>mf.nelec[1]) or
+            (fix_na+mf.nelec[1]>mf.mol.nelectron) or
+            (fix_nb+mf.nelec[0]>mf.mol.nelectron)):
+            logger.error(mf, 'electron number error in irrep_nelec %s',
+                         mf.irrep_nelec.items())
+            raise ValueError('irrep_nelec')
+    if float_irname:
+        logger.info(mf, '%d free electrons in irreps %s',
+                    mf.mol.nelectron-fix_na-fix_nb,
+                    ' '.join(float_irname))
+    elif fix_na+fix_nb != mf.mol.nelectron:
+        logger.error(mf, 'electron number error in irrep_nelec %d',
+                     mf.irrep_nelec.items())
+        raise ValueError('irrep_nelec')
+
 
 class UHF(uhf.UHF):
     __doc__ = uhf.UHF.__doc__ + '''
@@ -175,36 +212,7 @@ class UHF(uhf.UHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        logger.info(self, '%s with symmetry adapted basis',
-                    self.__class__.__name__)
-        float_irname = []
-        fix_na = 0
-        fix_nb = 0
-        for irname in self.mol.irrep_name:
-            if irname in self.irrep_nelec:
-                fix_na += self.irrep_nelec[irname][0]
-                fix_nb += self.irrep_nelec[irname][1]
-            else:
-                float_irname.append(irname)
-        float_irname = set(float_irname)
-        if fix_na+fix_nb > 0:
-            logger.info(self, 'fix %d electrons in irreps: %s',
-                        fix_na+fix_nb, str(self.irrep_nelec.items()))
-            if ((fix_na+fix_nb > self.mol.nelectron) or
-                (fix_na>self.nelec[0]) or (fix_nb>self.nelec[1]) or
-                (fix_na+self.nelec[1]>self.mol.nelectron) or
-                (fix_nb+self.nelec[0]>self.mol.nelectron)):
-                logger.error(self, 'electron number error in irrep_nelec %s',
-                             self.irrep_nelec.items())
-                raise ValueError('irrep_nelec')
-        if float_irname:
-            logger.info(self, '%d free electrons in irreps %s',
-                        self.mol.nelectron-fix_na-fix_nb,
-                        ' '.join(float_irname))
-        elif fix_na+fix_nb != self.mol.nelectron:
-            logger.error(self, 'electron number error in irrep_nelec %d',
-                         self.irrep_nelec.items())
-            raise ValueError('irrep_nelec')
+        dump_flags(self)
 
     def build_(self, mol=None):
         for irname in self.irrep_nelec:
@@ -236,25 +244,31 @@ class UHF(uhf.UHF):
         cb = hf_symm.so2ao_mo_coeff(self.mol.symm_orb, cs)
         return numpy.array((ea,eb)), (ca,cb)
 
-    def get_occ(self, mo_energy, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
         '''
+        if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        if (mo_coeff is not None and
-            mo_coeff[0].shape[0] != mo_coeff[0].shape[1]):  # due to linear-dep
-            ovlp_ao = self.get_ovlp()
-            orbsyma = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
-                                          mo_coeff[0], ovlp_ao, False)
-            orbsymb = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
-                                          mo_coeff[1], ovlp_ao, False)
-            orbsyma = numpy.asarray(orbsyma)
-            orbsymb = numpy.asarray(orbsymb)
+        if orbsym is None:
+            if (mo_coeff is not None and
+                mo_coeff[0].shape[0] != mo_coeff[0].shape[1]):  # due to linear-dep
+                ovlp_ao = self.get_ovlp()
+                orbsyma = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                              mo_coeff[0], ovlp_ao, False)
+                orbsymb = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                              mo_coeff[1], ovlp_ao, False)
+                orbsyma = numpy.asarray(orbsyma)
+                orbsymb = numpy.asarray(orbsymb)
+            else:
+                ovlp_ao = None
+                orbsyma = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                           for i, ir in enumerate(mol.irrep_id)]
+                orbsyma = orbsymb = numpy.hstack(orbsyma)
         else:
-            ovlp_ao = None
-            orbsyma = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
-                       for i, ir in enumerate(mol.irrep_id)]
-            orbsyma = orbsymb = numpy.hstack(orbsyma)
+            orbsyma = numpy.asarray(orbsym[0])
+            orbsymb = numpy.asarray(orbsym[1])
+        assert(mo_energy[0].size == orbsyma.size)
 
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []

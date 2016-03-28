@@ -465,8 +465,8 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
-        n_a = (mol.nelectron + mol.spin) // 2
-        self.nelec = (n_a, mol.nelectron - n_a)
+        n_b = (mol.nelectron - mol.spin) // 2
+        self.nelec = (mol.nelectron-n_b, n_b)
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
