@@ -210,11 +210,13 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
     return g_orb, gorb_update, h_op, h_diag
 
 def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
-                  conv_tol_grad=1e-4, verbose=None):
+                  conv_tol_grad=1e-4, max_stepsize=None, verbose=None):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(casscf.stdout, casscf.verbose)
+    if max_stepsize is None:
+        max_stepsize = casscf.max_stepsize
 
     t3m = (time.clock(), time.time())
     u = 1
@@ -222,7 +224,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
             casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
     g_kf0 = g_kf = g_orb
     norm_gkf0 = norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
-    log.debug('    |g|= %4.3g', norm_gorb)
+    log.debug('    |g|=%5.3g', norm_gorb)
     t3m = log.timer('gen h_op', *t3m)
 
     def precond(x, e):
@@ -277,8 +279,8 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                 (seig < casscf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
-                if dxmax > casscf.max_stepsize:
-                    scale = casscf.max_stepsize / dxmax
+                if dxmax > max_stepsize:
+                    scale = max_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
@@ -290,8 +292,8 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                 norm_gorb = numpy.linalg.norm(g_orb)
                 norm_dxi = numpy.linalg.norm(dxi)
                 norm_dr = numpy.linalg.norm(dr)
-                log.debug('    imic %d(%d)  |g[o]|= %4.3g  |dxi|= %4.3g  '
-                          'max(|x|)= %4.3g  |dr|= %4.3g  eig= %4.3g  seig= %4.3g',
+                log.debug('    imic %d(%d)  |g[o]|=%5.3g  |dxi|=%5.3g  '
+                          'max(|x|)=%5.3g  |dr|=%5.3g  eig=%5.3g  seig=%5.3g',
                           imic, ihop, norm_gorb, norm_dxi,
                           dxmax, norm_dr, w, seig)
 
@@ -313,8 +315,8 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                     norm_gkf = numpy.linalg.norm(g_kf)
                     norm_dg = numpy.linalg.norm(g_kf-g_orb)
                     kf_compensate = norm_dg / norm_gorb
-                    log.debug('Adjust keyframe g_orb to |g|= %4.3g  '
-                              '|g-correction|= %4.3g', norm_gkf, norm_dg)
+                    log.debug('Adjust keyframe g_orb to |g|=%5.3g  '
+                              '|g-correction|=%5.3g', norm_gkf, norm_dg)
                     jkcount += 1
                     if kf_compensate > casscf.ah_grad_trust_region:
                         g_orb = g_orb - hdxi
@@ -348,11 +350,11 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         g_kf1 = gorb_update(u)
         norm_gkf1 = numpy.linalg.norm(g_kf1)
         norm_dg = numpy.linalg.norm(g_kf1-g_orb)
-        log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
+        log.debug('    |g|=%5.3g (keyframe), |g-correction|=%5.3g',
                   norm_gkf1, norm_dg)
         if (norm_dg > norm_gorb*casscf.ah_grad_trust_region and
             norm_gorb > conv_tol_grad*.4):  # More iters when close to local minimum
-            log.debug('    Rejct keyframe |g|= %4.3g  |g_last| = %4.3g',
+            log.debug('    Reject keyframe |g|=%5.3g  |g_last| =%5.3g',
                       norm_gkf1, norm_gorb)
             break
         kf_compensate = norm_dg / norm_gorb
@@ -476,7 +478,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     conv = False
     totmicro = totinner = 0
     norm_gorb = norm_gci = -1
-    elast = e_tot
+    de, elast = e_tot, e_tot
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
@@ -485,11 +487,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     casdm1_prev = casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
     for imacro in range(macro):
-        if casscf.dynamic_micro_step:
-            max_cycle_micro = max(micro, int(micro-1-numpy.log(norm_ddm)))
+        max_cycle_micro = casscf.micro_step_scheduler(locals())
+        max_stepsize = casscf.max_stepsize_scheduler(locals())
         imicro = 0
         rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                    eris, r0, conv_tol_grad, log)
+                                    eris, r0, conv_tol_grad, max_stepsize, log)
         for u, g_orb, njk in rota:
             imicro += 1
             norm_gorb = numpy.linalg.norm(g_orb)
@@ -498,7 +500,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('orbital rotation', *t3m)
             if imicro == max_cycle_micro:
-                log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  ',
+                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  ',
                           imicro, norm_t, norm_gorb)
                 break
 
@@ -511,8 +513,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  |u-1|= %4.3g  |g[o]|= %4.3g  '
-                      '|g[c]|= %s  |ddm|= %4.3g',
+            log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  '
+                      '|g[c]|= %s  |ddm|=%5.3g',
                       imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
@@ -546,7 +548,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
-        elast = e_tot
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
@@ -554,7 +555,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         log.timer('CASCI solver', *t2m)
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
-        if (abs(e_tot - elast) < tol
+        de, elast = e_tot - elast, e_tot
+        if (abs(de) < tol
             and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_ddm)):
             conv = True
 
@@ -728,7 +730,6 @@ class CASSCF(casci.CASCI):
         self.grad_update_dep = 1
         self.ci_update_dep = 2
         self.internal_rotation = False
-        self.dynamic_micro_step = False
         self.keyframe_interval = 4
         self.keyframe_interval_rate = 1.
         self.keyframe_trust_region = 0.25
@@ -747,6 +748,7 @@ class CASSCF(casci.CASCI):
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
         self.converged = False
+        self._max_stepsize = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -781,7 +783,6 @@ class CASSCF(casci.CASCI):
         log.debug('grad_update_dep %d', self.grad_update_dep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
         log.info('internal_rotation = %s', self.internal_rotation)
-        log.info('dynamic_micro_step %s', self.dynamic_micro_step)
         log.info('keyframe_interval = %d', self.keyframe_interval)
         log.info('keyframe_interval_rate = %g', self.keyframe_interval_rate)
         log.info('keyframe_trust_region = %g', self.keyframe_trust_region)
@@ -871,12 +872,12 @@ class CASSCF(casci.CASCI):
                              envs['imacro'], envs['njk'], envs['imicro']+1,
                              e_tot, e_tot-envs['elast'], ss[0])
                 if 'norm_gci' in envs:
-                    log.info('               |grad[o]|= %4.3g  '
-                             '|grad[c]|= %s  |ddm|= %4.3g',
+                    log.info('               |grad[o]|=%5.3g  '
+                             '|grad[c]|= %s  |ddm|=%5.3g',
                              envs['norm_gorb'],
                              envs['norm_gci'], envs['norm_ddm'])
                 else:
-                    log.info('               |grad[o]|= %4.3g  |ddm|= %4.3g',
+                    log.info('               |grad[o]|=%5.3g  |ddm|=%5.3g',
                              envs['norm_gorb'], envs['norm_ddm'])
             else:  # Initialization step
                 if ss is None:
@@ -1158,6 +1159,19 @@ class CASSCF(casci.CASCI):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(pyscf.lib.chkfile.load(chkfile, 'mcscf'))
         return self
+
+    def micro_step_scheduler(self, envs):
+        #log_norm_ddm = numpy.log(envs['norm_ddm'])
+        #return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
+        return self.max_cycle_micro
+
+    def max_stepsize_scheduler(self, envs):
+        if envs['de'] < self.conv_tol or self._max_stepsize is None:
+            self._max_stepsize = self.max_stepsize
+            return self.max_stepsize
+        else:
+            self._max_stepsize *= .5
+            return self._max_stepsize
 
 
 # to avoid calculating AO integrals
