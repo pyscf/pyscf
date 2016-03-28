@@ -14,6 +14,7 @@ General JK contraction function for
 import time
 import numpy
 import pyscf.lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
@@ -155,8 +156,6 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-
     mol = gto.M(atom='H 0 -.5 0; H 0 .5 0', basis='cc-pvdz')
 
     nao = mol.nao_nr()

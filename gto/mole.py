@@ -1854,11 +1854,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               bras=None, kets=None):
-        '''One-electron integral generator.
+        '''Integral generator.
 
         Args:
             intor : str
-                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                Name of the 1e or 2e AO integrals.  Ref to :func:`getints` for the
                 complete list of available 1-electron integral names
 
         Kwargs:
