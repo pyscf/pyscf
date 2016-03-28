@@ -276,7 +276,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     def project(mfmo, init_mo, ncore, s):
         nocc = ncore + casscf.ncas
-        if ncore > 0
+        if ncore > 0:
             mo0core = init_mo[:,:ncore]
             s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
             s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
