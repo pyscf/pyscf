@@ -96,10 +96,10 @@ def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
         lao = lo.orth.orth_ao(mol, orth_method)
 
-    if callable(test):
+    if callable(test_or_idx):
         idx = [i for i,x in enumerate(mol.spheric_labels(1)) if test(x)]
     else:
-        idx = test
+        idx = test_or_idx
     idx = numpy.asarray(idx)
     mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
     s1 = numpy.einsum('ki,ki->i', mo1, mo1)

@@ -169,12 +169,7 @@ class Gradients(pyscf.lib.StreamObject):
         mol.set_rinv_origin_(mol.atom_coord(ia))
         return -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
 
-    def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  atmlst=None):
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
-        return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
+    grad_elec = grad_elec
 
     def grad_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol

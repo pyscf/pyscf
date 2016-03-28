@@ -56,42 +56,49 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     return mo1.reshape(h1.shape), None
 
 # h1 shape is (:,nvir+nocc,nocc)
-def solve_withs1(fvind, mo_energy, mo_occ, h1, s1=None,
+def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
                  max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
+    ''' C^1_{ij} = -1/2 S1
+    e1 = h1 - s1*e0 + (e0_j-e0_i)*c1 + vhf[c1]
+    '''
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(sys.stdout, verbose)
     t0 = (time.clock(), time.time())
 
-    e_a = mo_energy[mo_occ==0]
-    e_i = mo_energy[mo_occ>0]
+    occidx = mo_occ > 0
+    viridx = mo_occ == 0
+    e_a = mo_energy[viridx]
+    e_i = mo_energy[occidx]
     e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
-    nocc = e_i.size
-    nvir = e_a.size
+    nvir, nocc = e_ai.shape
     nmo = nocc + nvir
 
-    hs = mo1base = h1.reshape(-1,nmo,nocc) - s1.reshape(-1,nmo,nocc)*e_i
-    mo_e1 = hs[:,mo_occ>0,:].copy()
+# Do not reshape h1 because h1 may be a 2D array (nvir,nocc)
+    s1 = s1.reshape(-1,nmo,nocc)
 
-    mo1base[:,mo_occ==0] *= -e_ai
-    mo1base[:,mo_occ>0] = -s1.reshape(-1,nmo,nocc)[:,mo_occ>0] * .5
-    e_ij = lib.direct_sum('i-j->ij', e_i, e_i)
-    mo_e1 += mo1base[:,mo_occ>0,:] * e_ij
+    hs = mo1base = h1.reshape(-1,nmo,nocc) - s1*e_i
+    mo_e1 = hs[:,occidx,:].copy()
+
+    mo1base[:,viridx] *= -e_ai
+    mo1base[:,occidx] = -s1[:,occidx] * .5
 
     def vind_vo(mo1):
-        v = fvind(mo1.reshape(h1.shape)).reshape(mo1base.shape)
-        v[:,mo_occ==0,:] *= e_ai
-        v[:,mo_occ>0,:] = 0
+        v = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
+        v[:,viridx,:] *= e_ai
+        v[:,occidx,:] = 0
         return v.ravel()
     mo1 = lib.krylov(vind_vo, mo1base.ravel(),
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     mo1 = mo1.reshape(mo1base.shape)
     log.timer('krylov solver in CPHF', *t0)
 
-    v_mo = fvind(mo1.reshape(h1.shape)).reshape(mo1base.shape)
-    mo_e1 -= v_mo[:,mo_occ>0,:]
-    mo1[:,mo_occ==0] = mo1base[:,mo_occ==0] - v_mo[:,mo_occ==0]*e_ai
+    v_mo = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
+    mo1[:,viridx] = mo1base[:,viridx] - v_mo[:,viridx]*e_ai
+
+    mo_e1 += mo1[:,occidx] * lib.direct_sum('i-j->ij', e_i, e_i)
+    mo_e1 += v_mo[:,occidx,:]
 
     if h1.ndim == 3:
         return mo1, mo_e1

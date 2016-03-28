@@ -21,6 +21,9 @@ mol.build(
     basis = {"H": '6-31g',
              "O": '6-31g',}
 )
+molsym = mol.copy()
+molsym.symmetry = True
+molsym.build(0, 0)
 
 
 class KnowValues(unittest.TestCase):
@@ -206,6 +209,11 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm0, dm1))
 
         mf = scf.rohf.ROHF(mol)
+        dm1 = mf.init_guess_by_1e(mol)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1),
+                               5.3700828975288122/numpy.sqrt(2), 9)
+
+        mf = scf.rohf.ROHF(molsym)
         dm1 = mf.init_guess_by_1e(mol)
         self.assertAlmostEqual(numpy.linalg.norm(dm1),
                                5.3700828975288122/numpy.sqrt(2), 9)

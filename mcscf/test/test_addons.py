@@ -126,7 +126,22 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e, -108.70065770892457, 7)
 
     def test_project_init_guess(self):
-        print('todo test_project_init_guess')
+        b = 1.5
+        mol1 = gto.M(
+        verbose = 0,
+        atom = [
+            ['O',(  0.000000,  0.000000, -b/2)],
+            ['O',(  0.000000,  0.000000,  b/2)], ],
+        basis = 'ccpvtz',)
+        mf1 = scf.RHF(mol1).run()
+        mc1 = mcscf.CASSCF(mf1, 4, 4)
+        mo1 = mcscf.project_init_guess(mc1, mfr.mo_coeff, prev_mol=mol)
+        s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
+        self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
+                         s1.shape[0])
+        self.assertAlmostEqual(numpy.linalg.norm(s1), 7.7459666924148349, 9)
+
+        self.assertRaises(AssertionError, mcscf.project_init_guess, mc1, mfr.mo_coeff)
 
 
 if __name__ == "__main__":

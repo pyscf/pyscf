@@ -42,7 +42,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
         if numpy.iscomplexobj(mo):
-            raise RuntimeError('TODO: project DHF orbital to UHF orbital')
+            raise NotImplementedError('TODO: project DHF orbital to UHF orbital')
         mo_coeff = fproj(mo)
         mo_a = mo_coeff[:,mo_occ>0]
         mo_b = mo_coeff[:,mo_occ>1]
@@ -63,7 +63,7 @@ def get_init_guess(mol, key='minao'):
     elif key.lower() == 'atom':
         return init_guess_by_atom(mol)
     elif key.lower() == 'chkfile':
-        raise RuntimeError('Call pyscf.scf.uhf.init_guess_by_chkfile instead')
+        raise DeprecationWarning('Call pyscf.scf.uhf.init_guess_by_chkfile instead')
     else:
         return init_guess_by_minao(mol)
 
@@ -167,17 +167,59 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
          hf.level_shift(s1e, dm[1], f[1], level_shift_factor))
     return numpy.array(f)
 
+def get_occ(mf, mo_energy=None, mo_coeff=None):
+    if mo_energy is None: mo_energy = mf.mo_energy
+    e_idx_a = numpy.argsort(mo_energy[0])
+    e_idx_b = numpy.argsort(mo_energy[1])
+    e_sort_a = mo_energy[0][e_idx_a]
+    e_sort_b = mo_energy[1][e_idx_b]
+    nmo = mo_energy[0].size
+    n_a, n_b = mf.nelec
+    mo_occ = numpy.zeros_like(mo_energy)
+    mo_occ[0][e_idx_a[:n_a]] = 1
+    mo_occ[1][e_idx_b[:n_b]] = 1
+    if mf.verbose >= logger.INFO and n_a < nmo and n_b > 0 and n_b < nmo:
+        if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
+            logger.warn(mf, '!! alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
+                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
+        else:
+            logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
+                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
+
+        if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
+            logger.warn(mf, '!! beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
+                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
+        else:
+            logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
+                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
+
+        if e_sort_a[n_a-1]+1e-3 > e_sort_b[n_b]:
+            logger.warn(mf, '!! system HOMO %.15g >= system LUMO %.15g',
+                        e_sort_b[n_a-1], e_sort_b[n_b])
+
+        numpy.set_printoptions(threshold=nmo)
+        logger.debug(mf, '  alpha mo_energy =\n%s', mo_energy[0])
+        logger.debug(mf, '  beta  mo_energy =\n%s', mo_energy[1])
+        numpy.set_printoptions(threshold=1000)
+
+    if mo_coeff is not None and mf.verbose >= logger.DEBUG:
+        ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
+                                  mo_coeff[1][:,mo_occ[1]>0]),
+                                  mf.get_ovlp())
+        logger.debug(mf, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
+    return mo_occ
+
 def get_grad(mo_coeff, mo_occ, fock_ao):
     '''UHF Gradients'''
-    occidxa = numpy.where(mo_occ[0]>0)[0]
-    occidxb = numpy.where(mo_occ[1]>0)[0]
-    viridxa = numpy.where(mo_occ[0]==0)[0]
-    viridxb = numpy.where(mo_occ[1]==0)[0]
+    occidxa = mo_occ[0] > 0
+    occidxb = mo_occ[1] > 0
+    viridxa = ~occidxa
+    viridxb = ~occidxb
 
     focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
-    g = numpy.hstack((focka[viridxa[:,None],occidxa].reshape(-1),
-                      fockb[viridxb[:,None],occidxb].reshape(-1)))
+    g = numpy.hstack((focka[viridxa.reshape(-1,1) & occidxa],
+                      fockb[viridxb.reshape(-1,1) & occidxb]))
     return g.reshape(-1)
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -315,27 +357,21 @@ def analyze(mf, verbose=logger.DEBUG):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
     ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
                             mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
     log.note('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
     log.note('**** MO energy ****')
-    for i in range(mo_energy[0].__len__()):
-        if mo_occ[0][i] > 0:
-            log.note("alpha occupied MO #%d energy = %.15g occ= %g",
-                     i+1, mo_energy[0][i], mo_occ[0][i])
-        else:
-            log.note("alpha virtual MO #%d energy = %.15g occ= %g",
-                     i+1, mo_energy[0][i], mo_occ[0][i])
-    for i in range(mo_energy[1].__len__()):
-        if mo_occ[1][i] > 0:
-            log.note("beta occupied MO #%d energy = %.15g occ= %g",
-                     i+1, mo_energy[1][i], mo_occ[1][i])
-        else:
-            log.note("beta virtual MO #%d energy = %.15g occ= %g",
-                     i+1, mo_energy[1][i], mo_occ[1][i])
-    if mf.verbose >= logger.DEBUG:
+    log.note('                             alpha | beta                alpha | beta')
+    for i in range(mo_occ.shape[1]):
+        log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
+                 i+1, mo_energy[0][i], mo_energy[1][i],
+                 mo_occ[0][i], mo_occ[1][i])
+    if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients for alpha spin **')
         label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1)
@@ -360,9 +396,9 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     pop_b = numpy.einsum('ij->i', dm[1]*s)
     label = mol.spheric_labels(False)
 
-    log.note(' ** Mulliken pop alpha/beta **')
+    log.note(' ** Mulliken pop       alpha | beta **')
     for i, s in enumerate(label):
-        log.note('pop of  %s %10.5f  / %10.5f',
+        log.note('pop of  %s %10.5f | %-10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
 
     log.note(' ** Mulliken atomic charges  **')
@@ -450,60 +486,13 @@ class UHF(hf.SCF):
 
     get_fock_ = get_fock_
 
+    get_occ = get_occ
+
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
-
-    def get_occ(self, mo_energy=None, mo_coeff=None):
-        if mo_energy is None: mo_energy = self.mo_energy
-        e_idx_a = numpy.argsort(mo_energy[0])
-        e_idx_b = numpy.argsort(mo_energy[1])
-        e_sort_a = mo_energy[0][e_idx_a]
-        e_sort_b = mo_energy[1][e_idx_b]
-        n_a, n_b = self.nelec
-        mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[0][e_idx_a[:n_a]] = 1
-        mo_occ[1][e_idx_b[:n_b]] = 1
-        if n_a < mo_energy[0].size:
-            logger.info(self, 'alpha nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
-            if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
-                logger.warn(self, '!! alpha HOMO %.12g >= LUMO %.12g',
-                            e_sort_a[n_a-1], e_sort_a[n_a])
-        else:
-            logger.info(self, 'alpha nocc = %d  HOMO = %.12g  no LUMO',
-                        n_a, e_sort_a[n_a-1])
-        if self.verbose >= logger.DEBUG:
-            numpy.set_printoptions(threshold=len(e_sort_a))
-            logger.debug(self, '  mo_energy = %s', mo_energy[0])
-
-        if n_b > 0 and n_b < mo_energy[1].size:
-            logger.info(self, 'beta  nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
-            if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
-                logger.warn(self, '!! beta HOMO %.12g >= LUMO %.12g',
-                            e_sort_b[n_b-1], e_sort_b[n_b])
-            if e_sort_b[n_a-1]+1e-3 > e_sort_b[n_b]:
-                logger.warn(self, '!! system HOMO %.12g >= system LUMO %.12g',
-                            e_sort_b[n_a-1], e_sort_b[n_b])
-        elif n_b > 0:
-            logger.info(self, 'beta nocc = %d  HOMO = %.12g  no LUMO',
-                        n_b, e_sort_b[n_b-1])
-        else:
-            logger.info(self, 'beta  nocc = %d  no HOMO  LUMO = %.12g',
-                        n_b, e_sort_b[n_b])
-        if self.verbose >= logger.DEBUG:
-            logger.debug(self, '  mo_energy = %s', mo_energy[1])
-            numpy.set_printoptions(threshold=1000)
-
-        if mo_coeff is not None:
-            ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                                      mo_coeff[1][:,mo_occ[1]>0]),
-                                      self.get_ovlp())
-            logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
-        return mo_occ
 
     @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):

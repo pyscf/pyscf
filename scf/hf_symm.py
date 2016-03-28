@@ -146,8 +146,7 @@ class RHF(hf.RHF):
                     self.__class__.__name__)
         float_irname = []
         fix_ne = 0
-        for ir in range(self.mol.symm_orb.__len__()):
-            irname = self.mol.irrep_name[ir]
+        for irname in self.mol.irrep_name:
             if irname in self.irrep_nelec:
                 fix_ne += self.irrep_nelec[irname]
             else:
@@ -193,13 +192,12 @@ class RHF(hf.RHF):
         return e, c
 
     def get_occ(self, mo_energy, mo_coeff=None):
-        ''' We cannot assume default mo_energy value, because the orbital
-        energies are sorted after doing SCF.  But in this function, we need
-        the orbital energies are grouped by symmetry irreps
+        ''' We assumed mo_energy are grouped by symmetry irreps, (see function
+        self.eig). The orbitals are sorted after SCF.
         '''
         mol = self.mol
-        nirrep = len(mol.symm_orb)
-        if mo_coeff is not None:
+        if (mo_coeff is not None and
+            mo_coeff.shape[0] != mo_coeff.shape[1]):  # due to linear-dep
             orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                          mo_coeff, self.get_ovlp(), False)
             orbsym = numpy.asarray(orbsym)
@@ -209,46 +207,44 @@ class RHF(hf.RHF):
             orbsym = numpy.hstack(orbsym)
 
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_e_left = []
-        idx_e_left = []
+        rest_idx = []
         nelec_fix = 0
         for i, ir in enumerate(mol.irrep_id):
             irname = mol.irrep_name[i]
             ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
-                e_idx = numpy.argsort(mo_energy[ir_idx])
-                mo_occ[ir_idx[e_idx[:n//2]]] = 2
+                occ_sort = numpy.argsort(mo_energy[ir_idx])
+                occ_idx  = ir_idx[occ_sort[:n//2]]
+                mo_occ[occ_idx] = 2
                 nelec_fix += n
             else:
-                idx_e_left.append(ir_idx)
+                rest_idx.append(ir_idx)
         nelec_float = mol.nelectron - nelec_fix
         assert(nelec_float >= 0)
         if nelec_float > 0:
-            idx_e_left = numpy.hstack(idx_e_left)
-            mo_e_left = mo_energy[idx_e_left]
-            mo_e_sort = numpy.argsort(mo_e_left)
-            occ_idx = idx_e_left[mo_e_sort[:(nelec_float//2)]]
+            rest_idx = numpy.hstack(rest_idx)
+            occ_sort = numpy.argsort(mo_energy[rest_idx])
+            occ_idx  = rest_idx[occ_sort[:nelec_float//2]]
             mo_occ[occ_idx] = 2
 
-        viridx = (mo_occ==0)
-        if self.verbose < logger.INFO or viridx.sum() == 0:
-            return mo_occ
-        ehomo = max(mo_energy[mo_occ>0 ])
-        elumo = min(mo_energy[mo_occ==0])
-        noccs = []
-        for i, ir in enumerate(mol.irrep_id):
-            irname = mol.irrep_name[i]
-            ir_idx = (orbsym == ir)
+        vir_idx = (mo_occ==0)
+        if self.verbose >= logger.INFO or numpy.count_nonzero(vir_idx) > 0:
+            ehomo = max(mo_energy[mo_occ>0 ])
+            elumo = min(mo_energy[mo_occ==0])
+            noccs = []
+            for i, ir in enumerate(mol.irrep_id):
+                irname = mol.irrep_name[i]
+                ir_idx = (orbsym == ir)
 
-            noccs.append(int(mo_occ[ir_idx].sum()))
-            if ehomo in mo_energy[ir_idx]:
-                irhomo = irname
-            if elumo in mo_energy[ir_idx]:
-                irlumo = irname
-        logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
-                    irhomo, ehomo, irlumo, elumo)
-        if self.verbose >= logger.DEBUG:
+                noccs.append(int(mo_occ[ir_idx].sum()))
+                if ehomo in mo_energy[ir_idx]:
+                    irhomo = irname
+                if elumo in mo_energy[ir_idx]:
+                    irlumo = irname
+            logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
+                        irhomo, ehomo, irlumo, elumo)
+
             logger.debug(self, 'irrep_nelec = %s', noccs)
             _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
                             verbose=self.verbose)
@@ -351,8 +347,7 @@ class ROHF(rohf.ROHF):
         float_irname = []
         fix_na = 0
         fix_nb = 0
-        for ir in range(self.mol.symm_orb.__len__()):
-            irname = self.mol.irrep_name[ir]
+        for irname in self.mol.irrep_name:
             if irname in self.irrep_nelec:
                 if isinstance(self.irrep_nelec[irname], (int, numpy.integer)):
                     nb = self.irrep_nelec[irname] // 2
@@ -402,7 +397,6 @@ class ROHF(rohf.ROHF):
                 logger.warn(self, '!! No irrep %s', irname)
         return hf.RHF.build_(self, mol)
 
-    # same to RHF.eig
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nirrep = self.mol.symm_orb.__len__()
@@ -416,6 +410,8 @@ class ROHF(rohf.ROHF):
             es.append(e)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
+        self._mo_ea = numpy.einsum('ik,ik->k', c, self._focka_ao.dot(c))
+        self._mo_eb = numpy.einsum('ik,ik->k', c, self._fockb_ao.dot(c))
         return e, c
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
@@ -438,14 +434,14 @@ class ROHF(rohf.ROHF):
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
         self._focka_ao = h1e + vhf[0]
-        fockb_ao = h1e + vhf[1]
+        self._fockb_ao = h1e + vhf[1]
         ncore = (self.mol.nelectron-self.mol.spin) // 2
         nopen = self.mol.spin
         nocc = ncore + nopen
         dmsf = dm[0]+dm[1]
         mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
         fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
-        fb = reduce(numpy.dot, (mo_space.T, fockb_ao, mo_space))
+        fb = reduce(numpy.dot, (mo_space.T, self._fockb_ao, mo_space))
         feff = (fa + fb) * .5
         feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
         feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
@@ -464,95 +460,103 @@ class ROHF(rohf.ROHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        mo_occ = numpy.zeros_like(mo_energy)
-        nirrep = mol.symm_orb.__len__()
+        if self._mo_ea is None:
+            mo_ea = mo_eb = mo_energy
+        else:
+            mo_ea = self._mo_ea
+            mo_eb = self._mo_eb
+        nmo = mo_ea.size
+        mo_occ = numpy.zeros(nmo)
+        if mo_coeff is not None and mo_coeff.shape[0] != mo_coeff.shape[1]:
+            orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                         mo_coeff, self.get_ovlp(), False)
+            orbsym = numpy.asarray(orbsym)
+        else:
+            orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
+                      for i, ir in enumerate(mol.irrep_id)]
+            orbsym = numpy.hstack(orbsym)
+
         float_idx = []
         neleca_fix = 0
         nelecb_fix = 0
-        p0 = 0
-        for ir in range(nirrep):
-            irname = mol.irrep_name[ir]
-            nso = mol.symm_orb[ir].shape[1]
+        for i, ir in enumerate(mol.irrep_id):
+            irname = mol.irrep_name[i]
+            ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 if isinstance(self.irrep_nelec[irname], (int, numpy.integer)):
-                    ncore = self.irrep_nelec[irname] // 2
-                    nocc = self.irrep_nelec[irname] - ncore
+                    nelecb = self.irrep_nelec[irname] // 2
+                    neleca = self.irrep_nelec[irname] - nelecb
                 else:
-                    ncore = self.irrep_nelec[irname][1]
-                    nocc = self.irrep_nelec[irname][0]
-                mo_occ[p0:p0+ncore] = 2
-                mo_occ[p0+ncore:p0+nocc] = 1
-                neleca_fix += nocc
-                nelecb_fix += ncore
+                    neleca, nelecb = self.irrep_nelec[irname]
+                mo_occ[ir_idx] = rohf._fill_rohf_occ(mo_energy[ir_idx],
+                                                     mo_ea[ir_idx], mo_eb[ir_idx],
+                                                     nelecb, neleca-nelecb)
+                neleca_fix += neleca
+                nelecb_fix += nelecb
             else:
-                float_idx.append(range(p0,p0+nso))
-            p0 += nso
+                float_idx.append(ir_idx)
 
-        open_mo_energy = mo_energy
-        mo_energy = mo_energy.copy()  # Roothan Fock eigenvalue + alpha energy
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
         assert(nelec_float >= 0)
         if len(float_idx) > 0:
             float_idx = numpy.hstack(float_idx)
             nopen = mol.spin - (neleca_fix - nelecb_fix)
             ncore = (nelec_float - nopen)//2
-            ecore = mo_energy[float_idx]
-            core_sort = numpy.argsort(ecore)
-            core_idx = float_idx[core_sort][:ncore]
-            open_idx = float_idx[core_sort][ncore:]
-            if mo_coeff is not None:
-                open_mo_energy = numpy.einsum('ki,ki->i', mo_coeff,
-                                              self._focka_ao.dot(mo_coeff))
-            eopen = open_mo_energy[open_idx]
-            mo_energy[open_idx] = eopen
-            open_sort = numpy.argsort(eopen)
-            open_idx = open_idx[open_sort]
-            mo_occ[core_idx] = 2
-            mo_occ[open_idx[:nopen]] = 1
+            mo_occ[float_idx] = rohf._fill_rohf_occ(mo_energy[float_idx],
+                                                    mo_ea[float_idx],
+                                                    mo_eb[float_idx],
+                                                    ncore, nopen)
 
-        viridx = (mo_occ==0)
-        if self.verbose < logger.INFO or viridx.sum() == 0:
-            return mo_occ
-        ehomo = max(mo_energy[mo_occ>0])
-        elumo = min(mo_energy[viridx])
-        ndoccs = []
-        nsoccs = []
-        p0 = 0
-        for ir in range(nirrep):
-            irname = mol.irrep_name[ir]
-            nso = mol.symm_orb[ir].shape[1]
+        ncore = self.nelec[1]
+        nocc  = self.nelec[0]
+        vir_idx = (mo_occ==0)
+        if self.verbose >= logger.INFO and nocc < nmo and ncore > 0:
+            ehomo = max(mo_energy[mo_occ> 0])
+            elumo = min(mo_energy[mo_occ==0])
+            ndoccs = []
+            nsoccs = []
+            for i, ir in enumerate(mol.irrep_id):
+                irname = mol.irrep_name[i]
+                ir_idx = (orbsym == ir)
 
-            ndoccs.append((mo_occ[p0:p0+nso]==2).sum())
-            nsoccs.append((mo_occ[p0:p0+nso]==1).sum())
-            if ehomo in mo_energy[p0:p0+nso]:
-                irhomo = irname
-            if elumo in mo_energy[p0:p0+nso]:
-                irlumo = irname
-            p0 += nso
+                ndoccs.append(numpy.count_nonzero(mo_occ[ir_idx]==2))
+                nsoccs.append(numpy.count_nonzero(mo_occ[ir_idx]==1))
+                if ehomo in mo_energy[ir_idx]:
+                    irhomo = irname
+                if elumo in mo_energy[ir_idx]:
+                    irlumo = irname
 
-        # to help self.eigh compute orbital energy
-        self._irrep_doccs = ndoccs
-        self._irrep_soccs = nsoccs
+            # to help self.eigh compute orbital energy
+            self._irrep_doccs = ndoccs
+            self._irrep_soccs = nsoccs
 
-        logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
-                    irhomo, ehomo, irlumo, elumo)
-        if self.verbose >= logger.DEBUG:
+            logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
+                        irhomo, ehomo, irlumo, elumo)
+
             logger.debug(self, 'double occ irrep_nelec = %s', ndoccs)
             logger.debug(self, 'single occ irrep_nelec = %s', nsoccs)
-            orbsym = [numpy.repeat(ir, mol.symm_orb[i].shape[1])
-                      for i, ir in enumerate(mol.irrep_id)]
-            orbsym = numpy.hstack(orbsym)
-            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
-                            verbose=self.verbose)
-            p0 = 0
-            for ir in range(nirrep):
-                irname = mol.irrep_name[ir]
-                nso = mol.symm_orb[ir].shape[1]
-                logger.debug2(self, 'core_mo_energy of %s = %s',
-                              irname, mo_energy[p0:p0+nso])
-                logger.debug2(self, 'open_mo_energy of %s = %s',
-                              irname, open_mo_energy[p0:p0+nso])
-                p0 += nso
+            #_dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
+            #                verbose=self.verbose)
+            if nopen > 0:
+                core_idx = mo_occ == 2
+                open_idx = mo_occ == 1
+                vir_idx = mo_occ == 0
+                logger.debug(self, '                  Roothaan           | alpha              | beta')
+                logger.debug(self, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
+                             max(mo_energy[core_idx]),
+                             max(mo_ea[core_idx]), max(mo_eb[core_idx]))
+                logger.debug(self, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
+                             min(mo_energy[vir_idx]),
+                             min(mo_ea[vir_idx]), min(mo_eb[vir_idx]))
+                for i in numpy.where(open_idx)[0]:
+                    logger.debug(self, '  1-occ =         %18.15g | %18.15g | %18.15g',
+                                 mo_energy[i], mo_ea[i], mo_eb[i])
+
+            numpy.set_printoptions(threshold=nmo)
+            logger.debug(self, '  Roothaan mo_energy =\n%s', mo_energy)
+            logger.debug1(self, '  alpha mo_energy =\n%s', mo_ea)
+            logger.debug1(self, '  beta  mo_energy =\n%s', mo_eb)
+            numpy.set_printoptions(threshold=1000)
         return mo_occ
 
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
@@ -579,6 +583,13 @@ class ROHF(rohf.ROHF):
         self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2].take(c_sort, axis=1),
                                       self.mo_coeff[:,self.mo_occ==1].take(o_sort, axis=1),
                                       self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
+        if self._mo_ea is not None:
+            self._mo_ea = numpy.hstack((self._mo_ea[self.mo_occ==2][c_sort],
+                                        self._mo_ea[self.mo_occ==1][o_sort],
+                                        self._mo_ea[self.mo_occ==0][v_sort]))
+            self._mo_eb = numpy.hstack((self._mo_eb[self.mo_occ==2][c_sort],
+                                        self._mo_eb[self.mo_occ==1][o_sort],
+                                        self._mo_eb[self.mo_occ==0][v_sort]))
         ncore = len(c_sort)
         nocc = ncore + len(o_sort)
         self.mo_occ[:ncore] = 2
@@ -623,13 +634,27 @@ class ROHF(rohf.ROHF):
         for k,ir in enumerate(mol.irrep_id):
             irname_full[ir] = mol.irrep_name[k]
         irorbcnt = {}
-        for k, j in enumerate(orbsym):
-            if j in irorbcnt:
-                irorbcnt[j] += 1
-            else:
-                irorbcnt[j] = 1
-            log.info('MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
+        if self._mo_ea is None:
+            for k, j in enumerate(orbsym):
+                if j in irorbcnt:
+                    irorbcnt[j] += 1
+                else:
+                    irorbcnt[j] = 1
+                log.note('MO #%-3d (%s #%-2d), energy= %-18.15g occ= %g',
+                         k+1, irname_full[j], irorbcnt[j],
+                         mo_energy[k], mo_occ[k])
+        else:
+            mo_ea = self._mo_ea
+            mo_eb = self._mo_eb
+            log.note('                Roothaan           | alpha              | beta')
+            for k, j in enumerate(orbsym):
+                if j in irorbcnt:
+                    irorbcnt[j] += 1
+                else:
+                    irorbcnt[j] = 1
+                log.note('MO #%-3d (%s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
+                         k+1, irname_full[j], irorbcnt[j],
+                         mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
 
         if verbose >= logger.DEBUG:
             label = mol.spheric_labels(True)
@@ -665,22 +690,22 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
     for i, ir in enumerate(mol.irrep_id):
         irname = mol.irrep_name[i]
         ir_idx = (orbsym == ir)
-        nso = ir_idx.sum()
-        nocc = (mo_occ[ir_idx]>0).sum()
+        nso = numpy.count_nonzero(ir_idx)
+        nocc = numpy.count_nonzero(mo_occ[ir_idx])
         e_ir = mo_energy[ir_idx]
         if nocc == 0:
             log.debug('%s%s nocc = 0', title, irname)
         elif nocc == nso:
-            log.debug('%s%s nocc = %d  HOMO = %.12g',
+            log.debug('%s%s nocc = %d  HOMO = %.15g',
                       title, irname, nocc, e_ir[nocc-1])
         else:
-            log.debug('%s%s nocc = %d  HOMO = %.12g  LUMO = %.12g',
+            log.debug('%s%s nocc = %d  HOMO = %.15g  LUMO = %.15g',
                       title, irname, nocc, e_ir[nocc-1], e_ir[nocc])
             if e_ir[nocc-1]+1e-3 > elumo:
-                log.warn('!! %s%s HOMO %.12g > system LUMO %.12g',
+                log.warn('!! %s%s HOMO %.15g > system LUMO %.15g',
                          title, irname, e_ir[nocc-1], elumo)
             if e_ir[nocc] < ehomo+1e-3:
-                log.warn('!! %s%s LUMO %.12g < system HOMO %.12g',
+                log.warn('!! %s%s LUMO %.15g < system HOMO %.15g',
                          title, irname, e_ir[nocc], ehomo)
         log.debug('   mo_energy = %s', e_ir)
 

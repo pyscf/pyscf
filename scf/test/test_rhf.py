@@ -19,7 +19,7 @@ H     0    0.757    0.587''',
 
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-10
-mf.scf()
+mf.kernel()
 
 
 class KnowValues(unittest.TestCase):
@@ -64,7 +64,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 6)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
@@ -110,6 +110,8 @@ class KnowValues(unittest.TestCase):
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
         self.assertAlmostEqual(mf.scf(), -76.026765673119627, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 6)
 
     def test_hf_symm_fixnocc(self):
         pmol = mol.copy()
@@ -118,6 +120,8 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf_symm.RHF(pmol)
         mf.irrep_nelec = {'B1':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9778759898704612, 6)
 
     def test_hf_symm_rohf(self):
         pmol = mol.copy()
@@ -127,6 +131,8 @@ class KnowValues(unittest.TestCase):
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
         self.assertAlmostEqual(mf.scf(), -75.627354109594179, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.6782452972117743, 6)
 
     def test_hf_symm_rohf_fixnocc(self):
         pmol = mol.copy()
@@ -137,6 +143,8 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf_symm.ROHF(pmol)
         mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873076011029529, 6)
 
     def test_n2_symm(self):
         pmol = gto.M(

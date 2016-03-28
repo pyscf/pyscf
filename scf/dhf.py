@@ -204,10 +204,14 @@ def time_reversal_matrix(mol, mat):
 
 def analyze(mf, verbose=logger.DEBUG):
     #from pyscf.tools import dump_mat
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     #mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
+
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:

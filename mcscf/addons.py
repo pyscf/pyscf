@@ -293,10 +293,13 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
 
         # remove core and active space from rest
-        rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-        restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
-        restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
-        mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
+        if mocc.shape[1] < mfmo.shape[1]:
+            rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
+            restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
+            restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
+            mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
+        else:
+            mo = mocc
 
         if casscf.verbose >= logger.DEBUG:
             s1 = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))

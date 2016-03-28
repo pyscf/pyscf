@@ -177,7 +177,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         log = logger.Logger(self.stdout, verbose)
         log.info('******** Block flags ********')
         log.info('scratchDirectory = %s', self.scratchDirectory)
-        log.info('integralFile = %s', self.integralFile)
+        log.info('integralFile = %s', os.path.join(self._input_dir, self.integralFile))
         log.info('configFile = %s', self.configFile)
         log.info('outputFile = %s', self.outputFile)
         log.info('maxIter = %d', self.maxIter)

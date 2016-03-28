@@ -264,7 +264,7 @@ class KnowValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.kernel()
         nr = scf.newton(mf)
-        nr.max_cycle = 2
+        nr.max_cycle = 3
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 

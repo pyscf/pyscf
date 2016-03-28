@@ -357,11 +357,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
     fock = mf.get_fock(h1e, s1e, vhf, dm, 0, None)
-    mo_energy = mf.get_mo_energy(fock, s1e, dm)[0]
-# NOTE: the initial guess mo_occ CANNOT be changed.  The mo_occ returned by
-# get_occ function from hf_symm module changes the ordering of orbitals.  It
-# cannot be used with the initial guess mo_coeff
-    mf._scf.get_occ(mo_energy, mo_coeff)
+# NOTE: DO NOT change the initial guess mo_occ, mo_coeff
+    mo_energy, mo_tmp = mf.eig(fock, s1e)
+    mf.get_occ(mo_energy, mo_tmp)
 
     if dump_chk:
         chkfile.save_mol(mol, mf.chkfile)
@@ -379,8 +377,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
-        mo_energy = mf.get_mo_energy(fock, s1e, dm)[0]
-        mf._scf.get_occ(mo_energy, mo_coeff)
+# NOTE: DO NOT change the initial guess mo_occ, mo_coeff
+        mo_energy, mo_tmp = mf.eig(fock, s1e)
+        mf.get_occ(mo_energy, mo_tmp)
 # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         e_tot = mf._scf.energy_tot(dm, h1e, vhf)
 
@@ -406,8 +405,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         jktot += jkcount
 
     rotaiter.close()
-    mo_energy, mo_coeff = mf.get_mo_energy(fock, s1e, dm)
-    mo_occ = mf._scf.get_occ(mo_energy, mo_coeff)
+    mo_energy, mo_coeff = mf.eig(fock, s1e)
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, e_tot, norm_gorb, jktot)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
@@ -469,9 +468,9 @@ def newton(mf):
             log.info('max_memory %d MB (current use %d MB)',
                      self.max_memory, pyscf.lib.current_memory()[0])
 
-        def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                      diis_start_cycle=None, level_shift_factor=None,
-                      damp_factor=None):
+        def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                     diis_start_cycle=None, level_shift_factor=None,
+                     damp_factor=None):
             return h1e + vhf
 
         def kernel(self, mo_coeff=None, mo_occ=None):
@@ -499,8 +498,8 @@ def newton(mf):
             s1e = self._scf.get_ovlp(mol)
             vhf = self._scf.get_veff(mol, dm)
             fock = self.get_fock(h1e, s1e, vhf, dm, 0, None)
-            mo_energy, mo_coeff = self.get_mo_energy(fock, s1e, dm)
-            mo_occ = self._scf.get_occ(mo_energy, mo_coeff)
+            mo_energy, mo_coeff = self.eig(fock, s1e)
+            mo_occ = self.get_occ(mo_energy, mo_coeff)
             return mo_coeff, mo_occ
 
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
@@ -521,9 +520,6 @@ def newton(mf):
         def update_mo_coeff(self, mo_coeff, u):
             return numpy.dot(mo_coeff, u)
 
-        def get_mo_energy(self, fock, s1e, dm):
-            return self.eig(fock, s1e)
-
     if isinstance(mf, pyscf.scf.rohf.ROHF):
         class ROHF(RHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
@@ -535,17 +531,17 @@ def newton(mf):
                             mol.symm_orb, mo_coeff, s=self.get_ovlp())
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
-            def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                          diis_start_cycle=None, level_shift_factor=None,
-                          damp_factor=None):
+            def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                         diis_start_cycle=None, level_shift_factor=None,
+                         damp_factor=None):
                 fock = h1e + vhf
-                self._focka_ao = fock[0]
+                self._focka_ao, self._fockb_ao = fock  # needed by ._scf.eig
+                self._dm_ao = dm  # needed by .eig
                 return fock
 
-            def get_mo_energy(self, fock, s1e, dm):
-                focka_ao, fockb_ao = fock
-                self._focka_ao = focka_ao
-                fc = (focka_ao + fockb_ao) * .5
+            def eig(self, fock, s1e):
+                dm = self._dm_ao
+                fc = (self._focka_ao + self._fockb_ao) * .5
 # Projector for core, open-shell, and virtual
                 nao = s1e.shape[0]
                 pc = numpy.dot(dm[1], s1e)
@@ -554,11 +550,14 @@ def newton(mf):
                 f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
                 f += reduce(numpy.dot, (po.T, fc, po)) * .5
                 f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-                f += reduce(numpy.dot, (po.T, fockb_ao, pc))
-                f += reduce(numpy.dot, (po.T, focka_ao, pv))
+                f += reduce(numpy.dot, (po.T, self._fockb_ao, pc))
+                f += reduce(numpy.dot, (po.T, self._focka_ao, pv))
                 f += reduce(numpy.dot, (pv.T, fc, pc))
                 f = f + f.T
-                return self.eig(f, s1e)
+                return self._scf.eig(f, s1e)
+                #fc = numpy.dot(fock[0], mo_coeff)
+                #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
+                #return mo_energy
         return ROHF()
 
     elif isinstance(mf, pyscf.scf.uhf.UHF):

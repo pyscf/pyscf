@@ -633,6 +633,46 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
 
+def get_occ(mf, mo_energy=None, mo_coeff=None):
+    '''Label the occupancies for each orbital
+
+    Kwargs:
+        mo_energy : 1D ndarray
+            Obital energies
+
+        mo_coeff : 2D ndarray
+            Obital coefficients
+
+    Examples:
+
+    >>> from pyscf import gto, scf
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
+    >>> mf = scf.hf.SCF(mol)
+    >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
+    >>> mf.get_occ(energy)
+    array([2, 2, 0, 2, 2, 2])
+    '''
+    if mo_energy is None: mo_energy = mf.mo_energy
+    e_idx = numpy.argsort(mo_energy)
+    e_sort = mo_energy[e_idx]
+    nmo = mo_energy.size
+    mo_occ = numpy.zeros(nmo)
+    nocc = mf.mol.nelectron // 2
+    mo_occ[e_idx[:nocc]] = 2
+    if mf.verbose >= logger.INFO and nocc < nmo:
+        if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
+            logger.warn(mf, '!! HOMO %.15g == LUMO %.15g',
+                        e_sort[nocc-1], e_sort[nocc])
+        else:
+            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
+                        e_sort[nocc-1], e_sort[nocc])
+
+    if mf.verbose >= logger.DEBUG:
+        numpy.set_printoptions(threshold=nmo)
+        logger.debug(mf, '  mo_energy =\n%s', mo_energy)
+        numpy.set_printoptions(threshold=1000)
+    return mo_occ
+
 def get_grad(mo_coeff, mo_occ, fock_ao):
     '''RHF Gradients
 
@@ -669,13 +709,8 @@ def analyze(mf, verbose=logger.DEBUG):
         log = logger.Logger(mf.stdout, verbose)
 
     log.note('**** MO energy ****')
-    for i in range(len(mo_energy)):
-        if mo_occ[i] > 0:
-            log.note('occupied MO #%d energy= %.15g occ= %g',
-                     i+1, mo_energy[i], mo_occ[i])
-        else:
-            log.note('virtual MO #%d energy= %.15g occ= %g',
-                     i+1, mo_energy[i], mo_occ[i])
+    for i,c in enumerate(mo_occ):
+        log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients **')
         label = mf.mol.spheric_labels(True)
@@ -961,6 +996,8 @@ class SCF(pyscf.lib.StreamObject):
                               diis_start_cycle, level_shift_factor, damp_factor)
     get_fock_ = get_fock_
 
+    get_occ = get_occ
+
     @pyscf.lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
@@ -1029,45 +1066,6 @@ class SCF(pyscf.lib.StreamObject):
             logger.debug1(self, 'Nelec from initial guess = %g',
                           (dm*self.get_ovlp()).sum())
         return dm
-
-    def get_occ(self, mo_energy=None, mo_coeff=None):
-        '''Label the occupancies for each orbital
-
-        Kwargs:
-            mo_energy : 1D ndarray
-                Obital energies
-
-            mo_coeff : 2D ndarray
-                Obital coefficients
-
-        Examples:
-
-        >>> from pyscf import gto, scf
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
-        >>> mf = scf.hf.SCF(mol)
-        >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
-        >>> mf.get_occ(energy)
-        array([2, 2, 0, 2, 2, 2])
-        '''
-        if mo_energy is None: mo_energy = self.mo_energy
-        e_idx = numpy.argsort(mo_energy)
-        e_sort = mo_energy[e_idx]
-        mo_occ = numpy.zeros_like(mo_energy)
-        nocc = self.mol.nelectron // 2
-        mo_occ[e_idx[:nocc]] = 2
-        if nocc < mo_occ.size:
-            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
-                        e_sort[nocc-1], e_sort[nocc])
-            if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
-                logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
-                            e_sort[nocc-1], e_sort[nocc])
-        else:
-            logger.info(self, 'HOMO = %.12g', e_sort[nocc-1])
-        if self.verbose >= logger.DEBUG:
-            numpy.set_printoptions(threshold=len(mo_energy))
-            logger.debug(self, '  mo_energy = %s', mo_energy)
-            numpy.set_printoptions(threshold=1000)
-        return mo_occ
 
     # full density matrix for RHF
     @pyscf.lib.with_doc(make_rdm1.__doc__)
