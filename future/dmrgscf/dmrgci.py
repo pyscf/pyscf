@@ -10,6 +10,7 @@ DMRG solver for CASCI and CASSCF.
 '''
 
 import os
+import sys
 import struct
 import time
 import tempfile
@@ -87,7 +88,10 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.integralFile = "FCIDUMP"
         self.configFile = "dmrg.conf"
         self.outputFile = "dmrg.out"
-        self._input_dir = '.'
+        if hasattr(settings, 'BLOCKRUNTIMEDIR'):
+            self.runtimeDir = settings.BLOCKRUNTIMEDIR
+        else:
+            self.runtimeDir = '.'
         self.maxIter = 20
         self.approx_maxIter = 4
         self.twodot_to_onedot = 15
@@ -177,9 +181,9 @@ class DMRGCI(pyscf.lib.StreamObject):
         log = logger.Logger(self.stdout, verbose)
         log.info('******** Block flags ********')
         log.info('scratchDirectory = %s', self.scratchDirectory)
-        log.info('integralFile = %s', os.path.join(self._input_dir, self.integralFile))
-        log.info('configFile = %s', self.configFile)
-        log.info('outputFile = %s', self.outputFile)
+        log.info('integralFile = %s', os.path.join(self.runtimeDir, self.integralFile))
+        log.info('configFile = %s', os.path.join(self.runtimeDir, self.configFile))
+        log.info('outputFile = %s', os.path.join(self.runtimeDir, self.outputFile))
         log.info('maxIter = %d', self.maxIter)
         log.info('scheduleSweeps = %s', str(self.scheduleSweeps))
         log.info('scheduleMaxMs = %s', str(self.scheduleMaxMs))
@@ -223,12 +227,12 @@ class DMRGCI(pyscf.lib.StreamObject):
             writeDMRGConfFile(self, nelec, True,
                               with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
-                inFile = os.path.join(self._input_dir, self.configFile)
+                inFile = os.path.join(self.runtimeDir, self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
             executeBLOCK(self)
             if self.verbose >= logger.DEBUG1:
-                outFile = os.path.join(self._input_dir, self.outputFile)
+                outFile = os.path.join(self.runtimeDir, self.outputFile)
                 logger.debug1(self, open(outFile).read())
             self.has_threepdm = True
 
@@ -271,12 +275,12 @@ class DMRGCI(pyscf.lib.StreamObject):
             writeDMRGConfFile(self, nelec, True,
                               with_2pdm=False, extraline=['restart_nevpt2_npdm'])
             if self.verbose >= logger.DEBUG1:
-                inFile = os.path.join(self._input_dir, self.configFile)
+                inFile = os.path.join(self.runtimeDir, self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
             executeBLOCK(self)
             if self.verbose >= logger.DEBUG1:
-                outFile = os.path.join(self._input_dir, self.outputFile)
+                outFile = os.path.join(self.runtimeDir, self.outputFile)
                 logger.debug1(self, open(outFile).read())
             self.has_nevpt = True
 
@@ -304,7 +308,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         writeIntegralFile(self, h1e, eri, norb, nelec)
         writeDMRGConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
-            inFile = os.path.join(self._input_dir, self.configFile)
+            inFile = os.path.join(self.runtimeDir, self.configFile)
             logger.debug1(self, 'Block Input conf')
             logger.debug1(self, open(inFile, 'r').read())
         if self.onlywriteIntegral:
@@ -320,7 +324,7 @@ class DMRGCI(pyscf.lib.StreamObject):
 
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = os.path.join(self._input_dir, self.outputFile)
+            outFile = os.path.join(self.runtimeDir, self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
@@ -332,12 +336,12 @@ class DMRGCI(pyscf.lib.StreamObject):
         writeIntegralFile(self, h1e, eri, norb, nelec)
         writeDMRGConfFile(self, nelec, fciRestart, self.approx_maxIter)
         if self.verbose >= logger.DEBUG1:
-            inFile = os.path.join(self._input_dir, self.configFile)
+            inFile = os.path.join(self.runtimeDir, self.configFile)
             logger.debug1(self, 'Block Input conf')
             logger.debug1(self, open(inFile, 'r').read())
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
-            outFile = os.path.join(self._input_dir, self.outputFile)
+            outFile = os.path.join(self.runtimeDir, self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
 
@@ -372,7 +376,7 @@ def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
 
 def writeDMRGConfFile(DMRGCI, nelec, Restart,
                       maxIter=None, with_2pdm=True, extraline=[]):
-    confFile = os.path.join(DMRGCI._input_dir, DMRGCI.configFile)
+    confFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.configFile)
 
     f = open(confFile, 'w')
     if isinstance(nelec, (int, numpy.integer)):
@@ -419,7 +423,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
             f.write('sym c2h\n' )
         else:
             f.write('sym %s\n' % DMRGCI.groupname.lower())
-    f.write('orbitals %s\n' % os.path.join(DMRGCI._input_dir,
+    f.write('orbitals %s\n' % os.path.join(DMRGCI.runtimeDir,
                                            DMRGCI.integralFile))
     if maxIter is None:
         maxIter = DMRGCI.maxIter
@@ -456,7 +460,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec):
         nelecb = nelec - neleca
     else :
         neleca, nelecb = nelec
-    integralFile = os.path.join(DMRGCI._input_dir, DMRGCI.integralFile)
+    integralFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.integralFile)
     if DMRGCI.groupname is not None and DMRGCI.orbsym:
         orbsym = dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym)
     else:
@@ -472,8 +476,8 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec):
 
 def executeBLOCK(DMRGCI):
 
-    inFile  = os.path.join(DMRGCI._input_dir, DMRGCI.configFile)
-    outFile = os.path.join(DMRGCI._input_dir, DMRGCI.outputFile)
+    inFile  = os.path.join(DMRGCI.runtimeDir, DMRGCI.configFile)
+    outFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.outputFile)
     try:
         cmd = ' '.join((DMRGCI.mpiprefix, DMRGCI.executable, inFile))
         cmd = "%s > %s" % (cmd, outFile)
