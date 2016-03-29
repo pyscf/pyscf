@@ -480,7 +480,7 @@ def executeBLOCK(DMRGCI):
     outFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.outputFile)
     try:
         cmd = ' '.join((DMRGCI.mpiprefix, DMRGCI.executable, inFile))
-        cmd = "%s > %s" % (cmd, outFile)
+        cmd = "%s > %s 2>&1" % (cmd, outFile)
         check_call(cmd, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)

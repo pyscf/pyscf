@@ -12,8 +12,8 @@ from pyscf.gto import mole
 from pyscf.lib import logger
 import pyscf.symm.param
 
-GEOM_THRESHOLD = 1e-5
-PLACE = int(-numpy.log10(GEOM_THRESHOLD))
+TOLERANCE = 1e-5
+PLACE = int(-numpy.log10(TOLERANCE))
 
 def get_charge_center(atoms):
     charge = numpy.array([mole._charge(a[0]) for a in atoms])
@@ -36,12 +36,12 @@ def get_inertia_momentum(atoms, basis):
     im = numpy.einsum('i,ij,ik->jk', charge, coords, coords)/charge.sum()
     return im
 
-def parallel_vectors(v1, v2, tol=GEOM_THRESHOLD):
+def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
         return True
     else:
         v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
-        return numpy.linalg.norm(v3) < GEOM_THRESHOLD
+        return numpy.linalg.norm(v3) < TOLERANCE
 
 def argsort_coords(coords):
     coords = numpy.around(coords, decimals=PLACE-1)
@@ -86,7 +86,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 # a tight threshold for classifying the main class of group.  Because if the
 # main group class is incorrectly assigned, the following search _search_toi
 # and search_c_highest is very likely to give wrong type of symmetry
-    tol = GEOM_THRESHOLD / len(atoms)
+    tol = TOLERANCE / len(atoms)
     log.debug('geometry tol = %g', tol)
 
     rawsys = SymmSys(atoms, basis)
@@ -265,7 +265,7 @@ def symm_identical_atoms(gpname, atoms):
         return eql_atom_ids
 
     center = get_charge_center(atoms)
-    if not numpy.allclose(center, 0, atol=GEOM_THRESHOLD):
+    if not numpy.allclose(center, 0, atol=TOLERANCE):
         sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
                         % str(center))
     opdic = symm_ops(gpname)
@@ -278,7 +278,7 @@ def symm_identical_atoms(gpname, atoms):
     for op in ops:
         newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
-        if not numpy.allclose(coords0, newc[idx], atol=GEOM_THRESHOLD):
+        if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
             raise RuntimeError('Symmetry identical atoms not found')
         dup_atom_ids.append(idx)
 
@@ -295,7 +295,7 @@ def check_given_symm(gpname, atoms, basis=None):
 #FIXME: compare the basis set when basis is given
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
-        if numpy.allclose(coords[:,:2], 0, atol=GEOM_THRESHOLD):
+        if numpy.allclose(coords[:,:2], 0, atol=TOLERANCE):
             opdic = symm_ops(gpname)
             rawsys = SymmSys(atoms, basis)
             return rawsys.detect_icenter()
@@ -303,7 +303,7 @@ def check_given_symm(gpname, atoms, basis=None):
             return False
     elif gpname == 'Coov':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
-        return numpy.allclose(coords[:,:2], 0, atol=GEOM_THRESHOLD)
+        return numpy.allclose(coords[:,:2], 0, atol=TOLERANCE)
 
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
@@ -316,7 +316,7 @@ def check_given_symm(gpname, atoms, basis=None):
         for op in ops:
             newc = numpy.dot(coords, op)
             idx = argsort_coords(newc)
-            if not numpy.allclose(coords0, newc[idx], atol=GEOM_THRESHOLD):
+            if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
                 return False
     return True
 
@@ -361,7 +361,7 @@ class SymmSys(object):
         lst = numpy.argsort(r)
         groups = [[index[lst[0]]]]
         for i in range(len(lst)-1):
-            if numpy.allclose(r[lst[i]], r[lst[i+1]], atol=GEOM_THRESHOLD):
+            if numpy.allclose(r[lst[i]], r[lst[i+1]], atol=TOLERANCE):
                 groups[-1].append(index[lst[i+1]])
             else:
                 groups.append([index[lst[i+1]]])
@@ -375,7 +375,7 @@ class SymmSys(object):
             r0 = self.atoms[lst,1:]
             r1 = numpy.dot(r0, op)
             if not numpy.allclose(sort_coords(r0), sort_coords(r1),
-                                  atol=GEOM_THRESHOLD):
+                                  atol=TOLERANCE):
                 return False
         return True
 
@@ -404,12 +404,12 @@ class SymmSys(object):
                 # distance to xy-mirror are identical
                 if has_c2x:
                     for d in uniq_zcos:
-                        if numpy.allclose(d, 0, atol=GEOM_THRESHOLD): # plain which cross the orig
+                        if numpy.allclose(d, 0, atol=TOLERANCE): # plain which cross the orig
                             r1 = r0[zcos==d]
                             i1, i2 = numpy.tril_indices(len(r1))
                             maybe_c2x.append(r1[i1] + r1[i2])
-                        elif d > GEOM_THRESHOLD:
-                            mirrord = abs(zcos+d)<GEOM_THRESHOLD
+                        elif d > TOLERANCE:
+                            mirrord = abs(zcos+d)<TOLERANCE
                             if mirrord.sum() == (zcos==d).sum():
                                 above = r0[zcos==d]
                                 below = r0[mirrord]
@@ -441,7 +441,7 @@ class SymmSys(object):
             op = rotation_mat(zaxis, numpy.pi*2/i)
             r1 = numpy.dot(r0, op)
             if numpy.allclose(sort_coords(r0), sort_coords(r1),
-                              atol=GEOM_THRESHOLD):
+                              atol=TOLERANCE):
                 n = i
                 break
 
@@ -453,8 +453,8 @@ class SymmSys(object):
             maybe_vec = numpy.vstack(maybe_vec)
             # remove zero-vectors and duplicated vectors
             d = numpy.einsum('ij,ij->i', maybe_vec, maybe_vec)
-            maybe_vec = maybe_vec[d>GEOM_THRESHOLD**2]
-            maybe_vec /= numpy.sqrt(d[d>GEOM_THRESHOLD**2]).reshape(-1,1)
+            maybe_vec = maybe_vec[d>TOLERANCE**2]
+            maybe_vec /= numpy.sqrt(d[d>TOLERANCE**2]).reshape(-1,1)
             maybe_vec = _remove_dupvec(maybe_vec) # also transfer to pseudo-vector
 
             # remove the C2x which can be related by Cn rotation along z axis
@@ -464,7 +464,7 @@ class SymmSys(object):
                     cos2r1 = numpy.einsum('j,ij->i', r1, maybe_vec[k+1:])
                     for i in range(1,n):
                         c = numpy.cos(numpy.pi*i/n) # no 2pi because of pseudo-vector
-                        seen[k+1:][abs(cos2r1-c) < GEOM_THRESHOLD] = True
+                        seen[k+1:][abs(cos2r1-c) < TOLERANCE] = True
 
             possible_vec = maybe_vec[numpy.logical_not(seen)]
             return possible_vec
@@ -476,7 +476,7 @@ class SymmSys(object):
             for c in possible_c2x:
                 op = rotation_mat(c, numpy.pi)
                 r1 = numpy.dot(r0, op)
-                if numpy.allclose(sort_coords(r1), r0, atol=GEOM_THRESHOLD):
+                if numpy.allclose(sort_coords(r1), r0, atol=TOLERANCE):
                     c2x = c
                     break
 
@@ -487,7 +487,7 @@ class SymmSys(object):
             for c in possible_mirrorx:
                 op = householder(c)
                 r1 = numpy.dot(r0, op)
-                if numpy.allclose(sort_coords(r1), r0, atol=GEOM_THRESHOLD):
+                if numpy.allclose(sort_coords(r1), r0, atol=TOLERANCE):
                     mirrorx = c
                     break
 
@@ -500,7 +500,7 @@ def _search_toi(rawsys):
         op = rotation_mat(zaxis, numpy.pi*2/n)
         r1 = numpy.dot(coords, op)
         return numpy.allclose(sort_coords(coords), sort_coords(r1),
-                              atol=GEOM_THRESHOLD)
+                              atol=TOLERANCE)
 
     def highest_c(zaxis, coords):
         for n in (5, 4, 3):
@@ -587,8 +587,8 @@ def _search_toi(rawsys):
 
 # orientation of rotation axes
 def _pesudo_vectors(vs):
-    idy0 = abs(vs[:,1])<GEOM_THRESHOLD
-    idz0 = abs(vs[:,2])<GEOM_THRESHOLD
+    idy0 = abs(vs[:,1])<TOLERANCE
+    idz0 = abs(vs[:,2])<TOLERANCE
     vs = vs.copy()
     # ensure z component > 0
     vs[vs[:,2]<0] *= -1
@@ -605,7 +605,7 @@ def _remove_dupvec(vs):
             return vs
         else:
             x = numpy.sum(abs(vs[1:]-vs[0]), axis=1)
-            rest = rm_iter(vs[1:][x>GEOM_THRESHOLD])
+            rest = rm_iter(vs[1:][x>TOLERANCE])
             return numpy.vstack((vs[0], rest))
     return rm_iter(_pesudo_vectors(vs))
 
