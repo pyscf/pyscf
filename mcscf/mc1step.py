@@ -353,7 +353,8 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         log.debug('    |g|=%5.3g (keyframe), |g-correction|=%5.3g',
                   norm_gkf1, norm_dg)
         if (norm_dg > norm_gorb*casscf.ah_grad_trust_region and
-            norm_gorb > conv_tol_grad*.4):  # More iters when close to local minimum
+            norm_gkf1 > norm_gkf and
+            norm_gorb > conv_tol_grad*.5):  # More iters when close to local minimum
             log.debug('    Reject keyframe |g|=%5.3g  |g_last| =%5.3g',
                       norm_gkf1, norm_gorb)
             break
@@ -1168,10 +1169,10 @@ class CASSCF(casci.CASCI):
     def max_stepsize_scheduler(self, envs):
         if envs['de'] < self.conv_tol or self._max_stepsize is None:
             self._max_stepsize = self.max_stepsize
-            return self.max_stepsize
         else:
             self._max_stepsize *= .5
-            return self._max_stepsize
+            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
+        return self._max_stepsize
 
 
 # to avoid calculating AO integrals

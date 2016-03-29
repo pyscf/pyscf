@@ -740,10 +740,10 @@ class CASSCF(casci_uhf.CASCI):
     def max_stepsize_scheduler(self, envs):
         if envs['de'] < self.conv_tol or self._max_stepsize is None:
             self._max_stepsize = self.max_stepsize
-            return self.max_stepsize
         else:
             self._max_stepsize *= .5
-            return self._max_stepsize
+            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
+        return self._max_stepsize
 
 
 # to avoid calculating AO integrals
