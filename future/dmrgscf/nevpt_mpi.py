@@ -156,7 +156,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
     from pyscf.dmrgscf import settings
-    nevptsolver.exectuable = settings.BLOCKEXE_COMPRESS_NEVPT
+    nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
     scratch = nevptsolver.scratchDirectory
     nevptsolver.scratchDirectory = ''
 
