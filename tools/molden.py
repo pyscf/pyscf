@@ -153,7 +153,10 @@ def load(moldenfile):
             elif '[MO]' in line:
                 break
             line = f.readline()
-        mol.build(0, 0)
+        if mol.tot_electrons() % 2 == 0:
+            mol.build(0, 0)
+        else:
+            mol.build(0, 0, spin=1)
 
         data = f.read()
         data = data.split('Sym')[1:]

@@ -478,7 +478,7 @@ def newton(mf):
             if mo_occ is None: mo_occ = self.mo_occ
             cput0 = (time.clock(), time.time())
 
-            self.build(self.mol)
+            self.build_(self.mol)
             self.dump_flags()
             self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \

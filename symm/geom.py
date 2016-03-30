@@ -73,6 +73,17 @@ def householder(vec):
     vec = numpy.array(vec)
     return numpy.eye(3) - vec[:,None]*vec*2
 
+def axes_alias(axes, ref):
+    '''Rename axes, make it as close as possible to the ref axes
+    '''
+    xcomp, ycomp, zcomp = numpy.einsum('ix,jx->ji', axes, ref)
+    z_id = numpy.argmax(abs(zcomp))
+    xcomp[z_id] = ycomp[z_id] = 0       # remove z
+    x_id = numpy.argmax(abs(xcomp))
+    ycomp[x_id] = 0                     # remove x
+    y_id = numpy.argmax(abs(ycomp))
+    return axes[[x_id,y_id,z_id]]
+
 #TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
     '''Detect the point group symmetry for given molecule.
@@ -86,7 +97,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 # a tight threshold for classifying the main class of group.  Because if the
 # main group class is incorrectly assigned, the following search _search_toi
 # and search_c_highest is very likely to give wrong type of symmetry
-    tol = TOLERANCE / len(atoms)
+    tol = TOLERANCE / numpy.sqrt(1+len(atoms))
     log.debug('geometry tol = %g', tol)
 
     rawsys = SymmSys(atoms, basis)
@@ -105,7 +116,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
         gpname, axes = _search_toi(rawsys)
     elif (numpy.allclose(w[0], w[1], atol=tol) or
           numpy.allclose(w[1], w[2], atol=tol)):
-        if numpy.allclose(w[1], w[2], atol=tol):
+        if not numpy.allclose(w[0], w[1], atol=tol):
             axes = axes[[1,2,0]]
         n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
         if c2x is not None:
@@ -137,6 +148,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 gpname = 'D2h'
             else:
                 gpname = 'D2'
+            axes = axes_alias(axes, numpy.eye(3))
         elif is_c2z or is_c2x or is_c2y:
             if is_c2x:
                 axes = axes[[1,2,0]]
@@ -170,23 +182,24 @@ def subgroup(gpname, axes):
     if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
         return gpname, axes
     elif gpname in ('SO3',):
-        #return 'D2h', axes
+        #return 'D2h', axes_alias(axes, numpy.eye(3))
         return 'Dooh', axes
     elif gpname in ('Dooh',):
-        #return 'D2h', axes
+        #return 'D2h', axes_alias(axes, numpy.eye(3))
         return 'Dooh', axes
     elif gpname in ('Coov',):
         #return 'C2v', axes
         return 'Coov', axes
     elif gpname in ('Oh',):
-        return 'D2h', axes
+        return 'D2h', axes_alias(axes, numpy.eye(3))
     elif gpname in ('Ih',):
         return 'Cs', axes[[2,0,1]]
     elif gpname in ('Td',):
-        x,y,z = axes
-        x = (x+y) / numpy.linalg.norm(x+y)
-        y = numpy.cross(z, x)
-        return 'C2v', numpy.array((x,y,z))
+        #x,y,z = axes
+        #x = (x+y) / numpy.linalg.norm(x+y)
+        #y = numpy.cross(z, x)
+        #return 'C2v', numpy.array((x,y,z))
+        return 'D2', axes_alias(axes, numpy.eye(3))
     elif re.search(r'S\d+', gpname):
         n = int(re.search(r'\d+', gpname).group(0))
         return 'C%d'%(n//2), axes

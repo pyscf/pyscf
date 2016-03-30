@@ -143,43 +143,6 @@ def map_rhf_to_uhf(rhf):
     '''Take the settings from RHF object'''
     return uhf.map_rhf_to_uhf(rhf)
 
-def dump_flags(mf):
-    logger.info(mf, '%s with symmetry adapted basis',
-                mf.__class__.__name__)
-    float_irname = []
-    fix_na = 0
-    fix_nb = 0
-    for irname in mf.mol.irrep_name:
-        if irname in mf.irrep_nelec:
-            if isinstance(mf.irrep_nelec[irname], (int, numpy.integer)):
-                nelecb = mf.irrep_nelec[irname] // 2
-                neleca = mf.irrep_nelec[irname] - nelecb
-            else:
-                neleca, nelecb = mf.irrep_nelec[irname]
-            fix_na += neleca
-            fix_nb += nelecb
-        else:
-            float_irname.append(irname)
-    float_irname = set(float_irname)
-    if fix_na+fix_nb > 0:
-        logger.info(mf, 'fix %d electrons in irreps: %s',
-                    fix_na+fix_nb, str(mf.irrep_nelec.items()))
-        if ((fix_na+fix_nb > mf.mol.nelectron) or
-            (fix_na>mf.nelec[0]) or (fix_nb>mf.nelec[1]) or
-            (fix_na+mf.nelec[1]>mf.mol.nelectron) or
-            (fix_nb+mf.nelec[0]>mf.mol.nelectron)):
-            logger.error(mf, 'electron number error in irrep_nelec %s',
-                         mf.irrep_nelec.items())
-            raise ValueError('irrep_nelec')
-    if float_irname:
-        logger.info(mf, '%d free electrons in irreps %s',
-                    mf.mol.nelectron-fix_na-fix_nb,
-                    ' '.join(float_irname))
-    elif fix_na+fix_nb != mf.mol.nelectron:
-        logger.error(mf, 'electron number error in irrep_nelec %d',
-                     mf.irrep_nelec.items())
-        raise ValueError('irrep_nelec')
-
 
 class UHF(uhf.UHF):
     __doc__ = uhf.UHF.__doc__ + '''
@@ -211,8 +174,8 @@ class UHF(uhf.UHF):
         self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
-        hf.SCF.dump_flags(self)
-        dump_flags(self)
+        uhf.UHF.dump_flags(self)
+        hf_symm.check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
 
     def build_(self, mol=None):
         for irname in self.irrep_nelec:

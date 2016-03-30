@@ -203,6 +203,7 @@ class KnowValues(unittest.TestCase):
         mol.atom = [["O" , (0. , 0.     , 0.)],
                     ['ghost'   , (0. , -0.757, 0.587)],
                     [1   , (0. , 0.757 , 0.587)] ]
+        mol.verbose = 0
         mol.spin = 1
         mol.symmetry = True
         mol.basis = {'O':'ccpvdz', 'H':'ccpvdz',
@@ -275,6 +276,9 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 2
         mf = scf.ROHF(pmol).set(verbose = 0)
         mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
+        self.assertRaises(ValueError, mf.dump_flags)
+
+        mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
         self.assertRaises(ValueError, mf.dump_flags)
 
 

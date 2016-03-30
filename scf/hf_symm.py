@@ -111,6 +111,60 @@ def so2ao_mo_coeff(so, irrep_mo_coeff):
     return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir]) \
                          for ir in range(so.__len__())])
 
+def check_irrep_nelec(mol, irrep_nelec, nelec):
+    for irname in irrep_nelec.keys():
+        if irname not in mol.irrep_name:
+            logger.warn(mol, 'Molecule does not have irrep %s', irname)
+
+    float_irname = []
+    fix_na = 0
+    fix_nb = 0
+    for i, irname in enumerate(mol.irrep_name):
+        if irname in irrep_nelec:
+            if isinstance(irrep_nelec[irname], (int, numpy.integer)):
+                nelecb = irrep_nelec[irname] // 2
+                neleca = irrep_nelec[irname] - nelecb
+            else:
+                neleca, nelecb = irrep_nelec[irname]
+            norb = mol.symm_orb[i].shape[1]
+            if nelecb >= norb:
+                msg =('More electrons than orbitals for irrep %s '
+                      'nelec = %d + %d, norb = %d' %
+                      (irname, neleca,nelecb, norb))
+                raise ValueError(msg)
+            fix_na += neleca
+            fix_nb += nelecb
+        else:
+            float_irname.append(irname)
+    assert(fix_na >= fix_nb and mol.spin >= fix_na-fix_nb)
+
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec // 2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    fix_ne = fix_na + fix_nb
+    if ((fix_na > neleca) or (fix_nb > nelecb) or
+        (fix_na+nelecb > mol.nelectron) or
+        (fix_nb+neleca > mol.nelectron)):
+        msg =('More electrons defined by irrep_nelec than total num electrons. '
+              'mol.nelectron = %d  irrep_nelec = %s' %
+              (mol.nelectron, irrep_nelec))
+        raise ValueError(msg)
+    else:
+        logger.info(mol, 'fix %d electrons in irreps %s',
+                    fix_ne, irrep_nelec.items())
+
+    if len(set(float_irname)) == 0 and fix_ne != mol.nelectron:
+        msg =('Num electrons defined by irrep_nelec != total num electrons. '
+              'mol.nelectron = %d  irrep_nelec = %s' %
+              (mol.nelectron, irrep_nelec))
+        raise ValueError(msg)
+    else:
+        logger.info(mol, '    %d free electrons in irreps %s',
+                    mol.nelectron-fix_ne, ' '.join(float_irname))
+    return fix_na, fix_nb, float_irname
+
 
 class RHF(hf.RHF):
     __doc__ = hf.SCF.__doc__ + '''
@@ -142,35 +196,7 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        logger.info(self, '%s with symmetry adapted basis',
-                    self.__class__.__name__)
-        float_irname = []
-        fix_ne = 0
-        for irname in self.mol.irrep_name:
-            if irname in self.irrep_nelec:
-                fix_ne += self.irrep_nelec[irname]
-            else:
-                float_irname.append(irname)
-        if fix_ne > 0:
-            logger.info(self, 'fix %d electrons in irreps %s',
-                        fix_ne, self.irrep_nelec.items())
-            if fix_ne > self.mol.nelectron:
-                logger.error(self, 'num. electron error in irrep_nelec %s',
-                             self.irrep_nelec.items())
-                raise ValueError('irrep_nelec')
-        if float_irname:
-            logger.info(self, '%d free electrons in irreps %s',
-                        self.mol.nelectron-fix_ne, ' '.join(float_irname))
-        elif fix_ne != self.mol.nelectron:
-            logger.error(self, 'number of electrons error in irrep_nelec %s',
-                         self.irrep_nelec.items())
-            raise ValueError('irrep_nelec')
-
-    def build_(self, mol=None):
-        for irname in self.irrep_nelec.keys():
-            if irname not in self.mol.irrep_name:
-                logger.warn(self, '!! No irrep %s', irname)
-        return hf.RHF.build_(self, mol)
+        check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
 
 #TODO: force E1gx/E1gy ... use the same coefficients
     def eig(self, h, s):
@@ -345,28 +371,8 @@ class ROHF(rohf.ROHF):
         self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self):
-        from pyscf.scf import uhf_symm
         rohf.ROHF.dump_flags(self)
-        uhf_symm.dump_flags(self)
-
-    def build_(self, mol=None):
-        # specify alpha,beta for same irreps
-        na = 0
-        nb = 0
-        for x in self.irrep_nelec.values():
-            if isinstance(x, (int, numpy.integer)):
-                v = x // 2
-                na += x - v
-                nb += v
-            else:
-                na += x[0]
-                nb += x[1]
-        nopen = self.mol.spin
-        assert(na >= nb and nopen >= na-nb)
-        for irname in self.irrep_nelec.keys():
-            if irname not in self.mol.irrep_name:
-                logger.warn(self, '!! No irrep %s', irname)
-        return hf.RHF.build_(self, mol)
+        check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
 
     def eig(self, h, s):
         ncore = (self.mol.nelectron-self.mol.spin) // 2

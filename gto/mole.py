@@ -603,7 +603,7 @@ def tot_electrons(mol):
     Examples:
 
     >>> mol = gto.M(atom='H 0 1 0; C 0 0 1', charge=1)
-    >>> gto.tot_electrons(mol)
+    >>> mol.tot_electrons()
     6
     '''
     nelectron = -mol.charge
@@ -1437,8 +1437,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             _atm, _ecpbas, _env = _atm, None, pre_env
         return _atm, _ecpbas, _env
 
-    def tot_electrons(self):
-        return tot_electrons(self)
+    tot_electrons = tot_electrons
 
     @pyscf.lib.with_doc(gto_norm.__doc__)
     def gto_norm(self, l, expnt):
