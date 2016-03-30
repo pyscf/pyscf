@@ -17,7 +17,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     if callback is None:
         callback = casscf.callback
 
-
     log = logger.Logger(casscf.stdout, verbose)
     cput0 = (time.clock(), time.time())
     log.debug('Start 2-step CASSCF')
@@ -38,7 +37,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv_tol_ddm = conv_tol_grad * 3
     conv = False
-    elast = e_tot
+    de, elast = e_tot, e_tot
     totmicro = totinner = 0
     casdm1 = 0
     r0 = None
@@ -51,11 +50,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
         t3m = log.timer('update CAS DM', *t3m)
+        max_stepsize = casscf.max_stepsize_scheduler(locals())
         for imicro in range(micro):
-
-            for u, g_orb, njk1 in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                                       eris, r0, conv_tol_grad, log):
-                break
+            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                        eris, r0, conv_tol_grad, max_stepsize, log)
+            u, g_orb, njk1 = next(rota)
+            rota.close()
             njk += njk1
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
@@ -77,7 +77,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g',
+            log.debug('micro %d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
                       imicro, de, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
@@ -95,7 +95,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
-        if (abs(elast - e_tot) < tol and
+        de, elast = e_tot - elast, e_tot
+        if (abs(de) < tol and
             norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm):
             conv = True
         else:
