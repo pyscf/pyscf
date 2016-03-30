@@ -204,11 +204,7 @@ RCASCI = CASCI
 
 def UCASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
-        raise RuntimeError('First argument needs to be UHF object.')
-
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         mc = casci_uhf.CASCI(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
@@ -217,11 +213,7 @@ def UCASCI(mf, ncas, nelecas, **kwargs):
 
 def UCASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
-        raise RuntimeError('First argument needs to be UHF object.')
-
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         mc = mc1step_uhf.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
@@ -246,7 +238,7 @@ def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
 
 def _convert_to_rhf(mf, convert_df=True):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('UHF', 'UKS')):
+    if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
         mf1 = scf.RHF(mf.mol)
         mf1.__dict__.update(mf.__dict__)
