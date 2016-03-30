@@ -666,6 +666,10 @@ def npgto_nr(mol):
 def nao_nr(mol):
     '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
     return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
+def nao_cart(mol):
+    '''Total number of contracted cartesian GTOs for the given :class:`Mole` object'''
+    l = mol._bas[:,ANG_OF]
+    return ((l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]).sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_nr_range(mol, bas_id0, bas_id1):
@@ -1841,6 +1845,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     nao_nr = nao_nr
     nao_2c = nao_2c
+    nao_cart = nao_cart
 
     nao_nr_range = nao_nr_range
     nao_2c_range = nao_2c_range

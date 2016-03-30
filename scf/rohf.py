@@ -173,12 +173,12 @@ def _fill_rohf_occ(mo_energy, mo_energy_a, mo_energy_b, ncore, nopen):
     mo_occ = numpy.zeros_like(mo_energy)
     open_idx = []
     try:
-        core_sort = numpy.argpartition(mo_energy, ncore)
+        core_sort = numpy.argpartition(mo_energy, ncore-1)
         core_idx = core_sort[:ncore]
         if nopen > 0:
             open_idx = core_sort[ncore:]
 # Fill up open shell based on alpha orbital energy
-            open_sort = numpy.argpartition(mo_energy_a[open_idx], nopen)
+            open_sort = numpy.argpartition(mo_energy_a[open_idx], nopen-1)
             open_idx = open_idx[open_sort[:nopen]]
     except AttributeError:
         core_sort = numpy.argsort(mo_energy)

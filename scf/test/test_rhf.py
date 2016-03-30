@@ -243,6 +243,15 @@ class KnowValues(unittest.TestCase):
         energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7])
         self.assertTrue(numpy.allclose(mf.get_occ(energy),
                 [0, 2, 0, 0, 0, 1, 2, 0, 1, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
+        # 0 virtual
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                [2, 2, 1, 2, 2, 2, 2, 1]))
+        # 0 core
+        mf.nelec = (14, 0)
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
 
     def test_rohf_symm_get_occ(self):
         pmol = n2sym.copy()

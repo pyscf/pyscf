@@ -7,7 +7,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf import lo
 
-def mo_map(mol1, mo1, mol2, mo2, base=1, tol=.5):
+def mo_map(mol1, mo1, mol2, mo2, base=0, tol=.5):
     '''Given two orbitals, based on their overlap <i|j>, search all
     orbital-pairs which have significant overlap.
 
@@ -17,17 +17,17 @@ def mo_map(mol1, mo1, mol2, mo2, base=1, tol=.5):
     '''
     s = gto.intor_cross('cint1e_ovlp_sph', mol1, mol2)
     s = reduce(numpy.dot, (mo1.T, s, mo2))
-    idx = numpy.argwhere(abs(s) > tol)
+    idx = numpy.argwhere(abs(s) > tol) + base
     for i,j in idx:
         logger.info(mol1, '<mo-1|mo-2>  %d  %d  %12.8f',
-                    i+base, j+base, s[i,j])
+                    i, j, s[i,j])
     return idx, s
 
 def mo_1to1map(s):
     '''Given <i|j>, search for the 1-to-1 mapping between i and j.
 
     Returns:
-        a list [similar-j-to-i for i in <bra|]
+        a list [j-close-to-i for i in <bra|]
     '''
     s1 = abs(s)
     like_input = []
@@ -42,7 +42,7 @@ def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
     contributions for each MO
 
     Args:
-        test_or_idx : filter function or 1D array
+        test_or_idx : filter function or list
             If test_or_idx is a list, it is considered as the AO indices.
             If it's a function,  the AO indices are the items for which the
             function value is true.
@@ -88,7 +88,9 @@ def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
         tc2s = []
         for ib in range(mol.nbas):
             l = mol.bas_angular(ib)
-            tc2s.append(gto.cart2sph(l))
+            t = gto.cart2sph(l)
+            for i in range(mol.bas_nctr(ib)):
+                tc2s.append(t)
         tc2s = scipy.linalg.block_diag(*tc2s)
         lao = lo.orth.orth_ao(mol, orth_method)
         lao = numpy.dot(tc2s, lao)
@@ -97,10 +99,11 @@ def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
         lao = lo.orth.orth_ao(mol, orth_method)
 
     if callable(test_or_idx):
-        idx = [i for i,x in enumerate(mol.spheric_labels(1)) if test(x)]
+        idx = [i for i,x in enumerate(mol.spheric_labels(1)) if test_or_idx(x)]
     else:
-        idx = test_or_idx
-    idx = numpy.asarray(idx)
+        idx = numpy.asarray(test_or_idx, dtype=int)
+    if len(idx) == 0:
+        logger.warn(mol, 'Required orbitals are not found')
     mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
     s1 = numpy.einsum('ki,ki->i', mo1, mo1)
     return s1
