@@ -327,8 +327,8 @@ class CASSCF(casci_uhf.CASCI):
         self.frozen = frozen
         self.max_stepsize = .03
         self.max_cycle_macro = 50
-        self.max_cycle_micro = 3
-        self.max_cycle_micro_inner = 4
+        self.max_cycle_micro = 4
+        self.max_cycle_micro_inner = 3
         self.conv_tol = 1e-7
         self.conv_tol_grad = None
         # for augmented hessian
@@ -338,7 +338,7 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_lindep = 1e-14
         self.ah_start_tol = .2
         self.ah_start_cycle = 2
-        self.ah_grad_trust_region = 1.5
+        self.ah_grad_trust_region = 3.
         self.ah_decay_rate = .8
         self.internal_rotation = False
         self.keyframe_interval = 4999
@@ -462,7 +462,7 @@ class CASSCF(casci_uhf.CASCI):
             if 'imicro' in envs:  # Within CASSCF iteration
                 log.info('macro iter %d (%d JK  %d micro), '
                          'CASSCF E = %.15g  dE = %.8g',
-                         envs['imacro'], envs['njk'], envs['imicro']+1,
+                         envs['imacro'], envs['njk'], envs['imicro'],
                          e_tot, e_tot-envs['elast'])
                 if 'norm_gci' in envs:
                     log.info('               |grad[o]|=%5.3g  '

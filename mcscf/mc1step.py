@@ -694,7 +694,7 @@ class CASSCF(casci.CASCI):
 #TODO:self.inner_rotation = False # active-active rotation
         self.max_cycle_macro = 50
         self.max_cycle_micro = 4
-        self.max_cycle_micro_inner = 4
+        self.max_cycle_micro_inner = 3
         self.conv_tol = 1e-7
         self.conv_tol_grad = None
         # for augmented hessian
@@ -865,12 +865,12 @@ class CASSCF(casci.CASCI):
                 if ss is None:
                     log.info('macro iter %d (%d JK  %d micro), '
                              'CASSCF E = %.15g  dE = %.8g',
-                             envs['imacro'], envs['njk'], envs['imicro']+1,
+                             envs['imacro'], envs['njk'], envs['imicro'],
                              e_tot, e_tot-envs['elast'])
                 else:
                     log.info('macro iter %d (%d JK  %d micro), '
                              'CASSCF E = %.15g  dE = %.8g  S^2 = %.7f',
-                             envs['imacro'], envs['njk'], envs['imicro']+1,
+                             envs['imacro'], envs['njk'], envs['imicro'],
                              e_tot, e_tot-envs['elast'], ss[0])
                 if 'norm_gci' in envs:
                     log.info('               |grad[o]|=%5.3g  '
