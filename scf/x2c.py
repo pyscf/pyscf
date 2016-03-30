@@ -45,15 +45,19 @@ def sfx2c1e(mf):
     >>> mf = scf.sfx2c1e(scf.UHF(mol))
     >>> mf.scf()
     '''
-
-    class HF(mf.__class__):
+    mf_class = mf.__class__
+    class HF(mf_class):
         def __init__(self):
             self.xuncontract = True
             self.xequation = '1e'
+            self._tag_x2c = True
             self.__dict__.update(mf.__dict__)
             self._keys = self._keys.union(['xequation', 'xuncontract'])
 
         def get_hcore(self, mol=None):
+            if not self._tag_x2c:
+                return mf_class.get_hcore(self, mol)
+
             mol = mf.mol
             if self.xuncontract:
                 xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
