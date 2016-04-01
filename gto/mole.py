@@ -8,7 +8,7 @@ import os, sys
 import gc
 import time
 import math
-import itertools
+import json
 import numpy
 import scipy.special
 import ctypes
@@ -371,6 +371,14 @@ def conc_mol(mol1, mol2):
     mol3._atm, mol3._bas, mol3._env = \
             conc_env(mol1._atm, mol1._bas, mol1._env,
                      mol2._atm, mol2._bas, mol2._env)
+    off = len(mol1._env)
+    natm_off = len(mol1._atm)
+    ecpbas2 = numpy.copy(mol2._ecpbas)
+    ecpbas2[:,ATOM_OF  ] += natm_off
+    ecpbas2[:,PTR_EXP  ] += off
+    ecpbas2[:,PTR_COEFF] += off
+    mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+
     mol3.natm = len(mol3._atm)
     mol3.nbas = len(mol3._bas)
     mol3.verbose = mol1.verbose
@@ -384,8 +392,10 @@ def conc_mol(mol1, mol2):
     mol3.symmetry_subgroup = None
     mol3._atom = mol1._atom + mol2._atom
     mol3.unit = mol1.unit
-    mol3._basis = mol2._basis.copy()
+    mol3._basis = dict(mol2._basis)
     mol3._basis.update(mol1._basis)
+    mol3._ecp = dict(mol2._ecp)
+    mol3._ecp.update(mol1._ecp)
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
@@ -483,8 +493,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr_coeff = ptr_exp + nprim
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
-    _env = list(itertools.chain.from_iterable(_env)) # flatten nested lists
-    return numpy.array(_bas, numpy.int32), numpy.array(_env)
+    _env = pyscf.lib.flatten(_env) # flatten nested lists
+    return numpy.array(_bas, numpy.int32), numpy.array(_env, numpy.double)
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal
@@ -616,17 +626,26 @@ def copy(mol):
     '''
     import copy
     newmol = copy.copy(mol)
-    newmol._atm = numpy.copy(mol._atm)
-    newmol._bas = numpy.copy(mol._bas)
-    newmol._env = numpy.copy(mol._env)
+    newmol._atm    = numpy.copy(mol._atm)
+    newmol._bas    = numpy.copy(mol._bas)
+    newmol._env    = numpy.copy(mol._env)
+    newmol._ecpbas = numpy.copy(mol._ecpbas)
+
     newmol.atom    = copy.deepcopy(mol.atom)
     newmol._atom   = copy.deepcopy(mol._atom)
     newmol.basis   = copy.deepcopy(mol.basis)
     newmol._basis  = copy.deepcopy(mol._basis)
+    newmol.ecp     = copy.deepcopy(mol.ecp)
+    newmol._ecp    = copy.deepcopy(mol._ecp)
     return newmol
 
 def pack(mol):
-    '''Pack the given :class:`Mole` to a dict, which can be serialized with :mod:`pickle`
+    '''Pack the input args of :class:`Mole` to a dict, which can be serialized
+    with :mod:`pickle` or :mod:`json`.
+
+    Note this function only pack the input arguments than the entire Mole
+    class.  Modifications to mol._atm, mol._bas, mol._env are not tracked.
+    Use :func:`dumps` to serialize the entire Mole object.
     '''
     return {'atom'    : mol.atom,
             'unit'    : mol.unit,
@@ -635,13 +654,68 @@ def pack(mol):
             'spin'    : mol.spin,
             'symmetry': mol.symmetry,
             'nucmod'  : mol.nucmod,
+            'ecp'     : mol.ecp,
             'light_speed': mol.light_speed}
 def unpack(moldic):
-    '''Unpack a dict which is packed by :func:`pack`, return a :class:`Mole` object.
+    '''Unpack a dict which is packed by :func:`pack`, to generate the input
+    arguments for :class:`Mole` object.
     '''
     mol = Mole()
     mol.__dict__.update(moldic)
     return mol
+
+
+def dumps(mol):
+    '''Serialize Mole object to a JSON formatted str.
+    '''
+    exclude_keys = set(('output', 'stdout', '_keys'))
+    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas'))
+
+    moldic = dict(mol.__dict__)
+    for k in exclude_keys:
+        del(moldic[k])
+    for k in nparray_keys:
+        if isinstance(moldic[k], numpy.ndarray):
+            moldic[k] = moldic[k].tolist()
+    moldic['atom'] = repr(mol.atom)
+    moldic['basis']= repr(mol.basis)
+    moldic['ecp' ] = repr(mol.ecp)
+
+    if mol.symm_orb is not None:
+        # compress symm_orb
+        symm_orb = []
+        for c in mol.symm_orb:
+            x,y = numpy.nonzero(c)
+            val = c[x,y]
+            symm_orb.append((val.tolist(), x.tolist(), y.tolist(), c.shape))
+        moldic['symm_orb'] = symm_orb
+    return json.dumps(moldic)
+
+def loads(molstr):
+    '''Deserialize a str containing a JSON document to a Mole object.
+    '''
+    from numpy import array  # for eval function
+    moldic = json.loads(molstr)
+    mol = Mole()
+    mol.__dict__.update(moldic)
+    mol.atom = eval(mol.atom)
+    mol.basis= eval(mol.basis)
+    mol.ecp  = eval(mol.ecp)
+    mol._atm = numpy.array(mol._atm, dtype=numpy.int32)
+    mol._bas = numpy.array(mol._bas, dtype=numpy.int32)
+    mol._env = numpy.array(mol._env, dtype=numpy.double)
+    mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
+
+    if mol.symm_orb is not None:
+        # decompress symm_orb
+        symm_orb = []
+        for val, x, y, shape in mol.symm_orb:
+            c = numpy.zeros(shape)
+            c[numpy.array(x),numpy.array(y)] = numpy.array(val)
+            symm_orb.append(c)
+        mol.symm_orb = symm_orb
+    return mol
+
 
 def len_spinor(l, kappa):
     '''The number of spinor associated with given angular momentum and kappa.  If kappa is 0,
@@ -1237,6 +1311,14 @@ class Mole(pyscf.lib.StreamObject):
         self.__dict__.update(moldic)
         return self
 
+    dumps = dumps
+    @pyscf.lib.with_doc(loads.__doc__)
+    def loads(self, molstr):
+        return loads(molstr)
+    def loads_(self, molstr):
+        self.__dict__.update(loads(molstr).__dict__)
+        return self
+
 #TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
     def build_(self, dump_input=True, parse_arg=True,
                verbose=None, output=None, max_memory=None,
@@ -1434,7 +1516,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if _ecp:
             _atm, _ecpbas, _env = make_ecp_env(self, _atm, _ecp, pre_env)
         else:
-            _atm, _ecpbas, _env = _atm, None, pre_env
+            _atm, _ecpbas, _env = _atm, [], pre_env
         return _atm, _ecpbas, _env
 
     tot_electrons = tot_electrons

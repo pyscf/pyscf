@@ -11,6 +11,7 @@ import os, sys
 import tempfile
 import shutil
 import functools
+import itertools
 import math
 import ctypes
 import numpy
@@ -97,6 +98,7 @@ def find_if(test, lst):
     for l in lst:
         if test(l):
             return l
+    raise ValueError('No element of the given list matches the test condition.')
 
 # for give n, generate [(m1,m2),...] that
 #       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
@@ -110,6 +112,10 @@ def tril_equal_pace(n, base=0, npace=0, minimal=1):
         m2 = int(max(math.sqrt(m1**2+base**2), m1+minimal))
         yield m1, min(m2,n)
         m1 = m2
+
+def flatten(lst):
+    '''flatten nested lists'''
+    return list(itertools.chain.from_iterable(lst))
 
 
 class ctypes_stdout(object):

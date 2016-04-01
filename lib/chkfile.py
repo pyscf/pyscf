@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import json
 import h5py
 import pyscf.gto
 
@@ -119,13 +120,7 @@ def load_mol(chkfile):
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
     with h5py.File(chkfile, 'r') as fh5:
-        mol = pyscf.gto.Mole()
-        mol.verbose = 0
-        mol.output = '/dev/null'
-        moldic = eval(fh5['mol'].value)
-        if 'grids' in moldic:
-            del(moldic['grids'])
-        mol.build(False, False, **moldic)
+        mol = pyscf.gto.loads(fh5['mol'].value)
     return mol
 
 def save_mol(mol, chkfile):
@@ -140,6 +135,6 @@ def save_mol(mol, chkfile):
     Returns:
         No return value
     '''
-    dump(chkfile, 'mol', format(mol.pack()))
-
+    dump(chkfile, 'mol', mol.dumps())
+dump_mol = save_mol
 
