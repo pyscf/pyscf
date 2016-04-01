@@ -644,7 +644,7 @@ def hot_tuning_(casscf, configfile=None):
 
             logger.debug(casscf, 'Reading CASSCF parameters from config file  %s',
                          os.path.realpath(configfile))
-            logger.debug1(casscf, '    inject casscf settings %s', raw_js)
+            logger.debug1(casscf, '    Inject casscf settings %s', raw_js)
             conf = json.loads(raw_js)
             casscf.__dict__.update(conf.pop('casscf'))
 
@@ -655,11 +655,13 @@ def hot_tuning_(casscf, configfile=None):
             #        logger.info(casscf, 'Update envs[%s] = %s', k, conf[k])
             #        envs[k] = conf[k]
 
-            logger.debug1(casscf, '    inject python script\n%s\n', raw_py)
+            logger.debug1(casscf, '    Inject python script\n%s\n', raw_py)
             if len(raw_py.strip()) > 0:
-                exec raw_py in envs, {}
-# Change to the following code in Python3
-#                exec(raw_py, envs, {})
+                if sys.version_info >= (3,):
+# A hacky call using eval because exec are so different in python2 and python3
+                    eval(compile('exec(raw_py, envs, {})', '<str>', 'exec'))
+                else:
+                    eval(compile('exec raw_py in envs, {}', '<str>', 'exec'))
         except Exception as e:
             logger.warn(casscf, 'CASSCF hot_load error %s', e)
             logger.warn(casscf, ''.join(traceback.format_exc()))
