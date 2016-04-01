@@ -245,7 +245,9 @@ class UHF(hf.SCF):
         with_ssss : bool, for Dirac-Hartree-Fock only
             If False, ignore small component integrals (SS|SS).  Default is True.
         with_gaunt : bool, for Dirac-Hartree-Fock only
-            If False, ignore Gaunt interaction.  Default is False.
+            Default is False.
+        with_breit : bool, for Dirac-Hartree-Fock only
+            Gaunt + gauge term.  Default is False.
 
     Examples:
 

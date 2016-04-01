@@ -276,5 +276,5 @@ def remove_linear_dep(mf):
     return eig
 def remove_linear_dep_(mf):
     mf.eig = remove_linear_dep(mf)
-    return mf.eig
+    return mf
 

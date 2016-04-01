@@ -958,7 +958,7 @@ class SCF(pyscf.lib.StreamObject):
         logger.info(self, 'method = %s', self.__class__.__name__)
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
-        logger.info(self, 'level shift factor = %g', self.level_shift)
+        logger.info(self, 'level shift factor = %s', self.level_shift)
         logger.info(self, 'Do DIIS = %s', self.diis)
         logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
         logger.info(self, 'DIIS space = %d', self.diis_space)

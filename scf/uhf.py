@@ -153,18 +153,28 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+
+    if isinstance(level_shift_factor, (tuple, list, numpy.ndarray)):
+        shifta, shiftb = level_shift_factor
+    else:
+        shifta = shiftb = level_shift_factor
+    if isinstance(damp_factor, (tuple, list, numpy.ndarray)):
+        dampa, dampb = damp_factor
+    else:
+        dampa = dampb = damp_factor
+
     f = h1e + vhf
     if f.ndim == 2:
         f = (f, f)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = [dm*.5] * 2
     if 0 <= cycle < diis_start_cycle-1:
-        f = (hf.damping(s1e, dm[0], f[0], damp_factor),
-             hf.damping(s1e, dm[1], f[1], damp_factor))
+        f = (hf.damping(s1e, dm[0], f[0], dampa),
+             hf.damping(s1e, dm[1], f[1], dampb))
     if adiis and cycle >= diis_start_cycle:
         f = adiis.update(s1e, dm, numpy.array(f))
-    f = (hf.level_shift(s1e, dm[0], f[0], level_shift_factor),
-         hf.level_shift(s1e, dm[1], f[1], level_shift_factor))
+    f = (hf.level_shift(s1e, dm[0], f[0], shifta),
+         hf.level_shift(s1e, dm[1], f[1], shiftb))
     return numpy.array(f)
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
@@ -448,7 +458,9 @@ class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for UHF:
         nelec : (int, int)
-            If given, freeze the number of (alpha,beta) electrons to the given value
+            If given, freeze the number of (alpha,beta) electrons to the given value.
+        level_shift : number or two-element list
+            level shift (in Eh) for alpha and beta Fock if two-element list is given.
 
     Examples:
 

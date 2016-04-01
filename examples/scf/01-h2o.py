@@ -3,8 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf
-
 '''
 Another input style.
 
@@ -24,13 +22,15 @@ attributes are changed in your script. (Note to switch off the noise produced
 by mol.build function, you can call mol.build(0,0))
 '''
 
+from pyscf import gto, scf
+
 mol = gto.Mole()
 mol.verbose = 5
 #mol.output = 'out_h2o'
 mol.atom = '''
-O 0 0.     0
+O 0 0      0
 H 0 -2.757 2.587
-H 0 2.757  2.587'''
+H 0  2.757 2.587'''
 mol.basis = 'ccpvdz'
 mol.symmetry = 1
 mol.build()
