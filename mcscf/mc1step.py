@@ -9,10 +9,8 @@ import copy
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
-import pyscf.gto
-import pyscf.lib.logger as logger
-import pyscf.scf
+from pyscf import lib
+from pyscf.lib import logger
 from pyscf.mcscf import casci
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
@@ -48,9 +46,9 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
             jkcaa[i] = numpy.einsum('ik,ik->i', 6*kbuf[:,i]-2*jbuf[i], casdm1)
         vhf_a[i] =(numpy.einsum('quv,uv->q', jbuf, casdm1)
                  - numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
-        jtmp = pyscf.lib.dot(jbuf.reshape(nmo,-1), casdm2.reshape(ncas*ncas,-1))
+        jtmp = lib.dot(jbuf.reshape(nmo,-1), casdm2.reshape(ncas*ncas,-1))
         jtmp = jtmp.reshape(nmo,ncas,ncas)
-        ktmp = pyscf.lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2tmp)
+        ktmp = lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2tmp)
         hdm2[i] = (ktmp.reshape(nmo,ncas,ncas)+jtmp).transpose(1,0,2)
         g_dm2[i] = numpy.einsum('uuv->v', jtmp[ncore:nocc])
     jbuf = kbuf = jtmp = ktmp = dm2tmp = None
@@ -179,7 +177,7 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
 
         # part7
         # (-h_{sp} R_{rs} gamma_{rq} - h_{rq} R_{pq} gamma_{sp})/2 + (pr<->qs)
-        x2 = reduce(pyscf.lib.dot, (h1e_mo, x1, dm1))
+        x2 = reduce(lib.dot, (h1e_mo, x1, dm1))
         # part8
         # (g_{ps}\delta_{qr}R_rs + g_{qr}\delta_{ps}) * R_pq)/2 + (pr<->qs)
         x2 -= numpy.dot(g.T, x1)
@@ -377,8 +375,8 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
 
     toloose = numpy.sqrt(tol)
     # the first trial vector is (1,0,0,...), which is not included in xs
-    xs = [x for x in xs]
-    ax = [x for x in ax]
+    xs = list(xs)
+    ax = list(ax)
     nx = len(xs)
     if nx == 0:
         xs.append(x0)
@@ -419,7 +417,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
 
 
 def _regular_step(heff, ovlp, xs, lindep, log):
-    w, v, seig = pyscf.lib.safe_eigh(heff, ovlp, lindep)
+    w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
     if log.verbose >= logger.DEBUG3:
         log.debug3('v[0] %s', str(v[0]))
         log.debug3('AH eigs %s', str(w))
@@ -780,7 +778,7 @@ class CASSCF(casci.CASCI):
         log.info('ci_response_space = %d', self.ci_response_space)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
-                 self.max_memory, pyscf.lib.current_memory()[0])
+                 self.max_memory, lib.current_memory()[0])
         log.debug('grad_update_dep %d', self.grad_update_dep)
         log.debug('ci_update_dep %d', self.ci_update_dep)
         log.info('internal_rotation = %s', self.internal_rotation)
@@ -834,7 +832,6 @@ class CASSCF(casci.CASCI):
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         if eris is None:
-            import copy
             fcasci = copy.copy(self)
             fcasci.ao2mo = self.get_h2cas
         else:
@@ -1021,10 +1018,10 @@ class CASSCF(casci.CASCI):
                 kbuf = eris.papa[i]
                 jk +=(numpy.einsum('quv,q->uv', jbuf, ddm[i])
                     - numpy.einsum('uqv,q->uv', kbuf, ddm[i]) * .5)
-                p1aa[i] = pyscf.lib.dot(ua.T, jbuf.reshape(nmo,-1))
-                paa1[i] = pyscf.lib.dot(kbuf.transpose(0,2,1).reshape(-1,nmo), ra)
+                p1aa[i] = lib.dot(ua.T, jbuf.reshape(nmo,-1))
+                paa1[i] = lib.dot(kbuf.transpose(0,2,1).reshape(-1,nmo), ra)
             h1 = reduce(numpy.dot, (ua.T, h1e_mo, ua)) + jk
-            aa11 = pyscf.lib.dot(ua.T, p1aa.reshape(nmo,-1)).reshape((ncas,)*4)
+            aa11 = lib.dot(ua.T, p1aa.reshape(nmo,-1)).reshape((ncas,)*4)
             aaaa = eris.ppaa[ncore:nocc,ncore:nocc,:,:]
             aa11 = aa11 + aa11.transpose(2,3,0,1) - aaaa
 
@@ -1048,7 +1045,7 @@ class CASSCF(casci.CASCI):
             a1aa = numpy.empty((ncas,ncas,ncas**2))
             for i in range(ncas):
                 jbuf = eris.ppaa[ncore+i]
-                a1aa[i] = pyscf.lib.dot(ra.T, jbuf.reshape(nmo,-1))
+                a1aa[i] = lib.dot(ra.T, jbuf.reshape(nmo,-1))
             aaaa = eris.ppaa[ncore:nocc,ncore:nocc,:,:]
             a1aa = a1aa.reshape((ncas,)*4)
             a1aa = a1aa + a1aa.transpose(1,0,2,3)
@@ -1082,24 +1079,7 @@ class CASSCF(casci.CASCI):
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
         hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
-#        ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]   # (!)
-# In equation (!), h1 and h2 are approximations to the fully transformed
-# hamiltonain wrt rotated MO.  h1 and h2 have only 0th and part of 1st order
-# (missing VHF[core DM response]).  Fully solving equation (!) would lead
-# to an approximation version of the CI solver in the macro iteration.  This
-# can be further approximated by reducing the max_cycle for fcisolver.kernel
-# or solving eq (!) in a sub-space.  If the size of subspace is 1, it results
-# in the gradient updates.  This is the reason why gradeint updates works very
-# well.  Other approximations for eq (!) can be
-#
-# * Perturbation updating   gci/(e_ci-hci_diag), gci = H^1 ci^0  is the way
-#   davidson.dsyev generate new trial vector.  Numerically, perturbation
-#   updating is worse than the simple gradeint.
-# * Restorsing the davidson.dsyev hessian from previous FCI solver as the
-#   approx CI hessian then solving  (H-E*1)dc = g or aug-hessian or H dc = g
-#   has not obvious advantage than simple gradeint.
-
-        g = hc - (e_ci-ecore) * ci0.ravel()  # hc-eci*ci0 equals to eqs. (@)
+        g = hc - (e_ci-ecore) * ci0.ravel()
         if self.ci_response_space > 6:
             logger.debug(self, 'CI step by full response')
             # full response
@@ -1120,7 +1100,7 @@ class CASSCF(casci.CASCI):
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = pyscf.lib.safe_eigh(heff, seff)[:2]
+            e, v = lib.safe_eigh(heff, seff)[:2]
             ci1 = 0
             for i in range(nd):
                 ci1 += xs[i] * v[i,0]
@@ -1158,7 +1138,7 @@ class CASSCF(casci.CASCI):
         return self.update_from_chk_(chkfile)
     def update_from_chk_(self, chkfile=None):
         if chkfile is None: chkfile = self.chkfile
-        self.__dict__.update(pyscf.lib.chkfile.load(chkfile, 'mcscf'))
+        self.__dict__.update(lib.chkfile.load(chkfile, 'mcscf'))
         return self
 
     def micro_step_scheduler(self, envs):

@@ -4,7 +4,7 @@
 #
 
 '''
-A simple example to run CASSCF calculation.
+A simple example to run CASCI calculation.
 '''
 
 import numpy
@@ -19,9 +19,10 @@ myhf = scf.RHF(mol)
 myhf.kernel()
 
 # 6 orbitals, 8 electrons
-mycas = mcscf.CASSCF(myhf, 6, 8)
+mycas = mcscf.CASCI(myhf, 6, 8)
 mycas.kernel()
 
 # Natural occupancy in CAS space, Mulliken population etc.
 mycas.verbose = 4
 mycas.analyze()
+

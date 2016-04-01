@@ -104,12 +104,6 @@ AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
   "pyscf/lib/deps" and rebuild pyscf to fix this problem.
 
 
-```
-Exception AttributeError: "'NoneType' object has no attribute 'byref'" in
-<bound method VHFOpt.__del__ of <pyscf.scf._vhf.VHFOpt object at 0x2b52390>> ignored
-```
-  It happens when pyscf is used with inspectors like profiler, pdb etc.
-
 * h5py installation.
   If you got problems to install the latest h5py package,  you can try
   the old releases:
