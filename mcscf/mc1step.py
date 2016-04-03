@@ -251,14 +251,12 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
     kf_trust_region = casscf.keyframe_trust_region
     if x0_guess is None:
         x0_guess = g_orb
-    ah_conv_tol = min(norm_gorb**2, casscf.ah_conv_tol)
+    ah_conv_tol = casscf.ah_conv_tol
     #ah_start_cycle = max(casscf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
     ah_start_cycle = casscf.ah_start_cycle
     while True:
         # increase the AH accuracy when approach convergence
-        ah_start_tol = (numpy.log(norm_gorb+conv_tol_grad) -
-                        numpy.log(min(norm_gorb,conv_tol_grad))) * 1.5 * norm_gorb
-        ah_start_tol = max(min(ah_start_tol, casscf.ah_start_tol), ah_conv_tol)
+        ah_start_tol = min(norm_gorb*5, casscf.ah_start_tol)
         log.debug('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
                   ah_start_tol, ah_start_cycle, max_cycle)
         g_orb0 = g_orb
@@ -329,12 +327,6 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                         g_orb = g_kf
                         norm_gorb = norm_gkf
 
-                if scale is None:
-# Gradually decrease start_tol/conv_tol, so the next step is more accurate
-                    ah_start_tol = max(norm_gorb * 1.2,
-                                       ah_start_tol*casscf.ah_decay_rate)
-                    log.debug('Set ah_start_tol %g', ah_start_tol)
-
         u = casscf.update_rotate_matrix(dr)
         jkcount += ihop
         gorb_update = h_op = h_diag = None
@@ -346,22 +338,26 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         g_kf1, gorb_update, h_op, h_diag = \
                 casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
         g_kf1 = gorb_update(u)
+        jkcount += 1
+
         norm_gkf1 = numpy.linalg.norm(g_kf1)
         norm_dg = numpy.linalg.norm(g_kf1-g_orb)
         log.debug('    |g|=%5.3g (keyframe), |g-correction|=%5.3g',
                   norm_gkf1, norm_dg)
         if (norm_dg > norm_gorb*casscf.ah_grad_trust_region and
             norm_gkf1 > norm_gkf and
-            norm_gorb > conv_tol_grad*.5):  # More iters when close to local minimum
+            # More iters when close to local minimum
+            norm_gkf1 > conv_tol_grad*casscf.ah_grad_trust_region):
             log.debug('    Reject keyframe |g|=%5.3g  |g_last| =%5.3g',
                       norm_gkf1, norm_gorb)
+            u = casscf.update_rotate_matrix(dr-dxi)
+            yield u, g_kf, jkcount
             break
         kf_compensate = norm_dg / norm_gorb
         t3m = log.timer('gen h_op', *t3m)
         g_orb = g_kf = g_kf1
         norm_gorb = norm_gkf = norm_gkf1
         x0_guess = dxi
-        jkcount += 1
         ah_start_cycle -= 1
 
 
@@ -596,7 +592,7 @@ class CASSCF(casci.CASCI):
             Converge threshold.  Default is 1e-7
         conv_tol_grad : float
             Converge threshold for CI gradients and orbital rotation gradients.
-            Default is 3e-4
+            Default is 1e-4
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
             (see notes in max_cycle_micro_inner attribute)
@@ -687,9 +683,6 @@ class CASSCF(casci.CASCI):
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
         self.max_stepsize = .03
-# small max_ci_stepsize is good to converge, since steepest descent is used
-#ABORT        self.max_ci_stepsize = .01
-#TODO:self.inner_rotation = False # active-active rotation
         self.max_cycle_macro = 50
         self.max_cycle_micro = 4
         self.max_cycle_micro_inner = 3
@@ -716,7 +709,7 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
-        self.ah_start_tol = 1.5
+        self.ah_start_tol = 2.5
         self.ah_start_cycle = 3
 # * Classic AH can be simulated by setting eg
 #               max_cycle_micro_inner = 1
@@ -766,7 +759,6 @@ class CASSCF(casci.CASCI):
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
         log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('orbital rotation max_stepsize = %g', self.max_stepsize)
-        #log.info('max. ci step = %g', self.max_ci_stepsize)
         log.info('augmented hessian ah_max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian ah_conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian ah_linear dependence = %g', self.ah_lindep)

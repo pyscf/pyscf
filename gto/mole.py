@@ -327,7 +327,7 @@ def expand_etbs(etbs):
     >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
-    return sum([expand_etb(*etb) for etb in etbs], [])
+    return pyscf.lib.flatten([expand_etb(*etb) for etb in etbs])
 
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):

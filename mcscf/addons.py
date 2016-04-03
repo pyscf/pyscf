@@ -4,6 +4,7 @@
 #
 
 import os
+import sys
 from functools import reduce
 import numpy
 import pyscf.lib
@@ -170,11 +171,17 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
         else:
             no = nc
         caslst.extend(orbidx_by_irrep[ir][nc:no])
+    caslst = numpy.sort(numpy.asarray(caslst)) + base
 
-    logger.debug(casscf, 'ncore for each irreps %s', irrep_ncore)
-    logger.debug(casscf, 'ncas for each irreps %s', irrep_ncas)
-    logger.debug(casscf, 'caslst = %s', caslst)
-    return numpy.sort(numpy.asarray(caslst)) + base
+    if casscf.verbose >= logger.INFO:
+        logger.info(casscf, 'ncore for each irreps %s',
+                    dict([(symm.irrep_id2name(casscf.mol.groupname, k), v)
+                          for k,v in irrep_ncore.items() if v != 0]))
+        logger.info(casscf, 'ncas for each irreps %s',
+                    dict([(symm.irrep_id2name(casscf.mol.groupname, k), v)
+                          for k,v in irrep_ncas.items() if v != 0]))
+        logger.info(casscf, '(%d-based) caslst = %s', base, caslst)
+    return caslst
 
 def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                      cas_irrep_ncore=None, s=None):
