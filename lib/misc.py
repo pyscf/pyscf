@@ -114,8 +114,19 @@ def tril_equal_pace(n, base=0, npace=0, minimal=1):
         m1 = m2
 
 def flatten(lst):
-    '''flatten nested lists'''
+    '''flatten nested lists
+    x[0] + x[1] + x[2] + ...
+
+    Examples:
+
+    >>> flatten([[0, 2], [1], [[9, 8, 7]]])
+    [0, 2, 1, [9, 8, 7]]
+    '''
     return list(itertools.chain.from_iterable(lst))
+
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
 
 class ctypes_stdout(object):
@@ -293,6 +304,7 @@ class StreamObject(object):
             check_sanity(self, self._keys, self.stdout)
         return self
 
+_warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is
     overwritten.  It does not check the attributes which are prefixed with
@@ -304,16 +316,22 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
         class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
-            msg = ('Overwrite keys %s of %s\n' %
+            msg = ('Overwrite attributes  %s  of %s\n' %
                    (' '.join(keyin), obj.__class__))
-            sys.stderr.write(msg)
-            stdout.write(msg)
+            if msg not in _warn_once_registry:
+                _warn_once_registry[msg] = 1
+                sys.stderr.write(msg)
+                if stdout is not sys.stdout:
+                    stdout.write(msg)
         keydiff = keysub - class_attr
         if keydiff:
-            msg = ('%s does not have attributes %s\n' %
+            msg = ('%s does not have attributes  %s\n' %
                    (obj.__class__, ' '.join(keydiff)))
-            sys.stderr.write(msg)
-            stdout.write(msg)
+            if msg not in _warn_once_registry:
+                _warn_once_registry[msg] = 1
+                sys.stderr.write(msg)
+                if stdout is not sys.stdout:
+                    stdout.write(msg)
     return obj
 
 def with_doc(doc):
