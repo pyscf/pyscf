@@ -124,63 +124,100 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     >>> mcscf.caslst_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
     [5, 7, 8, 10, 11, 14, 15, 20, 25, 26, 31, 32]
     '''
+    mol = casscf.mol
+    log = logger.Logger(casscf.stdout, casscf.verbose)
     if s is None:
         s = casscf._scf.get_ovlp()
-    orbsym = pyscf.symm.label_orb_symm(casscf.mol, casscf.mol.irrep_id,
-                                       casscf.mol.symm_orb, mo_coeff, s)
+    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id,
+                                       mol.symm_orb, mo_coeff, s)
     orbsym = numpy.asarray(orbsym)
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas
 
     irreps = set(orbsym)
-    orbidx_by_irrep = {}
-    for ir in irreps:
-        orbidx_by_irrep[ir] = numpy.where(orbsym == ir)[0]
 
-    irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
     if cas_irrep_ncore is not None:
-        for k, n in cas_irrep_ncore.items():
+        irrep_ncore = {}
+        for k, v in cas_irrep_ncore.items():
             if isinstance(k, str):
-                irid = symm.irrep_name2id(casscf.mol.groupname, k)
+                irrep_ncore[symm.irrep_name2id(mol.groupname, k)] = v
             else:
-                irid = k
-            irrep_ncore[irid] = n
+                irrep_ncore[k] = v
+
+        ncore_rest = casscf.ncore - sum(irrep_ncore.values())
+        if ncore_rest > 0:  # guess core configuration
+            mask = numpy.ones(len(orbsym), dtype=bool)
+            for ir in irrep_ncore:
+                mask[orbsym == ir] = False
+            core_rest = orbsym[mask][:ncore_rest]
+            core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
+                              for ir in set(core_rest)])
+            log.info('Given core space %s < casscf core size %d',
+                     cas_irrep_ncore, casscf.ncore)
+            log.info('Add %s to core configuration', core_rest)
+            irrep_ncore.update(core_rest)
+        elif ncore_rest < 0:
+            raise ValueError('Given core space %s > casscf core size %d'
+                             % (cas_irrep_ncore, casscf.ncore))
+    else:
+        irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
 
     if not isinstance(cas_irrep_nocc, dict):
         # list => dict
         cas_irrep_nocc = dict([(ir, n) for ir,n in enumerate(cas_irrep_nocc)
                                if n > 0])
+
     irrep_ncas = {}
-    count = 0
-    for k, n in cas_irrep_nocc.items():
+    for k, v in cas_irrep_nocc.items():
         if isinstance(k, str):
-            irid = symm.irrep_name2id(casscf.mol.groupname, k)
+            irrep_ncas[symm.irrep_name2id(mol.groupname, k)] = v
         else:
-            irid = k
-        irrep_ncas[irid] = n
-        count += n
-    if count != casscf.ncas:
-        raise ValueError('Active space size %d != specified active space %s'
-                         % (casscf.ncas, cas_irrep_nocc))
+            irrep_ncas[k] = v
+
+    ncas_rest = casscf.ncas - sum(irrep_ncas.values())
+    if ncas_rest > 0:
+        mask = numpy.ones(len(orbsym), dtype=bool)
+# remove core and specified active space
+        for ir in irrep_ncas:
+            mask[orbsym == ir] = False
+        for ir, ncore in irrep_ncore.items():
+            idx = numpy.where(orbsym == ir)[0]
+            mask[idx[:ncore]] = False
+
+        cas_rest = orbsym[mask][:ncas_rest]
+        cas_rest = dict([(ir, numpy.count_nonzero(cas_rest==ir))
+                         for ir in set(cas_rest)])
+        log.info('Given active space %s < casscf active space size %d',
+                 cas_irrep_nocc, casscf.ncas)
+        log.info('Add %s to active space', cas_rest)
+        irrep_ncas.update(cas_rest)
+    elif ncas_rest < 0:
+        raise ValueError('Given active space %s > casscf active space size %d'
+                         % (cas_irrep_nocc, casscf.ncas))
 
     caslst = []
-    for ir in irreps:
-        nc = irrep_ncore[ir]
-        if ir in irrep_ncas:
-            no = nc + irrep_ncas[ir]
-        else:
-            no = nc
-        caslst.extend(orbidx_by_irrep[ir][nc:no])
+    for ir, ncas in irrep_ncas.items():
+        if ncas > 0:
+            if ir in irrep_ncore:
+                nc = irrep_ncore[ir]
+            else:
+                nc = 0
+            no = nc + ncas
+            idx = numpy.where(orbsym == ir)[0]
+            caslst.extend(idx[nc:no])
     caslst = numpy.sort(numpy.asarray(caslst)) + base
+    if len(caslst) < casscf.ncas:
+        raise ValueError('Not enough orbitals found for core %s, cas %s' %
+                         (cas_irrep_ncore, cas_irrep_nocc))
 
-    if casscf.verbose >= logger.INFO:
-        logger.info(casscf, 'ncore for each irreps %s',
-                    dict([(symm.irrep_id2name(casscf.mol.groupname, k), v)
-                          for k,v in irrep_ncore.items() if v != 0]))
-        logger.info(casscf, 'ncas for each irreps %s',
-                    dict([(symm.irrep_id2name(casscf.mol.groupname, k), v)
-                          for k,v in irrep_ncas.items() if v != 0]))
-        logger.info(casscf, '(%d-based) caslst = %s', base, caslst)
+    if log.verbose >= logger.INFO:
+        log.info('ncore for each irreps %s',
+                 dict([(symm.irrep_id2name(mol.groupname, k), v)
+                       for k,v in irrep_ncore.items()]))
+        log.info('ncas for each irreps %s',
+                 dict([(symm.irrep_id2name(mol.groupname, k), v)
+                       for k,v in irrep_ncas.items()]))
+        log.info('(%d-based) caslst = %s', base, caslst)
     return caslst
 
 def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,

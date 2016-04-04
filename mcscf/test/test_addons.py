@@ -111,6 +111,34 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(mo0, mo2))
         self.assertTrue(numpy.allclose(mo0, mo3))
 
+    def test_sort_mo_by_irrep1(self):
+        mol = gto.M(atom='N 0 0 -.45; N 0 0 .45', basis='ccpvdz',
+                    symmetry=True, verbose=0)
+        mf = scf.RHF(mol).run()
+        mc1 = mcscf.CASSCF(mf, 6, 6)
+        caslst = mcscf.addons.caslst_by_irrep(mc1, mf.mo_coeff,
+                {'A1g': 1, 'A1u': 1, 'E1uy': 1, 'E1ux': 1, 'E1gy': 1, 'E1gx': 1},
+                {'A1g': 2, 'A1u': 2})
+        self.assertEqual(list(caslst), [4,5,7,8,9,10])
+        caslst = mcscf.addons.caslst_by_irrep(mc1, mf.mo_coeff,
+                {'E1uy': 1, 'E1ux': 1, 'E1gy': 1, 'E1gx': 1},
+                {'A1g': 2, 'A1u': 2})
+        self.assertEqual(list(caslst), [4,5,7,8,9,10])
+        caslst = mcscf.addons.caslst_by_irrep(mc1, mf.mo_coeff,
+                {'E1uy': 1, 'E1ux': 1, 'E1gy': 1, 'E1gx': 1},
+                {'A1u': 2})
+        self.assertEqual(list(caslst), [4,5,7,8,9,10])
+        caslst = mcscf.addons.caslst_by_irrep(mc1, mf.mo_coeff,
+                {'A1g': 1, 'A1u': 1}, {'E1uy': 1, 'E1ux': 1})
+        self.assertEqual(list(caslst), [3,6,8,9,12,13])
+
+        self.assertRaises(ValueError, mcscf.addons.caslst_by_irrep, mc1, mf.mo_coeff,
+                          {'A1g': 1, 'A1u': 1}, {'E1uy': 3, 'E1ux': 3})
+        self.assertRaises(ValueError, mcscf.addons.caslst_by_irrep, mc1, mf.mo_coeff,
+                          {'A1g': 3, 'A1u': 4}, {'E1uy': 1, 'E1ux': 1})
+        self.assertRaises(ValueError, mcscf.addons.caslst_by_irrep, mc1, mf.mo_coeff,
+                          {'E2ux': 2, 'E2uy': 2}, {'E1uy': 1, 'E1ux': 1})
+
     def test_state_average(self):
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc.fcisolver = fci.solver(mol, singlet=False)

@@ -580,15 +580,6 @@ class CASCI(pyscf.lib.StreamObject):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
-    def sort_mo_by_irrep(self, cas_irrep_nocc,
-                         cas_irrep_ncore=None, mo_coeff=None, s=None):
-        '''Select active space based on symmetry information.
-        See also :func:`pyscf.mcscf.addons.sort_mo_by_irrep`
-        '''
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
-                                       cas_irrep_ncore, s)
-
     @pyscf.lib.with_doc(addons.state_average.__doc__)
     def state_average_(self, weights=(0.5,0.5)):
         self.fcisolver = addons.state_average(self, weights)
