@@ -2101,7 +2101,14 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     @pyscf.lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=1):
-        return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
+        if 'ECP' in intor:
+            assert(self._ecp is not None)
+            bas = numpy.vstack((self._bas, self._ecpbas))
+            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
+            self._env[PTR_NECPBAS] = len(self._ecpbas)
+        else:
+            bas = self._bas
+        return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
     @pyscf.lib.with_doc(eval_gto.eval_gto.__doc__)

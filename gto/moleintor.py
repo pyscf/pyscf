@@ -546,7 +546,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.reshape(di,dj,dk,dl)
         else:
             return buf.transpose(4,0,1,2,3)
-    elif '1e' in intor_name:
+    elif '1e' in intor_name or 'ECP' in intor_name:
         assert(len(shls) == 2)
         di, dj = [num_cgto_of(x) for x in shls]
         buf = numpy.empty((di,dj,comp), dtype, order='F')
