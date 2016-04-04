@@ -645,9 +645,15 @@ def hot_tuning_(casscf, configfile=None):
                         'callback', 'fcisolver', 'orbsym'))
 
     casscf_settings = {}
-    for k in casscf.__dict__:
+    for k, v in casscf.__dict__.items():
         if not (k.startswith('_') or k in exclude_keys):
-            casscf_settings[k] = getattr(casscf, k)
+            if (v is None or
+                isinstance(v, (basestring, bool, int, long, float,
+                               list, tuple, dict))):
+                casscf_settings[k] = v
+            elif isinstance(v, set):
+                casscf_settings[k] = list(v)
+
     doc = '''# JSON format
 # Note the double quote "" around keyword
 '''

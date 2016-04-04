@@ -689,7 +689,28 @@ def dumps(mol):
             val = c[x,y]
             symm_orb.append((val.tolist(), x.tolist(), y.tolist(), c.shape))
         moldic['symm_orb'] = symm_orb
-    return json.dumps(moldic)
+    try:
+        return json.dumps(moldic)
+    except TypeError:
+        import warnings
+        def skip_value(dic):
+            dic1 = {}
+            for k,v in dic.items():
+                if (v is None or
+                    isinstance(v, (basestring, bool, int, long, float))):
+                    dic1[k] = v
+                elif isinstance(v, (list, tuple)):
+                    dic1[k] = v   # Should I recursively skip_vaule?
+                elif isinstance(v, set):
+                    dic1[k] = list(v)
+                elif isinstance(v, dict):
+                    dic1[k] = skip_value(v)
+                else:
+                    msg =('Function mol.dumps removes attribute %s because '
+                          'it is not JSON-serializable\n' % k)
+                    warnings.warn(msg)
+            return dic1
+        return json.dumps(skip_value(moldic), skipkeys=True)
 
 def loads(molstr):
     '''Deserialize a str containing a JSON document to a Mole object.
