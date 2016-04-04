@@ -160,6 +160,14 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
         self.assertRaises(ValueError, mf.dump_flags)
 
+    def test_det_ovlp(self):
+        mf = scf.UHF(mol)
+        mf.scf()
+        s, x = mf.det_ovlp(mf.mo_coeff, mf.mo_coeff, mf.mo_occ, mf.mo_occ)
+        self.assertAlmostEqual(s, 1.000000000, 9)
+        self.assertAlmostEqual(numpy.trace(x[0]), mf.nelec[0]*1.000000000, 9)
+        self.assertAlmostEqual(numpy.trace(x[0]), mf.nelec[1]*1.000000000, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for uhf")
