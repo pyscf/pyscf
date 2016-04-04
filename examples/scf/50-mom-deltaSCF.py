@@ -2,8 +2,6 @@
 
 # Author: Junzi Liu <latrix1247@gmail.com>
 
-from pyscf import gto, scf, dft
-
 '''
  Delta-SCF with maximium occupation method for calculating specific excited state.
 
@@ -20,6 +18,8 @@ from pyscf import gto, scf, dft
 
  overwite keys get_occ of <class 'pyscf.scf.uks.UKS'>
 '''
+
+from pyscf import gto, scf, dft
 
 mol = gto.Mole()
 mol.verbose = 1

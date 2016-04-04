@@ -156,10 +156,10 @@ def mom_occ(mf, occorb, setocc):
         mo_occ[0][idx_a[-nocc_a:]] = 1.
         mo_occ[1][idx_b[-nocc_b:]] = 1.
 
-        if mf.verbose >= logger.INFO: 
+        if mf.verbose >= logger.DEBUG: 
             logger.info(mf, ' New alpha occ pattern: %s', mo_occ[0]) 
             logger.info(mf, ' New beta occ pattern: %s', mo_occ[1]) 
-        if mf.verbose >= logger.DEBUG:
+        if mf.verbose >= logger.DEBUG1:
             logger.info(mf, ' Current alpha mo_energy(sorted) = %s', mo_energy[0]) 
             logger.info(mf, ' Current beta mo_energy(sorted) = %s', mo_energy[1])
 
