@@ -3,7 +3,6 @@
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf, fci
-from pyscf.mcscf import dmet_cas
 
 '''
 Force the FCI solver of CASSCF following certain spin state.
@@ -43,3 +42,28 @@ mc = mcscf.CASSCF(mf, 8, 12)#(6,6))
 #mc.fcisolver.wfnsym = 'A2g'
 mc.kernel()
 print('Triplet Sigma_g^- %.15g  ref = -149.688656224059' % mc.e_tot)
+
+
+#
+# In the following example, without fix_spin_ decoration, it's probably unable
+# to converge to the correct spin state.
+#
+mol = gto.M(
+    atom = 'Mn 0 0 0; Mn 0 0 2.5',
+    basis = 'ccpvdz',
+    symmetry = 1,
+)
+mf = scf.RHF(mol)
+mf.set(level_shift=0.4).run()
+mc = mcscf.CASCI(mf, 12, 14)
+mc.fcisolver.max_cycle = 100
+mo = mc.sort_mo_by_irrep({'A1g': 2, 'A1u': 2,
+                          'E1uy': 1, 'E1ux': 1, 'E1gy': 1, 'E1gx': 1,
+                          'E2uy': 1, 'E2ux': 1, 'E2gy': 1, 'E2gx': 1},
+                         {'A1g': 5, 'A1u': 5,
+                          'E1uy': 2, 'E1ux': 2, 'E1gy': 2, 'E1gx': 2})
+mc.kernel(mo)
+
+fci.addons.fix_spin_(mc.fcisolver, shift=.5, ss_value=0)
+mc.kernel(mo)
+

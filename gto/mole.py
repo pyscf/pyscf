@@ -706,8 +706,8 @@ def dumps(mol):
                 elif isinstance(v, dict):
                     dic1[k] = skip_value(v)
                 else:
-                    msg =('Function mol.dumps removes attribute %s because '
-                          'it is not JSON-serializable\n' % k)
+                    msg =('Function mol.dumps drops attribute %s because '
+                          'it is not JSON-serializable' % k)
                     warnings.warn(msg)
             return dic1
         return json.dumps(skip_value(moldic), skipkeys=True)

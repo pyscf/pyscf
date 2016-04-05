@@ -12,7 +12,7 @@ BLOCKEXE = '/path/to/Block/block.spin_adapted'
 BLOCKEXE_COMPRESS_NEVPT = '/path/to/serially/compiled/Block/block.spin_adapted'
 BLOCKSCRATCHDIR = os.path.join(os.environ['TMPDIR'], str(os.getpid()))
 #BLOCKSCRATCHDIR = os.path.join('./scratch', str(os.getpid()))
-BLOCKRUNTIMEDIR = BLOCKSCRATCHDIR
+BLOCKRUNTIMEDIR = '.'
 MPIPREFIX = 'mpirun'  # change to srun for SLURM job system
 
 
