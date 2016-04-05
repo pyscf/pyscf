@@ -9,7 +9,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
-
+#include "fci_string.h"
 
 /*
  * Hamming weight popcount
@@ -120,6 +120,7 @@ int FCIstr2addr(int norb, int nelec, int64_t string)
 }
 
 
+// [cre, des, target_address, parity]
 void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                       int64_t *strs, int store_trilidx)
 {
@@ -188,6 +189,7 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
         }
 }
 
+// [cre, des, target_address, parity]
 void FCIcre_str_index(int *link_index, int norb, int na, int nocc,
                       int64_t *strs)
 {
@@ -203,7 +205,7 @@ void FCIcre_str_index(int *link_index, int norb, int na, int nocc,
                         if (!(str0 & (1ULL<<i))) {
                                 str1 = str0 | (1ULL<<i);
                                 tab[k*4+0] = i;
-                                tab[k*4+1] = i*(i+1)/2;
+                                tab[k*4+1] = 0;
                                 tab[k*4+2] = FCIstr2addr(norb, nocc+1, str1);
                                 if (FCIpopcount_1(str0>>(i+1)) % 2) {
                                         tab[k*4+3] = -1;
@@ -217,6 +219,7 @@ void FCIcre_str_index(int *link_index, int norb, int na, int nocc,
         }
 }
 
+// [cre, des, target_address, parity]
 void FCIdes_str_index(int *link_index, int norb, int na, int nocc,
                       int64_t *strs)
 {
@@ -230,8 +233,8 @@ void FCIdes_str_index(int *link_index, int norb, int na, int nocc,
                 for (i = 0; i < norb; i++) {
                         if (str0 & (1ULL<<i)) {
                                 str1 = str0 ^ (1ULL<<i);
-                                tab[k*4+0] = i;
-                                tab[k*4+1] = i*(i+1)/2;
+                                tab[k*4+0] = 0;
+                                tab[k*4+1] = i;
                                 tab[k*4+2] = FCIstr2addr(norb, nocc-1, str1);
                                 if (FCIpopcount_1(str0>>(i+1)) % 2) {
                                         tab[k*4+3] = -1;
@@ -245,3 +248,44 @@ void FCIdes_str_index(int *link_index, int norb, int na, int nocc,
         }
 }
 
+/*
+ ***********************************************************
+ */
+
+void FCIcompress_link(_LinkT *clink, int *link_index,
+                      int norb, int nstr, int nlink)
+{
+        int i, j, k, a, str1, sign;
+        for (k = 0; k < nstr; k++) {
+                for (j = 0; j < nlink; j++) {
+                        a    = link_index[j*4+0];
+                        i    = link_index[j*4+1];
+                        str1 = link_index[j*4+2];
+                        sign = link_index[j*4+3];
+                        clink[j].a = a;
+                        clink[j].i = i;
+                        clink[j].sign = sign;
+                        clink[j].addr = str1;
+                }
+                clink += nlink;
+                link_index += nlink * 4;
+        }
+}
+
+void FCIcompress_link_tril(_LinkTrilT *clink, int *link_index,
+                           int nstr, int nlink)
+{
+        int i, j, ia, str1, sign;
+        for (i = 0; i < nstr; i++) {
+                for (j = 0; j < nlink; j++) {
+                        ia   = link_index[j*4+0];
+                        str1 = link_index[j*4+2];
+                        sign = link_index[j*4+3];
+                        clink[j].ia = ia;
+                        clink[j].sign = sign;
+                        clink[j].addr = str1;
+                }
+                clink += nlink;
+                link_index += nlink * 4;
+        }
+}

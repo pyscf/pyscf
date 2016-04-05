@@ -77,6 +77,7 @@ ALIAS = {
     'def2tzvp'   : 'def2-tzvp.dat'  ,
     'tzv'        : 'tzv.dat'        ,
     'weigend'    : 'weigend_cfit.dat',
+    'weigend+etb': 'weigend_cfit.dat',
     'demon'      : 'demon_cfit.dat' ,
     'ahlrichs'   : 'ahlrichs_cfit.dat',
     'ccpvtzfit'  : 'cc-pvtz_fit.dat',
@@ -97,6 +98,7 @@ ALIAS = {
     'sbkjc'      : 'sbkjc.dat'      ,
     'stuttgart'  : 'stuttgart_dz.dat',
     'stuttgartdz': 'stuttgart_dz.dat',
+    'stuttgartrlc': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
 }
 

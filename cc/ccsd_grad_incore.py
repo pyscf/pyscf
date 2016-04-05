@@ -16,8 +16,8 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm_incore as ccsd_rdm
-import pyscf.grad
-from pyscf.grad import cphf
+from pyscf.scf import rhf_grad
+from pyscf.scf import cphf
 
 BLKSIZE = 192
 
@@ -26,11 +26,10 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(mycc)
     if d1 is None:
-        doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
-    else:
-        doo, dvv = d1
+        d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     if d2 is None:
         d2 = ccsd_rdm.gamma2_incore(mycc, t1, t2, l1, l2)
+    doo, dov, dvo, dvv = d1
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -228,16 +227,19 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
     return dm1
 
 
-# Only works with canonical orbitals
+#
+# Note: only works with canonical orbitals
+# Non-canonical formula refers to JCP, 95, 2639
+#
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           grad_hf=None, verbose=logger.INFO):
+           mf_grad=None, verbose=logger.INFO):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
     if eris is None: eris = ccsd._ERIS(mycc)
-    if grad_hf is None:
-        grad_hf = pyscf.grad.hf.RHF(mycc._scf)
+    if mf_grad is None:
+        mf_grad = rhf_grad.Gradients(mycc._scf)
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time0 = time.clock(), time.time()
@@ -255,14 +257,15 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nao_pair = nao * (nao+1) // 2
 
     log.debug('Build ccsd rdm1 intermediates')
-    doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
+    doo, dov, dvo, dvv = d1
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
     d2 = ccsd_rdm.gamma2_incore(mycc, t1, t2, l1, l2)
     time1 = log.timer('rdm2 intermediates', *time1)
     log.debug('Build ccsd response_rdm1')
-    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, (doo,dvv), d2)
+    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2)
     time1 = log.timer('response_rdm1 intermediates', *time1)
 
     dm1mo = response_dm1(mycc, t1, t2, l1, l2, eris, (Ioo, Ivv, Ivo, Xvo))
@@ -278,13 +281,15 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer('response_rdm1', *time1)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
-    dm2ao = _rdm2_mo2ao(mycc, d2, dm1mo, mo_coeff)
+    dm1_with_hf = dm1mo.copy()
+    for i in range(nocc):
+        dm1_with_hf[i,i] += 1
+    dm2ao = _rdm2_mo2ao(mycc, d2, dm1_with_hf, mo_coeff)
     time1 = log.timer('MO->AO transformation', *time1)
 
-#TODO: pass hf_grad object to compute h1 and s1
     log.debug('h1 and JK1')
-    h1 = grad_hf.get_hcore(mol)
-    s1 = grad_hf.get_ovlp(mol)
+    h1 = mf_grad.get_hcore(mol)
+    s1 = mf_grad.get_ovlp(mol)
     zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
@@ -296,11 +301,11 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     # Hartree-Fock part contribution
     hf_dm1 = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
     dm1ao += hf_dm1
-    zeta += grad_hf.make_rdm1e(mycc.mo_energy, mycc.mo_coeff, mycc.mo_occ)
+    zeta += mf_grad.make_rdm1e(mycc.mo_energy, mycc.mo_coeff, mycc.mo_occ)
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = grad_hf.aorange_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -308,11 +313,10 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] =(numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
               + numpy.einsum('xji,ij->x', s1[:,p0:p1], im1[:,p0:p1]))
 # h[1] \dot DM, *2 for +c.c.,  contribute to f1
-        vrinv = grad_hf._grad_rinv(mol, ia)
-        de[k] +=(numpy.einsum('xij,ij->x', h1[:,p0:p1], dm1ao[p0:p1]  )
-               + numpy.einsum('xji,ij->x', h1[:,p0:p1], dm1ao[:,p0:p1]))
-        de[k] +=(numpy.einsum('xij,ij->x', vrinv, dm1ao)
-               + numpy.einsum('xji,ij->x', vrinv, dm1ao))
+        h1ao = mf_grad._grad_rinv(mol, ia)
+        h1ao[:,p0:p1] += h1[:,p0:p1]
+        de[k] +=(numpy.einsum('xij,ij->x', h1ao, dm1ao)
+               + numpy.einsum('xji,ij->x', h1ao, dm1ao))
 # -s[1]*e \dot DM,  contribute to f1
         de[k] -=(numpy.einsum('xij,ij->x', s1[:,p0:p1], zeta[p0:p1]  )
                + numpy.einsum('xji,ij->x', s1[:,p0:p1], zeta[:,p0:p1]))
@@ -326,13 +330,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         dm2buf = _load_block_tril(dm2ao, p0, p1)
         de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
 
-        for i in range(3):
-            #:tmp = _ccsd.unpack_tril(eri1[i].reshape(-1,nao_pair))
-            #:vj = numpy.einsum('ijkl,kl->ij', tmp, hf_dm1)
-            #:vk = numpy.einsum('ijkl,jk->il', tmp, hf_dm1)
-            vj, vk = hf_get_jk_incore(eri1[i], hf_dm1)
-            de[k,i] -=(numpy.einsum('ij,ij->', vj, hf_dm1[p0:p1])
-                     - numpy.einsum('ij,ij->', vk, hf_dm1[p0:p1])*.5) * 2
         eri1 = dm2buf = None
         log.debug('grad of atom %d %s = %s', ia, mol.atom_symbol(ia), de[k])
         time1 = log.timer('grad of atom %d'%ia, *time1)
@@ -345,18 +342,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
                  de[k,0], de[k,1], de[k,2])
     log.timer('CCSD gradients', *time0)
     return de
-
-def shell_prange(mol, start, stop, blksize):
-    nao = 0
-    ib0 = start
-    for ib in range(start, stop):
-        now = (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
-        nao += now
-        if nao > blksize and nao > now:
-            yield (ib0, ib, nao-now)
-            ib0 = ib
-            nao = now
-    yield (ib0, stop, nao)
 
 def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff):
     log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -405,7 +390,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff):
 
     pool = pool.ravel()[:blksize*nvir**3].reshape((blksize*nvir,nvir,nvir))
     for p0, p1 in prange(0, nvir_pair, blksize*nvir):
-        buf1 = _ccsd.unpack_tril(dvvvv[p0:p1], out=pool[:p1-p0])
+        buf1 = _ccsd.unpack_tril(_cp(dvvvv[p0:p1]), out=pool[:p1-p0])
         _trans(buf1, nocc, nvir, nocc, nvir, bufvv[p0:p1])
     pool = buf1 = None
 
@@ -553,9 +538,9 @@ if __name__ == '__main__':
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -569,14 +554,14 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-14
     ehf0 = mf.scf()
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     mycc = ccsd.CCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0.          0.         -0.07080036]
 # [ 0.          0.          0.07080036]]

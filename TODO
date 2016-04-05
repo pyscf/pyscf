@@ -2,15 +2,13 @@
 
 * EOM-IP-CCSD, EOM-EA-CCSD, EOM-EE-CCSD
 
-* COSMO or PCM solvent model
+* PCM solvent model
 
 * CASPT2
 
-* DFT, MP2 gradients
+* MP2 gradients
 
-* DFT, MP2 NMR
-
-* TDDFT
+* MP2 NMR
 
 * HF, DFT Hessian
 
@@ -24,6 +22,4 @@
   - Better initial guess for triplet etc
 
 ------------------------------------------------
-* function for pipelines
-  - .m(*kwargs) ?
 * dryrun mode

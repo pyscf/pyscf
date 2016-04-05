@@ -1,17 +1,25 @@
 import sys
-from pyscf.dft import vxc
+try:
+    from pyscf.dft import libxc
+except (ImportError, OSError):
+    pass
+try:
+    from pyscf.dft import xcfun
+except (ImportError, OSError):
+    pass
 from pyscf.dft import rks
+from pyscf.dft import roks
 from pyscf.dft import uks
 from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.df import density_fit
-
-# register the XC keywords in module
-curmod = sys.modules[__name__]
-for k,v in vxc.XC_CODES.items():
-    setattr(curmod, k, v)
+from pyscf.dft.gen_grid import sg1_prune, nwchem_prune, treutler_prune, \
+        stratmann, original_becke
+from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
+        delley, mura_knowles, gauss_chebyshev, treutler, treutler_ahlrichs, \
+        treutler_atomic_radii_adjust, becke_atomic_radii_adjust
 
 
 def RKS(mol, *args):
@@ -19,7 +27,7 @@ def RKS(mol, *args):
         return uks.UKS(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
-            return rks.ROKS(mol, *args)
+            return roks.ROKS(mol, *args)
         else:
             return rks.RKS(mol, *args)
     else:
@@ -32,7 +40,7 @@ def ROKS(mol, *args):
     if mol.nelectron == 1:
         return uks.UKS(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
-        return rks.ROKS(mol, *args)
+        return roks.ROKS(mol, *args)
     else:
         return rks_symm.ROKS(mol, *args)
 

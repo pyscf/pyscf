@@ -157,34 +157,73 @@ def DHF(mol, *args):
 def X2C(mol, *args):
     return x2c.UHF(mol, *args)
 
-def density_fit(mf, auxbasis='weigend'):
+def density_fit(mf, auxbasis='weigend+etb'):
     return mf.density_fit(auxbasis)
 
 def newton(mf):
-    '''augmented hessian for Newton Raphson'''
+    '''augmented hessian for Newton Raphson
+
+    Examples:
+
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
+    >>> mf = scf.RHF(mol).run(conv_tol=.5)
+    >>> mf = scf.newton(mf).set(conv_tol=1e-9)
+    >>> mf.kernel()
+    -1.0811707843774987
+    '''
     return newton_ah.newton(mf)
 
-def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None, auxbasis='weigend',
-                **newton_kwargs):
+def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
+                auxbasis=None, **newton_kwargs):
     '''Wrap function to quickly setup and call Newton solver.
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
     ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.
     '''
+    from pyscf.lib import logger
+    from pyscf import df
+    if auxbasis is None:
+        auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
     mf1 = density_fit(newton(mf), auxbasis)
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
+    if hasattr(mf, 'grids'):
+        import copy
+        from pyscf.dft import gen_grid
+        approx_grids = gen_grid.Grids(mf.mol)
+        approx_grids.verbose = 0
+        approx_grids.level = 0
+        mf1.grids = approx_grids
+
+        approx_numint = copy.copy(mf._numint)
+        mf1._numint = approx_numint
 
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
+        logger.note(mf, '========================================================')
+        logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
+        logger.note(mf, '========================================================')
         mf0 = density_fit(mf, auxbasis)
-        mf0.conv_tol = .5
+        mf0.conv_tol = .25
         if mf0.level_shift == 0:
-            mf0.level_shift = .2
+            mf0.level_shift = .3
+        if hasattr(mf, 'grids'):
+            mf0.grids = approx_grids
+            mf0._numint = approx_numint
+# Note: by setting small_rho_cutoff, dft.get_veff_ function may overwrite
+# approx_grids and approx_numint.  It will further changes the corresponding
+# mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
+# dft.get_veff_ are not executed so that more grid points may be found in
+# approx_grids.
+            mf0.small_rho_cutoff = 1e-6
         mf0.kernel()
+
         mf1._cderi = mf0._cderi
         mf1._naoaux = mf0._naoaux
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
+        logger.note(mf, '============================')
+        logger.note(mf, 'Generating initial guess end')
+        logger.note(mf, '============================')
 
     mf1.kernel(mo_coeff, mo_occ)
     mf.converged = mf1.converged

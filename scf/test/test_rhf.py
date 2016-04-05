@@ -19,7 +19,17 @@ H     0    0.757    0.587''',
 
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-10
-mf.scf()
+mf.kernel()
+
+n2sym = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = '''
+        N     0    0    0
+        N     0    0    1''',
+    symmetry = 1,
+    basis = 'cc-pvdz')
+n2mf = scf.RHF(n2sym).set(conv_tol=1e-10).run()
 
 
 class KnowValues(unittest.TestCase):
@@ -59,7 +69,7 @@ class KnowValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
         self.assertAlmostEqual(abs(pop).sum(), 22.056441149586863, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
-        self.assertAlmostEqual(abs(pop).sum(), 22.11825416138074, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.118254161380747, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
         self.assertAlmostEqual(abs(pop).sum(), 22.117869619510266, 7)
 
@@ -68,7 +78,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 6)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
@@ -114,6 +124,8 @@ class KnowValues(unittest.TestCase):
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
         self.assertAlmostEqual(mf.scf(), -76.026765673119627, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 6)
 
     def test_hf_symm_fixnocc(self):
         pmol = mol.copy()
@@ -122,6 +134,8 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf_symm.RHF(pmol)
         mf.irrep_nelec = {'B1':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9778759898704612, 6)
 
     def test_hf_symm_rohf(self):
         pmol = mol.copy()
@@ -131,6 +145,8 @@ class KnowValues(unittest.TestCase):
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
         self.assertAlmostEqual(mf.scf(), -75.627354109594179, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.6782452972117743, 6)
 
     def test_hf_symm_rohf_fixnocc(self):
         pmol = mol.copy()
@@ -141,32 +157,34 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf_symm.ROHF(pmol)
         mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
+        pop, chg = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873076011029529, 6)
 
     def test_n2_symm(self):
-        pmol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''
-                N     0    0    0
-                N     0    0    1''',
-            symmetry = 1,
-            basis = 'cc-pvdz')
-        mf = scf.hf_symm.RHF(pmol)
+        mf = scf.hf_symm.RHF(n2sym)
         self.assertAlmostEqual(mf.scf(), -108.9298383856092, 9)
 
     def test_n2_symm_rohf(self):
-        pmol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''
-                N     0    0    0
-                N     0    0    1''',
-            symmetry = 1,
-            charge = 1,
-            spin = 1,
-            basis = 'cc-pvdz')
+        pmol = n2sym.copy()
+        pmol.charge = 1
+        pmol.spin = 1
+        pmol.nelectron -= 1
         mf = scf.hf_symm.ROHF(pmol)
         self.assertAlmostEqual(mf.scf(), -108.33899076078299, 9)
+
+    def test_n2_symm_fixnocc(self):
+        mf = scf.hf_symm.RHF(n2sym)
+        mf.irrep_nelec = {'A1g':8, 'A1u':2, 'E1ux':2, 'E1uy':2}
+        self.assertAlmostEqual(mf.scf(), -106.52905502298771, 9)
+
+    def test_n2_symm_rohf_fixnocc(self):
+        pmol = n2sym.copy()
+        pmol.charge = 1
+        pmol.spin = 1
+        pmol.nelectron -= 1
+        mf = scf.hf_symm.ROHF(pmol)
+        mf.irrep_nelec = {'A1g':6, 'A1u':3, 'E1ux':2, 'E1uy':2}
+        self.assertAlmostEqual(mf.scf(), -108.21954550790898, 9)
 
     def test_dot_eri_dm(self):
         numpy.random.seed(1)
@@ -185,6 +203,7 @@ class KnowValues(unittest.TestCase):
         mol.atom = [["O" , (0. , 0.     , 0.)],
                     ['ghost'   , (0. , -0.757, 0.587)],
                     [1   , (0. , 0.757 , 0.587)] ]
+        mol.verbose = 0
         mol.spin = 1
         mol.symmetry = True
         mol.basis = {'O':'ccpvdz', 'H':'ccpvdz',
@@ -192,6 +211,75 @@ class KnowValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol)
         self.assertAlmostEqual(mf.kernel(), -75.393287998638741, 9)
+
+    def test_rhf_get_occ(self):
+        mol = gto.M(verbose=7, output='/dev/null').set(nelectron=10)
+        mf = scf.hf.RHF(mol)
+        energy = numpy.array([-10, -1, 1, -2, 0, -3])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy), [2, 2, 0, 2, 2, 2]))
+
+    def test_rhf_symm_get_occ(self):
+        mf = scf.RHF(n2sym).set(verbose = 0)
+        orbsym = numpy.array([0 , 5, 0 , 5 , 6 , 7 , 0 , 2 , 3 , 5 , 0 , 6 , 7 , 0 , 2 , 3 , 5 , 10, 11, 5])
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7])
+        mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2]))
+        mf.irrep_nelec = {'E1ux':2, 'E1uy':2}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [0, 2, 0, 0, 2, 0, 2, 0, 0, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
+        mf.irrep_nelec = {}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
+
+    def test_rohf_get_occ(self):
+        mol = gto.M(verbose=7, output='/dev/null').set(nelectron=8, spin=2)
+        mf = scf.rohf.ROHF(mol)
+        energy = numpy.array([-10, -1, 1, -2, 0, -3])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy), [2, 1, 0, 2, 1, 2]))
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        pmol.symmetry = False
+        mf = scf.rohf.ROHF(pmol).set(verbose = 0)
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                [0, 2, 0, 0, 0, 1, 2, 0, 1, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
+        # 0 virtual
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                [2, 2, 1, 2, 2, 2, 2, 1]))
+        # 0 core
+        mf.nelec = (14, 0)
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51])
+        self.assertTrue(numpy.allclose(mf.get_occ(energy),
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+
+    def test_rohf_symm_get_occ(self):
+        pmol = n2sym.copy()
+        pmol.charge = 0
+        pmol.spin = 2
+        mf = scf.ROHF(pmol).set(verbose = 0)
+        orbsym = numpy.array([0 , 5, 0 , 5 , 6 , 7 , 0 , 2 , 3 , 5 , 0 , 6 , 7 , 0 , 2 , 3 , 5 , 10, 11, 5])
+        energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7])
+        mf.irrep_nelec = {'A1g':7, 'A1u':3, 'E1ux':2, 'E1uy':2}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [2, 2, 1, 0, 2, 0, 2, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 1]))
+        mf.irrep_nelec = {'E1ux':2, 'E1uy':2}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [0, 2, 0, 0, 2, 0, 2, 0, 1, 1, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
+        mf.irrep_nelec = {}
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+                [0, 2, 0, 0, 0, 1, 2, 0, 1, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
+
+    def test_rohf_symm_dump_flags(self):
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        mf = scf.ROHF(pmol).set(verbose = 0)
+        mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
+        self.assertRaises(ValueError, mf.dump_flags)
+
+        mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
+        self.assertRaises(ValueError, mf.dump_flags)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,6 @@ from pyscf.lib import logger
 import pyscf.ao2mo
 import pyscf.cc.ccsd_slow as ccsd
 
-BLKMIN = 4
 # t2,l2 as ijab
 
 # default max_memory = 2000 MB
@@ -33,10 +32,7 @@ def kernel(cc, eris=None, t1=None, t2=None, l1=None, l2=None,
     if l2 is None: l2 = t2
 
     nocc, nvir = t1.shape
-    blksize = max(BLKMIN, int(max_memory*.95e6/8/(nvir**3*6)))
-    log.debug('block size = %d, nocc = %d is divided into %d blocks',
-              blksize, nocc, int((nocc+blksize-1)/blksize))
-    saved = make_intermediates(mcc, t1, t2, eris)
+    saved = make_intermediates(cc, t1, t2, eris)
 
     if cc.diis:
         adiis = lib.diis.DIIS(cc, cc.diis_file)
@@ -47,7 +43,7 @@ def kernel(cc, eris=None, t1=None, t2=None, l1=None, l2=None,
 
     conv = False
     for istep in range(max_cycle):
-        l1new, l2new = update_amps(cc, t1, t2, l1, l2, eris, saved, blksize)
+        l1new, l2new = update_amps(cc, t1, t2, l1, l2, eris, saved)
         normt = numpy.linalg.norm(l1new-l1) + numpy.linalg.norm(l2new-l2)
         l1, l2 = l1new, l2new
         l1new = l2new = None
@@ -138,7 +134,7 @@ def make_intermediates(cc, t1, t2, eris):
 
 
 # update L1, L2
-def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
+def update_amps(cc, t1, t2, l1, l2, eris, saved):
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nocc, nvir = t1.shape
@@ -177,7 +173,7 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved, blksize=1):
     l2new += m3 + m4
     l2new += eris.ovov.transpose(0,2,1,3)
 
-    l1new += eris.fock[:nocc,nocc:]
+    l1new += fov
     l1new += numpy.einsum('jb,iajb->ia', l1, eris.ovov) * 2
     l1new +=-numpy.einsum('jb,ijba->ia', l1, eris.oovv)
     l1new += numpy.einsum('ib,ba->ia', l1, saved.w1)

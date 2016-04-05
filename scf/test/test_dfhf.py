@@ -2,8 +2,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
 import unittest
+import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -101,6 +102,16 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((4,nao,nao))
         vhf = mf.get_veff(mol, dm, hermi=0)
         self.assertAlmostEqual(numpy.linalg.norm(vhf), 288.09692010645102, 9)
+
+    def test_assign_cderi(self):
+        nao = mol.nao_nr()
+        w, u = scipy.linalg.eigh(mol.intor('cint2e_sph', aosym='s4'))
+        idx = w > 1e-9
+
+        mf = scf.density_fit(scf.UHF(mol))
+        mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
+        self.assertAlmostEqual(mf.kernel(), -76.026765673110447, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for df")

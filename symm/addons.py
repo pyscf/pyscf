@@ -4,6 +4,8 @@
 
 from functools import reduce
 import numpy
+import scipy.linalg
+import pyscf.lib
 from pyscf.lib import logger
 from pyscf.symm import basis
 from pyscf.symm import param
@@ -72,7 +74,38 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
     return orbsym
 
 def symmetrize_orb(mol, mo, orbsym=None, s=None):
-    '''Symmetrize the given orbitals
+    '''Symmetrize the given orbitals.
+    
+    This function is different to the :func:`symmetrize_space`:  In this
+    function, each orbital is symmetrized by removing non-symmetric components.
+    :func:`symmetrize_space` symmetrizes the entire space by mixing different
+    orbitals.
+
+    Args:
+        mo : 2D float array
+            The orbital space to symmetrize
+
+    Kwargs:
+        orbsym : integer list
+            Irrep id for each orbital.  If not given, the irreps are guessed
+            by calling :func:`label_orb_symm`.
+        s : 2D float array
+            Overlap matrix.  If given, use this overlap than the the overlap
+            of the input mol.
+
+    Returns:
+        2D orbital coefficients
+
+    Examples:
+
+    >>> from pyscf import gto, symm, scf
+    >>> mol = gto.M(atom = 'C  0  0  0; H  1  1  1; H -1 -1  1; H  1 -1 -1; H -1  1 -1',
+    ...             basis = 'sto3g')
+    >>> mf = scf.RHF(mol).run()
+    >>> mol.build(0, 0, symmetry='D2')
+    >>> mo = symm.symmetrize_orb(mol, mf.mo_coeff)
+    >>> print(symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo))
+    ['A', 'A', 'B1', 'B2', 'B3', 'A', 'B1', 'B2', 'B3']
     '''
     if s is None:
         s = mol.intor_symmetric('cint1e_ovlp_sph')
@@ -92,8 +125,68 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None):
         idx = orbsym == ir
         csym = mol.symm_orb[i]
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
-        sc = numpy.linalg.solve(ovlpso, numpy.dot(mo_s[idx], csym).T)
+        sc = pyscf.lib.cho_solve(ovlpso, numpy.dot(mo_s[idx], csym).T)
         mo1[:,idx] = numpy.dot(csym, sc)
+    return mo1
+
+def symmetrize_space(mol, mo, s=None):
+    '''Symmetrize the given orbital space.
+    
+    This function is different to the :func:`symmetrize_orb`:  In this function,
+    the given orbitals are mixed to reveal the symmtery; :func:`symmetrize_orb`
+    projects out non-symmetric components for each orbital.
+
+    Args:
+        mo : 2D float array
+            The orbital space to symmetrize
+
+    Kwargs:
+        s : 2D float array
+            Overlap matrix.  If not given, overlap is computed with the input mol.
+
+    Returns:
+        2D orbital coefficients
+
+    Examples:
+
+    >>> from pyscf import gto, symm, scf
+    >>> mol = gto.M(atom = 'C  0  0  0; H  1  1  1; H -1 -1  1; H  1 -1 -1; H -1  1 -1',
+    ...             basis = 'sto3g')
+    >>> mf = scf.RHF(mol).run()
+    >>> mol.build(0, 0, symmetry='D2')
+    >>> mo = symm.symmetrize_space(mol, mf.mo_coeff)
+    >>> print(symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo))
+    ['A', 'A', 'A', 'B1', 'B1', 'B2', 'B2', 'B3', 'B3']
+    '''
+    if s is None:
+        s = mol.intor_symmetric('cint1e_ovlp_sph')
+    nmo = mo.shape[1]
+    mo_s = numpy.dot(mo.T, s)
+    mo1 = []
+    for i, ir in enumerate(mol.irrep_id):
+        csym = mol.symm_orb[i]
+        moso = numpy.dot(mo_s, csym)
+        ovlpso = reduce(numpy.dot, (csym.T, s, csym))
+
+# excluding orbitals which are already symmetrized
+        diag = numpy.einsum('ik,ki->i', moso, pyscf.lib.cho_solve(ovlpso, moso.T))
+        idx = abs(1-diag) < 1e-8
+        orb_exclude = mo[:,idx]
+        mo1.append(orb_exclude)
+        moso1 = moso[~idx]
+        dm = numpy.dot(moso1.T, moso1)
+
+        if dm.trace() > 1e-8:
+            e, u = scipy.linalg.eigh(dm, ovlpso)
+            mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
+    mo1 = numpy.hstack(mo1)
+    if mo1.shape[1] != nmo:
+        raise ValueError('The input orbital space is not symmetrized.\n It is '
+                         'probably because the input mol and orbitals are of '
+                         'different orientation.')
+    snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
+    if snorm > 1e-6:
+        raise ValueError('Orbitals are not orthogonalized')
     return mo1
 
 def std_symb(gpname):
@@ -141,7 +234,7 @@ def irrep_name(pgname, irrep_id):
     raise RuntimeError('This function was obsoleted. Use irrep_id2name')
 
 def route(target, nelec, orbsym):
-    '''Pick the orbitals to form the given symmetry.
+    '''Pick orbitals to form a determinant which has the right symmetry.
     If solution is not found, return []
     '''
     def riter(target, nelec, orbsym):
@@ -164,7 +257,6 @@ def route(target, nelec, orbsym):
 
 
 if __name__ == "__main__":
-    import scipy.linalg
     from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()

@@ -16,5 +16,5 @@ Kohn-Sham DFT
 .. automodule:: pyscf.dft.numint
    :members:
 
-.. automodule:: pyscf.dft.vxc
+.. automodule:: pyscf.dft.libxc
    :members:

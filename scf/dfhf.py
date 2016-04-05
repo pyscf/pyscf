@@ -18,7 +18,7 @@ from pyscf.ao2mo import _ao2mo
 OCCDROP = 1e-12
 BLOCKDIM = 240
 
-def density_fit(mf, auxbasis='weigend'):
+def density_fit(mf, auxbasis='weigend+etb'):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
 
@@ -26,7 +26,10 @@ def density_fit(mf, auxbasis='weigend'):
         mf : an SCF object
 
     Kwargs:
-        auxbasis : str
+        auxbasis : str or basis dict
+            Same format to the input attribute mol.basis.
+            The default basis 'weigend+etb' means weigend-coulomb-fit basis
+            for light elements and even-tempered basis for heavy elements.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -47,7 +50,8 @@ def density_fit(mf, auxbasis='weigend'):
     '''
 
     import pyscf.scf
-    class DFHF(mf.__class__):
+    mf_class = mf.__class__
+    class DFHF(mf_class):
         def __init__(self):
             self.__dict__.update(mf.__dict__)
             self.auxbasis = auxbasis
@@ -58,28 +62,37 @@ def density_fit(mf, auxbasis='weigend'):
             self._keys = self._keys.union(['auxbasis'])
 
         def get_jk(self, mol=None, dm=None, hermi=1):
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            if isinstance(self, pyscf.scf.dhf.UHF):
-                return r_get_jk_(self, mol, dm, hermi)
+            if self._tag_df:
+                if mol is None: mol = self.mol
+                if dm is None: dm = self.make_rdm1()
+                if isinstance(self, pyscf.scf.dhf.UHF):
+                    return r_get_jk_(self, mol, dm, hermi)
+                else:
+                    return get_jk_(self, mol, dm, hermi)
             else:
-                return get_jk_(self, mol, dm, hermi)
+                return mf_class.get_jk(self, mol, dm, hermi)
 
         def get_j(self, mol=None, dm=None, hermi=1):
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            if isinstance(self, pyscf.scf.dhf.UHF):
-                return r_get_jk_(self, mol, dm, hermi)[0]
+            if self._tag_df:
+                if mol is None: mol = self.mol
+                if dm is None: dm = self.make_rdm1()
+                if isinstance(self, pyscf.scf.dhf.UHF):
+                    return r_get_jk_(self, mol, dm, hermi)[0]
+                else:
+                    return get_jk_(self, mol, dm, hermi, with_k=False)[0]
             else:
-                return get_jk_(self, mol, dm, hermi, with_k=False)[0]
+                return mf_class.get_j(self, mol, dm, hermi)
 
         def get_k(self, mol=None, dm=None, hermi=1):
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            if isinstance(self, pyscf.scf.dhf.UHF):
-                return r_get_jk_(self, mol, dm, hermi)[1]
+            if self._tag_df:
+                if mol is None: mol = self.mol
+                if dm is None: dm = self.make_rdm1()
+                if isinstance(self, pyscf.scf.dhf.UHF):
+                    return r_get_jk_(self, mol, dm, hermi)[1]
+                else:
+                    return get_jk_(self, mol, dm, hermi, with_j=False)[1]
             else:
-                return get_jk_(self, mol, dm, hermi, with_j=False)[1]
+                return mf_class.get_k(self, mol, dm, hermi)
 
     return DFHF()
 
@@ -90,21 +103,20 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
     if not hasattr(mf, '_cderi') or mf._cderi is None:
         nao = mol.nao_nr()
         nao_pair = nao*(nao+1)//2
-        auxmol = df.incore.format_aux_basis(mol, mf.auxbasis)
-        mf._naoaux = auxmol.nao_nr()
-        if (nao_pair*mf._naoaux*8/1e6*2+pyscf.lib.current_memory()[0]
-            < mf.max_memory*.8):
+        max_memory = (mf.max_memory - pyscf.lib.current_memory()[0]) * .8
+        if (nao_pair*nao*3*8/1e6*2 < max_memory):
             mf._cderi = df.incore.cholesky_eri(mol, auxbasis=mf.auxbasis,
                                                verbose=log)
         else:
             mf._cderi = tempfile.NamedTemporaryFile()
             df.outcore.cholesky_eri(mol, mf._cderi.name, auxbasis=mf.auxbasis,
                                     verbose=log)
-#            if (nao_pair*mf._naoaux*8/1e6+pyscf.lib.current_memory()[0]
-#                < mf.max_memory*.9):
+#            if (nao_pair*nao*3*8/1e6 < mf.max_memory):
 #                with df.load(mf._cderi) as feri:
 #                    cderi = numpy.asarray(feri)
 #                mf._cderi = cderi
+        if mf.verbose >= logger.DEBUG1:
+            t1 = log.timer('Generate density fitting integrals', *t0)
     if mf._naoaux is None:
 # By overwriting mf._cderi, one can provide the Cholesky integrals for "DF/RI" calculation
         with df.load(mf._cderi) as feri:
@@ -112,18 +124,18 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
 
     if len(dms) == 0:
         return [], []
-
+    elif isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        nset = 1
+        dms = [dms]
+    else:
+        nset = len(dms)
+    nao = dms[0].shape[0]
     cderi = mf._cderi
-    nao = mol.nao_nr()
+
     fmmm = df.incore._fpointer('RIhalfmmm_nr_s2_bra')
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        dms = [dms]
-        nset = 1
-    else:
-        nset = len(dms)
     vj = numpy.zeros((nset,nao,nao))
     vk = numpy.zeros((nset,nao,nao))
 
@@ -155,6 +167,7 @@ def get_jk_(mf, mol, dms, hermi=1, with_j=True, with_k=True):
         if mf.verbose >= logger.DEBUG1:
             t1 = log.timer('Initialization', *t0)
         with df.load(cderi) as feri:
+            assert(feri[0].size == nao*(nao+1)//2)
             buf = numpy.empty((BLOCKDIM*nao,nao))
             for b0, b1 in prange(0, mf._naoaux, BLOCKDIM):
                 eri1 = numpy.array(feri[b0:b1], copy=False)

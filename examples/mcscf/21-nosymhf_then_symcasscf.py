@@ -21,9 +21,9 @@ mol.build(
             [1   , (0. , 0.757  , 0.587)]],
     basis = 'cc-pvdz',
 )
-m = scf.RHF(mol)
-m.kernel()
+mf = scf.RHF(mol)
+mf.kernel()
 
 mol.build(0, 0, symmetry = 'C2v')
-mc = mcscf.CASSCF(m, 6, 8)
+mc = mcscf.CASSCF(mf, 6, 8)
 mc.kernel()

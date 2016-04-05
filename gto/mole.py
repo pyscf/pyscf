@@ -8,10 +8,11 @@ import os, sys
 import gc
 import time
 import math
-import itertools
+import json
 import numpy
 import scipy.special
 import ctypes
+import pyscf.lib
 import pyscf.lib.parameters as param
 from pyscf.lib import logger
 from pyscf.gto import cmd_args
@@ -114,6 +115,7 @@ def cart2j_l(l):
     return c2spinor
 
 def atom_types(atoms, basis=None):
+    '''symmetry inequivalent atoms'''
     atmgroup = {}
     for ia, a in enumerate(atoms):
         if a[0] in atmgroup:
@@ -325,8 +327,7 @@ def expand_etbs(etbs):
     >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
-    basis = [expand_etb(*etb) for etb in etbs]
-    return list(itertools.chain.from_iterable(basis))
+    return pyscf.lib.flatten([expand_etb(*etb) for etb in etbs])
 
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):
@@ -362,6 +363,40 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     bas2[:,PTR_COEFF] += off
     return (numpy.vstack((atm1,atm2)), numpy.vstack((bas1,bas2)),
             numpy.hstack((env1,env2)))
+
+def conc_mol(mol1, mol2):
+    '''Concatenate two Mole objects.
+    '''
+    mol3 = Mole()
+    mol3._atm, mol3._bas, mol3._env = \
+            conc_env(mol1._atm, mol1._bas, mol1._env,
+                     mol2._atm, mol2._bas, mol2._env)
+    off = len(mol1._env)
+    natm_off = len(mol1._atm)
+    ecpbas2 = numpy.copy(mol2._ecpbas)
+    ecpbas2[:,ATOM_OF  ] += natm_off
+    ecpbas2[:,PTR_EXP  ] += off
+    ecpbas2[:,PTR_COEFF] += off
+    mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+
+    mol3.natm = len(mol3._atm)
+    mol3.nbas = len(mol3._bas)
+    mol3.verbose = mol1.verbose
+    mol3.output = mol1.output
+    mol3.max_memory = mol1.max_memory
+    mol3.light_speed = mol1.light_speed
+    mol3.charge = mol1.charge + mol2.charge
+    mol3.spin = mol1.spin + mol2.spin
+    mol3.nelectron = mol1.nelectron + mol2.nelectron
+    mol3.symmetry = False
+    mol3.symmetry_subgroup = None
+    mol3._atom = mol1._atom + mol2._atom
+    mol3.unit = mol1.unit
+    mol3._basis = dict(mol2._basis)
+    mol3._basis.update(mol1._basis)
+    mol3._ecp = dict(mol2._ecp)
+    mol3._ecp.update(mol1._ecp)
+    return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
 def intor_cross(intor, mol1, mol2, comp=1):
@@ -426,10 +461,11 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     _bas = []
     _env = []
     for b in basis_add:
+        if not b:  # == []
+            continue
         angl = b[0]
-        assert(angl < 8)
-        if angl in [6, 7]:
-            print('libcint may have large error for ERI of i function')
+        #if angl in [6, 7]:
+        #    print('libcint may have large error for ERI of i function')
         if isinstance(b[1], int):
             kappa = b[1]
             b_coeff = numpy.array(b[2:])
@@ -457,8 +493,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr_coeff = ptr_exp + nprim
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
-    _env = list(itertools.chain.from_iterable(_env)) # flatten nested lists
-    return numpy.array(_bas, numpy.int32), numpy.array(_env)
+    _env = pyscf.lib.flatten(_env) # flatten nested lists
+    return numpy.array(_bas, numpy.int32), numpy.array(_env, numpy.double)
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal
@@ -497,13 +533,17 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
 
     for ia, atom in enumerate(atoms):
         symb = atom[0]
+        puresymb = _rm_digit(symb)
         if symb in _basdic:
-            bas0 = _basdic[symb]
+            b = _basdic[symb].copy()
+            b[:,ATOM_OF] = ia
+            _bas.append(b)
+        elif puresymb in _basdic:
+            b = _basdic[puresymb].copy()
+            b[:,ATOM_OF] = ia
+            _bas.append(b)
         else:
-            bas0 = _basdic[_rm_digit(symb)]
-        b = bas0.copy()
-        b[:,ATOM_OF] = ia
-        _bas.append(b)
+            sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
 
     if _atm:
         _atm = numpy.asarray(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
@@ -573,7 +613,7 @@ def tot_electrons(mol):
     Examples:
 
     >>> mol = gto.M(atom='H 0 1 0; C 0 0 1', charge=1)
-    >>> gto.tot_electrons(mol)
+    >>> mol.tot_electrons()
     6
     '''
     nelectron = -mol.charge
@@ -586,17 +626,26 @@ def copy(mol):
     '''
     import copy
     newmol = copy.copy(mol)
-    newmol._atm = numpy.copy(mol._atm)
-    newmol._bas = numpy.copy(mol._bas)
-    newmol._env = numpy.copy(mol._env)
+    newmol._atm    = numpy.copy(mol._atm)
+    newmol._bas    = numpy.copy(mol._bas)
+    newmol._env    = numpy.copy(mol._env)
+    newmol._ecpbas = numpy.copy(mol._ecpbas)
+
     newmol.atom    = copy.deepcopy(mol.atom)
     newmol._atom   = copy.deepcopy(mol._atom)
     newmol.basis   = copy.deepcopy(mol.basis)
     newmol._basis  = copy.deepcopy(mol._basis)
+    newmol.ecp     = copy.deepcopy(mol.ecp)
+    newmol._ecp    = copy.deepcopy(mol._ecp)
     return newmol
 
 def pack(mol):
-    '''Pack the given :class:`Mole` to a dict, which can be serialized with :mod:`pickle`
+    '''Pack the input args of :class:`Mole` to a dict, which can be serialized
+    with :mod:`pickle` or :mod:`json`.
+
+    Note this function only pack the input arguments than the entire Mole
+    class.  Modifications to mol._atm, mol._bas, mol._env are not tracked.
+    Use :func:`dumps` to serialize the entire Mole object.
     '''
     return {'atom'    : mol.atom,
             'unit'    : mol.unit,
@@ -605,13 +654,89 @@ def pack(mol):
             'spin'    : mol.spin,
             'symmetry': mol.symmetry,
             'nucmod'  : mol.nucmod,
+            'ecp'     : mol.ecp,
             'light_speed': mol.light_speed}
 def unpack(moldic):
-    '''Unpack a dict which is packed by :func:`pack`, return a :class:`Mole` object.
+    '''Unpack a dict which is packed by :func:`pack`, to generate the input
+    arguments for :class:`Mole` object.
     '''
     mol = Mole()
     mol.__dict__.update(moldic)
     return mol
+
+
+def dumps(mol):
+    '''Serialize Mole object to a JSON formatted str.
+    '''
+    exclude_keys = set(('output', 'stdout', '_keys'))
+    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas'))
+
+    moldic = dict(mol.__dict__)
+    for k in exclude_keys:
+        del(moldic[k])
+    for k in nparray_keys:
+        if isinstance(moldic[k], numpy.ndarray):
+            moldic[k] = moldic[k].tolist()
+    moldic['atom'] = repr(mol.atom)
+    moldic['basis']= repr(mol.basis)
+    moldic['ecp' ] = repr(mol.ecp)
+
+    if mol.symm_orb is not None:
+        # compress symm_orb
+        symm_orb = []
+        for c in mol.symm_orb:
+            x,y = numpy.nonzero(c)
+            val = c[x,y]
+            symm_orb.append((val.tolist(), x.tolist(), y.tolist(), c.shape))
+        moldic['symm_orb'] = symm_orb
+    try:
+        return json.dumps(moldic)
+    except TypeError:
+        import warnings
+        def skip_value(dic):
+            dic1 = {}
+            for k,v in dic.items():
+                if (v is None or
+                    isinstance(v, (basestring, bool, int, long, float))):
+                    dic1[k] = v
+                elif isinstance(v, (list, tuple)):
+                    dic1[k] = v   # Should I recursively skip_vaule?
+                elif isinstance(v, set):
+                    dic1[k] = list(v)
+                elif isinstance(v, dict):
+                    dic1[k] = skip_value(v)
+                else:
+                    msg =('Function mol.dumps removes attribute %s because '
+                          'it is not JSON-serializable\n' % k)
+                    warnings.warn(msg)
+            return dic1
+        return json.dumps(skip_value(moldic), skipkeys=True)
+
+def loads(molstr):
+    '''Deserialize a str containing a JSON document to a Mole object.
+    '''
+    from numpy import array  # for eval function
+    moldic = json.loads(molstr)
+    mol = Mole()
+    mol.__dict__.update(moldic)
+    mol.atom = eval(mol.atom)
+    mol.basis= eval(mol.basis)
+    mol.ecp  = eval(mol.ecp)
+    mol._atm = numpy.array(mol._atm, dtype=numpy.int32)
+    mol._bas = numpy.array(mol._bas, dtype=numpy.int32)
+    mol._env = numpy.array(mol._env, dtype=numpy.double)
+    mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
+
+    if mol.symm_orb is not None:
+        # decompress symm_orb
+        symm_orb = []
+        for val, x, y, shape in mol.symm_orb:
+            c = numpy.zeros(shape)
+            c[numpy.array(x),numpy.array(y)] = numpy.array(val)
+            symm_orb.append(c)
+        mol.symm_orb = symm_orb
+    return mol
+
 
 def len_spinor(l, kappa):
     '''The number of spinor associated with given angular momentum and kappa.  If kappa is 0,
@@ -636,6 +761,10 @@ def npgto_nr(mol):
 def nao_nr(mol):
     '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
     return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
+def nao_cart(mol):
+    '''Total number of contracted cartesian GTOs for the given :class:`Mole` object'''
+    l = mol._bas[:,ANG_OF]
+    return ((l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]).sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_nr_range(mol, bas_id0, bas_id1):
@@ -696,7 +825,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
              for b in range(bas_id0, bas_id1)])
     return nao_id0, nao_id0+n
 
-def ao_loc_nr(mol):
+def ao_loc_nr(mol, cart=False):
     '''Offset of every shell in the spherical basis function spectrum
 
     Returns:
@@ -708,12 +837,14 @@ def ao_loc_nr(mol):
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
-    off = 0
-    ao_loc = []
-    for i in range(len(mol._bas)):
-        ao_loc.append(off)
-        off += (mol.bas_angular(i) * 2 + 1) * mol.bas_nctr(i)
-    ao_loc.append(off)
+    if cart:
+        l = mol._bas[:,ANG_OF]
+        dims = (l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]
+    else:
+        dims = (mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]
+    ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
+    ao_loc[0] = 0
+    dims.cumsum(dtype=numpy.int32, out=ao_loc[1:])
     return ao_loc
 
 def ao_loc_2c(mol):
@@ -967,6 +1098,24 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:                return ibf + (atmshell-l1-1)*degen + (degen+m)
 #TODO:        ibf += degen
 
+def offset_nr_by_atom(mol):
+    '''Non-relativistic AO offset for each atom.  Return a list, each item
+    of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''
+    aorange = []
+    p0 = p1 = 0
+    b0 = b1 = 0
+    ia0 = 0
+    for ib in range(mol.nbas):
+        if ia0 != mol.bas_atom(ib):
+            aorange.append((b0, ib, p0, p1))
+            ia0 = mol.bas_atom(ib)
+            p0 = p1
+            b0 = ib
+        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
+    aorange.append((b0, mol.nbas, p0, p1))
+    return aorange
+
 #FIXME:
 def is_same_mol(mol1, mol2):
     if mol1._atom.__len__() != mol2._atom.__len__():
@@ -976,32 +1125,6 @@ def is_same_mol(mol1, mol2):
            or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
             return False
     return True
-
-
-def check_sanity(obj, keysref, stdout=sys.stdout):
-    '''Check misinput of class attributes, check whether a class method is
-    overwritten.  It does not check the attributes which are prefixed with
-    "_".
-
-    Args:
-        obj : this object should have attribute _keys to store all the
-        name of the attributes of the object
-    '''
-    objkeys = [x for x in obj.__dict__.keys() if x[0] != '_']
-    keysub = set(objkeys) - set(keysref)
-    if keysub:
-        keyin = keysub.intersection(dir(obj.__class__))
-        if keyin:
-            msg = ('overwrite keys %s of %s\n' %
-                   (' '.join(keyin), str(obj.__class__)))
-            sys.stderr.write(msg)
-            stdout.write(msg)
-        keydiff = keysub - set(dir(obj.__class__))
-        if keydiff:
-            msg = ('%s has no attributes %s\n' %
-                   (str(obj.__class__), ' '.join(keydiff)))
-            sys.stderr.write(msg)
-            stdout.write(msg)
 
 
 # for _atm, _bas, _env
@@ -1042,7 +1165,7 @@ NUC_GAUSS = 2
 # on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
 # set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
 #
-class Mole(object):
+class Mole(pyscf.lib.StreamObject):
     '''Basic class to hold molecular structure and global options
 
     Attributes:
@@ -1192,19 +1315,6 @@ class Mole(object):
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
 
-    def check_sanity(self, obj):
-        '''Check misinput of class attributes, check whether a class method is
-        overwritten.  It does not check the attributes which are prefixed with
-        "_".
-
-        Args:
-            obj : this object should have attribute _keys to store all the
-            name of the attributes of the object
-        '''
-        if hasattr(obj, '_keys'):
-            if self.verbose > logger.QUIET:
-                check_sanity(obj, obj._keys, self.stdout)
-
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
@@ -1215,17 +1325,23 @@ class Mole(object):
     def copy(self):
         return copy(self)
 
-    def pack(self):
-        return pack(self)
+    pack = pack
+    @pyscf.lib.with_doc(unpack.__doc__)
     def unpack(self, moldic):
         return unpack(moldic)
     def unpack_(self, moldic):
         self.__dict__.update(moldic)
         return self
 
+    dumps = dumps
+    @pyscf.lib.with_doc(loads.__doc__)
+    def loads(self, molstr):
+        return loads(molstr)
+    def loads_(self, molstr):
+        self.__dict__.update(loads(molstr).__dict__)
+        return self
+
 #TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
-    def build(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
     def build_(self, dump_input=True, parse_arg=True,
                verbose=None, output=None, max_memory=None,
                atom=None, basis=None, unit=None, nucmod=None, ecp=None,
@@ -1291,7 +1407,8 @@ class Mole(object):
            and self.stdout.name != self.output:
             self.stdout = open(self.output, 'w')
 
-        self.check_sanity(self)
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
@@ -1323,10 +1440,13 @@ class Mole(object):
                                                    self._basis):
                     self.topgroup, orig, axes = \
                             pyscf.symm.detect_symm(self._atom, self._basis)
-                    sys.stderr.write('Warn: unable to identify input symmetry %s, '
-                                     'use %s instead.\n' %
-                                     (self.symmetry, self.topgroup))
                     self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                    _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
+                    _atom = '\n'.join([str(a) for a in _atom])
+                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
+                                         'It is recommended to use symmetry="%s" with '
+                                         'geometry (unit="Bohr")\n%s' %
+                                         (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \
                         pyscf.symm.detect_symm(self._atom, self._basis)
@@ -1377,20 +1497,31 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         logger.debug3(self, 'ecpbas  = %s', str(self._ecpbas))
 
         self._built = True
-        #return self._atm, self._bas, self._env
+        return self
+    def kernel(self, *args, **kwargs):
+        return self.build_(*args, **kwargs)
+    def build(self, *args, **kwargs):
+        return self.build_(*args, **kwargs)
+    kernel.__doc__ = build_.__doc__
+    build.__doc__ = build_.__doc__
 
+    @pyscf.lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
         return format_atom(atom, origin, axes, unit)
 
+    @pyscf.lib.with_doc(format_basis.__doc__)
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
 
+    @pyscf.lib.with_doc(format_ecp.__doc__)
     def format_ecp(self, ecp_tab):
         return format_ecp(ecp_tab)
 
+    @pyscf.lib.with_doc(expand_etb.__doc__)
     def expand_etb(self, l, n, alpha, beta):
         return expand_etb(l, n, alpha, beta)
 
+    @pyscf.lib.with_doc(expand_etbs.__doc__)
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
 
@@ -1407,12 +1538,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if _ecp:
             _atm, _ecpbas, _env = make_ecp_env(self, _atm, _ecp, pre_env)
         else:
-            _atm, _ecpbas, _env = _atm, None, pre_env
+            _atm, _ecpbas, _env = _atm, [], pre_env
         return _atm, _ecpbas, _env
 
-    def tot_electrons(self):
-        return tot_electrons(self)
+    tot_electrons = tot_electrons
 
+    @pyscf.lib.with_doc(gto_norm.__doc__)
     def gto_norm(self, l, expnt):
         return gto_norm(l, expnt)
 
@@ -1438,11 +1569,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
             head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
-            branch = os.path.basename(open(head, 'r').read().splitlines()[0])
+            with open(head, 'r') as f:
+                branch = os.path.basename(f.read().splitlines()[0])
             # or command(git log -1 --pretty=%H)
             head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
-            with open(head, 'r') as fin:
-                self.stdout.write('GIT %s branch  %s' % (branch, fin.readline()))
+            with open(head, 'r') as f:
+                self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
             self.stdout.write('\n')
         except IOError:
             pass
@@ -1507,6 +1639,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
         logger.info(self, 'CPU time: %12.2f', time.clock())
+        return self
 
     def set_common_origin_(self, coord):
         '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
@@ -1517,8 +1650,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> mol.set_common_orig_((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
+        return self
     def set_common_orig_(self, coord):
-        self.set_common_origin_(coord)
+        return self.set_common_origin_(coord)
 
     def set_rinv_origin_(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
@@ -1529,8 +1663,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> mol.set_rinv_orig_((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
+        return self
     def set_rinv_orig_(self, coord):
-        self.set_rinv_origin_(coord)
+        return self.set_rinv_origin_(coord)
 
     def set_nuc_mod_(self, atm_id, zeta):
         '''Change the nuclear charge distribution of the given atom ID.  The charge
@@ -1545,6 +1680,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         ptr = self._atm[atm_id,PTR_ZETA]
         self._env[ptr] = zeta
+        return self
 
     def set_rinv_zeta_(self, zeta):
         '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
@@ -1553,6 +1689,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         cint1e_rinv_* functions.  Make sure to set it back to 0 after using it!
         '''
         self._env[PTR_RINV_ZETA] = zeta
+        return self
+
+    def update_(self, chkfile):
+        return self.update_from_chk_(chkfile)
+    def update_from_chk_(self, chkfile):
+        import h5py
+        with h5py.File(chkfile, 'r') as fh5:
+            moldic = eval(fh5['mol'].value)
+            self.build(False, False, **moldic)
+        return self
 
 
 #######################################################
@@ -1798,39 +1944,29 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return len_cart(self._bas[bas_id,ANG_OF])
 
 
-    def npgto_nr(self):
-        return npgto_nr(self)
+    npgto_nr = npgto_nr
 
-    def nao_nr(self):
-        return nao_nr(self)
+    nao_nr = nao_nr
+    nao_2c = nao_2c
+    nao_cart = nao_cart
 
-    def nao_nr_range(self, bas_id0, bas_id1):
-        return nao_nr_range(self, bas_id0, bas_id1)
+    nao_nr_range = nao_nr_range
+    nao_2c_range = nao_2c_range
 
-    def nao_2c(self):
-        return nao_2c(self)
-
-    def nao_2c_range(self, bas_id0, bas_id1):
-        return nao_2c_range(self, bas_id0, bas_id1)
-
-    def ao_loc_nr(self):
-        return ao_loc_nr(self)
-
-    def ao_loc_2c(self):
-        return ao_loc_2c(self)
+    ao_loc_nr = ao_loc_nr
+    ao_loc_2c = ao_loc_2c
 
     def tmap(self):
         return time_reversal_map(self)
-    def time_reversal_map(self):
-        return time_reversal_map(self)
+    time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               bras=None, kets=None):
-        '''One-electron integral generator.
+        '''Integral generator.
 
         Args:
             intor : str
-                Name of the 1-electron integral.  Ref to :func:`getints` for the
+                Name of the 1e or 2e AO integrals.  Ref to :func:`getints` for the
                 complete list of available 1-electron integral names
 
         Kwargs:
@@ -1964,10 +2100,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return self.intor(intor, comp=comp, hermi=0, aosym=aosym, out=out,
                           bras=bras, kets=kets)
 
+    @pyscf.lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=1):
-        return moleintor.getints_by_shell(intor, shells, self._atm, self._bas,
+        if 'ECP' in intor:
+            assert(self._ecp is not None)
+            bas = numpy.vstack((self._bas, self._ecpbas))
+            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
+            self._env[PTR_NECPBAS] = len(self._ecpbas)
+        else:
+            bas = self._bas
+        return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
+    @pyscf.lib.with_doc(eval_gto.eval_gto.__doc__)
     def eval_gto(self, eval_name, coords,
                  comp=1, bastart=0, bascount=None, non0tab=None, out=None):
         return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
@@ -1976,26 +2121,29 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def energy_nuc(self):
         return energy_nuc(self)
     def get_enuc(self):
-        return energy_nuc(self)
+        return self.energy_nuc()
 
+    @pyscf.lib.with_doc(cart_labels.__doc__)
     def cart_labels(self, fmt=False):
         return cart_labels(self, fmt)
 
+    @pyscf.lib.with_doc(spheric_labels.__doc__)
     def spheric_labels(self, fmt=False):
         return spheric_labels(self, fmt)
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
 
-    def search_ao_nr(self, atm_id, l, m, atmshell):
-        return search_ao_nr(self, atm_id, l, m, atmshell)
-    def search_ao_r(self, atm_id, l, m, kappa, atmshell):
-        return search_ao_r(self, atm_id, l, m, kappa, atmshell)
+    search_ao_nr = search_ao_nr
+    search_ao_r = search_ao_r
 
+    offset_nr_by_atom = offset_nr_by_atom
+
+    @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
         return spinor_labels(self)
 
-_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.iteritems())
+_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
 def _rm_digit(symb):
     if symb.isalpha():

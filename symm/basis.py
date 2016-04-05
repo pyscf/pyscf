@@ -63,7 +63,7 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
         idx = []
         for c in op_coords:
             idx.append(numpy.argwhere(numpy.sum(abs(coords0-c),axis=1)
-                                      <geom.GEOM_THRESHOLD)[0,0])
+                                      <geom.TOLERANCE)[0,0])
         op_relate_atoms = numpy.array(atom_ids)[idx]
 
         ib = 0

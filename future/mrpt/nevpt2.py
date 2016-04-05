@@ -17,6 +17,7 @@ from pyscf import fci
 from pyscf import mcscf
 from pyscf import ao2mo
 from pyscf import scf
+from pyscf.mcscf import casci
 from pyscf.ao2mo import _ao2mo
 
 libmc = pyscf.lib.load_library('libmcscf')
@@ -478,7 +479,7 @@ def Sij(mc, dms, eris, verbose=None):
     dm2 = dms['2']
     dm3 = dms['3']
     if mo_core.size ==0 :
-        return 0.0
+        return 0.0, 0
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
         h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
@@ -556,107 +557,208 @@ def Sir(mc, dms, eris, verbose=None):
     return _norm_to_energy(norm, h, -diff)
 
 
+class NEVPT(pyscf.lib.StreamObject):
+    '''Strongly contracted NEVPT2
+
+    Attributes:
+        root : int
+            To control which state to compute if multiple roots or state-average
+            wfn were calculated in CASCI/CASSCF
+        compressed_mps : bool
+            compressed MPS perturber method for DMRG-SC-NEVPT2
+
+    Examples:
+
+    >>> mf = gto.M('N 0 0 0; N 0 0 1.4', basis='6-31g').apply(scf.RHF).run()
+    >>> mc = mcscf.CASSCF(mf, 4, 4).run()
+    >>> NEVPT(mc).kernel()
+    -0.14058324991532101
+    '''
+    def __init__(self, mc, root=0):
+        self.__dict__.update(mc.__dict__)
+        self._mc = mc
+        self.root = root
+        self.compressed_mps = False
+
+##################################################
+# don't modify the following attributes, they are not input options
+        self.e_corr = None
+        self.canonicalized = False
+        nao,nmo = mc.mo_coeff.shape
+        self.onerdm = numpy.zeros((nao,nao))
+        self._keys = set(self.__dict__.keys())
+
+    def get_hcore(self):
+        return self._mc.get_hcore()
+
+    def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
+                      cas_natorb=False, casdm1=None, verbose=logger.NOTE):
+        return self._mc.canonicalize(mo_coeff, ci, eris, sort, cas_natorb, casdm1, verbose)
+
+    def get_veff(self, mol=None, dm=None, hermi=1):
+        return self._mc.get_veff(mol, dm, hermi)
+
+    def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
+        return self._mc.h1e_for_cas(mo_coeff, ncas, ncore)
+
+    def load_ci(self, root=None):
+        '''Hack me to load CI wfn from disk'''
+        if root is None:
+            root = self.root
+        if self._mc.fcisolver.nroots == 1:
+            return self._mc.ci
+        else:
+            return self._mc.ci[root]
+
+
+    def for_dmrg(self):
+        #TODO
+        #Some preprocess for dmrg-nevpt
+        return self
+
+    def compress_approx(self,maxM=500, compress_schedule=None, tol=1e-7, stored_integral =False):
+        '''SC-NEVPT2 with compressed perturber
+
+        Kwargs :
+            maxM : int
+                DMRG bond dimension
+
+        Examples:
+
+        >>> mf = gto.M('N 0 0 0; N 0 0 1.4', basis='6-31g').apply(scf.RHF).run()
+        >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
+        >>> NEVPT(mc, root=0).compress_approx(maxM=100).kernel()
+        -0.14058324991532101
+        '''
+        #TODO
+        #Some preprocess for compressed perturber
+        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+            logger.info(self, 'Use compressed mps perturber as an aaproximation')
+        else:
+            logger.error(self, 'Compressed mps perturber can be only used for DMRG wave function')
+            exit()
+
+        from pyscf.dmrgscf.nevpt_mpi import DMRG_COMPRESS_NEVPT
+        if stored_integral: #Stored perturbation integral and read them again. For debugging purpose.
+            DMRG_COMPRESS_NEVPT('nevpt_perturb_integral',maxM= maxM, root= self.root, nevptsolver= compress_schedule, tol= tol)
+        else:
+            DMRG_COMPRESS_NEVPT(self,maxM= maxM, root= self.root, nevptsolver= compress_schedule, tol= tol)
+
+        self.canonicalized = True
+        self.compressed_mps = True
+        return self
+
+
+
+    def kernel(self):
+        if isinstance(self.verbose, logger.Logger):
+            log = self.verbose
+        else:
+            log = logger.Logger(self.stdout, self.verbose)
+        time0 = (time.clock(), time.time())
+        #By defaut, _mc is canonicalized for the first root.
+        #For SC-NEVPT based on compressed MPS perturber functions, the _mc was already canonicalized.
+        if (not self.canonicalized):
+            self.mo_coeff,_, self.mo_energy = self.canonicalize(self.mo_coeff,ci=self.load_ci(),verbose=self.verbose)
+
+        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+            logger.info(self, 'DMRG-NEVPT')
+            dm1, dm2, dm3 = self.fcisolver.make_rdm123(self.load_ci(),self.ncas,self.nelecas,None)
+        else:
+            dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
+                                               self.load_ci(), self.load_ci(), self.ncas, self.nelecas)
+        dm4 = None
+
+        dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
+               #'h1': hdm1, 'h2': hdm2, 'h3': hdm3
+              }
+        time1 = log.timer('3pdm, 4pdm', *time0)
+
+        eris = _ERIS(self, self.mo_coeff)
+        time1 = log.timer('integral transformation', *time1)
+        nocc = self.ncore + self.ncas
+
+        if not hasattr(self.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
+            link_indexa = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[0])
+            link_indexb = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[1])
+            aaaa = eris['ppaa'][self.ncore:nocc,self.ncore:nocc].copy()
+            f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, self.load_ci(), self.ncas,
+                                 self.nelecas, (link_indexa,link_indexb))
+            f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, self.load_ci(), self.ncas,
+                                 self.nelecas, (link_indexa,link_indexb))
+            dms['f3ca'] = f3ca
+            dms['f3ac'] = f3ac
+        time1 = log.timer('eri-4pdm contraction', *time1)
+
+        if self.compressed_mps:
+            fh5 = h5py.File('Perturbation_%d'%self.root,'r')
+            e_Si     =   fh5['Vi/energy'].value
+            #The definition of norm changed.
+            #However, there is no need to print out it.
+            #Only perturbation energy is wanted.
+            norm_Si  =   fh5['Vi/norm'].value
+            e_Sr     =   fh5['Vr/energy'].value
+            norm_Sr  =   fh5['Vr/norm'].value
+            fh5.close()
+            logger.note(self, "Sr    (-1)'  E = %.14f",  e_Sr  )
+            logger.note(self, "Si    (+1)'  E = %.14f",  e_Si  )
+
+        else:
+            norm_Sr   , e_Sr    = Sr(self, self.load_ci(), dms, eris)
+            logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
+            time1 = log.timer("space Sr (-1)'", *time1)
+            norm_Si   , e_Si    = Si(self, self.load_ci(), dms, eris)
+            logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )
+            time1 = log.timer("space Si (+1)'", *time1)
+        norm_Sijrs, e_Sijrs = Sijrs(self, eris)
+        logger.note(self, "Sijrs (0)  ,   E = %.14f", e_Sijrs)
+        time1 = log.timer('space Sijrs (0)', *time1)
+        norm_Sijr , e_Sijr  = Sijr(self, dms, eris)
+        logger.note(self, "Sijr  (+1) ,   E = %.14f",  e_Sijr)
+        time1 = log.timer('space Sijr (+1)', *time1)
+        norm_Srsi , e_Srsi  = Srsi(self, dms, eris)
+        logger.note(self, "Srsi  (-1) ,   E = %.14f",  e_Srsi)
+        time1 = log.timer('space Srsi (-1)', *time1)
+        norm_Srs  , e_Srs   = Srs(self, dms, eris)
+        logger.note(self, "Srs   (-2) ,   E = %.14f",  e_Srs )
+        time1 = log.timer('space Srs (-2)', *time1)
+        norm_Sij  , e_Sij   = Sij(self, dms, eris)
+        logger.note(self, "Sij   (+2) ,   E = %.14f",  e_Sij )
+        time1 = log.timer('space Sij (+2)', *time1)
+        norm_Sir  , e_Sir   = Sir(self, dms, eris)
+        logger.note(self, "Sir   (0)' ,   E = %.14f",  e_Sir )
+        time1 = log.timer("space Sir (0)'", *time1)
+
+        nevpt_e  = e_Sr + e_Si + e_Sijrs + e_Sijr + e_Srsi + e_Srs + e_Sij + e_Sir
+        logger.note(self, "Nevpt2 Energy = %.15f", nevpt_e)
+        log.timer('SC-NEVPT2', *time0)
+
+        self.e_corr = nevpt_e
+        return nevpt_e
+
+
 
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
-def sc_nevpt(mc, ci=None, useMPS=False, verbose=None):
-    '''Strongly contracted NEVPT2'''
-    if ci is None:
-        ci=mc.ci
-    #mc.cas_natorb(ci=ci)
-
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mc.stdout, mc.verbose)
-
-    time0 = (time.clock(), time.time())
-
-    #By defaut, mc is canonicalized for the first root.
-    if mc.fcisolver.nroots > 1:
-        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=ci,verbose=log)
-
-    #if not useMPS:
-    #    mc.mo_coeff, _, orbe = mc.canonicalize(casdm1=dm1)
-    #else:
-    #    orbe = reduce(numpy.dot, (mc.mo_coeff.T, mc.get_fock(ci=ci), mc.mo_coeff)).diagonal()
-
-
-    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
-        logger.info(mc, 'DMRG-NEVPT')
-        dm1, dm2, dm3 = mc.fcisolver.make_rdm123(ci,mc.ncas,mc.nelecas,None)
-    else:
-        if useMPS:
-            logger.error(mc,"MPS nevpt only used for DMRG calculation")
-            exit()
-        dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
-                                           ci, ci, mc.ncas, mc.nelecas)
-    dm4 = None
-
-    dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
-           #'h1': hdm1, 'h2': hdm2, 'h3': hdm3
-          }
-    time1 = log.timer('3pdm, 4pdm', *time0)
-
-    eris = _ERIS(mc, mc.mo_coeff)
-    time1 = log.timer('integral transformation', *time1)
-    nocc = mc.ncore + mc.ncas
+def sc_nevpt(mc, ci=None, verbose=None):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("once")
+        warnings.warn('API updates: function sc_nevpt is deprecated feature. '
+                      'It will be removed in future release.\n'
+                      'It is recommended to run NEVPT2 with new function '
+                      'mrpt.NEVPT(mc).kernel()')
+        if ci is not None:
+            warnings.warn('API updates: The kwarg "ci" has no effects. '
+                          'Use mrpt.NEVPT(mc,root=?) for excited state.')
+    return NEVPT(mc).kernel()
 
 
 
-    if not hasattr(mc.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
-        link_indexa = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[0])
-        link_indexb = fci.cistring.gen_linkstr_index(range(mc.ncas), mc.nelecas[1])
-        aaaa = eris['ppaa'][mc.ncore:nocc,mc.ncore:nocc].copy()
-        f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, ci, mc.ncas,
-                             mc.nelecas, (link_indexa,link_indexb))
-        f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, ci, mc.ncas,
-                             mc.nelecas, (link_indexa,link_indexb))
-        dms['f3ca'] = f3ca
-        dms['f3ac'] = f3ac
-    time1 = log.timer('eri-4pdm contraction', *time1)
 
-    if useMPS:
-        fh5 = h5py.File('Perturbation_%d'%ci,'r')
-        e_Si     =   fh5['Vi/energy'].value    
-        norm_Si  =   fh5['Vi/norm'].value       
-        e_Sr     =   fh5['Vr/energy'].value     
-        norm_Sr  =   fh5['Vr/norm'].value       
-        fh5.close()
-        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
-        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
 
-    else:
-        norm_Sr   , e_Sr    = Sr(mc,ci, dms, eris)
-        logger.note(mc, "Sr    (-1)', Norm = %.14f  E = %.14f", norm_Sr  , e_Sr  )
-        time1 = log.timer("space Sr (-1)'", *time1)
-        norm_Si   , e_Si    = Si(mc,ci, dms, eris)
-        logger.note(mc, "Si    (+1)', Norm = %.14f  E = %.14f", norm_Si  , e_Si  )
-        time1 = log.timer("space Si (+1)'", *time1)
-    norm_Sijrs, e_Sijrs = Sijrs(mc, eris)
-    logger.note(mc, "Sijrs (0)  , Norm = %.14f  E = %.14f", norm_Sijrs,e_Sijrs)
-    time1 = log.timer('space Sijrs (0)', *time1)
-    norm_Sijr , e_Sijr  = Sijr(mc, dms, eris)
-    logger.note(mc, "Sijr  (+1) , Norm = %.14f  E = %.14f", norm_Sijr, e_Sijr)
-    time1 = log.timer('space Sijr (+1)', *time1)
-    norm_Srsi , e_Srsi  = Srsi(mc, dms, eris)
-    logger.note(mc, "Srsi  (-1) , Norm = %.14f  E = %.14f", norm_Srsi, e_Srsi)
-    time1 = log.timer('space Srsi (-1)', *time1)
-    norm_Srs  , e_Srs   = Srs(mc, dms, eris)
-    logger.note(mc, "Srs   (-2) , Norm = %.14f  E = %.14f", norm_Srs , e_Srs )
-    time1 = log.timer('space Srs (-2)', *time1)
-    norm_Sij  , e_Sij   = Sij(mc, dms, eris)
-    logger.note(mc, "Sij   (+2) , Norm = %.14f  E = %.14f", norm_Sij , e_Sij )
-    time1 = log.timer('space Sij (+2)', *time1)
-    norm_Sir  , e_Sir   = Sir(mc, dms, eris)
-    logger.note(mc, "Sir   (0)' , Norm = %.14f  E = %.14f", norm_Sir , e_Sir )
-    time1 = log.timer("space Sir (0)'", *time1)
 
-    nevpt_e  = e_Sr + e_Si + e_Sijrs + e_Sijr + e_Srsi + e_Srs + e_Sij + e_Sir
-    logger.note(mc, "Nevpt2 Energy = %.15f", nevpt_e)
-    log.timer('SC-NEVPT2', *time0)
-    return nevpt_e
 
 
 def _contract4pdm(kern, eri, civec, norb, nelec, link_index=None):
