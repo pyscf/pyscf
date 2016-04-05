@@ -1,6 +1,7 @@
+import sys
 import numpy as np
 import scipy.linalg
-
+from pyscf import lib
 
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
@@ -67,7 +68,7 @@ def fftk(f, gs, r, k):
 def ifftk(g, gs, r, k):
     '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
 
-    fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = [(1/Ng) \sum_G fk(k+G)e^{-iGr}] e^{ikr}
+    fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
     return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
 
@@ -88,6 +89,18 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
 
     '''
     kG = k + cell.Gv
+
+    # Here we 'wrap around' the high frequency k+G vectors into their lower
+    # frequency counterparts.  Important if you want the gamma point and k-point
+    # answers to agree
+    box_edge = np.dot(2.*np.pi*np.diag(cell.gs+0.5), np.linalg.inv(cell._h))
+    reduced_coords = np.dot(kG, np.linalg.inv(box_edge))
+    equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
+    factor = np.trunc(reduced_coords)
+    kG -= 2.*np.dot(np.sign(factor), box_edge)
+    kG[equal2boundary] = [0.0, 0.0, 0.0]
+    # Done wrapping.
+
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
     try:
@@ -129,6 +142,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG += mf.exx_vq[qidx] * is_lt_maxqv
 
+    coulG[ coulG == np.inf ] = 0.0
+
     return coulG
 
 
@@ -148,10 +163,10 @@ def madelung(cell, kpts):
     return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
 
 
-def get_monkhorst_pack_size(cell, ckpts): 
-    kpts = np.dot(ckpts, cell._h.T) / (2*np.pi) 
+def get_monkhorst_pack_size(cell, ckpts):
+    kpts = np.dot(ckpts, cell._h.T) / (2*np.pi)
     import ase.dft.kpoints
-    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts) 
+    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts)
     #Nk = np.array([len(np.unique(ki)) for ki in kpts.T])
     return Nk
 
@@ -162,7 +177,7 @@ def f_aux(cell, q):
     denom = 4 * np.dot(b*np.sin(a*q/2.), b*np.sin(a*q/2.)) \
           + 2 * np.dot(b*np.sin(a*q), np.roll(b,1,axis=0)*np.sin(np.roll(a,1,axis=0)*q ))
     return 1./(2*np.pi)**2 * 1./denom
-    
+
 
 def get_lattice_Ls(cell, nimgs):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
@@ -196,33 +211,52 @@ def super_cell(cell, ncopy):
                     supcell.atom.append([atom, coord + L])
     supcell.unit = 'B'
     supcell.h = np.dot(cell._h, np.diag(ncopy))
+    supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2,
+                           ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
+                           ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
     supcell.build(False, False)
     return supcell
 
 
-def get_KLMN(kpts):
-    '''Get array KLMN where for gs indices, K, L, M,
-    KLMN[K,L,M] gives index of N that satifies
-    momentum conservation
+def get_kconserv(cell, kpts):
+    '''Get the momentum conservation array for a set of k-points.
 
-       G(K) - G(L) = G(M) - G(N)
+    Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
+    the index n that satifies momentum conservation,
+
+       k(k) - k(l) = - k(m) + k(n)
 
     This is used for symmetry e.g. integrals of the form
-
-    [\phi*[K](1) \phi[L](1) | \phi*[M](2) \phi[N](2)]
-
-    are zero unless N satisfies the above.
+        [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)]
+    are zero unless n satisfies the above.
     '''
     nkpts = kpts.shape[0]
     KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
+    kvecs = 2*np.pi*scipy.linalg.inv(cell._h)
 
     for K, kvK in enumerate(kpts):
         for L, kvL in enumerate(kpts):
             for M, kvM in enumerate(kpts):
-                kvN = kvM + kvL - kvK
-                KLMN[K, L, M] = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                              kpts > kvN - 1.e-12))[0][0]
+                # Here we find where kvN = kvM + kvL - kvK (mod K)
+                temp = range(-1,2)
+                xyz = lib.cartesian_prod((temp,temp,temp))
+                found = 0
+                kvMLK = kvK - kvL + kvM
+                kvN = kvMLK
+                for ishift in xrange(len(xyz)):
+                    kvN = kvMLK + np.dot(xyz[ishift],kvecs)
+                    finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
+                                                     kpts > kvN - 1.e-12).sum(axis=1)==3)
+                    # The k-point should be the same in all 3 indices as kvN
+                    if len(finder[0]) > 0:
+                        KLMN[K, L, M] = finder[0][0]
+                        found = 1
+                        break
 
+                if found == 0:
+                    print "** ERROR: Problem in get_kconserv. Quitting."
+                    print kvMLK
+                    sys.exit()
     return KLMN
 
 
@@ -232,27 +266,28 @@ def cutoff_to_gs(h, cutoff):
 
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
 
-    Args: 
+    Args:
         h : (3,3) ndarray
             The unit cell lattice vectors, a "three-column" array [a1|a2|a3], in Bohr
         cutoff : float
             KE energy cutoff in a.u.
 
-    Returns: 
+    Returns:
         gs : (3,) array
     '''
     grid_spacing = np.pi / np.sqrt(2 * cutoff)
 
-    print grid_spacing
-    print h
+    #print grid_spacing
+    #print h
 
     h0 = np.linalg.norm(h[:,0])
     h1 = np.linalg.norm(h[:,1])
     h2 = np.linalg.norm(h[:,2])
 
-    print h0, h1, h2
-    # number of grid points is 2gs+1 (~ 2 gs) along each direction 
-    gs = np.ceil([h0 / (2*grid_spacing), 
-                  h1 / (2*grid_spacing), 
+    #print h0, h1, h2
+    # number of grid points is 2gs+1 (~ 2 gs) along each direction
+    gs = np.ceil([h0 / (2*grid_spacing),
+                  h1 / (2*grid_spacing),
                   h2 / (2*grid_spacing)])
-    return gs
+    return gs.astype(int)
+

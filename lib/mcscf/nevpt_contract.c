@@ -7,22 +7,11 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "fci_string.h"
 
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define BLK     48
 #define BUFBASE 96
-
-typedef struct {
-        unsigned int addr;
-        unsigned char a;
-        unsigned char i;
-        char sign;
-        char _padding;
-} _LinkT;
-#define EXTRACT_I(I)    (I.i)
-#define EXTRACT_A(I)    (I.a)
-#define EXTRACT_SIGN(I) (I.sign)
-#define EXTRACT_ADDR(I) (I.addr)
 
 double FCI_t1ci_sf(double *ci0, double *t1, int bcount,
                    int stra_id, int strb_id,
@@ -32,27 +21,6 @@ double FCI_t2ci_sf(double *ci0, double *t1, int bcount,
                    int stra_id, int strb_id,
                    int norb, int na, int nb, int nlinka, int nlinkb,
                    _LinkT *clink_indexa, _LinkT *clink_indexb);
-
-static void compress_link(_LinkT *clink, int *link_index,
-                          int norb, int nstr, int nlink)
-{
-        int i, j, k, a, str1, sign;
-        for (k = 0; k < nstr; k++) {
-                for (j = 0; j < nlink; j++) {
-                        a    = link_index[j*4+0];
-                        i    = link_index[j*4+1];
-                        str1 = link_index[j*4+2];
-                        sign = link_index[j*4+3];
-                        clink[j].a = a;
-                        clink[j].i = i;
-                        clink[j].sign = sign;
-                        clink[j].addr = str1;
-                }
-                clink += nlink;
-                link_index += nlink * 4;
-        }
-}
-
 
 static void tril2pdm_particle_symm(double *rdm2, double *tbra, double *tket,
                                    int bcount, int ncre, int norb)
@@ -277,8 +245,8 @@ void NEVPTcontract(void (*kernel)(),
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
-        compress_link(clinka, link_indexa, norb, na, nlinka);
-        compress_link(clinkb, link_indexb, norb, nb, nlinkb);
+        FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
+        FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
         memset(pdm2, 0, sizeof(double) * n4);
         memset(rdm3, 0, sizeof(double) * n4 * nnorb);
 

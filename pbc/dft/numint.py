@@ -5,9 +5,9 @@ import pyscf.dft
 from pyscf.pbc import tools
 
 ## Moderate speedup by caching eval_ao
-#from joblib import Memory
-#memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-#@memory.cache
+from joblib import Memory
+memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+@memory.cache
 def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, bastart=0,
             bascount=None, non0tab=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
@@ -379,11 +379,11 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
             excsum += (den*exc).sum()
 
         if kpt_band is None:
-            vmat += ni.eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
-                                xctype=xctype, verbose=verbose)
+            vmat = vmat + ni.eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
+                                      xctype=xctype, verbose=verbose)
         else:
-            vmat += eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
-                             xctype=xctype, verbose=verbose)
+            vmat = vmat + eval_mat(mol, ao_k1, weight, rho, vrho, vsigma,
+                                   xctype=xctype, verbose=verbose)
 
     return nelec, excsum, vmat
 

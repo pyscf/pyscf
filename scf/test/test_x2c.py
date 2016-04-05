@@ -27,7 +27,7 @@ class KnowValues(unittest.TestCase):
 
         myx2c.xuncontract = True
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.075946103708105, 9)
+        self.assertAlmostEqual(e, -76.075429084793271, 9)
 
     def test_x2c1e(self):
         myx2c = scf.x2c.UHF(mol)
@@ -37,7 +37,7 @@ class KnowValues(unittest.TestCase):
 
         myx2c.xuncontract = True
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.075948634842121, 9)
+        self.assertAlmostEqual(e, -76.075431233275026, 9)
 
 
 if __name__ == "__main__":

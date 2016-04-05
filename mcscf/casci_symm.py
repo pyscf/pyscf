@@ -4,13 +4,12 @@
 #
 
 import numpy
-import pyscf.lib
-import pyscf.gto
 from pyscf.lib import logger
 import pyscf.symm
 import pyscf.scf
-import pyscf.ao2mo
 from pyscf.mcscf import casci
+from pyscf import fci
+from pyscf.mcscf import addons
 
 
 class CASCI(casci.CASCI):
@@ -20,6 +19,7 @@ class CASCI(casci.CASCI):
 #TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+        self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
 
     def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
@@ -54,12 +54,21 @@ class CASCI(casci.CASCI):
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
 
+    def sort_mo_by_irrep(self, cas_irrep_nocc,
+                         cas_irrep_ncore=None, mo_coeff=None, s=None):
+        '''Select active space based on symmetry information.
+        See also :func:`pyscf.mcscf.addons.sort_mo_by_irrep`
+        '''
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
+                                       cas_irrep_ncore, s)
+
 def eig(mat, orbsym):
     orbsym = numpy.asarray(orbsym)
     norb = mat.shape[0]
     e = numpy.zeros(norb)
     c = numpy.zeros((norb,norb))
-    for i0 in set(orbsym):
+    for i0 in sorted(set(orbsym)):
         lst = numpy.where(orbsym == i0)[0]
         if len(lst) > 0:
             w, v = pyscf.scf.hf.eig(mat[lst[:,None],lst], None)
@@ -76,7 +85,7 @@ def label_symmetry_(mc, mo_coeff):
                                               mc.mol.symm_orb, mo_coeff, s=s)
     except ValueError:
         logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
-        mo_coeff = pyscf.symm.symmetrize_orb(mc.mol, mo_coeff, s=s)
+        mo_coeff = pyscf.symm.symmetrize_space(mc.mol, mo_coeff, s=s)
         diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
         mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
         mc.orbsym = pyscf.symm.label_orb_symm(mc.mol, irrep_name,

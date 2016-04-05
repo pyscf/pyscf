@@ -3,17 +3,18 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Some hacky functions
+'''
+
 import os, sys
 import tempfile
 import shutil
 import functools
+import itertools
 import math
 import ctypes
 import numpy
-
-'''
-Some hacky functions
-'''
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -97,6 +98,7 @@ def find_if(test, lst):
     for l in lst:
         if test(l):
             return l
+    raise ValueError('No element of the given list matches the test condition.')
 
 # for give n, generate [(m1,m2),...] that
 #       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
@@ -110,6 +112,21 @@ def tril_equal_pace(n, base=0, npace=0, minimal=1):
         m2 = int(max(math.sqrt(m1**2+base**2), m1+minimal))
         yield m1, min(m2,n)
         m1 = m2
+
+def flatten(lst):
+    '''flatten nested lists
+    x[0] + x[1] + x[2] + ...
+
+    Examples:
+
+    >>> flatten([[0, 2], [1], [[9, 8, 7]]])
+    [0, 2, 1, [9, 8, 7]]
+    '''
+    return list(itertools.chain.from_iterable(lst))
+
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
 
 
 class ctypes_stdout(object):
@@ -212,6 +229,119 @@ class omnimethod(object):
 
     def __get__(self, instance, owner):
         return functools.partial(self.func, instance)
+
+
+class StreamObject(object):
+    '''For most methods, there are three stream functions to pipe computing stream:
+
+    1 ``.set_`` function to update object attributes, eg
+    ``mf = scf.RHF(mol).set_(conv_tol=1e-5)`` is identical to proceed in two steps
+    ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
+
+    2 ``.run_`` function to execute the kenerl function (the function arguments
+    are passed to kernel function).  If keyword arguments is given, it will first
+    call ``.set_`` function to update object attributes then execute the kernel
+    function.  Eg
+    ``mf = scf.RHF(mol).run_(dm_init, conv_tol=1e-5)`` is identical to three steps
+    ``mf = scf.RHF(mol); mf.conv_tol=1e-5; mf.kernel(dm_init)``
+
+    3 ``.apply`` function to apply the given function/class to the current object
+    (function arguments and keyword arguments are passed to the given function).
+    Eg
+    ``mol.apply(scf.RHF).run_().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
+    ``mf = scf.RHF(mol); mf.kernel(); mcscf.CASSCF(mf, 6, 4, frozen=4)``
+    '''
+
+    verbose = 0
+    stdout = sys.stdout
+    _keys = set(['verbose', 'stdout'])
+
+    def run_(self, *args, **kwargs):
+        '''Call the kernel function of current object.  `args` will be passed
+        to kernel function.  `kwargs` will be used to update the attributes of
+        current object.
+        '''
+        self.set_(**kwargs)
+        self.kernel(*args)
+        return self
+    def run(self, *args, **kwargs):
+        return self.run_(*args, **kwargs)
+    run.__doc__ = run_.__doc__
+
+    def set_(self, **kwargs):
+        '''Update the attributes of the current object.
+        '''
+        #if hasattr(self, '_keys'):
+        #    for k,v in kwargs.items():
+        #        setattr(self, k, v)
+        #        if k not in self._keys:
+        #            sys.stderr.write('Warning: %s does not have attribute %s\n'
+        #                             % (self.__class__, k))
+        #else:
+        for k,v in kwargs.items():
+            setattr(self, k, v)
+        return self
+    def set(self, **kwargs):
+        return self.set_(**kwargs)
+    set.__doc__ = set_.__doc__
+
+    def apply(self, fn, *args, **kwargs):
+        '''Apply the fn to rest arguments:  return fn(*args, **kwargs)
+        '''
+        return fn(self, *args, **kwargs)
+
+#    def _format_args(self, args, kwargs, kernel_kw_lst):
+#        args1 = [kwargs.pop(k, v) for k, v in kernel_kw_lst]
+#        return args + args1[len(args):], kwargs
+
+    def check_sanity(self):
+        '''Check misinput of class attributes, check whether a class method is
+        overwritten.  It does not check the attributes which are prefixed with
+        "_".
+        '''
+        if (self.verbose > 0 and  # logger.QUIET
+            hasattr(self, '_keys')):
+            check_sanity(self, self._keys, self.stdout)
+        return self
+
+_warn_once_registry = {}
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    '''Check misinput of class attributes, check whether a class method is
+    overwritten.  It does not check the attributes which are prefixed with
+    "_".
+    '''
+    objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
+    keysub = set(objkeys) - set(keysref)
+    if keysub:
+        class_attr = set(dir(obj.__class__))
+        keyin = keysub.intersection(class_attr)
+        if keyin:
+            msg = ('Overwrite attributes  %s  of %s\n' %
+                   (' '.join(keyin), obj.__class__))
+            if msg not in _warn_once_registry:
+                _warn_once_registry[msg] = 1
+                sys.stderr.write(msg)
+                if stdout is not sys.stdout:
+                    stdout.write(msg)
+        keydiff = keysub - class_attr
+        if keydiff:
+            msg = ('%s does not have attributes  %s\n' %
+                   (obj.__class__, ' '.join(keydiff)))
+            if msg not in _warn_once_registry:
+                _warn_once_registry[msg] = 1
+                sys.stderr.write(msg)
+                if stdout is not sys.stdout:
+                    stdout.write(msg)
+    return obj
+
+def with_doc(doc):
+    '''Use this decorator to add doc string for function
+    '''
+    def make_fn(fn):
+        fn.__doc__ = doc
+        return fn
+    return make_fn
+
 
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):

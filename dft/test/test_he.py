@@ -32,8 +32,8 @@ class KnowValues(unittest.TestCase):
         method.xc = 'xlyp'
         self.assertAlmostEqual(method.scf(), -2.9045738259332161, 9)
 
-    def test_nr_b3lyp(self):
-        method.xc = 'b3lyp'
+    def test_nr_b3lypg(self):
+        method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -2.9070540942168002, 9)
 
 

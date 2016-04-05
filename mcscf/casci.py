@@ -12,7 +12,7 @@ from pyscf.lib import logger
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
-from pyscf.tools.mo_mapping import mo_1to1map
+from pyscf.mcscf import addons
 
 
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
@@ -52,7 +52,6 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
     from pyscf.tools import dump_mat
-    from pyscf.mcscf import addons
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ci is None: ci = casscf.ci
     if isinstance(verbose, logger.Logger):
@@ -120,7 +119,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
     '''Generalized Fock matrix in AO representation
     '''
-    from pyscf.mcscf import mc_ao2mo
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     nmo = mo_coeff.shape[1]
@@ -166,8 +164,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         coefficients, the third is the natural occupancy associated to the
         natural orbitals.
     '''
-    from pyscf.mcscf import mc_ao2mo
     from pyscf.tools import dump_mat
+    from pyscf.tools.mo_mapping import mo_1to1map
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -259,8 +257,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mc : a CASSCF/CASCI object or RHF object
 
     Returns:
-        A tuple, the first item is natural orbitals, the second is updated CI
-        coefficients.
+        A tuple, (natural orbitals, CI coefficients, orbital energies)
+        The orbital energies are the diagonal terms of general Fock matrix.
     '''
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -268,6 +266,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
+    if casdm1 is None:
+        casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
@@ -347,7 +347,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class CASCI(object):
+class CASCI(pyscf.lib.StreamObject):
     '''CASCI
 
     Attributes:
@@ -421,7 +421,7 @@ class CASCI(object):
             assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
         #self.fcisolver = fci.direct_spin0.FCISolver(mol)
-        self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1])
+        self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1], False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 50
@@ -454,6 +454,10 @@ class CASCI(object):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        if self.mo_coeff is None:
+            log.warn('Orbital for CASCI is not specified.  You probably need '
+                     'call SCF.kernel() to initialize orbitals.')
+        return self
 
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
@@ -480,19 +484,21 @@ class CASCI(object):
 
         nao, nmo = mo_coeff.shape
         if self._scf._eri is not None:
-            eri = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
+            eri = pyscf.ao2mo.full(self._scf._eri, mo_coeff)
         else:
-            eri = pyscf.ao2mo.outcore.full_iofree(self.mol, mo_coeff,
-                                                  verbose=self.verbose)
+            eri = pyscf.ao2mo.full(self.mol, mo_coeff, verbose=self.verbose)
         return eri
 
+    @pyscf.lib.with_doc(h1e_for_cas.__doc__)
+    def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return h1e_for_cas(self, mo_coeff, ncas, ncore)
     def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
     def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return h1e_for_cas(self, mo_coeff, ncas, ncore)
+    get_h1cas.__doc__ = h1e_for_cas.__doc__
+    get_h1eff.__doc__ = h1e_for_cas.__doc__
 
     def casci(self, mo_coeff=None, ci0=None):
         return self.kernel(mo_coeff, ci0)
@@ -504,9 +510,8 @@ class CASCI(object):
         if ci0 is None:
             ci0 = self.ci
 
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         self.dump_flags()
 
         self.e_tot, self.e_cas, self.ci = \
@@ -555,10 +560,7 @@ class CASCI(object):
                  verbose=None):
         return get_fock(self, mo_coeff, ci, eris, casdm1, verbose)
 
-    def canonicalize(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                     cas_natorb=False, casdm1=None, verbose=None):
-        return canonicalize(self, mo_coeff, ci, eris, sort, cas_natorb,
-                            casdm1, verbose)
+    canonicalize = canonicalize
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None):
         self.mo_coeff, ci, self.mo_energy = \
@@ -567,25 +569,25 @@ class CASCI(object):
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
+    canonicalize_.__doc__ = canonicalize.__doc__
 
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
         return analyze(self, mo_coeff, ci, verbose)
 
     def sort_mo(self, caslst, mo_coeff=None, base=1):
-        from pyscf.mcscf import addons
+        '''Select active space.  See also :func:`pyscf.mcscf.addons.sort_mo`
+        '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
-    def sort_mo_by_irrep(self, cas_irrep_nocc,
-                         cas_irrep_ncore=None, mo_coeff=None, s=None):
-        from pyscf.mcscf import addons
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
-                                       cas_irrep_ncore, s)
-
+    @pyscf.lib.with_doc(addons.state_average.__doc__)
     def state_average_(self, weights=(0.5,0.5)):
-        from pyscf.mcscf import addons
         self.fcisolver = addons.state_average(self, weights)
+        return self
+
+    @pyscf.lib.with_doc(addons.state_specific.__doc__)
+    def state_specific_(self, state=1):
+        self.fcisolver = addons.state_specific(self, state)
         return self
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,

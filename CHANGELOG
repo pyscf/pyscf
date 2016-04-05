@@ -1,4 +1,40 @@
-Version 1.1 alpha 1 (2015-11-?):
+Version 1.1 alpha-2 (2016-3-8):
+* Added
+  - CCSD(T) and CCSD(T) gradients
+  - General JK contraction function
+  - HF Hessian
+  - DFT Hessian
+  - Function to symmetrize given orbital space
+  - General XC functional evaluator (using Libxc or Xcfun)
+  - Intrinsic Atomic Orbital (IAO)
+* Modify
+  - NEVPT interface
+  - Default DFT pruning scheme
+  - Improving linear dependence issue for X2C module
+* Bug fixing
+  - CCSD density matrix
+  - Atomic radii for DFT grids
+  - Handling h function for molden
+  - Projecting CASSCF initial guess from orbitals of different shape
+
+Version 1.1 alpha-1 (2016-2-8):
+* Added
+  - CCSD gradients
+  - DMRG-NEVPT2 interface
+  - DFT gradients
+  - TDDFT and TDDFT gradients
+  - DFT NMR
+  - COSMO interface
+  - QM/MM interface
+  - Pipek-Mezey localization
+  - DF-CASSCF
+  - State-specific CASSCF for excited states
+  - Stream operations: apply, run, set
+  - General basis value evaluator
+  - DMRG (Block) examples
+* Modify
+  - Default DFT grids schemes (grid density, prune etc)
+
 
 Version 1.0 (2015-10-8):
 * 1.0 Release

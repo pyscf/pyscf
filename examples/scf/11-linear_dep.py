@@ -19,6 +19,7 @@ We might add another attribute for Mole object to indicate the unit in the futur
 
 Note in this example, the diffuse functions in the basis might cause linear
 dependency in the AO space.  It can affect the accuracy of the SCF calculation.
+See also example  42-remove_linear_dep.py  to remove the linear dependency.
 '''
 
 mol = gto.Mole()

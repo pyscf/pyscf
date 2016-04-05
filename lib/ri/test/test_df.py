@@ -10,6 +10,8 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import ao2mo
 
+# FIXME
+
 libri1 = lib.load_library('libri')
 
 mol = gto.Mole()
@@ -85,7 +87,7 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print 'Full Tests for df'
+    print('Full Tests for df')
     unittest.main()
 
 

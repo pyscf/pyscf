@@ -23,8 +23,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     ncore = casscf.ncore
     ncas = casscf.ncas
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris)
-    log.info('CASCI E = %.15g', e_tot)
+    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if ncas == nmo:
         return True, e_tot, e_ci, fcivec, mo
 
@@ -33,29 +32,29 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv_tol_ddm = conv_tol_grad * 3
     conv = False
-    elast = e_tot
+    de, elast = e_tot, e_tot
     totmicro = totinner = 0
     casdm1 = (0,0)
     r0 = None
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
     for imacro in range(macro):
-        ninner = 0
+        njk = 0
         t3m = t2m
         casdm1_old = casdm1
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
         norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_old[0])
                  + numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
         t3m = log.timer('update CAS DM', *t3m)
+        max_stepsize = casscf.max_stepsize_scheduler(locals())
         for imicro in range(micro):
-
-            for u, g_orb, njk in casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                                      eris, r0, conv_tol_grad, log):
-                break
-            ninner += njk
+            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+                                        eris, r0, conv_tol_grad, max_stepsize, log)
+            u, g_orb, njk1 = next(rota)
+            rota.close()
+            njk += njk1
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
-            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = list(map(numpy.dot, mo, u))
@@ -64,30 +63,26 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d  ~dE= %4.3g  |u-1|= %4.3g  |g[o]|= %4.3g  |dm1|= %4.3g',
-                      imicro, de, norm_t, norm_gorb, norm_ddm)
+            log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
+                      imicro, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < 1e-4 or abs(de) < tol*.8 or norm_gorb < conv_tol_grad*.8:
+            if norm_t < 1e-4 or norm_gorb < conv_tol_grad*.8:
                 break
 
         r0 = casscf.pack_uniq_var(u)
-        totinner += ninner
+        totinner += njk
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris)
-        log.info('macro iter %d (%d JK  %d micro), CASSCF E = %.15g  dE = %.8g',
-                 imacro, ninner, imicro+1, e_tot, e_tot-elast)
-        log.info('               |grad[o]|= %4.3g  |dm1|= %4.3g',
-                 norm_gorb, norm_ddm)
-        log.debug('CAS space CI energy = %.15g', e_ci)
+        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
-        if (abs(elast - e_tot) < tol and
+        de, elast = e_tot - elast, e_tot
+        if (abs(de) < tol and
             norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm):
             conv = True
         else:

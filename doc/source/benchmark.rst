@@ -1,4 +1,4 @@
-.. _benchmakr:
+.. _benchmark:
 
 
 Benchmark
@@ -33,7 +33,7 @@ Platform
 ========= ==============================
 CPU       4 Intel E5-2670 @ 2.6 GB
 Memory    64 GB DDR3
-OS        Costum Redhat 6.6
+OS        Custom Redhat 6.6
 BLAS      MKL 11.0
 Compiler  Intel 13.0
 ========= ==============================

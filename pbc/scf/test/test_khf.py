@@ -29,13 +29,16 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def test_kpt_vs_supercell(self):
-        ngs = 8
+        # For large ngs, agreement is always achieved
+        # ngs = 8
+        # For small ngs, agreement only achieved if "wrapping" k-k'+G in get_coulG
+        ngs = 4
         nk = (3, 1, 1)
         cell = make_primitive_cell(ngs)
         print "cell gs =", cell.gs
         scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
-        kmf = pbchf.KRHF(cell, abs_kpts)
+        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         kmf.verbose = 7
         ekpt = kmf.scf()
 
@@ -49,7 +52,7 @@ class KnowValues(unittest.TestCase):
 
         scaled_gamma = ase.dft.kpoints.monkhorst_pack((1,1,1))
         gamma = supcell.get_abs_kpts(scaled_gamma)
-        mf = pbchf.KRHF(supcell, gamma)
+        mf = pbchf.KRHF(supcell, gamma, exxdiv='vcut_sph')
         mf.verbose = 7
         esup = mf.scf()/np.prod(nk)
 
@@ -59,6 +62,5 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ekpt, esup, 8)
 
 if __name__ == '__main__':
-    print("Full Tests for pbc.dft.krks")
+    print("Full Tests for pbc.scf.khf")
     unittest.main()
-

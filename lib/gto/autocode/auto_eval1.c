@@ -55,9 +55,9 @@ gto2[n*blksize+i] = + (-1*c[0]*s[1]) + c[1]*s[0];
         } }
                          } else {
 for (n = 0; n < degen; n++) {
-gto0[i] = 0;
-gto1[i] = 0;
-gto2[i] = 0;
+gto0[n*blksize+i] = 0;
+gto1[n*blksize+i] = 0;
+gto2[n*blksize+i] = 0;
 } } }
 exps += blksize;
 gto0 += mblksize;
@@ -163,15 +163,15 @@ gto8[n*blksize+i] = + (-1*c[0]*s[7]) + c[1]*s[6];
         } }
                          } else {
 for (n = 0; n < degen; n++) {
-gto0[i] = 0;
-gto1[i] = 0;
-gto2[i] = 0;
-gto3[i] = 0;
-gto4[i] = 0;
-gto5[i] = 0;
-gto6[i] = 0;
-gto7[i] = 0;
-gto8[i] = 0;
+gto0[n*blksize+i] = 0;
+gto1[n*blksize+i] = 0;
+gto2[n*blksize+i] = 0;
+gto3[n*blksize+i] = 0;
+gto4[n*blksize+i] = 0;
+gto5[n*blksize+i] = 0;
+gto6[n*blksize+i] = 0;
+gto7[n*blksize+i] = 0;
+gto8[n*blksize+i] = 0;
 } } }
 exps += blksize;
 gto0 += mblksize;
@@ -257,9 +257,9 @@ gto2[n*blksize+i] = + (-1*c[0]*s[1]) + c[1]*s[0];
         } }
                          } else {
 for (n = 0; n < degen; n++) {
-gto0[i] = 0;
-gto1[i] = 0;
-gto2[i] = 0;
+gto0[n*blksize+i] = 0;
+gto1[n*blksize+i] = 0;
+gto2[n*blksize+i] = 0;
 } } }
 exps += blksize;
 gto0 += mblksize;

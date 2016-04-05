@@ -18,8 +18,7 @@
 void GTOnabla1(double *fx1, double *fy1, double *fz1,
                double *fx0, double *fy0, double *fz0, int l, double a);
 void GTOx1(double *fx1, double *fy1, double *fz1,
-           double *fx0, double *fy0, double *fz0, int l,
-           double x, double y, double z);
+           double *fx0, double *fy0, double *fz0, int l, double *ri);
 int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
                 int l, int nprim, int nctr, int blksize, double fac);
 
@@ -39,14 +38,10 @@ void GTOeval_cart_drv(void (*feval)(),  int (*fexp)(),
         GTOnabla1(fx##o, fy##o, fz##o, fx##i, fy##i, fz##i, l, alpha[k])
 /* r-R_0, R_0 is (0,0,0) */
 #define GTO_R0I(o, i, l) \
-        GTOx1(fx##o, fy##o, fz##o, fx##i, fy##i, fz##i, l, \
-              gridx[i], gridy[i], gridz[i])
+        GTOx1(fx##o, fy##o, fz##o, fx##i, fy##i, fz##i, l, ri)
 /* r-R_C, R_C is common origin */
 #define GTO_RCI(o, i, l) \
-        GTOx1(fx##o, fy##o, fz##o, fx##i, fy##i, fz##i, l, \
-              gridx[i]-env[PTR_COMMON_ORIG+0], \
-              gridy[i]-env[PTR_COMMON_ORIG+1], \
-              gridz[i]-env[PTR_COMMON_ORIG+2])
+        GTOx1(fx##o, fy##o, fz##o, fx##i, fy##i, fz##i, l, dri)
 /* origin from center of each basis
  * x1(fx1, fy1, fz1, fx0, fy0, fz0, l, 0, 0, 0) */
 #define GTO_R_I(o, i, l) \

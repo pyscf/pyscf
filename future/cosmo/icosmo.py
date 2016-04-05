@@ -94,10 +94,10 @@ class COSMO(object):
 
     def fepsi(self):
         if self.eps<0.0:
-  	   fe = 1.0
-	else:
-	   fe = (self.eps-1.0)/(self.eps+0.5)
-	return fe
+            fe = 1.0
+        else:
+            fe = (self.eps-1.0)/(self.eps+0.5)
+        return fe
 
     def check(self):
         print('asso_cosurf= %s' % self.asso_cosurf)
@@ -312,7 +312,7 @@ class COSMO(object):
         return e_tot
 
     def cosmo_fock(self, dm):
-	return cosmo_fock(self, dm)
+        return cosmo_fock(self, dm)
 
     def cosmo_occ(self, dm):
         return cosmo_occ(self, dm)
@@ -583,7 +583,7 @@ def cosmo_for_mcscf(mc, cosmo):
             cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
             cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
             edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm_guess)
-	    # Substract <VP> to get E0, then add Ediel
+            # Substract <VP> to get E0, then add Ediel
             e_tot = e_tot - edup + cosmo.ediel
             return e_tot, e_cas, fcivec
 
@@ -599,7 +599,7 @@ def cosmo_for_casci(mc, cosmo):
     cosmo.initialization(cosmo.mol)
     if cosmo.dm is not None:
         cosmo._dm_guess = cosmo.dm
-	vcosmo = cosmo.cosmo_fock(cosmo.dm)
+        vcosmo = cosmo.cosmo_fock(cosmo.dm)
 
     class CAS(oldCAS):
         def __init__(self):
@@ -612,7 +612,7 @@ def cosmo_for_casci(mc, cosmo):
                 if cosmo._dm_guess is None:  # Initial guess
                     na = self.ncore + self.nelecas[0]
                     nb = self.ncore + self.nelecas[1]
-		    print 'Initial DM: na,nb,nelec=',na,nb,na+nb
+                    log.Initial('Initial DM: na,nb,nelec=',na,nb,na+nb)
                     dm =(numpy.dot(self.mo_coeff[:,:na], self.mo_coeff[:,:na].T)
                        + numpy.dot(self.mo_coeff[:,:nb], self.mo_coeff[:,:nb].T))
                 else:
@@ -646,7 +646,7 @@ def cosmo_for_casci(mc, cosmo):
                 cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
                 cosmo._dm_guess += numpy.dot(mocore, mocore.T) * 2
                 edup = numpy.einsum('ij,ij', cosmo._v, cosmo._dm_guess)
-	        # Substract <VP> to get E0, then add Ediel
+                # Substract <VP> to get E0, then add Ediel
                 e_tot = e_tot - edup + cosmo.ediel
 
                 log.debug('COSMO E_diel = %.15g', cosmo.ediel)

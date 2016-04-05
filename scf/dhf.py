@@ -17,8 +17,8 @@ import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import chkfile
 from pyscf.scf import _vhf
+import pyscf.scf.chkfile
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -142,7 +142,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
 
     if numpy.iscomplexobj(scf_rec['mo_coeff']):
         mo = scf_rec['mo_coeff']
@@ -204,10 +204,14 @@ def time_reversal_matrix(mol, mat):
 
 def analyze(mf, verbose=logger.DEBUG):
     #from pyscf.tools import dump_mat
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     #mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
+
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
@@ -241,7 +245,9 @@ class UHF(hf.SCF):
         with_ssss : bool, for Dirac-Hartree-Fock only
             If False, ignore small component integrals (SS|SS).  Default is True.
         with_gaunt : bool, for Dirac-Hartree-Fock only
-            If False, ignore Gaunt interaction.  Default is False.
+            Default is False.
+        with_breit : bool, for Dirac-Hartree-Fock only
+            Gaunt + gauge term.  Default is False.
 
     Examples:
 
@@ -294,14 +300,13 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def build_(self, mol=None):
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
 
@@ -415,8 +420,16 @@ class UHF(hf.SCF):
         self._finalize_()
         return self.e_tot
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
+
+    def x2c(self):
+        import pyscf.scf.x2c
+        x2chf = pyscf.scf.x2c.UHF(self.mol)
+        x2chf.__dict__.update(self.__dict__)
+        return x2chf
+
 
 class HF1e(UHF):
     def scf(self, *args):

@@ -579,6 +579,11 @@ void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
         free(buf);
 }
 
+static int no_prescreen()
+{
+        return 1;
+}
+
 void GTOnr2e_fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
                       int (*fprescreen)(), double *eri, int ncomp,
                       int *ishlst, int nbra, int *jshlst, int nket,
@@ -617,6 +622,10 @@ void GTOnr2e_fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
 
         struct _Envs envs = {natm, nbas, atm, bas, env, nao,
                                 ao_loc, NULL, cintopt};
+
+        if (fprescreen == NULL) {
+                fprescreen = no_prescreen;
+        }
 
 #pragma omp parallel default(none) \
         shared(fill, fprescreen, eri, envs, intor, ncomp, nbra, nket, \

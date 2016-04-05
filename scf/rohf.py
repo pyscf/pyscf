@@ -10,10 +10,11 @@ Restricted Open-shell Hartree-Fock
 from functools import reduce
 import numpy
 import pyscf.gto
+import pyscf.lib
 from pyscf.lib import logger
-from pyscf.scf import chkfile
 from pyscf.scf import hf
 from pyscf.scf import uhf
+import pyscf.scf.chkfile
 
 
 def init_guess_by_minao(mol):
@@ -24,13 +25,13 @@ def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
     return numpy.array((dm*.5, dm*.5))
 
-def init_guess_by_chkfile(mol, chk, project=True):
+def init_guess_by_chkfile(mol, chkfile, project=True):
     from pyscf.scf import addons
-    if isinstance(chk, pyscf.gto.Mole):
-        raise RuntimeError('''
+    if isinstance(chkfile, pyscf.gto.Mole):
+        raise TypeError('''
 You see this error message because of the API updates.
-The first argument is chk file name.''')
-    chk_mol, scf_rec = chkfile.load_scf(chk)
+The first argument is chkfile file name.''')
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile)
 
     def fproj(mo):
         if project:
@@ -41,7 +42,7 @@ The first argument is chk file name.''')
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']
         if numpy.iscomplexobj(mo):
-            raise RuntimeError('TODO: project DHF orbital to ROHF orbital')
+            raise NotImplementedError('TODO: project DHF orbital to ROHF orbital')
         dm = make_rdm1(fproj(mo), mo_occ)
     else:  # UHF
         mo = scf_rec['mo_coeff']
@@ -81,8 +82,8 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         dm = numpy.array((dm*.5, dm*.5))
 # Fc = (Fa+Fb)/2
     mf._focka_ao = h1e + vhf[0]
-    fockb_ao = h1e + vhf[1]
-    fc = (mf._focka_ao + fockb_ao) * .5
+    mf._fockb_ao = h1e + vhf[1]
+    fc = (mf._focka_ao + mf._fockb_ao) * .5
 # Projector for core, open-shell, and virtual
     nao = s1e.shape[0]
     pc = numpy.dot(dm[1], s1e)
@@ -91,7 +92,7 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
     f += reduce(numpy.dot, (po.T, fc, po)) * .5
     f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-    f += reduce(numpy.dot, (po.T, fockb_ao, pc))
+    f += reduce(numpy.dot, (po.T, mf._fockb_ao, pc))
     f += reduce(numpy.dot, (po.T, mf._focka_ao, pv))
     f += reduce(numpy.dot, (pv.T, fc, pc))
     f = f + f.T
@@ -109,22 +110,111 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
 # TODO, check other treatment  J. Chem. Phys. 133, 141102
     return f
 
+
+def get_occ(mf, mo_energy=None, mo_coeff=None):
+    '''Label the occupancies for each orbital.
+    NOTE the occupancies are not assigned based on the orbital energy ordering.
+    The first N orbitals are assigned to be occupied orbitals.
+
+    Examples:
+
+    >>> mol = gto.M(atom='H 0 0 0; O 0 0 1.1', spin=1)
+    >>> mf = scf.hf.SCF(mol)
+    >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
+    >>> mf.get_occ(energy)
+    array([2, 2, 2, 2, 1, 0])
+    '''
+
+    if mo_energy is None: mo_energy = mf.mo_energy
+    if mf._mo_ea is None:
+        mo_ea = mo_eb = mo_energy
+    else:
+        mo_ea = mf._mo_ea
+        mo_eb = mf._mo_eb
+    nmo = mo_ea.size
+    mo_occ = numpy.zeros(nmo)
+    ncore = mf.nelec[1]
+    nocc  = mf.nelec[0]
+    nopen = nocc - ncore
+    mo_occ = _fill_rohf_occ(mo_energy, mo_ea, mo_eb, ncore, nopen)
+
+    if mf.verbose >= logger.INFO and nocc < nmo and ncore > 0:
+        ehomo = max(mo_energy[mo_occ> 0])
+        elumo = min(mo_energy[mo_occ==0])
+        if ehomo+1e-3 > elumo:
+            logger.warn(mf.mol, '!! HOMO %.15g >= LUMO %.15g',
+                        ehomo, elumo)
+        else:
+            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
+                        ehomo, elumo)
+        if nopen > 0:
+            core_idx = mo_occ == 2
+            open_idx = mo_occ == 1
+            vir_idx = mo_occ == 0
+            logger.debug(mf, '                  Roothaan           | alpha              | beta')
+            logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
+                         max(mo_energy[core_idx]),
+                         max(mo_ea[core_idx]), max(mo_eb[core_idx]))
+            logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
+                         min(mo_energy[vir_idx]),
+                         min(mo_ea[vir_idx]), min(mo_eb[vir_idx]))
+            for i in numpy.where(open_idx)[0]:
+                logger.debug(mf, '  1-occ =         %18.15g | %18.15g | %18.15g',
+                             mo_energy[i], mo_ea[i], mo_eb[i])
+
+        numpy.set_printoptions(threshold=nmo)
+        logger.debug(mf, '  Roothaan mo_energy =\n%s', mo_energy)
+        logger.debug1(mf, '  alpha mo_energy =\n%s', mo_ea)
+        logger.debug1(mf, '  beta  mo_energy =\n%s', mo_eb)
+        numpy.set_printoptions(threshold=1000)
+    return mo_occ
+
+def _fill_rohf_occ(mo_energy, mo_energy_a, mo_energy_b, ncore, nopen):
+    mo_occ = numpy.zeros_like(mo_energy)
+    open_idx = []
+    try:
+        core_sort = numpy.argpartition(mo_energy, ncore-1)
+        core_idx = core_sort[:ncore]
+        if nopen > 0:
+            open_idx = core_sort[ncore:]
+# Fill up open shell based on alpha orbital energy
+            open_sort = numpy.argpartition(mo_energy_a[open_idx], nopen-1)
+            open_idx = open_idx[open_sort[:nopen]]
+    except AttributeError:
+        core_sort = numpy.argsort(mo_energy)
+        core_idx = core_sort[:ncore]
+        if nopen > 0:
+            open_idx = core_sort[ncore:]
+            open_sort = numpy.argsort(mo_energy_a[open_idx])
+            open_idx = open_idx[open_sort[:nopen]]
+    mo_occ[core_idx] = 2
+    mo_occ[open_idx] = 1
+    return mo_occ
+
 def get_grad(mo_coeff, mo_occ, fock=None):
-    occidxa = numpy.where(mo_occ>0)[0]
-    occidxb = numpy.where(mo_occ==2)[0]
-    viridxa = numpy.where(mo_occ==0)[0]
-    viridxb = numpy.where(mo_occ<2)[0]
-    mask = hf.uniq_var_indices(mo_occ)
+    '''ROHF gradients is the off-diagonal block [co + cv + ov], where
+    [ cc co cv ]
+    [ oc oo ov ]
+    [ vc vo vv ]
+    '''
+    occidxa = mo_occ > 0
+    occidxb = mo_occ == 2
+    viridxa = ~occidxa
+    viridxb = ~occidxb
+    uniq_var_a = viridxa.reshape(-1,1) & occidxa
+    uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
     focka = reduce(numpy.dot, (mo_coeff.T, fock[0], mo_coeff))
     fockb = reduce(numpy.dot, (mo_coeff.T, fock[1], mo_coeff))
 
     g = numpy.zeros_like(focka)
-    g[viridxa[:,None],occidxa]  = focka[viridxa[:,None],occidxa]
-    g[viridxb[:,None],occidxb] += fockb[viridxb[:,None],occidxb]
-    return g[mask]
+    g[uniq_var_a]  = focka[uniq_var_a]
+    g[uniq_var_b] += fockb[uniq_var_b]
+    return g[uniq_var_a | uniq_var_b]
 
 def make_rdm1(mo_coeff, mo_occ):
+    '''One-particle densit matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
+    '''
     mo_a = mo_coeff[:,mo_occ>0]
     mo_b = mo_coeff[:,mo_occ==2]
     dm_a = numpy.dot(mo_a, mo_a.T)
@@ -143,6 +233,38 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
 
+def analyze(mf, verbose=logger.DEBUG):
+    '''Analyze the given SCF object:  print orbital energies, occupancies;
+    print orbital coefficients; Mulliken population analysis
+    '''
+    from pyscf.tools import dump_mat
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
+
+    log.note('**** MO energy ****')
+    if mf._mo_ea is not None:
+        for i,c in enumerate(mo_occ):
+            log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+    else:
+        mo_ea = mf._mo_ea
+        mo_eb = mf._mo_eb
+        log.note('                Roothaan           | alpha              | beta')
+        for i,c in enumerate(mo_occ):
+            log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
+                     i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
+    if verbose >= logger.DEBUG:
+        log.debug(' ** MO coefficients **')
+        label = mf.mol.spheric_labels(True)
+        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    #return mf.mulliken_pop(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
+
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
 # keep mo_energy, mo_coeff, mo_occ as RHF structure
@@ -155,6 +277,9 @@ class ROHF(hf.RHF):
         n_a = (mol.nelectron + mol.spin) // 2
         self.nelec = (n_a, mol.nelectron - n_a)
         self._focka_ao = None
+        self._fockb_ao = None
+        self._mo_ea = None
+        self._mo_eb = None
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
@@ -178,8 +303,7 @@ class ROHF(hf.RHF):
         return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
-        if mol is None:
-            mol = self.mol
+        if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
@@ -187,80 +311,49 @@ class ROHF(hf.RHF):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def eig(self, h, s):
         '''Solve the generalized eigenvalue problem for Roothan effective Fock
-        matrix.  Note Roothaan effective Fock do not provide correct orbital
-        energies.  We use spectrum of alpha fock and beta fock to sort the
-        orbitals.  The energies of doubly occupied orbitals are the eigenvalue
-        of Roothaan Fock matrix.  But the energies of singly occupied orbitals
-        and virtual orbitals are the expection value of alpha-Fock matrix.
-
-        Args:
-            h : a list of 3 ndarrays
-                (fock_eff, fock_alpha, fock_beta), which is provided by :func:`ROHF.get_fock_`
+        matrix.  Note Roothaan effective Fock does not give correct orbital
+        energies.
         '''
-# TODO, check other treatment  J. Chem. Phys. 133, 141102
-        ncore = self.nelec[1]
+# TODO, check other treatments  J. Chem. Phys. 133, 141102
         mo_energy, mo_coeff = hf.SCF.eig(self, h, s)
-        mopen = mo_coeff[:,ncore:]
-        ea = numpy.einsum('ik,ik->k', mopen, self._focka_ao.dot(mopen))
-        idx = ea.argsort()
-        mo_energy[ncore:] = ea[idx]
-        mo_coeff[:,ncore:] = mopen[:,idx]
+        self._mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
+        self._mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
         return mo_energy, mo_coeff
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None,
-                  damp_factor=None):
-        return get_fock_(self, h1e, s1e, vhf, dm, cycle, adiis,
-                         diis_start_cycle, level_shift_factor, damp_factor)
+    @pyscf.lib.with_doc(get_fock_.__doc__)
+    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
+        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
+                              diis_start_cycle, level_shift_factor, damp_factor)
+    get_fock_ = get_fock_
 
+    get_occ = get_occ
+
+    @pyscf.lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
 
-    def get_occ(self, mo_energy=None, mo_coeff=None):
-        if mo_energy is None: mo_energy = self.mo_energy
-        mo_occ = numpy.zeros_like(mo_energy)
-        ncore = self.nelec[1]
-        nopen = self.nelec[0] - ncore
-        nocc = ncore + nopen
-        mo_occ[:ncore] = 2
-        mo_occ[ncore:nocc] = 1
-        if nocc < len(mo_energy):
-            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self.mol, '!! HOMO %.12g == LUMO %.12g',
-                            mo_energy[nocc-1], mo_energy[nocc])
-        else:
-            logger.info(self, 'HOMO = %.12g  no LUMO', mo_energy[nocc-1])
-        if nopen > 0:
-            for i in range(ncore, nocc):
-                logger.debug(self, 'singly occupied orbital energy = %.12g',
-                             mo_energy[i])
-        logger.debug(self, '  mo_energy = %s', mo_energy)
-        return mo_occ
-
+    @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ)
 
-    def energy_elec(self, dm=None, h1e=None, vhf=None):
-        return energy_elec(self, dm, h1e, vhf)
+    energy_elec = energy_elec
 
     # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
+    @pyscf.lib.with_doc(uhf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        '''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
-        for the given density matrix.  See :func:`scf.uhf.get_veff`.
-        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -284,5 +377,7 @@ class ROHF(hf.RHF):
             vhf = uhf._makevhf(vj, vk, nset) \
                 + numpy.array(vhf_last, copy=False)
         return vhf
+
+    analyze = analyze
 
 

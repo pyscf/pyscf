@@ -5,7 +5,7 @@ from pyscf import gto, dft
 from pyscf.dft import numint
 
 '''
-Evaluate exchange-correlation functional and itr potential on given grid
+Evaluate exchange-correlation functional and its potential on given grid
 coordinates.
 '''
 
@@ -24,19 +24,29 @@ dm = mf.make_rdm1()
 # Use default mesh grids and weights
 coords = mf.grids.coords
 weights = mf.grids.weights
-ao_value = numint.eval_ao(mol, coords, isgga=True)
+ao_value = numint.eval_ao(mol, coords, deriv=1)
 # The first row of rho is electron density, the rest three rows are electron
 # density gradients which are needed for GGA functional
-rho = numint.eval_rho(mol, ao_value, dm, isgga=True)
+rho = numint.eval_rho(mol, ao_value, dm, xctype='GGA')
 print(rho.shape)
-sigma = numpy.einsum('ip,ip->p', rho[1:], rho[1:])
 
-# See pyscf/dft/vxc.py for the XC functional ID
-x_id = dft.XC_GGA_X_B88
-c_id = dft.XC_GGA_C_P86
-ex, vx, vx_sigma = numint.eval_x(x_id, rho[0], sigma)
-ec, vc, vc_sigma = numint.eval_c(c_id, rho[0], sigma)
+#
+# Evaluate XC functional one by one.
+# Note: to evaluate only correlation functional, put ',' before the functional name
+#
+ex, vx = dft.libxc.eval_xc('B88', rho)[:2]
+ec, vc = dft.libxc.eval_xc(',P86', rho)[:2]
 print('Exc = %.12f' % numpy.einsum('i,i,i->', ex+ec, rho[0], weights))
-print('Vxc on each grid %s' % str(vx.shape))
-print('Vxc_sigma on each grid %s' % str(vx.shape))
+
+#
+# Evaluate XC functional together
+#
+exc, vxc = dft.libxc.eval_xc('B88,P86', rho)[:2]
+print('Exc = %.12f' % numpy.einsum('i,i,i->', exc, rho[0], weights))
+
+#
+# Evaluate XC functional for user specified functional
+#
+exc, vxc = dft.libxc.eval_xc('.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN', rho)[:2]
+print('Exc = %.12f  ref = -7.520014202688' % numpy.einsum('i,i,i->', exc, rho[0], weights))
 

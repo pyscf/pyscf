@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to PySCF's documentation!
-=================================
+Welcome to PySCF documentation!
+===============================
 
 Pyscf is a quantum chemistry package written in python.  The package aims to
 provide a simple, light-weight and efficient platform for quantum chemistry
@@ -51,7 +51,7 @@ Contents
 
 
 You can also download the `PDF version
-<http://www.pyscf.org/pdf/PySCF-1.0.pdf>`_ of this manual.
+<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf>`_ of this manual.
 
 
 .. Indices and tables

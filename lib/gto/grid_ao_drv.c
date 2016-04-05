@@ -50,14 +50,13 @@ void GTOnabla1(double *fx1, double *fy1, double *fz1,
  * r - R_O = (r-R_i) + ri, ri = (x,y,z) = R_i - R_O
  */
 void GTOx1(double *fx1, double *fy1, double *fz1,
-           double *fx0, double *fy0, double *fz0, int l,
-           double x, double y, double z)
+           double *fx0, double *fy0, double *fz0, int l, double *ri)
 {
         int i;
         for (i = 0; i <= l; i++) {
-                fx1[i] = x*fx0[i] + fx0[i+1];
-                fy1[i] = y*fy0[i] + fy0[i+1];
-                fz1[i] = z*fz0[i] + fz0[i+1];
+                fx1[i] = ri[0] * fx0[i] + fx0[i+1];
+                fy1[i] = ri[1] * fy0[i] + fy0[i+1];
+                fz1[i] = ri[2] * fz0[i] + fz0[i+1];
         }
 }
 

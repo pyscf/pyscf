@@ -24,6 +24,7 @@ mol0.basis['O'].extend(gto.mole.expand_etbs(((0, 4, 1, 1.8),
                                             (1, 3, 2, 1.8),
                                             (2, 2, 1, 1.8),)))
 mol0.verbose = 4
+mol0.ecp = {'O1': 'lanl2dz'}
 mol0.output = None
 mol0.build()
 
@@ -69,7 +70,7 @@ C    SP
         mol1 = mol0.copy()
         mol1.x = None
         mol1.copy = None
-        mol1.check_sanity(mol1)
+        mol1.check_sanity()
 
     def test_nao_range(self):
         self.assertEqual(mol0.nao_nr_range(1,4), (2, 7))
@@ -105,6 +106,15 @@ C    SP
         self.assertEqual(mol.irrep_id, [0, 1])
         mol = gto.M(atom='H 0 0 -1; H 0 0 1', symmetry='C2v')
         self.assertEqual(mol.irrep_id, [0])
+
+    def test_dumps(self):
+        import warnings
+        mol1 = gto.M()
+        mol1.x = lambda *args: None
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mol1.dumps()
+            self.assertTrue(w[0].category, UserWarning)
 
 
 if __name__ == "__main__":

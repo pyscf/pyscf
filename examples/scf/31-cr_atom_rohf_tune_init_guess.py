@@ -21,12 +21,12 @@ mol.build(
     charge = 6,
     spin = 0,
 )
-m = scf.RHF(mol)
-m.scf()
+mf = scf.RHF(mol)
+mf.scf()
 #
 # use cation to produce initial guess
 #
-mo = m.mo_coeff
+mo = mf.mo_coeff
 rdm1 = (numpy.dot(mo[:,:15], mo[:,:15].T),
         numpy.dot(mo[:,:9 ], mo[:,:9 ].T))
 
@@ -34,10 +34,10 @@ mol.charge = 0
 mol.spin = 6
 mol.build(False,False)
 
-m = scf.RHF(mol)
-m.chkfile = 'cr_atom.chk'
-m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
-m.scf(dm0=rdm1)
+mf = scf.RHF(mol)
+mf.chkfile = 'cr_atom.chk'
+mf.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
+mf.scf(dm0=rdm1)
 
 
 #
@@ -45,12 +45,12 @@ m.scf(dm0=rdm1)
 #
 mol.basis = 'aug-cc-pvdz'
 mol.build(False, False)
-m = scf.RHF(mol)
-m.level_shift = .2
-m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
+mf = scf.RHF(mol)
+mf.level_shift = .2
+mf.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 # init guess can also be read from chkfile
-dm = m.from_chk('cr_atom.chk')
-m.scf(dm)
+dm = mf.from_chk('cr_atom.chk')
+mf.scf(dm)
 
 
 #
@@ -61,11 +61,11 @@ spin = 6
 mol.basis = 'aug-cc-pvdz'
 mol.build(False,False)
 
-m = scf.UHF(mol)
-m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
-m.scf()
-rdm1 = m.make_rdm1()
+mf = scf.UHF(mol)
+mf.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
+mf.scf()
+rdm1 = mf.make_rdm1()
 
-m = scf.RHF(mol)
-m.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
-m.scf(rdm1)
+mf = scf.RHF(mol)
+mf.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
+mf.scf(rdm1)
