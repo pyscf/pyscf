@@ -1,0 +1,9 @@
+#
+# This file is an example to set the Xian-CI environment.
+# The configs will be used in xianci.py
+#
+
+# Contact "Bingbing Sun" <bsuo@nwu.edu.cn> to download and install Xian-CI
+# program.
+XIANCIEXE = '/path/to/Xian-CI/exe'
+
