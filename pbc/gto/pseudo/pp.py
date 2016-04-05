@@ -4,8 +4,8 @@ import scipy.special
 from pyscf import lib
 
 '''PP module.
-    
-For GTH/HGH PPs, see: 
+
+For GTH/HGH PPs, see:
     Goedecker, Teter, Hutter, PRB 54, 1703 (1996)
     Hartwigsen, Goedecker, and Hutter, PRB 58, 3641 (1998)
 '''
@@ -23,10 +23,10 @@ def get_alphas(cell):
 def get_alphas_gth(cell):
     '''alpha parameters for the local GTH pseudopotential.'''
 
-    alphas = np.zeros(cell.natm) 
+    alphas = np.zeros(cell.natm)
     for ia in range(cell.natm):
         Zia = cell.atom_charge(ia)
-        pp = cell._pseudo[ cell.atom_symbol(ia) ] 
+        pp = cell._pseudo[ cell.atom_symbol(ia) ]
         rloc, nexp, cexp = pp[1:3+1]
 
         cfacs = [1., 3., 15., 105.]
@@ -53,20 +53,20 @@ def get_gth_vlocG(cell, G):
     Args:
         G : (ngs,) ndarray
 
-    Returns: 
+    Returns:
          (natm, ngs) ndarray
     '''
-    vlocG = np.zeros((cell.natm,len(G))) 
+    vlocG = np.zeros((cell.natm,len(G)))
     for ia in range(cell.natm):
         Zia = cell.atom_charge(ia)
-        pp = cell._pseudo[ cell.atom_symbol(ia) ] 
+        pp = cell._pseudo[ cell.atom_symbol(ia) ]
         rloc, nexp, cexp = pp[1:3+1]
 
         G_red = G*rloc
         cfacs = np.array(
-                [1*G_red**0, 
-                 3 - G_red**2, 
-                 15 - 10*G_red**2 + G_red**4, 
+                [1*G_red**0,
+                 3 - G_red**2,
+                 15 - 10*G_red**2 + G_red**4,
                  105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
 
         with np.errstate(divide='ignore'):
@@ -85,7 +85,7 @@ def get_projG(cell, kpt=np.zeros(3)):
         projs : list( list( list( list( np.array(ngs) ) ) ) )
          - projs[atm][l][m][i][ngs]
     '''
-    return get_gth_projG(cell, kpt+cell.Gv) 
+    return get_gth_projG(cell, kpt+cell.Gv)
 
 def get_gth_projG(cell, Gvs):
     '''G space projectors from the FT of the real-space projectors.
@@ -96,11 +96,11 @@ def get_gth_projG(cell, Gvs):
     See MH Eq.(4.80)
     '''
     Gs,thetas,phis = cart2polar(Gvs)
-        
+
     hs = []
     projs = []
     for ia in range(cell.natm):
-        pp = cell._pseudo[ cell.atom_symbol(ia) ] 
+        pp = cell._pseudo[ cell.atom_symbol(ia) ]
         nproj_types = pp[4]
         h_ia = []
         proj_ia = []
@@ -121,7 +121,7 @@ def get_gth_projG(cell, Gvs):
 
     return hs, projs
 
-def projG_li(G, l, i, rl): 
+def projG_li(G, l, i, rl):
     G = np.array(G)
     G_red = G*rl
 
@@ -185,7 +185,7 @@ def cart2polar(rvec):
     r = lib.norm(rvec, axis=1)
     # theta is the polar angle, 0 < theta < pi
     # catch possible 0/0
-    theta = np.arccos(z/(r+1e-8))
+    theta = np.arccos(z/(r+1e-200))
     # phi is the azimuthal angle, 0 < phi < 2pi (or -pi < phi < pi)
     phi = np.arctan2(y,x)
     return r, theta, phi
