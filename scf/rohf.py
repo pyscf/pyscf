@@ -67,10 +67,7 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     where Fc stands for the Fa + Fb
 
     Returns:
-        (fock_eff, fock_alpha, fock_beta)
-        Roothaan effective Fock matrix, with UHF alpha and beta Fock matrices.
-        Attach alpha and beta fock, because Roothaan effective Fock cannot
-        provide correct orbital energies.
+        Roothaan effective Fock matrix
     '''
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
@@ -126,11 +123,11 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     '''
 
     if mo_energy is None: mo_energy = mf.mo_energy
-    if mf._mo_ea is None:
+    if mo_coeff is None or mf._focka_ao is None:
         mo_ea = mo_eb = mo_energy
     else:
-        mo_ea = mf._mo_ea
-        mo_eb = mf._mo_eb
+        mo_ea = numpy.einsum('ik,ik->k', mo_coeff, mf._focka_ao.dot(mo_coeff))
+        mo_eb = numpy.einsum('ik,ik->k', mo_coeff, mf._fockb_ao.dot(mo_coeff))
     nmo = mo_ea.size
     mo_occ = numpy.zeros(nmo)
     ncore = mf.nelec[1]
@@ -247,12 +244,12 @@ def analyze(mf, verbose=logger.DEBUG):
         log = logger.Logger(mf.stdout, verbose)
 
     log.note('**** MO energy ****')
-    if mf._mo_ea is not None:
+    if mf._focka_ao is None:
         for i,c in enumerate(mo_occ):
             log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
     else:
-        mo_ea = mf._mo_ea
-        mo_eb = mf._mo_eb
+        mo_ea = numpy.einsum('ik,ik->k', mo_coeff, mf._focka_ao.dot(mo_coeff))
+        mo_eb = numpy.einsum('ik,ik->k', mo_coeff, mf._fockb_ao.dot(mo_coeff))
         log.note('                Roothaan           | alpha              | beta')
         for i,c in enumerate(mo_occ):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
@@ -278,8 +275,6 @@ class ROHF(hf.RHF):
         self.nelec = (n_a, mol.nelectron - n_a)
         self._focka_ao = None
         self._fockb_ao = None
-        self._mo_ea = None
-        self._mo_eb = None
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
@@ -314,17 +309,6 @@ class ROHF(hf.RHF):
     def init_guess_by_chkfile(self, chkfile=None, project=True):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
-
-    def eig(self, h, s):
-        '''Solve the generalized eigenvalue problem for Roothan effective Fock
-        matrix.  Note Roothaan effective Fock does not give correct orbital
-        energies.
-        '''
-# TODO, check other treatments  J. Chem. Phys. 133, 141102
-        mo_energy, mo_coeff = hf.SCF.eig(self, h, s)
-        self._mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
-        self._mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
-        return mo_energy, mo_coeff
 
     @pyscf.lib.with_doc(get_fock_.__doc__)
     def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,

@@ -455,7 +455,7 @@ def map_rhf_to_uhf(rhf):
     return uhf
 
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
-    ''' Calculate the overlap between two different determinants. It is the product
+    r''' Calculate the overlap between two different determinants. It is the product
     of single values of molecular orbital overlap matrix.
 
     .. math::
@@ -484,6 +484,9 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
                 :math:`\mathbf{U} \mathbf{\Lambda}^{-1} \mathbf{V}^\dagger `
                 They are used to calculate asymmetric density matrix
     '''
+    
+    if numpy.sum(occ1) != numpy.sum(occ2):
+        raise RuntimeError('Electron numbers are not equal. Electronic coupling does not exist.')
 
     c1_a = mo1[0][:, occ1[0]>0]
     c1_b = mo1[1][:, occ1[1]>0]
@@ -498,7 +501,7 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     return numpy.prod(s_a)*numpy.prod(s_b), numpy.array((x_a, x_b))
 
 def make_asym_dm(mo1, mo2, occ1, occ2, x):
-    '''One-particle asymmetric density matrix
+    r'''One-particle asymmetric density matrix
 
     Args:
         mo1, mo2 : 2D ndarrays
@@ -506,10 +509,21 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
         occ1, occ2: 2D ndarrays
              Occupation numbers
         x: 2D ndarrays
-             :math:`\mathbf{U} \mathbf{\Lambda}^{-1} \mathbf{V}^\dagger `
+             :math:`\mathbf{U} \mathbf{\Lambda}^{-1} \mathbf{V}^\dagger`.
+             See also :func:`det_ovlp`
 
     Return:
         A list of 2D ndarrays for alpha and beta spin
+
+    Examples:
+
+    >>> mf1 = scf.UHF(gto.M(atom='H 0 0 0; F 0 0 1.3', basis='ccpvdz')).run()
+    >>> mf2 = scf.UHF(gto.M(atom='H 0 0 0; F 0 0 1.4', basis='ccpvdz')).run()
+    >>> s = gto.intor_cross('cint1e_ovlp_sph', mf1.mol, mf2.mol)
+    >>> det, x = det_ovlp(mf1.mo_coeff, mf1.mo_occ, mf2.mo_coeff, mf2.mo_occ, s)
+    >>> adm = make_asym_dm(mf1.mo_coeff, mf1.mo_occ, mf2.mo_coeff, mf2.mo_occ, x)
+    >>> adm.shape
+    (2, 19, 19)
     '''
 
     mo1_a = mo1[0][:, occ1[0]>0]

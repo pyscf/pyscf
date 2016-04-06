@@ -706,8 +706,8 @@ def dumps(mol):
                 elif isinstance(v, dict):
                     dic1[k] = skip_value(v)
                 else:
-                    msg =('Function mol.dumps removes attribute %s because '
-                          'it is not JSON-serializable\n' % k)
+                    msg =('Function mol.dumps drops attribute %s because '
+                          'it is not JSON-serializable' % k)
                     warnings.warn(msg)
             return dic1
         return json.dumps(skip_value(moldic), skipkeys=True)
@@ -717,6 +717,18 @@ def loads(molstr):
     '''
     from numpy import array  # for eval function
     moldic = json.loads(molstr)
+    if sys.version_info < (3,):
+# Convert to utf8 because JSON loads fucntion returns unicode.
+        def byteify(inp):
+            if isinstance(inp, dict):
+                return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
+            elif isinstance(inp, (tuple, list)):
+                return [byteify(x) for x in inp]
+            elif isinstance(inp, unicode):
+                return inp.encode('utf-8')
+            else:
+                return inp
+        moldic = byteify(moldic)
     mol = Mole()
     mol.__dict__.update(moldic)
     mol.atom = eval(mol.atom)
