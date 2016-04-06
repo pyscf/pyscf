@@ -485,7 +485,7 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
                 They are used to calculate asymmetric density matrix
     '''
     
-    if numpy.sum(occ1) <> numpy.sum(occ2):
+    if numpy.sum(occ1) != numpy.sum(occ2):
         raise RuntimeError('Electron numbers are not equal. Electronic coupling does not exist.')
 
     c1_a = mo1[0][:, occ1[0]>0]
