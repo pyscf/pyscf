@@ -623,7 +623,7 @@ class ROHF(rohf.ROHF):
         else:
             mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
             mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
-            log.note('                           Roothaan           | alpha              | beta')
+            log.note('                          Roothaan           | alpha              | beta')
             for k, j in enumerate(orbsym):
                 if j in irorbcnt:
                     irorbcnt[j] += 1
