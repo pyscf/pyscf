@@ -1212,29 +1212,34 @@ class SCF(pyscf.lib.StreamObject):
     @property
     def hf_energy(self):
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
-                         'Please use .e_tot instead\n')
+                         'It is replaced by attribute .e_tot\n')
         return self.e_tot
+    @hf_energy.setter
+    def hf_energy(self, x):
+        sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
+                         'It is replaced by attribute .e_tot\n')
+        self.level_shift = x
 
     @property
     def level_shift_factor(self):
         sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
-                         'Please use .level_shift instead\n')
+                         'It is replaced by attribute .level_shift\n')
         return self.level_shift
     @level_shift_factor.setter
     def level_shift_factor(self, x):
         sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
-                         'Please use .level_shift instead\n')
+                         'It is replaced by attribute .level_shift\n')
         self.level_shift = x
 
     @property
     def damp_factor(self):
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
-                         'Please use .damp instead\n')
+                         'It is replaced by attribute .damp\n')
         return self.damp
     @damp_factor.setter
     def damp_factor(self, x):
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
-                         'Please use .damp instead\n')
+                         'It is replaced by attribute .damp\n')
         self.damp = x
 
 

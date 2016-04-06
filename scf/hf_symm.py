@@ -136,7 +136,12 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
             fix_nb += nelecb
         else:
             float_irname.append(irname)
-    assert(fix_na >= fix_nb and mol.spin >= fix_na-fix_nb)
+    if fix_na < fix_nb:
+        raise ValueError('alpha electrons %d < beta electrons %d\n'
+                         'irrep_nelec %s' % (fix_na, fix_nb, irrep_nelec))
+    if mol.spin < fix_na-fix_nb:
+        raise ValueError('alpha electrons %d - beta electrons %d > mol.spin %d\n'
+                         'irrep_nelec %s' % (fix_na, fix_nb, mol.spin, irrep_nelec))
 
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec // 2
