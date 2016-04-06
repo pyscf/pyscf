@@ -1094,7 +1094,7 @@ class _NumInt(object):
     cache_xc_kernel_ = cache_xc_kernel_
     cache_xc_kernel  = cache_xc_kernel_
 
-    large_rho_indices
+    large_rho_indices = large_rho_indices
 
     @pyscf.lib.with_doc(eval_ao.__doc__)
     def eval_ao(self, mol, coords, deriv=0, relativity=0, bastart=0,
