@@ -380,7 +380,6 @@ class ROHF(rohf.ROHF):
         check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
 
     def eig(self, h, s):
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
         nirrep = self.mol.symm_orb.__len__()
         h = symm.symmetrize_matrix(h, self.mol.symm_orb)
         s = symm.symmetrize_matrix(s, self.mol.symm_orb)
@@ -392,8 +391,6 @@ class ROHF(rohf.ROHF):
             es.append(e)
         e = numpy.hstack(es)
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
-        self._mo_ea = numpy.einsum('ik,ik->k', c, self._focka_ao.dot(c))
-        self._mo_eb = numpy.einsum('ik,ik->k', c, self._fockb_ao.dot(c))
         return e, c
 
     def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
@@ -442,11 +439,11 @@ class ROHF(rohf.ROHF):
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        if self._mo_ea is None:
+        if mo_coeff is None or self._focka_ao is None:
             mo_ea = mo_eb = mo_energy
         else:
-            mo_ea = self._mo_ea
-            mo_eb = self._mo_eb
+            mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
+            mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
         nmo = mo_ea.size
         mo_occ = numpy.zeros(nmo)
         if orbsym is None:
@@ -570,13 +567,6 @@ class ROHF(rohf.ROHF):
         self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2].take(c_sort, axis=1),
                                       self.mo_coeff[:,self.mo_occ==1].take(o_sort, axis=1),
                                       self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
-        if self._mo_ea is not None:
-            self._mo_ea = numpy.hstack((self._mo_ea[self.mo_occ==2][c_sort],
-                                        self._mo_ea[self.mo_occ==1][o_sort],
-                                        self._mo_ea[self.mo_occ==0][v_sort]))
-            self._mo_eb = numpy.hstack((self._mo_eb[self.mo_occ==2][c_sort],
-                                        self._mo_eb[self.mo_occ==1][o_sort],
-                                        self._mo_eb[self.mo_occ==0][v_sort]))
         ncore = len(c_sort)
         nocc = ncore + len(o_sort)
         self.mo_occ[:ncore] = 2
@@ -621,7 +611,7 @@ class ROHF(rohf.ROHF):
         for k,ir in enumerate(mol.irrep_id):
             irname_full[ir] = mol.irrep_name[k]
         irorbcnt = {}
-        if self._mo_ea is None:
+        if self._focka_ao is None:
             for k, j in enumerate(orbsym):
                 if j in irorbcnt:
                     irorbcnt[j] += 1
@@ -631,15 +621,15 @@ class ROHF(rohf.ROHF):
                          k+1, irname_full[j], irorbcnt[j],
                          mo_energy[k], mo_occ[k])
         else:
-            mo_ea = self._mo_ea
-            mo_eb = self._mo_eb
-            log.note('                Roothaan           | alpha              | beta')
+            mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
+            mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
+            log.note('                           Roothaan           | alpha              | beta')
             for k, j in enumerate(orbsym):
                 if j in irorbcnt:
                     irorbcnt[j] += 1
                 else:
                     irorbcnt[j] = 1
-                log.note('MO #%-3d (%s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
+                log.note('MO #%-4d(%-3s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
                          k+1, irname_full[j], irorbcnt[j],
                          mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
 
