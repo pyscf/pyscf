@@ -106,8 +106,7 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     if small_rho_cutoff > 1e-20 and nset == 1:
         # Filter grids the first time setup grids
-        idx = numint.large_rho_indices(mol, dm, ks._numint, ks.grids,
-                                       small_rho_cutoff)
+        idx = ks._numint.large_rho_indices(mol, dm, ks.grids, small_rho_cutoff)
         logger.debug(ks, 'Drop grids %d',
                      ks.grids.weights.size - numpy.count_nonzero(idx))
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')

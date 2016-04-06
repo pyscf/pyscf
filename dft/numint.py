@@ -1033,7 +1033,7 @@ def cache_xc_kernel_(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def large_rho_indices(mol, dm, ni, grids, cutoff=1e-10, max_memory=2000):
+def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
     '''Indices of density which are larger than given cutoff
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
@@ -1093,6 +1093,8 @@ class _NumInt(object):
     nr_fxc = nr_fxc
     cache_xc_kernel_ = cache_xc_kernel_
     cache_xc_kernel  = cache_xc_kernel_
+
+    large_rho_indices = large_rho_indices
 
     @pyscf.lib.with_doc(eval_ao.__doc__)
     def eval_ao(self, mol, coords, deriv=0, relativity=0, bastart=0,
