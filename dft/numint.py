@@ -1033,15 +1033,16 @@ def cache_xc_kernel_(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def large_rho_indices(mol, dm, ni, grids, cutoff=1e-12, max_memory=2000):
+def large_rho_indices(mol, dm, ni, grids, cutoff=1e-10, max_memory=2000):
     '''Indices of density which are larger than given cutoff
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
     idx = []
+    cutoff = cutoff / grids.weights.size
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, max_memory, ni.non0tab):
         rho = make_rho(0, ao, mask, 'LDA')
-        idx.append(rho > cutoff)
+        idx.append(abs(rho*weight) > cutoff)
     return numpy.hstack(idx)
 
 

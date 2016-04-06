@@ -28,7 +28,10 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
         ks.grids.build_()
+        small_rho_cutoff = ks.small_rho_cutoff
         t0 = logger.timer(ks, 'setting up grids', *t0)
+    else:
+        small_rho_cutoff = 0
 
     n, ks._exc, vx = ks._numint.nr_uks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
@@ -73,10 +76,12 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if nset == 1:
         ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
 
-    if ks.small_rho_cutoff > 1e-20 and nset == 1:
+    if small_rho_cutoff > 1e-20 and nset == 1:
         # Filter grids the first time setup grids
         idx = numint.large_rho_indices(mol, dm[0]+dm[1], ks._numint, ks.grids,
-                                       ks.small_rho_cutoff)
+                                       small_rho_cutoff)
+        logger.debug(ks, 'Drop grids %d',
+                     ks.grids.weights.size - numpy.count_nonzero(idx))
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks._numint.non0tab = None
