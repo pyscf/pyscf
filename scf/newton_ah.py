@@ -221,7 +221,6 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         ah_start_tol = min(norm_gorb*5, mf.ah_start_tol)
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
-        max_cycle = mf.max_cycle_inner
         g_orb0 = g_orb
         imic = 0
         dr = 0
@@ -258,11 +257,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                           imic, ihop, norm_gorb, norm_dxi,
                           dxmax, norm_dr, w, seig)
 
-                if norm_gorb < .6:
-                    max_cycle = mf.max_cycle_inner-int(numpy.log(norm_gorb+1e-9)*2)
-                else:
-                    max_cycle = mf.max_cycle_inner
-
+                max_cycle = mf.max_cycle_inner-int(numpy.log(norm_gkf+1e-9)*2)
                 log.debug1('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
                            ah_start_tol, ah_start_cycle, max_cycle)
                 ikf += 1
@@ -419,7 +414,7 @@ def newton(mf):
     class RHF(mf.__class__):
         def __init__(self):
             self._scf = mf
-            self.max_cycle_inner = 12
+            self.max_cycle_inner = 10
             self.max_stepsize = .05
 
             self.ah_start_tol = 5.
@@ -428,7 +423,7 @@ def newton(mf):
             self.ah_conv_tol = 1e-12
             self.ah_lindep = 1e-14
             self.ah_max_cycle = 30
-            self.ah_grad_trust_region = 3.
+            self.ah_grad_trust_region = 2.5
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7

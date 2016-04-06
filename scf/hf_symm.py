@@ -623,13 +623,13 @@ class ROHF(rohf.ROHF):
         else:
             mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
             mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
-            log.note('                Roothaan           | alpha              | beta')
+            log.note('                           Roothaan           | alpha              | beta')
             for k, j in enumerate(orbsym):
                 if j in irorbcnt:
                     irorbcnt[j] += 1
                 else:
                     irorbcnt[j] = 1
-                log.note('MO #%-3d (%s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
+                log.note('MO #%-4d(%-3s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
                          k+1, irname_full[j], irorbcnt[j],
                          mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
 
