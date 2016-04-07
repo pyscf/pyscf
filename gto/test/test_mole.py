@@ -115,7 +115,7 @@ C    SP
             warnings.simplefilter("always")
             d = mol1.dumps()
             self.assertTrue(w[0].category, UserWarning)
-        mol1.loads(d)
+        mol1.loads(mol0.dumps())
 
 
 if __name__ == "__main__":

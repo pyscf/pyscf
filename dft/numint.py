@@ -1140,7 +1140,7 @@ class _NumInt(object):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao = self.eval_ao(mol, coords, deriv, non0tab=non0, out=buf)
+            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0, out=buf)
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=1):
