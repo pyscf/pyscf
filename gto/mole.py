@@ -222,7 +222,7 @@ def format_basis(basis_tab):
     ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
 
     Args:
-        basis_tab : list
+        basis_tab : dict
             Similar to :attr:`Mole.basis`, it **cannot** be a str
 
     Returns:
