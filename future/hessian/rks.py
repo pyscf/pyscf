@@ -171,13 +171,13 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
-        shls_offset = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         if abs(hyb) > 1e-10:
             vj1, vk1, vk2 = _vhf.direct_bindm('cint2e_ip1ip2_sph', 's1',
                                               ('ji->s1kl', 'li->s1kj', 'lj->s1ki'),
                                               (dm0[:,p0:p1], dm0[:,p0:p1], dm0), 9,
                                               mol._atm, mol._bas, mol._env,
-                                              shls_offset=shls_offset)
+                                              shls_slice=shls_slice)
             veff2 = vj1 * 2 - hyb * .5 * vk1
             veff2[:,:,p0:p1] -= hyb * .5 * vk2
             t1 = log.timer('contracting cint2e_ip1ip2_sph for atom %d'%ia, *t1)
@@ -186,7 +186,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                                          ('lk->s1ij', 'li->s1kj'),
                                          (dm0, dm0[:,p0:p1]), 9,
                                          mol._atm, mol._bas, mol._env,
-                                         shls_offset=shls_offset)
+                                         shls_slice=shls_slice)
             veff2[:,:,p0:p1] += vj1.transpose(0,2,1)
             veff2 -= hyb * .5 * vk1.transpose(0,2,1)
             vj1 = vk1 = vk2 = None
@@ -195,14 +195,14 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             vj1 = _vhf.direct_bindm('cint2e_ip1ip2_sph', 's1',
                                     'ji->s1kl', dm0[:,p0:p1], 9,
                                     mol._atm, mol._bas, mol._env,
-                                    shls_offset=shls_offset)
+                                    shls_slice=shls_slice)
             veff2 = vj1 * 2
             t1 = log.timer('contracting cint2e_ip1ip2_sph for atom %d'%ia, *t1)
 
             vj1 = _vhf.direct_bindm('cint2e_ipvip1_sph', 's2kl',
                                     'lk->s1ij', dm0, 9,
                                     mol._atm, mol._bas, mol._env,
-                                    shls_offset=shls_offset)
+                                    shls_slice=shls_slice)
             veff2[:,:,p0:p1] += vj1.transpose(0,2,1)
             t1 = log.timer('contracting cint2e_ipvip1_sph for atom %d'%ia, *t1)
 
@@ -423,14 +423,14 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
         h1ao[:,p0:p1] += h1a[:,p0:p1]
         h1ao = h1ao + h1ao.transpose(0,2,1)
 
-        shls_offset = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         if abs(hyb) > 1e-10:
             vj1, vj2, vk1, vk2 = \
                     _vhf.direct_bindm('cint2e_ip1_sph', 's2kl',
                                       ('ji->s2kl', 'lk->s1ij', 'li->s1kj', 'jk->s1il'),
                                       (-dm0[:,p0:p1], -dm0, -dm0[:,p0:p1], -dm0),
                                       3, mol._atm, mol._bas, mol._env,
-                                      shls_offset=shls_offset)
+                                      shls_slice=shls_slice)
             for i in range(3):
                 pyscf.lib.hermi_triu_(vj1[i], 1)
             veff = vj1 - hyb*.5*vk1
@@ -441,7 +441,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                                       ('ji->s2kl', 'lk->s1ij'),
                                       (-dm0[:,p0:p1], -dm0),
                                       3, mol._atm, mol._bas, mol._env,
-                                      shls_offset=shls_offset)
+                                      shls_slice=shls_slice)
             for i in range(3):
                 pyscf.lib.hermi_triu_(vj1[i], 1)
             veff = vj1

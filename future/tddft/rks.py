@@ -156,7 +156,7 @@ class TDA(rhf.TDA):
                 vj = self._scf.get_j(self.mol, dmvo, hermi=1)
                 v1ao += vj * 2
 
-        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(zs):
@@ -209,7 +209,7 @@ class TDDFT(rhf.TDHF):
         veff[:nz] += v1xc
         veff[nz:] += v1xc
 
-        veff = _ao2mo.nr_e2_(veff, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        veff = _ao2mo.nr_e2_(veff, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(xys):
@@ -250,7 +250,7 @@ class TDDFTNoHybrid(TDA):
             vj = self._scf.get_j(mol, dmvo, hermi=1)
             v1ao += vj * 2
 
-        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         edai = eai.ravel() * dai
         for i, z in enumerate(zs):
             # numpy.sqrt(eai) * (eai*dai*z + v1vo)

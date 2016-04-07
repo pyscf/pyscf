@@ -250,6 +250,7 @@ def format_basis(basis_tab):
         if isinstance(basis_tab[atom], str):
             fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
         else:
+#TODO: check and replace numpy.ndarray with list
             fmt_basis[symb] = basis_tab[atom]
     return fmt_basis
 
@@ -2126,9 +2127,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     @pyscf.lib.with_doc(eval_gto.eval_gto.__doc__)
     def eval_gto(self, eval_name, coords,
-                 comp=1, bastart=0, bascount=None, non0tab=None, out=None):
+                 comp=1, shls_slice=None, non0tab=None, out=None):
         return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
-                                 coords, comp, bastart, bascount, non0tab, out)
+                                 coords, comp, shls_slice, non0tab, out)
 
     def energy_nuc(self):
         return energy_nuc(self)

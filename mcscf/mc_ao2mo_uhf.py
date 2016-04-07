@@ -189,7 +189,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     cpp = numpy.empty((ncore[0],nmo,nmo))
     for i in range(ncore[0]):
         buf = fload(i)
-        klshape = (0, ncore[1], ncore[1], nmo-ncore[1])
+        klshape = (0, ncore[1], ncore[1], nmo)
         _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[1], klshape,
                       aosym='s4', mosym='s1', out=cvCV[i], ao_loc=ao_loc)
 

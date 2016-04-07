@@ -36,7 +36,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     eri1 = eri1.reshape(nmo,nocc,-1)
 
     klppshape = (0, nmo, 0, nmo)
-    klpashape = (0, nmo, ncore, ncas)
+    klpashape = (0, nmo, ncore, nocc)
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     for i in range(ncas):
         _ao2mo.nr_e2_(eri1[ncore+i,ncore:nocc], mo, klppshape,
@@ -59,7 +59,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
     pp = numpy.empty((ncore,ncore))
     for i in range(nmo):
-        klshape = (i, 1, 0, ncore)
+        klshape = (i, i+1, 0, ncore)
         _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', out=pp)
         k_pc[i] = pp.diagonal()
     return j_pc, k_pc, ppaa, papa
@@ -85,7 +85,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
 
     mo_c = numpy.asarray(mo, order='C')
     mo = numpy.asarray(mo, order='F')
-    pashape = (0, nmo, ncore, ncas)
+    pashape = (0, nmo, ncore, nocc)
     papa_buf = numpy.zeros((nao,ncas,nmo*ncas))
     j_pc = numpy.zeros((nmo,ncore))
     k_pc = numpy.zeros((nmo,ncore))
@@ -239,7 +239,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     log.debug1('nblk for ppaa = %d', nblk)
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
-        tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1-i0,0,nmo), 's4', 's1', ao_loc=ao_loc)
+        tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1,0,nmo), 's4', 's1', ao_loc=ao_loc)
         tmp1 = tmp1.reshape(ncas,ncas,i1-i0,nmo)
         for j in range(i1-i0):
             dset[i0+j] = tmp1[:,:,j].transpose(2,0,1)

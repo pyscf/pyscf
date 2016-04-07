@@ -81,7 +81,7 @@ class TDA(pyscf.lib.StreamObject):
             vhf = -vk
 
         #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
-        v1vo = _ao2mo.nr_e2_(vhf, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        v1vo = _ao2mo.nr_e2_(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(zs):
@@ -158,7 +158,7 @@ class TDHF(TDA):
         else:
             vhf = -vk
         #vhf = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
-        vhf = _ao2mo.nr_e2_(vhf, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        vhf = _ao2mo.nr_e2_(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(xys):

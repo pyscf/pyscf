@@ -25,7 +25,7 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, name))
 
 def eval_gto(eval_name, atm, bas, env, coords,
-             comp=1, bastart=0, bascount=None, non0tab=None, out=None):
+             comp=1, shls_slice=None, non0tab=None, out=None):
     '''Evaluate AO function value on the given grids,
 
     Args:
@@ -54,8 +54,10 @@ def eval_gto(eval_name, atm, bas, env, coords,
             The coordinates of the grids.
 
     Kwargs:
-        bastart, bascount : int
-            If given, only part of AOs (bastart <= shell_id < bastart+bascount) are evaluated.
+        shls_slice : 2-element list
+            (shl_start, shl_end).
+            If given, only part of AOs (shl_start <= shell_id < shl_end) are
+            evaluated.  By default, all shells defined in mol will be evaluated.
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
@@ -84,17 +86,19 @@ def eval_gto(eval_name, atm, bas, env, coords,
     nbas = bas.shape[0]
     ngrids = coords.shape[0]
 
-    if bascount is None:
-        bascount = nbas - bastart
+    if shls_slice is None:
+        shls_slice = (0, nbas)
+    bastart, basend = shls_slice
+    bascount = basend - bastart
 
     if '_cart' in eval_name:
         dtype = numpy.double
-        l = bas[bastart:bastart+bascount,ANG_OF]
-        nao = ((l+1)*(l+2)//2 * bas[bastart:bastart+bascount,NCTR_OF]).sum()
+        l = bas[bastart:basend,ANG_OF]
+        nao = ((l+1)*(l+2)//2 * bas[bastart:basend,NCTR_OF]).sum()
     elif '_sph' in eval_name:
         dtype = numpy.double
-        l = bas[bastart:bastart+bascount,ANG_OF]
-        nao = ((l*2+1) * bas[bastart:bastart+bascount,NCTR_OF]).sum()
+        l = bas[bastart:basend,ANG_OF]
+        nao = ((l*2+1) * bas[bastart:basend,NCTR_OF]).sum()
     else:
         raise NotImplementedError(eval_name)
 

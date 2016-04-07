@@ -107,14 +107,15 @@ C    SP
         mol = gto.M(atom='H 0 0 -1; H 0 0 1', symmetry='C2v')
         self.assertEqual(mol.irrep_id, [0])
 
-    def test_dumps(self):
+    def test_dumps_loads(self):
         import warnings
         mol1 = gto.M()
         mol1.x = lambda *args: None
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            mol1.dumps()
+            d = mol1.dumps()
             self.assertTrue(w[0].category, UserWarning)
+        mol1.loads(d)
 
 
 if __name__ == "__main__":

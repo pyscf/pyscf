@@ -458,7 +458,10 @@ def make_rdm1(mo_coeff, mo_occ):
 ################################################
 def dot_eri_dm(eri, dm, hermi=0):
     '''Compute J, K matrices in terms of the given 2-electron integrals and
-    density matrix
+    density matrix:
+
+    J ~ numpy.einsum('pqrs,qp->rs', eri, dm)
+    K ~ numpy.einsum('pqrs,qr->ps', eri, dm)
 
     Args:
         eri : ndarray
