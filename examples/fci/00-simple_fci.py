@@ -3,11 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf, fci
-
 '''
 A simple example to run FCI
 '''
+
+from pyscf import gto, scf, fci
 
 mol = gto.Mole()
 mol.build(
@@ -19,6 +19,10 @@ mol.build(
 myhf = scf.RHF(mol)
 myhf.kernel()
 
+#
+# Function fci.FCI creates an FCI solver based on the given orbitals and the
+# num. electrons and spin of the given mol object
+#
 cisolver = fci.FCI(mol, myhf.mo_coeff)
 print('E(FCI) = %.12f' % (cisolver.kernel()[0] + mol.energy_nuc()))
 
