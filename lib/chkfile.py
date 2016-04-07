@@ -7,8 +7,6 @@ import json
 import h5py
 import pyscf.gto
 
-from numpy import array  # for eval() function
-
 def load_chkfile_key(chkfile, key):
     return load(chkfile, key)
 def load(chkfile, key):
