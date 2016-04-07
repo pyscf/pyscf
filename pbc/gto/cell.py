@@ -351,13 +351,19 @@ class Cell(pyscf.gto.Mole):
         self.vol = float(scipy.linalg.det(self.lattice_vectors()))
         self._h = self.lattice_vectors()
 
-        if dump_input and self.verbose > logger.NOTE:
+        if dump_input and self.verbose >= logger.INFO:
+            logger.info(self, 'lattice vector [a1        | a2        | a3       ]')
+            logger.info(self, '               [%.9f | %.9f | %.9f]', self._h[0])
+            logger.info(self, '               [%.9f | %.9f | %.9f]', self._h[1])
+            logger.info(self, '               [%.9f | %.9f | %.9f]', self._h[2])
+            logger.info(self, 'Cell volume = %g', self.vol)
+            logger.info(self, 'nimgs = %s', self.nimgs)
+            logger.info(self, 'precision = %g', self.precision)
+            logger.info(self, 'gs = %s', self.gs)
+            logger.info(self, 'pseudo = %s', self.pseudo)
+            logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s', self.ew_cut)
-            logger.info(self, 'Cell volume = %g', self.vol)
-            logger.info(self, 'lattice vector  a1 = %s', self._h[:,0])
-            logger.info(self, '                a2 = %s', self._h[:,0])
-            logger.info(self, '                a3 = %s', self._h[:,0])
 
 
     @property

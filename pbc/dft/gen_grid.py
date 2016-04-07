@@ -6,7 +6,7 @@ from pyscf import dft
 from pyscf.pbc import tools
 
 
-def gen_uniform_grids(cell):
+def gen_uniform_grids(cell, gs=None):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -17,6 +17,8 @@ def gen_uniform_grids(cell):
             The real-space grid point coordinates.
 
     '''
+    if gs is None:
+        gs = cell.gs
     ngs = 2*np.asarray(cell.gs)+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
     invN = np.diag(1./ngs)
@@ -31,6 +33,7 @@ class UniformGrids(object):
         self.cell = cell
         self.coords = None
         self.weights = None
+        self.gs = None
         self.stdout = cell.stdout
         self.verbose = cell.verbose
 
@@ -39,14 +42,17 @@ class UniformGrids(object):
     def setup_grids_(self, cell=None):
         if cell == None: cell = self.cell
 
-        self.coords = gen_uniform_grids(self.cell)
+        self.coords = gen_uniform_grids(self.cell, self.gs)
         self.weights = np.ones(self.coords.shape[0])
         self.weights *= cell.vol/self.weights.shape[0]
 
         return self.coords, self.weights
 
     def dump_flags(self):
-        logger.info(self, 'Uniform grid')
+        if self.gs is None:
+            logger.info(self, 'Uniform grid, gs = %s', self.cell.gs)
+        else:
+            logger.info(self, 'Uniform grid, gs = %s', self.gs)
 
     def kernel(self, cell=None):
         self.dump_flags()
@@ -73,17 +79,17 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 # by r_cutoff
     #r_cutoff = pyscf.lib.norm(pyscf.lib.norm(cell._h, axis=1))
     r_cutoff = max(pyscf.lib.norm(cell._h, axis=1)) * 1.25
-    logger.debug1(cell, 'r_cutoff %g', r_cutoff)
 # Filter important atoms. Atoms close to the unicell if they are close to any
 # of the atoms in the unit cell
     mask = np.zeros(scell.natm, dtype=bool)
     for ia in range(cell.natm):
         c0 = cell.atom_coord(ia)
-        dr = coords[cell.natm:] - c0
+        dr = coords - c0
         rr = np.einsum('ix,ix->i', dr, dr)
-        mask[cell.natm:] |= rr < r_cutoff**2
+        mask |= rr < r_cutoff**2
     scell._atm = scell._atm[mask]
     scell.natm = len(scell._atm)
+    logger.debug(cell, 'r_cutoff %.9g  natm = %d', r_cutoff, scell.natm)
 
     atom_grids_tab = dft.gen_grid.gen_atomic_grids(scell, atom_grid, radi_method,
                                                    level, prune)
@@ -111,13 +117,15 @@ class BeckeGrids(dft.gen_grid.Grids):
                                                     level=self.level,
                                                     prune=self.prune)
         logger.info(self, 'tot grids = %d', len(self.weights))
+        logger.info(self, 'cell vol = %.9g  sum(weights) = %.9g',
+                    cell.vol, self.weights.sum())
         return self.coords, self.weights
 
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
 
-    n = 30
+    n = 3
     cell = pgto.Cell()
     cell.h = '''
     4   0   0
@@ -132,3 +140,5 @@ if __name__ == '__main__':
     cell.build()
     g = BeckeGrids(cell)
     g.build_()
+    print g.weights.sum()
+    print cell.vol
