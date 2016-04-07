@@ -23,7 +23,6 @@ from pyscf.pbc import tools
 from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.scf import scfint
-#import pyscf.pbc.scf.scfint as scfint
 import pyscf.pbc.scf.chkfile
 
 

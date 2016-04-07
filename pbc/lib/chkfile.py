@@ -12,8 +12,7 @@ from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 
 def load_cell(chkfile):
     '''Load Cell object from chkfile.
-    The save_cell/load_cell operation can be used a serialization method for Cell object.
-    
+
     Args:
         chkfile : str
             Name of chkfile.

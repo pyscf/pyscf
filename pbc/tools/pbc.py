@@ -233,7 +233,7 @@ def cell_plus_imgs(cell, nimgs):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    Ls = tools.get_lattice_Ls(cell, nimgs)
+    Ls = get_lattice_Ls(cell, nimgs)
     supcell = cell.copy()
     supcell.atom = []
     for L in Ls:

@@ -348,13 +348,13 @@ class Cell(pyscf.gto.Mole):
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
 
-        self.vol = scipy.linalg.det(self.lattice_vectors())
+        self.vol = float(scipy.linalg.det(self.lattice_vectors()))
         self._h = self.lattice_vectors()
 
         if dump_input and self.verbose > logger.NOTE:
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s', self.ew_cut)
-            logger.info(self, 'vol = %g', self.vol)
+            logger.info(self, 'Cell volume = %g', self.vol)
             logger.info(self, 'lattice vector  a1 = %s', self._h[:,0])
             logger.info(self, '                a2 = %s', self._h[:,0])
             logger.info(self, '                a3 = %s', self._h[:,0])
@@ -537,4 +537,18 @@ class Cell(pyscf.gto.Mole):
         return self
 
     get_lattice_Ls = get_lattice_Ls
+
+    def from_ase_(self, ase_atom):
+        '''Update cell based on given ase atom object
+
+        Examples:
+
+        >>> from ase.lattice import bulk
+        >>> cell.from_ase_(bulk('C', 'diamond', a=LATTICE_CONST))
+        '''
+        from pyscf.pbc.tools import pyscf_ase
+        self.h = ase_atom.cell
+        self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
+        return self
+
 

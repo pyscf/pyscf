@@ -1,19 +1,23 @@
 import numpy
 from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
-import pyscf.pbc
 import pyscf.lib
 import pyscf.dft
 from pyscf.pbc import tools
 
+try:
 ## Moderate speedup by caching eval_ao
-memory_cache = lambda f: f
-if pyscf.pbc.DEBUG:
-    try:
-        from joblib import Memory
-        memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-        memory_cache = memory.cache
-    except:
-        memory_cache = lambda f: f
+    from joblib import Memory
+    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+    def memory_cache(f):
+        g = memory.cache(f)
+        def maybe_cache(*args, **kwargs):
+            if pyscf.pbc.DEBUG:
+                return g(*args, **kwargs)
+            else:
+                return f(*args, **kwargs)
+        return maybe_cache
+except:
+    memory_cache = lambda f: f
 
 @memory_cache
 def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,

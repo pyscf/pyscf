@@ -1,6 +1,5 @@
-import sys
 from pyscf.pbc.dft import gen_grid
-#from pyscf.df import density_fit
+from pyscf.pbc.dft.gen_grid import UniformGrids, BeckeGrids
 
 
 def RKS(mol, *args, **kwargs):
