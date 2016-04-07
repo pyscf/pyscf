@@ -61,11 +61,11 @@ def runjk(dm1, ncomp, intorname, filldot, *namejk):
             dmsptr[i*n_dm+j] = dm1[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i,j*ncomp].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
-    shls_offset = (ctypes.c_int*8)(*([0, mol.nbas]*4))
+    shls_slice = (ctypes.c_int*8)(*([0, mol.nbas]*4))
 
     fdrv(intor, fdot, fjk, dmsptr, vjkptr,
          ctypes.c_int(njk*n_dm), ctypes.c_int(ncomp),
-         shls_offset, ao_loc.ctypes.data_as(ctypes.c_void_p),
+         shls_slice, ao_loc.ctypes.data_as(ctypes.c_void_p),
          cintopt, cvhfopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,

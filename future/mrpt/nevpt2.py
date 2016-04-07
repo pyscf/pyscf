@@ -914,24 +914,24 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
     app = numpy.empty((ncas,nmo*nmo))
     for i in range(ncore):
         buf = fload(i, i+1)
-        klshape = (0, ncore, nocc, nvir)
+        klshape = (0, ncore, nocc, nmo)
         _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', out=vcv, ao_loc=ao_loc)
         cvcv[i*nvir:(i+1)*nvir] = vcv[ncas:]
         pacv[i] = vcv[:ncas]
 
-        klshape = (0, nmo, ncore, ncas)
+        klshape = (0, nmo, ncore, nocc)
         _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', out=apa, ao_loc=ao_loc)
         papa[i] = apa
     for i in range(ncas):
         buf = fload(ncore+i, ncore+i+1)
-        klshape = (0, ncore, nocc, nvir)
+        klshape = (0, ncore, nocc, nmo)
         _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', out=vcv, ao_loc=ao_loc)
         pacv[ncore:,i] = vcv
 
-        klshape = (0, nmo, ncore, ncas)
+        klshape = (0, nmo, ncore, nocc)
         _ao2mo.nr_e2_(buf, mo, klshape,
                       aosym='s4', mosym='s1', out=vpa, ao_loc=ao_loc)
         papa[ncore:,i] = vpa

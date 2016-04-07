@@ -232,7 +232,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         klmosym = 's1'
         nkl_pair = nmok*nmol
         mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
-        klshape = (0, nmok, nmok, nmol)
+        klshape = (0, nmok, nmok, nmok+nmol)
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')
@@ -406,7 +406,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
         moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoj)
+        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)

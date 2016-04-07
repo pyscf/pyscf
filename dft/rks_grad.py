@@ -91,9 +91,6 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, weight.size, mask)
                 rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
-        XX, XY, XZ = 4, 5, 6
-        YX, YY, YZ = 5, 7, 8
-        ZX, ZY, ZZ = 6, 8, 9
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
@@ -104,25 +101,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 wv = numpy.empty_like(rho)
                 wv[0]  = weight * vrho
                 wv[1:] = rho[1:] * (weight * vsigma * 2)
-
-                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                vmat[idm,0] += numint._dot_ao_ao(mol, ao[1], aow, nao, weight.size, mask)
-                vmat[idm,1] += numint._dot_ao_ao(mol, ao[2], aow, nao, weight.size, mask)
-                vmat[idm,2] += numint._dot_ao_ao(mol, ao[3], aow, nao, weight.size, mask)
-
-                aow = numpy.einsum('pi,p->pi', ao[XX], wv[1])
-                aow+= numpy.einsum('pi,p->pi', ao[XY], wv[2])
-                aow+= numpy.einsum('pi,p->pi', ao[XZ], wv[3])
-                vmat[idm,0] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
-                aow = numpy.einsum('pi,p->pi', ao[YX], wv[1])
-                aow+= numpy.einsum('pi,p->pi', ao[YY], wv[2])
-                aow+= numpy.einsum('pi,p->pi', ao[YZ], wv[3])
-                vmat[idm,1] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
-                aow = numpy.einsum('pi,p->pi', ao[ZX], wv[1])
-                aow+= numpy.einsum('pi,p->pi', ao[ZY], wv[2])
-                aow+= numpy.einsum('pi,p->pi', ao[ZZ], wv[3])
-                vmat[idm,2] += numint._dot_ao_ao(mol, aow, ao[0], nao, weight.size, mask)
-                rho = vxc = vrho = vsigma = wv = aow = None
+                vmat[idm] += _gga_grad_sum(mol, ao, wv, mask)
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -130,6 +109,31 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         vmat = vmat.reshape(3,nao,nao)
     # - sign because nabla_X = -nabla_x
     return -vmat
+
+def _gga_grad_sum(mol, ao, wv, mask):
+    ngrid, nao = ao[0].shape
+    vmat = numpy.empty((3,nao,nao))
+    aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+    vmat[0] = numint._dot_ao_ao(mol, ao[1], aow, nao, ngrid, mask)
+    vmat[1] = numint._dot_ao_ao(mol, ao[2], aow, nao, ngrid, mask)
+    vmat[2] = numint._dot_ao_ao(mol, ao[3], aow, nao, ngrid, mask)
+
+    # XX, XY, XZ = 4, 5, 6
+    # YX, YY, YZ = 5, 7, 8
+    # ZX, ZY, ZZ = 6, 8, 9
+    aow = numpy.einsum('pi,p->pi', ao[4], wv[1])
+    aow+= numpy.einsum('pi,p->pi', ao[5], wv[2])
+    aow+= numpy.einsum('pi,p->pi', ao[6], wv[3])
+    vmat[0] += numint._dot_ao_ao(mol, aow, ao[0], nao, ngrid, mask)
+    aow = numpy.einsum('pi,p->pi', ao[5], wv[1])
+    aow+= numpy.einsum('pi,p->pi', ao[7], wv[2])
+    aow+= numpy.einsum('pi,p->pi', ao[8], wv[3])
+    vmat[1] += numint._dot_ao_ao(mol, aow, ao[0], nao, ngrid, mask)
+    aow = numpy.einsum('pi,p->pi', ao[6], wv[1])
+    aow+= numpy.einsum('pi,p->pi', ao[8], wv[2])
+    aow+= numpy.einsum('pi,p->pi', ao[9], wv[3])
+    vmat[2] += numint._dot_ao_ao(mol, aow, ao[0], nao, ngrid, mask)
+    return vmat
 
 
 class Gradients(rhf_grad.Gradients):
@@ -148,17 +152,17 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import dft
 
-    h2o = gto.Mole()
-    h2o.verbose = 0
-    h2o.output = None#'out_h2o'
-    h2o.atom = [
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None#'out_h2o'
+    mol.atom = [
         ['O' , (0. , 0.     , 0)],
         [1   , (0. , -0.757 , 0.587)],
         [1   , (0. ,  0.757 , 0.587)] ]
-    h2o.basis = {'H': '631g',
+    mol.basis = {'H': '631g',
                  'O': '631g',}
-    h2o.build()
-    mf = dft.RKS(h2o)
+    mol.build()
+    mf = dft.RKS(mol)
     mf.conv_tol = 1e-15
     print(mf.scf())
     g = Gradients(mf)

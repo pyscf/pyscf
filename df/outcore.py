@@ -243,7 +243,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
         moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoj)
+        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
 
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
