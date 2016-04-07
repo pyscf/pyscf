@@ -5,14 +5,15 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import gc
+import sys
+import json
 import numpy as np
 import scipy.linalg
 import scipy.optimize
-import pyscf
 import pyscf.lib.parameters as param
-from pyscf import lib
 import pyscf.gto.mole
+from pyscf import lib
+from pyscf.lib import logger
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol, _charge
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
@@ -73,7 +74,7 @@ def format_basis(basis_tab):
     ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
 
     Args:
-        basis_tab : list
+        basis_tab : dict
             Similar to :attr:`Cell.basis`, it **cannot** be a str
 
     Returns:
@@ -110,23 +111,109 @@ def copy(cell):
     return newcell
 
 def pack(cell):
-    '''Pack the given :class:`Cell` to a dict, which can be serialized with :mod:`pickle`
+    '''Pack the input args of :class:`Cell` to a dict, which can be serialized
+    with :mod:`pickle`
     '''
     cldic = pyscf.gto.mole.pack(cell)
     cldic['h'] = cell.h
     cldic['gs'] = cell.gs
     cldic['precision'] = cell.precision
+    cldic['pseudo'] = cell.pseudo
+    cldic['ke_cutoff'] = cell.ke_cutoff
     cldic['nimgs'] = cell.nimgs
     cldic['ew_eta'] = cell.ew_eta
     cldic['ew_cut'] = cell.ew_cut
     return cldic
 
 def unpack(celldic):
-    '''Convert the packed dict to a :class:`Cell` object.
+    '''Convert the packed dict to a :class:`Cell` object, to generate the
+    input arguments for :class:`Cell` object.
     '''
     cl = Cell()
     cl.__dict__.update(celldic)
     return cl
+
+
+def dumps(cell):
+    '''Serialize Cell object to a JSON formatted str.
+    '''
+    exclude_keys = set(('output', 'stdout', '_keys'))
+
+    celldic = dict(cell.__dict__)
+    for k in exclude_keys:
+        del(celldic[k])
+    for k in celldic:
+        if isinstance(celldic[k], np.ndarray):
+            celldic[k] = celldic[k].tolist()
+    celldic['atom'] = repr(cell.atom)
+    celldic['basis']= repr(cell.basis)
+    celldic['pseudo' ] = repr(cell.pseudo)
+
+    try:
+        return json.dumps(celldic)
+    except TypeError:
+        import warnings
+        def skip_value(dic):
+            dic1 = {}
+            for k,v in dic.items():
+                if (v is None or
+                    isinstance(v, (basestring, bool, int, long, float))):
+                    dic1[k] = v
+                elif isinstance(v, (list, tuple)):
+                    dic1[k] = v   # Should I recursively skip_vaule?
+                elif isinstance(v, set):
+                    dic1[k] = list(v)
+                elif isinstance(v, dict):
+                    dic1[k] = skip_value(v)
+                else:
+                    msg =('Function cell.dumps drops attribute %s because '
+                          'it is not JSON-serializable' % k)
+                    warnings.warn(msg)
+            return dic1
+        return json.dumps(skip_value(celldic), skipkeys=True)
+
+def loads(cellstr):
+    '''Deserialize a str containing a JSON document to a Cell object.
+    '''
+    from numpy import array  # for eval function
+    celldic = json.loads(cellstr)
+    if sys.version_info < (3,):
+# Convert to utf8 because JSON loads fucntion returns unicode.
+        def byteify(inp):
+            if isinstance(inp, dict):
+                return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
+            elif isinstance(inp, (tuple, list)):
+                return [byteify(x) for x in inp]
+            elif isinstance(inp, unicode):
+                return inp.encode('utf-8')
+            else:
+                return inp
+        celldic = byteify(celldic)
+    cell = Cell()
+    cell.__dict__.update(celldic)
+    cell.atom = eval(cell.atom)
+    cell.basis= eval(cell.basis)
+    cell.pseudo  = eval(cell.pseudo)
+    cell._atm = np.array(cell._atm, dtype=np.int32)
+    cell._bas = np.array(cell._bas, dtype=np.int32)
+    cell._env = np.array(cell._env, dtype=np.double)
+    cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
+    cell._h = np.asarray(cell._h)
+
+    return cell
+
+
+def get_lattice_Ls(cell, nimgs=None):
+    '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
+    if nimgs is None:
+        nimgs = cell.nimgs
+    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
+                  for j in range(-nimgs[1],nimgs[1]+1)
+                  for k in range(-nimgs[2],nimgs[2]+1)
+                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
+    Ts = np.array(Ts)
+    Ls = np.dot(cell._h, Ts.T).T
+    return Ls
 
 
 class Cell(pyscf.gto.Mole):
@@ -135,7 +222,7 @@ class Cell(pyscf.gto.Mole):
     Attributes:
         h : (3,3) ndarray
             The real-space unit cell lattice vectors, a "three-column" array [a1|a2|a3]
-            See defs. in MH Sec. 3.1
+            (Note a1 = h[:,0]; a2 = h[:,1]; a2 = h[:,2]).  See defs. in MH Sec. 3.1
             Convert from relative or "scaled" coordinates `s` to "absolute"
             cartesian coordinates `r` via `r = np.dot(_h, s)`.
             Reciprocal lattice vectors are given by [b1|b2|b3] = 2 pi inv(_h.T).
@@ -173,18 +260,20 @@ class Cell(pyscf.gto.Mole):
         self.h = None # lattice vectors, three *columns*: array((a1,a2,a3))
         self.gs = None
         self.precision = 1.e-8
-        self.nimgs = None
-        self.ew_eta = None
-        self.ew_cut = None
         self.pseudo = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
                               # of fourier components, with .5 * G**2 < ke_cutoff
 
 ##################################################
+# These attributes are initialized by build function if not given
+        self.nimgs = None
+        self.ew_eta = None
+        self.ew_cut = None
+
+##################################################
 # don't modify the following variables, they are not input arguments
-        self.Gv = None
         self.vol = None
-        self._h = None 
+        self._h = None
         self._pseudo = None
         self._keys = set(self.__dict__.keys())
 
@@ -259,13 +348,27 @@ class Cell(pyscf.gto.Mole):
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
 
-        self.Gv = self.get_Gv()
         self.vol = scipy.linalg.det(self.lattice_vectors())
         self._h = self.lattice_vectors()
 
+        if dump_input and self.verbose > logger.NOTE:
+            logger.info(self, 'ew_eta = %g', self.ew_eta)
+            logger.info(self, 'ew_cut = %s', self.ew_cut)
+            logger.info(self, 'vol = %g', self.vol)
+            logger.info(self, 'lattice vector  a1 = %s', self._h[:,0])
+            logger.info(self, '                a2 = %s', self._h[:,0])
+            logger.info(self, '                a3 = %s', self._h[:,0])
+
+
+    @property
+    def Gv(self):
+        return self.get_Gv()
+
+    @lib.with_doc(format_pseudo.__doc__)
     def format_pseudo(self, pseudo_tab):
         return format_pseudo(pseudo_tab)
 
+    @lib.with_doc(format_basis.__doc__)
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
 
@@ -273,10 +376,10 @@ class Cell(pyscf.gto.Mole):
         if self._pseudo:
             _atm, _ecpbas, _env = make_pseudo_env(self, _atm, self._pseudo, pre_env)
         else:
-            _atm, _ecpbas, _env = _atm, None, pre_env
+            _atm, _ecpbas, _env = _atm, [], pre_env
         return _atm, _ecpbas, _env
 
-    def get_nimgs(self, precision):
+    def get_nimgs(self, precision=None):
         r'''Choose number of basis function images in lattice sums
         to include for given precision in overlap, using
 
@@ -286,20 +389,22 @@ class Cell(pyscf.gto.Mole):
         that assumes an isolated exponent in the middle of the box, so
         it adds one additional lattice vector to be safe.
         '''
+        if precision is None:
+            precision = self.precision
         min_exp = np.min([np.min(self.bas_exp(ib)) for ib in range(self.nbas)])
 
         def fn(r):
-            return (np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision))**2
+            return np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision)
 
-        rcut = np.sqrt(-(np.log(precision)/min_exp)) # guess
-        rcut = scipy.optimize.fsolve(fn, rcut)[0]
+        guess = np.sqrt((5-np.log(precision))/min_exp)
+        rcut = scipy.optimize.fsolve(fn, guess, xtol=1e-4)[0]
         rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
         nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
         return nimgs+1 # additional lattice vector to take into account
                        # case where there are functions on the edges of the box.
 
-    def get_ewald_params(self, precision):
+    def get_ewald_params(self, precision=None):
         r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
 
         Choice is based on largest G vector and desired relative precision.
@@ -315,12 +420,15 @@ class Cell(pyscf.gto.Mole):
             ew_eta, ew_cut : float
                 The Ewald 'eta' and 'cut' parameters.
         '''
+        if precision is None:
+            precision = self.precision
+
         #  See Martin, p. 85 
         _h = self.lattice_vectors()
         Gmax = min([ 2.*np.pi*self.gs[i]/lib.norm(_h[i,:]) for i in range(3) ])
 
         log_precision = np.log(precision)
-        ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
+        ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
 
         rcut = np.sqrt(-log_precision)/ew_eta
         ew_cut = self.get_bounding_sphere(rcut)
@@ -412,9 +520,21 @@ class Cell(pyscf.gto.Mole):
     def copy(self):
         return copy(self)
 
-    def pack(self):
-        return pack(self)
+    pack = pack
+    @lib.with_doc(unpack.__doc__)
+    def unpack(self, moldic):
+        return unpack(moldic)
+    def unpack_(self, moldic):
+        self.__dict__.update(moldic)
+        return self
 
-    def unpack(self):
-        return unpack(self)
+    dumps = dumps
+    @lib.with_doc(loads.__doc__)
+    def loads(self, molstr):
+        return loads(molstr)
+    def loads_(self, molstr):
+        self.__dict__.update(loads(molstr).__dict__)
+        return self
+
+    get_lattice_Ls = get_lattice_Ls
 

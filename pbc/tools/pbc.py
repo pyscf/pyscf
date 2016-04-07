@@ -93,7 +93,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     # Here we 'wrap around' the high frequency k+G vectors into their lower
     # frequency counterparts.  Important if you want the gamma point and k-point
     # answers to agree
-    box_edge = np.dot(2.*np.pi*np.diag(cell.gs+0.5), np.linalg.inv(cell._h))
+    box_edge = np.dot(2.*np.pi*np.diag(np.asarray(cell.gs)+0.5),
+                      np.linalg.inv(cell._h))
     reduced_coords = np.dot(kG, np.linalg.inv(box_edge))
     equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
     factor = np.trunc(reduced_coords)
@@ -134,7 +135,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
             coulG[0] = np.pi / mf.exx_alpha**2
         # Index k+cell.Gv into the precomputed vq and add on
         gxyz = np.round(np.dot(kG, mf.exx_kcell.h)/(2*np.pi)).astype(int)
-        ngs = 2*mf.exx_kcell.gs+1
+        ngs = 2*np.asarray(mf.exx_kcell.gs)+1
         gxyz = (gxyz + ngs)%(ngs)
         qidx = (gxyz[:,0]*ngs[1] + gxyz[:,1])*ngs[2] + gxyz[:,2]
         #qidx = [np.linalg.norm(mf.exx_q-kGi,axis=1).argmin() for kGi in kG]
@@ -192,6 +193,8 @@ def get_lattice_Ls(cell, nimgs):
 
 def super_cell(cell, ncopy):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
+    Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
+    creates images in both +/- direction.
 
     Args:
         cell : instance of :class:`Cell`
@@ -215,6 +218,32 @@ def super_cell(cell, ncopy):
                            ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
                            ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
     supcell.build(False, False)
+    return supcell
+
+
+def cell_plus_imgs(cell, nimgs):
+    '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
+    Note this function differs from :fun:`super_cell` that super_cell only
+    stacks the images in + direction.
+
+    Args:
+        cell : instance of :class:`Cell`
+        nimgs : (3,) array
+
+    Returns:
+        supcell : instance of :class:`Cell`
+    '''
+    Ls = tools.get_lattice_Ls(cell, nimgs)
+    supcell = cell.copy()
+    supcell.atom = []
+    for L in Ls:
+        atom1 = []
+        for ia in range(cell.natm):
+            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
+        supcell.atom.extend(atom1)
+    supcell.unit = 'B'
+    supcell.h = np.dot(cell._h, np.diag(nimgs))
+    supcell.build(False, False, verbose=0)
     return supcell
 
 

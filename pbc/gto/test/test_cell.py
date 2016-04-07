@@ -28,7 +28,7 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_nimgs(self):
-        self.assertTrue(numpy.all(cl.get_nimgs(9e-1)==[2,2,2]))
+        self.assertTrue(numpy.all(cl.get_nimgs(9e-1)==[3,3,3]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-2)==[4,4,4]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-4)==[4,4,4]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-6)==[4,4,4]))
@@ -42,9 +42,19 @@ class KnowValues(unittest.TestCase):
         a = cl1.get_SI()
         self.assertAlmostEqual(finger(a), (16.506917823339265+1.6393578329869585j), 10)
 
-    def test_Rbounding_sphere(self):
-        self.assertTrue(numpy.all(cl1.get_Rbounding_sphere(4.5)==[12,8,7]))
+    def test_bounding_sphere(self):
+        self.assertTrue(numpy.all(cl1.get_bounding_sphere(4.5)==[12,8,7]))
 
+    def test_mixed_basis(self):
+        cl = pgto.Cell()
+        cl.build(
+            h = [[L,0,0], [0,L,0], [0,0,L]],
+            gs = [n,n,n],
+            atom = 'C1 %f %f %f; C2 %f %f %f' % ((L/2.,)*6),
+            basis = {'C1':'ccpvdz', 'C2':'gthdzv'})
+
+    def test_dumps_loads(self):
+        cl1.loads(cl1.dumps())
 
 
 if __name__ == '__main__':
