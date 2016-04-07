@@ -60,7 +60,7 @@ class KnowValues(unittest.TestCase):
         kmf = pbcdft.KRKS(cell, abs_kpts)
         kmf.xc = 'lda,vwn'
         #kmf.analytic_int = False
-        kmf.verbose = 7
+        #kmf.verbose = 7
         ekpt = kmf.scf()
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
@@ -72,7 +72,7 @@ class KnowValues(unittest.TestCase):
 
         mf = pbcdft.RKS(supcell)
         mf.xc = 'lda,vwn'
-        mf.verbose = 7
+        #mf.verbose = 7
         esup = mf.scf()/np.prod(nk)
 
         print "kpt sampling energy =", ekpt

@@ -264,6 +264,7 @@ class KRHF(pbchf.RHF):
         self.exx_built = False
         if self.exxdiv == 'vcut_ws':
             self.precompute_exx()
+        self._keys = self._keys.union(['exx_built', 'kpts', 'mo_coeff_kpts'])
 
     def dump_flags(self):
         pbchf.RHF.dump_flags(self)

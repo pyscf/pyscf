@@ -21,11 +21,13 @@ class KRKS(pyscf.pbc.scf.khf.KRHF):
     '''
     def __init__(self, cell, kpts):
         pyscf.pbc.scf.khf.KRHF.__init__(self, cell, kpts)
+        self.xc = 'LDA,VWN'
+        self.small_rho_cutoff = 0  # FIX rks.get_veff_
         self._numint = numint._KNumInt(kpts) # use periodic images of AO in
                                              # numerical integration
-        self.xc = 'LDA,VWN'
         self._ecoul = 0
         self._exc = 0
+        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):
         pyscf.pbc.scf.khf.KRHF.dump_flags(self)

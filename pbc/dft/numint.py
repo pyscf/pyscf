@@ -1,15 +1,23 @@
 import numpy
 from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
+import pyscf.pbc
 import pyscf.lib
 import pyscf.dft
 from pyscf.pbc import tools
 
 ## Moderate speedup by caching eval_ao
-from joblib import Memory
-memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-@memory.cache
-def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, bastart=0,
-            bascount=None, non0tab=None, verbose=None):
+memory_cache = lambda f: f
+if pyscf.pbc.DEBUG:
+    try:
+        from joblib import Memory
+        memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+        memory_cache = memory.cache
+    except:
+        memory_cache = lambda f: f
+
+@memory_cache
+def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
+            non0tab=None, out=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
     Args:
@@ -44,13 +52,11 @@ def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, bastart=0,
     for L in tools.get_lattice_Ls(cell, cell.nimgs):
         if kpt is None:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
-                                            bastart, bascount,
-                                            non0tab, verbose)
+                                            shl_slice, non0tab, out, verbose)
         else:
             factor = numpy.exp(1j*numpy.dot(kpt,L))
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
-                                            bastart, bascount,
-                                            non0tab, verbose) * factor
+                                            shl_slice, non0tab, out, verbose) * factor
 
     if cell.ke_cutoff is not None:
         ke = 0.5*numpy.einsum('gi,gi->g', cell.Gv, cell.Gv)
@@ -280,7 +286,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                                          xctype='LDA', verbose=None)
 
 
-def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
+def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None, kpt=None, kpt_band=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
@@ -293,9 +299,9 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
 
         grids : an instance of :class:`Grids`
             grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
-        x_id, c_id : int
-            Exchange/Correlation functional ID used by libxc library.
-            See pyscf/dft/vxc.py for more details.
+        xc_code : str
+            XC functional description.
+            See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
         dm : 2D array
             Density matrix
 
@@ -328,9 +334,8 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
     >>> grids = dft.gen_grid.Grids(mol)
     >>> grids.coords = numpy.random.random((100,3))  # 100 random points
     >>> grids.weights = numpy.random.random(100)
-    >>> x_id, c_id = dft.vxc.parse_xc_name('lda,vwn')
     >>> dm = numpy.random.random((mol.nao_nr(),mol.nao_nr()))
-    >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, x_id, c_id, dm)
+    >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, 'lda,vwn', dm)
     '''
     if kpt_band is None:
         kpt1 = kpt2 = kpt
@@ -338,7 +343,7 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
         kpt1 = kpt_band
         kpt2 = kpt
 
-    xctype = pyscf.dft.numint._xc_type(x_id, c_id)
+    xctype = ni._xc_type(xc_code)
     nao = dm.shape[1] # a bit hacky, but correct for dm or list of dm's
     ngrids = len(grids.weights)
     blksize = min(int(max_memory/6*1e6/8/nao), ngrids)
@@ -359,7 +364,7 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
                 ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=0)
             ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=0)
             rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
-            exc, vxc = ni.eval_xc(x_id, c_id, rho, spin, relativity, 1)[:2]
+            exc, vxc = ni.eval_xc(xc_code, rho, spin, relativity, 1)[:2]
             vrho = vxc[0]
             vsigma = None
             den = rho*weight
@@ -372,7 +377,7 @@ def nr_rks_vxc(ni, mol, grids, x_id, c_id, dm, spin=0, relativity=0, hermi=1,
                 ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=1)
             ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=1)
             rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
-            exc, vxc = ni.eval_xc(x_id, c_id, rho, spin, relativity, 1)[:2]
+            exc, vxc = ni.eval_xc(xc_code, rho, spin, relativity, 1)[:2]
             vrho, vsigma = vxc[:2]
             den = rho[0]*weight
             nelec += den.sum()
@@ -396,29 +401,31 @@ class _NumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
 
-    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, bastart=0,
-                bascount=None, non0tab=None, verbose=None):
-        return eval_ao(mol, coords, kpt, deriv, relativity, bastart,
-                       bascount, non0tab, verbose)
+    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
+                non0tab=None, out=None, verbose=None):
+        return eval_ao(mol, coords, kpt, deriv, relativity, shl_slice,
+                       non0tab, out, verbose)
 
     def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
-    def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
-        raise NotImplementedError
+    def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
+                  verbose=None):
+        dm = numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
+        return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
-    def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
+    def nr_rks(self, mol, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None, kpt=None, kpt_band=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
+        return nr_rks_vxc(self, mol, grids, xc_code, dms,
                           spin=0, relativity=0, hermi=1,
                           max_memory=max_memory, verbose=verbose,
                           kpt=kpt, kpt_band=kpt_band)
 
-    def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
+    def nr_uks(self, mol, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None):
         raise NotImplementedError
 
@@ -437,8 +444,8 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpts = kpts
 
-    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, bastart=0,
-                bascount=None, non0tab=None, verbose=None):
+    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0,
+                shl_slice=None, non0tab=None, out=None, verbose=None):
         '''
         Returns:
             ao_kpts: (nkpts, ngs, nao) ndarray
@@ -455,9 +462,8 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
         for k in range(nkpts):
             kpt = kpts[k,:]
-            ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, deriv,
-                                  relativity, bastart, bascount,
-                                  non0tab, verbose)
+            ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, deriv, relativity,
+                                     shl_slice, non0tab, out, verbose)
         return ao_kpts
 
     def eval_rho(self, mol, ao_kpts, dm_kpts, non0tab=None,
@@ -482,18 +488,18 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         raise NotImplementedError
 
-    def nr_rks(self, mol, grids, x_id, c_id, dms, hermi=1,
+    def nr_rks(self, mol, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None, kpt=None, kpt_band=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, mol, grids, x_id, c_id, dms,
+        return nr_rks_vxc(self, mol, grids, xc_code, dms,
                           spin=0, relativity=0, hermi=1,
                           max_memory=max_memory, verbose=verbose,
                           kpt=kpt, kpt_band=kpt_band)
 
-    def nr_uks(self, mol, grids, x_id, c_id, dms, hermi=1,
+    def nr_uks(self, mol, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None):
         raise NotImplementedError
 

@@ -102,7 +102,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     s1e = mf.get_ovlp(mol)
 
     cond = pyscf.lib.cond(s1e)
-    logger.debug(mf, 'cond(S) = %.9g' % cond)
+    logger.debug(mf, 'cond(S) = %s', cond)
     if numpy.max(cond)*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', numpy.max(cond))

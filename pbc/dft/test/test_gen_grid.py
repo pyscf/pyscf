@@ -31,9 +31,13 @@ class KnowValues(unittest.TestCase):
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
         cell.build()
         kpt = None
-        s1 = get_ovlp(cell, kpt)
+        grids = gen_grid.BeckeGrids(cell)
+        grids.level = 3
+        grids.build_()
+        s1 = get_ovlp(cell, kpt, grids)
         s2 = scfint.get_ovlp(cell, kpt)
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
+        self.assertEqual(grids.weights.size, 14829)
 
 
 if __name__ == '__main__':
