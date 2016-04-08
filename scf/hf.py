@@ -814,6 +814,27 @@ def eig(h, s):
     c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
     return e, c
 
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the Fock matrix within occupied, open,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    coreidx = mo_occ == 2
+    viridx = mo_occ == 0
+    openidx = ~(coreidx | viridx)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.size)
+    for idx in (coreidx, openidx, viridx):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+            mo_e[idx] = e
+    return mo_e, mo
+
 
 ############
 # For orbital rotation
@@ -1192,6 +1213,8 @@ class SCF(pyscf.lib.StreamObject):
     def pop(self, *args, **kwargs):
         return self.mulliken_meta(*args, **kwargs)
     pop.__doc__ = mulliken_meta.__doc__
+
+    canonicalize = canonicalize
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()

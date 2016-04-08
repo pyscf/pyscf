@@ -401,8 +401,10 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         jktot += jkcount
 
     rotaiter.close()
-    mo_energy, mo_coeff = mf.eig(fock, s1e)
-    mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    if mf.canonicalization:
+        logger.info(mf, 'Canonicalize SCF orbitals')
+        mo_energy, mo_coeff = mf.canonicalize(mo_coeff, mo_occ, fock)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, e_tot, norm_gorb, jktot)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
@@ -412,10 +414,21 @@ def newton(mf):
     import pyscf.scf
     from pyscf.mcscf import mc1step_symm
     class RHF(mf.__class__):
+        __doc__ = mf.__class__.__doc__ + '''
+        Attributes:
+            max_cycle_inner : int
+                AH iterations within eacy macro iterations. Default is 10
+            max_stepsize : int
+                The step size for orbital rotation.  Small step is prefered.  Default is 0.05.
+            canonicalization : bool
+                To control whether to canonicalize the orbitals optimized by
+                Newton solver.  Default is True.
+        '''
         def __init__(self):
             self._scf = mf
             self.max_cycle_inner = 10
             self.max_stepsize = .05
+            self.canonicalization = True
 
             self.ah_start_tol = 5.
             self.ah_start_cycle = 1
@@ -538,20 +551,8 @@ def newton(mf):
             get_fock = get_fock_
 
             def eig(self, fock, s1e):
-                dm = self._dm_ao
-                fc = (self._focka_ao + self._fockb_ao) * .5
-# Projector for core, open-shell, and virtual
-                nao = s1e.shape[0]
-                pc = numpy.dot(dm[1], s1e)
-                po = numpy.dot(dm[0]-dm[1], s1e)
-                pv = numpy.eye(nao) - numpy.dot(dm[0], s1e)
-                f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
-                f += reduce(numpy.dot, (po.T, fc, po)) * .5
-                f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-                f += reduce(numpy.dot, (po.T, self._fockb_ao, pc))
-                f += reduce(numpy.dot, (po.T, self._focka_ao, pv))
-                f += reduce(numpy.dot, (pv.T, fc, pc))
-                f = f + f.T
+                f = (self._focka_ao, self._fockb_ao)
+                f = pyscf.scf.rohf.get_roothaan_fock(f, self._dm_ao, s1e)
                 return self._scf.eig(f, s1e)
                 #fc = numpy.dot(fock[0], mo_coeff)
                 #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)

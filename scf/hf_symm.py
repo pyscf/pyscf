@@ -105,6 +105,59 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
 
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the Fock matrix in occupied, open,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    coreidx = mo_occ == 2
+    viridx = mo_occ == 0
+    openidx = ~(coreidx | viridx)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.size)
+    for idx in (coreidx, openidx, viridx):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            c = numpy.dot(mo_coeff[:,idx], c)
+            mo[:,idx] = _symmetrize_canonicalization_(mf.mol, e, c)
+            mo_e[idx] = e
+    return mo_e, mo
+
+def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff):
+    '''Restore symmetry for canonicalized orbitals
+    '''
+    def search_for_degeneracy(mo_energy):
+        idx = numpy.where(abs(mo_energy[1:] - mo_energy[:-1]) < 1e-6)[0]
+        return numpy.unique(numpy.hstack((idx, idx+1)))
+
+    degidx = search_for_degeneracy(mo_energy)
+    logger.debug1(mol, 'degidx %s', degidx)
+    if degidx.size > 0:
+        esub = mo_energy[degidx]
+        csub = mo_coeff[:,degidx]
+        scsub = numpy.dot(s, csub)
+        emin = abs(esub).min() * .5
+        es = []
+        cs = []
+        for i,ir in enumerate(mol.irrep_id):
+            so = mol.symm_orb[i]
+            sosc = numpy.dot(so.T, scsub)
+            s_ir = reduce(numpy.dot, (so.T, s, so))
+            fock_ir = numpy.dot(sosc*esub, sosc.T)
+            mo_energy, u = scipy.linalg.eigh(fock_ir, s_ir)
+            idx = abs(mo_energy) > emin
+            es.append(mo_energy[idx])
+            cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
+        es = numpy.hstack(es)
+        idx = numpy.argsort(es)
+        assert(numpy.allclose(es[idx], esub))
+        mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
+    return mo_coeff
+
 def so2ao_mo_coeff(so, irrep_mo_coeff):
     '''Transfer the basis of MO coefficients, from spin-adapted basis to AO basis
     '''
@@ -315,6 +368,8 @@ class RHF(hf.RHF):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
+
+    canonicalize = canonicalize
 
 
 class HF1e(hf.SCF):
@@ -655,6 +710,15 @@ class ROHF(rohf.ROHF):
         if mo_coeff is None: mo_coeff = (self.mo_coeff,self.mo_coeff)
         if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
+
+    @pyscf.lib.with_doc(canonicalize.__doc__)
+    def canonicalize(self, mo_coeff, mo_occ, fock=None):
+        dm = self.make_rdm1(mo_coeff, mo_occ)
+        if fock is None:
+            fock = self.get_hcore() + self.get_jk(mol, dm)
+        if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
+            fock = rohf.get_roothaan_fock(fock, dm, self.get_ovlp())
+        return canonicalize(self, mo_coeff, mo_occ, fock)
 
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
