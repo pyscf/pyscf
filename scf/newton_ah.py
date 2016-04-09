@@ -374,8 +374,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
-        mo_energy, mo_tmp = mf.eig(fock, s1e)
-        mf.get_occ(mo_energy, mo_tmp)
+        if mf.verbose >= logger.DEBUG:
+            mo_energy, mo_tmp = mf.eig(fock, s1e)
+            mf.get_occ(mo_energy, mo_tmp)
 # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         e_tot = mf._scf.energy_tot(dm, h1e, vhf)
 
@@ -405,6 +406,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         logger.info(mf, 'Canonicalize SCF orbitals')
         mo_energy, mo_coeff = mf.canonicalize(mo_coeff, mo_occ, fock)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    else:
+        mo_energy = mf.canonicalize(mo_coeff, mo_occ, fock)[0]
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, e_tot, norm_gorb, jktot)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ

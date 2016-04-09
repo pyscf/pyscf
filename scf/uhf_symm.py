@@ -154,6 +154,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     occidxb = mo_occ[1] == 1
     viridxa = mo_occ[0] == 0
     viridxb = mo_occ[1] == 0
+    s = mf.get_ovlp()
     def eig_(fock, mo_coeff, idx, es, cs):
         if numpy.count_nonzero(idx) > 0:
             orb = mo_coeff[:,idx]
@@ -161,7 +162,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
             c = numpy.dot(mo_coeff[:,idx], c)
-            cs[:,idx] == hf_symm._symmetrize_canonicalization_(mf.mol, e, c)
+            cs[:,idx] == hf_symm._symmetrize_canonicalization_(mf.mol, e, c, s)
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
     eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
@@ -241,8 +242,7 @@ class UHF(uhf.UHF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if orbsym is None:
-            if (mo_coeff is not None and
-                mo_coeff[0].shape[0] != mo_coeff[0].shape[1]):  # due to linear-dep
+            if mo_coeff is not None:  # due to linear-dep
                 ovlp_ao = self.get_ovlp()
                 orbsyma = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                               mo_coeff[0], ovlp_ao, False)

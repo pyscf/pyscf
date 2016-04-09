@@ -205,6 +205,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, '========================================================')
         mf0 = density_fit(mf, auxbasis)
         mf0.conv_tol = .25
+        mf0.conv_tol_grad = .5
         if mf0.level_shift == 0:
             mf0.level_shift = .3
         if hasattr(mf, 'grids'):

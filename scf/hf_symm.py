@@ -117,17 +117,18 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     openidx = ~(coreidx | viridx)
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.size)
+    s = mf.get_ovlp()
     for idx in (coreidx, openidx, viridx):
         if numpy.count_nonzero(idx) > 0:
             orb = mo_coeff[:,idx]
             f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
             e, c = scipy.linalg.eigh(f1)
             c = numpy.dot(mo_coeff[:,idx], c)
-            mo[:,idx] = _symmetrize_canonicalization_(mf.mol, e, c)
+            mo[:,idx] = _symmetrize_canonicalization_(mf.mol, e, c, s)
             mo_e[idx] = e
     return mo_e, mo
 
-def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff):
+def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff, s):
     '''Restore symmetry for canonicalized orbitals
     '''
     def search_for_degeneracy(mo_energy):
@@ -282,8 +283,7 @@ class RHF(hf.RHF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if orbsym is None:
-            if (mo_coeff is not None and
-                mo_coeff.shape[0] != mo_coeff.shape[1]):  # due to linear-dep
+            if mo_coeff is not None:
                 orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                              mo_coeff, self.get_ovlp(), False)
                 orbsym = numpy.asarray(orbsym)
@@ -502,7 +502,7 @@ class ROHF(rohf.ROHF):
         nmo = mo_ea.size
         mo_occ = numpy.zeros(nmo)
         if orbsym is None:
-            if mo_coeff is not None and mo_coeff.shape[0] != mo_coeff.shape[1]:
+            if mo_coeff is not None:
                 orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                              mo_coeff, self.get_ovlp(), False)
                 orbsym = numpy.asarray(orbsym)
