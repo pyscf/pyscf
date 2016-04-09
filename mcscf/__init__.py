@@ -35,6 +35,8 @@ There are some parameters to control the CASSCF/CASCI method.
         Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
+    canonicalization : bool
+        Whether to canonicalize orbitals.  Default is True.
     fcisolver : an instance of :class:`FCISolver`
         The pyscf.fci module provides several FCISolver for different scenario.  Generally,
         fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver

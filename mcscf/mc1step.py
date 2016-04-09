@@ -567,9 +567,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
 
-    log.debug('CASSCF canonicalization')
-    mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                                casscf.natorb, casdm1, log)
+    if casscf.canonicalization:
+        log.info('CASSCF canonicalization')
+        mo, fcivec, mo_energy = \
+                casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
+
     if dump_chk:
         casscf.dump_chk(locals())
 
@@ -768,6 +770,8 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian ah_grad_trust_region = %g', self.ah_grad_trust_region)
         log.info('augmented hessian ah_decay rate = %g', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
+        log.info('natorb = %s', self.natorb)
+        log.info('canonicalization = %s', self.canonicalization)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
