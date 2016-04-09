@@ -413,9 +413,14 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 def newton(mf):
     import pyscf.scf
     from pyscf.mcscf import mc1step_symm
+    if mf.__class__.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf.__class__.__doc__
     class RHF(mf.__class__):
-        __doc__ = mf.__class__.__doc__ + '''
-        Attributes:
+        __doc__ = doc + \
+        '''
+        Attributes for Newton solver:
             max_cycle_inner : int
                 AH iterations within eacy macro iterations. Default is 10
             max_stepsize : int
@@ -531,6 +536,7 @@ def newton(mf):
 
     if isinstance(mf, pyscf.scf.rohf.ROHF):
         class ROHF(RHF):
+            __doc__ = RHF.__doc__
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 mol = self._scf.mol
                 if mol.symmetry:
@@ -561,6 +567,7 @@ def newton(mf):
 
     elif isinstance(mf, pyscf.scf.uhf.UHF):
         class UHF(RHF):
+            __doc__ = RHF.__doc__
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 mol = self._scf.mol
                 if mol.symmetry:

@@ -23,14 +23,6 @@ def sfx2c1e(mf):
     Args:
         mf : an SCF object
 
-    Attributes:
-        xuncontract : bool or str or list of str/int
-            Use uncontracted basis to expand X matrix.
-            When atom symbol (str type) is assigned to this attribute, the
-            uncontracted basis will be used for the specified atoms.  If a
-            list is given, the uncontracted basis will be applied for the
-            atoms or atom-ID specified by the given list.
-
     Returns:
         An SCF object
 
@@ -46,7 +38,21 @@ def sfx2c1e(mf):
     >>> mf.scf()
     '''
     mf_class = mf.__class__
+    if mf_class.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf_class.__doc__
     class HF(mf_class):
+        __doc__ = doc + \
+        '''
+        Attributes for spin-free X2C:
+            xuncontract : bool or str or list of str/int
+                Use uncontracted basis to expand X matrix.
+                When atom symbol (str type) is assigned to this attribute, the
+                uncontracted basis will be used for the specified atoms.  If a
+                list is given, the uncontracted basis will be applied for the
+                atoms or atom-ID specified by the given list.
+        '''
         def __init__(self):
             self.xuncontract = True
             self.xequation = '1e'
