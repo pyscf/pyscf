@@ -1160,8 +1160,9 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
-PTR_ECPBAS_OFFSET = 8
-PTR_NECPBAS     = 9
+PTR_RANGE_OMEGA = 8
+PTR_ECPBAS_OFFSET = 18
+PTR_NECPBAS     = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -1678,6 +1679,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return self
     def set_rinv_orig_(self, coord):
         return self.set_rinv_origin_(coord)
+
+    def set_range_coulomb_(self, omega):
+        '''Apply the long range part of range-separated Coulomb operator for
+        **all** 2e integrals
+        erf(omega r12) / r12
+        '''
+        self._env[PTR_RANGE_OMEGA] = omega
 
     def set_nuc_mod_(self, atm_id, zeta):
         '''Change the nuclear charge distribution of the given atom ID.  The charge

@@ -24,8 +24,8 @@
 #define MAX(X,Y)        (X)>(Y)?(X):(Y)
 
 // Held in env, to get *ecpbas, necpbas
-#define PTR_ECPBAS_OFFSET       8
-#define PTR_NECPBAS             9
+#define PTR_ECPBAS_OFFSET       18
+#define PTR_NECPBAS             19
 
 
 // for radial grids
