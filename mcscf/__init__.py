@@ -241,7 +241,7 @@ def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
 def _convert_to_rhf(mf, convert_df=True):
     import copy
     import numpy
-    if not (isinstance(mf.mo_coeff, numpy.ndarray) and mf.mo_coeff.ndim == 2):
+    if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
         mf = copy.copy(mf)
         mf.mo_energy = mf.mo_energy[0]

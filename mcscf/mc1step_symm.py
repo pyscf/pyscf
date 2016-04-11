@@ -45,6 +45,9 @@ class CASSCF(mc1step.CASSCF):
             self.check_sanity()
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
+
+        casci_symm.label_symmetry_(self, self.mo_coeff)
+
         if (hasattr(self.fcisolver, 'wfnsym') and
             self.fcisolver.wfnsym is None and
             hasattr(self.fcisolver, 'guess_wfnsym')):
@@ -53,7 +56,6 @@ class CASSCF(mc1step.CASSCF):
             wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
             log.info('Active space CI wfn symmetry = %s', wfnsym)
 
-        casci_symm.label_symmetry_(self, self.mo_coeff)
         self.converged, self.e_tot, self.e_cas, self.ci, \
                 self.mo_coeff, self.mo_energy = \
                 _kern(self, mo_coeff,

@@ -138,8 +138,8 @@ def _make_fakemol(coords):
     print nbas
     fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = []
-    ptr = 0
+    fakeenv = [0] * gto.PTR_ENV_START
+    ptr = gto.PTR_ENV_START
     fakeatm[:,gto.PTR_COORD] = numpy.arange(0, nbas*3, 3)
     fakeenv.append(coords.ravel())
     ptr += nbas*3
