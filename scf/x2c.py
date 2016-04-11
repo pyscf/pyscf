@@ -23,14 +23,6 @@ def sfx2c1e(mf):
     Args:
         mf : an SCF object
 
-    Attributes:
-        xuncontract : bool or str or list of str/int
-            Use uncontracted basis to expand X matrix.
-            When atom symbol (str type) is assigned to this attribute, the
-            uncontracted basis will be used for the specified atoms.  If a
-            list is given, the uncontracted basis will be applied for the
-            atoms or atom-ID specified by the given list.
-
     Returns:
         An SCF object
 
@@ -45,15 +37,33 @@ def sfx2c1e(mf):
     >>> mf = scf.sfx2c1e(scf.UHF(mol))
     >>> mf.scf()
     '''
-
-    class HF(mf.__class__):
+    mf_class = mf.__class__
+    if mf_class.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf_class.__doc__
+    class HF(mf_class):
+        __doc__ = doc + \
+        '''
+        Attributes for spin-free X2C:
+            xuncontract : bool or str or list of str/int
+                Use uncontracted basis to expand X matrix.
+                When atom symbol (str type) is assigned to this attribute, the
+                uncontracted basis will be used for the specified atoms.  If a
+                list is given, the uncontracted basis will be applied for the
+                atoms or atom-ID specified by the given list.
+        '''
         def __init__(self):
             self.xuncontract = True
             self.xequation = '1e'
+            self._tag_x2c = True
             self.__dict__.update(mf.__dict__)
             self._keys = self._keys.union(['xequation', 'xuncontract'])
 
         def get_hcore(self, mol=None):
+            if not self._tag_x2c:
+                return mf_class.get_hcore(self, mol)
+
             mol = mf.mol
             if self.xuncontract:
                 xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)

@@ -35,6 +35,8 @@ There are some parameters to control the CASSCF/CASCI method.
         Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
+    canonicalization : bool
+        Whether to canonicalize orbitals.  Default is True.
     fcisolver : an instance of :class:`FCISolver`
         The pyscf.fci module provides several FCISolver for different scenario.  Generally,
         fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -204,11 +206,7 @@ RCASCI = CASCI
 
 def UCASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
-        raise RuntimeError('First argument needs to be UHF object.')
-
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         mc = casci_uhf.CASCI(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
@@ -217,11 +215,7 @@ def UCASCI(mf, ncas, nelecas, **kwargs):
 
 def UCASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
-        raise RuntimeError('First argument needs to be UHF object.')
-
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         mc = mc1step_uhf.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
@@ -245,31 +239,27 @@ def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
 
 
 def _convert_to_rhf(mf, convert_df=True):
-    from pyscf import scf
-    if (mf.__class__.__name__ in ('UHF', 'UKS')):
+    import copy
+    import numpy
+    if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
-        mf1 = scf.RHF(mf.mol)
-        mf1.__dict__.update(mf.__dict__)
-        mf1.mo_energy = mf.mo_energy[0]
-        mf1.mo_coeff  = mf.mo_coeff[0]
-        mf1.mo_occ    = mf.mo_occ[0]
-        mf = mf1
+        mf = copy.copy(mf)
+        mf.mo_energy = mf.mo_energy[0]
+        mf.mo_coeff  = mf.mo_coeff[0]
+        mf.mo_occ    = mf.mo_occ[0]
 
     # Avoid doing density fitting
     if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
-        mf1 = scf.RHF(mf.mol)
-        mf1.__dict__.update(mf.__dict__)
         from pyscf.lib import logger
-        logger.warn(mf, 'CASSCF: The first argument %s is a density-fitting SCF object. '
+        mf = copy.copy(mf)
+        logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
                     'Its orbitals are taken as the initial guess of CASSCF.\n'
                     'The CASSCF object is the normal solver (no approximated integrals). '
                     'mcscf.DFCASSCF is the function to create density fitting CASSCF '
-                    '(with approximate 2e integrals).',
-                    mf.__class__)
-        mf1._tag_df = False
-        return mf1
-    else:
-        return mf
+                    '(with approximate 2e integrals).')
+        mf._cderi = None
+        mf._tag_df = False
+    return mf
 
 approx_hessian = df.approx_hessian
 

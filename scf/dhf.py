@@ -204,10 +204,14 @@ def time_reversal_matrix(mol, mat):
 
 def analyze(mf, verbose=logger.DEBUG):
     #from pyscf.tools import dump_mat
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     #mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
+
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
@@ -241,7 +245,9 @@ class UHF(hf.SCF):
         with_ssss : bool, for Dirac-Hartree-Fock only
             If False, ignore small component integrals (SS|SS).  Default is True.
         with_gaunt : bool, for Dirac-Hartree-Fock only
-            If False, ignore Gaunt interaction.  Default is False.
+            Default is False.
+        with_breit : bool, for Dirac-Hartree-Fock only
+            Gaunt + gauge term.  Default is False.
 
     Examples:
 

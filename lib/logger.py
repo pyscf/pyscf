@@ -154,8 +154,7 @@ def log(rec, msg, *args):
 def error(rec, msg, *args):
     if rec.verbose >= ERROR:
         flush(rec, 'Error: '+msg, *args)
-    #if rec.stdout is not sys.stdout:
-        sys.stderr.write('Error: ' + (msg%args) + '\n')
+    sys.stderr.write('Error: ' + (msg%args) + '\n')
 
 def warn(rec, msg, *args):
     if rec.verbose >= WARN:

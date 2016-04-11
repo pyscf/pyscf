@@ -1,8 +1,8 @@
 .. _code_stand:
 
 
-Code standard
-*************
+General
+*******
 
 * New features first being placed in pyscf/future.
 
@@ -33,8 +33,8 @@ Code standard
   - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
 
 
-Name rules
-----------
+Name convention
+---------------
 
 * The prefix or suffix underscore in the function names have special meanings
 
@@ -48,8 +48,8 @@ Name rules
 
   - regular (pure) functions do not have underscore as the prefix or suffix.
 
-API rules
----------
+API convention
+--------------
 
 * :class:`gto.Mole` holds all global parameters, like the log level, the
   max memory usage etc.  They are used as the default value for all
@@ -106,4 +106,6 @@ API rules
       ``mo_occ`` are appeared in the argument lists,  they are always put
       in this order: ``mo_energy, mo_coeff, mo_occ``.
 
-
+  - xxx_slice
+    Taking the elements of object xxx between xxx_slice = (start, end)
+    (start <= elem < end)

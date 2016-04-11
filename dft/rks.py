@@ -59,7 +59,10 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
         ks.grids.build_()
+        small_rho_cutoff = ks.small_rho_cutoff
         t0 = logger.timer(ks, 'setting up grids', *t0)
+    else:
+        small_rho_cutoff = 0
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
 
@@ -101,10 +104,11 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if nset == 1:
         ks._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
 
-    if ks.small_rho_cutoff > 1e-20 and nset == 1:
+    if small_rho_cutoff > 1e-20 and nset == 1:
         # Filter grids the first time setup grids
-        idx = numint.large_rho_indices(mol, dm, ks._numint, ks.grids,
-                                       ks.small_rho_cutoff)
+        idx = ks._numint.large_rho_indices(mol, dm, ks.grids, small_rho_cutoff)
+        logger.debug(ks, 'Drop grids %d',
+                     ks.grids.weights.size - numpy.count_nonzero(idx))
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks._numint.non0tab = None
@@ -137,35 +141,45 @@ class RKS(pyscf.scf.hf.RHF):
     __doc__ = '''Restricted Kohn-Sham\n''' + pyscf.scf.hf.SCF.__doc__ + '''
     Attributes for RKS:
         xc : str
-            'X_name,C_name' for the XC functional
+            'X_name,C_name' for the XC functional.  Default is 'lda,vwn'
         grids : Grids object
-            grids.level (0 - 6)  big number for large mesh grids, default is 3
+            grids.level (0 - 9)  big number for large mesh grids. Default is 3
 
-            grids.atomic_radii  can be one of
-                | radi.treutler_atomic_radii_adjust(mol, radi.BRAGG_RADII)
-                | radi.treutler_atomic_radii_adjust(mol, radi.COVALENT_RADII)
-                | radi.becke_atomic_radii_adjust(mol, radi.BRAGG_RADII)
-                | radi.becke_atomic_radii_adjust(mol, radi.COVALENT_RADII)
-                | None,          to switch off atomic radii adjustment
+            radii_adjust
+                | radi.treutler_atomic_radii_adjust (default)
+                | radi.becke_atomic_radii_adjust
+                | None : to switch off atomic radii adjustment
 
-            grids.radi_method  scheme for radial grids, can be one of
-                | radi.treutler
+            grids.atomic_radii
+                | radi.BRAGG_RADII  (default)
+                | radi.COVALENT_RADII
+                | None : to switch off atomic radii adjustment
+
+            grids.radi_method  scheme for radial grids
+                | radi.treutler  (default)
+                | radi.delley
+                | radi.mura_knowles
                 | radi.gauss_chebyshev
 
-            grids.becke_scheme  weight partition function, can be one of
+            grids.becke_scheme  weight partition function
+                | gen_grid.original_becke  (default)
                 | gen_grid.stratmann
-                | gen_grid.original_becke
 
-            grids.prune  scheme to reduce number of grids, can be one of
+            grids.prune  scheme to reduce number of grids
+            | gen_grid.nwchem_prune  (default)
                 | gen_grid.sg1_prune
-                | gen_grid.nwchem_prune
                 | gen_grid.treutler_prune
+                | None : to switch off grids pruning
 
             grids.symmetry  True/False  to symmetrize mesh grids (TODO)
 
             grids.atom_grid  Set (radial, angular) grids for particular atoms.
             Eg, grids.atom_grid = {'H': (20,110)} will generate 20 radial
             grids and 110 angular grids for H atom.
+
+        small_rho_cutoff : float
+            Drop grids if their contribution to total electrons smaller than
+            this cutoff value.  Default is 1e-7.
 
     Examples:
 
@@ -194,7 +208,7 @@ class RKS(pyscf.scf.hf.RHF):
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
     mf.grids = gen_grid.Grids(mf.mol)
-    mf.small_rho_cutoff = 1e-12  # Use rho to filter grids
+    mf.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
     mf._ecoul = 0

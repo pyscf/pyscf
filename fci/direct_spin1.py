@@ -14,6 +14,14 @@
 #              MO integrals
 #
 
+'''
+Full CI solver for spin-free Hamiltonian.
+
+The CI wfn are stored as a 2D array [alpha,beta], where each row corresponds
+to an alpha string.  For each row (alpha string), there are
+total-num-beta-strings of columns.  Each column corresponds to a beta string.
+'''
+
 import sys
 import ctypes
 import numpy
@@ -183,7 +191,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
         addr = numpy.arange(hdiag.size)
     else:
         try:
-            addr = numpy.argpartition(hdiag, np)[:np]
+            addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
     addra = addr // nb

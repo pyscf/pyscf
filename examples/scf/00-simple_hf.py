@@ -3,14 +3,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf
-
 '''
 A simple example to run HF calculation.
 
 .kernel() function is the simple way to call HF driver.
 .analyze() function calls the Mulliken population analysis etc.
 '''
+
+from pyscf import gto, scf
 
 mol = gto.Mole()
 mol.build(

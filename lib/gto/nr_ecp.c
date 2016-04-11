@@ -13,8 +13,8 @@
 #define ECP_LMAX        4
 #define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
-#define CUTOFF          115  // 1e-50
-#define EPS             1e-10
+#define CUTOFF          460  // ~ 1e200
+#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-10*fabs(y) || fabs(x-y) < 1e-10)
 #define SQUARE(r)       (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define CART_CUM        (455+1) // upto l = 12
 #define K_TAYLOR_MAX    7
@@ -24,8 +24,8 @@
 #define MAX(X,Y)        (X)>(Y)?(X):(Y)
 
 // Held in env, to get *ecpbas, necpbas
-#define PTR_ECPBAS_OFFSET       8
-#define PTR_NECPBAS             9
+#define PTR_ECPBAS_OFFSET       18
+#define PTR_NECPBAS             19
 
 
 // for radial grids
@@ -1443,6 +1443,7 @@ static int _offset_cart[] = {0, 1, 4, 10, 20, 35, 56, 84, 120,
 
 /*
  * exponentially scaled modified spherical Bessel function of the first kind
+ * scipy.special.sph_in(order, z) * numpy.exp(-z)
  *
  * JCC, 27, 1009
  */
@@ -2133,7 +2134,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                         } } }
 
                                         for (i = 0; i < d2; i++) {
-                                                if (fabs(plast[i]-prad[i]) > EPS) {
+                                                if (CLOSE_ENOUGH(plast[i],prad[i])) {
                                                         converged[ijl] = 0;
                                                         all_conv = 0;
                                                         break;
@@ -2202,7 +2203,9 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
         for (n = 0; n < nrs; n++) {
                 tmp = rs[n*inc] - kaij;
                 tmp = fac - aij*tmp*tmp;
-                if (ur[n] == 0 || tmp < -CUTOFF || rs[n*inc]*k > CUTOFF) {
+                if (ur[n] == 0 || tmp > CUTOFF || tmp < -CUTOFF) {
+/* Avoid exp(tmp) goto infinity!  Usually such points correspond to remote
+ * functions.  Most likely, they can be dropped without affecting accuracy. */
                         rur[n] = 0;
                         for (i = 0; i < lmax1; i++) {
                                 bval[n*lmax1+i] = 0;
@@ -2340,7 +2343,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                                ai[ip]+aj[jp], ur, rs+start, nrs, step);
                                 converged[ip*npj+jp] = 1;
                                 for (i = 0; i < d2; i++) {
-                                        if (fabs(plast[i]-prad[i]) > EPS) {
+                                        if (CLOSE_ENOUGH(plast[i],prad[i])) {
                                                 converged[ip*npj+jp] = 0;
                                                 all_conv = 0;
                                                 break;

@@ -36,7 +36,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     eri1 = eri1.reshape(nmo,nocc,-1)
 
     klppshape = (0, nmo, 0, nmo)
-    klpashape = (0, nmo, ncore, ncas)
+    klpashape = (0, nmo, ncore, nocc)
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     for i in range(ncas):
         _ao2mo.nr_e2_(eri1[ncore+i,ncore:nocc], mo, klppshape,
@@ -59,7 +59,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
     pp = numpy.empty((ncore,ncore))
     for i in range(nmo):
-        klshape = (i, 1, 0, ncore)
+        klshape = (i, i+1, 0, ncore)
         _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', out=pp)
         k_pc[i] = pp.diagonal()
     return j_pc, k_pc, ppaa, papa
@@ -85,17 +85,17 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
 
     mo_c = numpy.asarray(mo, order='C')
     mo = numpy.asarray(mo, order='F')
-    pashape = (0, nmo, ncore, ncas)
+    pashape = (0, nmo, ncore, nocc)
     papa_buf = numpy.zeros((nao,ncas,nmo*ncas))
     j_pc = numpy.zeros((nmo,ncore))
     k_pc = numpy.zeros((nmo,ncore))
 
     mem_words = int(max(2000,max_memory-papa_buf.nbytes/1e6)*1e6/8)
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
-    shranges = outcore.guess_shell_ranges(mol, aobuflen, aobuflen, 's4')
+    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
+    shranges = outcore.guess_shell_ranges(mol, True, aobuflen, None, ao_loc)
     ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph',
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
-    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     nstep = len(shranges)
     paapp = 0
     maxbuflen = max([x[2] for x in shranges])
@@ -116,9 +116,9 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
-                  istep+1, nstep, *(sh_range[:3]))
+                  istep+1, nstep, *sh_range)
         buf = bufs1[:sh_range[2]]
-        _ao2mo.nr_e1fill_('cint2e_sph', sh_range[:3],
+        _ao2mo.nr_e1fill_('cint2e_sph', sh_range,
                           mol._atm, mol._bas, mol._env, 's4', 1, ao2mopt, buf)
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
@@ -239,7 +239,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     log.debug1('nblk for ppaa = %d', nblk)
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
-        tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1-i0,0,nmo), 's4', 's1', ao_loc=ao_loc)
+        tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1,0,nmo), 's4', 's1', ao_loc=ao_loc)
         tmp1 = tmp1.reshape(ncas,ncas,i1-i0,nmo)
         for j in range(i1-i0):
             dset[i0+j] = tmp1[:,:,j].transpose(2,0,1)

@@ -3,6 +3,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import os
+import sys
 from functools import reduce
 import numpy
 import pyscf.lib
@@ -122,58 +124,101 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     >>> mcscf.caslst_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
     [5, 7, 8, 10, 11, 14, 15, 20, 25, 26, 31, 32]
     '''
+    mol = casscf.mol
+    log = logger.Logger(casscf.stdout, casscf.verbose)
     if s is None:
         s = casscf._scf.get_ovlp()
-    orbsym = pyscf.symm.label_orb_symm(casscf.mol, casscf.mol.irrep_id,
-                                       casscf.mol.symm_orb, mo_coeff, s)
+    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id,
+                                       mol.symm_orb, mo_coeff, s)
     orbsym = numpy.asarray(orbsym)
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas
 
     irreps = set(orbsym)
-    orbidx_by_irrep = {}
-    for ir in irreps:
-        orbidx_by_irrep[ir] = numpy.where(orbsym == ir)[0]
 
-    irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
     if cas_irrep_ncore is not None:
-        for k, n in cas_irrep_ncore.items():
+        irrep_ncore = {}
+        for k, v in cas_irrep_ncore.items():
             if isinstance(k, str):
-                irid = symm.irrep_name2id(casscf.mol.groupname, k)
+                irrep_ncore[symm.irrep_name2id(mol.groupname, k)] = v
             else:
-                irid = k
-            irrep_ncore[irid] = n
+                irrep_ncore[k] = v
+
+        ncore_rest = casscf.ncore - sum(irrep_ncore.values())
+        if ncore_rest > 0:  # guess core configuration
+            mask = numpy.ones(len(orbsym), dtype=bool)
+            for ir in irrep_ncore:
+                mask[orbsym == ir] = False
+            core_rest = orbsym[mask][:ncore_rest]
+            core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
+                              for ir in set(core_rest)])
+            log.info('Given core space %s < casscf core size %d',
+                     cas_irrep_ncore, casscf.ncore)
+            log.info('Add %s to core configuration', core_rest)
+            irrep_ncore.update(core_rest)
+        elif ncore_rest < 0:
+            raise ValueError('Given core space %s > casscf core size %d'
+                             % (cas_irrep_ncore, casscf.ncore))
+    else:
+        irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
 
     if not isinstance(cas_irrep_nocc, dict):
         # list => dict
         cas_irrep_nocc = dict([(ir, n) for ir,n in enumerate(cas_irrep_nocc)
                                if n > 0])
+
     irrep_ncas = {}
-    count = 0
-    for k, n in cas_irrep_nocc.items():
+    for k, v in cas_irrep_nocc.items():
         if isinstance(k, str):
-            irid = symm.irrep_name2id(casscf.mol.groupname, k)
+            irrep_ncas[symm.irrep_name2id(mol.groupname, k)] = v
         else:
-            irid = k
-        irrep_ncas[irid] = n
-        count += n
-    if count != casscf.ncas:
-        raise ValueError('Active space size %d != specified active space %s'
-                         % (casscf.ncas, cas_irrep_nocc))
+            irrep_ncas[k] = v
+
+    ncas_rest = casscf.ncas - sum(irrep_ncas.values())
+    if ncas_rest > 0:
+        mask = numpy.ones(len(orbsym), dtype=bool)
+# remove core and specified active space
+        for ir in irrep_ncas:
+            mask[orbsym == ir] = False
+        for ir, ncore in irrep_ncore.items():
+            idx = numpy.where(orbsym == ir)[0]
+            mask[idx[:ncore]] = False
+
+        cas_rest = orbsym[mask][:ncas_rest]
+        cas_rest = dict([(ir, numpy.count_nonzero(cas_rest==ir))
+                         for ir in set(cas_rest)])
+        log.info('Given active space %s < casscf active space size %d',
+                 cas_irrep_nocc, casscf.ncas)
+        log.info('Add %s to active space', cas_rest)
+        irrep_ncas.update(cas_rest)
+    elif ncas_rest < 0:
+        raise ValueError('Given active space %s > casscf active space size %d'
+                         % (cas_irrep_nocc, casscf.ncas))
 
     caslst = []
-    for ir in irreps:
-        nc = irrep_ncore[ir]
-        if ir in irrep_ncas:
-            no = nc + irrep_ncas[ir]
-        else:
-            no = nc
-        caslst.extend(orbidx_by_irrep[ir][nc:no])
+    for ir, ncas in irrep_ncas.items():
+        if ncas > 0:
+            if ir in irrep_ncore:
+                nc = irrep_ncore[ir]
+            else:
+                nc = 0
+            no = nc + ncas
+            idx = numpy.where(orbsym == ir)[0]
+            caslst.extend(idx[nc:no])
+    caslst = numpy.sort(numpy.asarray(caslst)) + base
+    if len(caslst) < casscf.ncas:
+        raise ValueError('Not enough orbitals found for core %s, cas %s' %
+                         (cas_irrep_ncore, cas_irrep_nocc))
 
-    logger.debug(casscf, 'ncore for each irreps %s', irrep_ncore)
-    logger.debug(casscf, 'ncas for each irreps %s', irrep_ncas)
-    logger.debug(casscf, 'caslst = %s', caslst)
-    return numpy.sort(numpy.asarray(caslst)) + base
+    if log.verbose >= logger.INFO:
+        log.info('ncore for each irreps %s',
+                 dict([(symm.irrep_id2name(mol.groupname, k), v)
+                       for k,v in irrep_ncore.items()]))
+        log.info('ncas for each irreps %s',
+                 dict([(symm.irrep_id2name(mol.groupname, k), v)
+                       for k,v in irrep_ncas.items()]))
+        log.info('(%d-based) caslst = %s', base, caslst)
+    return caslst
 
 def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                      cas_irrep_ncore=None, s=None):
@@ -276,27 +321,33 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     def project(mfmo, init_mo, ncore, s):
         nocc = ncore + casscf.ncas
-        mo0core = init_mo[:,:ncore]
-        s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
-        s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
-        coreocc = numpy.einsum('ij,ji->i', s1, pyscf.lib.cho_solve(s1core, s1.T))
-        nmo = mfmo.shape[1]
-        coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
-        logger.debug(casscf, 'Core indices %s', coreidx)
-        logger.debug(casscf, 'Core components %s', coreocc[coreidx])
-        # take HF core
-        mocore = mfmo[:,coreidx]
+        if ncore > 0:
+            mo0core = init_mo[:,:ncore]
+            s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
+            s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
+            coreocc = numpy.einsum('ij,ji->i', s1, pyscf.lib.cho_solve(s1core, s1.T))
+            nmo = mfmo.shape[1]
+            coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
+            logger.debug(casscf, 'Core indices %s', coreidx)
+            logger.debug(casscf, 'Core components %s', coreocc[coreidx])
+            # take HF core
+            mocore = mfmo[:,coreidx]
 
-        # take projected CAS space
-        mocas = init_mo[:,ncore:nocc] \
-              - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
-        mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
+            # take projected CAS space
+            mocas = init_mo[:,ncore:nocc] \
+                  - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
+            mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
+        else:
+            mocc = init_mo[:,:nocc]
 
         # remove core and active space from rest
-        rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-        restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
-        restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
-        mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
+        if mocc.shape[1] < mfmo.shape[1]:
+            rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
+            restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
+            restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
+            mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
+        else:
+            mo = mocc
 
         if casscf.verbose >= logger.DEBUG:
             s1 = reduce(numpy.dot, (mo[:,ncore:nocc].T, s, mfmo))
@@ -575,6 +626,101 @@ def state_specific_(casscf, state=1):
     return casscf
 
 
+def hot_tuning_(casscf, configfile=None):
+    '''Allow you to tune CASSCF parameters on the runtime
+    '''
+    import traceback
+    import tempfile
+    import json
+    #from numpy import array
+
+    if configfile is None:
+        fconfig = tempfile.NamedTemporaryFile(suffix='.json')
+        configfile = fconfig.name
+    logger.info(casscf, 'Function hot_tuning_ dumps CASSCF parameters in config file%s',
+                configfile)
+
+    exclude_keys = set(('stdout', 'verbose', 'ci', 'mo_coeff', 'mo_energy',
+                        'e_cas', 'e_tot', 'ncore', 'ncas', 'nelecas', 'mol',
+                        'callback', 'fcisolver', 'orbsym'))
+
+    casscf_settings = {}
+    for k, v in casscf.__dict__.items():
+        if not (k.startswith('_') or k in exclude_keys):
+            if (v is None or
+                isinstance(v, (str, bool, int, float, list, tuple, dict))):
+                casscf_settings[k] = v
+            elif isinstance(v, set):
+                casscf_settings[k] = list(v)
+
+    doc = '''# JSON format
+# Note the double quote "" around keyword
+'''
+    conf = {'casscf': casscf_settings}
+    with open(configfile, 'w') as f:
+        f.write(doc)
+        f.write(json.dumps(conf, indent=4, sort_keys=True) + '\n')
+        f.write('# Starting from this line, code are parsed as Python script.  The Python code\n'
+                '# will be injected to casscf.kernel through callback hook.  The casscf.kernel\n'
+                '# function local variables can be directly accessed.  Note, these variables\n'
+                '# cannot be directly modified because the environment is generated using\n'
+                '# locals() function (see\n'
+                '# https://docs.python.org/2/library/functions.html#locals).\n'
+                '# You can modify some variables with inplace updating, eg\n'
+                '# from pyscf import fci\n'
+                '# if imacro > 6:\n'
+                '#     casscf.fcislover = fci.fix_spin_(fci.direct_spin1, ss_value=2)\n'
+                '#     mo[:,:3] *= -1\n'
+                '# Warning: this runtime modification is unsafe and highly unrecommended.\n')
+
+    old_cb = casscf.callback
+    def hot_load(envs):
+        try:
+            with open(configfile) as f:
+# filter out comments
+                raw_js = []
+                balance = 0
+                data = [x for x in f.readlines()
+                        if not x.startswith('#') and x.rstrip()]
+                for n, line in enumerate(data):
+                    if not line.lstrip().startswith('#'):
+                        raw_js.append(line)
+                        balance += line.count('{') - line.count('}')
+                        if balance == 0:
+                            break
+            raw_py = ''.join(data[n+1:])
+            raw_js = ''.join(raw_js)
+
+            logger.debug(casscf, 'Reading CASSCF parameters from config file  %s',
+                         os.path.realpath(configfile))
+            logger.debug1(casscf, '    Inject casscf settings %s', raw_js)
+            conf = json.loads(raw_js)
+            casscf.__dict__.update(conf.pop('casscf'))
+
+            # Not yet found a way to update locals() on the runtime
+            # https://docs.python.org/2/library/functions.html#locals
+            #for k in conf:
+            #    if k in envs:
+            #        logger.info(casscf, 'Update envs[%s] = %s', k, conf[k])
+            #        envs[k] = conf[k]
+
+            logger.debug1(casscf, '    Inject python script\n%s\n', raw_py)
+            if len(raw_py.strip()) > 0:
+                if sys.version_info >= (3,):
+# A hacky call using eval because exec are so different in python2 and python3
+                    eval(compile('exec(raw_py, envs, {})', '<str>', 'exec'))
+                else:
+                    eval(compile('exec raw_py in envs, {}', '<str>', 'exec'))
+        except Exception as e:
+            logger.warn(casscf, 'CASSCF hot_load error %s', e)
+            logger.warn(casscf, ''.join(traceback.format_exc()))
+
+        if callable(old_cb):
+            old_cb(envs)
+
+    casscf.callback = hot_load
+    return casscf
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -625,17 +771,16 @@ if __name__ == '__main__':
     mc.verbose = 4
     mc.fcisolver = pyscf.fci.solver(mol, False) # to mix the singlet and triplet
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:4]
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
     print(emc - -76.003352190262532)
 
-
     mc = mcscf.CASSCF(m, 4, 4)
     mc.verbose = 4
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:4]
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
@@ -646,3 +791,10 @@ if __name__ == '__main__':
     mc.verbose = 4
     mc = state_specific_(mc, 2)
     emc = mc.kernel()[0]
+
+
+    mc = mcscf.CASSCF(m, 4, 4)
+    mc.verbose = 4
+    hot_tuning_(mc, 'config1')
+    mc.kernel()
+    mc = None  # release for gc

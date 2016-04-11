@@ -10,6 +10,7 @@ import tempfile
 import numpy
 import h5py
 import pyscf.lib as lib
+from functools import reduce
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo

@@ -156,7 +156,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
     from pyscf.dmrgscf import settings
-    nevptsolver.exectuable = settings.BLOCKEXE_COMPRESS_NEVPT
+    nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
     scratch = nevptsolver.scratchDirectory
     nevptsolver.scratchDirectory = ''
 
@@ -166,7 +166,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
     nevptsolver.scratchDirectory = scratch
 
     if nevptsolver.verbose >= logger.DEBUG1:
-        inFile = os.path.join(nevptsolver._input_dir, nevptsolver.configFile)
+        inFile = os.path.join(nevptsolver.runtimeDir, nevptsolver.configFile)
         logger.debug1(nevptsolver, 'Block Input conf')
         logger.debug1(nevptsolver, open(inFile, 'r').read())
 
@@ -359,16 +359,44 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     #print p2.communicate()
     #call('cp %s/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
     #call('cp %s/node0/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
-    f1 =open(os.devnull,'w')
-    if MPI.Get_processor_name() == headnode:
-        subprocess.call('cp %s/* %s/'%(scratch,newscratch),stderr=f1,shell = True)
-        subprocess.call('cp %s/node0/* %s/node0'%(scratch,newscratch),shell = True)
-    else:
-        subprocess.call('scp %s:%s/* %s/'%(headnode,scratch,newscratch),stderr=f1,shell = True)
-        subprocess.call('scp %s:%s/node0/* %s/node0'%(headnode,scratch,newscratch),shell = True)
-    f1.close()
-    f = open('%s/FCIDUMP'%newscratch,'w')
+   # f1 =open(os.devnull,'w')
+   # if MPI.Get_processor_name() == headnode:
+   #     subprocess.call('cp %s/* %s/'%(scratch,newscratch),stderr=f1,shell = True)
+   #     subprocess.call('cp %s/node0/* %s/node0'%(scratch,newscratch),shell = True)
+   # else:
+   #     subprocess.call('scp %s:%s/* %s/'%(headnode,scratch,newscratch),stderr=f1,shell = True)
+   #     subprocess.call('scp %s:%s/node0/* %s/node0'%(headnode,scratch,newscratch),shell = True)
+   # f1.close()
 
+    #TODO
+    #Use mpi rather than scp to copy the file.
+    #To make the code robust.
+
+    if rank==0:
+        filenames = []
+        for fn in os.listdir('%s/node0'%scratch):
+            if fn== 'dmrg.e' or fn== 'statefile.0.tmp' or fn== 'RestartReorder.dat' or fn.startswith('wave') or fn.startswith('Rotation'):
+                filenames.append(fn)
+    else:
+        filenames = None
+
+    filenames = comm.bcast(filenames, root=0)
+
+    for i in xrange(len(filenames)):
+        if rank == 0:
+            with open('%s/node0/%s'%(scratch,filenames[i]),'rb') as f:
+                data = f.read()
+        else:
+            data = None
+        data = comm.bcast(data, root=0)
+        if data==None:
+            print 'empty file'
+        with open('%s/node0/%s'%(newscratch,filenames[i]),'wb') as f:
+            f.write(data)
+        
+        
+
+    f = open('%s/FCIDUMP'%newscratch,'w')
     pyscf.tools.fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)
     #h2e in active space
     writeh2e_sym(h2e,f,tol)

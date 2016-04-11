@@ -14,12 +14,13 @@ General JK contraction function for
 import time
 import numpy
 import pyscf.lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
 
 def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
-           aosym='s1', comp=1, hermi=0, shls_offset=None, verbose=logger.WARN):
+           aosym='s1', comp=1, hermi=0, shls_slice=None, verbose=logger.WARN):
     '''Compute J/K matrices for the given density matrix
 
     Args:
@@ -58,7 +59,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
             letters [ijkl].  Each script will be one-to-one applied to each
             entry of dms.  So it must have the same number of elements as the
             dms, len(scripts) == len(dms).
-        shls_offset : 8-element list
+        shls_slice : 8-element list
             (ish_start, ish_end, jsh_start, jsh_end, ksh_start, ksh_end, lsh_start, lsh_end)
 
     Returns:
@@ -100,15 +101,15 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
     >>> jcros1 = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3)
     >>> # Analytical gradients for coulomb interaction between 1s density and the other molecule
     >>> jpart1 = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3,
-    ...                 shls_offset=(0,1,0,1,0,mol.nbas,0,mol.nbas))
+    ...                 shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
     '''
     if isinstance(mols, (tuple, list)):
         assert(len(mols) == 4)
-        if shls_offset is None:
-            shls_offset = numpy.array([(0, mol.nbas) for mol in mols])
+        if shls_slice is None:
+            shls_slice = numpy.array([(0, mol.nbas) for mol in mols])
         else:
-            shls_offset = numpy.asarray(shls_offset).reshape(4,2)
-# concatenate unique mols and build corresponding shls_offset
+            shls_slice = numpy.asarray(shls_slice).reshape(4,2)
+# concatenate unique mols and build corresponding shls_slice
         mol_ids = [id(mol) for mol in mols]
         atm, bas, env = mols[0]._atm, mols[0]._bas, mols[0]._env
         bas_start = numpy.zeros(4, dtype=int)
@@ -120,12 +121,12 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
                                              mols[m]._bas, mols[m]._env)
             else:
                 bas_start[m] = bas_start[first]
-            shls_offset[m] += bas_start[m]
-        shls_offset = shls_offset.flatten()
+            shls_slice[m] += bas_start[m]
+        shls_slice = shls_slice.flatten()
     else:
         atm, bas, env = mols._atm, mols._bas, mols._env
-        if shls_offset is None:
-            shls_offset = (0, mols.nbas) * 4
+        if shls_slice is None:
+            shls_slice = (0, mols.nbas) * 4
 
     if isinstance(scripts, str):
         scripts = [scripts]
@@ -143,7 +144,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
             descript.append('->'.join((dmsym,'s2'+vsym)))
 
     vs = _vhf.direct_bindm(intor, aosym, descript, dms, comp, atm, bas, env,
-                           shls_offset=shls_offset)
+                           shls_slice=shls_slice)
     if hermi != 0:
         for v in vs:
             if v.ndim == 3:
@@ -155,8 +156,6 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-
     mol = gto.M(atom='H 0 -.5 0; H 0 .5 0', basis='cc-pvdz')
 
     nao = mol.nao_nr()
@@ -190,5 +189,5 @@ if __name__ == '__main__':
     j1cross = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3)
     print(numpy.allclose(j1cross, numpy.einsum('xijkl,lk->xij', eri1[:,nao:,nao:,:nao,:nao], dm)))
     j1part = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3,
-                    shls_offset=(0,1,0,1,0,mol.nbas,0,mol.nbas))
+                    shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
     print(numpy.allclose(j1part, numpy.einsum('xijkl,lk->xij', eri1[:,nao:nao+1,nao:nao+1,:nao,:nao], dm)))

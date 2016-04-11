@@ -9,6 +9,7 @@ import h5py
 import pyscf.lib
 import pyscf.lib.logger as logger
 from pyscf.ao2mo import _ao2mo
+from pyscf.ao2mo import outcore
 
 # default ioblk_size is 256 MB
 
@@ -53,7 +54,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         klshape = (0, nmok, 0, nmok)
     else:
         mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
-        klshape = (0, nmok, nmok, nmol)
+        klshape = (0, nmok, nmok, nmok+nmol)
 
     if isinstance(erifile, str):
         if h5py.is_hdf5(erifile):
@@ -172,14 +173,14 @@ def half_e1(mol, mo_coeffs, swapfile,
         ijshape = (0, nmoi, 0, nmoi)
     else:
         moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoj)
+        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
 # The buffer to hold AO integrals in C code
     aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
-    shranges = guess_shell_ranges(mol, e1buflen, aobuflen,
-                                  aosym not in ('s1', 's2kl', 'a2kl'))
+    shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2kl', 'a2kl')),
+                                          aobuflen, e1buflen, mol.ao_loc_2c(), False)
     if ao2mopt is None:
 #        if intor == 'cint2e':
 #            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
@@ -277,69 +278,6 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
     e2buflen = max(e2buflen//IOBUF_ROW_MIN, 1) * IOBUF_ROW_MIN
     chunks = (IOBUF_ROW_MIN, ncols)
     return e2buflen, chunks
-
-# based on the size of buffer, dynamic range of AO-shells for each buffer
-def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
-    ao_loc = mol.ao_loc_2c()
-
-    accum = []
-
-    if aosym:
-        for i in range(mol.nbas):
-            di = ao_loc[i+1] - ao_loc[i]
-            for j in range(i+1):
-                dj = ao_loc[j+1] - ao_loc[j]
-                accum.append(di*dj)
-    else:
-        for i in range(mol.nbas):
-            di = ao_loc[i+1] - ao_loc[i]
-            for j in range(mol.nbas):
-                dj = ao_loc[j+1] - ao_loc[j]
-                accum.append(di*dj)
-
-    ijsh_range = []
-    buflen = 0
-    ij_start = 0
-    for ij, dij in enumerate(accum):
-        buflen += dij
-        if buflen > max_iobuf:
-# to fill each iobuf, AO integrals may need to be fill to aobuf several times
-            if max_aobuf < buflen-dij:
-                ijdiv = []
-                n0 = ij_start
-                aobuf = 0
-                for n in range(ij_start, ij):
-                    aobuf += accum[n]
-                    if aobuf > max_aobuf:
-                        ijdiv.append((n0, n, aobuf-accum[n]))
-                        n0 = n
-                        aobuf = accum[n]
-                ijdiv.append((n0, ij, aobuf))
-            else:
-                ijdiv = [(ij_start, ij, buflen-dij)]
-
-            ijsh_range.append((ij_start, ij, buflen-dij, ijdiv))
-
-            ij_start = ij
-            buflen = dij
-
-    ij = len(accum)
-
-    if max_aobuf < buflen:
-        ijdiv = []
-        n0 = ij_start
-        aobuf = 0
-        for n in range(ij_start, ij):
-            aobuf += accum[n]
-            if aobuf > max_aobuf:
-                ijdiv.append((n0, n, aobuf-accum[n]))
-                n0 = n
-                aobuf = accum[n]
-        ijdiv.append((n0, ij, aobuf))
-    else:
-        ijdiv = [(ij_start, ij, buflen)]
-    ijsh_range.append((ij_start, ij, buflen, ijdiv))
-    return ijsh_range
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):

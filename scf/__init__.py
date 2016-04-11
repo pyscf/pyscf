@@ -161,7 +161,16 @@ def density_fit(mf, auxbasis='weigend+etb'):
     return mf.density_fit(auxbasis)
 
 def newton(mf):
-    '''augmented hessian for Newton Raphson'''
+    '''augmented hessian for Newton Raphson
+
+    Examples:
+
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
+    >>> mf = scf.RHF(mol).run(conv_tol=.5)
+    >>> mf = scf.newton(mf).set(conv_tol=1e-9)
+    >>> mf.kernel()
+    -1.0811707843774987
+    '''
     return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
@@ -196,6 +205,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, '========================================================')
         mf0 = density_fit(mf, auxbasis)
         mf0.conv_tol = .25
+        mf0.conv_tol_grad = .5
         if mf0.level_shift == 0:
             mf0.level_shift = .3
         if hasattr(mf, 'grids'):
@@ -206,7 +216,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 # mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
 # dft.get_veff_ are not executed so that more grid points may be found in
 # approx_grids.
-            mf0.small_rho_cutoff = 1e-6
+            mf0.small_rho_cutoff = 1e-5
         mf0.kernel()
 
         mf1._cderi = mf0._cderi

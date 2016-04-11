@@ -9,6 +9,7 @@ import pyscf.symm
 import pyscf.scf
 from pyscf.mcscf import casci
 from pyscf import fci
+from pyscf.mcscf import addons
 
 
 class CASCI(casci.CASCI):
@@ -52,6 +53,15 @@ class CASCI(casci.CASCI):
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
+
+    def sort_mo_by_irrep(self, cas_irrep_nocc,
+                         cas_irrep_ncore=None, mo_coeff=None, s=None):
+        '''Select active space based on symmetry information.
+        See also :func:`pyscf.mcscf.addons.sort_mo_by_irrep`
+        '''
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
+                                       cas_irrep_ncore, s)
 
 def eig(mat, orbsym):
     orbsym = numpy.asarray(orbsym)

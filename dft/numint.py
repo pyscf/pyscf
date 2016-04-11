@@ -17,7 +17,7 @@ libdft = pyscf.lib.load_library('libdft')
 OCCDROP = 1e-12
 BLKSIZE = 96
 
-def eval_ao(mol, coords, deriv=0, relativity=0, bastart=0, bascount=None,
+def eval_ao(mol, coords, deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
     '''Evaluate AO function value on the given grids.
 
@@ -36,8 +36,10 @@ def eval_ao(mol, coords, deriv=0, relativity=0, bastart=0, bascount=None,
             M is the size associated to the derivative deriv.
         relativity : bool
             No effects.
-        bastart, bascount : int
-            If given, only part of AOs (bastart <= shell_id < bastart+bascount) are evaluated.
+        shls_slice : 2-element list
+            (shl_start, shl_end).
+            If given, only part of AOs (shl_start <= shell_id < shl_end) are
+            evaluated.  By default, all shells defined in mol will be evaluated.
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
@@ -62,10 +64,10 @@ def eval_ao(mol, coords, deriv=0, relativity=0, bastart=0, bascount=None,
     >>> ao_value = eval_ao(mol, coords)
     >>> print(ao_value.shape)
     (100, 24)
-    >>> ao_value = eval_ao(mol, coords, deriv=1, bastart=1, bascount=3)
+    >>> ao_value = eval_ao(mol, coords, deriv=1, shls_slice=(1,4))
     >>> print(ao_value.shape)
     (4, 100, 7)
-    >>> ao_value = eval_ao(mol, coords, deriv=2, bastart=1, bascount=3)
+    >>> ao_value = eval_ao(mol, coords, deriv=2, shls_slice=(1,4))
     >>> print(ao_value.shape)
     (10, 100, 7)
     '''
@@ -77,10 +79,9 @@ Argument "isgga" is replaced by argument "deriv", to support high order AO deriv
 
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     feval = 'GTOval_sph_deriv%d' % deriv
-    return mol.eval_gto(feval, coords, comp, bastart, bascount, non0tab, out)
+    return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out)
 
-def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
-              verbose=None):
+def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
     '''Mask to indicate whether a shell is zero on particular grid
 
     Args:
@@ -92,8 +93,10 @@ def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
     Kwargs:
         relativity : bool
             No effects.
-        bastart, bascount : int
-            If given, only part of AOs (bastart <= shell_id < bastart+bascount) are evaluated.
+        shls_slice : 2-element list
+            (shl_start, shl_end).
+            If given, only part of AOs (shl_start <= shell_id < shl_end) are
+            evaluated.  By default, all shells defined in mol will be evaluated.
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
@@ -108,10 +111,11 @@ def make_mask(mol, coords, relativity=0, bastart=0, bascount=None,
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)
-    if bascount is None:
-        bascount = mol.nbas - bastart
+    if shls_slice is None:
+        shls_slice = (0, mol.nbas)
+    assert(shls_slice == (0, mol.nbas))
 
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,bascount),
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
                           dtype=numpy.int8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
@@ -1033,15 +1037,16 @@ def cache_xc_kernel_(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def large_rho_indices(mol, dm, ni, grids, cutoff=1e-12, max_memory=2000):
+def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
     '''Indices of density which are larger than given cutoff
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
     idx = []
+    cutoff = cutoff / grids.weights.size
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, max_memory, ni.non0tab):
         rho = make_rho(0, ao, mask, 'LDA')
-        idx.append(rho > cutoff)
+        idx.append(abs(rho*weight) > cutoff)
     return numpy.hstack(idx)
 
 
@@ -1093,16 +1098,18 @@ class _NumInt(object):
     cache_xc_kernel_ = cache_xc_kernel_
     cache_xc_kernel  = cache_xc_kernel_
 
+    large_rho_indices = large_rho_indices
+
     @pyscf.lib.with_doc(eval_ao.__doc__)
-    def eval_ao(self, mol, coords, deriv=0, relativity=0, bastart=0,
-                bascount=None, non0tab=None, out=None, verbose=None):
-        return eval_ao(mol, coords, deriv, relativity, bastart, bascount,
+    def eval_ao(self, mol, coords, deriv=0, relativity=0, shls_slice=None,
+                non0tab=None, out=None, verbose=None):
+        return eval_ao(mol, coords, deriv, relativity, shls_slice,
                        non0tab, out, verbose)
 
     @pyscf.lib.with_doc(make_mask.__doc__)
-    def make_mask(self, mol, coords, relativity=0, bastart=0, bascount=None,
+    def make_mask(self, mol, coords, relativity=0, shls_slice=None,
                   verbose=None):
-        return make_mask(mol, coords, relativity, bastart, bascount, verbose)
+        return make_mask(mol, coords, relativity, shls_slice, verbose)
 
     @pyscf.lib.with_doc(eval_rho2.__doc__)
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
@@ -1133,7 +1140,7 @@ class _NumInt(object):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao = self.eval_ao(mol, coords, deriv, non0tab=non0, out=buf)
+            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0, out=buf)
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=1):

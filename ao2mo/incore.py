@@ -138,7 +138,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
         nkl_pair = nmok*nmol
         mokl = numpy.array(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), \
                            order='F', copy=False)
-        klshape = (0, nmok, nmok, nmol)
+        klshape = (0, nmok, nmok, nmok+nmol)
 
     if nij_pair == 0 or nkl_pair == 0:
         # 0 dimension sometimes causes blas problem

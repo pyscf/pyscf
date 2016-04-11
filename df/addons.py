@@ -33,7 +33,7 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Kr'):
         else:
             conf = lib.parameters.ELEMENTS[nuc_charge][2]
             max_shells = 4 - conf.count(0)
-            emin_by_l = [1e3] * 8
+            emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
             for b in mol._basis[symb]:
                 l = b[0]
@@ -61,8 +61,8 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Kr'):
             emax_by_l = numpy.array(emax_by_l) / (numpy.arange(l_max*2-1)*.5+1)
 
             ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
-            etb = [(l, n, emin_by_l[l], beta)
-                   for l, n in enumerate(ns.astype(int)) if n > 0]
+            etb = [(l, max(n,1), emin_by_l[l], beta)
+                   for l, n in enumerate(ns.astype(int))]
             newbasis[symb] = gto.expand_etbs(etb)
 
     return newbasis

@@ -141,9 +141,9 @@ class KnowValues(unittest.TestCase):
         mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
         mf.kernel()
 
-        mc = mcscf.DFCASSCF(mf, 8, 8)
+        mc = mcscf.DFCASSCF(mf, 6, 6)
         mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -108.98924594072399, 7)
+        self.assertAlmostEqual(mc.e_tot, -108.98010545803884, 7)
 
 
 if __name__ == "__main__":

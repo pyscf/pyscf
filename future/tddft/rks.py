@@ -29,8 +29,8 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
     mol = td.mol
     grids = mf.grids
 
-    ni = copy.copy(mf._numint)
     if USE_XCFUN:
+        ni = copy.copy(mf._numint)
         try:
             ni.libxc = dft.xcfun
             xctype = ni._xc_type(xc_code)
@@ -38,6 +38,7 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
             ni.libxc = dft.libxc
             xctype = ni._xc_type(xc_code)
     else:
+        ni = mf._numint
         xctype = ni._xc_type(xc_code)
 
     mo_coeff = mf.mo_coeff
@@ -93,6 +94,8 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
                 fgg = uu_uu - uu_dd
                 frhogamma = u_uu - u_dd
 
+            ngrid = weight.size
+            wv = numpy.empty((4,ngrid))
             for i, dm in enumerate(dmvo):
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
@@ -101,8 +104,6 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
                 # *2 for alpha + beta
                 sigma1 = numpy.einsum('xi,xi->i', rho[1:], rho1[1:]) * 2
 
-                ngrid = weight.size
-                wv = numpy.empty((4,ngrid))
                 wv[0 ]  = frho * rho1[0]
                 wv[0 ] += frhogamma * sigma1
                 wv[1:]  = (fgg * sigma1 + frhogamma * rho1[0]) * rho[1:]
@@ -155,7 +156,7 @@ class TDA(rhf.TDA):
                 vj = self._scf.get_j(self.mol, dmvo, hermi=1)
                 v1ao += vj * 2
 
-        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(zs):
@@ -208,7 +209,7 @@ class TDDFT(rhf.TDHF):
         veff[:nz] += v1xc
         veff[nz:] += v1xc
 
-        veff = _ao2mo.nr_e2_(veff, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        veff = _ao2mo.nr_e2_(veff, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(xys):
@@ -249,7 +250,7 @@ class TDDFTNoHybrid(TDA):
             vj = self._scf.get_j(mol, dmvo, hermi=1)
             v1ao += vj * 2
 
-        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nvir,0,nocc)).reshape(-1,nvir*nocc)
+        v1vo = _ao2mo.nr_e2_(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         edai = eai.ravel() * dai
         for i, z in enumerate(zs):
             # numpy.sqrt(eai) * (eai*dai*z + v1vo)

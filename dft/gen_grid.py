@@ -210,7 +210,7 @@ def original_becke(g):
     return g1
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
-                     level=3, prune=nwchem_prune, atomic_radii=None):
+                     level=3, prune=nwchem_prune):
     '''Generate number of radial grids and angular grids for the given molecule.
 
     Returns:
@@ -241,10 +241,7 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             # rad_weight *= atomic_scale
 
             if callable(prune):
-                if atomic_radii is None:
-                    angs = prune(chg, rad, n_ang)
-                else:
-                    angs = prune(chg, rad, n_ang, atomic_radii)
+                angs = prune(chg, rad, n_ang)
             else:
                 angs = [n_ang] * n_rad
             pyscf.lib.logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
@@ -277,8 +274,10 @@ def gen_partition(mol, atom_grids_tab,
         grid_coord and grid_weight arrays.  grid_coord array has shape (N,3);
         weight 1D array has N elements.
     '''
-    if radii_adjust is not None:
-        atomic_radii_adjust = radii_adjust(mol, atomic_radii)
+    if radii_adjust is not None and atomic_radii is not None:
+        f_radii_adjust = radii_adjust(mol, atomic_radii)
+    else:
+        f_radii_adjust = None
     atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
     atm_dist = radi._inter_distance(mol)
     def gen_grid_partition(coords):
@@ -291,8 +290,8 @@ def gen_partition(mol, atom_grids_tab,
         for i in range(mol.natm):
             for j in range(i):
                 g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
-                if radii_adjust is not None:
-                    g = atomic_radii_adjust(i, j, g)
+                if f_radii_adjust is not None:
+                    g = f_radii_adjust(i, j, g)
                 g = becke_scheme(g)
                 pbecke[i] *= .5 * (1-g)
                 pbecke[j] *= .5 * (1+g)
@@ -316,36 +315,38 @@ class Grids(pyscf.lib.StreamObject):
     '''DFT mesh grids
 
     Attributes for Grids:
-        level : int (0 - 6)
+        level : int (0 - 9)
             big number for large mesh grids, default is 3
 
         atomic_radii : 1D array
-            Default is radi.BRAGG_RADII
+            | radi.BRAGG_RADII  (default)
+            | radi.COVALENT_RADII
+            | None : to switch off atomic radii adjustment
 
-        radii_adjust : function or None
+        radii_adjust : function(mol, atomic_radii) => (function(atom_id, atom_id, g) => array_like_g)
             Function to adjust atomic radii, can be one of
             | radi.treutler_atomic_radii_adjust
             | radi.becke_atomic_radii_adjust
-            | None,          to switch off atomic radii adjustment
+            | None : to switch off atomic radii adjustment
 
         radi_method : function(n) => (rad_grids, rad_weights)
             scheme for radial grids, can be one of
-            | radi.treutler
+            | radi.treutler  (default)
             | radi.delley
             | radi.mura_knowles
             | radi.gauss_chebyshev
 
         becke_scheme : function(v) => array_like_v
             weight partition function, can be one of
+            | gen_grid.original_becke  (default)
             | gen_grid.stratmann
-            | gen_grid.original_becke
 
         prune : function(nuc, rad_grids, n_ang) => list_n_ang_for_each_rad_grid
             scheme to reduce number of grids, can be one of
+            | gen_grid.nwchem_prune  (default)
             | gen_grid.sg1_prune
-            | gen_grid.nwchem_prune
             | gen_grid.treutler_prune
-            | None  (to switch off grid pruning)
+            | None : to switch off grid pruning
 
         symmetry : bool
             whether to symmetrize mesh grids (TODO)
@@ -401,7 +402,8 @@ class Grids(pyscf.lib.StreamObject):
         logger.info(self, 'symmetrized grids: %d', self.symmetry)
         if self.radii_adjust is not None:
             logger.info(self, 'atomic radii adjust function: %s',
-                        self.radii_adjust.__doc__)
+                        self.radii_adjust)
+            logger.debug2(self, 'atomic_radii : %s', self.atomic_radii)
         if self.atom_grid:
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
@@ -412,10 +414,9 @@ class Grids(pyscf.lib.StreamObject):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        atom_grids_tab = self.gen_atomic_grids(mol, atom_grid=self.atom_grid,
-                                               radi_method=self.radi_method,
-                                               level=self.level,
-                                               prune=self.prune)
+        atom_grids_tab = self.gen_atomic_grids(mol, self.atom_grid,
+                                               self.radi_method,
+                                               self.level, self.prune)
         self.coords, self.weights = \
                 self.gen_partition(mol, atom_grids_tab,
                                    self.radii_adjust, self.atomic_radii,
@@ -431,14 +432,13 @@ class Grids(pyscf.lib.StreamObject):
 
     @pyscf.lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
-                         level=None, prune=None, atomic_radii=None):
+                         level=None, prune=None):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = mol.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
-        return gen_atomic_grids(mol, atom_grid, self.radi_method, level,
-                                prune, atomic_radii)
+        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
 
     @pyscf.lib.with_doc(gen_partition.__doc__)
     def gen_partition(self, mol, atom_grids_tab,
@@ -450,6 +450,7 @@ class Grids(pyscf.lib.StreamObject):
 
     @property
     def prune_scheme(self):
+        import sys
         sys.stderr.write('WARN: Attribute .prune_scheme will be removed in PySCF v1.1. '
                          'Please use .prune instead\n')
         return self.prune

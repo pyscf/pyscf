@@ -3,9 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import gto, scf, fci
-
 '''
 Assign spin state for FCI wavefunction.
 
@@ -18,6 +15,9 @@ If spin-contamination is observed on FCI wavefunction, we can use the
 decoration function :func:`fci.addons.fix_spin_` to level shift the energy of
 states which do not have the target spin.
 '''
+
+import numpy
+from pyscf import gto, scf, fci
 
 mol = gto.M(atom='Ne 0 0 0', basis='631g', spin=2)
 m = scf.RHF(mol)

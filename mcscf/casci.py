@@ -363,6 +363,8 @@ class CASCI(pyscf.lib.StreamObject):
             Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
         natorb : bool
             Whether to restore the natural orbital in CAS space.  Default is not.
+        canonicalization : bool
+            Whether to canonicalize orbitals.  Default is True.
         fcisolver : an instance of :class:`FCISolver`
             The pyscf.fci module provides several FCISolver for different scenario.  Generally,
             fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -427,6 +429,7 @@ class CASCI(pyscf.lib.StreamObject):
         self.fcisolver.max_cycle = 50
         self.fcisolver.conv_tol = 1e-8
         self.natorb = False
+        self.canonicalization = True
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -446,6 +449,7 @@ class CASCI(pyscf.lib.StreamObject):
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
         log.info('natorb = %s', self.natorb)
+        log.info('canonicalization = %s', self.canonicalization)
         log.info('max_memory %d (MB)', self.max_memory)
         if self.mo_coeff is None:
             log.warn('Orbital initial guess is not given.\n'
@@ -579,15 +583,6 @@ class CASCI(pyscf.lib.StreamObject):
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
-
-    def sort_mo_by_irrep(self, cas_irrep_nocc,
-                         cas_irrep_ncore=None, mo_coeff=None, s=None):
-        '''Select active space based on symmetry information.
-        See also :func:`pyscf.mcscf.addons.sort_mo_by_irrep`
-        '''
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
-                                       cas_irrep_ncore, s)
 
     @pyscf.lib.with_doc(addons.state_average.__doc__)
     def state_average_(self, weights=(0.5,0.5)):

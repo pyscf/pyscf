@@ -49,8 +49,21 @@ def density_fit(mf, auxbasis='weigend+etb'):
     -100.005306000435510
     '''
 
-    import pyscf.scf
-    class DFHF(mf.__class__):
+    from pyscf.scf import dhf
+    mf_class = mf.__class__
+    if mf_class.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf_class.__doc__
+    class DFHF(mf_class):
+        __doc__ = doc + \
+        '''
+        Attributes for density-fitting SCF:
+            auxbasis : str or basis dict
+                Same format to the input attribute mol.basis.
+                The default basis 'weigend+etb' means weigend-coulomb-fit basis
+                for light elements and even-tempered basis for heavy elements.
+        '''
         def __init__(self):
             self.__dict__.update(mf.__dict__)
             self.auxbasis = auxbasis
@@ -61,28 +74,37 @@ def density_fit(mf, auxbasis='weigend+etb'):
             self._keys = self._keys.union(['auxbasis'])
 
         def get_jk(self, mol=None, dm=None, hermi=1):
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            if isinstance(self, pyscf.scf.dhf.UHF):
-                return r_get_jk_(self, mol, dm, hermi)
+            if self._tag_df:
+                if mol is None: mol = self.mol
+                if dm is None: dm = self.make_rdm1()
+                if isinstance(self, dhf.UHF):
+                    return r_get_jk_(self, mol, dm, hermi)
+                else:
+                    return get_jk_(self, mol, dm, hermi)
             else:
-                return get_jk_(self, mol, dm, hermi)
+                return mf_class.get_jk(self, mol, dm, hermi)
 
         def get_j(self, mol=None, dm=None, hermi=1):
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            if isinstance(self, pyscf.scf.dhf.UHF):
-                return r_get_jk_(self, mol, dm, hermi)[0]
+            if self._tag_df:
+                if mol is None: mol = self.mol
+                if dm is None: dm = self.make_rdm1()
+                if isinstance(self, dhf.UHF):
+                    return r_get_jk_(self, mol, dm, hermi)[0]
+                else:
+                    return get_jk_(self, mol, dm, hermi, with_k=False)[0]
             else:
-                return get_jk_(self, mol, dm, hermi, with_k=False)[0]
+                return mf_class.get_j(self, mol, dm, hermi)
 
         def get_k(self, mol=None, dm=None, hermi=1):
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            if isinstance(self, pyscf.scf.dhf.UHF):
-                return r_get_jk_(self, mol, dm, hermi)[1]
+            if self._tag_df:
+                if mol is None: mol = self.mol
+                if dm is None: dm = self.make_rdm1()
+                if isinstance(self, dhf.UHF):
+                    return r_get_jk_(self, mol, dm, hermi)[1]
+                else:
+                    return get_jk_(self, mol, dm, hermi, with_j=False)[1]
             else:
-                return get_jk_(self, mol, dm, hermi, with_j=False)[1]
+                return mf_class.get_k(self, mol, dm, hermi)
 
     return DFHF()
 

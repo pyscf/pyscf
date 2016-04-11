@@ -457,7 +457,10 @@ def make_rdm1(mo_coeff, mo_occ):
 ################################################
 def dot_eri_dm(eri, dm, hermi=0):
     '''Compute J, K matrices in terms of the given 2-electron integrals and
-    density matrix
+    density matrix:
+
+    J ~ numpy.einsum('pqrs,qp->rs', eri, dm)
+    K ~ numpy.einsum('pqrs,qr->ps', eri, dm)
 
     Args:
         eri : ndarray
@@ -633,6 +636,46 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
 
+def get_occ(mf, mo_energy=None, mo_coeff=None):
+    '''Label the occupancies for each orbital
+
+    Kwargs:
+        mo_energy : 1D ndarray
+            Obital energies
+
+        mo_coeff : 2D ndarray
+            Obital coefficients
+
+    Examples:
+
+    >>> from pyscf import gto, scf
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
+    >>> mf = scf.hf.SCF(mol)
+    >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
+    >>> mf.get_occ(energy)
+    array([2, 2, 0, 2, 2, 2])
+    '''
+    if mo_energy is None: mo_energy = mf.mo_energy
+    e_idx = numpy.argsort(mo_energy)
+    e_sort = mo_energy[e_idx]
+    nmo = mo_energy.size
+    mo_occ = numpy.zeros(nmo)
+    nocc = mf.mol.nelectron // 2
+    mo_occ[e_idx[:nocc]] = 2
+    if mf.verbose >= logger.INFO and nocc < nmo:
+        if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
+            logger.warn(mf, '!! HOMO %.15g == LUMO %.15g',
+                        e_sort[nocc-1], e_sort[nocc])
+        else:
+            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
+                        e_sort[nocc-1], e_sort[nocc])
+
+    if mf.verbose >= logger.DEBUG:
+        numpy.set_printoptions(threshold=nmo)
+        logger.debug(mf, '  mo_energy =\n%s', mo_energy)
+        numpy.set_printoptions(threshold=1000)
+    return mo_occ
+
 def get_grad(mo_coeff, mo_occ, fock_ao):
     '''RHF Gradients
 
@@ -669,13 +712,8 @@ def analyze(mf, verbose=logger.DEBUG):
         log = logger.Logger(mf.stdout, verbose)
 
     log.note('**** MO energy ****')
-    for i in range(len(mo_energy)):
-        if mo_occ[i] > 0:
-            log.note('occupied MO #%d energy= %.15g occ= %g',
-                     i+1, mo_energy[i], mo_occ[i])
-        else:
-            log.note('virtual MO #%d energy= %.15g occ= %g',
-                     i+1, mo_energy[i], mo_occ[i])
+    for i,c in enumerate(mo_occ):
+        log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients **')
         label = mf.mol.spheric_labels(True)
@@ -775,6 +813,27 @@ def eig(h, s):
     idx = numpy.argmax(abs(c.real), axis=0)
     c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
     return e, c
+
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the Fock matrix within occupied, open,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    coreidx = mo_occ == 2
+    viridx = mo_occ == 0
+    openidx = ~(coreidx | viridx)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.size)
+    for idx in (coreidx, openidx, viridx):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+            mo_e[idx] = e
+    return mo_e, mo
 
 
 ############
@@ -923,7 +982,7 @@ class SCF(pyscf.lib.StreamObject):
         logger.info(self, 'method = %s', self.__class__.__name__)
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
-        logger.info(self, 'level shift factor = %g', self.level_shift)
+        logger.info(self, 'level shift factor = %s', self.level_shift)
         logger.info(self, 'Do DIIS = %s', self.diis)
         logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
         logger.info(self, 'DIIS space = %d', self.diis_space)
@@ -960,6 +1019,8 @@ class SCF(pyscf.lib.StreamObject):
         return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
                               diis_start_cycle, level_shift_factor, damp_factor)
     get_fock_ = get_fock_
+
+    get_occ = get_occ
 
     @pyscf.lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
@@ -1029,45 +1090,6 @@ class SCF(pyscf.lib.StreamObject):
             logger.debug1(self, 'Nelec from initial guess = %g',
                           (dm*self.get_ovlp()).sum())
         return dm
-
-    def get_occ(self, mo_energy=None, mo_coeff=None):
-        '''Label the occupancies for each orbital
-
-        Kwargs:
-            mo_energy : 1D ndarray
-                Obital energies
-
-            mo_coeff : 2D ndarray
-                Obital coefficients
-
-        Examples:
-
-        >>> from pyscf import gto, scf
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1.1')
-        >>> mf = scf.hf.SCF(mol)
-        >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
-        >>> mf.get_occ(energy)
-        array([2, 2, 0, 2, 2, 2])
-        '''
-        if mo_energy is None: mo_energy = self.mo_energy
-        e_idx = numpy.argsort(mo_energy)
-        e_sort = mo_energy[e_idx]
-        mo_occ = numpy.zeros_like(mo_energy)
-        nocc = self.mol.nelectron // 2
-        mo_occ[e_idx[:nocc]] = 2
-        if nocc < mo_occ.size:
-            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
-                        e_sort[nocc-1], e_sort[nocc])
-            if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
-                logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
-                            e_sort[nocc-1], e_sort[nocc])
-        else:
-            logger.info(self, 'HOMO = %.12g', e_sort[nocc-1])
-        if self.verbose >= logger.DEBUG:
-            numpy.set_printoptions(threshold=len(mo_energy))
-            logger.debug(self, '  mo_energy = %s', mo_energy)
-            numpy.set_printoptions(threshold=1000)
-        return mo_occ
 
     # full density matrix for RHF
     @pyscf.lib.with_doc(make_rdm1.__doc__)
@@ -1192,6 +1214,8 @@ class SCF(pyscf.lib.StreamObject):
         return self.mulliken_meta(*args, **kwargs)
     pop.__doc__ = mulliken_meta.__doc__
 
+    canonicalize = canonicalize
+
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
@@ -1214,29 +1238,34 @@ class SCF(pyscf.lib.StreamObject):
     @property
     def hf_energy(self):
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
-                         'Please use .e_tot instead\n')
+                         'It is replaced by attribute .e_tot\n')
         return self.e_tot
+    @hf_energy.setter
+    def hf_energy(self, x):
+        sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
+                         'It is replaced by attribute .e_tot\n')
+        self.level_shift = x
 
     @property
     def level_shift_factor(self):
         sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
-                         'Please use .level_shift instead\n')
+                         'It is replaced by attribute .level_shift\n')
         return self.level_shift
     @level_shift_factor.setter
     def level_shift_factor(self, x):
         sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
-                         'Please use .level_shift instead\n')
+                         'It is replaced by attribute .level_shift\n')
         self.level_shift = x
 
     @property
     def damp_factor(self):
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
-                         'Please use .damp instead\n')
+                         'It is replaced by attribute .damp\n')
         return self.damp
     @damp_factor.setter
     def damp_factor(self, x):
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
-                         'Please use .damp instead\n')
+                         'It is replaced by attribute .damp\n')
         self.damp = x
 
 

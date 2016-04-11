@@ -151,7 +151,7 @@ class KnowValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.kernel()
         nr = scf.newton(mf)
-        nr.max_cycle = 2
+        nr.max_cycle = 3
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
@@ -264,29 +264,66 @@ class KnowValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.kernel()
         nr = scf.newton(mf)
-        nr.max_cycle = 2
+        nr.max_cycle = 3
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
-    def test_nr_fast_newton(self):
+    def test_nr_uks_fast_newton(self):
         mol = gto.M(
             verbose = 5,
             output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
+            atom = '''C 0 0 0
+            H  1  1  1
+            H -1 -1  1
+            H -1  1 -1
+            H  1 -1 -1''',
             basis = '6-31g',
             charge = 1,
             spin = 1,
+            symmetry = 1,
         )
         mf = dft.UKS(mol)
         mf.xc = 'b3lyp'
         mf1 = scf.fast_newton(mf)
-        self.assertAlmostEqual(mf1.e_tot, -75.893911947815042, 9)
+        self.assertAlmostEqual(mf1.e_tot, -39.69608384046235, 9)
 
-        mf1 = scf.fast_newton(dft.UKS(mol), dm0=mf.make_rdm1())
-        self.assertAlmostEqual(mf1.e_tot, -75.351012848127667, 9)
+        mf1 = scf.fast_newton(dft.UKS(mol))
+        self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 9)
+
+    def test_nr_rks_fast_newton(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''C 0 0 0
+            H  1  1  1
+            H -1 -1  1
+            H -1  1 -1
+            H  1 -1 -1''',
+            basis = '6-31g',
+            symmetry = 1,
+        )
+        mf = dft.RKS(mol)
+        mf.xc = 'b3lyp'
+        mf1 = scf.fast_newton(mf)
+        self.assertAlmostEqual(mf1.e_tot, -40.10277421254213, 9)
+
+    def test_nr_rohf_fast_newton(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''C 0 0 0
+            H  1  1  1
+            H -1 -1  1
+            H -1  1 -1
+            H  1 -1 -1''',
+            basis = '6-31g',
+            charge = 1,
+            spin = 1,
+            symmetry = 1,
+        )
+        mf = scf.ROHF(mol)
+        mf1 = scf.fast_newton(mf)
+        self.assertAlmostEqual(mf1.e_tot, -39.365972147397649, 9)
 
     def test_uks_gen_g_hop(self):
         mol = gto.M(

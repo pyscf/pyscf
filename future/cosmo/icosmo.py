@@ -440,9 +440,9 @@ def _make_fakemol(coords):
     nbas = coords.shape[0]
     fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = []
-    ptr = 0
-    fakeatm[:,gto.PTR_COORD] = numpy.arange(0, nbas*3, 3)
+    fakeenv = [0] * gto.PTR_ENV_START
+    ptr = gto.PTR_ENV_START
+    fakeatm[:,gto.PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
     fakeenv.append(coords.ravel())
     ptr += nbas*3
     fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
@@ -562,16 +562,9 @@ def cosmo_for_mcscf(mc, cosmo):
             cosmo._v = v1
             return self._scf.get_hcore(mol) + v1
 
-        def casci(self, mo_coeff, ci0=None, eris=None):
-            if eris is None:
-                import copy
-                fcasci = copy.copy(self)
-                fcasci.ao2mo = self.get_h2cas
-            else:
-                fcasci = mcscf.mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
-            log = lib.logger.Logger(self.stdout, self.verbose)
-            e_tot, e_cas, fcivec = mcscf.casci.kernel(fcasci, mo_coeff,
-                                                      ci0=ci0, verbose=log)
+        def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
+            e_tot, e_cas, fcivec = oldCAS.casci(self, mo_coeff, ci0, eris,
+                                                verbose, envs)
 
             if self.fcisolver.nroots > 1 and cosmo.casci_state_id is not None:
                 c = fcivec[cosmo.casci_state_id]
@@ -612,7 +605,7 @@ def cosmo_for_casci(mc, cosmo):
                 if cosmo._dm_guess is None:  # Initial guess
                     na = self.ncore + self.nelecas[0]
                     nb = self.ncore + self.nelecas[1]
-                    log.Initial('Initial DM: na,nb,nelec=',na,nb,na+nb)
+                    #log.Initial('Initial DM: na,nb,nelec=',na,nb,na+nb)
                     dm =(numpy.dot(self.mo_coeff[:,:na], self.mo_coeff[:,:na].T)
                        + numpy.dot(self.mo_coeff[:,:nb], self.mo_coeff[:,:nb].T))
                 else:

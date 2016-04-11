@@ -3,12 +3,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import gto, scf, mcscf
-
 '''
 A simple example to run CASSCF calculation.
 '''
+
+import numpy
+from pyscf import gto, scf, mcscf
 
 mol = gto.M(
     atom = 'O 0 0 0; O 0 0 1.2',
