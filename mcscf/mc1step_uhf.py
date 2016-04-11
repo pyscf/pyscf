@@ -387,7 +387,6 @@ class CASSCF(casci_uhf.CASCI):
         log.info('augmented hessian start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
-        log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
         #log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)

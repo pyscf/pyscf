@@ -24,19 +24,19 @@ def nr_auxe2(intor, basrange, atm, bas, env,
     env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(len(atm))
     nbas = ctypes.c_int(len(bas))
-    i0, ic, j0, jc, k0, kc = basrange
+    i0, i1, j0, j1, k0, k1 = basrange
     if 'ssc' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, bas)
-        if jloc is None: jloc = make_loc(j0, jc, bas)
-        if kloc is None: kloc = make_loc(k0, kc, bas, True)
+        if iloc is None: iloc = make_loc(i0, i1, bas)
+        if jloc is None: jloc = make_loc(j0, j1, bas)
+        if kloc is None: kloc = make_loc(k0, k1, bas, True)
     elif 'cart' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, bas, True)
-        if jloc is None: jloc = make_loc(j0, jc, bas, True)
-        if kloc is None: kloc = make_loc(k0, kc, bas, True)
+        if iloc is None: iloc = make_loc(i0, i1, bas, True)
+        if jloc is None: jloc = make_loc(j0, j1, bas, True)
+        if kloc is None: kloc = make_loc(k0, k1, bas, True)
     else:
-        if iloc is None: iloc = make_loc(i0, ic, bas)
-        if jloc is None: jloc = make_loc(j0, jc, bas)
-        if kloc is None: kloc = make_loc(k0, kc, bas)
+        if iloc is None: iloc = make_loc(i0, i1, bas)
+        if jloc is None: jloc = make_loc(j0, j1, bas)
+        if kloc is None: kloc = make_loc(k0, k1, bas)
     if naoi is None:
         naoi = iloc[-1] - iloc[0]
     if naoj is None:
@@ -69,7 +69,7 @@ def nr_auxe2(intor, basrange, atm, bas, env,
                               out.ctypes.data_as(ctypes.c_void_p),
                               ctypes.c_size_t(ijkoff),
                               ctypes.c_int(naoj), ctypes.c_int(naoaux),
-                              basrange.ctypes.data_as(ctypes.c_void_p),
+                              (ctypes.c_int*6)(i0,i1-i0,j0,j1-j0,k0,k1-k0),
                               iloc.ctypes.data_as(ctypes.c_void_p),
                               jloc.ctypes.data_as(ctypes.c_void_p),
                               kloc.ctypes.data_as(ctypes.c_void_p),
@@ -86,13 +86,13 @@ def totcart(bas):
             bas[:,gto.NCTR_OF]).sum()
 def totspheric(bas):
     return ((bas[:,gto.ANG_OF]*2+1) * bas[:,gto.NCTR_OF]).sum()
-def make_loc(shl0, shlc, bas, cart=False):
-    l = bas[shl0:shl0+shlc,gto.ANG_OF]
+def make_loc(shl0, shl1, bas, cart=False):
+    l = bas[shl0:shl1,gto.ANG_OF]
     if cart:
-        dims = (l+1)*(l+2)//2 * bas[shl0:shl0+shlc,gto.NCTR_OF]
+        dims = (l+1)*(l+2)//2 * bas[shl0:shl1,gto.NCTR_OF]
     else:
-        dims = (l*2+1) * bas[shl0:shl0+shlc,gto.NCTR_OF]
-    loc = numpy.empty(shlc+1, dtype=numpy.int32)
+        dims = (l*2+1) * bas[shl0:shl1,gto.NCTR_OF]
+    loc = numpy.empty(shl1-shl0+1, dtype=numpy.int32)
     loc[0] = 0
     dims.cumsum(dtype=numpy.int32, out=loc[1:])
     return loc

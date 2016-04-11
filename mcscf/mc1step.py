@@ -413,11 +413,8 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         log.debug3('H eigs %s', scipy.linalg.eigh(heff[1:,1:])[0])
         numpy.set_printoptions(8, linewidth=75)
 
-    idx = numpy.where(abs(v[0]) > 0.7)[0]
-    if len(idx) == 0:
-        sel = numpy.argsort(abs(v[0]))[-1]
-    else:
-        sel = idx[0]
+    idx = numpy.where(abs(v[0]) > 0.1)[0]
+    sel = idx[0]
 
     if w[sel] < -1e-5:
         log.debug1('AH might follow negative hessians %s', w[:sel])
@@ -1005,13 +1002,12 @@ class CASSCF(casci.CASCI):
         ### hessian_co part end ###
 
         ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_ci)
-        if g is not None:
-            norm_dci = min(numpy.linalg.norm(ci1-fcivec.ravel()),
-                           numpy.linalg.norm(ci1+fcivec.ravel()))
+        if g is not None:  # So state average CI, DMRG etc will not be applied
+            ovlp = numpy.dot(fcivec.ravel(), ci1.ravel())
             norm_g = numpy.linalg.norm(g)
-            if norm_dci > norm_g*self.ci_grad_trust_region:
-                logger.debug(self, '|ci1-ci0|=%5.3g |g|=%5.3g, ci1 out of trust region',
-                             norm_dci, norm_g)
+            if 1-abs(ovlp) > norm_g * self.ci_grad_trust_region:
+                logger.debug(self, '<ci1|ci0>=%5.3g |g|=%5.3g, ci1 out of trust region',
+                             ovlp, norm_g)
                 ci1 = fcivec.ravel() + g
                 ci1 *= 1/numpy.linalg.norm(ci1)
         casdm1, casdm2 = self.fcisolver.make_rdm12(ci1, ncas, nelecas)
@@ -1033,7 +1029,7 @@ class CASSCF(casci.CASCI):
         hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
         g = hc - (e_ci-ecore) * ci0.ravel()
-        if self.ci_response_space > 6:
+        if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0)

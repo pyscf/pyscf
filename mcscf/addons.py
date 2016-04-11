@@ -648,8 +648,7 @@ def hot_tuning_(casscf, configfile=None):
     for k, v in casscf.__dict__.items():
         if not (k.startswith('_') or k in exclude_keys):
             if (v is None or
-                isinstance(v, (basestring, bool, int, long, float,
-                               list, tuple, dict))):
+                isinstance(v, (str, bool, int, float, list, tuple, dict))):
                 casscf_settings[k] = v
             elif isinstance(v, set):
                 casscf_settings[k] = list(v)

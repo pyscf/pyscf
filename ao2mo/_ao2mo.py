@@ -282,7 +282,7 @@ def r_e2_(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
-    k0, k1, l0, l1 = shape
+    k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
     lc = l1 - l0
     kl_count = kc * lc

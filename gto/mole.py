@@ -18,7 +18,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
-from pyscf.gto import eval_gto
+from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
 
@@ -698,7 +698,7 @@ def dumps(mol):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (basestring, bool, int, long, float))):
+                    isinstance(v, (str, bool, int, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -2132,11 +2132,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    @pyscf.lib.with_doc(eval_gto.eval_gto.__doc__)
+    @pyscf.lib.with_doc(eval_gto.__doc__)
     def eval_gto(self, eval_name, coords,
                  comp=1, shls_slice=None, non0tab=None, out=None):
-        return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
-                                 coords, comp, shls_slice, non0tab, out)
+        return eval_gto(eval_name, self._atm, self._bas, self._env,
+                        coords, comp, shls_slice, non0tab, out)
 
     def energy_nuc(self):
         return energy_nuc(self)
