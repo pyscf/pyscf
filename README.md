@@ -3,9 +3,9 @@ PySCF
 
 Python module for quantum chemistry
 
-2016-03-08
+2016-04-11
 
-* [Release 1.1 alpha-2](../../releases/latest)
+* [Release 1.1 beta](../../releases/latest)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
@@ -48,7 +48,7 @@ Installation
 
 * Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
   interfaces avaialbe in pyscf.
-      Block (https://github.com/sanshar/Block)
+      Block (http://chemists.princeton.edu/chan/software/block-code-for-dmrg)
       CheMPS2 (https://github.com/SebWouters/CheMPS2)
   After installing the DMRG solver, create a file future/dmrgscf/settings.py
   to store the path where the DMRG solver was installed.
