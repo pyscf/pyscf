@@ -436,9 +436,8 @@ def intor_cross(intor, mol1, mol2, comp=1):
     nbas2 = len(mol2._bas)
     atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env,
                                 mol2._atm, mol2._bas, mol2._env)
-    bras = range(nbas1)
-    kets = range(nbas1, nbas1+nbas2)
-    return moleintor.getints(intor, atmc, basc, envc, bras, kets, comp, 0)
+    shls_slice = (0, nbas1, nbas1, nbas1+nbas2)
+    return moleintor.getints(intor, atmc, basc, envc, shls_slice, comp, 0)
 
 # append (charge, pointer to coordinates, nuc_mod) to _atm
 def make_atm_env(atom, ptr=0):
@@ -1981,7 +1980,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
-              bras=None, kets=None):
+              shls_slice=None):
         '''Integral generator.
 
         Args:
@@ -2023,12 +2022,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             bas = numpy.vstack((self._bas, self._ecpbas))
             self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
             self._env[PTR_NECPBAS] = len(self._ecpbas)
-            if bras is None: bras = numpy.arange(self.nbas, dtype=numpy.int32)
-            if kets is None: kets = numpy.arange(self.nbas, dtype=numpy.int32)
         else:
             bas = self._bas
         return moleintor.getints(intor, self._atm, bas, self._env,
-                                 bras=bras, kets=kets, comp=comp, hermi=hermi,
+                                 shls_slice, comp=comp, hermi=hermi,
                                  aosym=aosym, out=out)
 
     def intor_symmetric(self, intor, comp=1):
@@ -2082,43 +2079,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
         return self.intor(intor, comp, 2, aosym='a4')
-
-    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', out=None):
-        r'''Cross 1-electron integrals like
-
-        .. math::
-
-            \langle \mu | intor | \nu \rangle, \mu \in bras, \nu \in kets
-
-        Args:
-            intor : str
-                Name of the 1-electron integral.  Ref to :func:`getints` for the
-                full list of available 1-electron integral names
-            bras : list of int
-                A list of shell ids for bra
-            kets : list of int
-                A list of shell ids for ket
-
-        Kwargs:
-            comp : int
-                Components of the integrals, e.g. cint1e_ipovlp has 3 components
-
-        Returns:
-            ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
-
-        Examples:
-            Compute the overlap between H2 molecule and O atom
-
-        >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-        >>> mol.intor_cross('cint1e_ovlp_sph', range(0,3), range(3,5))
-        [[ 0.04875181  0.04875181]
-         [ 0.44714688  0.44714688]
-         [ 0.          0.        ]
-         [ 0.37820346  0.        ]
-         [ 0.          0.37820346]]
-        '''
-        return self.intor(intor, comp=comp, hermi=0, aosym=aosym, out=out,
-                          bras=bras, kets=kets)
 
     @pyscf.lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=1):

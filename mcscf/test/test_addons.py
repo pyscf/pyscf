@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
+from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import scf
