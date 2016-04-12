@@ -125,6 +125,7 @@ def load_mol(chkfile):
     except:
 # Compatibility to the old serialization format
 # TODO: remove it in future release
+        from numpy import array
         with h5py.File(chkfile, 'r') as fh5:
             mol = pyscf.gto.Mole()
             mol.verbose = 0

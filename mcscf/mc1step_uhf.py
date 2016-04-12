@@ -62,7 +62,7 @@ def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
-    def gorb_update(u):
+    def gorb_update(u, dep4=False):
         r0 = casscf.pack_uniq_var(u)
         return g_orb + h_op(r0)
 
@@ -328,7 +328,7 @@ class CASSCF(casci_uhf.CASCI):
         self.max_stepsize = .03
         self.max_cycle_macro = 50
         self.max_cycle_micro = 4
-        self.max_cycle_micro_inner = 3
+        self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = None
         # for augmented hessian
@@ -339,13 +339,10 @@ class CASSCF(casci_uhf.CASCI):
         self.ah_start_tol = .2
         self.ah_start_cycle = 2
         self.ah_grad_trust_region = 3.
-        self.ah_decay_rate = .8
         self.internal_rotation = False
-        self.keyframe_interval = 4999
-        self.keyframe_interval_rate = 1
-        self.keyframe_trust_region = 0.25e-9
         self.chkfile = mf.chkfile
         self.ci_response_space = 4
+        self.with_dep4 = False
         self.natorb = False
         self.callback = None
         self.chk_ci = False
@@ -390,7 +387,6 @@ class CASSCF(casci_uhf.CASCI):
         log.info('augmented hessian start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
-        log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
         log.info('ci_response_space = %d', self.ci_response_space)
         #log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)

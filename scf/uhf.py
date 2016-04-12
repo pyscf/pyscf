@@ -4,6 +4,7 @@
 import time
 from functools import reduce
 import numpy
+import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import hf
@@ -454,6 +455,34 @@ def map_rhf_to_uhf(rhf):
     uhf.mo_occ    = numpy.array((rhf.mo_occ,rhf.mo_occ))
     return uhf
 
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    mo_occ = numpy.asarray(mo_occ)
+    assert(mo_occ.ndim == 2)
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    occidxa = mo_occ[0] == 1
+    occidxb = mo_occ[1] == 1
+    viridxa = mo_occ[0] == 0
+    viridxb = mo_occ[1] == 0
+    def eig_(fock, mo_coeff, idx, es, cs):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            es[idx] = e
+            cs[:,idx] == numpy.dot(mo_coeff[:,idx], c)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.shape)
+    eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
+    eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
+    eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
+    eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
+    return mo_e, mo
+
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     r''' Calculate the overlap between two different determinants. It is the product
     of single values of molecular orbital overlap matrix.
@@ -672,6 +701,8 @@ class UHF(hf.SCF):
         if s is None:
             s = self.get_ovlp()
         return spin_square(mo_coeff, s)
+
+    canonicalize = canonicalize
 
     @pyscf.lib.with_doc(det_ovlp.__doc__)
     def det_ovlp(self, mo1, mo2, occ1, occ2, ovlp=None):

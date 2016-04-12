@@ -67,9 +67,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr_cross(self):
-        bra = range(mol.nbas//4)
-        ket = range(mol.nbas//4, mol.nbas)
-        s = mol.intor_cross('cint1e_ovlp_sph', bra, ket)
+        s = mol.intor('cint1e_ovlp_sph', shls_slice=(0,mol.nbas//4,mol.nbas//4,mol.nbas))
         self.assertAlmostEqual(finger(s), 99.38188078749701, 11)
 
     def test_intor_r(self):
@@ -141,7 +139,8 @@ class KnowValues(unittest.TestCase):
                          pmol._atm, pmol._bas, pmol._env)
         pmol.natm = len(pmol._atm)
         pmol.nbas = len(pmol._bas)
-        v0 = pmol.intor('cint2e_sph', bras=[pmol.nbas-1], kets=[pmol.nbas-1])
+        shls_slice=[pmol.nbas-1,pmol.nbas,pmol.nbas-1,pmol.nbas]
+        v0 = pmol.intor('cint2e_sph', shls_slice=shls_slice)
         nao = pmol.nao_nr()
         v0 = v0.reshape(nao,nao)[:-1,:-1]
         self.assertTrue(numpy.allclose(v0, v1))

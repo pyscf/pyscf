@@ -203,21 +203,10 @@ def project_mo_nr2r(mol1, mo1, mol2):
     return pyscf.lib.cho_solve(s22, mo2)
 
 def project_mo_r2r(mol1, mo1, mol2):
-    nbas1 = len(mol1._bas)
-    nbas2 = len(mol2._bas)
-    atm, bas, env = mole.conc_env(mol2._atm, mol2._bas, mol2._env,
-                                  mol1._atm, mol1._bas, mol1._env)
-    bras = kets = range(nbas2)
-    s22 = moleintor.getints('cint1e_ovlp', atm, bas, env,
-                            bras, kets, comp=1, hermi=1)
-    t22 = moleintor.getints('cint1e_spsp', atm, bas, env,
-                            bras, kets, comp=1, hermi=1)
-    bras = range(nbas2)
-    kets = range(nbas2, nbas1+nbas2)
-    s21 = moleintor.getints('cint1e_ovlp', atm, bas, env,
-                            bras, kets, comp=1, hermi=0)
-    t21 = moleintor.getints('cint1e_spsp', atm, bas, env,
-                            bras, kets, comp=1, hermi=0)
+    s22 = mol2.intor_symmetric('cint1e_ovlp')
+    t22 = mol2.intor_symmetric('cint1e_spsp')
+    s21 = mole.intor_cross('cint1e_ovlp', mol2, mol1)
+    t21 = mole.intor_cross('cint1e_spsp', mol2, mol1)
     n2c = s21.shape[1]
     pl = pyscf.lib.cho_solve(s22, s21)
     ps = pyscf.lib.cho_solve(t22, t21)
