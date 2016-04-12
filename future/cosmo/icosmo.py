@@ -8,6 +8,7 @@ import os, sys
 import tempfile
 import shutil
 import subprocess
+from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import gto, scf, mcscf

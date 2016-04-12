@@ -368,15 +368,16 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
 
+    # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
-    iroot = 0
-    for addr in numpy.argsort(hdiag):
+    try:
+        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+    except AttributeError:
+        addrs = numpy.argsort(hdiag)[:nroots]
+    for addr in addrs:
         x = numpy.zeros((na*nb))
         x[addr] = 1
         ci0.append(x.ravel())
-        iroot += 1
-        if iroot >= nroots:
-            break
     return ci0
 
 
