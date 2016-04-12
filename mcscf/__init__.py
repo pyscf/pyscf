@@ -244,9 +244,9 @@ def _convert_to_rhf(mf, convert_df=True):
     if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
         mf = copy.copy(mf)
-        mf.mo_energy = mf.mo_energy[0]
-        mf.mo_coeff  = mf.mo_coeff[0]
-        mf.mo_occ    = mf.mo_occ[0]
+        if mf.mo_energy is not None: mf.mo_energy = mf.mo_energy[0]
+        if mf.mo_coeff is not None:  mf.mo_coeff  = mf.mo_coeff[0]
+        if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
 
     # Avoid doing density fitting
     if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
