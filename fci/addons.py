@@ -208,6 +208,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
         neleca, nelecb = nelec
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    assert(ci.shape == (strsa.size,strsb.size))
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
     birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
     for i in range(norb):
@@ -221,6 +222,22 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     return ci1 * (1/numpy.linalg.norm(ci1))
 
 def guess_wfnsym(ci, norb, nelec, orbsym):
+    '''Guess the wavefunction symmetry based on the non-zero elements in the
+    given CI coefficients.
+
+    Args:
+        ci : 2D array
+            CI coefficients, row for alpha strings and column for beta strings.
+        norb : int
+            Number of orbitals.
+        nelec : int or 2-item list
+            Number of electrons, or 2-item list for (alpha, beta) electrons
+        orbsym : list of int
+            The irrep ID for each orbital.
+
+    Returns:
+        Irrep ID
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -229,8 +246,10 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
+        assert(ci.shape == (na,nb))
         idx = numpy.argmax(ci)
     else:
+        assert(ci[0].shape == (na,nb))
         idx = ci[0].argmax()
     stra = cistring.addr2str(norb, neleca, idx // nb)
     strb = cistring.addr2str(norb, nelecb, idx % nb )
@@ -268,6 +287,9 @@ def des_a(ci0, norb, neleca_nelecb, ap_id):
         has different number of rows to the input CI coefficients
     '''
     neleca, nelecb = neleca_nelecb
+    if ci0.ndim == 1:
+        ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
+                          cistring.num_strings(norb, nelecb))
     if neleca <= 0:
         return numpy.zeros((0, ci0.shape[1]))
     des_index = cistring.gen_des_str_index(range(norb), neleca)
@@ -302,6 +324,9 @@ def des_b(ci0, norb, neleca_nelecb, ap_id):
         has different number of columns to the input CI coefficients.
     '''
     neleca, nelecb = neleca_nelecb
+    if ci0.ndim == 1:
+        ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
+                          cistring.num_strings(norb, nelecb))
     if nelecb <= 0:
         return numpy.zeros((ci0.shape[0], 0))
     des_index = cistring.gen_des_str_index(range(norb), nelecb)
@@ -341,6 +366,9 @@ def cre_a(ci0, norb, neleca_nelecb, ap_id):
         has different number of rows to the input CI coefficients.
     '''
     neleca, nelecb = neleca_nelecb
+    if ci0.ndim == 1:
+        ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
+                          cistring.num_strings(norb, nelecb))
     if neleca >= norb:
         return numpy.zeros((0, ci0.shape[1]))
     cre_index = cistring.gen_cre_str_index(range(norb), neleca)
@@ -375,6 +403,9 @@ def cre_b(ci0, norb, neleca_nelecb, ap_id):
         has different number of columns to the input CI coefficients.
     '''
     neleca, nelecb = neleca_nelecb
+    if ci0.ndim == 1:
+        ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
+                          cistring.num_strings(norb, nelecb))
     if nelecb >= norb:
         return numpy.zeros((ci0.shape[0], 0))
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)

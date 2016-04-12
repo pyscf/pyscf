@@ -79,7 +79,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
         link_indexa, link_indexb = link_index
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     eri, link_indexa, dimirrep = reorder4irrep(eri, norb, link_indexa, orbsym)

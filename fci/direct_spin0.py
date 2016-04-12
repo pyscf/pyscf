@@ -37,7 +37,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
             assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na,nlink,_ = link_index.shape
-    ci1 = numpy.empty((na,na))
+    assert(fcivec.size == na**2)
+    ci1 = numpy.empty_like((na,na))
     f1e_tril = pyscf.lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                                 fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -46,7 +47,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
-    return pyscf.lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
 
 # Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
 # h2e = eri_{pq,rs} p^+ q r^+ s
@@ -69,6 +70,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
             assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     na,nlink,_ = link_index.shape
+    assert(fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
 
     libfci.FCIcontract_2e_spin0(eri.ctypes.data_as(ctypes.c_void_p),
@@ -78,7 +80,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
-    return pyscf.lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
 
 absorb_h1e = direct_spin1.absorb_h1e
 
