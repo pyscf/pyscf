@@ -1456,8 +1456,7 @@ class Mole(pyscf.lib.StreamObject):
                     _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
                     _atom = '\n'.join([str(a) for a in _atom])
                     raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                         'It is recommended to use symmetry="%s" with '
-                                         'geometry (unit="Bohr")\n%s' %
+                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
                                          (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \

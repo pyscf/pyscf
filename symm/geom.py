@@ -278,9 +278,9 @@ def symm_identical_atoms(gpname, atoms):
         return eql_atom_ids
 
     center = get_charge_center(atoms)
-    if not numpy.allclose(center, 0, atol=TOLERANCE):
-        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
-                        % str(center))
+#    if not numpy.allclose(center, 0, atol=GEOM_THRESHOLD):
+#        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
+#                        % str(center))
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     coords = numpy.array([a[1] for a in atoms], dtype=float)

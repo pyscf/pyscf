@@ -1,7 +1,7 @@
 lo
 **
 
-.. automodule:: pyscf.future.lo
+.. automodule:: pyscf.lo
  
 
 
