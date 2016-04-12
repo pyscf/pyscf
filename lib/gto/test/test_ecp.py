@@ -132,7 +132,7 @@ def type1_rad_part(lmax, k, aij, ur, rs):
     rad_all = numpy.empty((lmax+1,lmax+1))
     bessel_val = sph_ine(lmax, k*rs)
     ur_base = numpy.exp(k**2/(4*aij)) * ur * numpy.exp(-aij*(rs-k/(2*aij))**2)
-    idx = abs(ur_base) > 1e-40
+    idx = abs(ur_base) > 1e-80
     for lab in range(lmax+1):
         val = ur_base[idx] * rs[idx]**lab
         for l in range(lmax+1):
@@ -200,7 +200,7 @@ def type2_by_shell(mol, shls, ecpatm_id, ecpbas):
         if len(ecpbasi) == 0:
             continue
         ur = rad_part(mol, ecpbasi, rs) * ws
-        idx = abs(ur) > 1e-40
+        idx = abs(ur) > 1e-80
         rur = numpy.array([ur[idx] * rs[idx]**lab for lab in range(li+lj+1)])
 
         fi = facs_rad(mol, ish, lc, r_ca, rs)[:,:,idx].copy()
@@ -474,7 +474,9 @@ class KnowValues(unittest.TestCase):
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                                 mol._env.ctypes.data_as(ctypes.c_void_p))
-            self.assertTrue(numpy.allclose(mat0, mat1))
+            if not numpy.allclose(mat0, mat1, atol=1e-8):
+                print(i, j, numpy.linalg.norm(mat0-mat1))
+            self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type2((i,j))
@@ -546,7 +548,9 @@ class KnowValues(unittest.TestCase):
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                                 mol._env.ctypes.data_as(ctypes.c_void_p))
-            self.assertTrue(numpy.allclose(mat0, mat1))
+            if not numpy.allclose(mat0, mat1, atol=1e-8):
+                print(i, j, numpy.linalg.norm(mat0-mat1))
+            self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type1((i,j))

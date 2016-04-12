@@ -135,12 +135,11 @@ def mm_charge_grad(method, coords, charges):
 
 def _make_fakemol(coords):
     nbas = coords.shape[0]
-    print nbas
     fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = []
-    ptr = 0
-    fakeatm[:,gto.PTR_COORD] = numpy.arange(0, nbas*3, 3)
+    fakeenv = [0] * gto.PTR_ENV_START
+    ptr = gto.PTR_ENV_START
+    fakeatm[:,gto.PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
     fakeenv.append(coords.ravel())
     ptr += nbas*3
     fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
@@ -181,8 +180,8 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel() # ecc = -0.214974249975
     l1, l2 = mycc.solve_lambda()[1:]
 
-    hfg = mm_charge_grad(grad.hf.RHF(mf), coords, charges)
-    g1 = grad.ccsd.kernel(mycc, t1, t2, l1, l2, grad_hf=hfg)
+    hfg = mm_charge_grad(grad.RHF(mf), coords, charges)
+    g1 = grad.ccsd.kernel(mycc, t1, t2, l1, l2, mf_grad=hfg)
     print(g1 + hfg.grad_nuc(mol))
 # [[-1.70176287 -1.8007835  -2.62867229]
 #  [-0.02869778 -0.11235647  0.0073083 ]

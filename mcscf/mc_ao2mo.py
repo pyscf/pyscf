@@ -92,10 +92,10 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
 
     mem_words = int(max(2000,max_memory-papa_buf.nbytes/1e6)*1e6/8)
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
-    shranges = outcore.guess_shell_ranges(mol, aobuflen, aobuflen, 's4')
+    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
+    shranges = outcore.guess_shell_ranges(mol, True, aobuflen, None, ao_loc)
     ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph',
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
-    ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     nstep = len(shranges)
     paapp = 0
     maxbuflen = max([x[2] for x in shranges])
@@ -116,9 +116,9 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
-                  istep+1, nstep, *(sh_range[:3]))
+                  istep+1, nstep, *sh_range)
         buf = bufs1[:sh_range[2]]
-        _ao2mo.nr_e1fill_('cint2e_sph', sh_range[:3],
+        _ao2mo.nr_e1fill_('cint2e_sph', sh_range,
                           mol._atm, mol._bas, mol._env, 's4', 1, ao2mopt, buf)
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)

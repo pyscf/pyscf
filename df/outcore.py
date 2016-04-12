@@ -146,13 +146,13 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
     nbas = ctypes.c_int(mol.nbas)
     if 'ssc' in int3c:
         ao_loc = _ri.make_loc(0, mol.nbas, bas)
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas, True)
+        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas, True)
     elif 'cart' in int3c:
         ao_loc = _ri.make_loc(0, mol.nbas, bas, True)
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas, True)
+        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas, True)
     else:
         ao_loc = _ri.make_loc(0, mol.nbas, bas)
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas)
+        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas)
     nao = ao_loc[-1] - ao_loc[0]
     naoaux = kloc[-1] - kloc[0]
 
@@ -174,7 +174,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
         log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
-        basrange = (bstart, bend-bstart, 0, mol.nbas, mol.nbas, auxmol.nbas)
+        basrange = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
         buf = bufs1[:comp*nrow].reshape(comp,nrow,naoaux)
         if 's1' in aosym:
             ijkoff = ao_loc[bstart] * nao * naoaux
@@ -312,18 +312,14 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def _guess_shell_ranges(mol, buflen, aosym):
-    bas_dim = [(mol.bas_angular(i)*2+1)*(mol.bas_nctr(i)) \
-               for i in range(mol.nbas)]
-    ao_loc = [0]
-    for i in bas_dim:
-        ao_loc.append(ao_loc[-1]+i)
+    ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
 
     ish_seg = [0] # record the starting shell id of each buffer
     bufrows = []
     ij_start = 0
 
-    if aosym in ('s2ij'):
+    if aosym == 's2ij':
         for i in range(mol.nbas):
             ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
             if ij_end - ij_start > buflen and i != 0:

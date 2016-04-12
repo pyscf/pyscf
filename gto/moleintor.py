@@ -16,7 +16,7 @@ libcvhf = pyscf.lib.load_library('libcvhf')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, name))
 
-def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
+def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
             aosym='s1', out=None):
     r'''1e and 2e integral generator.
 
@@ -118,10 +118,8 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
             libcint integral function argument
 
     Kwargs:
-        bras : list of int
-            shell ids for bra.  Default is all shells given by bas
-        kets : list of int
-            shell ids for ket.  Default is all shells given by bas
+        shls_slice : 8-element list
+            (ish_start, ish_end, jsh_start, jsh_end, ksh_start, ksh_end, lsh_start, lsh_end)
         comp : int
             Components of the integrals, e.g. cint1e_ipovlp has 3 components.
         hermi : int (1e integral only)
@@ -157,24 +155,21 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
       [-0.48176097 -0.10289944]]]
     '''
     if intor_name.startswith('cint1e') or intor_name.startswith('ECP'):
-        return getints1e(intor_name, atm, bas, env, bras, kets, comp, hermi)
+        return getints1e(intor_name, atm, bas, env, shls_slice, comp, hermi)
     elif intor_name.startswith('cint2e'):
-        return getints2e(intor_name, atm, bas, env, bras, kets, comp,
+        return getints2e(intor_name, atm, bas, env, shls_slice, comp,
                          aosym, out)
     else:
         raise RuntimeError('Unknown intor')
 
-def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
-    if bras is None:
-        bralst = numpy.arange(len(bas), dtype=numpy.int32)
+def getints1e(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0):
+    nbas = len(bas)
+    if shls_slice is None:
+        shls_slice = (0, nbas, 0, nbas)
     else:
-        bralst = numpy.asarray(bras, dtype=numpy.int32)
-        assert(bralst.max() < len(bas))
-    if kets is None:
-        ketlst = numpy.arange(len(bas), dtype=numpy.int32)
-    else:
-        ketlst = numpy.asarray(kets, dtype=numpy.int32)
-        assert(ketlst.max() < len(bas))
+        assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
+    bralst = numpy.arange(shls_slice[0], shls_slice[1], dtype=numpy.int32)
+    ketlst = numpy.arange(shls_slice[2], shls_slice[3], dtype=numpy.int32)
 
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -222,7 +217,7 @@ def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
                 pyscf.lib.hermi_triu_(mat[i], hermi=hermi)
         return mat
 
-def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
+def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', out=None):
     aosym = _stand_sym_code(aosym)
 
@@ -247,7 +242,7 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
         raise NotImplementedError('cint2e spinor AO integrals')
 
     if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
-        assert(bras is None and kets is None)
+        assert(shls_slice is None)
         nao_pair = nao*(nao+1)//2
         if out is None:
             out = numpy.empty((nao_pair*(nao_pair+1)//2))
@@ -261,26 +256,22 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
 
     else:
         from pyscf.scf import _vhf
-        if bras is None:
-            bralst = numpy.arange(len(bas), dtype=numpy.int32)
+        if shls_slice is None:
+            shls_slice = (0, nbas.value, 0, nbas.value)
         else:
-            bralst = numpy.asarray(bras, dtype=numpy.int32)
-            assert(bralst.max() < len(bas))
-        if kets is None:
-            ketlst = numpy.arange(len(bas), dtype=numpy.int32)
-        else:
-            ketlst = numpy.asarray(kets, dtype=numpy.int32)
-            assert(ketlst.max() < len(bas))
+            assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
+        bralst = numpy.arange(shls_slice[0], shls_slice[1], dtype=numpy.int32)
+        ketlst = numpy.arange(shls_slice[2], shls_slice[3], dtype=numpy.int32)
         num_cgto_of = getattr(libcgto, cgto_in_shell)
         naoi = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in bralst])
         naoj = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in ketlst])
         if aosym in ('s4', 's2ij'):
-            nij = naoi * (naoi + 1) / 2
+            nij = naoi * (naoi + 1) // 2
             assert(numpy.alltrue(bralst == ketlst))
         else:
             nij = naoi * naoj
         if aosym in ('s4', 's2kl'):
-            nkl = nao * (nao + 1) / 2
+            nkl = nao * (nao + 1) // 2
         else:
             nkl = nao * nao
         if comp == 1:

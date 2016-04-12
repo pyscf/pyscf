@@ -450,6 +450,7 @@ class Grids(pyscf.lib.StreamObject):
 
     @property
     def prune_scheme(self):
+        import sys
         sys.stderr.write('WARN: Attribute .prune_scheme will be removed in PySCF v1.1. '
                          'Please use .prune instead\n')
         return self.prune
