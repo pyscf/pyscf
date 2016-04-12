@@ -353,9 +353,9 @@ class Cell(pyscf.gto.Mole):
 
         if dump_input and self.verbose >= logger.INFO:
             logger.info(self, 'lattice vector [a1        | a2        | a3       ]')
-            logger.info(self, '               [%.9f | %.9f | %.9f]', self._h[0])
-            logger.info(self, '               [%.9f | %.9f | %.9f]', self._h[1])
-            logger.info(self, '               [%.9f | %.9f | %.9f]', self._h[2])
+            logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[0])
+            logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[1])
+            logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[2])
             logger.info(self, 'Cell volume = %g', self.vol)
             logger.info(self, 'nimgs = %s', self.nimgs)
             logger.info(self, 'precision = %g', self.precision)
