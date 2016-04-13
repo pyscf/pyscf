@@ -1128,15 +1128,64 @@ def offset_nr_by_atom(mol):
     aorange.append((b0, mol.nbas, p0, p1))
     return aorange
 
-#FIXME:
-def is_same_mol(mol1, mol2):
+def is_same_mol(mol1, mol2, tol=1e-5, cmp_basis=True):
+    '''Compare the two molecules whether they have the same structure.
+
+    Kwargs:
+        tol : float
+            In Bohr
+        cmp_basis : bool
+            Whether to compare basis functions for the two molecules
+    '''
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
-    for a1, a2 in zip(mol1._atom, mol2._atom):
-        if a1[0] != a2[0] \
-           or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
-            return False
-    return True
+
+    im1 = inertia_momentum(mol1._atom)
+    im2 = inertia_momentum(mol2._atom)
+    if not numpy.allclose(numpy.linalg.eigh(im1)[0],
+                          numpy.linalg.eigh(im2)[0], atol=tol):
+        return False
+
+    if cmp_basis:
+        atomtypes1 = atom_types(mol1._atom, mol1._basis)
+        atomtypes2 = atom_types(mol2._atom, mol2._basis)
+        for k in atomtypes1:
+            if k not in atomtypes2:
+                return False
+            elif atomtypes1[k] != atomtypes2[k]:
+                return False
+            elif mol1._basis[k] != mol2._basis[k]:
+                return False
+    else:
+        atomtypes1 = atom_types(mol1._atom)
+        atomtypes2 = atom_types(mol2._atom)
+
+    # fake systems, which treates the atoms of different basis as different atoms.
+    def fake_charges(mol, atomtypes, chg1):
+        fake_chgs = numpy.zeros(mol.natm)
+        for k, lst in atomtypes.items():
+            fake_chgs[lst] = chg1
+            chg1 *= numpy.pi-2
+        return fake_chgs
+    im1 = inertia_momentum(mol1._atom, fake_charges(mol1, atomtypes1, .4))
+    im2 = inertia_momentum(mol2._atom, fake_charges(mol2, atomtypes2, .4))
+    return numpy.allclose(numpy.linalg.eigh(im1)[0],
+                          numpy.linalg.eigh(im2)[0], atol=tol)
+
+def inertia_momentum(atoms, charges=None):
+    if charges is None:
+        charges = numpy.array([_charge(a[0]) for a in atoms])
+    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
+    coords = coords - chgcenter
+    im = numpy.einsum('i,ij,ik->jk', charges, coords, coords)/charges.sum()
+    return im
+
+
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    sys.stderr.write('Function pyscg.gto.mole.check_sanity will be removed in PySCF-1.1. '
+                     'It is replaced by pyscg.lib.check_sanity\n')
+    return pyscf.lib.check_sanity(obj, keysref, stdout)
 
 
 # for _atm, _bas, _env

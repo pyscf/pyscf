@@ -117,6 +117,15 @@ C    SP
             self.assertTrue(w[0].category, UserWarning)
         mol1.loads(mol0.dumps())
 
+    def test_is_same_mol(self):
+        self.assertTrue(gto.is_same_mol(mol0, mol0))
+        mol1 = gto.M(atom='h   0  1  1; O1  0  0  0;  h   1  1  0')
+        self.assertTrue(not gto.is_same_mol(mol0, mol1))
+        self.assertTrue(gto.is_same_mol(mol0, mol1, cmp_basis=False))
+        mol1 = gto.M(atom='h   0  1  1; O1  0  0  0;  h   1  1  0.01')
+        self.assertTrue(not gto.is_same_mol(mol0, mol1, cmp_basis=False))
+        self.assertTrue(gto.is_same_mol(mol0, mol1, tol=.02, cmp_basis=False))
+
 
 if __name__ == "__main__":
     print("test mole.py")
