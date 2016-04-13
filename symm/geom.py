@@ -15,18 +15,6 @@ import pyscf.symm.param
 TOLERANCE = 1e-5
 PLACE = int(-numpy.log10(TOLERANCE))
 
-def get_charge_center(atoms, charges=None):
-    if charges is None:
-        charges = numpy.array([mole._charge(a[0]) for a in atoms])
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
-    rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
-    return rbar
-
-def get_mass_center(atoms):
-    mass = numpy.array([pyscf.lib.parameters.ELEMENTS[mole._charge(a[0])][1]
-                        for a in atoms])
-    return get_charge_center(atoms, mass)
-
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
         return True
@@ -268,7 +256,7 @@ def symm_identical_atoms(gpname, atoms):
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
         return eql_atom_ids
 
-    center = get_charge_center(atoms)
+    center = mole.charge_center(atoms)
 #    if not numpy.allclose(center, 0, atol=TOLERANCE):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
 #                        % str(center))

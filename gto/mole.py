@@ -1137,13 +1137,23 @@ def is_same_mol(mol1, mol2, tol=1e-5, cmp_basis=True):
         cmp_basis : bool
             Whether to compare basis functions for the two molecules
     '''
+    import pyscf.symm
+
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
 
-    im1 = inertia_momentum(mol1._atom)
-    im2 = inertia_momentum(mol2._atom)
-    if not numpy.allclose(numpy.linalg.eigh(im1)[0],
-                          numpy.linalg.eigh(im2)[0], atol=tol):
+    def inspect(mol, chgs=None):
+        coord = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
+        center = charge_center(mol._atom, chgs)
+        im = inertia_momentum(mol._atom, chgs)
+        w, v = numpy.linalg.eigh(im)
+        r = numpy.dot(coord-center, v)
+        return w, pyscf.symm.sort_coords(r)
+
+    w1, r1 = inspect(mol1)
+    w2, r2 = inspect(mol2)
+    if not (numpy.allclose(w1, w2, atol=tol) and
+            numpy.allclose(r1, r2, atol=tol)):
         return False
 
     if cmp_basis:
@@ -1167,10 +1177,12 @@ def is_same_mol(mol1, mol2, tol=1e-5, cmp_basis=True):
             fake_chgs[lst] = chg1
             chg1 *= numpy.pi-2
         return fake_chgs
-    im1 = inertia_momentum(mol1._atom, fake_charges(mol1, atomtypes1, .4))
-    im2 = inertia_momentum(mol2._atom, fake_charges(mol2, atomtypes2, .4))
-    return numpy.allclose(numpy.linalg.eigh(im1)[0],
-                          numpy.linalg.eigh(im2)[0], atol=tol)
+    fake_chg1 = fake_charges(mol1, atomtypes1, .4)
+    fake_chg2 = fake_charges(mol2, atomtypes2, .4)
+    w1, r1 = inspect(mol1, fake_chg1)
+    w2, r2 = inspect(mol2, fake_chg2)
+    return (numpy.allclose(w1, w2, atol=tol) and
+            numpy.allclose(r1, r2, atol=tol))
 
 def inertia_momentum(atoms, charges=None):
     if charges is None:
@@ -1180,6 +1192,17 @@ def inertia_momentum(atoms, charges=None):
     coords = coords - chgcenter
     im = numpy.einsum('i,ij,ik->jk', charges, coords, coords)/charges.sum()
     return im
+
+def charge_center(atoms, charges=None):
+    if charges is None:
+        charges = numpy.array([_charge(a[0]) for a in atoms])
+    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
+    return rbar
+
+def mass_center(atoms):
+    mass = numpy.array([param.ELEMENTS[_charge(a[0])][1] for a in atoms])
+    return charge_center(atoms, mass)
 
 
 def check_sanity(obj, keysref, stdout=sys.stdout):
