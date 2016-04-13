@@ -3,13 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf, mcscf
-
 '''
 State average
 
 Using mcscf.state_average_ to decorate the CASSCF object
 '''
+
+from pyscf import gto, scf, mcscf
 
 mol = gto.M(
     atom = [
