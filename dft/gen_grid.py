@@ -500,7 +500,7 @@ def prange(start, end, step):
 
 
 if __name__ == '__main__':
-    import gto
+    from pyscf import gto
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None#"out_h2o"

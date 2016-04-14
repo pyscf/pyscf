@@ -314,8 +314,8 @@ class CASCI(pyscf.lib.StreamObject):
 
 
 if __name__ == '__main__':
-    import gto
-    import scf
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
