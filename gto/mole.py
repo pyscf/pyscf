@@ -1499,7 +1499,12 @@ class Mole(pyscf.lib.StreamObject):
 
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            self._basis = self.format_basis(dict([(a, self.basis)
+            if self.basis.lower().startswith('unc'):
+                cbas = self.format_basis(dict([(a, self.basis[3:])
+                                                  for a in uniq_atoms]))
+                self._basis = dict((a,uncontract(cbas[a])) for a in cbas)
+            else:
+                self._basis = self.format_basis(dict([(a, self.basis)
                                                   for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)

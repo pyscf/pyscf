@@ -1169,7 +1169,7 @@ class _NumInt(object):
                 nao = dms[0].shape[0]
             ndms = len(dms)
             def make_rho(idm, ao, non0tab, xctype):
-                return self.eval_rho2(mol, ao, dms[idm], non0tab, xctype)
+                return self.eval_rho(mol, ao, dms[idm], non0tab, xctype)
         return make_rho, ndms, nao
 
 ####################
