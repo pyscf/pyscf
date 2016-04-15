@@ -363,7 +363,8 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     bas2[:,ATOM_OF  ] += natm_off
     bas2[:,PTR_EXP  ] += off
     bas2[:,PTR_COEFF] += off
-    return (numpy.vstack((atm1,atm2)), numpy.vstack((bas1,bas2)),
+    return (numpy.asarray(numpy.vstack((atm1,atm2)), dtype=numpy.int32),
+            numpy.asarray(numpy.vstack((bas1,bas2)), dtype=numpy.int32),
             numpy.hstack((env1,env2)))
 
 def conc_mol(mol1, mol2):
@@ -375,11 +376,17 @@ def conc_mol(mol1, mol2):
                      mol2._atm, mol2._bas, mol2._env)
     off = len(mol1._env)
     natm_off = len(mol1._atm)
-    ecpbas2 = numpy.copy(mol2._ecpbas)
-    ecpbas2[:,ATOM_OF  ] += natm_off
-    ecpbas2[:,PTR_EXP  ] += off
-    ecpbas2[:,PTR_COEFF] += off
-    mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+    if len(mol2._ecpbas) == 0:
+        mol3._ecpbas = mol1._ecpbas
+    else:
+        ecpbas2 = numpy.copy(mol2._ecpbas)
+        ecpbas2[:,ATOM_OF  ] += natm_off
+        ecpbas2[:,PTR_EXP  ] += off
+        ecpbas2[:,PTR_COEFF] += off
+        if len(mol1._ecpbas) == 0:
+            mol3._ecpbas = ecpbas2
+        else:
+            mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
 
     mol3.natm = len(mol3._atm)
     mol3.nbas = len(mol3._bas)
@@ -396,8 +403,13 @@ def conc_mol(mol1, mol2):
     mol3.unit = mol1.unit
     mol3._basis = dict(mol2._basis)
     mol3._basis.update(mol1._basis)
-    mol3._ecp = dict(mol2._ecp)
-    mol3._ecp.update(mol1._ecp)
+    if mol2._ecp is None:
+        mol3._ecp = mol1._ecp
+    elif mol1._ecp is None:
+        mol3._ecp = mol2._ecp
+    else:
+        mol3._ecp = dict(mol2._ecp)
+        mol3._ecp.update(mol1._ecp)
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
