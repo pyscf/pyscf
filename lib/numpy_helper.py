@@ -502,6 +502,8 @@ def direct_sum(subscripts, *operands):
         sign = [x for x in subscript if x in '+-']
 
         symbs = subscript[1:].replace('-', '+').split('+')
+        s = ''.join(symbs)
+        assert(len(set(s)) == len(s))  # make sure no duplicated symbols
         return sign, symbs
 
     if '->' in subscripts:

@@ -206,8 +206,9 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
                 if isinstance(atom[0], int):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
-                    rawsymb = _rm_digit(atom[0])
-                    symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
+                    a = atom[0].strip()
+                    rawsymb = _rm_digit(a)
+                    symb = a.replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
                     c = numpy.asarray(atom[1:4]) - origin
                 else:
