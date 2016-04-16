@@ -22,14 +22,14 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
         v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
         return numpy.linalg.norm(v3) < TOLERANCE
 
-def argsort_coords(coords):
+def argsort_coords(coords, decimals=PLACE-1):
     coords = numpy.around(coords, decimals=PLACE-1)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
-def sort_coords(coords):
-    coords = numpy.array(coords)
-    idx = argsort_coords(coords)
+def sort_coords(coords, decimals=PLACE-1):
+    coords = numpy.asarray(coords)
+    idx = argsort_coords(coords, decimals=PLACE-1)
     return coords[idx]
 
 # ref. http://en.wikipedia.org/wiki/Rotation_matrix
@@ -47,21 +47,28 @@ def rotation_mat(vec, theta):
     r = c * numpy.eye(3) + s * ux + (1-c) * uu
     return r
 
-# refection operation via householder
+# reflection operation with householder
 def householder(vec):
     vec = numpy.array(vec)
     return numpy.eye(3) - vec[:,None]*vec*2
 
-def axes_alias(axes, ref):
-    '''Rename axes, make it as close as possible to the ref axes
-    '''
+def closest_axes(axes, ref):
     xcomp, ycomp, zcomp = numpy.einsum('ix,jx->ji', axes, ref)
     z_id = numpy.argmax(abs(zcomp))
     xcomp[z_id] = ycomp[z_id] = 0       # remove z
     x_id = numpy.argmax(abs(xcomp))
     ycomp[x_id] = 0                     # remove x
     y_id = numpy.argmax(abs(ycomp))
-    return axes[[x_id,y_id,z_id]]
+    return x_id, y_id, z_id
+
+def alias_axes(axes, ref):
+    '''Rename axes, make it as close as possible to the ref axes
+    '''
+    x_id, y_id, z_id = closest_axes(axes, ref)
+    new_axes = axes[[x_id,y_id,z_id]]
+    if numpy.linalg.det(new_axes) < 0:
+        new_axes = axes[[y_id,x_id,z_id]]
+    return new_axes
 
 #TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
@@ -82,24 +89,34 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
     rawsys = SymmSys(atoms, basis)
     w, axes = scipy.linalg.eigh(rawsys.im)
     axes = axes.T
-    log.debug('principal inertia moments %s', str(w))
+
+# Make sure the axes can be rotated from continuous unitary transformation
+    x_id, y_id, z_id = closest_axes(axes, numpy.eye(3))
+    if axes[z_id,2] < 0:
+        axes[z_id] *= -1
+    if axes[x_id,0] < 0:
+        axes[x_id] *= -1
+    if numpy.linalg.det(axes) < 0:
+        axes[y_id] *= -1
+    log.debug('principal inertia moments %s', w)
+    log.debug('new axes %s', axes)
 
     if numpy.allclose(w, 0, atol=tol):
         gpname = 'SO3'
-        return gpname, rawsys.charge_center, _pesudo_vectors(axes)
+        return gpname, rawsys.charge_center, axes
 
     elif numpy.allclose(w[:2], 0, atol=tol): # linear molecule
         if rawsys.detect_icenter():
             gpname = 'Dooh'
         else:
             gpname = 'Coov'
-        return gpname, rawsys.charge_center, _pesudo_vectors(axes)
+        return gpname, rawsys.charge_center, axes
 
     else:
         try:
             if numpy.allclose(w, w[0], atol=tol): # T, O, I
                 gpname, axes = _search_toi(rawsys)
-                return gpname, rawsys.charge_center, _pesudo_vectors(axes)
+                return gpname, rawsys.charge_center, axes
 
             elif numpy.allclose(w[1], w[2], atol=tol):
                 axes = axes[[1,2,0]]
@@ -136,7 +153,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 gpname = 'S%d' % (n*2)
             else:
                 gpname = 'C%d' % n
-            return gpname, rawsys.charge_center, _pesudo_vectors(axes)
+            return gpname, rawsys.charge_center, axes
 
         else:
             is_c2x = rawsys.iden_op(rotation_mat(axes[0], numpy.pi))
@@ -148,7 +165,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                     gpname = 'D2h'
                 else:
                     gpname = 'D2'
-                axes = axes_alias(axes, numpy.eye(3))
+                axes = alias_axes(axes, numpy.eye(3))
             elif is_c2z or is_c2x or is_c2y:
                 if is_c2x:
                     axes = axes[[1,2,0]]
@@ -176,7 +193,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 #    charge_center = mole.charge_center(atoms)
 #    if not numpy.allclose(charge_center, rawsys.charge_center, atol=tol):
 #        assert(parallel_vectors(charge_center-rawsys.charge_center, axes[2]))
-    return gpname, rawsys.charge_center, _pesudo_vectors(axes)
+    return gpname, rawsys.charge_center, axes
 
 
 # reduce to D2h and its subgroups
@@ -185,16 +202,16 @@ def subgroup(gpname, axes):
     if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
         return gpname, axes
     elif gpname in ('SO3',):
-        #return 'D2h', axes_alias(axes, numpy.eye(3))
+        #return 'D2h', alias_axes(axes, numpy.eye(3))
         return 'Dooh', axes
     elif gpname in ('Dooh',):
-        #return 'D2h', axes_alias(axes, numpy.eye(3))
+        #return 'D2h', alias_axes(axes, numpy.eye(3))
         return 'Dooh', axes
     elif gpname in ('Coov',):
         #return 'C2v', axes
         return 'Coov', axes
     elif gpname in ('Oh',):
-        return 'D2h', axes_alias(axes, numpy.eye(3))
+        return 'D2h', alias_axes(axes, numpy.eye(3))
     elif gpname in ('Ih',):
         return 'Cs', axes[[2,0,1]]
     elif gpname in ('Td',):
@@ -202,7 +219,7 @@ def subgroup(gpname, axes):
         #x = (x+y) / numpy.linalg.norm(x+y)
         #y = numpy.cross(z, x)
         #return 'C2v', numpy.array((x,y,z))
-        return 'D2', axes_alias(axes, numpy.eye(3))
+        return 'D2', alias_axes(axes, numpy.eye(3))
     elif re.search(r'S\d+', gpname):
         n = int(re.search(r'\d+', gpname).group(0))
         return 'C%d'%(n//2), axes
@@ -283,7 +300,7 @@ def symm_identical_atoms(gpname, atoms):
     center = mole.charge_center(atoms)
 #    if not numpy.allclose(center, 0, atol=TOLERANCE):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
-#                        % str(center))
+#                        % center)
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     coords = numpy.array([a[1] for a in atoms], dtype=float)
@@ -603,7 +620,6 @@ def _search_toi(rawsys):
     return gpname, axes
 
 
-# orientation of rotation axes
 def _pesudo_vectors(vs):
     idy0 = abs(vs[:,1])<TOLERANCE
     idz0 = abs(vs[:,2])<TOLERANCE
@@ -615,7 +631,6 @@ def _pesudo_vectors(vs):
     # if y and z component == 0, ensure x component > 0
     vs[(vs[:,0]<0) & idy0 & idz0] *= -1
     return vs
-
 
 def _remove_dupvec(vs):
     def rm_iter(vs):

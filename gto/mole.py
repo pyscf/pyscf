@@ -1141,7 +1141,7 @@ def offset_nr_by_atom(mol):
     aorange.append((b0, mol.nbas, p0, p1))
     return aorange
 
-def is_same_mol(mol1, mol2, tol=1e-5, cmp_basis=True):
+def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     '''Compare the two molecules whether they have the same structure.
 
     Kwargs:
@@ -1155,47 +1155,62 @@ def is_same_mol(mol1, mol2, tol=1e-5, cmp_basis=True):
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
 
-    def inspect(mol, chgs=None):
-        coord = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
-        center = charge_center(mol._atom, chgs)
-        im = inertia_momentum(mol._atom, chgs)
-        w, v = numpy.linalg.eigh(im)
-        r = numpy.dot(coord-center, v)
-        return w, pyscf.symm.sort_coords(r)
-
-    w1, r1 = inspect(mol1)
-    w2, r2 = inspect(mol2)
-    if not (numpy.allclose(w1, w2, atol=tol) and
-            numpy.allclose(r1, r2, atol=tol)):
-        return False
-
     if cmp_basis:
         atomtypes1 = atom_types(mol1._atom, mol1._basis)
         atomtypes2 = atom_types(mol2._atom, mol2._basis)
         for k in atomtypes1:
             if k not in atomtypes2:
                 return False
-            elif atomtypes1[k] != atomtypes2[k]:
+            elif len(atomtypes1[k]) != len(atomtypes2[k]):
                 return False
             elif mol1._basis[k] != mol2._basis[k]:
                 return False
-    else:
-        atomtypes1 = atom_types(mol1._atom)
-        atomtypes2 = atom_types(mol2._atom)
 
-    # fake systems, which treates the atoms of different basis as different atoms.
-    def fake_charges(mol, atomtypes, chg1):
-        fake_chgs = numpy.zeros(mol.natm)
-        for k, lst in atomtypes.items():
-            fake_chgs[lst] = chg1
-            chg1 *= numpy.pi-2
-        return fake_chgs
-    fake_chg1 = fake_charges(mol1, atomtypes1, .4)
-    fake_chg2 = fake_charges(mol2, atomtypes2, .4)
-    w1, r1 = inspect(mol1, fake_chg1)
-    w2, r2 = inspect(mol2, fake_chg2)
-    return (numpy.allclose(w1, w2, atol=tol) and
-            numpy.allclose(r1, r2, atol=tol))
+    def inspect(mol, chgs=None):
+        coord = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
+        center = charge_center(mol._atom, chgs)
+        im = inertia_momentum(mol._atom, chgs)
+        w, v = numpy.linalg.eigh(im)
+        axes = v.T
+# Fixed phase
+        x_id, y_id, z_id = pyscf.symm.closest_axes(axes, numpy.eye(3))
+        if axes[z_id,2] < 0:
+            axes[z_id] *= -1
+        if axes[x_id,0] < 0:
+            axes[x_id] *= -1
+        if numpy.linalg.det(axes) < 0:
+            axes[y_id] *= -1
+        r = numpy.dot(coord-center, axes.T)
+        place = int(-numpy.log10(tol)) - 1
+        idx = pyscf.symm.argsort_coords(r, place)
+        chgs = mol._atm[:,CHARGE_OF]
+        return w, chgs[idx], r[idx]
+
+    w1, z1, r1 = inspect(mol1)
+    w2, z2, r2 = inspect(mol2)
+    moleq = (numpy.allclose(w1, w2, atol=tol) and
+             numpy.all(z1==z2) and
+             numpy.allclose(r1, r2, atol=tol))
+    if ignore_chiral:
+        if moleq:
+            return True
+        else:
+            place = int(-numpy.log10(tol)) - 1
+            r2[:,2] *= -1
+            idx = pyscf.symm.argsort_coords(r2, place)
+            z2 = z2[idx]
+            r2 = r2[idx]
+            return (numpy.allclose(w1, w2, atol=tol) and
+                    numpy.all(z1==z2) and
+                    numpy.allclose(r1, r2, atol=tol))
+    else:
+        return moleq
+is_same_mol = same_mol
+
+def chiral_mol(mol1, mol2):
+    '''Detect whether two molecules are chiral isomers'''
+    return (not same_mol(mol1, mol2, ignore_chiral=False) and
+            same_mol(mol1, mol2, ignore_chiral=True))
 
 def inertia_momentum(atoms, charges=None):
     if charges is None:
