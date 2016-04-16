@@ -718,7 +718,7 @@ if __name__ == '__main__':
     mc.max_cycle_macro = 10
     # Return natural orbitals from mc2step in casscf_mo.
     mc.natorb = True
-    emc_1, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
+    emc_1, e_ci, fcivec, mo_energy, casscf_mo = mc.mc2step(m.mo_coeff)
 
     # Write orbitals to molden output.
     with open( 'output.molden', 'w' ) as fout:
