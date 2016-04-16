@@ -1166,45 +1166,50 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
             elif mol1._basis[k] != mol2._basis[k]:
                 return False
 
-    def inspect(mol, chgs=None):
-        coord = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
-        center = charge_center(mol._atom, chgs)
-        im = inertia_momentum(mol._atom, chgs)
+    def finger(mol, chgs, coord):
+        center = charge_center(mol._atom, chgs, coord)
+        im = inertia_momentum(mol._atom, chgs, coord)
         w, v = numpy.linalg.eigh(im)
         axes = v.T
-# Fixed phase
-        x_id, y_id, z_id = pyscf.symm.closest_axes(axes, numpy.eye(3))
-        if axes[z_id,2] < 0:
-            axes[z_id] *= -1
-        if axes[x_id,0] < 0:
-            axes[x_id] *= -1
         if numpy.linalg.det(axes) < 0:
-            axes[y_id] *= -1
+            axes *= -1
         r = numpy.dot(coord-center, axes.T)
-        place = int(-numpy.log10(tol)) - 1
-        idx = pyscf.symm.argsort_coords(r, place)
-        chgs = mol._atm[:,CHARGE_OF]
-        return w, chgs[idx], r[idx]
+        return w, r
 
-    w1, z1, r1 = inspect(mol1)
-    w2, z2, r2 = inspect(mol2)
-    moleq = (numpy.allclose(w1, w2, atol=tol) and
-             numpy.all(z1==z2) and
-             numpy.allclose(r1, r2, atol=tol))
-    if ignore_chiral:
-        if moleq:
-            return True
-        else:
-            place = int(-numpy.log10(tol)) - 1
-            r2[:,2] *= -1
-            idx = pyscf.symm.argsort_coords(r2, place)
-            z2 = z2[idx]
-            r2 = r2[idx]
-            return (numpy.allclose(w1, w2, atol=tol) and
-                    numpy.all(z1==z2) and
-                    numpy.allclose(r1, r2, atol=tol))
-    else:
-        return moleq
+    chg1 = mol1._atm[:,CHARGE_OF]
+    chg2 = mol2._atm[:,CHARGE_OF]
+    coord1 = numpy.array([mol1.atom_coord(i) for i in range(mol1.natm)])
+    coord2 = numpy.array([mol2.atom_coord(i) for i in range(mol2.natm)])
+    w1, r1 = finger(mol1, chg1, coord1)
+    w2, r2 = finger(mol2, chg2, coord2)
+    if not (numpy.allclose(w1, w2, atol=tol)):
+        return False
+
+    rotate_xy  = numpy.array([[-1., 0., 0.],
+                              [ 0.,-1., 0.],
+                              [ 0., 0., 1.]])
+    rotate_yz  = numpy.array([[ 1., 0., 0.],
+                              [ 0.,-1., 0.],
+                              [ 0., 0.,-1.]])
+    rotate_zx  = numpy.array([[-1., 0., 0.],
+                              [ 0., 1., 0.],
+                              [ 0., 0.,-1.]])
+
+    def inspect(z1, r1, z2, r2):
+        place = int(-numpy.log10(tol)) - 1
+        idx = pyscf.symm.argsort_coords(r2, place)
+        z2 = z2[idx]
+        r2 = r2[idx]
+        for rot in (rotate_xy, rotate_yz, rotate_zx):
+            r1new = numpy.dot(r1, rot)
+            idx = pyscf.symm.argsort_coords(r1new, place)
+            if (numpy.all(z1[idx]==z2) and
+                numpy.allclose(r1new[idx], r2, atol=tol)):
+                return True
+        return False
+
+    return (inspect(chg1, r1, chg2, r2) or
+            (ignore_chiral and inspect(chg1, r1, chg2,-r2)))
 is_same_mol = same_mol
 
 def chiral_mol(mol1, mol2):
@@ -1212,19 +1217,21 @@ def chiral_mol(mol1, mol2):
     return (not same_mol(mol1, mol2, ignore_chiral=False) and
             same_mol(mol1, mol2, ignore_chiral=True))
 
-def inertia_momentum(atoms, charges=None):
+def inertia_momentum(atoms, charges=None, coords=None):
     if charges is None:
         charges = numpy.array([_charge(a[0]) for a in atoms])
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    if coords is None:
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
     chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
     coords = coords - chgcenter
     im = numpy.einsum('i,ij,ik->jk', charges, coords, coords)/charges.sum()
     return im
 
-def charge_center(atoms, charges=None):
+def charge_center(atoms, charges=None, coords=None):
     if charges is None:
         charges = numpy.array([_charge(a[0]) for a in atoms])
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
+    if coords is None:
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
     rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
     return rbar
 
