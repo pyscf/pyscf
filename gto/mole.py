@@ -1200,20 +1200,28 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
         idx = pyscf.symm.argsort_coords(r2, place)
         z2 = z2[idx]
         r2 = r2[idx]
-        for rot in (rotate_xy, rotate_yz, rotate_zx):
+        for rot in (1, rotate_xy, rotate_yz, rotate_zx):
             r1new = numpy.dot(r1, rot)
             idx = pyscf.symm.argsort_coords(r1new, place)
-            if (numpy.all(z1[idx]==z2) and
+            if (numpy.all(z1[idx] == z2) and
                 numpy.allclose(r1new[idx], r2, atol=tol)):
                 return True
         return False
 
     return (inspect(chg1, r1, chg2, r2) or
-            (ignore_chiral and inspect(chg1, r1, chg2,-r2)))
+            (ignore_chiral and inspect(chg1, r1, chg2, -r2)))
 is_same_mol = same_mol
 
-def chiral_mol(mol1, mol2):
-    '''Detect whether two molecules are chiral isomers'''
+def chiral_mol(mol1, mol2=None):
+    '''Detect whether the given molelcule is chiral molecule or two molecules
+    are chiral isomers.
+    '''
+    if mol2 is None:
+        mol2 = mol1.copy()
+        ptr_coord = mol2._atm[:,PTR_COORD]
+        mol2._env[ptr_coord  ] *= -1
+        mol2._env[ptr_coord+1] *= -1
+        mol2._env[ptr_coord+2] *= -1
     return (not same_mol(mol1, mol2, ignore_chiral=False) and
             same_mol(mol1, mol2, ignore_chiral=True))
 
