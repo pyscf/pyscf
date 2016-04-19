@@ -164,6 +164,7 @@ if __name__ == '__main__':
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
         symmetry = True,
+        symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()

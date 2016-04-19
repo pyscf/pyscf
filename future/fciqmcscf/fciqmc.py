@@ -577,7 +577,7 @@ def one_from_two_pdm(two_pdm, nelec):
 
     # Last two indices refer to middle two second quantized operators in the 2RDM
     one_pdm = numpy.einsum('ikjj->ik', two_pdm)
-    one_pdm /= (nelec-1)
+    one_pdm /= (numpy.sum(nelec)-1)
     return one_pdm
 
 def find_full_casscf_12rdm(fciqmcci, mo_coeff, filename, norbcas, neleccas, directory='.'):

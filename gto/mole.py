@@ -507,7 +507,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
     _env = pyscf.lib.flatten(_env) # flatten nested lists
-    return numpy.array(_bas, numpy.int32), numpy.array(_env, numpy.double)
+    return (numpy.array(_bas, numpy.int32).reshape(-1,BAS_SLOTS),
+            numpy.array(_env, numpy.double))
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal
@@ -540,6 +541,8 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
     _basdic = {}
     for symb, basis_add in basis.items():
         bas0, env0 = make_bas_env(basis_add, 0, ptr_env)
+        if bas0.size == 0:
+            sys.stderr.write('No basis found for atom %s\n' % symb)
         ptr_env = ptr_env + len(env0)
         _basdic[symb] = bas0
         _env.append(env0)
