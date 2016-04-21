@@ -415,7 +415,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     else:
         pw = pv = addr = None
 
-    if pspace_size >= na*nb and ci0 is not None and not davidson_only:
+    if pspace_size >= na*nb and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
         if na*nb == 1:
