@@ -71,7 +71,6 @@ def eval_ao(mol, coords, deriv=0, relativity=0, shls_slice=None,
     >>> print(ao_value.shape)
     (10, 100, 7)
     '''
-    assert(coords.flags.c_contiguous)
     if isinstance(deriv, bool):
         logger.warn(mol, '''
 You see this error message because of the API updates in pyscf v1.1.
@@ -107,7 +106,7 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
         2D bool array of shape (N,nbas), where N is the number of grids, nbas
         is the number of shells
     '''
-    assert(coords.flags.c_contiguous)
+    coords = numpy.asarray(coords, order='C')
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)

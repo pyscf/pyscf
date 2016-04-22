@@ -31,7 +31,7 @@ libfci = pyscf.lib.load_library('libfci')
 # h2e has three parts (h2e_aa, h2e_ab, h2e_bb)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -76,7 +76,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
