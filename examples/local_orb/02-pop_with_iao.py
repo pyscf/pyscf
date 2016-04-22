@@ -20,7 +20,9 @@ mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
 a = lo.iao.iao(mol, mo_occ)
 
 # Orthogonalize IAO
-a = numpy.dot(a, reduce(numpy.dot, (a.T, mf.get_ovlp(), a)))
+a = numpy.dot(a, lo.orth.lowdin(reduce(numpy.dot, (a.T, mf.get_ovlp(), a))))
+
+# transform mo_occ to IAO representation. Note the AO dimension is reduced
 mo_occ = reduce(numpy.dot, (a.T, mf.get_ovlp(), mo_occ))
 
 dm = numpy.dot(mo_occ, mo_occ.T) * 2
