@@ -313,7 +313,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         evals, evecs = eigs(self.ipccsd_matvec, size, nroots)
         return evals.real[:nroots], evecs
 
-    @profile
     def ipccsd_matvec(self, vector):
     ########################################################
     # FOLLOWING:                                           #
@@ -388,7 +387,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         evals, evecs = eigs(self.eaccsd_matvec, size, nroots)
         return evals.real[:nroots], evecs
 
-    @profile
     def eaccsd_matvec(self,vector):
     ########################################################
     # FOLLOWING:                                           #
