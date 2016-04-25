@@ -237,7 +237,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         r1,r2 = self.vector_to_amplitudes_ee(vector)
 
         if not self.made_ee_imds:
-            self.imds = _IMDS(self)
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
             self.imds.make_ee()
             self.made_ee_imds = True
 
@@ -321,7 +322,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         r1,r2 = self.vector_to_amplitudes_ip(vector)
 
         if not self.made_ip_imds:
-            self.imds = _IMDS(self)
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
             self.imds.make_ip()
             self.made_ip_imds = True
 
@@ -394,7 +396,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         r1,r2 = self.vector_to_amplitudes_ea(vector)
 
         if not self.made_ea_imds:
-            self.imds = _IMDS(self)
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
             self.imds.make_ea()
             self.made_ea_imds = True
 
