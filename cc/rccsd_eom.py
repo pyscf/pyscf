@@ -313,6 +313,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         evals, evecs = eigs(self.ipccsd_matvec, size, nroots)
         return evals.real[:nroots], evecs
 
+    @profile
     def ipccsd_matvec(self, vector):
     ########################################################
     # FOLLOWING:                                           #
@@ -329,26 +330,24 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         imds = self.imds
 
-        Hr1 = (- einsum('ki,k->i',imds.Loo,r1)
-               + 2.*einsum('ld,ild->i',imds.Fov,r2)
-               +   -einsum('kd,kid->i',imds.Fov,r2)
-               - 2.*einsum('klid,kld->i',imds.Wooov,r2)
-               +    einsum('lkid,kld->i',imds.Wooov,r2)
-               )
+        Hr1 = -einsum('ki,k->i',imds.Loo,r1)
+        Hr1 += 2.*einsum('ld,ild->i',imds.Fov,r2)
+        Hr1 +=   -einsum('kd,kid->i',imds.Fov,r2)
+        Hr1 += -2.*einsum('klid,kld->i',imds.Wooov,r2)
+        Hr1 +=     einsum('lkid,kld->i',imds.Wooov,r2)
 
-        tmp = ( 2.*einsum('lkdc,kld->c',imds.Woovv,r2)
-                  -einsum('kldc,kld->c',imds.Woovv,r2) )
-        Hr2 = ( + einsum('bd,ijd->ijb',imds.Lvv,r2)
-                - einsum('ki,kjb->ijb',imds.Loo,r2)
-                - einsum('lj,ilb->ijb',imds.Loo,r2)
-                - einsum('kbij,k->ijb',imds.Wovoo,r1)
-                + einsum('klij,klb->ijb',imds.Woooo,r2)
-                + 2.*einsum('lbdj,ild->ijb',imds.Wovvo,r2)
-                +   -einsum('kbdj,kid->ijb',imds.Wovvo,r2)
-                +   -einsum('lbjd,ild->ijb',imds.Wovov,r2) #typo in nooijen's paper
-                +   -einsum('kbid,kjd->ijb',imds.Wovov,r2)
-                - einsum('c,ijcb->ijb',tmp,self.t2)
-                )
+        tmp = 2.*einsum('lkdc,kld->c',imds.Woovv,r2)
+        tmp +=  -einsum('kldc,kld->c',imds.Woovv,r2)
+        Hr2 = einsum('bd,ijd->ijb',imds.Lvv,r2)
+        Hr2 += -einsum('ki,kjb->ijb',imds.Loo,r2)
+        Hr2 += -einsum('lj,ilb->ijb',imds.Loo,r2)
+        Hr2 += -einsum('kbij,k->ijb',imds.Wovoo,r1)
+        Hr2 +=  einsum('klij,klb->ijb',imds.Woooo,r2)
+        Hr2 += 2.*einsum('lbdj,ild->ijb',imds.Wovvo,r2)
+        Hr2 +=   -einsum('kbdj,kid->ijb',imds.Wovvo,r2)
+        Hr2 +=   -einsum('lbjd,ild->ijb',imds.Wovov,r2) #typo in nooijen's paper
+        Hr2 +=   -einsum('kbid,kjd->ijb',imds.Wovov,r2)
+        Hr2 += -einsum('c,ijcb->ijb',tmp,self.t2)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
@@ -357,13 +356,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         r1 = vector[:nocc].copy()
-        r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
-        index = nocc
-        for i in range(nocc):
-            for j in range(nocc):
-                for a in range(nvir):
-                    r2[i,j,a] =  vector[index]
-                    index += 1
+        r2 = vector[nocc:].copy().reshape(nocc,nocc,nvir)
+        #r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
+        #index = nocc
+        #for i in range(nocc):
+        #    for j in range(nocc):
+        #        for a in range(nvir):
+        #            r2[i,j,a] =  vector[index]
+        #            index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ip(self,r1,r2):
@@ -372,12 +372,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         size = nocc+nocc*nocc*nvir
         vector = np.zeros(size, r1.dtype)
         vector[:nocc] = r1.copy()
-        index = nocc
-        for i in range(nocc):
-            for j in range(nocc):
-                for a in range(nvir):
-                    vector[index] = r2[i,j,a]
-                    index += 1
+        vector[nocc:] = r2.copy().reshape(nocc*nocc*nvir)
+        #index = nocc
+        #for i in range(nocc):
+        #    for j in range(nocc):
+        #        for a in range(nvir):
+        #            vector[index] = r2[i,j,a]
+        #            index += 1
         return vector
 
     def eaccsd(self, nroots=2*4):
@@ -387,6 +388,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         evals, evecs = eigs(self.eaccsd_matvec, size, nroots)
         return evals.real[:nroots], evecs
 
+    @profile
     def eaccsd_matvec(self,vector):
     ########################################################
     # FOLLOWING:                                           #
@@ -404,11 +406,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         # Eq. (30)
-        Hr1 = ( einsum('ac,c->a',imds.Lvv,r1)
-               + einsum('ld,lad->a',2.*imds.Fov,r2)
-               + einsum('ld,lda->a',  -imds.Fov,r2)
-               + 2.0*einsum('alcd,lcd->a',imds.Wvovv,r2)
-               +    -einsum('aldc,lcd->a',imds.Wvovv,r2) )
+        Hr1 =  einsum('ac,c->a',imds.Lvv,r1)
+        Hr1 += einsum('ld,lad->a',2.*imds.Fov,r2)
+        Hr1 += einsum('ld,lda->a',  -imds.Fov,r2)
+        Hr1 += 2.*einsum('alcd,lcd->a',imds.Wvovv,r2)
+        Hr1 +=   -einsum('aldc,lcd->a',imds.Wvovv,r2)
 
         ## Eq. (31)
         Hr2 = einsum('abcj,c->jab',imds.Wvvvo,r1)
@@ -431,13 +433,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         r1 = vector[:nvir].copy()
-        r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
-        index = nvir
-        for i in range(nocc):
-            for a in range(nvir):
-                for b in range(nvir):
-                    r2[i,a,b] =  vector[index]
-                    index += 1
+        r2 = vector[nvir:].copy().reshape(nocc,nvir,nvir)
+        #r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
+        #index = nvir
+        #for i in range(nocc):
+        #    for a in range(nvir):
+        #        for b in range(nvir):
+        #            r2[i,a,b] =  vector[index]
+        #            index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ea(self,r1,r2):
@@ -446,12 +449,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         size = nvir+nvir*nvir*nocc
         vector = np.zeros(size, r1.dtype)
         vector[:nvir] = r1.copy()
-        index = nvir
-        for i in range(nocc):
-            for a in range(nvir):
-                for b in range(nvir):
-                    vector[index] = r2[i,a,b]
-                    index += 1
+        vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
+        #index = nvir
+        #for i in range(nocc):
+        #    for a in range(nvir):
+        #        for b in range(nvir):
+        #            vector[index] = r2[i,a,b]
+        #            index += 1
         return vector
 
 
