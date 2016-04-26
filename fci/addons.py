@@ -208,7 +208,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
         neleca, nelecb = nelec
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    assert(ci.shape == (strsa.size,strsb.size))
+    ci = ci.reshape(strsa.size,strsb.size)
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
     birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
     for i in range(norb):
@@ -246,10 +246,10 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
-        assert(ci.shape == (na,nb))
+        assert(ci.size == na*nb)
         idx = numpy.argmax(ci)
     else:
-        assert(ci[0].shape == (na,nb))
+        assert(ci[0].size == na*nb)
         idx = ci[0].argmax()
     stra = cistring.addr2str(norb, neleca, idx // nb)
     strb = cistring.addr2str(norb, nelecb, idx % nb )
