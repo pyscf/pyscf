@@ -517,6 +517,17 @@ class Cell(pyscf.gto.Mole):
         # inv_h has reciprocal vectors as rows
         return 2*np.pi*np.dot(scaled_kpts, scipy.linalg.inv(self._h))
 
+    def get_scaled_kpts(self, abs_kpts):
+        '''Get scaled k-points, given absolute k-points in 1/Bohr.
+
+        Args:
+            abs_kpts : (nkpts, 3) ndarray of floats 
+
+        Returns:
+            scaled_kpts : (nkpts, 3) ndarray of floats
+        '''
+        return 1./(2*np.pi)*np.dot(abs_kpts, self._h)
+
     def copy(self):
         return copy(self)
 
