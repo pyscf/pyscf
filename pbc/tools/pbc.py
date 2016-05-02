@@ -99,7 +99,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
     factor = np.trunc(reduced_coords)
     kG -= 2.*np.dot(np.sign(factor), box_edge)
-    kG[equal2boundary] = [0.0, 0.0, 0.0]
+    #kG[equal2boundary] = [0.0, 0.0, 0.0]
+    # coulG[equal2boundary] is zero'd at end.
     # Done wrapping.
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
@@ -119,6 +120,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
+            #coulG[np.isclose(np.linalg.norm(kG,axis=1),0.0)] = 4*np.pi*0.5*Rc**2
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 4*np.pi*0.5*Rc**2
     elif mf.exxdiv == 'ewald':
@@ -143,7 +145,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG += mf.exx_vq[qidx] * is_lt_maxqv
 
-    coulG[ coulG == np.inf ] = 0.0
+    #coulG[ coulG == np.inf ] = 0.0
+    coulG[equal2boundary] = 0.0
 
     return coulG
 
