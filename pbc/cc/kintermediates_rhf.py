@@ -349,7 +349,7 @@ def Woooo(cc,t1,t2,eris):
                 for kc in range(nkpts):
                     kd = kconserv[kk,kc,kl]
                     Wklij[kk,kl,ki] += einsum('klcd,ijcd->klij',eris.oovv[kk,kl,kc],t2[ki,kj,kc])
-                Wklij[kk,kl,ki] += einsum('klcd,ic,jd->klij',eris.oovv[kk,kl,ki],t1[ki],t1[kd])
+                Wklij[kk,kl,ki] += einsum('klcd,ic,jd->klij',eris.oovv[kk,kl,ki],t1[ki],t1[kj])
                 Wklij[kk,kl,ki] += einsum('klid,jd->klij',eris.ooov[kk,kl,ki],t1[kj])
                 Wklij[kk,kl,ki] += einsum('lkjc,ic->klij',eris.ooov[kl,kk,kj],t1[ki])
     return Wklij
