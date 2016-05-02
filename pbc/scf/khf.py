@@ -514,6 +514,9 @@ class KRHF(pbchf.RHF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if kpts is None: kpts = self.kpts
 
+        if not np.allclose(kpt_band, np.zeros(3)):
+            self._dtype = np.complex128
+
         fock = pbchf.get_hcore(cell, kpt_band) \
                 + self.get_veff(kpts=kpts, kpt_band=kpt_band)
         s1e = pbchf.get_ovlp(cell, kpt_band)
