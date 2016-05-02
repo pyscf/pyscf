@@ -39,8 +39,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
     cput1 = cput0 = (time.clock(), time.time())
     nkpts, nocc, nvir = t1.shape
-    eold = 0.0 + 1j*0.0
-    eccsd = 0.0 + 1j*0.0
+    eold = 0.0
+    eccsd = 0.0
     if cc.diis:
         adiis = lib.diis.DIIS(cc, cc.diis_file)
         adiis.space = cc.diis_space
@@ -273,11 +273,14 @@ def energy(cc, t1, t2, eris):
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, abs_kpts, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
         self._kpts = abs_kpts
         self.nkpts = len(self._kpts)
         self.kconserv = tools.get_kconserv(mf.cell, abs_kpts)
-        self.khelper  = kpoint_helper.unique_pqr_list(mf.cell, abs_kpts)
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        self.khelper = kpoint_helper.unique_pqr_list(mf.cell, abs_kpts)
+        self.made_ee_imds = False
+        self.made_ip_imds = False
+        self.made_ea_imds = False
 
     def dump_flags(self):
         pyscf.cc.ccsd.CCSD.dump_flags(self)
@@ -313,7 +316,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         t2 = numpy.conj(t2)
         self.emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
         self.emp2 /= nkpts
-        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
+        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -363,17 +366,23 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return update_amps(self, t1, t2, eris, max_memory)
 
     def ipccsd(self, nroots=2*4):
+        time0 = time.clock(), time.time()
+        log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         nkpts = self.nkpts
         size =  nocc + nkpts*nkpts*nocc*nocc*nvir
+        evals = np.zeros((nkpts,nroots),np.complex)
+        evecs = np.zeros((nkpts,size,nroots),np.complex)
         for kshift in range(nkpts):
             self.kshift = kshift
-            evals, evecs = eigs(self.ipccsd_matvec, size, nroots)
-            np.set_printoptions(precision=16)
-            print "kshift evals : ", evals[:nroots]
-        return evals.real[:nroots], evecs
+            evals[kshift], evecs[kshift] = eigs(self.ipccsd_matvec, size, nroots, self.ipccsd_diag())
+            #np.set_printoptions(precision=16)
+            #print "kshift evals : ", evals[kshift]
+        time0 = log.timer_debug1('converge ip-ccsd', *time0)
+        return evals.real, evecs
 
+    #@profile
     def ipccsd_matvec(self, vector):
     ########################################################
     # FOLLOWING:                                           #
@@ -382,53 +391,95 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     ########################################################
         r1,r2 = self.vector_to_amplitudes_ip(vector)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
+        t1,t2 = self.t1, self.t2
         nkpts = self.nkpts
         kshift = self.kshift
         kconserv = self.kconserv
 
-        Lvv = imdk.Lvv(self,t1,t2,eris)
-        Loo = imdk.Loo(self,t1,t2,eris)
-        Fov = imdk.cc_Fov(self,t1,t2,eris)
-        Wooov = imdk.Wooov(self,t1,t2,eris)
-        Wovvo = imdk.Wovvo(self,t1,t2,eris)
-        Wovoo = imdk.Wovoo(self,t1,t2,eris)
-        Woooo = imdk.Woooo(self,t1,t2,eris)
-        Wovov = imdk.Wovov(self,t1,t2,eris)
-        Woovv = eris.oovv
+        if not self.made_ip_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ip()
+            self.made_ip_imds = True
 
-        Hr1 = -einsum('ki,k->i',Loo[kshift],r1)
+        imds = self.imds
+
+        Hr1 = -einsum('ki,k->i',imds.Loo[kshift],r1)
         for kl in range(nkpts):
-            Hr1 += 2.*einsum('ld,ild->i',Fov[kl],r2[kshift,kl])
-            Hr1 +=   -einsum('ld,lid->i',Fov[kl],r2[kl,kshift])
+            Hr1 += 2.*einsum('ld,ild->i',imds.Fov[kl],r2[kshift,kl])
+            Hr1 +=   -einsum('ld,lid->i',imds.Fov[kl],r2[kl,kshift])
             for kk in range(nkpts):
                 kd = kconserv[kk,kshift,kl]
-                Hr1 += -2.*einsum('klid,kld->i',Wooov[kk,kl,kshift],r2[kk,kl])
-                Hr1 +=     einsum('lkid,kld->i',Wooov[kl,kk,kshift],r2[kk,kl])
+                Hr1 += -2.*einsum('klid,kld->i',imds.Wooov[kk,kl,kshift],r2[kk,kl])
+                Hr1 +=     einsum('lkid,kld->i',imds.Wooov[kl,kk,kshift],r2[kk,kl])
 
         Hr2 = np.zeros(r2.shape,dtype=t1.dtype)
         for ki in range(nkpts):
             for kj in range(nkpts):
                 kb = kconserv[ki,kshift,kj]
-                Hr2[ki,kj] += einsum('bd,ijd->ijb',Lvv[kb],r2[ki,kj])
-                Hr2[ki,kj] -= einsum('li,ljb->ijb',Loo[ki],r2[ki,kj])
-                Hr2[ki,kj] -= einsum('lj,ilb->ijb',Loo[kj],r2[ki,kj])
-                Hr2[ki,kj] -= einsum('kbij,k->ijb',Wovoo[kshift,kb,ki],r1)
+                Hr2[ki,kj] += einsum('bd,ijd->ijb',imds.Lvv[kb],r2[ki,kj])
+                Hr2[ki,kj] -= einsum('li,ljb->ijb',imds.Loo[ki],r2[ki,kj])
+                Hr2[ki,kj] -= einsum('lj,ilb->ijb',imds.Loo[kj],r2[ki,kj])
+                Hr2[ki,kj] -= einsum('kbij,k->ijb',imds.Wovoo[kshift,kb,ki],r1)
                 for kl in range(nkpts):
                     kk = kconserv[ki,kl,kj]
-                    Hr2[ki,kj] += einsum('klij,klb->ijb',Woooo[kk,kl,ki],r2[kk,kl])
+                    Hr2[ki,kj] += einsum('klij,klb->ijb',imds.Woooo[kk,kl,ki],r2[kk,kl])
                     kd = kconserv[kl,kj,kb]
-                    Hr2[ki,kj] += 2.*einsum('lbdj,ild->ijb',Wovvo[kl,kb,kd],r2[ki,kl])
-                    Hr2[ki,kj] += -einsum('lbdj,lid->ijb',Wovvo[kl,kb,kd],r2[kl,ki])
-                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',Wovov[kl,kb,kj],r2[ki,kl]) #typo in nooijen's paper
+                    Hr2[ki,kj] += 2.*einsum('lbdj,ild->ijb',imds.Wovvo[kl,kb,kd],r2[ki,kl])
+                    Hr2[ki,kj] += -einsum('lbdj,lid->ijb',imds.Wovvo[kl,kb,kd],r2[kl,ki])
+                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',imds.Wovov[kl,kb,kj],r2[ki,kl]) #typo in nooijen's paper
                     kd = kconserv[kl,ki,kb]
-                    Hr2[ki,kj] += -einsum('lbid,ljd->ijb',Wovov[kl,kb,ki],r2[kl,kj])
+                    Hr2[ki,kj] += -einsum('lbid,ljd->ijb',imds.Wovov[kl,kb,ki],r2[kl,kj])
                     for kk in range(nkpts):
                         kc = kshift
                         kd = kconserv[kl,kc,kk]
-                        tmp = ( 2.*einsum('lkdc,kld->c',Woovv[kl,kk,kd],r2[kk,kl])
-                                  -einsum('kldc,kld->c',Woovv[kk,kl,kd],r2[kk,kl]) )
+                        tmp = ( 2.*einsum('lkdc,kld->c',imds.Woovv[kl,kk,kd],r2[kk,kl])
+                                  -einsum('kldc,kld->c',imds.Woovv[kk,kl,kd],r2[kk,kl]) )
                         Hr2[ki,kj] += -einsum('c,ijcb->ijb',tmp,t2[ki,kj,kshift])
+
+        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        return vector
+
+    def ipccsd_diag(self):
+        t1,t2 = self.t1, self.t2
+        nkpts, nocc, nvir = t1.shape
+        kshift = self.kshift
+        kconserv = self.kconserv
+
+        if not self.made_ip_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ip()
+            self.made_ip_imds = True
+
+        imds = self.imds
+
+        Hr1 = -np.diag(imds.Loo[kshift])
+
+        Hr2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir),dtype=t1.dtype)
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                kb = kconserv[ki,kshift,kj]
+                for i in range(nocc):
+                    for j in range(nocc):
+                        for b in range(nvir):
+                            Hr2[ki,kj,i,j,b] = imds.Lvv[kb,b,b]
+                            Hr2[ki,kj,i,j,b] -= imds.Loo[ki,i,i]
+                            Hr2[ki,kj,i,j,b] -= imds.Loo[kj,j,j]
+                            for kl in range(nkpts):
+                                kk = kconserv[ki,kl,kj]
+                                Hr2[ki,kj,i,j,b] += imds.Woooo[kk,kl,ki,i,j,i,j]*(kk==ki)*(kl==kj)
+                                kd = kconserv[kl,kj,kb]
+                                Hr2[ki,kj,i,j,b] += 2.*imds.Wovvo[kl,kb,kd,j,b,b,j]*(kl==kj)
+                                Hr2[ki,kj,i,j,b] += -imds.Wovvo[kl,kb,kd,i,b,b,j]*(i==j)*(kl==ki)*(ki==kj)
+                                Hr2[ki,kj,i,j,b] += -imds.Wovov[kl,kb,kj,j,b,j,b]*(kl==kj)
+                                kd = kconserv[kl,ki,kb]
+                                Hr2[ki,kj,i,j,b] += -imds.Wovov[kl,kb,ki,i,b,i,b]*(kl==ki)
+                                for kk in range(nkpts):
+                                    kc = kshift
+                                    kd = kconserv[kl,kc,kk]
+                                    Hr2[ki,kj,i,j,b] += -2.*np.dot(t2[ki,kj,kshift,i,j,:,b],imds.Woovv[kl,kk,kd,j,i,b,:])*(kk==ki)*(kl==kj)
+                                    Hr2[ki,kj,i,j,b] += np.dot(t2[ki,kj,kshift,i,j,:,b],imds.Woovv[kk,kl,kd,i,j,b,:])*(kk==ki)*(kl==kj)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
@@ -439,15 +490,16 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nkpts = self.nkpts
 
         r1 = vector[:nocc].copy()
-        r2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), vector.dtype)
-        index = nocc
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                for i in range(nocc):
-                    for j in range(nocc):
-                        for a in range(nvir):
-                            r2[ki,kj,i,j,a] =  vector[index]
-                            index += 1
+        r2 = vector[nocc:].copy().reshape(nkpts,nkpts,nocc,nocc,nvir)
+        #r2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), vector.dtype)
+        #index = nocc
+        #for ki in range(nkpts):
+        #    for kj in range(nkpts):
+        #        for i in range(nocc):
+        #            for j in range(nocc):
+        #                for a in range(nvir):
+        #                    r2[ki,kj,i,j,a] =  vector[index]
+        #                    index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ip(self,r1,r2):
@@ -458,28 +510,35 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         vector = np.zeros((size), r1.dtype)
         vector[:nocc] = r1.copy()
-        index = nocc
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                for i in range(nocc):
-                    for j in range(nocc):
-                        for a in range(nvir):
-                            vector[index] = r2[ki,kj,i,j,a]
-                            index += 1
+        vector[nocc:] = r2.copy().reshape(nkpts*nkpts*nocc*nocc*nvir)
+        #index = nocc
+        #for ki in range(nkpts):
+        #    for kj in range(nkpts):
+        #        for i in range(nocc):
+        #            for j in range(nocc):
+        #                for a in range(nvir):
+        #                    vector[index] = r2[ki,kj,i,j,a]
+        #                    index += 1
         return vector
 
     def eaccsd(self, nroots=2*4):
+        time0 = time.clock(), time.time()
+        log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         nkpts = self.nkpts
         size =  nvir + nkpts*nkpts*nocc*nvir*nvir
+        evals = np.zeros((nkpts,nroots),np.complex)
+        evecs = np.zeros((nkpts,size,nroots),np.complex)
         for kshift in range(nkpts):
             self.kshift = kshift
-            evals, evecs = eigs(self.eaccsd_matvec, size, nroots)
-            np.set_printoptions(precision=16)
-            print "kshift evals : ", evals[:nroots]
-        return evals.real[:nroots], evecs
+            evals[kshift], evecs[kshift] = eigs(self.eaccsd_matvec, size, nroots, self.eaccsd_diag())
+            #np.set_printoptions(precision=16)
+            #print "kshift evals : ", evals[:nroots]
+        time0 = log.timer_debug1('converge ea-ccsd', *time0)
+        return evals.real, evecs
 
+    #@profile
     def eaccsd_matvec(self, vector):
     ########################################################
     # FOLLOWING:                                           #
@@ -488,56 +547,98 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     ########################################################
         r1,r2 = self.vector_to_amplitudes_ea(vector)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
+        t1,t2 = self.t1, self.t2
         nkpts = self.nkpts
         kshift = self.kshift
         kconserv = self.kconserv
 
-        Lvv = imdk.Lvv(self,t1,t2,eris)
-        Loo = imdk.Loo(self,t1,t2,eris)
-        Fov = imdk.cc_Fov(self,t1,t2,eris)
-        Wvovv = imdk.Wvovv(self,t1,t2,eris)
-        Wvvvo = imdk.Wvvvo(self,t1,t2,eris)
-        Wovvo = imdk.Wovvo(self,t1,t2,eris)
-        Wvvvv = imdk.Wvvvv(self,t1,t2,eris)
-        Woovv = eris.oovv
-        Wovov = imdk.Wovov(self,t1,t2,eris)
+        if not self.made_ea_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ea()
+            self.made_ea_imds = True
 
-        Hr1 = einsum('ac,c->a',Lvv[kshift],r1)
+        imds = self.imds
+
+        Hr1 = einsum('ac,c->a',imds.Lvv[kshift],r1)
         for kl in range(nkpts):
-            Hr1 += 2.*einsum('ld,lad->a',Fov[kl],r2[kl,kshift])
-            Hr1 +=   -einsum('ld,lda->a',Fov[kl],r2[kl,kl])
+            Hr1 += 2.*einsum('ld,lad->a',imds.Fov[kl],r2[kl,kshift])
+            Hr1 +=   -einsum('ld,lda->a',imds.Fov[kl],r2[kl,kl])
             for kc in range(nkpts):
                 kd = kconserv[kshift,kc,kl]
-                Hr1 +=  2.*einsum('alcd,lcd->a',Wvovv[kshift,kl,kc],r2[kl,kc])
-                Hr1 +=    -einsum('aldc,lcd->a',Wvovv[kshift,kl,kd],r2[kl,kc])
+                Hr1 +=  2.*einsum('alcd,lcd->a',imds.Wvovv[kshift,kl,kc],r2[kl,kc])
+                Hr1 +=    -einsum('aldc,lcd->a',imds.Wvovv[kshift,kl,kd],r2[kl,kc])
 
         Hr2 = np.zeros(r2.shape,dtype=t1.dtype)
         for kj in range(nkpts):
             for ka in range(nkpts):
                 kb = kconserv[kshift,ka,kj]
-                Hr2[kj,ka] += einsum('abcj,c->jab',Wvvvo[ka,kb,kshift],r1)
-                Hr2[kj,ka] -= einsum('lj,lab->jab',Loo[kj],r2[kj,ka])
-                Hr2[kj,ka] += einsum('ac,jcb->jab',Lvv[ka],r2[kj,ka])
-                Hr2[kj,ka] += einsum('bd,jad->jab',Lvv[kb],r2[kj,ka])
+                Hr2[kj,ka] += einsum('abcj,c->jab',imds.Wvvvo[ka,kb,kshift],r1)
+                Hr2[kj,ka] -= einsum('lj,lab->jab',imds.Loo[kj],r2[kj,ka])
+                Hr2[kj,ka] += einsum('ac,jcb->jab',imds.Lvv[ka],r2[kj,ka])
+                Hr2[kj,ka] += einsum('bd,jad->jab',imds.Lvv[kb],r2[kj,ka])
                 for kd in range(nkpts):
                     kc = kconserv[ka,kd,kb]
-                    Hr2[kj,ka] += einsum('abcd,jcd->jab',Wvvvv[ka,kb,kc],r2[kj,kc])
+                    Hr2[kj,ka] += einsum('abcd,jcd->jab',imds.Wvvvv[ka,kb,kc],r2[kj,kc])
                     kl = kconserv[kd,kb,kj]
-                    Hr2[kj,ka] += 2.*einsum('lbdj,lad->jab',Wovvo[kl,kb,kd],r2[kl,ka])
-                    #Wvovo[kb,kl,kd,kj] <= Wovov[kl,kb,kj,kd].transpose(1,0,3,2)
-                    Hr2[kj,ka] += -einsum('bldj,lad->jab',Wovov[kl,kb,kj].transpose(1,0,3,2),r2[kl,ka])
-                    #Wvoov[kb,kl,kj,kd] <= Wovvo[kl,kb,kd,kj].transpose(1,0,3,2)
-                    Hr2[kj,ka] += -einsum('bljd,lda->jab',Wovvo[kl,kb,kd].transpose(1,0,3,2),r2[kl,kd])
+                    Hr2[kj,ka] += 2.*einsum('lbdj,lad->jab',imds.Wovvo[kl,kb,kd],r2[kl,ka])
+                    #imds.Wvovo[kb,kl,kd,kj] <= imds.Wovov[kl,kb,kj,kd].transpose(1,0,3,2)
+                    Hr2[kj,ka] += -einsum('bldj,lad->jab',imds.Wovov[kl,kb,kj].transpose(1,0,3,2),r2[kl,ka])
+                    #imds.Wvoov[kb,kl,kj,kd] <= imds.Wovvo[kl,kb,kd,kj].transpose(1,0,3,2)
+                    Hr2[kj,ka] += -einsum('bljd,lda->jab',imds.Wovvo[kl,kb,kd].transpose(1,0,3,2),r2[kl,kd])
                     kl = kconserv[kd,ka,kj]
-                    #Wvovo[ka,kl,kd,kj] <= Wovov[kl,ka,kj,kd].transpose(1,0,3,2)
-                    Hr2[kj,ka] += -einsum('aldj,ldb->jab',Wovov[kl,ka,kj].transpose(1,0,3,2),r2[kl,kd])
+                    #imds.Wvovo[ka,kl,kd,kj] <= imds.Wovov[kl,ka,kj,kd].transpose(1,0,3,2)
+                    Hr2[kj,ka] += -einsum('aldj,ldb->jab',imds.Wovov[kl,ka,kj].transpose(1,0,3,2),r2[kl,kd])
                     for kc in range(nkpts):
                         kk = kshift
                         kl = kconserv[kc,kk,kd]
-                        tmp = ( 2.*einsum('klcd,lcd->k',Woovv[kk,kl,kc],r2[kl,kc])
-                                  -einsum('kldc,lcd->k',Woovv[kk,kl,kd],r2[kl,kc]) )
+                        tmp = ( 2.*einsum('klcd,lcd->k',imds.Woovv[kk,kl,kc],r2[kl,kc])
+                                  -einsum('kldc,lcd->k',imds.Woovv[kk,kl,kd],r2[kl,kc]) )
                         Hr2[kj,ka] += -einsum('k,kjab->jab',tmp,t2[kshift,kj,ka])
+
+        vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        return vector
+
+    def eaccsd_diag(self):
+        t1,t2 = self.t1, self.t2
+        nkpts, nocc, nvir = t1.shape
+        kshift = self.kshift
+        kconserv = self.kconserv
+
+        if not self.made_ea_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ea()
+            self.made_ea_imds = True
+
+        imds = self.imds
+
+        Hr1 = np.diag(imds.Lvv[kshift])
+
+        Hr2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir),dtype=t1.dtype)
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = kconserv[kshift,ka,kj]
+                for j in range(nocc):
+                    for a in range(nvir):
+                        for b in range(nvir):
+                            Hr2[kj,ka,j,a,b] -= imds.Loo[kj,j,j]
+                            Hr2[kj,ka,j,a,b] += imds.Lvv[ka,a,a]
+                            Hr2[kj,ka,j,a,b] += imds.Lvv[kb,b,b]
+                            for kd in range(nkpts):
+                                kc = kconserv[ka,kd,kb]
+                                Hr2[kj,ka,j,a,b] += imds.Wvvvv[ka,kb,kc,a,b,a,b]*(kc==ka)
+                                kl = kconserv[kd,kb,kj]
+                                Hr2[kj,ka,j,a,b] += 2.*imds.Wovvo[kl,kb,kd,j,b,b,j]*(kl==kj)
+                                Hr2[kj,ka,j,a,b] += -imds.Wovov[kl,kb,kj].transpose(1,0,3,2)[b,j,b,j]*(kl==kj)
+                                Hr2[kj,ka,j,a,b] += -imds.Wovvo[kl,kb,kd].transpose(1,0,3,2)[b,j,j,b]*(a==b)*(kl==kj)*(kd==ka)
+                                kl = kconserv[kd,ka,kj]
+                                Hr2[kj,ka,j,a,b] += -imds.Wovov[kl,ka,kj].transpose(1,0,3,2)[a,j,a,j]*(kl==kj)*(kd==ka)
+                                for kc in range(nkpts):
+                                    kk = kshift
+                                    kl = kconserv[kc,kk,kd]
+                                    Hr2[kj,ka,j,a,b] += -2*np.dot(t2[kshift,kj,ka,:,j,a,b],imds.Woovv[kk,kl,kc,:,j,a,b])*(kl==kj)*(kc==ka)
+                                    Hr2[kj,ka,j,a,b] += np.dot(t2[kshift,kj,ka,:,j,a,b],imds.Woovv[kk,kl,kd,:,j,b,a])*(kl==kj)*(kc==ka)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -548,15 +649,16 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nkpts = self.nkpts
 
         r1 = vector[:nvir].copy()
-        r2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), vector.dtype)
-        index = nvir
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                for j in range(nocc):
-                    for a in range(nvir):
-                        for b in range(nvir):
-                            r2[kj,ka,j,a,b] = vector[index]
-                            index += 1
+        r2 = vector[nvir:].copy().reshape(nkpts,nkpts,nocc,nvir,nvir)
+        #r2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), vector.dtype)
+        #index = nvir
+        #for kj in range(nkpts):
+        #    for ka in range(nkpts):
+        #        for j in range(nocc):
+        #            for a in range(nvir):
+        #                for b in range(nvir):
+        #                    r2[kj,ka,j,a,b] = vector[index]
+        #                    index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ea(self,r1,r2):
@@ -567,14 +669,15 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         vector = np.zeros((size), r1.dtype)
         vector[:nvir] = r1.copy()
-        index = nvir
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                for j in range(nocc):
-                    for a in range(nvir):
-                        for b in range(nvir):
-                            vector[index] = r2[kj,ka,j,a,b]
-                            index += 1
+        vector[nvir:] = r2.copy().reshape(nkpts*nkpts*nocc*nvir*nvir)
+        #index = nvir
+        #for kj in range(nkpts):
+        #    for ka in range(nkpts):
+        #        for j in range(nocc):
+        #            for a in range(nvir):
+        #                for b in range(nvir):
+        #                    vector[index] = r2[kj,ka,j,a,b]
+        #                    index += 1
         return vector
 
 class _ERIS:
@@ -691,6 +794,40 @@ class _ERIS:
 
         log.timer('CCSD integral transformation', *cput0)
 
+
+class _IMDS:
+    def __init__(self, cc):
+        self.cc = cc
+
+    def make_ip(self):
+        cc = self.cc
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        self.Lvv = imdk.Lvv(cc,t1,t2,eris)
+        self.Loo = imdk.Loo(cc,t1,t2,eris)
+        self.Fov = imdk.cc_Fov(cc,t1,t2,eris)
+        self.Wooov = imdk.Wooov(cc,t1,t2,eris)
+        self.Wovvo = imdk.Wovvo(cc,t1,t2,eris)
+        self.Wovoo = imdk.Wovoo(cc,t1,t2,eris)
+        self.Woooo = imdk.Woooo(cc,t1,t2,eris)
+        self.Wovov = imdk.Wovov(cc,t1,t2,eris)
+        self.Woovv = eris.oovv
+
+    def make_ea(self):
+        cc = self.cc
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        self.Lvv = imdk.Lvv(cc,t1,t2,eris)
+        self.Loo = imdk.Loo(cc,t1,t2,eris)
+        self.Fov = imdk.cc_Fov(cc,t1,t2,eris)
+        self.Wvovv = imdk.Wvovv(cc,t1,t2,eris)
+        self.Wvvvo = imdk.Wvvvo(cc,t1,t2,eris)
+        self.Wovvo = imdk.Wovvo(cc,t1,t2,eris)
+        self.Wvvvv = imdk.Wvvvv(cc,t1,t2,eris)
+        self.Woovv = eris.oovv
+        self.Wovov = imdk.Wovov(cc,t1,t2,eris)
+
+
 def print_james_header():
     print ""
     print " ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
@@ -700,6 +837,7 @@ def print_james_header():
     print " ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ "
     print ""
     return
+
 
 def print_james_ascii():
     print "\
@@ -765,6 +903,7 @@ yyyyydmmmmmmmmdy+++oosss++///////:////++++oooooooooo+oooooooooossssso+++++ooyss+
 yyyyymmmmdddmdhs///ooooo///////::::///+///++++++oossssssssoooooossso+//+++oossso++osyyhhmmmddddddddd\n\
     "
     return
+
 
 def print_tim_ascii():
     print "\n\
