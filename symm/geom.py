@@ -66,7 +66,7 @@ def alias_axes(axes, ref):
     '''
     x_id, y_id, z_id = closest_axes(axes, ref)
     new_axes = axes[[x_id,y_id,z_id]]
-    if numpy.linalg.det(new_axes) < 0:
+    if numpy.linalg.det(new_axes) < 0:  # Avoid breaking chirality
         new_axes = axes[[y_id,x_id,z_id]]
     return new_axes
 

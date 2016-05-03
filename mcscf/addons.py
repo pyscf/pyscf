@@ -343,9 +343,14 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         # remove core and active space from rest
         if mocc.shape[1] < mfmo.shape[1]:
             rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-            restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
-            restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
-            mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
+            e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+            restorb = numpy.dot(rest, u[:,e>1e-7])
+            if casscf.mol.symmetry:
+                t = casscf.mol.intor_symmetric('cint1e_kin_sph')
+                t = reduce(numpy.dot, (restorb.T, t, restorb))
+                e, u = numpy.linalg.eigh(t)
+                restorb = numpy.dot(restorb, u)
+            mo = numpy.hstack((mocc, restorb))
         else:
             mo = mocc
 
