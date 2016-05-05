@@ -31,7 +31,7 @@ libfci = pyscf.lib.load_library('libfci')
 # h2e has three parts (h2e_aa, h2e_ab, h2e_bb)
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -45,7 +45,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    ci1 = numpy.zeros((na,nb))
+    assert(fcivec.size == na*nb)
+    ci1 = numpy.zeros_like(fcivec)
     f1e_tril = pyscf.lib.pack_tril(f1e[0])
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -75,7 +76,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -93,7 +94,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_uhf2e(g2e_aa.ctypes.data_as(ctypes.c_void_p),

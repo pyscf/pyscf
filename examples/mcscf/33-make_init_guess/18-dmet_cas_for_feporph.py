@@ -198,7 +198,7 @@ mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
 # 2. Without specifying wfnsym for fcisolver, it may converge to B2g or B3g
 #    states.  The two states are very close to B1g solution (~ 1 mEh higher).
 #
-# 3. mc.frozen = idx4d to freeze the 4D orbitals in active space.  Without
+# 3. mc.frozen = ... to freeze the 4D orbitals in active space.  Without
 #    doing so, it's possible for the optimizer to cross the barrier, and
 #    mixing the 4d and 4s orbital, then converge to a nearby solution which
 #    involves 4s orbitals.  The 4s character solution is energetically lower
@@ -207,7 +207,7 @@ mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
 #
 fci.addons.fix_spin_(mc.fcisolver, ss_value=2)  # Triplet, ss_value = S*(S+1)
 mc.fcisolver.wfnsym = 'B1g'
-mc.frozen = idx4d
+mc.frozen = range(mc.ncore+5, mc.ncore+10)  # 6th-10th active orbitals are Fe 4d
 mc.kernel(mo)
 mo = mc.mo_coeff
 

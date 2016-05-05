@@ -147,3 +147,6 @@ from pyscf import ao2mo
 
 __path__.append(os.path.join(os.path.dirname(__file__), 'future'))
 __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
+
+DEBUG = False
+

@@ -42,7 +42,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class HF(mf_class):
+    class SFX2C(mf_class):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
@@ -107,7 +107,7 @@ def sfx2c1e(mf):
                 h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
             return h1
 
-    return HF()
+    return SFX2C()
 
 sfx2c = sfx2c1e
 

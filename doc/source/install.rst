@@ -5,8 +5,8 @@ Installation
 
 You may already have `cmake <http://www.cmake.org>`_,
 `numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
-and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use pip
-to install numpy, scipy and h5py::
+and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use
+``python-pypi`` to install numpy, scipy and h5py::
 
   $ pip install --target=/path/to/python/libs numpy
   $ pip install --target=/path/to/python/libs scipy
@@ -25,11 +25,11 @@ Now you need build the C extensions in :file:`pyscf/lib`::
   $ make
 
 It will automatically download the analytical GTO integral library
-``libcint`` https://github.com/sunqm/libcint.git and the DFT
-exchange correlation functional library ``libxc``
-http://www.tddft.org/programs/Libxc.  Finally, to make Python find pyscf
-package, add the **parent directory** of pyscf to :code:`PYTHONPATH`,
-e.g. assuming pyscf is put in ``/home/abc``::
+``libcint`` https://github.com/sunqm/libcint.git and the DFT exchange
+correlation functional library `libxc <http://www.tddft.org/programs/Libxc>_`
+and `xcfun <https://github.com/dftlibs/xcfun.git>_`.  Finally, to make Python
+be able to find pyscf package, add the **parent directory** of pyscf to
+:code:`PYTHONPATH`, e.g. assuming pyscf is put in ``/home/abc``::
 
   export PYTHONPATH=/home/abc:$PYTHONPATH
 
@@ -64,13 +64,13 @@ many modules)::
   $ make
 
 You can link to other BLAS libraries by setting ``BLA_VENDOR``, eg
-``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``.  Please refer to `cmake
-mannual <http://www.cmake.org/cmake/help/v3.0/module/FindBLAS.html>`_
-for more details of the use of ``FindBLAS`` macro.
+``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``.  Please refer to `cmake mannual
+<http://www.cmake.org/cmake/help/v3.0/module/FindBLAS.html>`_ for more details
+of the use of ``FindBLAS`` macro.
 
-If the cmake ``BLA_VENDOR`` cannot detect the right BLAS library as you
-expected, you can simply assign the libraries to the variable
-``BLAS_LIBRARIES`` in :file:`lib/CMakeLists.txt`::
+If the cmake ``BLA_VENDOR`` cannot find the right BLAS library as you expected,
+you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
+:file:`lib/CMakeLists.txt`::
 
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
@@ -107,29 +107,40 @@ Plugins
 
 DMRG solver
 -----------
-
-There are two DMRG solver interfaces avaialbe in PySCF:
-Block (http://chemists.princeton.edu/chan/software/block-code-for-dmrg)
-and CheMPS2 (http://sebwouters.github.io/CheMPS2/index.html).
-Before using the DMRG, you need create a config file
+Density matrix renormalization group (DMRG) implementations Block
+(http://chemists.princeton.edu/chan/software/block-code-for-dmrg) and
+CheMPS2 (http://sebwouters.github.io/CheMPS2/index.html)
+are efficient DMRG solvers for ab initio quantum chemistry problem.
+`Installing Block <http://sanshar.github.io/Block/build.html>`_ requires
+C++11 compiler.  If C++11 is not supported by your compiler, you can
+register and download precompiled Block binary from
+http://chemists.princeton.edu/chan/software/block-code-for-dmrg.
+Before using the Block or CheMPS2, you need create a config file
 future/dmrgscf/settings.py  (as shown by settings.py.example) to store
 the path where the DMRG solver was installed.
 
 FCIQMC
 ------
-PySCF has an interface to call FCIQMC solver NECI
-(https://github.com/ghb24/NECI_STABLE).  To use NECI, you need
-create a config file future/fciqmc/settings.py to store the path where
-NECI was installed.
+NECI (https://github.com/ghb24/NECI_STABLE) is FCIQMC code developed by
+George Booth and Ali Alavi.  PySCF has an interface to call FCIQMC
+solver NECI.  To use NECI, you need create a config file
+future/fciqmc/settings.py to store the path where NECI was installed.
 
 Libxc
 -----
+By default, building PySCF will automatically download and install
+`Libxc 2.2.2 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_
+``pyscf.dft.libxc`` module provided a general interface to access Libxc functionals.
 
 Xcfun
 -----
+By default, building PySCF will automatically download and install
+latest xcfun code from https://github.com/dftlibs/xcfun.
+``pyscf.dft.xcfun`` module provided a general interface to access Libxc
+functionals.
 
-COSMO
------
+XianCI
+------
+XianCI is a spin-adapted MRCI program.  "Bingbing Sun" <bsuo@nwu.edu.cn>
+is the main developer of XianCI program.
 
-QM/MM
------

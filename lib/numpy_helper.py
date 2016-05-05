@@ -19,7 +19,7 @@ ANTIHERMI = 2
 
 
 # 2d -> 1d
-def pack_tril(mat):
+def pack_tril(mat, out=None):
     '''flatten the lower triangular part of a matrix.
     Given mat, it returns mat[numpy.tril_indices(mat.shape[0])]
 
@@ -28,20 +28,26 @@ def pack_tril(mat):
     >>> pack_tril(numpy.arange(9).reshape(3,3))
     [0 3 4 6 7 8]
     '''
-    mat = numpy.ascontiguousarray(mat)
-    nd = mat.shape[0]
-    tril = numpy.empty(nd*(nd+1)//2, mat.dtype)
-    if numpy.iscomplexobj(mat):
-        fn = _np_helper.NPzpack_tril
+    mat = numpy.asarray(mat, order='C')
+    if mat.ndim == 2:
+        count, nd = 1, mat.shape[0]
+        if out is None:
+            out = numpy.empty(nd*(nd+1)//2, mat.dtype)
     else:
-        fn = _np_helper.NPdpack_tril
-    fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), tril.ctypes.data_as(ctypes.c_void_p), \
+        count, nd = mat.shape[:2]
+        if out is None:
+            out = numpy.empty((count,nd*(nd+1)//2), mat.dtype)
+    if numpy.iscomplexobj(mat):
+        fn = _np_helper.NPzpack_tril_2d
+    else:
+        fn = _np_helper.NPdpack_tril_2d
+    fn(ctypes.c_int(count), ctypes.c_int(nd),
+       out.ctypes.data_as(ctypes.c_void_p),
        mat.ctypes.data_as(ctypes.c_void_p))
-    return tril
+    return out
 
 # 1d -> 2d, write hermitian lower triangle to upper triangle
-def unpack_tril(tril, filltriu=HERMITIAN):
+def unpack_tril(tril, filltriu=HERMITIAN, out=None):
     '''Reverse operation of pack_tril.  Put a vector in the lower triangular
     part of a matrix.
 
@@ -69,18 +75,25 @@ def unpack_tril(tril, filltriu=HERMITIAN):
      [ 1.  2. -4.]
      [ 3.  4.  5.]]
     '''
-    tril = numpy.ascontiguousarray(tril)
-    nd = int(numpy.sqrt(tril.size*2))
-    mat = numpy.empty((nd,nd), tril.dtype)
-    if numpy.iscomplexobj(tril):
-        fn = _np_helper.NPzunpack_tril
+    tril = numpy.asarray(tril, order='C')
+    if tril.ndim == 2:
+        count, nd = tril.shape
+        nd = int(numpy.sqrt(nd*2))
+        if out is None:
+            out = numpy.empty((count,nd,nd), tril.dtype)
     else:
-        fn = _np_helper.NPdunpack_tril
-    fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), tril.ctypes.data_as(ctypes.c_void_p),
-       mat.ctypes.data_as(ctypes.c_void_p),
-       ctypes.c_int(filltriu))
-    return mat
+        count, nd = 1, tril.size
+        nd = int(numpy.sqrt(nd*2))
+        if out is None:
+            out = numpy.empty((nd,nd), tril.dtype)
+    if numpy.iscomplexobj(tril):
+        fn = _np_helper.NPzunpack_tril_2d
+    else:
+        fn = _np_helper.NPdunpack_tril_2d
+    fn(ctypes.c_int(count), ctypes.c_int(nd),
+       tril.ctypes.data_as(ctypes.c_void_p),
+       out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(filltriu))
+    return out
 
 # extract a row from a tril-packed matrix
 def unpack_row(tril, row_id):
@@ -504,6 +517,8 @@ def direct_sum(subscripts, *operands):
         sign = [x for x in subscript if x in '+-']
 
         symbs = subscript[1:].replace('-', '+').split('+')
+        s = ''.join(symbs)
+        assert(len(set(s)) == len(s))  # make sure no duplicated symbols
         return sign, symbs
 
     if '->' in subscripts:

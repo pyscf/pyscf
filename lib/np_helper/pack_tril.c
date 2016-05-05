@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <complex.h>
+#include <omp.h>
 #include "np_helper.h"
 
 void NPdsymm_triu(int n, double *mat, int hermi)
@@ -98,12 +99,9 @@ void NPzhermi_triu(int n, double complex *mat, int hermi)
 void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 {
         size_t i, j, ij;
-        double *pmat;
-
         for (ij = 0, i = 0; i < n; i++) {
-                pmat = mat + i * n;
                 for (j = 0; j <= i; j++, ij++) {
-                        pmat[j] = tril[ij];
+                        mat[i*n+j] = tril[ij];
                 }
         }
         if (hermi) {
@@ -185,5 +183,66 @@ void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
                 }
                 in += idim;
         }
+}
+
+void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat, hermi)
+{
+        int ic;
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                NPdunpack_tril(n, tril+n2*ic, mat+nn*ic, hermi);
+        }
+}
+}
+
+void NPzunpack_tril_2d(int count, int n,
+                       double complex *tril, double complex *mat, int hermi)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat, hermi)
+{
+        int ic;
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                NPzunpack_tril(n, tril+n2*ic, mat+nn*ic, hermi);
+        }
+}
+}
+
+void NPdpack_tril_2d(int count, int n, double *tril, double *mat)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat)
+{
+        int ic;
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                NPdpack_tril(n, tril+n2*ic, mat+nn*ic);
+        }
+}
+}
+
+void NPzpack_tril_2d(int count, int n, double complex *tril, double complex *mat)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, tril, mat)
+{
+        int ic;
+        size_t nn = n * n;
+        size_t n2 = n*(n+1)/2;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                NPzpack_tril(n, tril+n2*ic, mat+nn*ic);
+        }
+}
 }
 

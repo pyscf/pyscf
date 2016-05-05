@@ -15,27 +15,6 @@ import pyscf.symm.param
 TOLERANCE = 1e-5
 PLACE = int(-numpy.log10(TOLERANCE))
 
-def get_charge_center(atoms):
-    charge = numpy.array([mole._charge(a[0]) for a in atoms])
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
-    rbar = numpy.einsum('i,ij->j', charge, coords)/charge.sum()
-    return rbar
-
-def get_mass_center(atoms):
-    mass = numpy.array([pyscf.lib.parameters.ELEMENTS[mole._charge(a[0])][1]
-                        for a in atoms])
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
-    rbar = numpy.einsum('i,ij->j', mass, coords)/mass.sum()
-    return rbar
-
-def get_inertia_momentum(atoms, basis):
-    charge = numpy.array([mole._charge(a[0]) for a in atoms])
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
-    rbar = numpy.einsum('i,ij->j', charge, coords)/charge.sum()
-    coords = coords - rbar
-    im = numpy.einsum('i,ij,ik->jk', charge, coords, coords)/charge.sum()
-    return im
-
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
         return True
@@ -43,14 +22,14 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
         v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
         return numpy.linalg.norm(v3) < TOLERANCE
 
-def argsort_coords(coords):
+def argsort_coords(coords, decimals=PLACE-1):
     coords = numpy.around(coords, decimals=PLACE-1)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
-def sort_coords(coords):
-    coords = numpy.array(coords)
-    idx = argsort_coords(coords)
+def sort_coords(coords, decimals=PLACE-1):
+    coords = numpy.asarray(coords)
+    idx = argsort_coords(coords, decimals=PLACE-1)
     return coords[idx]
 
 # ref. http://en.wikipedia.org/wiki/Rotation_matrix
@@ -68,21 +47,28 @@ def rotation_mat(vec, theta):
     r = c * numpy.eye(3) + s * ux + (1-c) * uu
     return r
 
-# refection operation via householder
+# reflection operation with householder
 def householder(vec):
     vec = numpy.array(vec)
     return numpy.eye(3) - vec[:,None]*vec*2
 
-def axes_alias(axes, ref):
-    '''Rename axes, make it as close as possible to the ref axes
-    '''
+def closest_axes(axes, ref):
     xcomp, ycomp, zcomp = numpy.einsum('ix,jx->ji', axes, ref)
     z_id = numpy.argmax(abs(zcomp))
     xcomp[z_id] = ycomp[z_id] = 0       # remove z
     x_id = numpy.argmax(abs(xcomp))
     ycomp[x_id] = 0                     # remove x
     y_id = numpy.argmax(abs(ycomp))
-    return axes[[x_id,y_id,z_id]]
+    return x_id, y_id, z_id
+
+def alias_axes(axes, ref):
+    '''Rename axes, make it as close as possible to the ref axes
+    '''
+    x_id, y_id, z_id = closest_axes(axes, ref)
+    new_axes = axes[[x_id,y_id,z_id]]
+    if numpy.linalg.det(new_axes) < 0:  # Avoid breaking chirality
+        new_axes = axes[[y_id,x_id,z_id]]
+    return new_axes
 
 #TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
@@ -103,77 +89,111 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
     rawsys = SymmSys(atoms, basis)
     w, axes = scipy.linalg.eigh(rawsys.im)
     axes = axes.T
-    log.debug('principal inertia moments %s', str(w))
+
+# Make sure the axes can be rotated from continuous unitary transformation
+    x_id, y_id, z_id = closest_axes(axes, numpy.eye(3))
+    if axes[z_id,2] < 0:
+        axes[z_id] *= -1
+    if axes[x_id,0] < 0:
+        axes[x_id] *= -1
+    if numpy.linalg.det(axes) < 0:
+        axes[y_id] *= -1
+    log.debug('principal inertia moments %s', w)
+    log.debug('new axes %s', axes)
 
     if numpy.allclose(w, 0, atol=tol):
         gpname = 'SO3'
+        return gpname, rawsys.charge_center, axes
+
     elif numpy.allclose(w[:2], 0, atol=tol): # linear molecule
         if rawsys.detect_icenter():
             gpname = 'Dooh'
         else:
             gpname = 'Coov'
-    elif numpy.allclose(w, w[0], atol=tol): # T, O, I
-        gpname, axes = _search_toi(rawsys)
-    elif (numpy.allclose(w[0], w[1], atol=tol) or
-          numpy.allclose(w[1], w[2], atol=tol)):
-        if not numpy.allclose(w[0], w[1], atol=tol):
-            axes = axes[[1,2,0]]
-        n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
-        if c2x is not None:
-            if rawsys.iden_op(householder(axes[2])):
-                gpname = 'D%dh' % n
-            elif rawsys.detect_icenter():
-                gpname = 'D%dd' % n
-            else:
-                gpname = 'D%d' % n
-            yaxis = numpy.cross(axes[2], c2x)
-            axes = numpy.array((c2x, yaxis, axes[2]))
-        elif mirrorx is not None:
-            gpname = 'C%dv' % n
-            yaxis = numpy.cross(axes[2], mirrorx)
-            axes = numpy.array((mirrorx, yaxis, axes[2]))
-        elif rawsys.iden_op(householder(axes[2])): # xy-mirror
-            gpname = 'C%dh' % n
-        elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi/n)): # rotate and inverse
-            gpname = 'S%d' % (n*2)
-        else:
-            gpname = 'C%d' % n
+        return gpname, rawsys.charge_center, axes
+
     else:
-        is_c2x = rawsys.iden_op(rotation_mat(axes[0], numpy.pi))
-        is_c2y = rawsys.iden_op(rotation_mat(axes[1], numpy.pi))
-        is_c2z = rawsys.iden_op(rotation_mat(axes[2], numpy.pi))
-# rotate to old axes, as close as possible?
-        if is_c2z and is_c2x and is_c2y:
-            if rawsys.detect_icenter():
-                gpname = 'D2h'
-            else:
-                gpname = 'D2'
-            axes = axes_alias(axes, numpy.eye(3))
-        elif is_c2z or is_c2x or is_c2y:
-            if is_c2x:
+        try:
+            if numpy.allclose(w, w[0], atol=tol): # T, O, I
+                gpname, axes = _search_toi(rawsys)
+                return gpname, rawsys.charge_center, axes
+
+            elif numpy.allclose(w[1], w[2], atol=tol):
                 axes = axes[[1,2,0]]
-            if is_c2y:
-                axes = axes[[2,0,1]]
-            if rawsys.iden_op(householder(axes[2])):
-                gpname = 'C2h'
-            elif rawsys.iden_op(householder(axes[0])):
-                gpname = 'C2v'
+                n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
+            elif numpy.allclose(w[0], w[1], atol=tol):
+                n, c2x, mirrorx = rawsys.search_c_highest(axes[2])
             else:
-                gpname = 'C2'
+                n = 1
+        except RotationAxisNotFound:
+# Some quasi symmetric system may cheat the inertia momentum.  If any of
+# the symmetry inequivalent single atom does not sit the possible rotation
+# axis, RotationAxisNotFound will be raised. We temporarily label this system
+# with highest rotation axis C1
+            n = 1
+
+        #print('Highest C_n = C%d' % n)
+        if n >= 2:
+            if c2x is not None:
+                if rawsys.iden_op(householder(axes[2])):
+                    gpname = 'D%dh' % n
+                elif rawsys.detect_icenter():
+                    gpname = 'D%dd' % n
+                else:
+                    gpname = 'D%d' % n
+                yaxis = numpy.cross(axes[2], c2x)
+                axes = numpy.array((c2x, yaxis, axes[2]))
+            elif mirrorx is not None:
+                gpname = 'C%dv' % n
+                yaxis = numpy.cross(axes[2], mirrorx)
+                axes = numpy.array((mirrorx, yaxis, axes[2]))
+            elif rawsys.iden_op(householder(axes[2])): # xy-mirror
+                gpname = 'C%dh' % n
+            elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi/n)): # rotate and inverse
+                gpname = 'S%d' % (n*2)
+            else:
+                gpname = 'C%d' % n
+            return gpname, rawsys.charge_center, axes
+
         else:
-            if rawsys.detect_icenter():
-                gpname = 'Ci'
-            elif rawsys.iden_op(householder(axes[0])):
-                gpname = 'Cs'
-                axes = axes[[1,2,0]]
-            elif rawsys.iden_op(householder(axes[1])):
-                gpname = 'Cs'
-                axes = axes[[2,0,1]]
-            elif rawsys.iden_op(householder(axes[2])):
-                gpname = 'Cs'
+            is_c2x = rawsys.iden_op(rotation_mat(axes[0], numpy.pi))
+            is_c2y = rawsys.iden_op(rotation_mat(axes[1], numpy.pi))
+            is_c2z = rawsys.iden_op(rotation_mat(axes[2], numpy.pi))
+# rotate to old axes, as close as possible?
+            if is_c2z and is_c2x and is_c2y:
+                if rawsys.detect_icenter():
+                    gpname = 'D2h'
+                else:
+                    gpname = 'D2'
+                axes = alias_axes(axes, numpy.eye(3))
+            elif is_c2z or is_c2x or is_c2y:
+                if is_c2x:
+                    axes = axes[[1,2,0]]
+                if is_c2y:
+                    axes = axes[[2,0,1]]
+                if rawsys.iden_op(householder(axes[2])):
+                    gpname = 'C2h'
+                elif rawsys.iden_op(householder(axes[0])):
+                    gpname = 'C2v'
+                else:
+                    gpname = 'C2'
             else:
-                gpname = 'C1'
-    return gpname, rawsys.charge_center, _pesudo_vectors(axes)
+                if rawsys.detect_icenter():
+                    gpname = 'Ci'
+                elif rawsys.iden_op(householder(axes[0])):
+                    gpname = 'Cs'
+                    axes = axes[[1,2,0]]
+                elif rawsys.iden_op(householder(axes[1])):
+                    gpname = 'Cs'
+                    axes = axes[[2,0,1]]
+                elif rawsys.iden_op(householder(axes[2])):
+                    gpname = 'Cs'
+                else:
+                    gpname = 'C1'
+#    charge_center = mole.charge_center(atoms)
+#    if not numpy.allclose(charge_center, rawsys.charge_center, atol=tol):
+#        assert(parallel_vectors(charge_center-rawsys.charge_center, axes[2]))
+    return gpname, rawsys.charge_center, axes
 
 
 # reduce to D2h and its subgroups
@@ -182,16 +202,16 @@ def subgroup(gpname, axes):
     if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
         return gpname, axes
     elif gpname in ('SO3',):
-        #return 'D2h', axes_alias(axes, numpy.eye(3))
+        #return 'D2h', alias_axes(axes, numpy.eye(3))
         return 'Dooh', axes
     elif gpname in ('Dooh',):
-        #return 'D2h', axes_alias(axes, numpy.eye(3))
+        #return 'D2h', alias_axes(axes, numpy.eye(3))
         return 'Dooh', axes
     elif gpname in ('Coov',):
         #return 'C2v', axes
         return 'Coov', axes
     elif gpname in ('Oh',):
-        return 'D2h', axes_alias(axes, numpy.eye(3))
+        return 'D2h', alias_axes(axes, numpy.eye(3))
     elif gpname in ('Ih',):
         return 'Cs', axes[[2,0,1]]
     elif gpname in ('Td',):
@@ -199,7 +219,7 @@ def subgroup(gpname, axes):
         #x = (x+y) / numpy.linalg.norm(x+y)
         #y = numpy.cross(z, x)
         #return 'C2v', numpy.array((x,y,z))
-        return 'D2', axes_alias(axes, numpy.eye(3))
+        return 'D2', alias_axes(axes, numpy.eye(3))
     elif re.search(r'S\d+', gpname):
         n = int(re.search(r'\d+', gpname).group(0))
         return 'C%d'%(n//2), axes
@@ -277,10 +297,10 @@ def symm_identical_atoms(gpname, atoms):
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
         return eql_atom_ids
 
-    center = get_charge_center(atoms)
-    if not numpy.allclose(center, 0, atol=TOLERANCE):
-        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
-                        % str(center))
+    center = mole.charge_center(atoms)
+#    if not numpy.allclose(center, 0, atol=TOLERANCE):
+#        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
+#                        % center)
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
     coords = numpy.array([a[1] for a in atoms], dtype=float)
@@ -338,6 +358,8 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
+class RotationAxisNotFound(Exception):
+    pass
 
 class SymmSys(object):
     def __init__(self, atoms, basis=None):
@@ -409,7 +431,7 @@ class SymmSys(object):
                     cn = (zcos==d).sum()
                     if (cn == 1):
                         if not parallel_vectors(zaxis, r0[zcos==d][0]):
-                            raise RuntimeError('Unknown symmetry')
+                            raise RotationAxisNotFound
                     else:
                         maybe_cn.append(cn)
 
@@ -568,7 +590,7 @@ def _search_toi(rawsys):
                                 maybe_axes[-1] = [zaxis,xaxis]
                                 break
                             else:
-                                raise RuntimeError('Unknown symmetry')
+                                raise RotationAxisNotFound
                     break # lst in rawsys.group_atoms_by_distance(atype)
 
     def make_axes(zx):
@@ -598,7 +620,6 @@ def _search_toi(rawsys):
     return gpname, axes
 
 
-# orientation of rotation axes
 def _pesudo_vectors(vs):
     idy0 = abs(vs[:,1])<TOLERANCE
     idz0 = abs(vs[:,2])<TOLERANCE
@@ -610,7 +631,6 @@ def _pesudo_vectors(vs):
     # if y and z component == 0, ensure x component > 0
     vs[(vs[:,0]<0) & idy0 & idz0] *= -1
     return vs
-
 
 def _remove_dupvec(vs):
     def rm_iter(vs):

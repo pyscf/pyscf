@@ -497,6 +497,20 @@ class KnowValues(unittest.TestCase):
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D3d')
 
+    def test_quasi_c2v(self):
+        atoms = [
+            ['Fe', ( 0.0000000000,   0.0055197721,   0.0055197721)],
+            ['O' , (-1.3265475500,   0.0000000000,  -0.9445024777)],
+            ['O' , ( 1.3265475500,   0.0000000000,  -0.9445024777)],
+            ['O' , ( 0.0000000000,  -1.3265374484,   0.9444796669)],
+            ['O' , ( 0.0000000000,   1.3265374484,   0.9444796669)],]
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'Cs')
+        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-2
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'C2v')
+        geom.TOLERANCE = tolbak
+
 
 
 def ring(n, start=0):

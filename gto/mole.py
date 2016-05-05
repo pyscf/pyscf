@@ -206,8 +206,9 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
                 if isinstance(atom[0], int):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
-                    rawsymb = _rm_digit(atom[0])
-                    symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
+                    a = atom[0].strip()
+                    rawsymb = _rm_digit(a)
+                    symb = a.replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
                     c = numpy.asarray(atom[1:4]) - origin
                 else:
@@ -362,7 +363,8 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     bas2[:,ATOM_OF  ] += natm_off
     bas2[:,PTR_EXP  ] += off
     bas2[:,PTR_COEFF] += off
-    return (numpy.vstack((atm1,atm2)), numpy.vstack((bas1,bas2)),
+    return (numpy.asarray(numpy.vstack((atm1,atm2)), dtype=numpy.int32),
+            numpy.asarray(numpy.vstack((bas1,bas2)), dtype=numpy.int32),
             numpy.hstack((env1,env2)))
 
 def conc_mol(mol1, mol2):
@@ -374,11 +376,17 @@ def conc_mol(mol1, mol2):
                      mol2._atm, mol2._bas, mol2._env)
     off = len(mol1._env)
     natm_off = len(mol1._atm)
-    ecpbas2 = numpy.copy(mol2._ecpbas)
-    ecpbas2[:,ATOM_OF  ] += natm_off
-    ecpbas2[:,PTR_EXP  ] += off
-    ecpbas2[:,PTR_COEFF] += off
-    mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+    if len(mol2._ecpbas) == 0:
+        mol3._ecpbas = mol1._ecpbas
+    else:
+        ecpbas2 = numpy.copy(mol2._ecpbas)
+        ecpbas2[:,ATOM_OF  ] += natm_off
+        ecpbas2[:,PTR_EXP  ] += off
+        ecpbas2[:,PTR_COEFF] += off
+        if len(mol1._ecpbas) == 0:
+            mol3._ecpbas = ecpbas2
+        else:
+            mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
 
     mol3.natm = len(mol3._atm)
     mol3.nbas = len(mol3._bas)
@@ -395,8 +403,13 @@ def conc_mol(mol1, mol2):
     mol3.unit = mol1.unit
     mol3._basis = dict(mol2._basis)
     mol3._basis.update(mol1._basis)
-    mol3._ecp = dict(mol2._ecp)
-    mol3._ecp.update(mol1._ecp)
+    if mol2._ecp is None:
+        mol3._ecp = mol1._ecp
+    elif mol1._ecp is None:
+        mol3._ecp = mol2._ecp
+    else:
+        mol3._ecp = dict(mol2._ecp)
+        mol3._ecp.update(mol1._ecp)
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
@@ -494,7 +507,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
     _env = pyscf.lib.flatten(_env) # flatten nested lists
-    return numpy.array(_bas, numpy.int32), numpy.array(_env, numpy.double)
+    return (numpy.array(_bas, numpy.int32).reshape(-1,BAS_SLOTS),
+            numpy.array(_env, numpy.double))
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal
@@ -527,6 +541,8 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
     _basdic = {}
     for symb, basis_add in basis.items():
         bas0, env0 = make_bas_env(basis_add, 0, ptr_env)
+        if bas0.size == 0:
+            sys.stderr.write('No basis found for atom %s\n' % symb)
         ptr_env = ptr_env + len(env0)
         _basdic[symb] = bas0
         _env.append(env0)
@@ -1128,15 +1144,117 @@ def offset_nr_by_atom(mol):
     aorange.append((b0, mol.nbas, p0, p1))
     return aorange
 
-#FIXME:
-def is_same_mol(mol1, mol2):
+def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
+    '''Compare the two molecules whether they have the same structure.
+
+    Kwargs:
+        tol : float
+            In Bohr
+        cmp_basis : bool
+            Whether to compare basis functions for the two molecules
+    '''
+    import pyscf.symm
+
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
-    for a1, a2 in zip(mol1._atom, mol2._atom):
-        if a1[0] != a2[0] \
-           or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
-            return False
-    return True
+
+    if cmp_basis:
+        atomtypes1 = atom_types(mol1._atom, mol1._basis)
+        atomtypes2 = atom_types(mol2._atom, mol2._basis)
+        for k in atomtypes1:
+            if k not in atomtypes2:
+                return False
+            elif len(atomtypes1[k]) != len(atomtypes2[k]):
+                return False
+            elif mol1._basis[k] != mol2._basis[k]:
+                return False
+
+    def finger(mol, chgs, coord):
+        center = charge_center(mol._atom, chgs, coord)
+        im = inertia_momentum(mol._atom, chgs, coord)
+        w, v = numpy.linalg.eigh(im)
+        axes = v.T
+        if numpy.linalg.det(axes) < 0:
+            axes *= -1
+        r = numpy.dot(coord-center, axes.T)
+        return w, r
+
+    chg1 = mol1._atm[:,CHARGE_OF]
+    chg2 = mol2._atm[:,CHARGE_OF]
+    coord1 = numpy.array([mol1.atom_coord(i) for i in range(mol1.natm)])
+    coord2 = numpy.array([mol2.atom_coord(i) for i in range(mol2.natm)])
+    w1, r1 = finger(mol1, chg1, coord1)
+    w2, r2 = finger(mol2, chg2, coord2)
+    if not (numpy.allclose(w1, w2, atol=tol)):
+        return False
+
+    rotate_xy  = numpy.array([[-1., 0., 0.],
+                              [ 0.,-1., 0.],
+                              [ 0., 0., 1.]])
+    rotate_yz  = numpy.array([[ 1., 0., 0.],
+                              [ 0.,-1., 0.],
+                              [ 0., 0.,-1.]])
+    rotate_zx  = numpy.array([[-1., 0., 0.],
+                              [ 0., 1., 0.],
+                              [ 0., 0.,-1.]])
+
+    def inspect(z1, r1, z2, r2):
+        place = int(-numpy.log10(tol)) - 1
+        idx = pyscf.symm.argsort_coords(r2, place)
+        z2 = z2[idx]
+        r2 = r2[idx]
+        for rot in (1, rotate_xy, rotate_yz, rotate_zx):
+            r1new = numpy.dot(r1, rot)
+            idx = pyscf.symm.argsort_coords(r1new, place)
+            if (numpy.all(z1[idx] == z2) and
+                numpy.allclose(r1new[idx], r2, atol=tol)):
+                return True
+        return False
+
+    return (inspect(chg1, r1, chg2, r2) or
+            (ignore_chiral and inspect(chg1, r1, chg2, -r2)))
+is_same_mol = same_mol
+
+def chiral_mol(mol1, mol2=None):
+    '''Detect whether the given molelcule is chiral molecule or two molecules
+    are chiral isomers.
+    '''
+    if mol2 is None:
+        mol2 = mol1.copy()
+        ptr_coord = mol2._atm[:,PTR_COORD]
+        mol2._env[ptr_coord  ] *= -1
+        mol2._env[ptr_coord+1] *= -1
+        mol2._env[ptr_coord+2] *= -1
+    return (not same_mol(mol1, mol2, ignore_chiral=False) and
+            same_mol(mol1, mol2, ignore_chiral=True))
+
+def inertia_momentum(atoms, charges=None, coords=None):
+    if charges is None:
+        charges = numpy.array([_charge(a[0]) for a in atoms])
+    if coords is None:
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+    chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
+    coords = coords - chgcenter
+    im = numpy.einsum('i,ij,ik->jk', charges, coords, coords)/charges.sum()
+    return im
+
+def charge_center(atoms, charges=None, coords=None):
+    if charges is None:
+        charges = numpy.array([_charge(a[0]) for a in atoms])
+    if coords is None:
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+    rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
+    return rbar
+
+def mass_center(atoms):
+    mass = numpy.array([param.ELEMENTS[_charge(a[0])][1] for a in atoms])
+    return charge_center(atoms, mass)
+
+
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    sys.stderr.write('Function pyscg.gto.mole.check_sanity will be removed in PySCF-1.1. '
+                     'It is replaced by pyscg.lib.check_sanity\n')
+    return pyscf.lib.check_sanity(obj, keysref, stdout)
 
 
 # for _atm, _bas, _env
@@ -1428,7 +1546,12 @@ class Mole(pyscf.lib.StreamObject):
 
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            self._basis = self.format_basis(dict([(a, self.basis)
+            if self.basis.lower().startswith('unc'):
+                cbas = self.format_basis(dict([(a, self.basis[3:])
+                                                  for a in uniq_atoms]))
+                self._basis = dict((a,uncontract(cbas[a])) for a in cbas)
+            else:
+                self._basis = self.format_basis(dict([(a, self.basis)
                                                   for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)
@@ -1457,8 +1580,7 @@ class Mole(pyscf.lib.StreamObject):
                     _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
                     _atom = '\n'.join([str(a) for a in _atom])
                     raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                         'It is recommended to use symmetry="%s" with '
-                                         'geometry (unit="Bohr")\n%s' %
+                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
                                          (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \

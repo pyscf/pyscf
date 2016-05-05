@@ -47,7 +47,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     See also :func:`direct_nosym.absorb_h1e`
     '''
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
@@ -61,7 +61,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2es1(eri.ctypes.data_as(ctypes.c_void_p),
