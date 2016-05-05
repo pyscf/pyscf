@@ -20,3 +20,9 @@ void NPzpack_tril(int n, double complex *tril, double complex *mat);
 
 void NPdtranspose(int n, int m, double *a, double *at, int blk);
 void NPztranspose(int n, int m, double complex *a, double complex *at, int blk);
+
+void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi);
+void NPzunpack_tril_2d(int count, int n,
+                       double complex *tril, double complex *mat, int hermi);
+void NPdpack_tril_2d(int count, int n, double *tril, double *mat);
+
