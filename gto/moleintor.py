@@ -146,7 +146,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     Examples:
 
     >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-    >>> gto.moleintor('cint1e_ipnuc_sph', mol._atm, mol._bas, mol._env, comp=3) # <nabla i | V_nuc | j>
+    >>> gto.getints('cint1e_ipnuc_sph', mol._atm, mol._bas, mol._env, comp=3) # <nabla i | V_nuc | j>
     [[[ 0.          0.        ]
       [ 0.          0.        ]]
      [[ 0.          0.        ]
