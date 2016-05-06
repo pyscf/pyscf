@@ -362,7 +362,7 @@ def spin_square(mo, s=1):
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
-    print orbital coefficients; Mulliken population analysis
+    print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
@@ -390,7 +390,8 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log),\
+            mf.dip_moment(mf.mol, dm, verbose=log)
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -563,6 +564,65 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
     dm_b = reduce(numpy.dot, (mo1_b, x[1], mo2_b.T.conj()))
     return numpy.array((dm_a, dm_b))
 
+def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+    r''' Dipole moment calculation
+
+    .. math::
+
+        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Z_A X_A
+        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Z_A Y_A
+        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Z_A Z_A
+
+    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
+    moment
+
+    Args:
+         mol: an instance of :class:`Mole`
+         dm : a list of 2D ndarrays
+              a list of density matrices
+
+    Return:
+        A list: the dipole moment on x, y and z component
+    '''
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+
+    if unit_symbol == 'Debye':
+        unit = 2.541746    # a.u. to Debye
+    else:
+        unit = 1.0
+
+    from pyscf.gto import getints
+    ao_dip=getints('cint1e_r_sph', mol._atm, mol._bas, mol._env, comp=3)
+
+    el_dip_x = numpy.trace(numpy.dot(dm[0], ao_dip[0]))
+    el_dip_x += numpy.trace(numpy.dot(dm[1], ao_dip[0]))
+    el_dip_y = numpy.trace(numpy.dot(dm[0], ao_dip[1]))
+    el_dip_y += numpy.trace(numpy.dot(dm[1], ao_dip[1]))
+    el_dip_z = numpy.trace(numpy.dot(dm[0], ao_dip[2]))
+    el_dip_z += numpy.trace(numpy.dot(dm[1], ao_dip[2]))
+
+    nucl_dip_x = nucl_dip_y = nucl_dip_z = 0.0
+    for i in xrange(mol.natm):
+        nucl_dip_x += mol.atom_charge(i)*mol.atom_coord(i)[0]
+        nucl_dip_y += mol.atom_charge(i)*mol.atom_coord(i)[1]
+        nucl_dip_z += mol.atom_charge(i)*mol.atom_coord(i)[2]
+
+    mol_dip_x = (-el_dip_x + nucl_dip_x)*unit
+    mol_dip_y = (-el_dip_y + nucl_dip_y)*unit
+    mol_dip_z = (-el_dip_z + nucl_dip_z)*unit
+
+    if unit_symbol == 'Debye' :
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f',
+                mol_dip_x, mol_dip_y, mol_dip_z)
+    else:
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f',
+                mol_dip_x, mol_dip_y, mol_dip_z)
+    return numpy.array((mol_dip_x, mol_dip_y, mol_dip_z))
+
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for UHF:
@@ -712,6 +772,13 @@ class UHF(hf.SCF):
     @pyscf.lib.with_doc(make_asym_dm.__doc__)
     def make_asym_dm(self, mo1, mo2, occ1, occ2, x):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
+
+    @pyscf.lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        if unit_symbol is None: unit_symbol='Debye'
+        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
 def _makevhf(vj, vk, nset):
     if nset == 1:
