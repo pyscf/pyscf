@@ -595,8 +595,8 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         unit = 1.0
 
-    from pyscf.gto import getints
-    ao_dip=getints('cint1e_r_sph', mol._atm, mol._bas, mol._env, comp=3)
+    mol.set_common_orig_((0,0,0))
+    ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
 
     el_dip_x = numpy.trace(numpy.dot(dm[0], ao_dip[0]))
     el_dip_x += numpy.trace(numpy.dot(dm[1], ao_dip[0]))
@@ -606,7 +606,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     el_dip_z += numpy.trace(numpy.dot(dm[1], ao_dip[2]))
 
     nucl_dip_x = nucl_dip_y = nucl_dip_z = 0.0
-    for i in xrange(mol.natm):
+    for i in range(mol.natm):
         nucl_dip_x += mol.atom_charge(i)*mol.atom_coord(i)[0]
         nucl_dip_y += mol.atom_charge(i)*mol.atom_coord(i)[1]
         nucl_dip_z += mol.atom_charge(i)*mol.atom_coord(i)[2]
