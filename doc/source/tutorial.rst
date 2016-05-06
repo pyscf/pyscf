@@ -42,8 +42,8 @@ It's very possible that you put ``/home/abc/pyscf`` in :code:`PYTHONPATH`.
 You need to remove the ``/pyscf`` in that string and try
 ``import pyscf`` in the python shell again.
 
-.. note::  The quick setup will not provide the best performance.
-  Please refer to :ref:`installing` for the optimized libraries.
+.. note::  The quick setup does not provide the best performance.
+  Please see :ref:`installing` for the optimized libraries.
 
 
 A simple example
@@ -641,12 +641,13 @@ Yes, we are ready to implement our own density fitting Hartree-Fock now!
 
   def get_vhf(mol, dm, *args, **kwargs):
       naux = eri2c.shape[0]
+      nao = mol.nao_nr()
       rho = numpy.einsum('ijp,ij->p', eri3c, dm)
       rho = numpy.linalg.solve(eri2c, rho)
       jmat = numpy.einsum('p,ijp->ij', rho, eri3c)
       kpj = numpy.einsum('ijp,jk->ikp', eri3c, dm)
       pik = numpy.linalg.solve(eri2c, kpj.reshape(-1,naux).T)
-      kmat = numpy.einsum('pik,kjp->ij', pik, eri3c)
+      kmat = numpy.einsum('pik,kjp->ij', pik.reshape(naux,nao,nao), eri3c)
       return jmat - kmat * .5
       
   mf = scf.RHF(mol)

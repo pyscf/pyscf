@@ -1,14 +1,12 @@
 .. _code_stand:
 
 
-Code standard
-*************
+General
+*******
 
 * New features first being placed in pyscf/future.
 
 * Code at least should work under python-2.7, gcc-4.8.
-
-  - it'd be better compatibile with Python 2.6 - 3.4
 
 * 90/10 functional/OOP, unless performance critical, functions are pure.
 
@@ -24,15 +22,19 @@ Code standard
 
   - Do **not** use other program languages (to keep the package light-weight).
 
-* Using ctypes to interface C/python functions (no cython)
-
 * Loose-coupling principle
 
   - Reinventing-wheel is accepted (to reduce the entanglement to the
     rest of the package).
 
-Name rules
-----------
+* Not enforced but recommended
+  - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
+  - Following C89 standard for C code;
+  - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
+
+
+Name convention
+---------------
 
 * The prefix or suffix underscore in the function names have special meanings
 
@@ -46,8 +48,8 @@ Name rules
 
   - regular (pure) functions do not have underscore as the prefix or suffix.
 
-API rules
----------
+API convention
+--------------
 
 * :class:`gto.Mole` holds all global parameters, like the log level, the
   max memory usage etc.  They are used as the default value for all
@@ -104,4 +106,6 @@ API rules
       ``mo_occ`` are appeared in the argument lists,  they are always put
       in this order: ``mo_energy, mo_coeff, mo_occ``.
 
-
+  - xxx_slice
+    Taking the elements of object xxx between xxx_slice = (start, end)
+    (start <= elem < end)

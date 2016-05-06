@@ -5,18 +5,29 @@
   - 4-component relativistic Dirac-Hartree-Fock
   - density fitting HF (up to ~5000 basis)
   - Second order SCF
+  - General JK contraction function
 
 * DFT (up to ~3000 basis)
   - Non-relativistic restricted, restricted open-shell, unrestricted Kohn-Sham
   - scalar relativistic DFT
   - density fitting DFT (up to ~5000 basis)
+  - General XC functional evaluator (for Libxc or XcFun)
+  - General AO evaluator
+
+* TDDFT
+  - TDHF
+  - TDDFT
+  - TDHF gradients
+  - TDDFT gradients
 
 * General CASCI/CASSCF solver (up to ~2500 basis)
   - State-average CASCI/CASSCF
+  - State-specific CASCI/CASSCF for excited states
   - Multiple roots CASCI
   - Support DMRG as plugin CI solver to do DMRG-CASSCF
   - Support FCIQMC as plugin CI solver to do FCIQMC-CASSCF
   - UHF-based UCASSCF
+  - Density-fitting CASSCF
 
 * MP2 (up to ~200 occupied, ~1000 virtual orbitals)
   - RHF-based MP2
@@ -25,8 +36,13 @@
 * CCSD (up to ~100 occupied, ~800 virtual orbitals)
   - canonical CCSD
   - canonical CCSD lambda solver
-  - CCSD 1-particle density matrix, 2-particle density matrix
+  - CCSD 1-particle and 2-particle density matrices
   - CCSD gradients
+
+* CCSD(T)
+  - canonical CCSD(T)
+  - canonical density matrices
+  - canonical gradients
 
 * Full CI
   - Direct-CI solver for spin degenerated Hamiltonian
@@ -37,13 +53,24 @@
 * Gradients
   - non-relativistic RHF gradients
   - 4-component DHF gradients
+  - non-relativistic DFT gradients
+  - non-relativistic CCSD gradients
+  - non-relativistic TDHF and TDDFT gradients
+
+* Hessian
+  - non-relativistic RHF hessian
+  - non-relativistic RKS hessian
 
 * NMR
   - non-relativistic RHF NMR shielding
   - 4-component DHF NMR shielding
+  - non-relativistic DFT NMR shielding
 
 * MRPT
   - Strongly contracted NEVPT2
+
+* Solvation effects
+  - COSMO model for Hartree-Fock, DFT, CASCI, CASSCF and DMRG-CASCI, DMRG-CASSCF
 
 * AO integrals
   - Interface to call Libcint library
@@ -53,6 +80,7 @@
   - 33 types of 2-electron spinor-GTO integrals
   - 4 types of 3-center 2-electron real-GTO integrals
   - 6 types of 3-center 2-electron spinor-GTO integrals
+  - General basis value evaluator (for numeric integration)
 
 * MO integrals
   - 2-electron integral transformation for any integrals provided by
@@ -65,12 +93,14 @@
   - Meta-Lowdin
   - Natural atomic orbital (NAO)
   - Intrinsic atomic orbital (IAO)
+  - Pipek-Mezey
 
 * D2h symmetry and linear molecule symmetry
   - Molecule symmetry detection
   - Symmetry adapted basis
   - Label orbital symmetry on the fly
   - Change symmetry information on the fly
+  - Function to symmetrize given orbital space
 
 * Tools
   - fcidump

@@ -7,7 +7,7 @@ import tempfile
 import numpy
 import h5py
 import pyscf.lib
-import pyscf.lib.logger as logger
+from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
 # default ioblk_size is 256 MB
@@ -28,7 +28,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
         erifile : str or h5py File or h5py Group object
             To store the transformed integrals, in HDF5 format.
 
-    Kwargs
+    Kwargs:
         dataname : str
             The dataset name in the erifile (ref the hierarchy of HDF5 format
             http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
@@ -57,8 +57,6 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
-        verbose : int
-            Print level
         max_memory : float or int
             The maximum size of cache to use (in MB), large cache may **not**
             improve performance.
@@ -147,8 +145,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
-        verbose : int
-            Print level
         max_memory : float or int
             The maximum size of cache to use (in MB), large cache may **not**
             improve performance.
@@ -236,7 +232,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         klmosym = 's1'
         nkl_pair = nmok*nmol
         mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
-        klshape = (0, nmok, nmok, nmol)
+        klshape = (0, nmok, nmok, nmok+nmol)
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')
@@ -410,13 +406,13 @@ def half_e1(mol, mo_coeffs, swapfile,
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
         moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoj)
+        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
 # The buffer to hold AO integrals in C code, see line (@)
     aobuflen = int((mem_words - iobuf_words) // (nao_pair*comp))
-    shranges = guess_shell_ranges(mol, e1buflen, aobuflen, aosym)
+    shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen, aobuflen)
     if ao2mopt is None:
         if intor == 'cint2e_sph':
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
@@ -697,69 +693,53 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
     return e2buflen, chunks
 
 # based on the size of buffer, dynamic range of AO-shells for each buffer
-def guess_shell_ranges(mol, max_iobuf, max_aobuf, aosym):
+def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
+                       compress_diag=True):
     max_iobuf = max(1, max_iobuf)
-    max_aobuf = max(1, max_aobuf)
-    ao_loc = mol.ao_loc_nr()
+    if ao_loc is None:
+        ao_loc = mol.ao_loc_nr()
 
-    accum = []
+    lstdij = []
 
-    if aosym in ('s4', 's2kl'):
+    if aosym:
         for i in range(mol.nbas):
             di = ao_loc[i+1] - ao_loc[i]
-            for j in range(i):
-                dj = ao_loc[j+1] - ao_loc[j]
-                accum.append(di*dj)
-            accum.append(di*(di+1)//2)
+            if compress_diag:
+                for j in range(i):
+                    dj = ao_loc[j+1] - ao_loc[j]
+                    lstdij.append(di*dj)
+                lstdij.append(di*(di+1)//2)
+            else:
+                for j in range(i+1):
+                    dj = ao_loc[j+1] - ao_loc[j]
+                    lstdij.append(di*dj)
     else:
         for i in range(mol.nbas):
             di = ao_loc[i+1] - ao_loc[i]
             for j in range(mol.nbas):
                 dj = ao_loc[j+1] - ao_loc[j]
-                accum.append(di*dj)
+                lstdij.append(di*dj)
 
-    ijsh_range = []
-    buflen = 0
-    ij_start = 0
-    for ij, dij in enumerate(accum):
-        buflen += dij
-        if buflen > max_iobuf and buflen > dij:
-# to fill each iobuf, AO integrals may need to be fill to aobuf several times
-            if max_aobuf < buflen-dij:
-                ijdiv = []
-                n0 = ij_start
-                aobuf = 0
-                for n in range(ij_start, ij):
-                    aobuf += accum[n]
-                    if aobuf > max_aobuf and aobuf > accum[n]:
-                        ijdiv.append((n0, n, aobuf-accum[n]))
-                        n0 = n
-                        aobuf = accum[n]
-                ijdiv.append((n0, ij, aobuf))
+    def div_shls(ijstart, ij_max, bufsize):
+        ij_now = ijstart + 1
+        grouped = [(ijstart, ij_now, lstdij[ijstart])]
+        while ij_now < ij_max:
+            ijstart, ijstop, buflen = grouped[-1]
+            dij = lstdij[ij_now]
+            if buflen + dij > bufsize:
+                grouped.append((ij_now, ij_now+1, dij))
             else:
-                ijdiv = [(ij_start, ij, buflen-dij)]
+                grouped[-1] = (ijstart, ij_now+1, buflen+dij)
+            ij_now += 1
+        return grouped
+    ijsh_range = div_shls(0, len(lstdij), max_iobuf)
 
-            ijsh_range.append((ij_start, ij, buflen-dij, ijdiv))
-
-            ij_start = ij
-            buflen = dij
-
-    ij = len(accum)
-
-    if max_aobuf < buflen:
-        ijdiv = []
-        n0 = ij_start
-        aobuf = 0
-        for n in range(ij_start, ij):
-            aobuf += accum[n]
-            if aobuf > max_aobuf:
-                ijdiv.append((n0, n, aobuf-accum[n]))
-                n0 = n
-                aobuf = accum[n]
-        ijdiv.append((n0, ij, aobuf))
-    else:
-        ijdiv = [(ij_start, ij, buflen)]
-    ijsh_range.append((ij_start, ij, buflen, ijdiv))
+    if max_aobuf is not None:
+        max_aobuf = max(1, max_aobuf)
+        def div_each_iobuf(ijstart, ijstop, buflen):
+# to fill each iobuf, AO integrals may need to be fill to aobuf several times
+            return (ijstart, ijstop, buflen, div_shls(ijstart, ijstop, max_aobuf))
+        ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]
     return ijsh_range
 
 def _stand_sym_code(sym):

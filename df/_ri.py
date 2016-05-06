@@ -24,19 +24,19 @@ def nr_auxe2(intor, basrange, atm, bas, env,
     env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(len(atm))
     nbas = ctypes.c_int(len(bas))
-    i0, ic, j0, jc, k0, kc = basrange
+    i0, i1, j0, j1, k0, k1 = basrange
     if 'ssc' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, _cgto_spheric(bas))
-        if jloc is None: jloc = make_loc(j0, jc, _cgto_spheric(bas))
-        if kloc is None: kloc = make_loc(k0, kc, _cgto_cart(bas))
+        if iloc is None: iloc = make_loc(i0, i1, bas)
+        if jloc is None: jloc = make_loc(j0, j1, bas)
+        if kloc is None: kloc = make_loc(k0, k1, bas, True)
     elif 'cart' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, _cgto_cart(bas))
-        if jloc is None: jloc = make_loc(j0, jc, _cgto_cart(bas))
-        if kloc is None: kloc = make_loc(k0, kc, _cgto_cart(bas))
+        if iloc is None: iloc = make_loc(i0, i1, bas, True)
+        if jloc is None: jloc = make_loc(j0, j1, bas, True)
+        if kloc is None: kloc = make_loc(k0, k1, bas, True)
     else:
-        if iloc is None: iloc = make_loc(i0, ic, _cgto_spheric(bas))
-        if jloc is None: jloc = make_loc(j0, jc, _cgto_spheric(bas))
-        if kloc is None: kloc = make_loc(k0, kc, _cgto_spheric(bas))
+        if iloc is None: iloc = make_loc(i0, i1, bas)
+        if jloc is None: jloc = make_loc(j0, j1, bas)
+        if kloc is None: kloc = make_loc(k0, k1, bas)
     if naoi is None:
         naoi = iloc[-1] - iloc[0]
     if naoj is None:
@@ -49,11 +49,15 @@ def nr_auxe2(intor, basrange, atm, bas, env,
         ij_count = naoi * naoj
     else:
         fill = _fpointer('RIfill_s2ij_auxe2')
-        ij_count = naoi * (naoi+1) // 2
-    if out is None:
-        out = numpy.empty((ij_count,naoaux))
+        ij_count = iloc[-1]*(iloc[-1]+1)//2 - iloc[0]*(iloc[0]+1)//2
+    if comp == 1:
+        shape = (ij_count,naoaux)
     else:
-        out = numpy.ndarray((ij_count,naoaux), buffer=out)
+        shape = (comp,ij_count,naoaux)
+    if out is None:
+        out = numpy.empty(shape)
+    else:
+        out = numpy.ndarray(shape, buffer=out)
 
     basrange = numpy.asarray(basrange, numpy.int32)
     fintor = _fpointer(intor)
@@ -65,7 +69,7 @@ def nr_auxe2(intor, basrange, atm, bas, env,
                               out.ctypes.data_as(ctypes.c_void_p),
                               ctypes.c_size_t(ijkoff),
                               ctypes.c_int(naoj), ctypes.c_int(naoaux),
-                              basrange.ctypes.data_as(ctypes.c_void_p),
+                              (ctypes.c_int*6)(i0,i1-i0,j0,j1-j0,k0,k1-k0),
                               iloc.ctypes.data_as(ctypes.c_void_p),
                               jloc.ctypes.data_as(ctypes.c_void_p),
                               kloc.ctypes.data_as(ctypes.c_void_p),
@@ -82,18 +86,13 @@ def totcart(bas):
             bas[:,gto.NCTR_OF]).sum()
 def totspheric(bas):
     return ((bas[:,gto.ANG_OF]*2+1) * bas[:,gto.NCTR_OF]).sum()
-def make_loc(shl0, shlc, num_cgto):
-    loc = numpy.empty(shlc+1, dtype=numpy.int32)
-    off = 0
-    for k, i in enumerate(range(shl0, shl0+shlc)):
-        loc[k] = off
-        off += num_cgto(i)
-    loc[shlc] = off
+def make_loc(shl0, shl1, bas, cart=False):
+    l = bas[shl0:shl1,gto.ANG_OF]
+    if cart:
+        dims = (l+1)*(l+2)//2 * bas[shl0:shl1,gto.NCTR_OF]
+    else:
+        dims = (l*2+1) * bas[shl0:shl1,gto.NCTR_OF]
+    loc = numpy.empty(shl1-shl0+1, dtype=numpy.int32)
+    loc[0] = 0
+    dims.cumsum(dtype=numpy.int32, out=loc[1:])
     return loc
-def _cgto_spheric(bas):
-    return lambda i: (bas[i,gto.ANG_OF]*2+1) * bas[i,gto.NCTR_OF]
-def _cgto_cart(bas):
-    def fcart(i):
-        l = bas[i,gto.ANG_OF]
-        return (l+1)*(l+2)//2 * bas[i,gto.NCTR_OF]
-    return fcart

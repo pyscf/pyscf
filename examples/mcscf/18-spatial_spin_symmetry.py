@@ -3,80 +3,67 @@
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf, fci
-from pyscf.mcscf import dmet_cas
 
 '''
-Force the FCI solver of CASSCF follow the spin state.
-
-The default FCI solver cannot stick on the triplet state.  Using
-fci.addons.force_spin_ function to decorate mc.fcisolver, a constraint of
-the spin eigenfunction is imposed on the FCI solver.
-
-Slow convergence is observed in this test.  In this system, the CI
-coefficients and orbital rotation are strongly coupled.  Small orbital
-rotation leads to significant change of CI eigenfunction.  The micro iteration
-is not able to predict the right orbital rotations since the first order
-approximation for orbital gradients and CI hamiltonian are just too far to the
-exact value.
+Force the FCI solver of CASSCF following certain spin state.
 '''
 
-mol = gto.Mole()
-mol.atom = [
-    ['Fe', (0.      , 0.0000  , 0.0000)],
-    ['N' , (1.9764  , 0.0000  , 0.0000)],
-    ['N' , (0.0000  , 1.9884  , 0.0000)],
-    ['N' , (-1.9764 , 0.0000  , 0.0000)],
-    ['N' , (0.0000  , -1.9884 , 0.0000)],
-    ['C' , (2.8182  , -1.0903 , 0.0000)],
-    ['C' , (2.8182  , 1.0903  , 0.0000)],
-    ['C' , (1.0918  , 2.8249  , 0.0000)],
-    ['C' , (-1.0918 , 2.8249  , 0.0000)],
-    ['C' , (-2.8182 , 1.0903  , 0.0000)],
-    ['C' , (-2.8182 , -1.0903 , 0.0000)],
-    ['C' , (-1.0918 , -2.8249 , 0.0000)],
-    ['C' , (1.0918  , -2.8249 , 0.0000)],
-    ['C' , (4.1961  , -0.6773 , 0.0000)],
-    ['C' , (4.1961  , 0.6773  , 0.0000)],
-    ['C' , (0.6825  , 4.1912  , 0.0000)],
-    ['C' , (-0.6825 , 4.1912  , 0.0000)],
-    ['C' , (-4.1961 , 0.6773  , 0.0000)],
-    ['C' , (-4.1961 , -0.6773 , 0.0000)],
-    ['C' , (-0.6825 , -4.1912 , 0.0000)],
-    ['C' , (0.6825  , -4.1912 , 0.0000)],
-    ['H' , (5.0441  , -1.3538 , 0.0000)],
-    ['H' , (5.0441  , 1.3538  , 0.0000)],
-    ['H' , (1.3558  , 5.0416  , 0.0000)],
-    ['H' , (-1.3558 , 5.0416  , 0.0000)],
-    ['H' , (-5.0441 , 1.3538  , 0.0000)],
-    ['H' , (-5.0441 , -1.3538 , 0.0000)],
-    ['H' , (-1.3558 , -5.0416 , 0.0000)],
-    ['H' , (1.3558  , -5.0416 , 0.0000)],
-    ['C' , (2.4150  , 2.4083  , 0.0000)],
-    ['C' , (-2.4150 , 2.4083  , 0.0000)],
-    ['C' , (-2.4150 , -2.4083 , 0.0000)],
-    ['C' , (2.4150  , -2.4083 , 0.0000)],
-    ['H' , (3.1855  , 3.1752  , 0.0000)],
-    ['H' , (-3.1855 , 3.1752  , 0.0000)],
-    ['H' , (-3.1855 , -3.1752 , 0.0000)],
-    ['H' , (3.1855  , -3.1752 , 0.0000)],
-]
+mol = gto.M(
+    atom = '''
+      8  0  0  0
+      8  0  0  1.1''',
+    basis = 'ccpvdz',
+    symmetry = True,
+    spin = 2,
+)
 
-mol.basis = 'ccpvdz'
-mol.verbose = 5
-mol.output = 'fepor3.out'
-mol.spin = 2
-mol.symmetry = True
-mol.build()
-
-m = scf.ROHF(mol)
-m.level_shift = 1.5
-mf = scf.fast_newton(m)
+mf = scf.RHF(mol)
 mf.kernel()
 
-mc = mcscf.CASSCF(m, 10, 10)
-idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
-mo = dmet_cas.dmet_cas(mc, m.make_rdm1(), idx3d, base=0)
-fci.addons.fix_spin_(mc.fcisolver, ss_value=2)  # Triplet, ss_value = S*(S+1)
-mc.fcisolver.wfnsym = 'B1g'
+# Specify CI wfn spatial symmetry by assigning fcisolver.wfnsym
+mc = mcscf.CASSCF(mf, 8, 12)
+mc.fcisolver.wfnsym = 'A2u'
+mc.kernel()
+print('Triplet Sigma_u^- %.15g  ref = -149.383495797891' % mc.e_tot)
+
+# Specify CI wfn spatial symmetry and spin symmetry
+fci.addons.fix_spin_(mc.fcisolver, ss_value=6)  # Quintet, ss_value = S*(S+1) = 6
+mc.fcisolver.wfnsym = 'A2u'
+mc.kernel()
+print('Quintet Sigma_u^- %.15g  ref = -148.920732172378' % mc.e_tot)
+
+
+#
+# Similarly, you can get ground state wfn of triplet Sz=0
+#
+mc = mcscf.CASSCF(mf, 8, 12)#(6,6))
+#mc.fcisolver = fci.direct_spin1_symm.FCISolver(mol)
+#fci.addons.fix_spin_(mc.fcisolver, ss_value=2)
+#mc.fcisolver.wfnsym = 'A2g'
+mc.kernel()
+print('Triplet Sigma_g^- %.15g  ref = -149.688656224059' % mc.e_tot)
+
+
+#
+# In the following example, without fix_spin_ decoration, it's probably unable
+# to converge to the correct spin state.
+#
+mol = gto.M(
+    atom = 'Mn 0 0 0; Mn 0 0 2.5',
+    basis = 'ccpvdz',
+    symmetry = 1,
+)
+mf = scf.RHF(mol)
+mf.set(level_shift=0.4).run()
+mc = mcscf.CASCI(mf, 12, 14)
+mc.fcisolver.max_cycle = 100
+mo = mc.sort_mo_by_irrep({'A1g': 2, 'A1u': 2,
+                          'E1uy': 1, 'E1ux': 1, 'E1gy': 1, 'E1gx': 1,
+                          'E2uy': 1, 'E2ux': 1, 'E2gy': 1, 'E2gx': 1},
+                         {'A1g': 5, 'A1u': 5,
+                          'E1uy': 2, 'E1ux': 2, 'E1gy': 2, 'E1gx': 2})
+mc.kernel(mo)
+
+fci.addons.fix_spin_(mc.fcisolver, shift=.5, ss_value=0)
 mc.kernel(mo)
 

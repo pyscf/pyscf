@@ -9,8 +9,10 @@ import os
 #       http://www.princeton.edu/chemistry/chan/software/dmrg/
 #       https://github.com/sanshar/Block
 BLOCKEXE = '/path/to/Block/block.spin_adapted'
-#BLOCKSCRATCHDIR = os.environ['TMPDIR']
-BLOCKSCRATCHDIR = './scratch'
+BLOCKEXE_COMPRESS_NEVPT = '/path/to/serially/compiled/Block/block.spin_adapted'
+BLOCKSCRATCHDIR = os.path.join(os.environ['TMPDIR'], str(os.getpid()))
+#BLOCKSCRATCHDIR = os.path.join('./scratch', str(os.getpid()))
+BLOCKRUNTIMEDIR = '.'
 MPIPREFIX = 'mpirun'  # change to srun for SLURM job system
 
 

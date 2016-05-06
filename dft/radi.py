@@ -6,10 +6,11 @@
 '''radii grids'''
 
 import numpy
+from pyscf.lib.parameters import BOHR
 
 #########################
-# JCP 41 3199 (1964). In Angstrom (of the time, strictly)
-BRAGG_RADII = numpy.array((
+# JCP 41 3199 (1964).
+BRAGG_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
         0.35,                                     1.40,             # 1s
         1.45, 1.05, 0.85, 0.70, 0.65, 0.60, 0.50, 1.50,             # 2s2p
         1.80, 1.50, 1.25, 1.10, 1.00, 1.00, 1.00, 1.80,             # 3s3p
@@ -39,7 +40,7 @@ BRAGG_RADII = numpy.array((
 #       Jorge Echeverria, Eduard Cremades, Flavia Barragan and Santiago
 #       Alvarez.  Covalent radii revisited. Dalton Trans., 2008, 2832-2838,
 #       doi:10.1039/b801115j
-COVALENT_RADII = numpy.array((
+COVALENT_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
         0.31,                                     0.28,             # 1s
         1.28, 0.96, 0.84, 0.73, 0.71, 0.66, 0.57, 0.58,             # 2s2p
         1.66, 1.41, 1.21, 1.11, 1.07, 1.05, 1.02, 1.06,             # 3s3p
@@ -58,6 +59,14 @@ COVALENT_RADII = numpy.array((
         2.15, 2.06, 2.00, 1.96, 1.90, 1.87, 1.80, 1.69))
 
 
+# P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
+SG1RADII = numpy.array((
+    0,
+    1.0000,                                                 0.5882,
+    3.0769, 2.0513, 1.5385, 1.2308, 1.0256, 0.8791, 0.7692, 0.6838,
+    4.0909, 3.1579, 2.5714, 2.1687, 1.8750, 1.6514, 1.4754, 1.3333))
+
+
 #? gauss-legendre quadrature
 
 # Murray, N.C. Handy, G.J. Laming,  Mol. Phys. 78, 997(1993)
@@ -71,7 +80,7 @@ def becke(n, **kwargs):
 # scale rad and rad_weight if necessary
 # gauss-legendre
 def delley(n, **kwargs):
-    '''Delley'''
+    '''Delley radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     r_outer = 12.
@@ -84,9 +93,8 @@ def delley(n, **kwargs):
         dr[i-1] = dri
     return r, dr
 
-# Mura-Knowles log3 quadrature (JCP,104,9848)
 def mura_knowles(n, charge=None, **kwargs):
-    '''Mura-Knowles'''
+    '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
 # 7 for Li, Be, Na, Mg, K, Ca, otherwise 5
@@ -103,7 +111,7 @@ def mura_knowles(n, charge=None, **kwargs):
 # Gauss-Chebyshev of the second kind,  and the transformed interval [0,\infty)
 # Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
 def gauss_chebyshev(n, **kwargs):
-    '''Gauss-Chebyshev'''
+    '''Gauss-Chebyshev (JCP, 108, 3226) radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     step = 1. / (n+1)
@@ -121,9 +129,8 @@ def gauss_chebyshev(n, **kwargs):
     return r, dr
 
 
-# O. Treutler, R. Ahlrichs, JCP 102, 346.  (M4)
-def treutler(n, **kwargs):
-    '''Treutler-Ahlrichs'''
+def treutler_ahlrichs(n, **kwargs):
+    '''Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     step = numpy.pi / (n+1)
@@ -134,7 +141,7 @@ def treutler(n, **kwargs):
         dr[i] = step * numpy.sin((i+1)*step) \
                 * ln2*(1+x)**.6 *(-.6/(1+x)*numpy.log((1-x)/2)+1/(1-x))
     return r[::-1], dr[::-1]
-
+treutler = treutler_ahlrichs
 
 
 
@@ -146,7 +153,7 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
 
-    rad = numpy.array([atomic_radii[mol.atom_charge(ia)-1] \
+    rad = numpy.array([atomic_radii[mol.atom_charge(ia)]
                        for ia in range(mol.natm)])
     rr = rad.reshape(-1,1)/rad
     a = .25 * (rr.T - rr)
@@ -160,7 +167,7 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)-1] \
+    rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)]
                                   for ia in range(mol.natm)]))
     rr = rad.reshape(-1,1)/rad
     a = .25 * (rr.T - rr)

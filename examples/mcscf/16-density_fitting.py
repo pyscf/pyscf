@@ -8,16 +8,9 @@ from pyscf import gto, scf, mcscf
 '''
 Density fitting for orbital optimzation.
 
-NOTE mcscf.density_fit function decorates the mcscf.CASSCF object to
-approximate the second order optimization solver.  There is no approximation
-for the 2e integrals.  They are evaluated by the regular 4-center integration.
-To approximate every 2e integrals using density fitting method,  we need
-decorate the SCF object with density_fit function.  (The "overall" density
-fitting is new in PySCF-1.1).
-
-This rule basically follows the same convention used in the SCF decoration.
-See pyscf/mcscf/df.py for more details and
-pyscf/example/scf/23-decorate_scf.py as an exmple
+Note mcscf.density_fit function follows the same convention of decoration
+ordering which is applied in the SCF decoration.  See pyscf/mcscf/df.py for
+more details and pyscf/example/scf/23-decorate_scf.py as an exmple.
 '''
 
 mol = gto.Mole()
@@ -42,8 +35,20 @@ mf = scf.RHF(mol)
 mf.conv_tol = 1e-8
 e = mf.kernel()
 
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 6, 6))
+#
+# DFCASSCF uses density-fitting 2e integrals overall, regardless the
+# underlying mean-filed object
+#
+mc = mcscf.DFCASSCF(mf, 6, 6)
 mo = mc.sort_mo([17,20,21,22,23,30])
 mc.kernel(mo)
-print('E(CAS) = %.12f, ref = -230.848493421389' % mc.e_tot)
+print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
+
+#
+# Assign DF basis
+#
+mc = mcscf.DFCASSCF(mf, 6, 6, auxbasis='ccpvtzfit')
+mo = mc.sort_mo([17,20,21,22,23,30])
+mc.kernel(mo)
+print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
 

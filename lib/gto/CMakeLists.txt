@@ -1,0 +1,11 @@
+add_library(cgto SHARED 
+  moleintor.c fill_int2e.c grid_ao_drv.c fastexp.c deriv1.c nr_ecp.c
+  autocode/auto_eval1.c)
+
+set_target_properties(cgto PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
+  COMPILE_FLAGS ${OpenMP_C_FLAGS}
+  LINK_FLAGS ${OpenMP_C_FLAGS})
+
+target_link_libraries(cgto cint ${BLAS_LIBRARIES})
+

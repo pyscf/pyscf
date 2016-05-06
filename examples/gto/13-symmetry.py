@@ -27,28 +27,45 @@ Symmetry adapted basis are stored in Mole object.
 '''
 
 mol = gto.M(
-    atom = 'C 0 0 0; O 0 0 1.5',
+    atom = 'C 0 .2 0; O 0 0 1.1',
     symmetry = True,
 )
-print('%-4s is a subgroup of %s' % (mol.groupname, mol.topgroup))
+print('Symmetry %-4s, using subgroup %s.  The molecule geometry is changed' %
+      (mol.topgroup, mol.groupname))
+for x in mol._atom:
+    print(x)
+print('--\n')
 
 mol = gto.M(
-    atom = 'C 0 0 0; O 0 0 1.5',
+    atom = 'C 0 .2 0; O 0 0 1.1',
     symmetry = True,
     symmetry_subgroup = 'C2v',
 )
-print('%-4s is a subgroup of %s' % (mol.groupname, mol.topgroup))
+print('Symmetry %-4s, using subgroup %s.  The molecule geometry is changed' %
+      (mol.topgroup, mol.groupname))
+for x in mol._atom:
+    print(x)
+print('--\n')
+
+try:
+    mol = gto.M(
+        atom = 'C 0 .2 0; O 0 0 1.1',
+        symmetry = 'C2v',
+    )
+except RuntimeWarning as e:
+    print('Unable to identify the symmetry with the input geometry.  Error msg:')
+    print(e)
+print('--\n')
 
 mol = gto.M(
     atom = 'C 0 0 0; O 0 0 1.5',
     symmetry = 'C2v',
 )
-print('%-4s is a subgroup of %s' % (mol.groupname, mol.topgroup))
-
-mol = gto.M(
-    atom = 'C 0 0 0; O 0 1.5 0',
-    symmetry = 'C2v',
-)
+print('Symmetry %-4s, using subgroup %s.' % (mol.topgroup, mol.groupname))
+print('If "symmetry=string" was specified, the string is taken as the '
+      'group name and the geometry is kept')
+for x in mol._atom:
+    print(x)
 
 for k, ir in enumerate(mol.irrep_name):
     print('Irrep name %s  (ID %d), symm-adapted-basis shape %s' %

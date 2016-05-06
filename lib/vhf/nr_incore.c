@@ -763,19 +763,16 @@ void CVHFnrs1_incore_drv(double *eri, double *dmj, double *vj,
                          double *dmk, double *vk,
                          int n, void (*const fvj)(), void (*const fvk)())
 {
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dmj, dmk, vj, vk, n)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
+                int i, j;
+                size_t ij, off;
+                double *vj_priv = malloc(sizeof(double)*n*n);
+                double *vk_priv = malloc(sizeof(double)*n*n);
                 memset(vj_priv, 0, sizeof(double)*n*n);
                 memset(vk_priv, 0, sizeof(double)*n*n);
 #pragma omp for nowait schedule(dynamic, 4)

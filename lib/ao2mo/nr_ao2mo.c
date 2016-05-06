@@ -1113,6 +1113,7 @@ void AO2MOnr_e1_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
         }
         ao_loc[nbas] = nao;
         double *eri_ao = malloc(sizeof(double) * nao*nao*nkl*ncomp);
+        assert(eri_ao);
         AO2MOnr_e1fill_drv(intor, cgto_in_shell, fill,
                            eri_ao, klsh_start, klsh_count,
                            nkl, ncomp, cintopt, vhfopt,

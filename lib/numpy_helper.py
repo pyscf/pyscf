@@ -328,8 +328,6 @@ def dot(a, b, alpha=1, c=None, beta=0):
     if c is None:
         c = numpy.empty((m,n))
         beta = 0
-    else:
-        assert(c.flags.c_contiguous)
 
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
@@ -504,6 +502,8 @@ def direct_sum(subscripts, *operands):
         sign = [x for x in subscript if x in '+-']
 
         symbs = subscript[1:].replace('-', '+').split('+')
+        s = ''.join(symbs)
+        assert(len(set(s)) == len(s))  # make sure no duplicated symbols
         return sign, symbs
 
     if '->' in subscripts:

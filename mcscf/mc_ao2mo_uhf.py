@@ -189,7 +189,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     cpp = numpy.empty((ncore[0],nmo,nmo))
     for i in range(ncore[0]):
         buf = fload(i)
-        klshape = (0, ncore[1], ncore[1], nmo-ncore[1])
+        klshape = (0, ncore[1], ncore[1], nmo)
         _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[1], klshape,
                       aosym='s4', mosym='s1', out=cvCV[i], ao_loc=ao_loc)
 
@@ -252,10 +252,11 @@ class _ERIS(object):
             import gc
             gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
-            max_memory = max(2000, casscf.max_memory*.9-pyscf.lib.current_memory()[0])
+            max_memory = max(2000, casscf.max_memory*.9-mem_now)
             if ((mem_outcore+mem_now) < casscf.max_memory*.9):
-                if max_memory < mem_outcore:
-                    log.warn('Not enough memory! You need increase CASSCF.max_memory')
+                if max_memory < mem_basic:
+                    log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+                             (mem_outcore+mem_now)/.9, casscf.max_memory)
                 self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
                 self.aapp, self.aaPP, self.AApp, self.AAPP, \
                 self.appa, self.apPA, self.APPA, \

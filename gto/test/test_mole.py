@@ -24,6 +24,7 @@ mol0.basis['O'].extend(gto.mole.expand_etbs(((0, 4, 1, 1.8),
                                             (1, 3, 2, 1.8),
                                             (2, 2, 1, 1.8),)))
 mol0.verbose = 4
+mol0.ecp = {'O1': 'lanl2dz'}
 mol0.output = None
 mol0.build()
 
@@ -69,7 +70,7 @@ C    SP
         mol1 = mol0.copy()
         mol1.x = None
         mol1.copy = None
-        mol1.check_sanity(mol1)
+        mol1.check_sanity()
 
     def test_nao_range(self):
         self.assertEqual(mol0.nao_nr_range(1,4), (2, 7))
@@ -105,6 +106,81 @@ C    SP
         self.assertEqual(mol.irrep_id, [0, 1])
         mol = gto.M(atom='H 0 0 -1; H 0 0 1', symmetry='C2v')
         self.assertEqual(mol.irrep_id, [0])
+
+    def test_dumps_loads(self):
+        import warnings
+        mol1 = gto.M()
+        mol1.x = lambda *args: None
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            d = mol1.dumps()
+            self.assertTrue(w[0].category, UserWarning)
+        mol1.loads(mol0.dumps())
+
+    def test_same_mol1(self):
+        self.assertTrue(gto.same_mol(mol0, mol0))
+        mol1 = gto.M(atom='h   0  1  1; O1  0  0  0;  h   1  1  0')
+        self.assertTrue(not gto.same_mol(mol0, mol1))
+        self.assertTrue(gto.same_mol(mol0, mol1, cmp_basis=False))
+
+        mol1 = gto.M(atom='h   0  1  1; O1  0  0  0;  h   1  1  0.01')
+        self.assertTrue(not gto.same_mol(mol0, mol1, cmp_basis=False))
+        self.assertTrue(gto.same_mol(mol0, mol1, tol=.02, cmp_basis=False))
+
+        mol1 = gto.M(atom='''H 0.0052917700 0.0000000000 -0.8746076326
+                             F 0.0000000000 0.0000000000 0.0516931447''')
+        mol2 = gto.M(atom='''H 0.0000000000 0.0000000000 -0.8746076326
+                             F 0.0000000000 0.0000000000 0.0516931447''')
+        self.assertTrue(gto.same_mol(mol1, mol2))
+        self.assertTrue(not gto.same_mol(mol1, mol2, tol=1e-6))
+
+    def test_same_mol2(self):
+        mol1 = gto.M(atom='H 0.0052917700 0.0000000000 -0.8746076326; F 0.0000000000 0.0000000000 0.0464013747')
+        mol2 = gto.M(atom='H 0.0000000000 0.0000000000 -0.8746076326; F 0.0052917700 0.0000000000 0.0464013747')
+        self.assertTrue(gto.same_mol(mol1, mol2))
+
+        mol1 = gto.M(atom='H 0.0052917700 0.0000000000 -0.8693158626; F 0.0000000000 0.0000000000 0.0464013747')
+        mol2 = gto.M(atom='H 0.0000000000 0.0052917700 -0.8693158626; F 0.0000000000 0.0000000000 0.0464013747')
+        mol3 = gto.M(atom='H 0.0000000000 0.0000000000 -0.8693158626; F 0.0052917700 0.0000000000 0.0464013747')
+        mol4 = gto.M(atom='H -0.0052917700 0.0000000000 -0.8746076326; F 0.0000000000 0.0000000000 0.0411096047')
+        mols = (mol1, mol2, mol3, mol4)
+        for i,mi in enumerate(mols):
+            for j in range(i):
+                self.assertTrue(gto.same_mol(mols[i], mols[j]))
+
+        mol1 = gto.M(atom='''H 0.0000000000 0.0000000000 0.0000000000
+          H 0.9497795800 1.3265673200 0.0000000000
+          H 0.9444878100 -1.3265673200 0.0000000000
+          H -0.9444878100 0.0000000000 1.3265673200
+          H -0.9444878100 0.0000000000 -1.3265673200''',charge=1)
+        mol2 = gto.M(atom='''H 0.0000000000 0.0000000000 0.0000000000
+          H 0.9444878100 1.3265673200 0.0000000000
+          H 0.9497795800 -1.3265673200 0.0000000000
+          H -0.9444878100 0.0000000000 1.3265673200
+          H -0.9444878100 0.0000000000 -1.3265673200''',charge=1)
+        self.assertTrue(gto.same_mol(mol1, mol2))
+
+    def test_chiral_mol(self):
+        mol1 = gto.M(atom='C 0 0 0; H 1 1 1; He -1 -1 1; Li -1 1 -1; Be 1 -1 -1')
+        mol2 = gto.M(atom='C 0 0 0; H 1 1 1; He -1 -1 1; Be -1 1 -1; Li 1 -1 -1')
+        self.assertTrue(gto.chiral_mol(mol1, mol2))
+        self.assertTrue(gto.chiral_mol(mol1))
+
+        mol1 = gto.M(atom='''H 0.9444878100 1.3265673200 0.0052917700
+                            H 0.9444878100 -1.3265673200 0.0000000000
+                            H -0.9444878100 0.0000000000 1.3265673200
+                            H -0.9444878100 0.0000000000 -1.3265673200''')
+        mol2 = gto.M(atom='''H 0.9444878100 1.3265673200 0.0000000000
+                            H 0.9444878100 -1.3265673200 0.0052917700
+                            H -0.9444878100 0.0000000000 1.3265673200
+                            H -0.9444878100 0.0000000000 -1.3265673200''')
+        self.assertTrue(gto.chiral_mol(mol1, mol2))
+
+        mol1 = gto.M(atom='''H 0.9444878100 1.3265673200 0.0052917700
+                            H 0.9444878100 -1.3265673200 0.0000000000
+                            H -0.9444878100 0.0000000000 1.3265673200
+                            H -0.9444878100 0.0000000000 -1.3265673200''')
+        self.assertTrue(gto.chiral_mol(mol1))
 
 
 if __name__ == "__main__":

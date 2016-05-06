@@ -17,8 +17,8 @@ import pyscf.lib
 import pyscf.gto
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import chkfile
 from pyscf.scf import _vhf
+import pyscf.scf.chkfile
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -37,6 +37,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
     else:
         dm = dm0
 
+    mf._coulomb_now = 'LLLL'
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
@@ -141,7 +142,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
 
     if numpy.iscomplexobj(scf_rec['mo_coeff']):
         mo = scf_rec['mo_coeff']
@@ -203,10 +204,14 @@ def time_reversal_matrix(mol, mat):
 
 def analyze(mf, verbose=logger.DEBUG):
     #from pyscf.tools import dump_mat
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     #mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
+
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
@@ -240,7 +245,9 @@ class UHF(hf.SCF):
         with_ssss : bool, for Dirac-Hartree-Fock only
             If False, ignore small component integrals (SS|SS).  Default is True.
         with_gaunt : bool, for Dirac-Hartree-Fock only
-            If False, ignore Gaunt interaction.  Default is False.
+            Default is False.
+        with_breit : bool, for Dirac-Hartree-Fock only
+            Gaunt + gauge term.  Default is False.
 
     Examples:
 
@@ -256,11 +263,17 @@ class UHF(hf.SCF):
         hf.SCF.__init__(self, mol)
         self.conv_tol = 1e-8
         self.with_ssss = True
-        self._coulomb_now = 'LLLL' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.with_gaunt = False
+        self.with_breit = False
 
         self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self):
+        hf.SCF.dump_flags(self)
+        logger.info(self, 'with_ssss %s, with_gaunt %s, with_breit %s',
+                    self.with_ssss, self.with_gaunt, self.with_breit)
 
     def get_hcore(self, mol=None):
         if mol is None:
@@ -287,14 +300,13 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
-        if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.mol, chk, project=project)
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def build_(self, mol=None):
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
 
@@ -365,9 +377,15 @@ class UHF(hf.SCF):
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
                                 opt_llll, opt_ssll, opt_ssss)
 
-        if self.with_gaunt and 'SS' in self._coulomb_now.upper():
-            logger.info(mol, 'Gaunt integral')
-            vj1, vk1 = _call_veff_gaunt(mol, dm, hermi, opt_gaunt)
+        if self.with_breit:
+            if 'SSSS' in self._coulomb_now.upper() or not self.with_ssss:
+                vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, True)
+                logger.info(self, 'Add Breit term')
+                vj += vj1
+                vk += vk1
+        elif self.with_gaunt and 'SS' in self._coulomb_now.upper():
+            logger.info(self, 'Add Gaunt term')
+            vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
             vk += vk1
 
@@ -402,8 +420,16 @@ class UHF(hf.SCF):
         self._finalize_()
         return self.e_tot
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
+
+    def x2c(self):
+        import pyscf.scf.x2c
+        x2chf = pyscf.scf.x2c.UHF(self.mol)
+        x2chf.__dict__.update(self.__dict__)
+        return x2chf
+
 
 class HF1e(UHF):
     def scf(self, *args):
@@ -538,30 +564,33 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
     return _jk_triu_(vj, vk, hermi)
 
-def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
-    c1 = .5/mol.light_speed
+def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
+    if with_breit:
+        intor_prefix = 'cint2e_breit_'
+    else:
+        intor_prefix = 'cint2e_'
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
         n2c = dm.shape[0] // 2
-        dmls = dm[:n2c,n2c:].copy() * c1**2
-        dmsl = dm[n2c:,:n2c].copy() * c1**2
-        dmll = dm[:n2c,:n2c].copy() * c1**2
-        dmss = dm[n2c:,n2c:].copy() * c1**2
+        dmls = dm[:n2c,n2c:].copy()
+        dmsl = dm[n2c:,:n2c].copy()
+        dmll = dm[:n2c,:n2c].copy()
+        dmss = dm[n2c:,n2c:].copy()
         dms = [dmsl, dmsl, dmls, dmll, dmss]
     else:
         n_dm = len(dm)
         n2c = dm[0].shape[0] // 2
-        dmll = [dmi[:n2c,:n2c].copy() * c1**2 for dmi in dm]
-        dmls = [dmi[:n2c,n2c:].copy() * c1**2 for dmi in dm]
-        dmsl = [dmi[n2c:,:n2c].copy() * c1**2 for dmi in dm]
-        dmss = [dmi[n2c:,n2c:].copy() * c1**2 for dmi in dm]
+        dmll = [dmi[:n2c,:n2c].copy() for dmi in dm]
+        dmls = [dmi[:n2c,n2c:].copy() for dmi in dm]
+        dmsl = [dmi[n2c:,:n2c].copy() for dmi in dm]
+        dmss = [dmi[n2c:,n2c:].copy() for dmi in dm]
         dms = dmsl + dmsl + dmls + dmll + dmss
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
 
     jks = ('lk->s1ij',) * n_dm \
         + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm('cint2e_ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
+    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
     vj[:,:n2c,n2c:] = vx[:n_dm,:,:]
     vk[:,:n2c,n2c:] = vx[n_dm:,:,:]
@@ -569,7 +598,7 @@ def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
     jks = ('lk->s1ij',) * n_dm \
         + ('li->s1kj',) * n_dm \
         + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm('cint2e_ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
+    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
     vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
     vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]
@@ -586,7 +615,11 @@ def _call_veff_gaunt(mol, dm, hermi=1, mf_opt=None):
     if n_dm == 1:
         vj = vj.reshape(n2c*2,n2c*2)
         vk = vk.reshape(n2c*2,n2c*2)
-    return -vj, -vk
+    c1 = .5/mol.light_speed
+    if with_breit:
+        return vj*c1**2, vk*c1**2
+    else:
+        return -vj*c1**2, -vk*c1**2
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons
@@ -619,4 +652,6 @@ if __name__ == '__main__':
     energy = method.scf() #-2.38146942868
     print(energy)
     method.with_gaunt = True
+    print(method.scf()) # -2.38138339005
+    method.with_breit = True
     print(method.scf()) # -2.38138339005

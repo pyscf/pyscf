@@ -217,10 +217,11 @@ class DIIS(object):
         g = numpy.zeros(nd+1, x.dtype)
         g[0] = 1
 
-        try:
-            c = numpy.linalg.solve(h, g)
-        except numpy.linalg.linalg.LinAlgError:
-            logger.warn(self, 'singularity in diis')
+        #try:
+        #    c = numpy.linalg.solve(h, g)
+        #except numpy.linalg.linalg.LinAlgError:
+        #    logger.warn(self, ' diis singular')
+        if 1:
             w, v = scipy.linalg.eigh(h)
             idx = abs(w)>1e-14
             c = numpy.dot(v[:,idx]*(1/w[idx]), numpy.dot(v[:,idx].T.conj(), g))

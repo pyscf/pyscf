@@ -13,17 +13,21 @@ import pyscf.lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import _ri
+from pyscf.df import addons
 
 libri = pyscf.lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
-def format_aux_basis(mol, auxbasis='weigend'):
+def format_aux_basis(mol, auxbasis='weigend+etb'):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
     the basis sets
     '''
     pmol = copy.copy(mol)  # just need shallow copy
-    if isinstance(auxbasis, str):
+
+    if auxbasis == 'weigend+etb':
+        pmol._basis = pmol.format_basis(addons.aug_etb_for_dfbasis(mol))
+    elif isinstance(auxbasis, str):
         uniq_atoms = set([a[0] for a in mol._atom])
         pmol._basis = pmol.format_basis(dict([(a, auxbasis)
                                               for a in uniq_atoms]))
@@ -46,19 +50,19 @@ def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
     '''
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                       auxmol._atm, auxmol._bas, auxmol._env)
+    nbastot = len(bas)
     if 'cart' in intor:
-        iloc = jloc = _ri.make_loc(0, mol.nbas, _ri._cgto_cart(bas))
+        iloc = jloc = _ri.make_loc(0, mol.nbas, bas, True)
     else:
-        iloc = jloc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
+        iloc = jloc = _ri.make_loc(0, mol.nbas, bas)
     if mol1 is None:
-        basrange = (0, mol.nbas, 0, mol.nbas, mol.nbas, auxmol.nbas)
+        basrange = (0, mol.nbas, 0, mol.nbas, mol.nbas, nbastot)
     else:
 # Append mol1 next to auxmol
         atm, bas, env = gto.mole.conc_env(atm, bas, env,
                                           mol1._atm, mol1._bas, mol1._env)
-        basrange = (0, mol.nbas, mol.nbas+auxmol.nbas, mol1.nbas,
-                    mol.nbas, auxmol.nbas)
-        jloc = None
+        basrange = (0, mol.nbas, nbastot, nbastot+mol1.nbas, mol.nbas, nbastot)
+        jloc = _ri.make_loc(0, mol1.nbas, mol1._bas)
     eri = _ri.nr_auxe2(intor, basrange,
                        atm, bas, env, aosym, comp, iloc=iloc, jloc=jloc)
     return eri
@@ -92,7 +96,7 @@ def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
     return eri
 
 
-def cholesky_eri(mol, auxbasis='weigend', verbose=0):
+def cholesky_eri(mol, auxbasis='weigend+etb', verbose=0):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous

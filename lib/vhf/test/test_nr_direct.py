@@ -34,8 +34,9 @@ c_bas = numpy.array(mol._bas, dtype=numpy.int32)
 c_env = numpy.array(mol._env)
 natm = ctypes.c_int(c_atm.shape[0])
 nbas = ctypes.c_int(c_bas.shape[0])
-cintopt = ctypes.c_void_p()
-vhfopt  = ctypes.c_void_p()
+cvhfopt = lib.c_null_ptr()
+cintopt = lib.c_null_ptr()
+ao_loc = numpy.asarray(mol.ao_loc_nr(), dtype=numpy.int32)
 # for each dm1, call namejk
 def runjk(dm1, ncomp, intorname, filldot, *namejk):
     fdrv = getattr(libcvhf2, 'CVHFnr_direct_drv')
@@ -50,19 +51,22 @@ def runjk(dm1, ncomp, intorname, filldot, *namejk):
     else:
         n_dm = dm1.shape[0]
 
+    vjk = numpy.zeros((njk,n_dm*ncomp,nao,nao))
     fjk = (ctypes.c_void_p*(njk*n_dm))()
-    dms = (ctypes.c_void_p*(njk*n_dm))()
+    dmsptr = (ctypes.c_void_p*(njk*n_dm))()
+    vjkptr = (ctypes.c_void_p*(njk*n_dm))()
     for i, symb in enumerate(namejk):
         f1 = ctypes.c_void_p(_ctypes.dlsym(libcvhf2._handle, symb))
         for j in range(n_dm):
-            dms[i*n_dm+j] = dm1[j].ctypes.data_as(ctypes.c_void_p)
+            dmsptr[i*n_dm+j] = dm1[j].ctypes.data_as(ctypes.c_void_p)
+            vjkptr[i*n_dm+j] = vjk[i,j*ncomp].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
-    vjk = numpy.zeros((njk,n_dm*ncomp,nao,nao))
+    shls_slice = (ctypes.c_int*8)(*([0, mol.nbas]*4))
 
-    fdrv(intor, fdot, fjk, dms,
-         vjk.ctypes.data_as(ctypes.c_void_p),
+    fdrv(intor, fdot, fjk, dmsptr, vjkptr,
          ctypes.c_int(njk*n_dm), ctypes.c_int(ncomp),
-         cintopt, vhfopt,
+         shls_slice, ao_loc.ctypes.data_as(ctypes.c_void_p),
+         cintopt, cvhfopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))

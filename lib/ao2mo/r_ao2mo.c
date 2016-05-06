@@ -231,6 +231,7 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double complex *eri,
         int shls[4];
         double complex *buf = malloc(sizeof(double complex)
                                      *di*nao*NCTRMAX*NCTRMAX*envs->ncomp);
+        assert(buf);
         double complex *pbuf, *pbuf1, *peri;
 
         shls[0] = ish;
@@ -297,6 +298,7 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double complex *eri,
         int shls[4];
         double complex *buf = malloc(sizeof(double complex)
                                      *di*nao*nkl*envs->ncomp);
+        assert(buf);
         double complex *pbuf, *pbuf1, *peri;
 
         shls[0] = ish;
@@ -811,6 +813,7 @@ void AO2MOr_e1_drv(int (*intor)(), void (*fill)(),
 
         double complex *eri_ao = malloc(sizeof(double complex)
                                         * nao*nao*nkl*ncomp);
+        assert(eri_ao);
         int ish, kl;
         int (*fprescreen)();
         if (vhfopt) {

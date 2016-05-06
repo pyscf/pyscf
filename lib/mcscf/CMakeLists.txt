@@ -1,7 +1,8 @@
 #include_directories(${CINT_INCLUDE_DIR})
 
 add_library(fci SHARED
-  fci_contract.c fci_rdm.c fci_string.c fci_spin.c fci_4pdm.c)
+  fci_contract.c fci_contract_nosym.c
+  fci_rdm.c fci_string.c fci_spin.c fci_4pdm.c)
 
 set_target_properties(fci PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

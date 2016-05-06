@@ -19,14 +19,14 @@ from pyscf.df import incore
 from pyscf.df import _ri
 
 #
-# for auxe1 (ij|P)
+# for auxe1 (P|ij)
 #
 
 libri = pyscf.lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
-def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=None,
+def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
                  int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
                  ioblk_size=256, verbose=0):
     '''3-center 2-electron AO integrals
@@ -106,7 +106,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=Non
     return erifile
 
 # store cderi in blocks
-def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
+def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
                    int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph',
                    comp=1, ioblk_size=256, verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
@@ -145,14 +145,14 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     natm = ctypes.c_int(mol.natm+auxmol.natm)
     nbas = ctypes.c_int(mol.nbas)
     if 'ssc' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, _ri._cgto_cart(bas))
+        ao_loc = _ri.make_loc(0, mol.nbas, bas)
+        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas, True)
     elif 'cart' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, _ri._cgto_cart(bas))
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, _ri._cgto_cart(bas))
+        ao_loc = _ri.make_loc(0, mol.nbas, bas, True)
+        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas, True)
     else:
-        ao_loc = _ri.make_loc(0, mol.nbas, _ri._cgto_spheric(bas))
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, _ri._cgto_spheric(bas))
+        ao_loc = _ri.make_loc(0, mol.nbas, bas)
+        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas)
     nao = ao_loc[-1] - ao_loc[0]
     naoaux = kloc[-1] - kloc[0]
 
@@ -167,14 +167,14 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     log.debug('erifile %.8g MB, IO buf size %.8g MB',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     if log.verbose >= logger.DEBUG1:
-        log.debug1('shranges = %s', list(shranges))
+        log.debug1('shranges = %s', shranges)
     cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
     for istep, sh_range in enumerate(shranges):
         log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
-        basrange = (bstart, bend-bstart, 0, mol.nbas, mol.nbas, auxmol.nbas)
+        basrange = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
         buf = bufs1[:comp*nrow].reshape(comp,nrow,naoaux)
         if 's1' in aosym:
             ijkoff = ao_loc[bstart] * nao * naoaux
@@ -182,7 +182,8 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
             ijkoff = ao_loc[bstart] * (ao_loc[bstart]+1) // 2 * naoaux
         _ri.nr_auxe2(int3c, basrange,
                      atm, bas, env, aosym, comp, cintopt, buf, ijkoff,
-                     nao, nao, naoaux, ao_loc[bstart:bend], ao_loc, kloc)
+                     ao_loc[bend]-ao_loc[bstart],
+                     nao, naoaux, ao_loc[bstart:bend+1], ao_loc, kloc)
         for icomp in range(comp):
             if comp == 1:
                 label = '%s/%d'%(dataname,istep)
@@ -199,7 +200,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend', dataname='eri_mo',
     return erifile
 
 
-def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpdir=None,
+def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
             int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
             max_memory=2000, ioblk_size=256, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
@@ -242,7 +243,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend', dataname='eri_mo', tmpd
         ijmosym = 's1'
         nij_pair = nmoi*nmoj
         moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoj)
+        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
 
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
@@ -311,18 +312,14 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def _guess_shell_ranges(mol, buflen, aosym):
-    bas_dim = [(mol.bas_angular(i)*2+1)*(mol.bas_nctr(i)) \
-               for i in range(mol.nbas)]
-    ao_loc = [0]
-    for i in bas_dim:
-        ao_loc.append(ao_loc[-1]+i)
+    ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
 
     ish_seg = [0] # record the starting shell id of each buffer
     bufrows = []
     ij_start = 0
 
-    if aosym in ('s2ij'):
+    if aosym == 's2ij':
         for i in range(mol.nbas):
             ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
             if ij_end - ij_start > buflen and i != 0:
@@ -345,7 +342,7 @@ def _guess_shell_ranges(mol, buflen, aosym):
         bufrows.append(nao*nao-ij_start)
 
     # for each buffer, sh_ranges record (start, end, bufrow)
-    sh_ranges = zip(ish_seg[:-1], ish_seg[1:], bufrows)
+    sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
     return sh_ranges
 
 def _stand_sym_code(sym):

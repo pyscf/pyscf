@@ -10,14 +10,15 @@ import tempfile
 import numpy
 import h5py
 import pyscf.lib as lib
+from functools import reduce
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
-import pyscf.grad
-from pyscf.grad import cphf
+from pyscf.scf import rhf_grad
+from pyscf.scf import cphf
 
 BLKSIZE = 192
 
@@ -28,10 +29,8 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(mycc)
     if d1 is None:
-        doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2,
-                                                 max_memory)
-    else:
-        doo, dvv = d1
+        d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory)
+    doo, dov, dvo, dvv = d1
     if d2 is None:
         _d2tmpfile = tempfile.NamedTemporaryFile()
         fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
@@ -44,7 +43,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
         dovvv = fd2intermediate['dovvv']
         dooov = fd2intermediate['dooov']
     else:
-        dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = d2
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
@@ -84,8 +83,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
     d_ovvo = None
     d_ovov = lib.transpose_sum(d_ovov.reshape(nov,nov)).reshape(nocc,nvir,nocc,nvir)
     #:Ivo += numpy.einsum('jbka,jbki->ai', d_ovov, eris.ovoo)
-    Ivo += lib.dot(d_ovov.reshape(-1,nvir).T,
-                   _cp(eris.ovoo).reshape(-1,nocc))
+    Ivo += lib.dot(d_ovov.reshape(-1,nvir).T, _cp(eris.ovoo).reshape(-1,nocc))
     eris_ovov = _cp(eris.ovov)
     #:Ioo += numpy.einsum('jakb,iakb->ij', d_ovov, eris.ovov)
     #:Ivv += numpy.einsum('jcib,jcia->ab', d_ovov, eris.ovov)
@@ -267,7 +265,7 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
                 v[p0:p1] += numpy.einsum('iajb,bj->ia', eris_ovov, x) * 4
                 v[p0:p1] -= numpy.einsum('ibja,bj->ia', eris_ovov, x)
                 eris_ovov = None
-                v -= numpy.einsum('jiab,bj->ia', _cp(eris.oovv[p0:p1]), x[:,p0:p1])
+                v[p0:p1] -= numpy.einsum('ijba,bj->ia', _cp(eris.oovv[p0:p1]), x[:,p0:p1])
         return v.T
     mo_energy = eris.fock.diagonal()
     mo_occ = numpy.zeros_like(mo_energy)
@@ -279,16 +277,19 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
     return dm1
 
 
-# Only works with canonical orbitals
+#
+# Note: only works with canonical orbitals
+# Non-canonical formula refers to JCP, 95, 2639
+#
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           grad_hf=None, max_memory=2000, verbose=logger.INFO):
+           mf_grad=None, max_memory=2000, verbose=logger.INFO):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
     if eris is None: eris = ccsd._ERIS(mycc)
-    if grad_hf is None:
-        grad_hf = pyscf.grad.hf.RHF(mycc._scf)
+    if mf_grad is None:
+        mf_grad = rhf_grad.Gradients(mycc._scf)
 
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time0 = time.clock(), time.time()
@@ -306,7 +307,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nao_pair = nao * (nao+1) // 2
 
     log.debug('Build ccsd rdm1 intermediates')
-    doo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory)
+    d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory)
+    doo, dov, dvo, dvv = d1
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
@@ -315,13 +317,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate, max_memory)
     time1 = log.timer('rdm2 intermediates', *time1)
     log.debug('Build ccsd response_rdm1')
-    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, (doo,dvv),
-                                          d2, max_memory)
+    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2, max_memory)
     time1 = log.timer('response_rdm1 intermediates', *time1)
 
     dm1mo = response_dm1(mycc, t1, t2, l1, l2, eris, (Ioo, Ivv, Ivo, Xvo))
-    dm1mo[:nocc,:nocc] = doo * 2
-    dm1mo[nocc:,nocc:] = dvv * 2
+    dm1mo[:nocc,:nocc] = doo + doo.T
+    dm1mo[nocc:,nocc:] = dvv + dvv.T
     dm1ao = reduce(numpy.dot, (mo_coeff, dm1mo, mo_coeff.T))
     im1 = numpy.zeros_like(dm1mo)
     im1[:nocc,:nocc] = Ioo
@@ -333,8 +334,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
     _dm2file = tempfile.NamedTemporaryFile()
+# Basically, 4 times of dm2 is computed. *2 in _rdm2_mo2ao, *2 in _load_block_tril
     fdm2 = h5py.File(_dm2file.name, 'w')
-    _rdm2_mo2ao(mycc, d2, dm1mo, mo_coeff, fdm2, max_memory)
+    dm1_with_hf = dm1mo.copy()
+    for i in range(nocc):  # HF 2pdm ~ 4(ij)(kl)-2(il)(jk), diagonal+1 because of 4*dm2
+        dm1_with_hf[i,i] += 1
+    _rdm2_mo2ao(mycc, d2, dm1_with_hf, mo_coeff, fdm2, max_memory)
     time1 = log.timer('MO->AO transformation', *time1)
     for key in fd2intermediate.keys():
         del(fd2intermediate[key])
@@ -342,8 +347,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
 #TODO: pass hf_grad object to compute h1 and s1
     log.debug('h1 and JK1')
-    h1 = grad_hf.get_hcore(mol)
-    s1 = grad_hf.get_ovlp(mol)
+    h1 = mf_grad.get_hcore(mol)
+    s1 = mf_grad.get_ovlp(mol)
     zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
@@ -355,11 +360,11 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     # Hartree-Fock part contribution
     hf_dm1 = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
     dm1ao += hf_dm1
-    zeta += grad_hf.make_rdm1e(mycc.mo_energy, mycc.mo_coeff, mycc.mo_occ)
+    zeta += mf_grad.make_rdm1e(mycc.mo_energy, mycc.mo_coeff, mycc.mo_occ)
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = grad_hf.aorange_by_atom()
+    offsetdic = mol.offset_nr_by_atom()
     max_memory1 = max_memory - lib.current_memory()[0]
     blksize = max(1, int(max_memory1*1e6/8/(nao**3*2.5)))
     ioblksize = fdm2['dm2/0'].shape[-1]
@@ -370,11 +375,10 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] =(numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
               + numpy.einsum('xji,ij->x', s1[:,p0:p1], im1[:,p0:p1]))
 # h[1] \dot DM, *2 for +c.c.,  contribute to f1
-        vrinv = grad_hf._grad_rinv(mol, ia)
-        de[k] +=(numpy.einsum('xij,ij->x', h1[:,p0:p1], dm1ao[p0:p1]  )
-               + numpy.einsum('xji,ij->x', h1[:,p0:p1], dm1ao[:,p0:p1]))
-        de[k] +=(numpy.einsum('xij,ij->x', vrinv, dm1ao)
-               + numpy.einsum('xji,ij->x', vrinv, dm1ao))
+        h1ao = mf_grad._grad_rinv(mol, ia)
+        h1ao[:,p0:p1] += h1[:,p0:p1]
+        de[k] +=(numpy.einsum('xij,ij->x', h1ao, dm1ao)
+               + numpy.einsum('xji,ij->x', h1ao, dm1ao))
 # -s[1]*e \dot DM,  contribute to f1
         de[k] -=(numpy.einsum('xij,ij->x', s1[:,p0:p1], zeta[p0:p1]  )
                + numpy.einsum('xji,ij->x', s1[:,p0:p1], zeta[:,p0:p1]))
@@ -384,21 +388,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 # 2e AO integrals dot 2pdm
         ip0 = p0
         for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
-            eri1 = gto.moleintor.getints('cint2e_ip1_sph', mol._atm, mol._bas,
-                                         mol._env, numpy.arange(b0,b1), comp=3,
-                                         aosym='s2kl').reshape(3,nf,nao,-1)
+            eri1 = mol.intor('cint2e_ip1_sph', comp=3, aosym='s2kl',
+                             shls_slice=(b0,b1,0,mol.nbas)).reshape(3,nf,nao,-1)
             dm2buf = numpy.empty((nf,nao,nao_pair))
             for ic, (i0, i1) in enumerate(prange(0, nao_pair, ioblksize)):
                 _load_block_tril(fdm2['dm2/%d'%ic], ip0, ip0+nf, dm2buf[:,:,i0:i1])
             de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
-
-            for i in range(3):
-                #:tmp = _ccsd.unpack_tril(eri1[i].reshape(-1,nao_pair))
-                #:vj = numpy.einsum('ijkl,kl->ij', tmp, hf_dm1[ip0:ip0+nf])
-                #:vk = numpy.einsum('ijkl,jk->il', tmp, hf_dm1[ip0:ip0+nf])
-                vj, vk = hf_get_jk_incore(eri1[i], hf_dm1)
-                de[k,i] -=(numpy.einsum('ij,ij->', vj, hf_dm1[ip0:ip0+nf])
-                         - numpy.einsum('ij,ij->', vk, hf_dm1[ip0:ip0+nf])*.5) * 2
             eri1 = dm2buf = None
             ip0 += nf
         log.debug('grad of atom %d %s = %s', ia, mol.atom_symbol(ia), de[k])
@@ -437,7 +432,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
     else:
         _dm2file = None
     time1 = time.clock(), time.time()
-    dovov, dvvvv, doooo, doovv, dovvo, dovvv, dooov = d2
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nov = nocc * nvir
     nao, nmo = mo_coeff.shape
@@ -462,6 +457,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
              pao_loc, ctypes.c_int(0))
         return out
 
+# transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
     _tmpfile = tempfile.NamedTemporaryFile()
     fswap = h5py.File(_tmpfile.name)
     max_memory1 = max_memory - lib.current_memory()[0]
@@ -663,7 +659,7 @@ if __name__ == '__main__':
         verbose = 0,
         atom = [
             ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. ,-0.757  , 0.587)],
             [1   , (0. , 0.757  , 0.587)]],
         basis = '631g'
     )
@@ -675,9 +671,9 @@ if __name__ == '__main__':
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -691,14 +687,14 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-14
     ehf0 = mf.scf()
-    ghf = grad.hf.RHF(mf).grad()
+    ghf = grad.RHF(mf).grad()
     mycc = ccsd.CCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()[1:]
-    g1 = kernel(mycc, t1, t2, l1, l2, grad_hf=grad.hf.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.hf.grad_nuc(mol))
+    print(g1 + grad.grad_nuc(mol))
 #[[ 0.          0.         -0.07080036]
 # [ 0.          0.          0.07080036]]

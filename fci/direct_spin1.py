@@ -14,6 +14,14 @@
 #              MO integrals
 #
 
+'''
+Full CI solver for spin-free Hamiltonian.
+
+The CI wfn are stored as a 2D array [alpha,beta], where each row corresponds
+to an alpha string.  For each row (alpha string), there are
+total-num-beta-strings of columns.  Each column corresponds to a beta string.
+'''
+
 import sys
 import ctypes
 import numpy
@@ -21,8 +29,10 @@ import scipy.linalg
 import pyscf.lib
 import pyscf.gto
 import pyscf.ao2mo
+from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
+from pyscf.fci import spin_op
 
 libfci = pyscf.lib.load_library('libfci')
 
@@ -30,7 +40,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
     vector.
     '''
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = nelec//2
@@ -44,8 +54,9 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
+    assert(fcivec.size == na*nb)
     f1e_tril = pyscf.lib.pack_tril(f1e)
-    ci1 = numpy.zeros((na,nb))
+    ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
                             ci1.ctypes.data_as(ctypes.c_void_p),
@@ -87,9 +98,9 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
         eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 
-    Please refer to the treatment in :func:`direct_spin1.absorb_h1e`
+    See also :func:`direct_spin1.absorb_h1e`
     '''
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     eri = pyscf.ao2mo.restore(4, eri, norb)
     if link_index is None:
         if isinstance(nelec, (int, numpy.integer)):
@@ -104,7 +115,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -177,7 +188,13 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
     nb = cistring.num_strings(norb, nelecb)
-    addr = numpy.argsort(hdiag)[:np]
+    if hdiag.size < np:
+        addr = numpy.arange(hdiag.size)
+    else:
+        try:
+            addr = numpy.argpartition(hdiag, np-1)[:np]
+        except AttributeError:
+            addr = numpy.argsort(hdiag)[:np]
     addra = addr // nb
     addrb = addr % nb
     stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
@@ -342,6 +359,8 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return dm1, dm2
 
 def get_init_guess(norb, nelec, nroots, hdiag):
+    '''Initial guess is the single Slater determinant
+    '''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -350,15 +369,16 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
 
+    # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
-    iroot = 0
-    for addr in numpy.argsort(hdiag):
+    try:
+        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+    except AttributeError:
+        addrs = numpy.argsort(hdiag)[:nroots]
+    for addr in addrs:
         x = numpy.zeros((na*nb))
         x[addr] = 1
         ci0.append(x.ravel())
-        iroot += 1
-        if iroot >= nroots:
-            break
     return ci0
 
 
@@ -366,40 +386,48 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 # direct-CI driver
 ###############################################################
 
-def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
+def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               max_memory=None, verbose=None, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-        nelec = (neleca, nelecb)
+
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     else:
-        neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        link_indexa, link_indexb = link_index
+
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-    pw, pv = scipy.linalg.eigh(h0)
+    if pspace_size > 0:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = scipy.linalg.eigh(h0)
+    else:
+        pw = pv = addr = None
+
+    if pspace_size >= na*nb and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-    if ci0 is not None and not davidson_only:
-        if len(pw) == na*nb:
-            if na*nb == 1:
-                return pw[0], pv[:,0]
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*nb))
-                civec[:,addr] = pv[:,:nroots].T
-                return pw[:nroots], civec.reshape(nroots,na,nb)
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*nb))
-                civec[addr] = pv[:,0]
-                return pw[0], civec.reshape(na,nb)
+        if na*nb == 1:
+            return pw[0], pv[:,0].reshape(1,1)
+        elif nroots > 1:
+            civec = numpy.empty((nroots,na*nb))
+            civec[:,addr] = pv[:,:nroots].T
+            return pw[:nroots], civec.reshape(nroots,na,nb)
+        elif abs(pw[0]-pw[1]) > 1e-12:
+            civec = numpy.empty((na*nb))
+            civec[addr] = pv[:,0]
+            return pw[0], civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -423,10 +451,16 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None,
         else:
             ci0 = [x.ravel() for x in ci0]
 
+    if tol is None: tol = fci.conv_tol
+    if lindep is None: lindep = fci.lindep
+    if max_cycle is None: max_cycle = fci.max_cycle
+    if max_space is None: max_space = fci.max_space
+    if max_memory is None: max_memory = fci.max_memory
+    if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
     #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   **kwargs)
+                   max_memory=max_memory, verbose=verbose, **kwargs)
     if nroots > 1:
         return e, [ci.reshape(na,nb) for ci in c]
     else:
@@ -462,17 +496,17 @@ def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 
-class FCISolver(object):
+class FCISolver(pyscf.lib.StreamObject):
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
-            self.verbose = pyscf.lib.logger.NOTE
+            self.verbose = logger.NOTE
         else:
             self.stdout = mol.stdout
             self.verbose = mol.verbose
         self.mol = mol
         self.max_cycle = 50
-        self.max_space = 20
+        self.max_space = 12
         self.conv_tol = 1e-10
         self.lindep = 1e-14
         self.max_memory = pyscf.lib.parameters.MEMORY_MAX
@@ -490,9 +524,8 @@ class FCISolver(object):
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
-        log = pyscf.lib.logger.Logger(self.stdout, verbose)
-        log.info('******** CI flags ********')
-        log.info('fci module = %s', self.__module__)
+        log = logger.Logger(self.stdout, verbose)
+        log.info('******** %s flags ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('linear dependence = %g', self.lindep)
@@ -501,95 +534,110 @@ class FCISolver(object):
         log.info('max_memory %d MB', self.max_memory)
         log.info('davidson only = %s', self.davidson_only)
         log.info('nroots = %d', self.nroots)
+        log.info('pspace_size = %d', self.pspace_size)
+        return self
 
 
+    @pyscf.lib.with_doc(absorb_h1e.__doc__)
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
+    @pyscf.lib.with_doc(make_hdiag.__doc__)
     def make_hdiag(self, h1e, eri, norb, nelec):
         return make_hdiag(h1e, eri, norb, nelec)
 
+    @pyscf.lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
         return pspace(h1e, eri, norb, nelec, hdiag, np)
 
+    @pyscf.lib.with_doc(contract_1e.__doc__)
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
+    @pyscf.lib.with_doc(contract_2e.__doc__)
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond, nroots=None, tol=None, **kwargs):
-        if nroots is None: nroots = self.nroots
-        if tol is None: tol = self.conv_tol
-        opts = {'max_memory': self.max_memory,
-                'nroots' : nroots,
-                'tol' : tol,
-                'verbose': pyscf.lib.logger.Logger(self.stdout, self.verbose)}
-        if nroots == 1 and x0[0].size > 6.5e7: # 500MB
-            opts['lessio'] = True
-        for k, v in kwargs.iteritems():
-            if v is None:
-                opts[k] = getattr(self, k)
-            else:
-                opts[k] = v
-        return pyscf.lib.davidson(op, x0, precond, **opts)
+    def eig(self, op, x0, precond, **kwargs):
+        if kwargs['nroots'] == 1 and x0[0].size > 6.5e7: # 500MB
+            lessio = True
+        else:
+            lessio = False
+        return pyscf.lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
-        return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
-                                   self.level_shift)
-#    def make_precond(self, hdiag, *args):
-#        return lambda x, e, *args: x/(hdiag-(e-self.level_shift))
+        if pspaceig is None:
+            return make_diag_precond(hdiag, pspaceig, pspaceci, addr,
+                                     self.level_shift)
+        else:
+            return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
+                                       self.level_shift)
 
+    @pyscf.lib.with_doc(get_init_guess.__doc__)
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None, **kwargs):
-        if self.verbose > pyscf.lib.logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
-        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, tol, lindep,
-                          max_cycle, max_space, nroots, davidson_only,
-                          pspace_size, **kwargs)
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
+                          tol, lindep, max_cycle, max_space, nroots,
+                          davidson_only, pspace_size, **kwargs)
 
+    @pyscf.lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def spin_square(self, fcivec, norb, nelec):
-        from pyscf.fci import spin_op
         if self.nroots == 1:
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
             ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
             return [x[0] for x in ss], [x[1] for x in ss]
+    spin_square.__doc__ = spin_op.spin_square0.__doc__
 
+    @pyscf.lib.with_doc(make_rdm1s.__doc__)
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(make_rdm12s.__doc__)
     def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12s(fcivec, norb, nelec, link_index, reorder)
 
+    @pyscf.lib.with_doc(make_rdm12.__doc__)
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
     def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
-        return make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
+        r'''Spin traced 2-particle density matrice
 
+        NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but
+        stored as [p,r,q,s]
+        '''
+        return self.make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
+
+    @pyscf.lib.with_doc(make_rdm1s.__doc__)
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(trans_rdm1.__doc__)
     def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
+    @pyscf.lib.with_doc(trans_rdm12s.__doc__)
     def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
                      reorder=True):
         return trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
 
+    @pyscf.lib.with_doc(trans_rdm12.__doc__)
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)

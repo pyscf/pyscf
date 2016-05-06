@@ -75,6 +75,8 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
         out = numpy.empty((comp,nkl,nao_pair))
     else:
         out = numpy.ndarray((comp,nkl,nao_pair), buffer=out)
+    if out.size == 0:
+        return out
 
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
@@ -100,13 +102,15 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
         libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
     return out
 
-def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None):
+def nr_e1_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
-    i0, icount, j0, jcount = shape
+    i0, i1, j0, j1 = orbs_slice
+    icount = i1 - i0
+    jcount = j1 - j0
     ij_count = icount * jcount
 
     if aosym in ('s4', 's2ij'):
@@ -130,6 +134,8 @@ def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None):
         out = numpy.empty((nrow,ij_count))
     else:
         out = numpy.ndarray((nrow,ij_count), buffer=out)
+    if out.size == 0:
+        return out
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
@@ -147,14 +153,16 @@ def nr_e1_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None):
 
 # if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
-def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None,
+def nr_e2_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
            ao_loc=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
-    k0, kc, l0, lc = shape
+    k0, k1, l0, l1 = orbs_slice
+    kc = k1 - k0
+    lc = l1 - l0
     kl_count = kc * lc
 
     if aosym in ('s4', 's2kl'):
@@ -178,6 +186,8 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None,
         out = numpy.empty((nrow,kl_count))
     else:
         out = numpy.ndarray((nrow,kl_count), buffer=out)
+    if out.size == 0:
+        return out
 
     if ao_loc is None:
         pao_loc = ctypes.POINTER(ctypes.c_void_p)()
@@ -202,12 +212,14 @@ def nr_e2_(eri, mo_coeff, shape, aosym='s1', mosym='s1', out=None,
 
 
 # if out is not None, transform AO to MO in-place
-def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
+def r_e1_(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
           tao, aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
-    i0, icount, j0, jcount = shape
+    i0, i1, j0, j1 = orbs_slice
+    icount = i1 - i0
+    jcount = j1 - j0
     ij_count = icount * jcount
 
     c_atm = numpy.asarray(atm, dtype=numpy.int32)
@@ -228,6 +240,8 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
     else:
         out = numpy.ndarray((comp,nkl,nao_pair), dtype=numpy.complex,
                             buffer=out)
+    if out.size == 0:
+        return out
 
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
@@ -262,13 +276,15 @@ def r_e1_(intor, mo_coeff, shape, sh_range, atm, bas, env,
 
 # if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
-def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', out=None):
+def r_e2_(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
-    k0, kc, l0, lc = shape
+    k0, k1, l0, l1 = orbs_slice
+    kc = k1 - k0
+    lc = l1 - l0
     kl_count = kc * lc
 
     if kc <= lc:
@@ -283,6 +299,8 @@ def r_e2_(eri, mo_coeff, shape, tao, ao_loc, aosym='s1', out=None):
     else:
         out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex,
                             buffer=out)
+    if out.size == 0:
+        return out
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
     ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)

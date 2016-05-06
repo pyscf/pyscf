@@ -17,19 +17,20 @@ mol.basis = 'ccpvtz'
 mol.build()
 mf = dft.RKS(mol)
 mf.grids.atom_grid = {"H": (50, 110)}
-mf.grids.setup_grids_()
+mf.prune = None
+mf.grids.build()
 nao = mol.nao_nr()
 
 class KnowValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
-        self.assertEqual(non0.sum(), 71955)
+        self.assertEqual(non0.sum(), 94352)
         self.assertAlmostEqual(numpy.dot(non0.ravel(),
                                          numpy.cos(numpy.arange(non0.size))),
-                               107.69227300597809, 9)
+                               13.078714266478269, 9)
         self.assertAlmostEqual(numpy.dot(numpy.cos(non0).ravel(),
                                          numpy.cos(numpy.arange(non0.size))),
-                               -48.536221663504378, 9)
+                               -4.7363075913557724, 9)
 
     def test_dot_ao_dm(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)
@@ -44,7 +45,7 @@ class KnowValues(unittest.TestCase):
 
     def test_dot_ao_ao(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)
-        ao = dft.numint.eval_ao(mol, mf.grids.coords, isgga=True)
+        ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
         res0 = lib.dot(ao[0].T, ao[1])
         res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], nao,
                                      mf.grids.weights.size, non0tab)

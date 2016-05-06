@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_rks(self):
         mf = cosmo.cosmo_(dft.RKS(mol))
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lypg'
         mf.conv_tol = 1e-11
         self.assertAlmostEqual(mf.kernel(), -76.407553915, 9)
 
@@ -27,6 +27,7 @@ class KnowValues(unittest.TestCase):
         mf.verbose = 0
         mf.kernel()
         mc = cosmo.cosmo_(mcscf.CASSCF(mf, 4, 4))
+        mc.verbose = 4
         self.assertAlmostEqual(mc.kernel(mc.sort_mo([3,4,6,7]))[0],
                                -76.0656799183, 8)
 

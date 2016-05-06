@@ -16,10 +16,10 @@ mol.atom = '''
     H    0.  -0.757  0.587
     H    0.  0.757   0.587'''
 mol.basis = 'sto-3g'
-mol.symmetry = 1
+mol.symmetry = 'c2v'
 mol.build()
 m = scf.RHF(mol)
-m.conv_tol = 1e-15
+m.conv_tol_grad = 1e-8
 ehf = m.scf()
 norb = m.mo_coeff.shape[1]
 nelec = mol.nelectron
@@ -38,7 +38,7 @@ ci0 /= numpy.linalg.norm(ci0)
 class KnowValues(unittest.TestCase):
     def test_contract(self):
         ci1 = cis.contract_2e(g2e, ci0, norb, nelec)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.365338254327568, 10)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.365338253599546, 10)
 
     def test_kernel(self):
         e, c = fci.direct_spin0_symm.kernel(h1e, g2e, norb, nelec, orbsym=orbsym)

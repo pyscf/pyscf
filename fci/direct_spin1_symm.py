@@ -28,7 +28,7 @@ from pyscf.fci import addons
 libfci = pyscf.lib.load_library('libfci')
 
 def reorder4irrep(eri, norb, link_index, orbsym):
-    if not orbsym:
+    if not list(orbsym):
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
     orbsym = numpy.array(orbsym)
 # map irrep IDs of Dooh or Coov to D2h, C2v
@@ -45,10 +45,10 @@ def reorder4irrep(eri, norb, link_index, orbsym):
 # of the sorted pair
     order = numpy.argsort(trilirrep)
     rank = order.argsort()
-    eri = eri[order][:,order]
+    eri = eri.take(order,axis=0).take(order,axis=1)
     link_index_irrep = link_index.copy()
     link_index_irrep[:,:,0] = rank[link_index[:,:,0]]
-    return eri, link_index_irrep, dimirrep
+    return numpy.asarray(eri, order='C'), link_index_irrep, dimirrep
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return direct_spin1.contract_1e(f1e, fcivec, norb, nelec, link_index)
@@ -62,8 +62,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
-    assert(fcivec.flags.c_contiguous)
-    if not orbsym:
+    fcivec = numpy.asarray(fcivec, order='C')
+    if not list(orbsym):
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -79,7 +79,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
         link_indexa, link_indexb = link_index
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     eri, link_indexa, dimirrep = reorder4irrep(eri, norb, link_indexa, orbsym)
@@ -220,27 +220,55 @@ class FCISolver(direct_spin1.FCISolver):
         self.wfnsym = None
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
         self.davidson_only = True
+        self.pspace_size = 0  # Improper pspace size may break symmetry
 
     def dump_flags(self, verbose=None):
+        if verbose is None: verbose = self.verbose
         direct_spin1.FCISolver.dump_flags(self, verbose)
+        log = pyscf.lib.logger.Logger(self.stdout, verbose)
         if isinstance(self.wfnsym, str):
-            logger.info(self, 'specified total symmetry = %s', self.wfnsym)
+            log.info('specified CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.integer)):
-            logger.info(self, 'specified total symmetry = %s',
-                        symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+            log.info('specified CI wfn symmetry = %s',
+                     symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+        return self
+
+    def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
+        return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
+
+    def make_hdiag(self, h1e, eri, norb, nelec):
+        return direct_spin1.make_hdiag(h1e, eri, norb, nelec)
+
+    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+        return direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
                     orbsym=[], **kwargs):
-        if not orbsym:
+        if not list(orbsym):
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         wfnsym = _id_wfnsym(self, norb, nelec, self.wfnsym)
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
+
+    def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, **kwargs):
+        if fcivec is None:
+            wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
+        else:
+            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, self.orbsym)
+        if 'verbose' in kwargs:
+            if isinstance(kwargs['verbose'], logger.Logger):
+                log = kwargs['verbose']
+            else:
+                log = logger.Logger(self.stdout, kwargs['verbose'])
+            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+        else:
+            logger.debug(self, 'Guessing CI wfn symmetry = %s', wfnsym)
+        return wfnsym
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
@@ -253,19 +281,11 @@ class FCISolver(direct_spin1.FCISolver):
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
         else:
             wfnsym_bak = None
-        if self.verbose > logger.QUIET:
-            pyscf.gto.mole.check_sanity(self, self._keys, self.stdout)
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
 
-        wfnsym = _id_wfnsym(self, norb, nelec, self.wfnsym)
-        if 'verbose' in kwargs:
-            if isinstance(kwargs['verbose'], logger.Logger):
-                log = kwargs['verbose']
-            else:
-                log = logger.Logger(self.stdout, kwargs['verbose'])
-            log.debug('total symmetry = %s', wfnsym)
-        else:
-            logger.debug(self, 'total symmetry = %s', wfnsym)
-        e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
+        wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
+        e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
                                        davidson_only, pspace_size, **kwargs)
         if self.wfnsym is not None:

@@ -6,7 +6,6 @@ from functools import reduce
 import numpy
 import pyscf.lib
 from pyscf.fci import cistring
-from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
 
 librdm = pyscf.lib.load_library('libfci')
@@ -62,6 +61,7 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     function can compute the expectation value spin square operator for
     UHF-FCI wavefunction
     '''
+    from pyscf.fci import direct_spin1
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -144,7 +144,7 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_baab(fcivec, norb, nelec):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -170,7 +170,6 @@ def _make_rdm2_baab(fcivec, norb, nelec):
                            bcre_index.ctypes.data_as(ctypes.c_void_p))
     return dm2
 def make_rdm2_baab(fcivec, norb, nelec):
-    assert(fcivec.flags.c_contiguous)
     dm2 = _make_rdm2_baab(fcivec, norb, nelec)
     dm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', fcivec, fcivec, norb, nelec)
     dm1b, dm2 = rdm.reorder_rdm(dm1b, dm2, inplace=True)
@@ -180,6 +179,7 @@ def make_rdm2_baab(fcivec, norb, nelec):
 # dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def _make_rdm2_abba(fcivec, norb, nelec):
+    fcivec = numpy.asarray(fcivec, order='C')
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelecb = nelec // 2
     else:
@@ -222,11 +222,15 @@ def contract_ss(fcivec, norb, nelec):
     nb = cistring.num_strings(norb, nelecb)
     fcivec = fcivec.reshape(na,nb)
 
-    def gen_map(fstr_index, nelec):
+    def gen_map(fstr_index, nelec, des=True):
         a_index = fstr_index(range(norb), nelec)
         amap = numpy.zeros((a_index.shape[0],norb,2), dtype=numpy.int32)
-        for k, tab in enumerate(a_index):
-            amap[k,tab[:,0]] = tab[:,2:]
+        if des:
+            for k, tab in enumerate(a_index):
+                amap[k,tab[:,1]] = tab[:,2:]
+        else:
+            for k, tab in enumerate(a_index):
+                amap[k,tab[:,0]] = tab[:,2:]
         return amap
 
     if neleca > 0:
@@ -240,12 +244,12 @@ def contract_ss(fcivec, norb, nelec):
         bdes = None
 
     if neleca < norb:
-        acre = gen_map(cistring.gen_cre_str_index, neleca)
+        acre = gen_map(cistring.gen_cre_str_index, neleca, False)
     else:
         acre = None
 
     if nelecb < norb:
-        bcre = gen_map(cistring.gen_cre_str_index, nelecb)
+        bcre = gen_map(cistring.gen_cre_str_index, nelecb, False)
     else:
         bcre = None
 
@@ -334,20 +338,21 @@ if __name__ == '__main__':
     print(spin_square0(ci1, 4, (3,1)))
 
     print(numpy.einsum('ij,ij->', ci1, contract_ss(ci1, 4, (3,1))),
-          spin_square(ci1, 4, (3,1)))
+          spin_square(ci1, 4, (3,1))[0])
 
     numpy.random.seed(1)
     n = cistring.num_strings(6,3)
     ci0 = numpy.random.random((n,n))
     print(numpy.einsum('ij,ij->', ci0,contract_ss(ci0, 6, 6)),
-          spin_square(ci0, 6, 6))
+          spin_square(ci0, 6, 6)[0])
 
     na = cistring.num_strings(6,4)
     nb = cistring.num_strings(6,2)
     ci0 = numpy.random.random((na,nb))
     print(numpy.einsum('ij,ij->', ci0,contract_ss(ci0, 6, (4,2))),
-          spin_square(ci0, 6, (4,2)))
+          spin_square(ci0, 6, (4,2))[0])
 
+    print('----------')
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -386,4 +391,4 @@ if __name__ == '__main__':
     n = cistring.num_strings(10,5)
     ci0 = numpy.random.random((n,n))
     ss1 = numpy.einsum('ij,ij->', ci0, contract_ss(ci0, 10, 10))
-    print(ss1, spin_square(ci0, 10, 10))
+    print(ss1, spin_square(ci0, 10, 10)[0])

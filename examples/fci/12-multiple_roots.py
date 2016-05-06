@@ -3,14 +3,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import gto, scf, fci
-
 '''
 Multiple FCI roots
 
 Call fix_spin_ function here to ensure the solutions are all singlets
 '''
+
+import numpy
+from pyscf import gto, scf, fci
 
 mol = gto.M(atom='Ne 0 0 0', basis='631g')
 m = scf.RHF(mol)

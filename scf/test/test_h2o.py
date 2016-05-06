@@ -21,6 +21,9 @@ mol.build(
     basis = {"H": '6-31g',
              "O": '6-31g',}
 )
+molsym = mol.copy()
+molsym.symmetry = True
+molsym.build(0, 0)
 
 
 class KnowValues(unittest.TestCase):
@@ -107,12 +110,12 @@ class KnowValues(unittest.TestCase):
     def test_r_uhf(self):
         uhf = dhf.UHF(mol)
         uhf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(uhf.scf(), -76.038520472820863, 9)
+        self.assertAlmostEqual(uhf.scf(), -76.038520463270061, 9)
 
     def test_r_rhf(self):
         uhf = dhf.RHF(mol)
         uhf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(uhf.scf(), -76.038520472820863, 9)
+        self.assertAlmostEqual(uhf.scf(), -76.038520463270061, 9)
 
     def test_level_shift_uhf(self):
         uhf = scf.UHF(mol)
@@ -206,6 +209,11 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm0, dm1))
 
         mf = scf.rohf.ROHF(mol)
+        dm1 = mf.init_guess_by_1e(mol)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1),
+                               5.3700828975288122/numpy.sqrt(2), 9)
+
+        mf = scf.rohf.ROHF(molsym)
         dm1 = mf.init_guess_by_1e(mol)
         self.assertAlmostEqual(numpy.linalg.norm(dm1),
                                5.3700828975288122/numpy.sqrt(2), 9)

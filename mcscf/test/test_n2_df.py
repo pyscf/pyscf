@@ -2,6 +2,7 @@
 
 import unittest
 import numpy
+import scipy.linalg
 from pyscf import gto
 from pyscf import scf
 from pyscf import df
@@ -39,50 +40,50 @@ msym.scf()
 
 class KnowValues(unittest.TestCase):
     def test_mc1step_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 4, 4))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc2step_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 4, 4))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc1step_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 6, 6))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_mc2step_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(m, 6, 6))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_mc1step_symm_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 4, 4))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc2step_symm_4o4e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 4, 4))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.913786407955, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
     def test_mc1step_symm_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 6, 6))
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_mc2step_symm_6o6e(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(msym, 6, 6))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(msym, 6, 6))
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
@@ -111,7 +112,7 @@ class KnowValues(unittest.TestCase):
 #    def test_casci_uhf(self):
 #        mf = scf.UHF(mol)
 #        mf.scf()
-#        mc = mcscf.density_fit(mcscf.CASSCF(mf, 4, 4))
+#        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4))
 #        emc = mc.mc1step()[0]
 #        self.assertAlmostEqual(emc, -108.913786407955, 7)
 #        emc = mc.mc2step()[0]
@@ -121,7 +122,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(msym)
         mf.max_memory = 100
         mf.kernel()
-        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.DFCASSCF(mf, 4, 4)
         eri0 = numpy.dot(mf._cderi.T, mf._cderi)
         nmo = mc.mo_coeff.shape[1]
         ncore = mc.ncore
@@ -130,6 +131,20 @@ class KnowValues(unittest.TestCase):
         eris = mc.ao2mo(mc.mo_coeff)
         self.assertTrue(numpy.allclose(eri0[:,:,ncore:nocc,ncore:nocc], eris.ppaa))
         self.assertTrue(numpy.allclose(eri0[:,ncore:nocc,:,ncore:nocc], eris.papa))
+
+    def test_assign_cderi(self):
+        nao = molsym.nao_nr()
+        w, u = scipy.linalg.eigh(mol.intor('cint2e_sph', aosym='s4'))
+        idx = w > 1e-9
+
+        mf = scf.density_fit(scf.RHF(molsym))
+        mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
+        mf.kernel()
+
+        mc = mcscf.DFCASSCF(mf, 6, 6)
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.98010545803884, 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")

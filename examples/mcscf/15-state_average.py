@@ -3,13 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf, mcscf
-
 '''
 State average
 
 Using mcscf.state_average_ to decorate the CASSCF object
 '''
+
+from pyscf import gto, scf, mcscf
 
 mol = gto.M(
     atom = [
@@ -28,10 +28,15 @@ mc.kernel()
 mo = mc.mo_coeff
 
 # An equivalent input for state average is
-mc = mcscf.CASSCF(mf, 4, 4)
-mc.state_average_([.64,.36])
-mc.verbose = 4
-mc.kernel()
+mc = mcscf.CASSCF(mf, 4, 4).state_average_([.64,.36]).run(verbose=4)
+#
+# Note stream operations are applied here.  The above one line code is
+# equivalent to the following serail statements
+#
+#mc = mcscf.CASSCF(mf, 4, 4)
+#mc.state_average_([.64,.36])
+#mc.verbose = 4
+#mc.kernel()
 mo = mc.mo_coeff
 
 #

@@ -35,6 +35,8 @@ There are some parameters to control the CASSCF/CASCI method.
         Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
+    canonicalization : bool
+        Whether to canonicalize orbitals.  Default is True.
     fcisolver : an instance of :class:`FCISolver`
         The pyscf.fci module provides several FCISolver for different scenario.  Generally,
         fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -159,11 +161,11 @@ from pyscf.mcscf import addons
 from pyscf.mcscf import casci_uhf
 from pyscf.mcscf import mc1step_uhf
 from pyscf.mcscf.addons import *
-from pyscf.mcscf.df import density_fit
+from pyscf.mcscf import df
+from pyscf.mcscf import chkfile
 
 def CASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
-    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -172,14 +174,7 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
-        mf1 = scf.RHF(mf.mol)
-        mf1.__dict__.update(mf.__dict__)
-        mf1.mo_energy = mf.mo_energy[0]
-        mf1.mo_coeff  = mf.mo_coeff[0]
-        mf1.mo_occ    = mf.mo_occ[0]
-        mf = mf1
-
+    mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
@@ -191,7 +186,6 @@ RCASSCF = CASSCF
 
 def CASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
-    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -200,14 +194,7 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
-        mf1 = scf.RHF(mf.mol)
-        mf1.__dict__.update(mf.__dict__)
-        mf1.mo_energy = mf.mo_energy[0]
-        mf1.mo_coeff  = mf.mo_coeff[0]
-        mf1.mo_occ    = mf.mo_occ[0]
-        mf = mf1
-
+    mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
     else:
@@ -219,11 +206,7 @@ RCASCI = CASCI
 
 def UCASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
-        raise RuntimeError('First argument needs to be UHF object.')
-
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         mc = casci_uhf.CASCI(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
@@ -232,20 +215,65 @@ def UCASCI(mf, ncas, nelecas, **kwargs):
 
 def UCASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
-    if (mf.__class__.__name__ in ('RHF','ROHF') or
-        isinstance(mf, (scf.hf.RHF, scf.rohf.ROHF))):
-        raise RuntimeError('First argument needs to be UHF object.')
-
-    if mf.__class__.__name__ in ('UHF', 'UKS') or isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         mc = mc1step_uhf.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
 
-def DFCASSCF(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
-    mc = CASSCF(mf, ncas, nelecas, **kwargs)
-    return density_fit(mc, auxbasis)
+def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
+    mf = _convert_to_rhf(mf, False)
+    if mf.mol.symmetry:
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
+    else:
+        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
+    return df.density_fit(mc, auxbasis)
 
-def DFCASCI(mf, ncas, nelecas, auxbasis='weigend', **kwargs):
-    mc = CASCI(mf, ncas, nelecas, **kwargs)
-    return density_fit(mc, auxbasis)
+def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
+    mf = _convert_to_rhf(mf, False)
+    if mf.mol.symmetry:
+        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
+    else:
+        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
+    return df.density_fit(mc, auxbasis)
+
+
+def _convert_to_rhf(mf, convert_df=True):
+    import copy
+    import numpy
+    if isinstance(mf, scf.uhf.UHF):
+        # convert to RHF
+        mf = copy.copy(mf)
+        if mf.mo_energy is not None: mf.mo_energy = mf.mo_energy[0]
+        if mf.mo_coeff is not None:  mf.mo_coeff  = mf.mo_coeff[0]
+        if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
+
+    # Avoid doing density fitting
+    if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
+        from pyscf.lib import logger
+        mf = copy.copy(mf)
+        logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
+                    'Its orbitals are taken as the initial guess of CASSCF.\n'
+                    'The CASSCF object is the normal solver (no approximated integrals). '
+                    'mcscf.DFCASSCF is the function to create density fitting CASSCF '
+                    '(with approximate 2e integrals).')
+        mf._cderi = None
+        mf._tag_df = False
+    return mf
+
+approx_hessian = df.approx_hessian
+
+def density_fit(mc, auxbasis=None):
+    if hasattr(mc._scf, '_tag_df') and mc._scf._tag_df:
+        return df.density_fit(mc, auxbasis)
+    else:
+        from pyscf.lib import logger
+        logger.warn(mc, 'NOTE: approx_hessian function is available for DF orbital hessian!\n'
+                    'The CASSCF object is built on normal SCF object %s '
+                    '(without density fitting).  Currently, this density_fit '
+                    'function will call approx_hessian to approximate orbital '
+                    'hessian for backward compatibility.\n'
+                    'In the future release, it will be removed and the '
+                    'density_fit function will only generate DF-CASSCF method.',
+                    mc._scf.__class__)
+        return approx_hessian(mc, auxbasis)

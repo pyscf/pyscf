@@ -24,11 +24,17 @@ H -.990138, -0.436705  0''',
             basis = 'ccpvdz',
             symmetry = 1,
             spin = 2)
-mf = scf.RHF(mol)
-mf.kernel()
 
-mc = mcscf.CASSCF(mf, 14, 6)
-mc.verbose = 4
-mc.ci_update_dep = 4
-mc.max_cycle_micro = 10
-mc.kernel()
+mc = mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 14, 6).run(verbose=4, ci_update_dep=4, max_cycle_micro=10)
+
+#
+# Note: stream operations are used here.  This one line code is equivalent to
+# the following serial statements.
+#
+#mf = scf.RHF(mol)
+#mf.kernel()
+#mc = mcscf.CASSCF(mf, 14, 6)
+#mc.verbose = 4
+#mc.ci_update_dep = 4
+#mc.max_cycle_micro = 10
+#mc.kernel()

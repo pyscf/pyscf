@@ -51,7 +51,7 @@ class KnowValues(unittest.TestCase):
         # Ensures that casscf_mo returns the natural orbital basis in the
         # active space.
         mc.natorb = True
-        emc, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)[0:4]
+        emc, e_ci, fcivec, mo_energy, casscf_mo = mc.mc2step(m.mo_coeff)
 
         fciqmcci = FCIQMCCI(mol)
         fciqmcci.tau = 0.01

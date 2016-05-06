@@ -18,9 +18,7 @@ mol.basis = '6-31g*'
 mol.build()
 
 mf = scf.RHF(mol)
-mf = scf.fast_newton(mf)
 mf.kernel()
 
 mf = dft.RKS(mol)
-mf = scf.fast_newton(mf)
 mf.kernel()

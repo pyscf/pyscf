@@ -69,7 +69,7 @@ class CheMPS2(object):
         Initializer = PyCheMPS2.PyInitialize()
         Initializer.Init()
 
-        if self.groupname:
+        if self.groupname is not None:
             groupNumber = GROUPNAME_ID[self.groupname]
         else:
             groupNumber = 0
@@ -164,6 +164,7 @@ if __name__ == '__main__':
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
         symmetry = True,
+        symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)
     m.scf()
