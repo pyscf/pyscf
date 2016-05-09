@@ -862,7 +862,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
                 fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
-                u_u, u_d, d_d = fxc[0][ip:ip+ngrid*3].T
+                u_u, u_d, d_d = fxc[0][ip:ip+ngrid].T
                 ip += ngrid
 
             for i in range(nset):
