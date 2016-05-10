@@ -701,7 +701,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
-    print orbital coefficients; Mulliken population analysis
+    print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
@@ -720,8 +720,8 @@ def analyze(mf, verbose=logger.DEBUG):
         label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
-
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log), \
+            mf.dip_moment(mf.mol, dm, verbose=log)
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
@@ -836,6 +836,60 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
+def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+    r''' Dipole moment calculation
+
+    .. math::
+
+        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Z_A X_A
+        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Z_A Y_A
+        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Z_A Z_A
+
+    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
+    moment
+
+    Args:
+         mol: an instance of :class:`Mole`
+         dm : a 2D ndarrays density matrices
+
+    Return:
+        A list: the dipole moment on x, y and z component
+    '''
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+
+    if unit_symbol == 'Debye':
+        unit = 2.541746    # a.u. to Debye
+    else:
+        unit = 1.0
+
+    mol.set_common_orig_((0,0,0))
+    ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
+
+    el_dip_x = numpy.trace(numpy.dot(dm, ao_dip[0]))
+    el_dip_y = numpy.trace(numpy.dot(dm, ao_dip[1]))
+    el_dip_z = numpy.trace(numpy.dot(dm, ao_dip[2]))
+
+    nucl_dip_x = nucl_dip_y = nucl_dip_z = 0.0
+    for i in range(mol.natm):
+        nucl_dip_x += mol.atom_charge(i)*mol.atom_coord(i)[0]
+        nucl_dip_y += mol.atom_charge(i)*mol.atom_coord(i)[1]
+        nucl_dip_z += mol.atom_charge(i)*mol.atom_coord(i)[2]
+
+    mol_dip_x = (-el_dip_x + nucl_dip_x)*unit
+    mol_dip_y = (-el_dip_y + nucl_dip_y)*unit
+    mol_dip_z = (-el_dip_z + nucl_dip_z)*unit
+
+    if unit_symbol == 'Debye' :
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f',
+                mol_dip_x, mol_dip_y, mol_dip_z)
+    else:
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f',
+                mol_dip_x, mol_dip_y, mol_dip_z)
+    return numpy.array((mol_dip_x, mol_dip_y, mol_dip_z))
 
 ############
 # For orbital rotation
@@ -1218,13 +1272,20 @@ class SCF(pyscf.lib.StreamObject):
 
     canonicalize = canonicalize
 
+    @pyscf.lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        if unit_symbol is None: unit_symbol='Debye'
+        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis='weigend+etb'):
-        import pyscf.scf.dfhf
-        return pyscf.scf.dfhf.density_fit(self, auxbasis)
+    def density_fit(self, auxbasis='weigend+etb', with_df=None):
+        import pyscf.df.df_jk
+        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 
     def x2c(self):
         import pyscf.scf.x2c
@@ -1323,6 +1384,12 @@ class RHF(SCF):
             return vj - vk * .5
         else:
             return SCF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF/ROHF'''
+        from pyscf.scf import addons
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':

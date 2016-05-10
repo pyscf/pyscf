@@ -461,6 +461,7 @@ def newton(mf):
         def dump_flags(self):
             log = logger.Logger(self.stdout, self.verbose)
             log.info('\n')
+            self._scf.dump_flags()
             log.info('******** %s Newton solver flags ********', self._scf.__class__)
             log.info('SCF tol = %g', self.conv_tol)
             log.info('conv_tol_grad = %s',    self.conv_tol_grad)
@@ -510,6 +511,9 @@ def newton(mf):
 
         def from_dm(self, dm):
             '''Transform density matrix to the initial guess'''
+            if isinstance(dm, str):
+                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
+                dm = self.from_chk(dm, True)
             mol = self._scf.mol
             h1e = self._scf.get_hcore(mol)
             s1e = self._scf.get_ovlp(mol)

@@ -8,6 +8,7 @@
 
 #define HERMITIAN    1
 #define ANTIHERMI    2
+#define SYMMETRIC    3
 
 void NPdsymm_triu(int n, double *mat, int hermi);
 void NPzhermi_triu(int n, double complex *mat, int hermi);

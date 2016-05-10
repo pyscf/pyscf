@@ -77,8 +77,9 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         nao = mol.nao_nr()
         mo = numpy.random.random((nao,nao))
-        pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 6)
+        popandchg, dip = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 4.0048449691540391, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.05844441822, 8)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
@@ -281,6 +282,11 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
         self.assertRaises(ValueError, mf.dump_flags)
 
+    def test_dip_moment(self):
+        mf = scf.RHF(mol)
+        mf.scf()
+        dip = mf.dip_moment(unit_symbol='au')
+        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985])) 
 
 if __name__ == "__main__":
     print("Full Tests for rhf")

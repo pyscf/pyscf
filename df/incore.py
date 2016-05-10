@@ -44,59 +44,34 @@ def format_aux_basis(mol, auxbasis='weigend+etb'):
 
 
 # (ij|L)
-def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0,
-           mol1=None):
+def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, out=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
     '''
-    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                      auxmol._atm, auxmol._bas, auxmol._env)
-    nbastot = len(bas)
-    if 'cart' in intor:
-        iloc = jloc = _ri.make_loc(0, mol.nbas, bas, True)
-    else:
-        iloc = jloc = _ri.make_loc(0, mol.nbas, bas)
-    if mol1 is None:
-        basrange = (0, mol.nbas, 0, mol.nbas, mol.nbas, nbastot)
-    else:
-# Append mol1 next to auxmol
-        atm, bas, env = gto.mole.conc_env(atm, bas, env,
-                                          mol1._atm, mol1._bas, mol1._env)
-        basrange = (0, mol.nbas, nbastot, nbastot+mol1.nbas, mol.nbas, nbastot)
-        jloc = _ri.make_loc(0, mol1.nbas, mol1._bas)
-    eri = _ri.nr_auxe2(intor, basrange,
-                       atm, bas, env, aosym, comp, iloc=iloc, jloc=jloc)
-    return eri
-
+    atm, bas, env, ao_loc = _env_and_aoloc(intor, mol, auxmol)
+    shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+    return _ri.nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
+                        aosym, comp, out=out)
 
 # (L|ij)
-def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, hermi=0):
+def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, out=None):
     '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
-    eri = aux_e2(mol, auxmol, intor, aosym, comp, hermi)
-    naux = eri.shape[1]
-    return pyscf.lib.transpose(eri.reshape(-1,naux))
+    if comp == 1:
+        out = aux_e2(mol, auxmol, intor, aosym, comp, out).T
+    else:
+        out = aux_e2(mol, auxmol, intor, aosym, comp, out).transpose(0,2,1)
+    return out
 
 
-def fill_2c2e(mol, auxmol, intor='cint2c2e_sph'):
+def fill_2c2e(mol, auxmol, intor='cint2c2e_sph', comp=1, hermi=1, out=None):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
-    c_atm = numpy.asarray(auxmol._atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(auxmol._bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(auxmol._env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-
-    naoaux = auxmol.nao_nr()
-    eri = numpy.empty((naoaux,naoaux))
-    libri.RInr_fill2c2e_sph(eri.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(0), ctypes.c_int(auxmol.nbas),
-                            c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                            c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                            c_env.ctypes.data_as(ctypes.c_void_p))
-    return eri
+    return auxmol.intor(intor, comp=comp, hermi=hermi, out=out)
 
 
-def cholesky_eri(mol, auxbasis='weigend+etb', verbose=0):
+# Note the temporary memory usage is about twice as large as the return cderi
+# array
+def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None, verbose=0):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
@@ -106,7 +81,8 @@ def cholesky_eri(mol, auxbasis='weigend+etb', verbose=0):
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    auxmol = format_aux_basis(mol, auxbasis)
+    if auxmol is None:
+        auxmol = format_aux_basis(mol, auxbasis)
 
     j2c = fill_2c2e(mol, auxmol, intor='cint2c2e_sph')
     log.debug('size of aux basis %d', j2c.shape[0])
@@ -116,15 +92,27 @@ def cholesky_eri(mol, auxbasis='weigend+etb', verbose=0):
     t1 = log.timer('Cholesky 2c2e', *t1)
 
     j3c = aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s2ij')
+    j3cT = j3c.T
     t1 = log.timer('3c2e', *t1)
     cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
                                           overwrite_b=True)
     j3c = None
-    # solve_triangular return cderi in Fortran order
-    cderi = pyscf.lib.transpose(cderi.T)
+    if cderi.flags.f_contiguous:
+        cderi = pyscf.lib.transpose(cderi.T)
     log.timer('cholesky_eri', *t0)
     return cderi
 
+
+def _env_and_aoloc(intor, mol, auxmol):
+    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                      auxmol._atm, auxmol._bas, auxmol._env)
+    if 'ssc' in intor:
+        ao_loc = mol.ao_loc_nr()
+        nao = ao_loc[-1]
+        ao_loc = numpy.hstack((ao_loc[:-1], nao+auxmol.ao_loc_nr(cart=True)))
+    else:
+        ao_loc = gto.moleintor.make_loc(bas, intor)
+    return atm, bas, env, ao_loc
 
 
 if __name__ == '__main__':

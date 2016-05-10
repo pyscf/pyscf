@@ -12,14 +12,11 @@ import numpy
 import h5py
 import pyscf.lib
 from pyscf.lib import logger
-from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
-from pyscf.mcscf import mc_ao2mo
-from pyscf.scf import dfhf
 from pyscf import df
 
 
-def density_fit(casscf, auxbasis=None):
+def density_fit(casscf, auxbasis=None, with_df=None):
     '''Generate DF-CASSCF for given CASSCF object.  It is done by overwriting
     three CASSCF member functions:
         * casscf.ao2mo which generates MO integrals
@@ -49,79 +46,105 @@ def density_fit(casscf, auxbasis=None):
     '''
     casscf_class = casscf.__class__
 
+    if with_df is None:
+        if (hasattr(casscf._scf, 'with_df') and
+            (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
+            with_df = casscf._scf.with_df
+        else:
+            with_df = df.DF(casscf.mol)
+            with_df.max_memory = casscf.max_memory
+            with_df.stdout = casscf.stdout
+            with_df.verbose = casscf.verbose
+            if auxbasis is not None:
+                with_df.auxbasis = auxbasis
+
     class CASSCF(casscf_class):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
             #self.grad_update_dep = 0
-            if auxbasis is None:
-                self.auxbasis = 'weigend+etb'
-            else:
-                self.auxbasis = auxbasis
-
-# _tag_df to indicate whether the CASSCF instance is a density-fitting object.
-            self._tag_df = True
-            if (hasattr(self._scf, '_cderi') and
-                (auxbasis is None or auxbasis == self._scf.auxbasis)):
-# Use the underlying density-fitting integrals by default
-                self._cderi = self._scf._cderi
-                self.auxbasis = self._scf.auxbasis
-            else:
-                if auxbasis is None:
-                    self.auxbasis = 'weigend+etb'
-                else:
-                    self.auxbasis = auxbasis
-# By overwriting _cderi, one can provide the Cholesky integrals for "DF/RI" calculation
-                self._cderi = None
-
-            self._naoaux = None
-            self._keys = self._keys.union(['auxbasis'])
+            self.with_df = with_df
+            self._keys = self._keys.union(['with_df'])
 
         def dump_flags(self):
             casscf_class.dump_flags(self)
             logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
 
         def ao2mo(self, mo_coeff):
-# using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
-            dfhf.get_jk_(self, self.mol, [])
-            return _ERIS(self, mo_coeff)
+            if self.with_df:
+                return _ERIS(self, mo_coeff, self.with_df)
+            else:
+                return casscf_class.ao2mo(self, mo_coeff)
 
         def get_h2eff(self, mo_coeff=None):  # For CASCI
-            dfhf.get_jk_(self, self.mol, [])
-            mo = numpy.asarray(mo_coeff, order='F')
-            nao, nmo = mo.shape
-            buf = numpy.empty((self._naoaux,nmo*(nmo+1)//2))
-            fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_s2')
-            fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-            ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
-            with df.load(self._cderi) as feri:
-                for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
-                    eri1 = numpy.asarray(feri[b0:b1], order='C')
+            if self.with_df:
+                mo = numpy.asarray(mo_coeff, order='F')
+                nao, nmo = mo.shape
+                naoaux = self.with_df.get_naoaux()
+                buf = numpy.empty((naoaux,nmo*(nmo+1)//2))
+                fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_s2')
+                fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+                ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
+                b0 = 0
+                for eri1 in self.with_df.loop():
+                    naux = eri1.shape[0]
                     fdrv(ftrans, fmmm,
-                         buf[b0:b1].ctypes.data_as(ctypes.c_void_p),
+                         buf[b0:b0+naux].ctypes.data_as(ctypes.c_void_p),
                          eri1.ctypes.data_as(ctypes.c_void_p),
                          mo.ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(b1-b0), ctypes.c_int(nao),
+                         ctypes.c_int(naux), ctypes.c_int(nao),
                          ctypes.c_int(0), ctypes.c_int(nmo),
                          ctypes.c_int(0), ctypes.c_int(nmo),
                          ctypes.c_void_p(0), ctypes.c_int(0))
-                    eri1 = None
-            eri = pyscf.lib.dot(buf.T, buf)
-            return eri
+                    b0 += naux
+                eri = pyscf.lib.dot(buf.T, buf)
+                return eri
+            else:
+                return casscf_class.get_h2eff(self, mo_coeff)
 
-# Modify get_veff for JK matrix of core densityBecause get_h1eff calls self.get_veff to generate core JK
+# Modify get_veff for JK matrix of core density because get_h1eff calls
+# self.get_veff to generate core JK
         def get_veff(self, mol=None, dm=None, hermi=1):
-            vj, vk = dfhf.get_jk_(self, mol, dm, hermi=hermi)
-            return vj-vk*.5
+            if self.with_df:
+                if dm is None:
+                    mocore = self.mo_coeff[:,:self.ncore]
+                    dm = numpy.dot(mocore, mocore.T) * 2
+                vj, vk = self.with_df.get_jk(mol, dm, hermi=hermi)
+                return vj-vk*.5
+            else:
+                return casscf_class.get_jk(self, mol, dm, hermi)
 
 # We don't modify self._scf because it changes self.h1eff function.
 # We only need approximate jk for self.update_jk_in_ah
         def get_jk(self, mol, dm, hermi=1):
-            return dfhf.get_jk_(self, mol, dm, hermi=hermi)
+            if self.with_df:
+                return self.with_df.get_jk(mol, dm, hermi=hermi)
+            else:
+                return casscf_class.get_jk(self, mol, dm, hermi)
+
+        def _exact_paaa(self, mo, u, out=None):
+            if self.with_df:
+                nmo = mo.shape[1]
+                ncore = self.ncore
+                ncas = self.ncas
+                nocc = ncore + ncas
+                mo1 = numpy.dot(mo, u)
+                mo1_cas = mo1[:,ncore:nocc]
+
+                paaa = numpy.zeros((nmo*ncas,ncas*ncas))
+                moij = numpy.asarray(numpy.hstack((mo1, mo1_cas)), order='F')
+                ijshape = (0, nmo, nmo, nmo+ncas)
+                for eri1 in self.with_df.loop():
+                    bufpa = _ao2mo.nr_e2_(eri1, moij, ijshape, 's2', 's1')
+                    bufaa = numpy.asarray(buf1[ncore:nocc,:], order='C')
+                    pyscf.lib.dot(bufpa.T, bufaa, 1, paaa, 1)
+                return paaa.reshape(nmo,ncas,ncas,ncas)
+            else:
+                return casscf_class._exact_paaa(self, mol, u, out)
 
     return CASSCF()
 
 
-def approx_hessian(casscf, auxbasis=None):
+def approx_hessian(casscf, auxbasis=None, with_df=None):
     '''Approximate the orbital hessian with density fitting integrals
     
     Note this function has no effects if the input casscf object is DF-CASSCF.
@@ -152,43 +175,39 @@ def approx_hessian(casscf, auxbasis=None):
     if 'CASCI' in str(casscf_class):
         return casscf  # because CASCI does not need orbital optimization
 
-    if hasattr(casscf, '_tag_df') and casscf._tag_df:
+    if hasattr(casscf, 'with_df') and casscf.with_df:
         return casscf
+
+    if with_df is None:
+        if (hasattr(casscf._scf, 'with_df') and
+            (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
+            with_df = casscf._scf.with_df
+        else:
+            with_df = df.DF(casscf.mol)
+            with_df.max_memory = casscf.max_memory
+            with_df.stdout = casscf.stdout
+            with_df.verbose = casscf.verbose
+            if auxbasis is not None:
+                with_df.auxbasis = auxbasis
 
     class CASSCF(casscf_class):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
             #self.grad_update_dep = 0
-# _tag_df to indicate whether the CASSCF instance is a density-fitting object.
-            self._tag_df = False
-            if (hasattr(self._scf, '_cderi') and
-                (auxbasis is None or auxbasis == self._scf.auxbasis)):
-                self._cderi = self._scf._cderi
-                self.auxbasis = self._scf.auxbasis
-            else: # what if self._cderi is not None?
-                if auxbasis is None:
-                    self.auxbasis = 'weigend+etb' #?
-                else:
-                    self.auxbasis = auxbasis
-                self._cderi = None
-
-            self._naoaux = None
-            self._keys = self._keys.union(['auxbasis'])
+            self.with_df = with_df
+            self._keys = self._keys.union(['with_df'])
 
         def dump_flags(self):
             casscf_class.dump_flags(self)
             logger.info(self, 'CASSCF: density fitting for orbital hessian')
 
         def ao2mo(self, mo_coeff):
-            log = logger.Logger(self.stdout, self.verbose)
 # the exact integral transformation
             eris = casscf_class.ao2mo(self, mo_coeff)
 
-# using dm=[], a hacky call to dfhf.get_jk, to generate self._cderi
-            dfhf.get_jk_(self, self.mol, [])
-
+            log = logger.Logger(self.stdout, self.verbose)
 # Add the approximate diagonal term for orbital hessian
-            t0 = (time.clock(), time.time())
+            t1 = t0 = (time.clock(), time.time())
             mo = numpy.asarray(mo_coeff, order='F')
             nao, nmo = mo.shape
             ncore = self.ncore
@@ -197,42 +216,34 @@ def approx_hessian(casscf, auxbasis=None):
             fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
-            bufs1 = numpy.empty((dfhf.BLOCKDIM,nmo,nmo))
-            t1 = t0
-            with df.load(self._cderi) as feri:
-                for b0, b1 in dfhf.prange(0, self._naoaux, dfhf.BLOCKDIM):
-                    eri1 = numpy.asarray(feri[b0:b1], order='C')
-                    buf = bufs1[:b1-b0]
-                    if log.verbose >= logger.DEBUG1:
-                        t1 = log.timer('load buf %d:%d'%(b0,b1), *t1)
-                    fdrv(ftrans, fmmm,
-                         buf.ctypes.data_as(ctypes.c_void_p),
-                         eri1.ctypes.data_as(ctypes.c_void_p),
-                         mo.ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(b1-b0), ctypes.c_int(nao),
-                         ctypes.c_int(0), ctypes.c_int(nmo),
-                         ctypes.c_int(0), ctypes.c_int(nmo),
-                         ctypes.c_void_p(0), ctypes.c_int(0))
-                    if log.verbose >= logger.DEBUG1:
-                        t1 = log.timer('transform [%d:%d]'%(b0,b1), *t1)
-                    bufd = numpy.einsum('kii->ki', buf)
-                    eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
-                    k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
-                    if log.verbose >= logger.DEBUG1:
-                        t1 = log.timer('j_pc and k_pc', *t1)
-                    eri1 = None
+            bufs1 = numpy.empty((self.with_df.blockdim,nmo,nmo))
+            for eri1 in self.with_df.loop():
+                naux = eri1.shape[0]
+                buf = bufs1[:naux]
+                fdrv(ftrans, fmmm,
+                     buf.ctypes.data_as(ctypes.c_void_p),
+                     eri1.ctypes.data_as(ctypes.c_void_p),
+                     mo.ctypes.data_as(ctypes.c_void_p),
+                     ctypes.c_int(naux), ctypes.c_int(nao),
+                     ctypes.c_int(0), ctypes.c_int(nmo),
+                     ctypes.c_int(0), ctypes.c_int(nmo),
+                     ctypes.c_void_p(0), ctypes.c_int(0))
+                bufd = numpy.einsum('kii->ki', buf)
+                eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
+                k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
+                t1 = log.timer_debug1('j_pc and k_pc', *t1)
             eris.k_pc = k_cp.T.copy()
             log.timer('ao2mo density fit part', *t0)
             return eris
 
         def get_jk(self, mol, dm, hermi=1):
-            return dfhf.get_jk_(self, mol, dm, hermi=hermi)
+            return self.with_df.get_jk(mol, dm, hermi=hermi)
 
     return CASSCF()
 
 
 class _ERIS(object):
-    def __init__(self, casscf, mo):
+    def __init__(self, casscf, mo, with_df):
         import gc
         gc.collect()
         log = logger.Logger(casscf.stdout, casscf.verbose)
@@ -242,7 +253,7 @@ class _ERIS(object):
         ncore = casscf.ncore
         ncas = casscf.ncas
         nocc = ncore + ncas
-        naoaux = casscf._naoaux
+        naoaux = with_df.get_naoaux()
 
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = pyscf.lib.current_memory()[0]
@@ -251,7 +262,7 @@ class _ERIS(object):
             log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                      (mem_basic+mem_now)/.9, casscf.max_memory)
 
-        t0 = (time.clock(), time.time())
+        t1 = t0 = (time.clock(), time.time())
         self._tmpfile = tempfile.NamedTemporaryFile()
         self.feri = h5py.File(self._tmpfile.name, 'w')
         self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
@@ -263,35 +274,31 @@ class _ERIS(object):
         _tmpfile1 = tempfile.NamedTemporaryFile()
         fxpp = h5py.File(_tmpfile1.name)
         bufpa = numpy.empty((naoaux,nmo,ncas))
-        bufs1 = numpy.empty((dfhf.BLOCKDIM,nmo,nmo))
+        bufs1 = numpy.empty((with_df.blockdim,nmo,nmo))
         fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
-        t2 = t1 = t0
         fxpp_keys = []
-        with df.load(casscf._cderi) as feri:
-            for b0, b1 in dfhf.prange(0, naoaux, dfhf.BLOCKDIM):
-                eri1 = numpy.asarray(feri[b0:b1], order='C')
-                if log.verbose >= logger.DEBUG1:
-                    t2 = log.timer('load buf %d:%d'%(b0,b1), *t2)
-                bufpp = bufs1[:b1-b0]
-                fdrv(ftrans, fmmm,
-                     bufpp.ctypes.data_as(ctypes.c_void_p),
-                     eri1.ctypes.data_as(ctypes.c_void_p),
-                     mo.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(b1-b0), ctypes.c_int(nao),
-                     ctypes.c_int(0), ctypes.c_int(nmo),
-                     ctypes.c_int(0), ctypes.c_int(nmo),
-                     ctypes.c_void_p(0), ctypes.c_int(0))
-                fxpp_keys.append([str(b0), b0, b1])
-                fxpp[str(b0)] = bufpp.transpose(1,2,0)
-                bufpa[b0:b1] = bufpp[:,:,ncore:nocc]
-                bufd = numpy.einsum('kii->ki', bufpp)
-                self.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
-                k_cp += numpy.einsum('kij,kij->ij', bufpp[:,:ncore], bufpp[:,:ncore])
-                if log.verbose >= logger.DEBUG1:
-                    t1 = log.timer('j_pc and k_pc', *t1)
-                eri1 = None
+        b0 = 0
+        for k, eri1 in enumerate(with_df.loop()):
+            naux = eri1.shape[0]
+            bufpp = bufs1[:naux]
+            fdrv(ftrans, fmmm,
+                 bufpp.ctypes.data_as(ctypes.c_void_p),
+                 eri1.ctypes.data_as(ctypes.c_void_p),
+                 mo.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(naux), ctypes.c_int(nao),
+                 ctypes.c_int(0), ctypes.c_int(nmo),
+                 ctypes.c_int(0), ctypes.c_int(nmo),
+                 ctypes.c_void_p(0), ctypes.c_int(0))
+            fxpp_keys.append([str(k), b0, b0+naux])
+            fxpp[str(k)] = bufpp.transpose(1,2,0)
+            bufpa[b0:b0+naux] = bufpp[:,:,ncore:nocc]
+            bufd = numpy.einsum('kii->ki', bufpp)
+            self.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
+            k_cp += numpy.einsum('kij,kij->ij', bufpp[:,:ncore], bufpp[:,:ncore])
+            b0 += naux
+            t1 = log.timer_debug1('j_pc and k_pc', *t1)
         self.k_pc = k_cp.T.copy()
         bufs1 = bufpp = None
         t1 = log.timer('density fitting ao2mo pass1', *t0)
@@ -320,7 +327,6 @@ class _ERIS(object):
             nrow = p1 - p0
             buf = bufs1[:nrow]
             tmp = bufs2[:nrow].reshape(-1,ncas**2)
-            col0 = 0
             for key, col0, col1 in fxpp_keys:
                 buf[:nrow,:,col0:col1] = fxpp[key][p0:p1]
             pyscf.lib.dot(buf.reshape(-1,naoaux), bufaa, 1, tmp)

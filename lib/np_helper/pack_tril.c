@@ -12,7 +12,7 @@ void NPdsymm_triu(int n, double *mat, int hermi)
         int ic, ic1, jc, jc1;
         size_t i, j, i1;
 
-        if (hermi == HERMITIAN) {
+        if (hermi == HERMITIAN || hermi == SYMMETRIC) {
                 for (ic = 0; ic < n; ic += BLOCK_DIM) {
                         ic1 = ic + BLOCK_DIM;
                         if (ic1 > n) {
@@ -72,6 +72,24 @@ void NPzhermi_triu(int n, double complex *mat, int hermi)
                         for (i = ic; i < ic1; i++) {
                         for (j = ic; j < i; j++) {
                                 mat[j*n+i] = conj(mat[i*n+j]);
+                        } }
+                }
+        } else if (hermi == SYMMETRIC) {
+                for (ic = 0; ic < n; ic += BLOCK_DIM) {
+                        ic1 = ic + BLOCK_DIM;
+                        if (ic1 > n) {
+                                ic1 = n;
+                        }
+                        for (jc = 0; jc < ic; jc += BLOCK_DIM) {
+                                jc1 = jc + BLOCK_DIM;
+                                for (i1 = ic; i1 < ic1; i1++) {
+                                for (j = jc; j < jc1; j++) {
+                                        mat[j*n+i1] = mat[i1*n+j];
+                                } }
+                        }
+                        for (i = ic; i < ic1; i++) {
+                        for (j = ic; j < i; j++) {
+                                mat[j*n+i] = mat[i*n+j];
                         } }
                 }
         } else {

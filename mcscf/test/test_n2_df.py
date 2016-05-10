@@ -123,7 +123,9 @@ class KnowValues(unittest.TestCase):
         mf.max_memory = 100
         mf.kernel()
         mc = mcscf.DFCASSCF(mf, 4, 4)
-        eri0 = numpy.dot(mf._cderi.T, mf._cderi)
+        with df.load(mf._cderi) as feri:
+            cderi = numpy.asarray(feri)
+        eri0 = numpy.dot(cderi.T, cderi)
         nmo = mc.mo_coeff.shape[1]
         ncore = mc.ncore
         nocc = ncore + mc.ncas
