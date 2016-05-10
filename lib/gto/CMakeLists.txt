@@ -8,5 +8,5 @@ set_target_properties(cgto PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(cgto cint ${BLAS_LIBRARIES})
+target_link_libraries(cgto cint np_helper ${BLAS_LIBRARIES})
 
