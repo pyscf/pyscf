@@ -23,19 +23,19 @@ def lowdin(s):
    e, v = numpy.linalg.eigh(s)
    return numpy.dot(v/numpy.sqrt(e), v.T.conj())
 
-def scdmU(coeff,ova):
-   aux = numpy.identity(ova.shape[0])
-   #aux = lowdin(ova)
-   no = coeff.shape[1]	
-   ova = reduce(numpy.dot,(coeff.T,ova,aux))
-   # ova = no*nb
-   q,r,piv = scipy.linalg.qr(ova, pivoting=True)
-   # In fact, it is just "Lowdin-orthonormalized PAO".
-   bc = ova[:,piv[:no]]
-   ova = numpy.dot(bc.T,bc)
-   s12inv = lowdin(ova)
-   u = numpy.dot(bc,s12inv)
-   return u
+#def scdmU(coeff,ova):
+#   aux = numpy.identity(ova.shape[0])
+#   #aux = lowdin(ova)
+#   no = coeff.shape[1]	
+#   ova = reduce(numpy.dot,(coeff.T,ova,aux))
+#   # ova = no*nb
+#   q,r,piv = scipy.linalg.qr(ova, pivoting=True)
+#   # In fact, it is just "Lowdin-orthonormalized PAO".
+#   bc = ova[:,piv[:no]]
+#   ova = numpy.dot(bc.T,bc)
+#   s12inv = lowdin(ova)
+#   u = numpy.dot(bc,s12inv)
+#   return u
 
 #------------------------------------------------
 # Boys/PM-Localization

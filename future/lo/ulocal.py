@@ -103,7 +103,8 @@ def dumpLocal(fname):
    #--------------------
    # Virtual space: PAO
    #--------------------
-   aux = lowdin(ova)
+   from pyscf import lo
+   aux = lo.orth_ao(mol,method='meta_lowdin')
    mv = scdm(ma_v,ova,aux)
  
    # P[dm] 
