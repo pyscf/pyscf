@@ -157,8 +157,8 @@ def DHF(mol, *args):
 def X2C(mol, *args):
     return x2c.UHF(mol, *args)
 
-def density_fit(mf, auxbasis='weigend+etb'):
-    return mf.density_fit(auxbasis)
+def density_fit(mf, auxbasis='weigend+etb', with_df=None):
+    return mf.density_fit(auxbasis, with_df)
 
 def newton(mf):
     '''augmented hessian for Newton Raphson

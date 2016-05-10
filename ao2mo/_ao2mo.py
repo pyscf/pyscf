@@ -156,7 +156,7 @@ def nr_e1_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
 def nr_e2_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
            ao_loc=None):
     assert(eri.flags.c_contiguous)
-    assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
+    assert(aosym in ('s4', 's2ij', 's2kl', 's2', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
@@ -165,7 +165,7 @@ def nr_e2_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     lc = l1 - l0
     kl_count = kc * lc
 
-    if aosym in ('s4', 's2kl'):
+    if aosym in ('s4', 's2', 's2kl'):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(kc == lc)

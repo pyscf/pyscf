@@ -511,6 +511,9 @@ def newton(mf):
 
         def from_dm(self, dm):
             '''Transform density matrix to the initial guess'''
+            if isinstance(dm, str):
+                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
+                dm = self.from_chk(dm, True)
             mol = self._scf.mol
             h1e = self._scf.get_hcore(mol)
             s1e = self._scf.get_ovlp(mol)

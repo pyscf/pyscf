@@ -110,7 +110,7 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         if hasattr(eris, '_paaa'):
             paaa = eris._paaa
         else:
-            paaa = _exact_paaa(casscf, mo, u)
+            paaa = casscf._exact_paaa(mo, u)
         g[:,ncore:nocc] += numpy.einsum('puvw,tuvw->pt', paaa, casdm2)
         return g
 
@@ -201,25 +201,6 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         return casscf.pack_uniq_var(x2)
 
     return g_orb, gorb_update, h_op, h_diag
-
-def _exact_paaa(casscf, mo, u, out=None):
-    nmo = mo.shape[1]
-    ncore = casscf.ncore
-    ncas = casscf.ncas
-    nocc = ncore + ncas
-    mo1 = numpy.dot(mo, u)
-    mo1_cas = mo1[:,ncore:nocc]
-    mos = (mo1_cas, mo1_cas, mo1, mo1_cas)
-    if casscf._scf._eri is None:
-        aapa = ao2mo.general(casscf.mol, mos)
-    else:
-        aapa = ao2mo.general(casscf._scf._eri, mos)
-    paaa = numpy.empty((nmo*ncas,ncas*ncas))
-    buf = numpy.empty((ncas,ncas,nmo*ncas))
-    for ij, (i, j) in enumerate(zip(*numpy.tril_indices(ncas))):
-        buf[i,j] = buf[j,i] = aapa[ij]
-    paaa = lib.transpose(buf.reshape(ncas*ncas,-1), out=out)
-    return paaa.reshape(nmo,ncas,ncas,ncas)
 
 def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
                   conv_tol_grad=1e-4, max_stepsize=None, verbose=None):
@@ -333,7 +314,7 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
             log.debug('    Keyframe |g|=%5.3g  |g_last| =%5.3g out of trust region',
                       norm_gkf1, norm_gorb)
             if ((not casscf.with_dep4 and norm_gkf > 5e-4) or
-                (hasattr(casscf._scf, '_tag_df') and casscf._scf._tag_df) or
+                (hasattr(casscf._scf, 'with_df') and casscf._scf.with_df) or
                 isinstance(casscf._scf, scf.uhf.UHF)):
 #TODO:  transformation for DF integrals
                 u = casscf.update_rotate_matrix(dr-dxi)
@@ -969,7 +950,7 @@ class CASSCF(casci.CASCI):
             vj, vk = self._scf.get_jk(self.mol, dm_core)
             h1 =(reduce(numpy.dot, (ua.T, h1e_mo, ua)) +
                  reduce(numpy.dot, (mo1_cas.T, vj-vk*.5, mo1_cas)))
-            eris._paaa = _exact_paaa(self, mo, u)
+            eris._paaa = self._exact_paaa(mo, u)
             h2 = eris._paaa[ncore:nocc]
             vj = vk = None
         else:
@@ -1057,6 +1038,25 @@ class CASSCF(casci.CASCI):
 
     def get_jk(self, mol, dm, hermi=1):
         return self._scf.get_jk(mol, dm, hermi=1)
+
+    def _exact_paaa(self, mo, u, out=None):
+        nmo = mo.shape[1]
+        ncore = self.ncore
+        ncas = self.ncas
+        nocc = ncore + ncas
+        mo1 = numpy.dot(mo, u)
+        mo1_cas = mo1[:,ncore:nocc]
+        mos = (mo1_cas, mo1_cas, mo1, mo1_cas)
+        if self._scf._eri is None:
+            aapa = ao2mo.general(self.mol, mos)
+        else:
+            aapa = ao2mo.general(self._scf._eri, mos)
+        paaa = numpy.empty((nmo*ncas,ncas*ncas))
+        buf = numpy.empty((ncas,ncas,nmo*ncas))
+        for ij, (i, j) in enumerate(zip(*numpy.tril_indices(ncas))):
+            buf[i,j] = buf[j,i] = aapa[ij]
+        paaa = lib.transpose(buf.reshape(ncas*ncas,-1), out=out)
+        return paaa.reshape(nmo,ncas,ncas,ncas)
 
     def dump_chk(self, envs):
         if hasattr(self.fcisolver, 'nevpt_intermediate'):

@@ -816,14 +816,19 @@ def nao_nr_range(mol, bas_id0, bas_id1):
     >>> gto.nao_nr_range(mol, 2, 4)
     (2, 6)
     '''
-    nao_id0 = ((mol._bas[:bas_id0,ANG_OF]*2+1) * mol._bas[:bas_id0,NCTR_OF]).sum()
-    n = ((mol._bas[bas_id0:bas_id1,ANG_OF]*2+1)* mol._bas[bas_id0:bas_id1,NCTR_OF]).sum()
-    return nao_id0, nao_id0+n
+    ao_loc = moleintor.make_loc(mol._bas[:bas_id1], 'sph')
+    nao_id0 = ao_loc[bas_id0]
+    nao_id1 = ao_loc[-1]
+    return nao_id0, nao_id1
 
 def nao_2c(mol):
     '''Total number of contracted spinor GTOs for the given :class:`Mole` object'''
-    return sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
-                for b in range(len(mol._bas))])
+    l = mol._bas[:,ANG_OF]
+    kappa = mol._bas[:,KAPPA_OF]
+    dims = (l*4+2) * mol._bas[:,NCTR_OF]
+    dims[kappa<0] = l[kappa<0] * 2 + 2
+    dims[kappa>0] = l[kappa>0] * 2
+    return dims.sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_2c_range(mol, bas_id0, bas_id1):
@@ -847,11 +852,10 @@ def nao_2c_range(mol, bas_id0, bas_id1):
     >>> gto.nao_2c_range(mol, 2, 4)
     (4, 12)
     '''
-    nao_id0 = sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
-                   for b in range(bas_id0)])
-    n = sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
-             for b in range(bas_id0, bas_id1)])
-    return nao_id0, nao_id0+n
+    ao_loc = moleintor.make_loc(mol._bas[:bas_id1], '')
+    nao_id0 = ao_loc[bas_id0]
+    nao_id1 = ao_loc[-1]
+    return nao_id0, nao_id1
 
 def ao_loc_nr(mol, cart=False):
     '''Offset of every shell in the spherical basis function spectrum
@@ -866,14 +870,9 @@ def ao_loc_nr(mol, cart=False):
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
     if cart:
-        l = mol._bas[:,ANG_OF]
-        dims = (l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]
+        return moleintor.make_loc(mol._bas, 'cart')
     else:
-        dims = (mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]
-    ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
-    ao_loc[0] = 0
-    dims.cumsum(dtype=numpy.int32, out=ao_loc[1:])
-    return ao_loc
+        return moleintor.make_loc(mol._bas, 'sph')
 
 def ao_loc_2c(mol):
     '''Offset of every shell in the spinor basis function spectrum
@@ -887,13 +886,7 @@ def ao_loc_2c(mol):
     >>> gto.ao_loc_2c(mol)
     [0, 2, 4, 6, 12, 18, 20, 22, 24, 30, 36]
     '''
-    off = 0
-    ao_loc = []
-    for i in range(len(mol._bas)):
-        ao_loc.append(off)
-        off += mol.bas_len_spinor(i) * mol.bas_nctr(i)
-    ao_loc.append(off)
-    return ao_loc
+    return moleintor.make_loc(mol._bas, 'spinor')
 
 def time_reversal_map(mol):
     r'''The index to map the spinor functions and its time reversal counterpart.
@@ -1158,6 +1151,11 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
 
+    chg1 = mol1._atm[:,CHARGE_OF]
+    chg2 = mol2._atm[:,CHARGE_OF]
+    if not numpy.all(numpy.sort(chg1) == numpy.sort(chg2)):
+        return False
+
     if cmp_basis:
         atomtypes1 = atom_types(mol1._atom, mol1._basis)
         atomtypes2 = atom_types(mol2._atom, mol2._basis)
@@ -1179,8 +1177,6 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
         r = numpy.dot(coord-center, axes.T)
         return w, r
 
-    chg1 = mol1._atm[:,CHARGE_OF]
-    chg2 = mol2._atm[:,CHARGE_OF]
     coord1 = numpy.array([mol1.atom_coord(i) for i in range(mol1.natm)])
     coord2 = numpy.array([mol2.atom_coord(i) for i in range(mol2.natm)])
     w1, r1 = finger(mol1, chg1, coord1)
@@ -1249,6 +1245,17 @@ def charge_center(atoms, charges=None, coords=None):
 def mass_center(atoms):
     mass = numpy.array([param.ELEMENTS[_charge(a[0])][1] for a in atoms])
     return charge_center(atoms, mass)
+
+def condense_to_shell(mol, mat, compressor=numpy.max):
+    '''The given matrix is first partitioned to blocks, based on AO shell as
+    delimiter.  Then call compressor function to abstract each block.
+    '''
+    ao_loc = mol.ao_loc_nr()
+    abstract = numpy.empty((mol.nbas,mol.nbas))
+    for i, i0 in enumerate(ao_loc[:mol.nbas]):
+        for j, j0 in enumerate(ao_loc[:mol.nbas]):
+            abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    return abstract
 
 
 def check_sanity(obj, keysref, stdout=sys.stdout):
@@ -1547,11 +1554,11 @@ class Mole(pyscf.lib.StreamObject):
             # specify global basis for whole molecule
             if self.basis.lower().startswith('unc'):
                 cbas = self.format_basis(dict([(a, self.basis[3:])
-                                                  for a in uniq_atoms]))
+                                               for a in uniq_atoms]))
                 self._basis = dict((a,uncontract(cbas[a])) for a in cbas)
             else:
                 self._basis = self.format_basis(dict([(a, self.basis)
-                                                  for a in uniq_atoms]))
+                                                      for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)
 
@@ -2244,6 +2251,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
         return spinor_labels(self)
+
+    condense_to_shell = condense_to_shell
 
 _ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
