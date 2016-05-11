@@ -326,9 +326,6 @@ def r_get_jk_(dfobj, mol, dms, hermi=1):
     logger.timer(dfobj, 'vj and vk', *t0)
     return vj, vk
 
-def r_get_jk_(dfobj, mol, dms, hermi=1):
-    return r_get_jk_o1_(dfobj, mol, dms, hermi)
-
 
 if __name__ == '__main__':
     import pyscf.gto
