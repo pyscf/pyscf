@@ -29,8 +29,7 @@ class DF(lib.StreamObject):
 
         self.auxbasis = 'weigend+etb'
         self.auxmol = None
-        self._tmpfile = tempfile.NamedTemporaryFile()
-        self._cderi = None
+        self._cderi = tempfile.NamedTemporaryFile()
         self._call_count = 0
         self.blockdim = 240
 
@@ -47,10 +46,9 @@ class DF(lib.StreamObject):
         if nao_pair*nao*3*8/1e6*2 < max_memory:
             self._cderi = incore.cholesky_eri(mol, auxmol=auxmol, verbose=log)
         else:
-            self._cderi = self._tmpfile.name
-            outcore.cholesky_eri(mol, self._cderi, auxmol=auxmol, verbose=log)
+            outcore.cholesky_eri(mol, self._cderi.name, auxmol=auxmol, verbose=log)
             if nao_pair*nao*3*8/1e6 < max_memory:
-                with addons.load(self._cderi) as feri:
+                with addons.load(self._cderi.name) as feri:
                     cderi = numpy.asarray(feri)
                 self._cderi = cderi
             log.timer_debug1('Generate density fitting integrals', *t0)
@@ -58,7 +56,7 @@ class DF(lib.StreamObject):
         return self
 
     def loop(self):
-        if self._cderi is None:
+        if self.auxmol is None:
             self.build()
         with addons.load(self._cderi) as feri:
             naoaux = feri.shape[0]
@@ -78,7 +76,7 @@ class DF(lib.StreamObject):
     def get_naoaux(self):
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
-        if self._cderi is None:
+        if self.auxmol is None:
             self.build()
         with addons.load(self._cderi) as feri:
             return feri.shape[0]
@@ -133,14 +131,14 @@ class DF4C(DF):
                                                 aosym='s2', verbose=log)
         else:
             raise NotImplementedError
-            self._cderi = self._tmpfile.name
-            self._cderi = r_outcore.cholesky_eri(mol, self._cderi,
+            self._cderifile = self._cderi
+            self._cderi = r_outcore.cholesky_eri(mol, self._cderi.name,
                                                  auxbasis=self.auxbasis,
                                                  verbose=log)
         return self
 
     def loop(self):
-        if self._cderi is None:
+        if self.auxmol is None:
             self.build()
         with addons.load(self._cderi[0]) as ferill:
             naoaux = ferill.shape[0]
