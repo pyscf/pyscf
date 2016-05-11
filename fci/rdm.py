@@ -36,7 +36,7 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
         else:
             neleca, nelecb = nelec
             assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na, nlink = link_index.shape[:2]
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
@@ -61,7 +61,7 @@ def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
         else:
             neleca, nelecb = nelec
             assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        link_index = cistring.gen_linkstr_index(range(norb), neleca)
     link_index = (link_index, link_index)
     return make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index, symm)
 
@@ -84,8 +84,8 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
             neleca = nelec - nelecb
         else:
             neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
@@ -115,8 +115,8 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
             neleca = nelec - nelecb
         else:
             neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
