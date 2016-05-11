@@ -5,8 +5,8 @@ import scipy.linalg
 Extension to scipy.linalg module developed for PBC branch.
 '''
 
-method = 'arnoldi'
-#method = 'davidson'
+method = 'davidson'
+#method = 'arnoldi'
 
 VERBOSE = False 
 
@@ -21,20 +21,126 @@ def eigs(matvec,size,nroots,Adiag=None):
 
     nroots = min(nroots,size)
 
-    if method == 'arnoldi':
+    if method == 'davidson':
+        e, c, niter = davidson(matvec,size,nroots,Adiag)
+        print "Davidson converged in %d iterations"%(niter)
+        return e,c
+    elif method == 'arnoldi':
         # Currently not used:
         x = np.ones((size,1))
         P = np.ones((size,1))
         arnold = Arnoldi(matvec_args, x, P, nroots=nroots)
-        return arnold.solve()
+        e,c = arnold.solve()
+        print "Arnoldi converged in %d iterations"%(arnold.totalIter)
+        return e,c
     else:
-        david = Davidson()
+        david = DavidsonZL()
         david.ndim = size
         david.neig = nroots
         david.diag = matvec(np.ones(size))
         david.matvec = matvec
 
         return david.solve_iter()
+
+#@profile
+def davidson(mult_by_A,N,neig,Adiag=None):
+    """Diagonalize a matrix via non-symmetric Davidson algorithm.
+
+    mult_by_A() is a function which takes a vector of length N
+        and returns a vector of length N.
+    neig is the number of eigenvalues requested
+    """
+    Mmin = min(neig,N)
+    Mmax = min(N,200)
+    tol = 1e-6
+
+    #Adiagcheck = np.zeros(N,np.complex)
+    #for i in range(N):
+    #    test = np.zeros(N,np.complex)
+    #    test[i] = 1.0
+    #    Adiagcheck[i] = mult_by_A(test)[i]
+    #print "Analytical Adiag == numerical Adiag?", np.allclose(Adiag,Adiagcheck)
+
+    if Adiag is None:
+        Adiag = np.zeros(N,np.complex)
+        for i in range(N):
+            test = np.zeros(N,np.complex)
+            test[i] = 1.0
+            Adiag[i] = mult_by_A(test)[i]
+
+    xi = np.zeros(N,np.complex)
+
+    target = 0
+    for M in range(Mmin,Mmax+1):
+        if M == Mmin:
+            # Set of M unit vectors from lowest Adiag (NxM)
+            b = np.zeros((N,M))
+            idx = Adiag.argsort()
+            for m,i in zip(range(M),idx):
+                b[i,m] = 1.0
+            ## Add random noise and orthogonalize
+            #for m in range(M):
+            #    b[:,m] += 0.01*np.random.random(N)
+            #    b[:,m] /= np.linalg.norm(b[:,m])
+            #    b,R = np.linalg.qr(b)
+
+            Ab = np.zeros((N,M),np.complex)
+            for m in range(M):
+                Ab[:,m] = mult_by_A(b[:,m])
+        else:
+            Ab = np.column_stack( (Ab,mult_by_A(b[:,M-1])) )
+
+        Atilde = np.dot(b.conj().transpose(),Ab)
+        lamda, alpha = diagonalize_asymm(Atilde)
+        lamda_k = lamda[target]
+        alpha_k = alpha[:,target]
+
+        if M == Mmax:
+            break
+
+        q = np.dot( Ab-lamda_k*b, alpha_k )
+        if np.linalg.norm(q) < tol:
+            if target == neig-1:
+                break
+            else:
+                target += 1
+        for i in range(N):
+            if np.allclose(lamda_k,Adiag[i]):
+                print "# Warning, eigenvalue is very close to a diagonal element of A"
+            xi[i] = q[i]/(lamda_k-Adiag[i])
+
+        # orthonormalize xi wrt b
+        bxi,R = np.linalg.qr(np.column_stack((b,xi)))
+        # append orthonormalized xi to b
+        b = np.column_stack((b,bxi[:,-1]))
+
+    if M > Mmin and M == Mmax:
+        print("WARNING: Davidson algorithm reached max basis size "
+              "M = %d without converging."%(M))
+
+    # Express alpha in original basis
+    evecs = np.dot(b,alpha) # b is N x M, alpha is M x M
+    return lamda[:neig], evecs[:,:neig], M
+
+
+def diagonalize_asymm(H):
+    """
+    Diagonalize a real, *asymmetric* matrix and return sorted results.
+    
+    Return the eigenvalues and eigenvectors (column matrix) 
+    sorted from lowest to highest eigenvalue.
+    """
+    E,C = np.linalg.eig(H)
+    #if np.allclose(E.imag, 0*E.imag):
+    #    E = np.real(E)
+    #else:
+    #    print "WARNING: Eigenvalues are complex, will be returned as such."
+
+    idx = E.real.argsort()
+    E = E[idx]
+    C = C[:,idx]
+
+    return E,C
 
 
 class Arnoldi(object):
@@ -295,7 +401,7 @@ class Arnoldi(object):
             self.constructSubspace()
 
 
-class Davidson(object):
+class DavidsonZL(object):
     def __init__(self):
         self.maxcycle = 200
         self.crit_e = 1.e-7
@@ -570,3 +676,25 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
         if VERBOSE: print ' final nindp from mgs_ortho =', nindp, \
                           ' diffIden=', diff
     return nindp, vlst2
+
+if __name__ == '__main__':
+    N = 200
+    neig = 4
+    A = np.zeros((N,N))
+    k = N/2
+    for ii in range(N):
+        i = ii+1
+        for jj in range(N):
+            j = jj+1
+            if j <= k:
+                A[ii,jj] = i*(i==j)-(i-j-k**2)
+            else:
+                A[ii,jj] = i*(i==j)+(i-j-k**2)
+    def matvec(x):
+        return np.dot(A,x)
+
+    e,c = eigs(matvec,N,neig,Adiag=np.diag(A))
+    print "# davidson evals =", e
+
+    e,c = diagonalize_asymm(A)
+    print "# numpy evals =", e.real[:neig]

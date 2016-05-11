@@ -165,6 +165,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        self.made_ee_imds = False
+        self.made_ip_imds = False
+        self.made_ea_imds = False
 
     def dump_flags(self):
         pyscf.cc.ccsd.CCSD.dump_flags(self)
@@ -233,47 +236,37 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     ########################################################
         r1,r2 = self.vector_to_amplitudes_ee(vector)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
-        Fvv = imd.Fvv(t1,t2,eris)
-        Foo = imd.Foo(t1,t2,eris)
-        Fov = imd.Fov(t1,t2,eris)
+        if not self.made_ee_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ee()
+            self.made_ee_imds = True
 
-        Woooo = imd.Woooo(t1,t2,eris)
-        Wvvvv = imd.Wvvvv(t1,t2,eris)
-        Wovvo = imd.Wovvo(t1,t2,eris)
-        Wooov = imd.Wooov(t1,t2,eris)
-        Wvovv = imd.Wvovv(t1,t2,eris)
-        Wovoo = imd.Wovoo(t1,t2,eris)
-        Wvvvo = imd.Wvvvo(t1,t2,eris)
-        # Additional intermediates
-        Woovv = eris.oovv
-        Wvoov =  Wovvo.transpose(1,0,3,2)
-        Wovvv = -Wvovv.transpose(1,0,2,3)
-        Woovo = -Wooov.transpose(0,1,3,2)
+        imds = self.imds
 
         # Eq. (9)
-        Hr1 = ( einsum('ae,ie->ia',Fvv,r1)
-               - einsum('mi,ma->ia',Foo,r1)
-               + einsum('me,imae->ia',Fov,r2)
-               + einsum('amie,me->ia',Wvoov,r1)
-               - 0.5*einsum('mnie,mnae->ia',Wooov,r2)
-               + 0.5*einsum('amef,imef->ia',Wvovv,r2) )
+        Hr1 = ( einsum('ae,ie->ia',imds.Fvv,r1)
+               - einsum('mi,ma->ia',imds.Foo,r1)
+               + einsum('me,imae->ia',imds.Fov,r2)
+               + einsum('amie,me->ia',imds.Wvoov,r1)
+               - 0.5*einsum('mnie,mnae->ia',imds.Wooov,r2)
+               + 0.5*einsum('amef,imef->ia',imds.Wvovv,r2) )
         # Eq. (10)
-        tmpab = ( einsum('be,ijae->ijab',Fvv,r2)
-                 - 0.5*einsum('mnef,ijae,mnbf->ijab',Woovv,self.t2,r2)
-                 - einsum('mbij,ma->ijab',Wovoo,r1)
-                 + einsum('maef,ijfb,me->ijab',Wovvv,self.t2,r1) )
-        tmpij = (-einsum('mj,imab->ijab',Foo,r2)
-                 - 0.5*einsum('mnef,imab,jnef->ijab',Woovv,self.t2,r2)
-                 + einsum('abej,ie->ijab',Wvvvo,r1)
-                 - einsum('mnei,njab,me->ijab',Woovo,self.t2,r1) )
+        tmpab = ( einsum('be,ijae->ijab',imds.Fvv,r2)
+                 - 0.5*einsum('mnef,ijae,mnbf->ijab',imds.Woovv,self.t2,r2)
+                 - einsum('mbij,ma->ijab',imds.Wovoo,r1)
+                 + einsum('maef,ijfb,me->ijab',imds.Wovvv,self.t2,r1) )
+        tmpij = (-einsum('mj,imab->ijab',imds.Foo,r2)
+                 - 0.5*einsum('mnef,imab,jnef->ijab',imds.Woovv,self.t2,r2)
+                 + einsum('abej,ie->ijab',imds.Wvvvo,r1)
+                 - einsum('mnei,njab,me->ijab',imds.Woovo,self.t2,r1) )
 
-        tmpabij = einsum('mbej,imae->ijab',Wovvo,r2)
+        tmpabij = einsum('mbej,imae->ijab',imds.Wovvo,r2)
 
         Hr2 = ( tmpab - tmpab.transpose(0,1,3,2)
                + tmpij - tmpij.transpose(1,0,2,3)
-               + 0.5*einsum('mnij,mnab->ijab',Woooo,r2)
-               + 0.5*einsum('abef,ijef->ijab',Wvvvv,r2)
+               + 0.5*einsum('mnij,mnab->ijab',imds.Woooo,r2)
+               + 0.5*einsum('abef,ijef->ijab',imds.Wvvvv,r2)
                + tmpabij - tmpabij.transpose(0,1,3,2)
                - tmpabij.transpose(1,0,2,3) + tmpabij.transpose(1,0,3,2) )
 
@@ -328,37 +321,32 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     ########################################################
         r1,r2 = self.vector_to_amplitudes_ip(vector)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
-        Lvv = imd.Lvv(t1,t2,eris)
-        Loo = imd.Loo(t1,t2,eris)
-        Fov = imd.cc_Fov(t1,t2,eris)
-        Wooov = imd.Wooov(t1,t2,eris)
-        Wovvo = imd.Wovvo(t1,t2,eris)
-        Wovoo = imd.Wovoo(t1,t2,eris)
-        Woooo = imd.Woooo(t1,t2,eris)
-        Wovov = imd.Wovov(t1,t2,eris)
-        Woovv = eris.oovv
+        if not self.made_ip_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ip()
+            self.made_ip_imds = True
 
-        Hr1 = (- einsum('ki,k->i',Loo,r1)
-               + 2.*einsum('ld,ild->i',Fov,r2)
-               +   -einsum('kd,kid->i',Fov,r2)
-               - 2.*einsum('klid,kld->i',Wooov,r2)
-               +    einsum('lkid,kld->i',Wooov,r2)
-               )
+        imds = self.imds
 
-        tmp = ( 2.*einsum('lkdc,kld->c',Woovv,r2)
-                  -einsum('kldc,kld->c',Woovv,r2) )
-        Hr2 = ( + einsum('bd,ijd->ijb',Lvv,r2)
-                - einsum('ki,kjb->ijb',Loo,r2)
-                - einsum('lj,ilb->ijb',Loo,r2)
-                - einsum('kbij,k->ijb',Wovoo,r1)
-                + einsum('klij,klb->ijb',Woooo,r2)
-                + 2.*einsum('lbdj,ild->ijb',Wovvo,r2)
-                +   -einsum('kbdj,kid->ijb',Wovvo,r2)
-                +   -einsum('lbjd,ild->ijb',Wovov,r2) #typo in nooijen's paper
-                +   -einsum('kbid,kjd->ijb',Wovov,r2)
-                - einsum('c,ijcb->ijb',tmp,t2)
-                )
+        Hr1 = -einsum('ki,k->i',imds.Loo,r1)
+        Hr1 += 2.*einsum('ld,ild->i',imds.Fov,r2)
+        Hr1 +=   -einsum('kd,kid->i',imds.Fov,r2)
+        Hr1 += -2.*einsum('klid,kld->i',imds.Wooov,r2)
+        Hr1 +=     einsum('lkid,kld->i',imds.Wooov,r2)
+
+        tmp = 2.*einsum('lkdc,kld->c',imds.Woovv,r2)
+        tmp +=  -einsum('kldc,kld->c',imds.Woovv,r2)
+        Hr2 = einsum('bd,ijd->ijb',imds.Lvv,r2)
+        Hr2 += -einsum('ki,kjb->ijb',imds.Loo,r2)
+        Hr2 += -einsum('lj,ilb->ijb',imds.Loo,r2)
+        Hr2 += -einsum('kbij,k->ijb',imds.Wovoo,r1)
+        Hr2 +=  einsum('klij,klb->ijb',imds.Woooo,r2)
+        Hr2 += 2.*einsum('lbdj,ild->ijb',imds.Wovvo,r2)
+        Hr2 +=   -einsum('kbdj,kid->ijb',imds.Wovvo,r2)
+        Hr2 +=   -einsum('lbjd,ild->ijb',imds.Wovov,r2) #typo in nooijen's paper
+        Hr2 +=   -einsum('kbid,kjd->ijb',imds.Wovov,r2)
+        Hr2 += -einsum('c,ijcb->ijb',tmp,self.t2)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
@@ -367,13 +355,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         r1 = vector[:nocc].copy()
-        r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
-        index = nocc
-        for i in range(nocc):
-            for j in range(nocc):
-                for a in range(nvir):
-                    r2[i,j,a] =  vector[index]
-                    index += 1
+        r2 = vector[nocc:].copy().reshape(nocc,nocc,nvir)
+        #r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
+        #index = nocc
+        #for i in range(nocc):
+        #    for j in range(nocc):
+        #        for a in range(nvir):
+        #            r2[i,j,a] =  vector[index]
+        #            index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ip(self,r1,r2):
@@ -382,12 +371,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         size = nocc+nocc*nocc*nvir
         vector = np.zeros(size, r1.dtype)
         vector[:nocc] = r1.copy()
-        index = nocc
-        for i in range(nocc):
-            for j in range(nocc):
-                for a in range(nvir):
-                    vector[index] = r2[i,j,a]
-                    index += 1
+        vector[nocc:] = r2.copy().reshape(nocc*nocc*nvir)
+        #index = nocc
+        #for i in range(nocc):
+        #    for j in range(nocc):
+        #        for a in range(nvir):
+        #            vector[index] = r2[i,j,a]
+        #            index += 1
         return vector
 
     def eaccsd(self, nroots=2*4):
@@ -404,45 +394,35 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     # J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)        #
     ########################################################
         r1,r2 = self.vector_to_amplitudes_ea(vector)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
 
-        t1,t2,eris = self.t1, self.t2, self.eris
-        fock = self.eris.fock
-        fov = fock[:nocc,nocc:]
-        foo = fock[:nocc,:nocc]
-        fvv = fock[nocc:,nocc:]
+        if not self.made_ea_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ea()
+            self.made_ea_imds = True
 
-        Lvv = imd.Lvv(t1,t2,eris)
-        Loo = imd.Loo(t1,t2,eris)
-        Fov = imd.cc_Fov(t1,t2,eris)
-        Wvovv = imd.Wvovv(t1,t2,eris)
-        Wvvvo = imd.Wvvvo(t1,t2,eris)
-        Wovvo = imd.Wovvo(t1,t2,eris)
-        Wvvvv = imd.Wvvvv(t1,t2,eris)
-        Woovv = eris.oovv
-        Wvovo = imd.Wovov(t1,t2,eris).transpose(1,0,3,2)
+        imds = self.imds
 
         # Eq. (30)
-        Hr1 = ( einsum('ac,c->a',Lvv,r1)
-               + einsum('ld,lad->a',2.*Fov,r2)
-               + einsum('ld,lda->a',  -Fov,r2)
-               + 2.0*einsum('alcd,lcd->a',Wvovv,r2)
-               +    -einsum('aldc,lcd->a',Wvovv,r2) )
+        Hr1 =  einsum('ac,c->a',imds.Lvv,r1)
+        Hr1 += einsum('ld,lad->a',2.*imds.Fov,r2)
+        Hr1 += einsum('ld,lda->a',  -imds.Fov,r2)
+        Hr1 += 2.*einsum('alcd,lcd->a',imds.Wvovv,r2)
+        Hr1 +=   -einsum('aldc,lcd->a',imds.Wvovv,r2)
 
         ## Eq. (31)
-        Hr2 = einsum('abcj,c->jab',Wvvvo,r1)
-        Hr2 += einsum('ac,jcb->jab',Lvv,r2)
-        Hr2 += einsum('bd,jad->jab',Lvv,r2)
-        Hr2 -= einsum('lj,lab->jab',Loo,r2)
-        Hr2 += 2.*einsum('lbdj,lad->jab',Wovvo,r2)
-        Hr2 +=   -einsum('bldj,lad->jab',Wvovo,r2)
-        Hr2 +=   -einsum('alcj,lcb->jab',Wvovo,r2)
-        Hr2 +=   -einsum('bljc,lca->jab',Wovvo.transpose(1,0,3,2),r2)
-        Hr2 += einsum('abcd,jcd->jab',Wvvvv,r2)
-        tmp = (2.*einsum('klcd,lcd->k',Woovv,r2)
-                 -einsum('kldc,lcd->k',Woovv,r2))
-        Hr2 -= einsum('k,kjab->jab',tmp,t2)
+        Hr2 = einsum('abcj,c->jab',imds.Wvvvo,r1)
+        Hr2 += einsum('ac,jcb->jab',imds.Lvv,r2)
+        Hr2 += einsum('bd,jad->jab',imds.Lvv,r2)
+        Hr2 -= einsum('lj,lab->jab',imds.Loo,r2)
+        Hr2 += 2.*einsum('lbdj,lad->jab',imds.Wovvo,r2)
+        Hr2 +=   -einsum('bldj,lad->jab',imds.Wvovo,r2)
+        Hr2 +=   -einsum('alcj,lcb->jab',imds.Wvovo,r2)
+        Hr2 +=   -einsum('bljc,lca->jab',imds.Wovvo.transpose(1,0,3,2),r2)
+        Hr2 += einsum('abcd,jcd->jab',imds.Wvvvv,r2)
+        tmp = (2.*einsum('klcd,lcd->k',imds.Woovv,r2)
+                 -einsum('kldc,lcd->k',imds.Woovv,r2))
+        Hr2 -= einsum('k,kjab->jab',tmp,self.t2)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -451,13 +431,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         r1 = vector[:nvir].copy()
-        r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
-        index = nvir
-        for i in range(nocc):
-            for a in range(nvir):
-                for b in range(nvir):
-                    r2[i,a,b] =  vector[index]
-                    index += 1
+        r2 = vector[nvir:].copy().reshape(nocc,nvir,nvir)
+        #r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
+        #index = nvir
+        #for i in range(nocc):
+        #    for a in range(nvir):
+        #        for b in range(nvir):
+        #            r2[i,a,b] =  vector[index]
+        #            index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ea(self,r1,r2):
@@ -466,12 +447,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         size = nvir+nvir*nvir*nocc
         vector = np.zeros(size, r1.dtype)
         vector[:nvir] = r1.copy()
-        index = nvir
-        for i in range(nocc):
-            for a in range(nvir):
-                for b in range(nvir):
-                    vector[index] = r2[i,a,b]
-                    index += 1
+        vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
+        #index = nvir
+        #for i in range(nocc):
+        #    for a in range(nvir):
+        #        for b in range(nvir):
+        #            vector[index] = r2[i,a,b]
+        #            index += 1
         return vector
 
 
@@ -534,3 +516,54 @@ class _ERIS:
             #self.vvvv = pyscf.ao2mo.restore(4, eri[nocc:,nocc:,nocc:,nocc:], nvir)
 
         log.timer('CCSD integral transformation', *cput0)
+
+class _IMDS:
+    def __init__(self, cc):
+        self.cc = cc
+
+    def make_ee(self):
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        self.Fvv = imd.Fvv(t1,t2,eris)
+        self.Foo = imd.Foo(t1,t2,eris)
+        self.Fov = imd.Fov(t1,t2,eris)
+
+        self.Woooo = imd.Woooo(t1,t2,eris)
+        self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+        self.Wovvo = imd.Wovvo(t1,t2,eris)
+        self.Wooov = imd.Wooov(t1,t2,eris)
+        self.Wvovv = imd.Wvovv(t1,t2,eris)
+        self.Wovoo = imd.Wovoo(t1,t2,eris)
+        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
+
+        # Additional intermediates
+        self.Woovv = eris.oovv
+        self.Wvoov =  self.imds.Wovvo.transpose(1,0,3,2)
+        self.Wovvv = -self.imds.Wvovv.transpose(1,0,2,3)
+        self.Woovo = -self.imds.Wooov.transpose(0,1,3,2)
+
+    def make_ip(self):
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        self.Lvv = imd.Lvv(t1,t2,eris)
+        self.Loo = imd.Loo(t1,t2,eris)
+        self.Fov = imd.cc_Fov(t1,t2,eris)
+        self.Wooov = imd.Wooov(t1,t2,eris)
+        self.Wovvo = imd.Wovvo(t1,t2,eris)
+        self.Wovoo = imd.Wovoo(t1,t2,eris)
+        self.Woooo = imd.Woooo(t1,t2,eris)
+        self.Wovov = imd.Wovov(t1,t2,eris)
+        self.Woovv = eris.oovv
+
+    def make_ea(self):
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        self.Lvv = imd.Lvv(t1,t2,eris)
+        self.Loo = imd.Loo(t1,t2,eris)
+        self.Fov = imd.cc_Fov(t1,t2,eris)
+        self.Wvovv = imd.Wvovv(t1,t2,eris)
+        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
+        self.Wovvo = imd.Wovvo(t1,t2,eris)
+        self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+        self.Woovv = eris.oovv
+        self.Wvovo = imd.Wovov(t1,t2,eris).transpose(1,0,3,2)
