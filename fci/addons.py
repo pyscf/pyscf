@@ -9,10 +9,7 @@ from pyscf import symm
 def large_ci(ci, norb, nelec, tol=.1):
     '''Search for the largest CI coefficients
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec//2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     idx = numpy.argwhere(abs(ci) > tol)
     res = []
     for i,j in idx:
@@ -24,10 +21,7 @@ def large_ci(ci, norb, nelec, tol=.1):
 def initguess_triplet(norb, nelec, binstring):
     '''Generate a triplet initial guess for FCI solver
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec//2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     addr = cistring.str2addr(norb, neleca, int(binstring,2))
@@ -56,11 +50,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     Returns:
         CI coefficients 2D array which has the target symmetry.
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     orbsym = numpy.asarray(orbsym)
     if not isinstance(orbsym[0], numpy.integer):
         raise RuntimeError('TODO: convert irrep symbol to irrep id')
@@ -201,11 +191,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     Returns:
         2D array which is the symmetrized CI coefficients
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
     ci = ci.reshape(strsa.size,strsb.size)
@@ -238,11 +224,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     Returns:
         Irrep ID
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
@@ -443,10 +425,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     then argsort to translate the string representation to the address
     [2(=0B011), 0(=0B101), 1(=0B110)]
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     if orbidxb is None:
         orbidxb = orbidxa
     guide_stringsa = cistring.gen_strings4orblist(orbidxa, neleca)
@@ -508,29 +487,41 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
         else:
             ss = ss_value
 
+        ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        if ss == 0:
+            na = int(numpy.sqrt(fcivec.size))
+            ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na), inplace=True)
+            ci0 *= .5
+
         if ss < sz*(sz+1)+.1:
 # (S^2-ss_value)|Psi> to shift state other than the lowest state
-            ci1 = spin_op.contract_ss(fcivec, norb, nelec)
-            ci1 -= ss * fcivec.reshape(ci1.shape)
+            ci1 = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            ci1 -= ss * fcivec
         else:
 # (S^2-ss_value)^2|Psi> to shift states except the given spin.
 # It still relies on the quality of initial guess
-            tmp = spin_op.contract_ss(fcivec, norb, nelec)
-            tmp -= ss * fcivec.reshape(tmp.shape)
+            tmp = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            tmp -= ss * fcivec
             ci1 = -ss * tmp
             ci1 += spin_op.contract_ss(tmp, norb, nelec)
             tmp = None
 
-        if ss == 0:
-            ci1 = pyscf.lib.transpose_sum(ci1, inplace=True) * .5
-
         ci1 *= shift
-        ci1 += old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        ci1 += ci0.reshape(fcivec.shape)
         return ci1
     fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
     return fciobj
 def fix_spin(fciobj, shift=.1, ss_value=None):
     return fix_spin_(copy.copy(fciobj), shift, ss_value)
+
+
+def _unpack(nelec):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+        return neleca, nelecb
+    else:
+        return nelec
 
 
 if __name__ == '__main__':
@@ -540,10 +531,10 @@ if __name__ == '__main__':
     b6 = numpy.arange(6)
     print([bin(i) for i in cistring.gen_strings4orblist(range(4), 3)])
     print([bin(i) for i in cistring.gen_strings4orblist(range(4), 2)])
-    print(des_a(a4+b4, 4, 6, 0))
-    print(des_a(a4+b4, 4, 6, 1))
-    print(des_a(a4+b4, 4, 6, 2))
-    print(des_a(a4+b4, 4, 6, 3))
+    print(des_a(a4+b4, 4, (3,3), 0))
+    print(des_a(a4+b4, 4, (3,3), 1))
+    print(des_a(a4+b4, 4, (3,3), 2))
+    print(des_a(a4+b4, 4, (3,3), 3))
     print('-------------')
     print(des_b(a6+b4, 4, (2,3), 0))
     print(des_b(a6+b4, 4, (2,3), 1))
@@ -555,10 +546,10 @@ if __name__ == '__main__':
     print(cre_a(a6+b4, 4, (2,3), 2))
     print(cre_a(a6+b4, 4, (2,3), 3))
     print('-------------')
-    print(cre_b(a6+b6, 4, 4, 0))
-    print(cre_b(a6+b6, 4, 4, 1))
-    print(cre_b(a6+b6, 4, 4, 2))
-    print(cre_b(a6+b6, 4, 4, 3))
+    print(cre_b(a6+b6, 4, (2,2), 0))
+    print(cre_b(a6+b6, 4, (2,2), 1))
+    print(cre_b(a6+b6, 4, (2,2), 2))
+    print(cre_b(a6+b6, 4, (2,2), 3))
 
     print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=1,
                                      irrep_nelec=None)!=0), [0], [2])
