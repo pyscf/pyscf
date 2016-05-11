@@ -487,24 +487,27 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
         else:
             ss = ss_value
 
+        ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        if ss == 0:
+            na = int(numpy.sqrt(fcivec.size))
+            ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na), inplace=True)
+            ci0 *= .5
+
         if ss < sz*(sz+1)+.1:
 # (S^2-ss_value)|Psi> to shift state other than the lowest state
-            ci1 = spin_op.contract_ss(fcivec, norb, nelec)
-            ci1 -= ss * fcivec.reshape(ci1.shape)
+            ci1 = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            ci1 -= ss * fcivec
         else:
 # (S^2-ss_value)^2|Psi> to shift states except the given spin.
 # It still relies on the quality of initial guess
-            tmp = spin_op.contract_ss(fcivec, norb, nelec)
-            tmp -= ss * fcivec.reshape(tmp.shape)
+            tmp = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            tmp -= ss * fcivec
             ci1 = -ss * tmp
             ci1 += spin_op.contract_ss(tmp, norb, nelec)
             tmp = None
 
-        if ss == 0:
-            ci1 = pyscf.lib.transpose_sum(ci1, inplace=True) * .5
-
         ci1 *= shift
-        ci1 += old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        ci1 += ci0.reshape(fcivec.shape)
         return ci1
     fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
     return fciobj

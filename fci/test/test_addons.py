@@ -165,6 +165,35 @@ class KnowValues(unittest.TestCase):
         ss = fci.spin_op.spin_square0(ci0, norb, nelec)
         self.assertAlmostEqual(ss[0], 0, 9)
 
+    def test_fix_spin(self):
+        def check(mci):
+            mci = fci.addons.fix_spin_(mci, .2, 0)
+            mci.kernel(nelec=(8,8))
+            self.assertAlmostEqual(mci.spin_square(mci.ci, mol.nao_nr(), 16)[0], 0, 7)
+
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
+                    symmetry=1, verbose=0)
+        mf = scf.RHF(mol).run()
+        mci = fci.FCI(mol, mf.mo_coeff, False)
+        mci.wfnsym = 'A1g'
+        check(mci)
+        mci.wfnsym = 'A2g'
+        check(mci)
+
+        mci = fci.FCI(mol, mf.mo_coeff, True)
+        mci.wfnsym = 'A1g'
+        check(mci)
+        mci.wfnsym = 'A2g'
+        check(mci)
+
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
+                    verbose=0)
+        mf = scf.RHF(mol).run()
+        mci = fci.FCI(mol, mf.mo_coeff, False)
+        check(mci)
+        mci = fci.FCI(mol, mf.mo_coeff, True)
+        check(mci)
+
 
 if __name__ == "__main__":
     print("Full Tests for fci.addons")
