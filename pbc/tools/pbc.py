@@ -120,7 +120,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
-            #coulG[np.isclose(np.linalg.norm(kG,axis=1),0.0)] = 4*np.pi*0.5*Rc**2
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 4*np.pi*0.5*Rc**2
     elif mf.exxdiv == 'ewald':
@@ -168,7 +167,7 @@ def madelung(cell, kpts):
 
 
 def get_monkhorst_pack_size(cell, ckpts):
-    kpts = np.dot(ckpts, cell._h.T) / (2*np.pi)
+    kpts = cell.get_scaled_kpts(ckpts)
     import ase.dft.kpoints
     Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts)
     #Nk = np.array([len(np.unique(ki)) for ki in kpts.T])
