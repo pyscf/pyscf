@@ -5,7 +5,7 @@
 
 import os
 from pyscf.pbc.gto.pseudo import parse_cp2k
-from pp import *
+from pyscf.pbc.gto.pseudo.pp import *
 
 ALIAS = {
     'gthblyp'    : 'gth-blyp.dat'   ,
