@@ -1805,6 +1805,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''Apply the long range part of range-separated Coulomb operator for
         **all** 2e integrals
         erf(omega r12) / r12
+        set omega to 0 to siwtch off the range-separated Coulomb
         '''
         self._env[PTR_RANGE_OMEGA] = omega
 
