@@ -258,9 +258,6 @@ class KRHF(pbchf.RHF):
         self.mo_occ = []
         self.mo_coeff_kpts = []
 
-        if cell.ke_cutoff is not None:
-            raise RuntimeError("ke_cutoff not supported with K pts yet")
-
         self.exx_built = False
         if self.exxdiv == 'vcut_ws':
             self.precompute_exx()

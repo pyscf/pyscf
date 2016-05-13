@@ -136,19 +136,13 @@ def build_cell(ase_atom, unit='B', ke=20.0, gsmax=None, basis='gth-szv',
     cell.pseudo = pseudo
     cell.dimension = dimension
     
-    if incore_anyway == True:
-        cell.incore_anyway = True
+    cell.incore_anyway = incore_anyway
 
     if gsmax is not None:
         cell.gs = np.array([gsmax,gsmax,gsmax])
     else:
-        # Will be over-written after build
-        cell.gs = np.array([1,1,1])
+        cell.ke_cutoff = ke
 
-    #cell.verbose = 4
-    cell.build()
-    if gsmax is None:
-        cell.gs = pbctools.cutoff_to_gs(cell._h, ke)
     cell.build()
     return cell
 

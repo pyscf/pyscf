@@ -17,6 +17,7 @@ from pyscf.lib import logger
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol, _charge
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.tools import pbc as pbctools
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -259,10 +260,11 @@ class Cell(pyscf.gto.Mole):
         pyscf.gto.Mole.__init__(self, **kwargs)
         self.h = None # lattice vectors, three *columns*: array((a1,a2,a3))
         self.gs = None
-        self.precision = 1.e-8
-        self.pseudo = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
                               # of fourier components, with .5 * G**2 < ke_cutoff
+        self.precision = 1.e-8
+        self.pseudo = None
+        self.dimension = None
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -282,8 +284,9 @@ class Cell(pyscf.gto.Mole):
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build_(self, dump_input=True, parse_arg=True,
-               h=None, gs=None, precision=None, nimgs=None,
+               h=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
                ew_eta=None, ew_cut=None, pseudo=None, basis=None,
+               dimension=None,
                *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -304,9 +307,10 @@ class Cell(pyscf.gto.Mole):
         if ew_cut is not None: self.ew_cut = ew_cut
         if pseudo is not None: self.pseudo = pseudo
         if basis is not None: self.basis = basis
+        if dimension is not None: self.dimension = dimension
 
         assert(self.h is not None)
-        assert(self.gs is not None)
+        assert(self.gs is not None or self.ke_cutoff is not None)
 
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
@@ -345,11 +349,13 @@ class Cell(pyscf.gto.Mole):
         if self.nimgs is None:
             self.nimgs = self.get_nimgs(self.precision)
 
-        if self.ew_eta is None or self.ew_cut is None:
-            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
-
         self.vol = float(scipy.linalg.det(self.lattice_vectors()))
         self._h = self.lattice_vectors()
+        if self.ke_cutoff is not None:
+            self.gs = pbctools.cutoff_to_gs(self._h, self.ke_cutoff)
+
+        if self.ew_eta is None or self.ew_cut is None:
+            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
 
         if dump_input and self.verbose > logger.NOTE:
             logger.info(self, 'ew_eta = %g', self.ew_eta)
