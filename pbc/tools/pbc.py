@@ -166,11 +166,9 @@ def madelung(cell, kpts):
     return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
 
 
-def get_monkhorst_pack_size(cell, ckpts):
-    kpts = cell.get_scaled_kpts(ckpts)
-    import ase.dft.kpoints
-    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts)
-    #Nk = np.array([len(np.unique(ki)) for ki in kpts.T])
+def get_monkhorst_pack_size(cell, kpts):
+    skpts = cell.get_scaled_kpts(kpts)
+    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
     return Nk
 
 
