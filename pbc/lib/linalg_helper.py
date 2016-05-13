@@ -51,7 +51,7 @@ def davidson(mult_by_A,N,neig,Adiag=None):
     neig is the number of eigenvalues requested
     """
     Mmin = min(neig,N)
-    Mmax = min(N,200)
+    Mmax = min(N,2000)
     tol = 1e-6
 
     #Adiagcheck = np.zeros(N,np.complex)
@@ -105,9 +105,10 @@ def davidson(mult_by_A,N,neig,Adiag=None):
             else:
                 target += 1
         for i in range(N):
+            eps = 0.
             if np.allclose(lamda_k,Adiag[i]):
-                print "# Warning, eigenvalue is very close to a diagonal element of A"
-            xi[i] = q[i]/(lamda_k-Adiag[i])
+                eps = 1e-8
+            xi[i] = q[i]/(lamda_k-Adiag[i]+eps)
 
         # orthonormalize xi wrt b
         bxi,R = np.linalg.qr(np.column_stack((b,xi)))
@@ -302,6 +303,7 @@ class Arnoldi(object):
         self.cAv = np.dot(self.Avlist[:self.currentSize].transpose(),self.sol[:self.currentSize])
 
     def computeResidual(self):
+        import sys
         self.res = self.cAv - self.cvEig * self.cv
         self.dres = np.vdot(self.res,self.res)**0.5
         #
