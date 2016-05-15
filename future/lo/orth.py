@@ -161,11 +161,11 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
         c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method.lower() == 'nao':
-        c_orth = nao.nao(mol, scf_method)
+        c_orth = nao.nao(mol, scf_method, s)
     else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
           # orthogonalizing within each set
         weight = numpy.ones(pre_orth_ao.shape[0])
-        c_orth = nao._nao_sub(mol, weight, pre_orth_ao)
+        c_orth = nao._nao_sub(mol, weight, pre_orth_ao, s)
     # adjust phase
     for i in range(c_orth.shape[1]):
         if c_orth[i,i] < 0:
