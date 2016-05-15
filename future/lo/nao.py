@@ -147,9 +147,10 @@ def prenao(mol, dm):
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
 
-def nao(mol, mf, restore=True):
+def nao(mol, mf, s=None, restore=True):
+    if s is None:
+        s = mol.intor_symmetric('cint1e_ovlp_sph')
     dm = mf.make_rdm1()
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
     p = reduce(numpy.dot, (s, dm, s))
     pre_occ, pre_nao = _prenao_sub(mol, p, s)
     cnao = _nao_sub(mol, pre_occ, pre_nao)
