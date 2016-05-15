@@ -175,11 +175,12 @@ def get_pp_o1(cell, kpt=np.zeros(3)):
     fakemol = pyscf.gto.Mole()
     fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
     fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
+    ptr = pyscf.gto.PTR_ENV_START
     fakemol._env = np.zeros(5)
     fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
     fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
-    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = 3
-    fakemol._bas[0,pyscf.gto.PTR_COEFF] = 4
+    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
+    fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
     Gv = np.asarray(cell.Gv+kpt)
     G_rad = pyscf.lib.norm(Gv, axis=1)
 
@@ -191,8 +192,8 @@ def get_pp_o1(cell, kpt=np.zeros(3)):
             if nl > 0:
                 hl = np.asarray(hl)
                 fakemol._bas[0,pyscf.gto.ANG_OF] = l
-                fakemol._env[3] = .5*rl**2
-                fakemol._env[4] = rl**(l+1.5)*np.pi**1.25
+                fakemol._env[ptr+3] = .5*rl**2
+                fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
                 pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
 
                 pYlm = np.empty((nl,l*2+1,ngs))
