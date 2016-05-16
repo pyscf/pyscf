@@ -245,13 +245,13 @@ def cc_Wvovo(cc,t1,t2,eris):
 
 def Wooov(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
-    kconserv = cc.kconserv
+    #kconserv = cc.kconserv
 
     Wklid = np.array(eris.ooov, copy=True)
     for kk in range(nkpts):
         for kl in range(nkpts):
             for ki in range(nkpts):
-                kd = kconserv[kk,ki,kl]
+                #kd = kconserv[kk,ki,kl]
                 Wklid[kk,kl,ki] += einsum('ic,klcd->klid',t1[ki],eris.oovv[kk,kl,ki])
     return Wklid
 
@@ -347,7 +347,7 @@ def Woooo(cc,t1,t2,eris):
             for ki in range(nkpts):
                 kj = kconserv[kk,ki,kl]
                 for kc in range(nkpts):
-                    kd = kconserv[kk,kc,kl]
+                    #kd = kconserv[kk,kc,kl]
                     Wklij[kk,kl,ki] += einsum('klcd,ijcd->klij',eris.oovv[kk,kl,kc],t2[ki,kj,kc])
                 Wklij[kk,kl,ki] += einsum('klcd,ic,jd->klij',eris.oovv[kk,kl,ki],t1[ki],t1[kj])
                 Wklij[kk,kl,ki] += einsum('klid,jd->klij',eris.ooov[kk,kl,ki],t1[kj])
@@ -443,7 +443,7 @@ def Wovoo(cc,t1,t2,eris):
                     Wkbij[kk,kb,ki] += einsum('lkjd,libd->kbij', -eris.ooov[kl,kk,kj],t2[kl,ki,kb])
 
                     # kb + kk - kd = kc
-                    kc = kconserv[kb,kd,kk]
+                    #kc = kconserv[kb,kd,kk]
                     Wkbij[kk,kb,ki] += einsum('bkdc,jidc->kbij',eris.vovv[kb,kk,kd],t2[kj,ki,kd])
                 Wkbij[kk,kb,ki] += einsum('bkdc,jd,ic->kbij',eris.vovv[kb,kk,kj],t1[kj],t1[ki])
                 Wkbij[kk,kb,ki] += einsum('kc,ijcb->kbij',FFov[kk],t2[ki,kj,kk])
