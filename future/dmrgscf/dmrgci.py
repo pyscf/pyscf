@@ -222,6 +222,36 @@ class DMRGCI(pyscf.lib.StreamObject):
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
+    def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
+        return self.trans_rdm12(statebra, stateket, norb, nelec, link_index, **kwargs)[0]
+
+    def trans_rdm12(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
+        nelectrons = 0
+        if isinstance(nelec, (int, numpy.integer)):
+            nelectrons = nelec
+        else:
+            nelectrons = nelec[0]+nelec[1]
+
+        writeDMRGConfFile(self, nelec, True, with_2pdm=False,
+                          extraline=['restart_tran_twopdm',
+                                     'specificpdm %d %d' % (statebra, stateket)])
+        executeBLOCK(self)
+
+        twopdm = numpy.zeros( (norb, norb, norb, norb) )
+        file2pdm = "spatial_twopdm.%d.%d.txt" %(statebra, stateket)
+        with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
+            norb_read = int(f.readline().split()[0])
+            assert(norb_read == norb)
+
+            for line in f:
+                linesp = line.split()
+                i, k, l, j = [int(x) for x in linesp[:4]]
+                twopdm[i,j,k,l] = 2.0 * float(linesp[4])
+
+        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm /= (nelectrons-1)
+        return onepdm, twopdm
+
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
             writeDMRGConfFile(self, nelec, True,

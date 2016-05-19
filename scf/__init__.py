@@ -218,9 +218,6 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 # approx_grids.
             mf0.small_rho_cutoff = 1e-5
         mf0.kernel()
-
-        mf1._cderi = mf0._cderi
-        mf1._naoaux = mf0._naoaux
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
         logger.note(mf, '============================')
         logger.note(mf, 'Generating initial guess end')
