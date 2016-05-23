@@ -13,6 +13,7 @@ def einsum(idx_str, *tensors):
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     """
 
+    idx_str = idx_str.replace(' ','')
     indices  = "".join(re.split(',|->',idx_str))
     counter = collections.Counter(indices)
     if np.any(np.array(counter.values() > 2)) or '->' not in idx_str:
@@ -149,3 +150,5 @@ if __name__ == '__main__':
     print np.allclose(Z, np.einsum('ijk,ijl,imn->klmn',A,B,C))
     Z = einsum('ijk,ijk->ijk',A,B)
     print np.allclose(Z, np.einsum('ijk,ijk->ijk',A,B))
+    Z = einsum('ijk, ijk  ->  ijk',A,B)
+    print np.allclose(Z, np.einsum('ijk, ijk  ->  ijk',A,B))
