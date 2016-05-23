@@ -58,6 +58,42 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
             fcinew[:,str1] += sign * t1[a,i,:,str0]
     return fcinew
 
+def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    fcivec = fcivec.reshape(na,nb)
+
+    t1a = numpy.zeros((norb,na,nb))
+    t1b = numpy.zeros((norb,na,nb))
+    for addr, s in enumerate(strsa):
+        for i in range(norb):
+            if s & (1<<i):
+                t1a[i,addr] += fcivec[addr]
+    for addr, s in enumerate(strsb):
+        for i in range(norb):
+            if s & (1<<i):
+                t1b[i,:,addr] += fcivec[:,addr]
+
+    fcinew = numpy.zeros_like(fcivec)
+    # u * n_alpha^+ n_beta
+    for addr, s in enumerate(strsa):
+        for i in range(norb):
+            if s & (1<<i):
+                fcinew[addr] += t1b[i,addr] * u
+    # u * n_beta^+ n_alpha
+    for addr, s in enumerate(strsb):
+        for i in range(norb):
+            if s & (1<<i):
+                fcinew[:,addr] += t1a[i,:,addr] * u
+    return fcinew
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
@@ -199,3 +235,14 @@ if __name__ == '__main__':
     e1 = kernel(h1e, eri, norb, nelec)
     print(e1, e1 - -7.9766331504361414)
 
+    from pyscf.fci import direct_uhf
+    nelec = norb = 6
+    u = numpy.zeros((norb,)*4)
+    na = cistring.num_strings(norb, nelec//2)
+    u0 = 2.5
+    for i in range(norb):
+        u[i,i,i,i] = u0
+    ci0 = numpy.random.random((na,na))
+    ci1ref = direct_uhf.contract_2e((u*0, u, u*0), ci0, norb, nelec)
+    ci1 = contract_2e_hubbard(u0, ci0, norb, nelec)
+    print(numpy.allclose(ci1ref, ci1))

@@ -89,6 +89,49 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                              link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
+def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    u_aa, u_ab, u_bb = u
+
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    occs = numpy.asarray([(1<<i) for i in range(norb)])
+    confa = (strsa.reshape(-1,1) & occs) > 0
+    confb = (strsb.reshape(-1,1) & occs) > 0
+
+    fcivec = fcivec.reshape(na,nb)
+    t1a = numpy.zeros((norb,na,nb))
+    t1b = numpy.zeros((norb,na,nb))
+    fcinew = numpy.zeros_like(fcivec)
+
+    for i in range(norb):
+        mask = (strsa & (1<<i)) > 0
+        t1a[i,mask,:] += fcivec[mask,:]
+        mask = (strsb & (1<<i)) > 0
+        t1b[i][:,mask] += fcivec[:,mask]
+
+    if u_aa != 0:  # u * n_alpha^+ n_alpha
+        for i in range(norb):
+            mask = (strsa & (1<<i)) > 0
+            fcinew[mask] += t1a[i,mask] * u_aa
+    if u_ab != 0:  # u * (n_alpha^+ n_beta + n_beta^+ n_alpha)
+        for i in range(norb):
+            mask = (strsa & (1<<i)) > 0
+            fcinew[mask] += t1b[i,mask] * u_ab
+            mask = (strsb & (1<<i)) > 0
+            fcinew[:,mask] += t1a[i][:,mask] * u_ab
+    if u_bb != 0:  # u * n_beta^+ n_beta
+        for i in range(norb):
+            mask = (strsb & (1<<i)) > 0
+            fcinew[:,mask] += t1b[i][:,mask] * u_bb
+    return fcinew
+
 def make_hdiag(h1e, eri, norb, nelec):
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
