@@ -101,35 +101,22 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    occs = numpy.asarray([(1<<i) for i in range(norb)])
-    confa = (strsa.reshape(-1,1) & occs) > 0
-    confb = (strsb.reshape(-1,1) & occs) > 0
-
     fcivec = fcivec.reshape(na,nb)
-    t1a = numpy.zeros((norb,na,nb))
-    t1b = numpy.zeros((norb,na,nb))
     fcinew = numpy.zeros_like(fcivec)
-
-    for i in range(norb):
-        mask = (strsa & (1<<i)) > 0
-        t1a[i,mask,:] += fcivec[mask,:]
-        mask = (strsb & (1<<i)) > 0
-        t1b[i][:,mask] += fcivec[:,mask]
 
     if u_aa != 0:  # u * n_alpha^+ n_alpha
         for i in range(norb):
-            mask = (strsa & (1<<i)) > 0
-            fcinew[mask] += t1a[i,mask] * u_aa
+            maska = (strsa & (1<<i)) > 0
+            fcinew[maska] += u_aa * fcivec[maska]
     if u_ab != 0:  # u * (n_alpha^+ n_beta + n_beta^+ n_alpha)
         for i in range(norb):
-            mask = (strsa & (1<<i)) > 0
-            fcinew[mask] += t1b[i,mask] * u_ab
-            mask = (strsb & (1<<i)) > 0
-            fcinew[:,mask] += t1a[i][:,mask] * u_ab
+            maska = (strsa & (1<<i)) > 0
+            maskb = (strsb & (1<<i)) > 0
+            fcinew[maska[:,None]&maskb] += 2*u_ab * fcivec[maska[:,None]&maskb]
     if u_bb != 0:  # u * n_beta^+ n_beta
         for i in range(norb):
-            mask = (strsb & (1<<i)) > 0
-            fcinew[:,mask] += t1b[i][:,mask] * u_bb
+            maskb = (strsb & (1<<i)) > 0
+            fcinew[:,maskb] += u_bb * fcivec[:,maskb]
     return fcinew
 
 def make_hdiag(h1e, eri, norb, nelec):
@@ -317,31 +304,44 @@ if __name__ == '__main__':
     mol.spin = 1
     mol.build()
 
-    m = scf.UHF(mol)
-    ehf = m.scf()
+#    m = scf.UHF(mol)
+#    ehf = m.scf()
+#
+#    cis = FCISolver(mol)
+#    norb = m.mo_energy[0].size
+#    nea = (mol.nelectron+1) // 2
+#    neb = (mol.nelectron-1) // 2
+#    nelec = (nea, neb)
+#    mo_a = m.mo_coeff[0]
+#    mo_b = m.mo_coeff[1]
+#    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
+#    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b))
+#    g2e_aa = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
+#    g2e_aa = g2e_aa.reshape(norb,norb,norb,norb)
+#    g2e_ab = ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)
+#    g2e_ab = g2e_ab.reshape(norb,norb,norb,norb)
+#    g2e_bb = ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False)
+#    g2e_bb = g2e_bb.reshape(norb,norb,norb,norb)
+#    h1e = (h1e_a, h1e_b)
+#    eri = (g2e_aa, g2e_ab, g2e_bb)
+#    na = cistring.num_strings(norb, nea)
+#    nb = cistring.num_strings(norb, neb)
+#    numpy.random.seed(15)
+#    fcivec = numpy.random.random((na,nb))
+#
+#    e = kernel(h1e, eri, norb, nelec)[0]
+#    print(e, e - -8.65159903476)
+#
 
-    cis = FCISolver(mol)
-    norb = m.mo_energy[0].size
-    nea = (mol.nelectron+1) // 2
-    neb = (mol.nelectron-1) // 2
-    nelec = (nea, neb)
-    mo_a = m.mo_coeff[0]
-    mo_b = m.mo_coeff[1]
-    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
-    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b))
-    g2e_aa = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
-    g2e_aa = g2e_aa.reshape(norb,norb,norb,norb)
-    g2e_ab = ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)
-    g2e_ab = g2e_ab.reshape(norb,norb,norb,norb)
-    g2e_bb = ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False)
-    g2e_bb = g2e_bb.reshape(norb,norb,norb,norb)
-    h1e = (h1e_a, h1e_b)
-    eri = (g2e_aa, g2e_ab, g2e_bb)
-    na = cistring.num_strings(norb, nea)
-    nb = cistring.num_strings(norb, neb)
-    numpy.random.seed(15)
-    fcivec = numpy.random.random((na,nb))
-
-    e = kernel(h1e, eri, norb, nelec)[0]
-    print(e, e - -8.65159903476)
-
+    from pyscf.fci import fci_slow
+    norb = 6
+    nelec = (3,2)
+    u = numpy.zeros((norb,)*4)
+    na = cistring.num_strings(norb, nelec[0])
+    nb = cistring.num_strings(norb, nelec[1])
+    for i in range(norb):
+        u[i,i,i,i] = 1
+    ci0 = numpy.random.random((na,nb))
+    ci1ref = contract_2e     ((u*1.1, u*2.2, u*1.8), ci0, norb, nelec)
+    ci1 = contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
+    print(numpy.allclose(ci1ref, ci1))
