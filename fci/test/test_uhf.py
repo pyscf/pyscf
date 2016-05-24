@@ -143,6 +143,19 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(dm2[2]), 155.324543159155, 10)
         self.assertAlmostEqual(numpy.linalg.norm(dm2[3]), 141.269867535222, 10)
 
+    def test_contract2e_hubbard(self):
+        norb = 6
+        nelec = (3,2)
+        u = numpy.zeros((norb,)*4)
+        na = fci.cistring.num_strings(norb, nelec[0])
+        nb = fci.cistring.num_strings(norb, nelec[1])
+        for i in range(norb):
+            u[i,i,i,i] = 1
+        ci0 = numpy.random.random((na,nb))
+        ci1ref = fci.direct_uhf.contract_2e     ((u*1.1, u*2.2, u*1.8), ci0, norb, nelec)
+        ci1 = fci.direct_uhf.contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
+        self.assertTrue(numpy.allclose(ci1ref, ci1))
+
 
 if __name__ == "__main__":
     print("Full Tests for uhf-based fci")
