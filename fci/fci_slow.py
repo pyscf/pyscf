@@ -248,16 +248,3 @@ if __name__ == '__main__':
 
     e1 = kernel(h1e, eri, norb, nelec)
     print(e1, e1 - -7.9766331504361414)
-
-    from pyscf.fci import direct_uhf
-    norb = 6
-    nelec = (3,2)
-    u = numpy.zeros((norb,)*4)
-    na = cistring.num_strings(norb, nelec[0])
-    nb = cistring.num_strings(norb, nelec[1])
-    for i in range(norb):
-        u[i,i,i,i] = 1
-    ci0 = numpy.random.random((na,nb))
-    ci1ref = direct_uhf.contract_2e((u*1.1, u*2.1, u*1.8), ci0, norb, nelec)
-    ci1 = contract_2e_hubbard((1.1, 2.1, 1.8), ci0, norb, nelec)
-    print(numpy.allclose(ci1ref, ci1))

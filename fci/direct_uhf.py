@@ -304,44 +304,30 @@ if __name__ == '__main__':
     mol.spin = 1
     mol.build()
 
-#    m = scf.UHF(mol)
-#    ehf = m.scf()
-#
-#    cis = FCISolver(mol)
-#    norb = m.mo_energy[0].size
-#    nea = (mol.nelectron+1) // 2
-#    neb = (mol.nelectron-1) // 2
-#    nelec = (nea, neb)
-#    mo_a = m.mo_coeff[0]
-#    mo_b = m.mo_coeff[1]
-#    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
-#    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b))
-#    g2e_aa = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
-#    g2e_aa = g2e_aa.reshape(norb,norb,norb,norb)
-#    g2e_ab = ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)
-#    g2e_ab = g2e_ab.reshape(norb,norb,norb,norb)
-#    g2e_bb = ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False)
-#    g2e_bb = g2e_bb.reshape(norb,norb,norb,norb)
-#    h1e = (h1e_a, h1e_b)
-#    eri = (g2e_aa, g2e_ab, g2e_bb)
-#    na = cistring.num_strings(norb, nea)
-#    nb = cistring.num_strings(norb, neb)
-#    numpy.random.seed(15)
-#    fcivec = numpy.random.random((na,nb))
-#
-#    e = kernel(h1e, eri, norb, nelec)[0]
-#    print(e, e - -8.65159903476)
-#
+    m = scf.UHF(mol)
+    ehf = m.scf()
 
-    from pyscf.fci import fci_slow
-    norb = 6
-    nelec = (3,2)
-    u = numpy.zeros((norb,)*4)
-    na = cistring.num_strings(norb, nelec[0])
-    nb = cistring.num_strings(norb, nelec[1])
-    for i in range(norb):
-        u[i,i,i,i] = 1
-    ci0 = numpy.random.random((na,nb))
-    ci1ref = contract_2e     ((u*1.1, u*2.2, u*1.8), ci0, norb, nelec)
-    ci1 = contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
-    print(numpy.allclose(ci1ref, ci1))
+    cis = FCISolver(mol)
+    norb = m.mo_energy[0].size
+    nea = (mol.nelectron+1) // 2
+    neb = (mol.nelectron-1) // 2
+    nelec = (nea, neb)
+    mo_a = m.mo_coeff[0]
+    mo_b = m.mo_coeff[1]
+    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
+    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b))
+    g2e_aa = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
+    g2e_aa = g2e_aa.reshape(norb,norb,norb,norb)
+    g2e_ab = ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)
+    g2e_ab = g2e_ab.reshape(norb,norb,norb,norb)
+    g2e_bb = ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False)
+    g2e_bb = g2e_bb.reshape(norb,norb,norb,norb)
+    h1e = (h1e_a, h1e_b)
+    eri = (g2e_aa, g2e_ab, g2e_bb)
+    na = cistring.num_strings(norb, nea)
+    nb = cistring.num_strings(norb, neb)
+    numpy.random.seed(15)
+    fcivec = numpy.random.random((na,nb))
+
+    e = kernel(h1e, eri, norb, nelec)[0]
+    print(e, e - -8.65159903476)
