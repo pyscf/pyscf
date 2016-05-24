@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from pyscf import gto
 from pyscf import lo
 from pyscf.tools import ring, molden
 
