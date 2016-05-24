@@ -9,10 +9,12 @@ Ref:
     F. Weinhold et al., J. Chem. Phys. 83(1985), 735-746
 '''
 
+import sys
 from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib.parameters
+from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger
 
@@ -263,6 +265,53 @@ def _spheric_average_mat(mat, l, lst):
     mat_frag = reduce(numpy.dot, (t,mat[lst,:][:,lst],t.T))
     return mat_frag
 
+def set_atom_conf(element, description):
+    '''Change the default atomic core and valence configuration to the one
+    given by "description".
+    See lo.nao.AOSHELL for the default configuration.
+
+    Args:
+        element : str or int
+            Element symbol or nuclear charge
+        description : str or a list of str
+            | "double p" : double p shell
+            | "double d" : double d shell
+            | "double f" : double f shell
+            | "polarize" : add one polarized shell
+            | "1s1d"     : keep core unchanged and set 1 s 1 d shells for valence
+            | ("3s2p","1d") : 3 s, 2 p shells for core and 1 d shells for valence
+    '''
+    charge = mole._charge(element)
+    def to_conf(desc):
+        desc = desc.replace(' ','').replace('-','').replace('_','').lower()
+        if "doublep" in desc:
+            desc = '2p'
+        elif "doubled" in desc:
+            desc = '2d'
+        elif "doublef" in desc:
+            desc = '2f'
+        elif "polarize" in desc:
+            loc = AOSHELL[charge][1].find('0')
+            desc = '1' + AOSHELL[charge][1][loc+1]
+        return desc
+    if isinstance(description, str):
+        c_desc, v_desc = AOSHELL[charge][0], to_conf(description)
+    else:
+        c_desc, v_desc = to_conf(description[0]), to_conf(description[1])
+
+    ncore = [int(x) for x in AOSHELL[charge][0][::2]]
+    ncv = [int(x) for x in AOSHELL[charge][1][::2]]
+    for i, s in enumerate(('s', 'p', 'd', 'f')):
+        if s in c_desc:
+            ncore[i] = int(c_desc.split(s)[0][-1])
+        if s in v_desc:
+            ncv[i] = ncore[i] + int(v_desc.split(s)[0][-1])
+    c_conf  = '%ds%dp%dd%df' % tuple(ncore)
+    cv_conf = '%ds%dp%dd%df' % tuple(ncv)
+    AOSHELL[charge] = [c_conf, cv_conf]
+    sys.stderr.write('Update %s conf: core %s core+valence %s\n' %
+                     (element, c_conf, cv_conf))
+
 
 if __name__ == "__main__":
     from pyscf import gto
@@ -290,3 +339,8 @@ if __name__ == "__main__":
     c = nao(mol, mf)
     print(reduce(numpy.dot, (c.T, p, c)).diagonal())
     print(_core_val_ryd_list(mol))
+
+    set_atom_conf('Fe', '1s1d')      # core 3s2p0d0f core+valence 4s2p1d0f
+    set_atom_conf('Fe', 'double d')  # core 3s2p0d0f core+valence 4s2p2d0f
+    set_atom_conf('Fe', 'double p')  # core 3s2p0d0f core+valence 4s4p2d0f
+    set_atom_conf('Fe', 'polarize')  # core 3s2p0d0f core+valence 4s4p2d1f
