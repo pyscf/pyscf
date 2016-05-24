@@ -119,7 +119,7 @@ def project_to_atomic_orbitals(mol, basname):
         p1 = p0 + ano.shape[1]
         c[p0:p1,p0:p1] = ano
         p0 = p1
-    return
+    return c
 pre_orth_project_ano = project_to_atomic_orbitals
 
 def pre_orth_ao_atm_scf(mol):
