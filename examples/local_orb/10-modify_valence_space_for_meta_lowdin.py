@@ -20,9 +20,16 @@ The extra valence shell is particular useful to identify the localized orbitals.
 #
 # Modify the default core valence settings for Be and Al
 #
-#                     Core        Valence
-lo.nao.AOSHELL[4 ] = ['1s0p0d0f', '2s1p0d0f'] # redefine the valence shell for Be
-lo.nao.AOSHELL[13] = ['2s1p0d0f', '3s2p1d0f'] # for Al
+# 1 s-shell as core, 1 s-shell + 1 p-shell as valence
+lo.set_atom_conf('Be', ('1s', '1s1p'))
+# 2 s-shells + 1 p-shell as core, 1 s-shell + 1 p-shell + 1 d-shell as valence
+lo.set_atom_conf('Al', ('2s1p', '1s1p1d'))
+# double-d shell for Fe, ie taking 3d and 4d orbitals as valence
+lo.set_atom_conf('Fe', 'double d')
+# double-d shell for Mo, ie taking 4d and 5d orbitals as valence
+lo.set_atom_conf('Mo', 'double d')
+# Put 3d orbital in valence space for Si
+lo.set_atom_conf('Si', 'polarize')
 
 #
 # Localize Be12 ring
