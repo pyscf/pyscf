@@ -99,7 +99,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
     equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
     factor = np.trunc(reduced_coords)
     kG -= 2.*np.dot(np.sign(factor), box_edge)
-    kG[equal2boundary] = [0.0, 0.0, 0.0]
+    #kG[equal2boundary] = [0.0, 0.0, 0.0]
+    # coulG[equal2boundary] is zero'd at end.
     # Done wrapping.
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
@@ -143,7 +144,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG += mf.exx_vq[qidx] * is_lt_maxqv
 
-    coulG[ coulG == np.inf ] = 0.0
+    #coulG[ coulG == np.inf ] = 0.0
+    coulG[equal2boundary] = 0.0
 
     return coulG
 
@@ -164,11 +166,9 @@ def madelung(cell, kpts):
     return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
 
 
-def get_monkhorst_pack_size(cell, ckpts):
-    kpts = np.dot(ckpts, cell._h.T) / (2*np.pi)
-    import ase.dft.kpoints
-    Nk, eoff = ase.dft.kpoints.get_monkhorst_pack_size_and_offset(kpts)
-    #Nk = np.array([len(np.unique(ki)) for ki in kpts.T])
+def get_monkhorst_pack_size(cell, kpts):
+    skpts = cell.get_scaled_kpts(kpts)
+    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
     return Nk
 
 

@@ -1,3 +1,5 @@
+import numpy as np
+
 from pyscf.pbc import scf as pbchf
 from pyscf.pbc import dft as pbcdft
 
@@ -20,18 +22,36 @@ def run_dft(cell):
     print mf.scf()
     return mf
 
-def run_khf(cell, nmp=[1,1,1], exxdiv=None):
+def run_khf(cell, nmp=[1,1,1], gamma=False, kshift=np.zeros(3), exxdiv=None):
     """Run a k-point-sampling Hartree-Fock calculation."""
     scaled_kpts = ase.dft.kpoints.monkhorst_pack(nmp)
+    if gamma:
+        for i in range(3):
+            if nmp[i] % 2 == 0:
+                scaled_kpts[:,i] += 0.5/nmp[i]
+    # Move first kpt to the Gamma pt
+    scaled_kpts -= scaled_kpts[0,:]
+    # Shift by kshift
+    scaled_kpts += kshift
+    # Put back in BZ
+    print "Before shifting back"
+    print scaled_kpts
+    scaled_kpts -= 1.0*np.round(scaled_kpts/1.0)
+    print "After shifting back"
+    print scaled_kpts
     abs_kpts = cell.get_abs_kpts(scaled_kpts)
     kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=exxdiv)
     kmf.verbose = 7
     print kmf.scf()
     return kmf
 
-def run_kdft(cell, nmp=[1,1,1]):
+def run_kdft(cell, nmp=[1,1,1], gamma=False):
     """Run a k-point-sampling DFT (LDA) calculation."""
     scaled_kpts = ase.dft.kpoints.monkhorst_pack(nmp)
+    if gamma:
+        for i in range(3):
+            if nmp[i] % 2 == 0:
+                scaled_kpts[:,i] += 0.5/nmp[i]
     abs_kpts = cell.get_abs_kpts(scaled_kpts)
     kmf = pbcdft.KRKS(cell, abs_kpts)
     kmf.xc = 'lda,vwn'

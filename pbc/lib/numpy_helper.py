@@ -1,6 +1,6 @@
 import numpy as np
 import re
-from pyscf import lib
+import collections
 
 DEBUG = False
 
@@ -13,7 +13,10 @@ def einsum(idx_str, *tensors):
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     """
 
-    if '->' not in idx_str:
+    idx_str = idx_str.replace(' ','')
+    indices  = "".join(re.split(',|->',idx_str))
+    counter = collections.Counter(indices)
+    if np.any(np.array(counter.values() > 2)) or '->' not in idx_str:
         return np.einsum(idx_str,*tensors)
 
     if idx_str.count(',') > 1:
@@ -131,10 +134,21 @@ def einsum(idx_str, *tensors):
     for idx in idxC:
         new_orderCt.append(idxCt.index(idx))
 
-    #return np.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
-    return lib.zdot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
+    return np.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
 
 
 def _cp(a):
     return np.array(a, copy=False, order='C')
 
+if __name__ == '__main__':
+    A = np.random.random((3,4,5))
+    B = np.random.random((3,4,5))
+    C = np.random.random((3,4,5))
+    Z = einsum('ijk,ijl->kl',A,B)
+    print np.allclose(Z, np.einsum('ijk,ijl->kl',A,B))
+    Z = einsum('ijk,ijl,imn->klmn',A,B,C)
+    print np.allclose(Z, np.einsum('ijk,ijl,imn->klmn',A,B,C))
+    Z = einsum('ijk,ijk->ijk',A,B)
+    print np.allclose(Z, np.einsum('ijk,ijk->ijk',A,B))
+    Z = einsum('ijk, ijk  ->  ijk',A,B)
+    print np.allclose(Z, np.einsum('ijk, ijk  ->  ijk',A,B))
