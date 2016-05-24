@@ -9,7 +9,8 @@ A2B = 1.889725989
 def get_ase_atom(formula):
     formula = formula.lower()
     assert formula in ['lih','lif','licl','mgo',
-                       'c','si','ge','sic','gaas','gan','cds','zns','zno','bn']
+                       'c','si','ge','sic','gaas','gan','cds',
+                       'zns','zno','bn','alp']
     if formula == 'lih':
         ase_atom = get_ase_rocksalt('Li','H')
     elif formula == 'lif':
@@ -32,6 +33,8 @@ def get_ase_atom(formula):
         ase_atom = get_ase_zincblende('Ga','N')
     elif formula == 'bn':
         ase_atom = get_ase_zincblende('B','N')
+    elif formula == 'alp':
+        ase_atom = get_ase_zincblende('Al','P')
 
     return ase_atom
 
@@ -52,8 +55,8 @@ def get_bandpath_fcc(ase_atom, npoints=30):
 
 def get_ase_zincblende(A='Ga', B='As'):
     # Lattice constants from Shishkin and Kresse, PRB 75, 235102 (2007)
-    assert A in ['Si', 'Ga', 'Cd', 'Zn', 'B']
-    assert B in ['C', 'As', 'S', 'O', 'N']
+    assert A in ['Si', 'Ga', 'Cd', 'Zn', 'B', 'Al']
+    assert B in ['C', 'As', 'S', 'O', 'N', 'P']
     from ase.lattice import bulk
     if A=='Si' and B=='C':
         ase_atom = bulk('SiC', 'zincblende', a=4.350*A2B)
@@ -69,6 +72,8 @@ def get_ase_zincblende(A='Ga', B='As'):
         ase_atom = bulk('ZnO', 'zincblende', a=4.580*A2B)
     elif A=='B' and B=='N':
         ase_atom = bulk('BN', 'zincblende', a=3.615*A2B)
+    elif A=='Al' and B=='P':
+        ase_atom = bulk('AlP', 'zincblende', a=5.451*A2B)
 
     return ase_atom
 
