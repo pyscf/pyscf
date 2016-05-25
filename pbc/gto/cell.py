@@ -286,7 +286,7 @@ def get_nimgs(cell, precision=None):
     return nimgs+1 # additional lattice vector to take into account
                    # case where there are functions on the edges of the box.
 
-def get_ewald_params(cell, precision=None, gs=None):
+def get_ewald_params(cell, precision=1e-8, gs=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
 
     Choice is based on largest G vector and desired relative precision.
@@ -302,8 +302,6 @@ def get_ewald_params(cell, precision=None, gs=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if precision is None:
-        precision = cell.precision
     if gs is None:
         gs = cell.gs
 
@@ -517,11 +515,12 @@ class Cell(pyscf.gto.Mole):
         if self.nimgs is None:
             self.nimgs = self.get_nimgs(self.precision)
 
-        if self.ke_cutoff is not None:
+        if self.gs is None:
+            assert(self.ke_cutoff is not None)
             self.gs = pbctools.cutoff_to_gs(self._h, self.ke_cutoff)
 
         if self.ew_eta is None or self.ew_cut is None:
-            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision)
+            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.gs)
 
         if dump_input and self.verbose >= logger.INFO:
             logger.info(self, 'lattice vector [a1        | a2        | a3       ]')

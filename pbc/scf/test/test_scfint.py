@@ -37,7 +37,8 @@ def make_cell2(L, n, nimgs=None):
                                 [0, (1.2, 1.0)]] })
     return cell
 
-k = numpy.ones(3) * .25
+numpy.random.seed(1)
+k = numpy.random.random(3)
 
 def finger(mat):
     w = numpy.cos(numpy.arange(mat.size))
@@ -124,7 +125,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(s0-s1), 0, 8)
 
     def test_t(self):
-        numpy.random.seed(3)
         cell = make_cell1(4, 20, [2,2,2])
         t0 = get_t(cell, kpt=k)
         t1 = scfint.get_t(cell, kpt=k)
