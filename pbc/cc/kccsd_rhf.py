@@ -272,12 +272,12 @@ def energy(cc, t1, t2, eris):
 
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
-    def __init__(self, mf, abs_kpts, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
-        self._kpts = abs_kpts
-        self.nkpts = len(self._kpts)
-        self.kconserv = tools.get_kconserv(mf.cell, abs_kpts)
-        self.khelper = kpoint_helper.unique_pqr_list(mf.cell, abs_kpts)
+        self.kpts = mf.kpts
+        self.nkpts = len(self.kpts)
+        self.kconserv = tools.get_kconserv(mf.cell, mf.kpts)
+        self.khelper = kpoint_helper.unique_pqr_list(mf.cell, mf.kpts)
         self.made_ee_imds = False
         self.made_ip_imds = False
         self.made_ea_imds = False
@@ -291,7 +291,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         time0 = time.clock(), time.time()
         nocc = self.nocc()
         nvir = self.nmo() - nocc
-        nkpts = len(self._kpts)
+        nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
         woovv = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
@@ -326,7 +326,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #       As of right now it works, but just not sure how the frozen list will work
         #       with it
         self._nocc = pyscf.cc.ccsd.CCSD.nocc(self)
-        self._nocc = (self._nocc // len(self._kpts))
+        self._nocc = (self._nocc // self.nkpts)
         return self._nocc
 
     def nmo(self):
@@ -365,20 +365,20 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def update_amps(self, t1, t2, eris, max_memory=2000):
         return update_amps(self, t1, t2, eris, max_memory)
 
-    def ipccsd(self, nroots=2*4):
+    def ipccsd(self, nroots=2*4, kptlist=None):
         time0 = time.clock(), time.time()
         log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         nkpts = self.nkpts
         size =  nocc + nkpts*nkpts*nocc*nocc*nvir
-        evals = np.zeros((nkpts,nroots),np.complex)
-        evecs = np.zeros((nkpts,size,nroots),np.complex)
-        for kshift in range(nkpts):
+        if kptlist is None:
+            kptlist = range(nkpts)
+        evals = np.zeros((len(kptlist),nroots),np.complex)
+        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        for k,kshift in enumerate(kptlist):
             self.kshift = kshift
-            evals[kshift], evecs[kshift] = eigs(self.ipccsd_matvec, size, nroots, self.ipccsd_diag())
-            #np.set_printoptions(precision=16)
-            #print "kshift evals : ", evals[kshift]
+            evals[k], evecs[k] = eigs(self.ipccsd_matvec, size, nroots, self.ipccsd_diag())
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         return evals.real, evecs
 
@@ -398,8 +398,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         if not self.made_ip_imds:
             if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ip()
+                self.imds = _IMDS()
+            self.imds.make_ip(self)
             self.made_ip_imds = True
 
         imds = self.imds
@@ -448,8 +448,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         if not self.made_ip_imds:
             if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ip()
+                self.imds = _IMDS()
+            self.imds.make_ip(self)
             self.made_ip_imds = True
 
         imds = self.imds
@@ -521,20 +521,20 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
-    def eaccsd(self, nroots=2*4):
+    def eaccsd(self, nroots=2*4, kptlist=None):
         time0 = time.clock(), time.time()
         log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc()
         nvir = self.nmo() - nocc
         nkpts = self.nkpts
         size =  nvir + nkpts*nkpts*nocc*nvir*nvir
-        evals = np.zeros((nkpts,nroots),np.complex)
-        evecs = np.zeros((nkpts,size,nroots),np.complex)
-        for kshift in range(nkpts):
+        if kptlist is None:
+            kptlist = range(nkpts)
+        evals = np.zeros((len(kptlist),nroots),np.complex)
+        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        for k,kshift in enumerate(kptlist):
             self.kshift = kshift
-            evals[kshift], evecs[kshift] = eigs(self.eaccsd_matvec, size, nroots, self.eaccsd_diag())
-            #np.set_printoptions(precision=16)
-            #print "kshift evals : ", evals[:nroots]
+            evals[k], evecs[k] = eigs(self.eaccsd_matvec, size, nroots, self.eaccsd_diag())
         time0 = log.timer_debug1('converge ea-ccsd', *time0)
         return evals.real, evecs
 
@@ -554,8 +554,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         if not self.made_ea_imds:
             if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ea()
+                self.imds = _IMDS()
+            self.imds.make_ea(self)
             self.made_ea_imds = True
 
         imds = self.imds
@@ -607,8 +607,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         if not self.made_ea_imds:
             if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ea()
+                self.imds = _IMDS()
+            self.imds.make_ea(self)
             self.made_ea_imds = True
 
         imds = self.imds
@@ -686,7 +686,7 @@ class _ERIS:
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
         moidx = numpy.ones(cc.mo_energy.shape, dtype=numpy.bool)
-        nkpts = len(cc._kpts)
+        nkpts = cc.nkpts
         nmo = cc.nmo()
         #TODO check that this and kccsd work for frozen...
         if isinstance(cc.frozen, (int, numpy.integer)):
@@ -717,7 +717,7 @@ class _ERIS:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             kconserv = cc.kconserv
-            khelper = cc.khelper #kpoint_helper.unique_pqr_list(cc._scf.cell,cc._kpts)
+            khelper = cc.khelper #kpoint_helper.unique_pqr_list(cc._scf.cell,cc.kpts)
             unique_klist = khelper.get_uniqueList()
             nUnique_klist = khelper.nUnique
 
@@ -733,7 +733,7 @@ class _ERIS:
                 ks = kconserv[kp,kq,kr]
                 eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
                             (mo_coeff[kp,:,:],mo_coeff[kq,:,:],mo_coeff[kr,:,:],mo_coeff[ks,:,:]),
-                            (cc._kpts[kp],cc._kpts[kq],cc._kpts[kr],cc._kpts[ks]))
+                            (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
                 eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
                 eri[kp,kq,kr] = eri_kpt.copy()
 
@@ -796,12 +796,12 @@ class _ERIS:
 
 
 class _IMDS:
-    def __init__(self, cc):
-        self.cc = cc
+    def __init__(self):
+        pass
 
-    def make_ip(self):
-        cc = self.cc
-        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+    def make_ip(self, cc):
+        #cc = self.cc
+        t1,t2,eris = cc.t1, cc.t2, cc.eris
 
         self.Lvv = imdk.Lvv(cc,t1,t2,eris)
         self.Loo = imdk.Loo(cc,t1,t2,eris)
@@ -813,9 +813,9 @@ class _IMDS:
         self.Wovov = imdk.Wovov(cc,t1,t2,eris)
         self.Woovv = eris.oovv
 
-    def make_ea(self):
-        cc = self.cc
-        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+    def make_ea(self, cc):
+        #cc = self.cc
+        t1,t2,eris = cc.t1, cc.t2, cc.eris
 
         self.Lvv = imdk.Lvv(cc,t1,t2,eris)
         self.Loo = imdk.Loo(cc,t1,t2,eris)

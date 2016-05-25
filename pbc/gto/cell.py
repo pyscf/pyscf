@@ -203,6 +203,31 @@ def loads(cellstr):
 
     return cell
 
+def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
+    r'''1-electron integrals from two cells like
+
+    .. math::
+
+        \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
+    '''
+    nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
+    Ls = get_lattice_Ls(cell1, nimgs)
+# Change the basis position only, keep all other envrionments
+    cellL = cell2.copy()
+    ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
+    _envL = cellL._env
+    int1e = 0
+    for L in Ls:
+        _envL[ptr_coord+0] = cell2._env[ptr_coord+0] + L[0]
+        _envL[ptr_coord+1] = cell2._env[ptr_coord+1] + L[1]
+        _envL[ptr_coord+2] = cell2._env[ptr_coord+2] + L[2]
+        if kpt is None:
+            int1e += pyscf.gto.mole.intor_cross(intor, cell1, cellL, comp)
+        else:
+            factor = np.exp(1j*np.dot(kpt, L))
+            int1e += pyscf.gto.mole.intor_cross(intor, cell1, cellL, comp) * factor
+    return int1e
+
 
 def get_lattice_Ls(cell, nimgs=None):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
@@ -574,4 +599,7 @@ class Cell(pyscf.gto.Mole):
         self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         return self
 
+    def pbc_intor(self, intor, comp=1, hermi=0, kpt=None):
+        assert('2e' not in intor)
+        return intor_cross(intor, self, self, comp, hermi, kpt)
 

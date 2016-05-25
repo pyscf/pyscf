@@ -62,19 +62,19 @@ def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             shl_slice, non0tab, out, verbose) * factor
 
-    if cell.ke_cutoff is not None:
-        ke = 0.5*numpy.einsum('gi,gi->g', cell.Gv, cell.Gv)
-        ke_mask = ke < cell.ke_cutoff
-
-        aoG = numpy.zeros_like(aoR)
-        for i in range(cell.nao_nr()):
-            if deriv == 1:
-                for c in range(4):
-                    aoG[c][ke_mask, i] = tools.fft(aoR[c][:,i], cell.gs)[ke_mask]
-                    aoR[c][:,i] = tools.ifft(aoG[c][:,i], cell.gs)
-            else:
-                aoG[ke_mask, i] = tools.fft(aoR[:,i], cell.gs)[ke_mask]
-                aoR[:,i] = tools.ifft(aoG[:,i], cell.gs)
+    #if cell.ke_cutoff is not None:
+    #    ke = 0.5*numpy.einsum('gi,gi->g', cell.Gv, cell.Gv)
+    #    ke_mask = ke < cell.ke_cutoff
+    #
+    #    aoG = numpy.zeros_like(aoR)
+    #    for i in range(cell.nao_nr()):
+    #        if deriv == 1:
+    #            for c in range(4):
+    #                aoG[c][ke_mask, i] = tools.fft(aoR[c][:,i], cell.gs)[ke_mask]
+    #                aoR[c][:,i] = tools.ifft(aoG[c][:,i], cell.gs)
+    #        else:
+    #            aoG[ke_mask, i] = tools.fft(aoR[:,i], cell.gs)[ke_mask]
+    #            aoR[:,i] = tools.ifft(aoG[:,i], cell.gs)
 
     return numpy.asarray(aoR)
 

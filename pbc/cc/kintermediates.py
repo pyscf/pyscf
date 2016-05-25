@@ -17,7 +17,7 @@ einsum = pbclib.einsum
 def make_tau(cc, t2, t1a, t1b, fac=1., out=None):
     nkpts, nocc, nvir = t1a.shape
     tau1 = t2.copy()
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
     for ki in range(nkpts):
         for ka in range(nkpts):
             for kj in range(nkpts):
@@ -42,7 +42,7 @@ def cc_Fvv(cc,t1,t2,eris):
     eris_vovv = -eris.ovvv.transpose(1,0,2,4,3,5,6)
     tau_tilde = make_tau(cc,t2,t1,t1,fac=0.5)
     Fae = numpy.zeros(fvv.shape, t1.dtype)
-    #kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    #kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
     for ka in range(nkpts):
         Fae[ka] += fvv[ka]
         Fae[ka] += -0.5*einsum('me,ma->ae',fov[ka],t1[ka])
@@ -85,7 +85,7 @@ def cc_Woooo(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
     tau = make_tau(cc,t2,t1,t1)
     Wmnij = eris.oooo.copy()
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
     for km in range(nkpts):
         for kn in range(nkpts):
             # Since it's not enough just to switch i and j and need to create the k_i and k_j
@@ -107,7 +107,7 @@ def cc_Wvvvv(cc,t1,t2,eris):
     eris_vovv = - eris.ovvv.transpose(1,0,2,4,3,5,6)
     tau = make_tau(cc,t2,t1,t1)
     Wabef = eris.vvvv.copy()
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
     for ka in range(nkpts):
         for kb in range(nkpts):
             for ke in range(nkpts):
@@ -126,7 +126,7 @@ def cc_Wvvvv(cc,t1,t2,eris):
 
 def cc_Wovvo(cc,t1,t2,eris):
     nkpts, nocc, nvir = t1.shape
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
     eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc),dtype=t2.dtype)
     for km in range(nkpts):

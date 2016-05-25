@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+#
+# Author: Garnet Chan <gkc1000@gmail.com>
+#
+
+'''
+ASE package interface
+'''
+
 import numpy as np
 import pyscf.gto.mole
 from ase.calculators.calculator import Calculator
@@ -42,7 +51,7 @@ class PySCF(Calculator):
         self.molcell=molcell
         self.mf_class=mf_class
         self.mf_dict=mf_dict
-        
+
     def set(self, **kwargs):
         changed_parameters = Calculator.set(self, **kwargs)
         if changed_parameters:
@@ -53,7 +62,7 @@ class PySCF(Calculator):
                                   'pbc', 'charges','magmoms']):
 
         Calculator.calculate(self, atoms)
-            
+
         calc_molcell = self.molcell.copy()
         calc_molcell.atom = ase_atoms_to_pyscf(atoms)
         calc_molcell.h = atoms.cell

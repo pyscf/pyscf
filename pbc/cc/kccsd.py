@@ -31,7 +31,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     elif t1 is None:
         nocc = cc.nocc()
         nvir = cc.nmo() - nocc
-        nkpts = len(cc._kpts)
+        nkpts = cc.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), numpy.complex128)
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
@@ -121,7 +121,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
     # integrals are in physics notation
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
 
     eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc), dtype=t2.dtype)
@@ -236,7 +236,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         t1new[ki] /= eia[ki]
 
     eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
-    kconserv = tools.get_kconserv(cc._scf.cell, cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -256,9 +256,10 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
 class CCSD(pyscf.cc.ccsd.CCSD):
 
-    def __init__(self, mf, abs_kpts, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        self._kpts = abs_kpts
-        nkpts = len(self._kpts)
+    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+        self.kpts = mf.kpts
+        self.nkpts = len(self.kpts)
+        nkpts = self.nkpts
 
         nmo = mf.cell.nao_nr()
         nso = 2*nmo
@@ -296,7 +297,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         #       As of right now it works, but just not sure how the frozen list will work
         #       with it
         self._nocc = 2*pyscf.cc.ccsd.CCSD.nocc(self)
-        self._nocc = (self._nocc // len(self._kpts))
+        self._nocc = (self._nocc // self.nkpts)
         return self._nocc
 
     def nmo(self):
@@ -319,7 +320,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         time0 = time.clock(), time.time()
         nocc = self.nocc()
         nvir = self.nmo() - nocc
-        nkpts = len(self._kpts)
+        nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
         self.emp2 = 0
@@ -329,7 +330,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
-        kconserv = tools.get_kconserv(self._scf.cell,self._kpts)
+        kconserv = tools.get_kconserv(self._scf.cell,self.kpts)
         for ki in range(nkpts):
           for kj in range(nkpts):
             for ka in range(nkpts):
@@ -381,7 +382,7 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
         cput0 = (time.clock(), time.time())
         moidx = numpy.ones(shape=cc.mo_energy.shape, dtype=numpy.bool)
-        nkpts = len(cc._kpts)
+        nkpts = cc.nkpts
         nmo = cc.nmo()
         # TODO change this for k-points ... seems like it should work
         if isinstance(cc.frozen, (int, numpy.integer)):
@@ -396,7 +397,7 @@ class _ERIS:
             for k in range(nkpts):
                 self.mo_coeff[k] = cc.mo_coeff[k][:,moidx[k]]
             mo_coeff = self.mo_coeff
-            self.fock = numpy.zeros((len(cc._kpts),nmo,nmo))
+            self.fock = numpy.zeros((nkpts,nmo,nmo))
             for k in range(nkpts):
                 self.fock[k] = numpy.diag(cc.mo_energy[k][moidx[k]])
         else:  # If mo_coeff is not canonical orbital
@@ -420,7 +421,7 @@ class _ERIS:
         if (method == 'incore' and cc._scf._eri is None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
 
-            kconserv = tools.get_kconserv(cc._scf.cell,cc._kpts)
+            kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
 
             eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
             for kp in range(nkpts):
@@ -429,7 +430,7 @@ class _ERIS:
                         ks = kconserv[kp,kq,kr]
                         eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
                                     (so_coeff[kp,:,:],so_coeff[kq,:,:],so_coeff[kr,:,:],so_coeff[ks,:,:]),
-                                    (cc._kpts[kp],cc._kpts[kq],cc._kpts[kr],cc._kpts[ks]))
+                                    (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
                         eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
                         eri[kp,kq,kr] = eri_kpt.copy()
 
@@ -482,7 +483,7 @@ class _ERIS:
 
 
 def check_antisymm_12( cc, kpts, integrals ):
-    kconserv = tools.get_kconserv(cc._scf.cell,cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
     for kp in range(nkpts):
@@ -501,7 +502,7 @@ def check_antisymm_12( cc, kpts, integrals ):
     print "antisymmetrization : max diff = %.15g" % diff
 
 def check_antisymm_34( cc, kpts, integrals ):
-    kconserv = tools.get_kconserv(cc._scf.cell,cc._kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
     for kp in range(nkpts):
