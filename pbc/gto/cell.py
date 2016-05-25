@@ -17,7 +17,6 @@ from pyscf.lib import logger
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol, _charge
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
-from pyscf.pbc.tools import pbc as pbctools
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -210,23 +209,54 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
+    import ctypes
+    import pyscf.gto.moleintor
+    if '2c2e' in intor:
+        drv_name = 'GTOint2c2e'
+    else:
+        assert('2e' not in intor)
+        drv_name = 'GTOint2c'
+    drv = getattr(pyscf.gto.moleintor.libcgto, drv_name)
+    fintor = pyscf.gto.moleintor._fpointer(intor)
+    intopt = lib.c_null_ptr()
+
+    atm, bas, env = pyscf.gto.conc_env(cell1._atm, cell1._bas, cell1._env,
+                                       cell2._atm, cell2._bas, cell2._env)
+    atm = np.asarray(atm, dtype=np.int32)
+    bas = np.asarray(bas, dtype=np.int32)
+    env = np.asarray(env, dtype=np.double)
+    natm = len(atm)
+    nbas = len(bas)
+    shls_slice = (0, cell1.nbas, cell1.nbas, cell1.nbas+cell2.nbas)
+    ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
+    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+
+    xyz = np.asarray([cell2.atom_coord(i) for i in range(cell2.natm)])
+    ptr_coord = atm[cell1.natm:,pyscf.gto.PTR_COORD]
+    out = 0
+    buf = np.empty((ni,nj))
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    Ls = get_lattice_Ls(cell1, nimgs)
-# Change the basis position only, keep all other envrionments
-    cellL = cell2.copy()
-    ptr_coord = cellL._atm[:,pyscf.gto.PTR_COORD]
-    _envL = cellL._env
-    int1e = 0
-    for L in Ls:
-        _envL[ptr_coord+0] = cell2._env[ptr_coord+0] + L[0]
-        _envL[ptr_coord+1] = cell2._env[ptr_coord+1] + L[1]
-        _envL[ptr_coord+2] = cell2._env[ptr_coord+2] + L[2]
+    for L in get_lattice_Ls(cell1, nimgs):
+        env[ptr_coord+0] = xyz[:,0] + L[0]
+        env[ptr_coord+1] = xyz[:,1] + L[1]
+        env[ptr_coord+2] = xyz[:,2] + L[2]
+        drv(fintor, buf.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(comp), ctypes.c_int(hermi),
+            (ctypes.c_int*4)(*(shls_slice[:4])),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
+
         if kpt is None:
-            int1e += pyscf.gto.mole.intor_cross(intor, cell1, cellL, comp)
+            out += buf
         else:
-            factor = np.exp(1j*np.dot(kpt, L))
-            int1e += pyscf.gto.mole.intor_cross(intor, cell1, cellL, comp) * factor
-    return int1e
+            out += buf * np.exp(1j*np.dot(kpt, L))
+
+    if hermi:
+        out = lib.hermi_triu_(out, hermi=hermi)
+    return out
 
 
 def get_lattice_Ls(cell, nimgs=None):
@@ -377,6 +407,7 @@ class Cell(pyscf.gto.Mole):
         self.vol = float(scipy.linalg.det(self.lattice_vectors()))
         self._h = self.lattice_vectors()
         if self.ke_cutoff is not None:
+            from pyscf.pbc.tools import pbc as pbctools
             self.gs = pbctools.cutoff_to_gs(self._h, self.ke_cutoff)
 
         if self.ew_eta is None or self.ew_cut is None:
@@ -586,6 +617,10 @@ class Cell(pyscf.gto.Mole):
 
     get_lattice_Ls = get_lattice_Ls
 
+    def pbc_intor(self, intor, comp=1, hermi=0, kpt=None):
+        '''One-electron integrals with PBC. See also Mole.intor'''
+        return intor_cross(intor, self, self, comp, hermi, kpt)
+
     def from_ase_(self, ase_atom):
         '''Update cell based on given ase atom object
 
@@ -598,8 +633,4 @@ class Cell(pyscf.gto.Mole):
         self.h = ase_atom.cell
         self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         return self
-
-    def pbc_intor(self, intor, comp=1, hermi=0, kpt=None):
-        assert('2e' not in intor)
-        return intor_cross(intor, self, self, comp, hermi, kpt)
 

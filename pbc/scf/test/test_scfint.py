@@ -64,6 +64,8 @@ def get_t(cell, kpt=np.zeros(3)):
     t *= (cell.vol/ngs)
     return t
 
+k = numpy.ones(3) * .25
+
 
 class KnowValues(unittest.TestCase):
     def test_olvp(self):
@@ -73,10 +75,15 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(s0-s1), 0, 8)
         self.assertAlmostEqual(finger(s1), 1.3229918679678208, 10)
 
+        s0 = get_ovlp(cell, kpt=k)
+        s1 = scfint.get_ovlp(cell, kpt=k)
+        self.assertAlmostEqual(numpy.linalg.norm(s0-s1), 0, 8)
+
     def test_t(self):
+        numpy.random.seed(3)
         cell = make_cell1(4, 20, [2,2,2])
-        t0 = get_t(cell)
-        t1 = scfint.get_t(cell)
+        t0 = get_t(cell, kpt=k)
+        t1 = scfint.get_t(cell, kpt=k)
         self.assertAlmostEqual(numpy.linalg.norm(t0-t1), 0, 8)
 
 
