@@ -109,49 +109,7 @@ def get_nuc(cell, kpt=np.zeros(3)):
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
     return vne
 
-
-def get_pp_o0(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
-    '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    nao = cell.nao_nr()
-
-    SI = cell.get_SI()
-    vlocG = pseudo.get_vlocG(cell)
-    vpplocG = -np.sum(SI * vlocG, axis=0)
-
-    # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs)
-    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
-
-    # vppnonloc evaluated in reciprocal space
-    aokG = np.empty(aoR.shape, np.complex128)
-    for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
-    ngs = len(aokG)
-
-    vppnl = np.zeros((nao,nao), dtype=np.complex128)
-    hs, projGs = pseudo.get_projG(cell, kpt)
-    for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
-        for l, h in enumerate(h_ia):
-            nl = h.shape[0]
-            for m in range(-l,l+1):
-                SPG_lm_aoG = np.zeros((nl,nao), dtype=np.complex128)
-                for i in range(nl):
-                    SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
-                    SPG_lm_aoG[i,:] = np.einsum('g,gp->p', SPG_lmi.conj(), aokG)
-                for i in range(nl):
-                    for j in range(nl):
-                        # Note: There is no (-1)^l here.
-                        vppnl += h[i,j]*np.einsum('p,q->pq',
-                                                   SPG_lm_aoG[i,:].conj(),
-                                                   SPG_lm_aoG[j,:])
-    vppnl *= (1./ngs**2)
-
-    return vpploc + vppnl
-
-def get_pp_o1(cell, kpt=np.zeros(3)):
+def get_pp(cell, kpt=np.zeros(3)):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
@@ -176,7 +134,7 @@ def get_pp_o1(cell, kpt=np.zeros(3)):
     fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
     fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
     ptr = pyscf.gto.PTR_ENV_START
-    fakemol._env = np.zeros(5)
+    fakemol._env = np.zeros(ptr+10)
     fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
     fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
     fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
@@ -208,9 +166,6 @@ def get_pp_o1(cell, kpt=np.zeros(3)):
     vppnl *= (1./ngs**2)
 
     return vpploc + vppnl
-
-def get_pp(cell, kpt=np.zeros(3)):
-    return get_pp_o1(cell, kpt)
 
 
 def get_jvloc_G0(cell, kpt=np.zeros(3)):
@@ -551,8 +506,6 @@ class RHF(pyscf.scf.hf.RHF):
         pyscf.scf.hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'Grid size = (%d, %d, %d)',
-                    self.cell.gs[0], self.cell.gs[1], self.cell.gs[2])
         logger.info(self, 'Using analytic integrals = %s', self.analytic_int)
         logger.info(self, 'Exchange divergence treatment = %s', self.exxdiv)
 
