@@ -547,7 +547,8 @@ def state_average(casscf, weights=(0.5,0.5)):
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
-            if casscf.verbose >= logger.DEBUG:
+            if (casscf.verbose >= logger.DEBUG and
+                hasattr(fcibase_class, 'spin_square')):
                 ss = fcibase_class.spin_square(self, c, norb, nelec)
                 for i, ei in enumerate(e):
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
@@ -606,7 +607,8 @@ def state_specific(casscf, state=1):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
             self._civec = c
-            if casscf.verbose >= logger.DEBUG:
+            if (casscf.verbose >= logger.DEBUG and
+                hasattr(fcibase_class, 'spin_square')):
                 ss = fcibase_class.spin_square(self, c[state], norb, nelec)
                 logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
                              state+1, e[state], ss[0])
