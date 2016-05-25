@@ -17,6 +17,7 @@ from pyscf.lib import logger
 from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol, _charge
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.tools import pbc as pbctools
 
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
@@ -123,6 +124,7 @@ def pack(cell):
     cldic['nimgs'] = cell.nimgs
     cldic['ew_eta'] = cell.ew_eta
     cldic['ew_cut'] = cell.ew_cut
+    cldic['dimension'] = cell.dimension
     return cldic
 
 def unpack(celldic):
@@ -237,7 +239,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     out = 0
     buf = np.empty((ni,nj))
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    for L in get_lattice_Ls(cell1, nimgs):
+    for L in cell1.get_lattice_Ls(nimgs):
         env[ptr_coord+0] = xyz[:,0] + L[0]
         env[ptr_coord+1] = xyz[:,1] + L[1]
         env[ptr_coord+2] = xyz[:,2] + L[2]
@@ -259,17 +261,125 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     return out
 
 
-def get_lattice_Ls(cell, nimgs=None):
-    '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
-    if nimgs is None:
-        nimgs = cell.nimgs
-    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
-                  for j in range(-nimgs[1],nimgs[1]+1)
-                  for k in range(-nimgs[2],nimgs[2]+1)
-                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
-    Ts = np.array(Ts)
-    Ls = np.dot(cell._h, Ts.T).T
-    return Ls
+def get_nimgs(cell, precision=None):
+    r'''Choose number of basis function images in lattice sums
+    to include for given precision in overlap, using
+
+    precision ~ 4 * pi * r^2 * e^{-\alpha r^2}
+
+    where \alpha is the smallest exponent in the basis. Note
+    that assumes an isolated exponent in the middle of the box, so
+    it adds one additional lattice vector to be safe.
+    '''
+    if precision is None:
+        precision = cell.precision
+    min_exp = np.min([np.min(cell.bas_exp(ib)) for ib in range(cell.nbas)])
+
+    def fn(r):
+        return np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision)
+
+    guess = np.sqrt((5-np.log(precision))/min_exp)
+    rcut = scipy.optimize.fsolve(fn, guess, xtol=1e-4)[0]
+    rlengths = lib.norm(cell.lattice_vectors(), axis=1) + 1e-200
+    nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+
+    return nimgs+1 # additional lattice vector to take into account
+                   # case where there are functions on the edges of the box.
+
+def get_ewald_params(cell, precision=None, gs=None):
+    r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+
+    Choice is based on largest G vector and desired relative precision.
+
+    The relative error in the G-space sum is given by (keeping only
+    exponential factors)
+        precision ~ e^{(-Gmax^2)/(4 \eta^2)}
+    which determines eta. Then, real-space cutoff is determined by (exp.
+    factors only)
+        precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
+
+    Returns:
+        ew_eta, ew_cut : float
+            The Ewald 'eta' and 'cut' parameters.
+    '''
+    if precision is None:
+        precision = cell.precision
+    if gs is None:
+        gs = cell.gs
+
+    #  See Martin, p. 85 
+    _h = cell.lattice_vectors()
+    Gmax = min([ 2.*np.pi*gs[i]/lib.norm(_h[i,:]) for i in range(3) ])
+
+    log_precision = np.log(precision)
+    ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
+
+    rcut = np.sqrt(-log_precision)/ew_eta
+    ew_cut = cell.get_bounding_sphere(rcut)
+    return ew_eta, ew_cut
+
+def get_bounding_sphere(cell, rcut):
+    '''Finds all the lattice points within a sphere of radius rcut.  
+
+    Defines a parallelipiped given by -N_x <= n_x <= N_x, with x in [1,3]
+    See Martin p. 85
+
+    Args:
+        rcut : number
+            real space cut-off for interaction
+
+    Returns:
+        cut : ndarray of 3 ints defining N_x
+    '''
+    Gmat = invh = scipy.linalg.inv(cell.lattice_vectors())
+    n1 = np.ceil(lib.norm(Gmat[0,:])*rcut).astype(int)
+    n2 = np.ceil(lib.norm(Gmat[1,:])*rcut).astype(int)
+    n3 = np.ceil(lib.norm(Gmat[2,:])*rcut).astype(int)
+    cut = np.array([n1, n2, n3])
+    return cut
+
+def get_Gv(cell, gs=None):
+    '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
+
+    Indices along each direction go as [0...cell.gs, -cell.gs...-1]
+    to follow FFT convention. Note that, for each direction, ngs = 2*cell.gs+1.
+
+    Args:
+        cell : instance of :class:`Cell`
+
+    Returns:
+        Gv : (ngs, 3) ndarray of floats
+            The array of G-vectors.
+    '''
+    if gs is None:
+        gs = cell.gs
+    gxrange = np.append(range(gs[0]+1), range(-gs[0],0))
+    gyrange = np.append(range(gs[1]+1), range(-gs[1],0))
+    gzrange = np.append(range(gs[2]+1), range(-gs[2],0))
+    gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
+
+    invh = scipy.linalg.inv(cell.lattice_vectors())
+    Gv = 2*np.pi* np.dot(gxyz, invh)
+    return Gv
+
+def get_SI(cell, Gv=None):
+    '''Calculate the structure factor for all atoms; see MH (3.34).
+
+    Args:
+        cell : instance of :class:`Cell`
+
+        Gv : (N,3) array
+            G vectors
+
+    Returns:
+        SI : (natm, ngs) ndarray, dtype=np.complex128
+            The structure factor for each atom at each G-vector.
+    '''
+    if Gv is None:
+        Gv = cell.get_Gv()
+    coords = [cell.atom_coord(ia) for ia in range(cell.natm)]
+    SI = np.exp(-1j*np.dot(coords, Gv.T))
+    return SI
 
 
 class Cell(pyscf.gto.Mole):
@@ -401,13 +511,13 @@ class Cell(pyscf.gto.Mole):
         # Do regular Mole.build_ with usual kwargs
         pyscf.gto.Mole.build_(self, dump_input, parse_arg, *args, **kwargs)
 
+        self._h = self.lattice_vectors()
+        self.vol = float(scipy.linalg.det(self._h))
+
         if self.nimgs is None:
             self.nimgs = self.get_nimgs(self.precision)
 
-        self.vol = float(scipy.linalg.det(self.lattice_vectors()))
-        self._h = self.lattice_vectors()
         if self.ke_cutoff is not None:
-            from pyscf.pbc.tools import pbc as pbctools
             self.gs = pbctools.cutoff_to_gs(self._h, self.ke_cutoff)
 
         if self.ew_eta is None or self.ew_cut is None:
@@ -421,7 +531,7 @@ class Cell(pyscf.gto.Mole):
             logger.info(self, 'Cell volume = %g', self.vol)
             logger.info(self, 'nimgs = %s', self.nimgs)
             logger.info(self, 'precision = %g', self.precision)
-            logger.info(self, 'gs = %s', self.gs)
+            logger.info(self, 'gs (grid size) = %s', self.gs)
             logger.info(self, 'pseudo = %s', self.pseudo)
             logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
@@ -446,118 +556,6 @@ class Cell(pyscf.gto.Mole):
         else:
             _atm, _ecpbas, _env = _atm, [], pre_env
         return _atm, _ecpbas, _env
-
-    def get_nimgs(self, precision=None):
-        r'''Choose number of basis function images in lattice sums
-        to include for given precision in overlap, using
-
-        precision ~ 4 * pi * r^2 * e^{-\alpha r^2}
-
-        where \alpha is the smallest exponent in the basis. Note
-        that assumes an isolated exponent in the middle of the box, so
-        it adds one additional lattice vector to be safe.
-        '''
-        if precision is None:
-            precision = self.precision
-        min_exp = np.min([np.min(self.bas_exp(ib)) for ib in range(self.nbas)])
-
-        def fn(r):
-            return np.log(4*np.pi*r**2)-min_exp*r**2-np.log(precision)
-
-        guess = np.sqrt((5-np.log(precision))/min_exp)
-        rcut = scipy.optimize.fsolve(fn, guess, xtol=1e-4)[0]
-        rlengths = lib.norm(self.lattice_vectors(), axis=1) + 1e-200
-        nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
-
-        return nimgs+1 # additional lattice vector to take into account
-                       # case where there are functions on the edges of the box.
-
-    def get_ewald_params(self, precision=None):
-        r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
-
-        Choice is based on largest G vector and desired relative precision.
-
-        The relative error in the G-space sum is given by (keeping only
-        exponential factors)
-            precision ~ e^{(-Gmax^2)/(4 \eta^2)}
-        which determines eta. Then, real-space cutoff is determined by (exp.
-        factors only)
-            precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
-
-        Returns:
-            ew_eta, ew_cut : float
-                The Ewald 'eta' and 'cut' parameters.
-        '''
-        if precision is None:
-            precision = self.precision
-
-        #  See Martin, p. 85 
-        _h = self.lattice_vectors()
-        Gmax = min([ 2.*np.pi*self.gs[i]/lib.norm(_h[i,:]) for i in range(3) ])
-
-        log_precision = np.log(precision)
-        ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
-
-        rcut = np.sqrt(-log_precision)/ew_eta
-        ew_cut = self.get_bounding_sphere(rcut)
-        return ew_eta, ew_cut
-
-    def get_bounding_sphere(self, rcut):
-        '''Finds all the lattice points within a sphere of radius rcut.  
-
-        Defines a parallelipiped given by -N_x <= n_x <= N_x, with x in [1,3]
-        See Martin p. 85
-
-        Args:
-            rcut : number
-                real space cut-off for interaction
-
-        Returns:
-            cut : ndarray of 3 ints defining N_x
-        '''
-        invhT = scipy.linalg.inv(self.lattice_vectors().T)
-        Gmat = invhT.T
-        n1 = np.ceil(lib.norm(Gmat[0,:])*rcut).astype(int)
-        n2 = np.ceil(lib.norm(Gmat[1,:])*rcut).astype(int)
-        n3 = np.ceil(lib.norm(Gmat[2,:])*rcut).astype(int)
-        cut = np.array([n1, n2, n3])
-        return cut
-
-    def get_Gv(self):
-        '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
-
-        Indices along each direction go as [0...self.gs, -self.gs...-1]
-        to follow FFT convention. Note that, for each direction, ngs = 2*self.gs+1.
-
-        Args:
-            self : instance of :class:`Cell`
-
-        Returns:
-            Gv : (ngs, 3) ndarray of floats
-                The array of G-vectors.
-        '''
-        gxrange = range(self.gs[0]+1)+range(-self.gs[0],0)
-        gyrange = range(self.gs[1]+1)+range(-self.gs[1],0)
-        gzrange = range(self.gs[2]+1)+range(-self.gs[2],0)
-        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
-
-        invh = scipy.linalg.inv(self.lattice_vectors())
-        Gv = 2*np.pi* np.dot(gxyz, invh)
-        return Gv
-
-    def get_SI(self):
-        '''Calculate the structure factor for all atoms; see MH (3.34).
-
-        Args:
-            self : instance of :class:`Cell`
-
-        Returns:
-            SI : (natm, ngs) ndarray, dtype=np.complex128
-                The structure factor for each atom at each G-vector.
-        '''
-        coords = [self.atom_coord(ia) for ia in range(self.natm)]
-        SI = np.exp(-1j*np.dot(coords, self.Gv.T))
-        return SI
 
     def lattice_vectors(self):
         if isinstance(self.h, str):
@@ -615,7 +613,17 @@ class Cell(pyscf.gto.Mole):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
-    get_lattice_Ls = get_lattice_Ls
+    get_lattice_Ls = pbctools.get_lattice_Ls
+
+    get_nimgs = get_nimgs
+
+    get_ewald_params = get_ewald_params
+
+    get_bounding_sphere = get_bounding_sphere
+
+    get_Gv = get_Gv
+
+    get_SI = get_SI
 
     def pbc_intor(self, intor, comp=1, hermi=0, kpt=None):
         '''One-electron integrals with PBC. See also Mole.intor'''
@@ -633,4 +641,5 @@ class Cell(pyscf.gto.Mole):
         self.h = ase_atom.cell
         self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         return self
+
 

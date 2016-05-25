@@ -73,12 +73,12 @@ def ifftk(g, gs, r, k):
     return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
 
 
-def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
+def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
-        cell : instance of :class:`Cell`
         k : (3,) ndarray
+            k-point
         exx : bool
             Whether this is an exchange matrix element.
         mf : instance of :class:`SCF`
@@ -88,12 +88,16 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
             The Coulomb kernel.
 
     '''
-    kG = k + cell.Gv
+    if gs is None:
+        gs = cell.gs
+    if Gv is None:
+        Gv = cell.get_Gv(gs)
 
+    kG = k + Gv
     # Here we 'wrap around' the high frequency k+G vectors into their lower
     # frequency counterparts.  Important if you want the gamma point and k-point
     # answers to agree
-    box_edge = np.dot(2.*np.pi*np.diag(np.asarray(cell.gs)+0.5),
+    box_edge = np.dot(2.*np.pi*np.diag(np.asarray(gs)+0.5),
                       np.linalg.inv(cell._h))
     reduced_coords = np.dot(kG, np.linalg.inv(box_edge))
     equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
@@ -105,18 +109,18 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
-    try:
+    if mf is not None and hasattr(mf, 'kpts'):
         kpts = mf.kpts
-    except AttributeError:
+    else:
         kpts = k.reshape(1,3)
     Nk = len(kpts)
 
-    if exx is False or mf.exxdiv is None:
+    if not exx or mf.exxdiv is None:
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = 0.
-    elif mf.exxdiv == 'vcut_sph':
+    elif mf.exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
@@ -134,7 +138,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
             coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*mf.exx_alpha**2))) + 0j
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = np.pi / mf.exx_alpha**2
-        # Index k+cell.Gv into the precomputed vq and add on
+        # Index k+Gv into the precomputed vq and add on
         gxyz = np.round(np.dot(kG, mf.exx_kcell.h)/(2*np.pi)).astype(int)
         ngs = 2*np.asarray(mf.exx_kcell.gs)+1
         gxyz = (gxyz + ngs)%(ngs)
@@ -172,21 +176,14 @@ def get_monkhorst_pack_size(cell, kpts):
     return Nk
 
 
-def f_aux(cell, q):
-    a = cell._h.T
-    b = 2*np.pi*scipy.linalg.inv(cell._h)
-    denom = 4 * np.dot(b*np.sin(a*q/2.), b*np.sin(a*q/2.)) \
-          + 2 * np.dot(b*np.sin(a*q), np.roll(b,1,axis=0)*np.sin(np.roll(a,1,axis=0)*q ))
-    return 1./(2*np.pi)**2 * 1./denom
-
-
-def get_lattice_Ls(cell, nimgs):
+def get_lattice_Ls(cell, nimgs=None):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.'''
-    Ts = [[i,j,k] for i in range(-nimgs[0],nimgs[0]+1)
-                  for j in range(-nimgs[1],nimgs[1]+1)
-                  for k in range(-nimgs[2],nimgs[2]+1)
-                  if i**2+j**2+k**2 <= 1./3*np.dot(nimgs,nimgs)]
-    Ts = np.array(Ts)
+    if nimgs is None:
+        nimgs = cell.nimgs
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
+                             np.arange(-nimgs[1],nimgs[1]+1),
+                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= 1./3*np.dot(nimgs,nimgs)]
     Ls = np.dot(cell._h, Ts.T).T
     return Ls
 
@@ -217,7 +214,8 @@ def super_cell(cell, ncopy):
     supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2,
                            ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
                            ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
-    supcell.build(False, False)
+    supcell.build(False, False, verbose=0)
+    supcell.verbose = cell.verbose
     return supcell
 
 
@@ -244,6 +242,7 @@ def cell_plus_imgs(cell, nimgs):
     supcell.unit = 'B'
     supcell.h = np.dot(cell._h, np.diag(nimgs))
     supcell.build(False, False, verbose=0)
+    supcell.verbose = cell.verbose
     return supcell
 
 
