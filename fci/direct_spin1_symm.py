@@ -202,6 +202,9 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             iroot += 1
             if iroot >= nroots:
                 break
+    # Add noise
+    ci0[0][0 ] += 1e-5
+    ci0[0][-1] -= 1e-5
     return ci0
 
 
