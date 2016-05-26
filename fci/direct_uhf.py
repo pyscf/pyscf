@@ -150,14 +150,16 @@ def make_hdiag(h1e, eri, norb, nelec):
     return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
+    if not isinstance(nelec, (int, numpy.integer)):
+        nelec = sum(nelec)
     h1e_a, h1e_b = h1e
     h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
     h2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
     h2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
     f1e_a = h1e_a - numpy.einsum('jiik->jk', h2e_aa) * .5
     f1e_b = h1e_b - numpy.einsum('jiik->jk', h2e_bb) * .5
-    f1e_a *= 1./(nelec[0]+nelec[1])
-    f1e_b *= 1./(nelec[0]+nelec[1])
+    f1e_a *= 1./(nelec+1e-100)
+    f1e_b *= 1./(nelec+1e-100)
     for k in range(norb):
         h2e_aa[:,:,k,k] += f1e_a
         h2e_aa[k,k,:,:] += f1e_a

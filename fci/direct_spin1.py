@@ -379,6 +379,10 @@ def get_init_guess(norb, nelec, nroots, hdiag):
         x = numpy.zeros((na*nb))
         x[addr] = 1
         ci0.append(x.ravel())
+
+    # Add noise
+    ci0[0][0 ] += 1e-5
+    ci0[0][-1] -= 1e-5
     return ci0
 
 
