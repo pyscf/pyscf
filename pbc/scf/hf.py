@@ -517,16 +517,13 @@ class RHF(pyscf.scf.hf.RHF):
     Attributes:
         kpt : (3,) ndarray
             The AO k-point in Cartesian coordinates, in units of 1/Bohr.
-        analytic_int : bool
-            Whether to use analytic (libcint) integrals instead of grid-based.
     '''
-    def __init__(self, cell, kpt=None, analytic_int=None, exxdiv='ewald'):
+    def __init__(self, cell, kpt=None, exxdiv='ewald'):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
-        self.grids = pyscf.pbc.dft.gen_grid.UniformGrids(cell)
 
         if kpt is None:
             self.kpt = np.zeros(3)
@@ -537,45 +534,27 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             self._dtype = np.complex128
 
-        if analytic_int is None:
-            self.analytic_int = False
-        else:
-            self.analytic_int = True
-
         self.exxdiv = exxdiv
 
-        self._keys = self._keys.union(['cell', 'grids', 'kpt', 'analytic_int', 'exxdiv'])
+        self._keys = self._keys.union(['cell', 'kpt', 'exxdiv'])
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'Grid size = (%d, %d, %d)',
-                    self.cell.gs[0], self.cell.gs[1], self.cell.gs[2])
-        logger.info(self, 'Using analytic integrals = %s', self.analytic_int)
         logger.info(self, 'Exchange divergence treatment = %s', self.exxdiv)
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
 
-        if self.analytic_int:
-            logger.info(self, "Using analytic integrals")
-            h = scfint.get_hcore(cell, kpt)
-        else:
-            h = get_hcore(cell, kpt)
-        return self._safe_cast(h)
+        return scfint.get_hcore(cell, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
 
-        if self.analytic_int:
-            logger.info(self, "Using analytic integrals")
-            s = scfint.get_ovlp(cell, kpt)
-        else:
-            s = get_ovlp(cell, kpt)
-        return self._safe_cast(s)
+        return scfint.get_ovlp(cell, kpt)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         return self.get_jk_(cell, dm, hermi, kpt, kpt_band)
@@ -607,7 +586,7 @@ class RHF(pyscf.scf.hf.RHF):
         #        self.opt = self.init_direct_scf(cell)
         #    vj, vk = get_jk(cell, dm, hermi, self.opt, kpt)
         logger.timer(self, 'vj and vk', *cpu0)
-        return self._safe_cast(vj), self._safe_cast(vk)
+        return vj, vk
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute J matrix for the given density matrix.
@@ -619,12 +598,12 @@ class RHF(pyscf.scf.hf.RHF):
         cpu0 = (time.clock(), time.time())
         vj = get_j(cell, dm, hermi, self.opt, kpt, kpt_band)
         logger.timer(self, 'vj', *cpu0)
-        return self._safe_cast(vj)
+        return vj
 
     def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute K matrix for the given density matrix.
         '''
-        return self._safe_cast(self.get_jk(cell, dm, hermi, kpt, kpt_band)[1])
+        return self.get_jk(cell, dm, hermi, kpt, kpt_band)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpt_band=None):
@@ -668,7 +647,7 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             vj, vk = pyscf.scf.hf.dot_eri_dm(self._eri, dm, hermi)
 
-        return self._safe_cast(vj), self._safe_cast(vk)
+        return vj, vk
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
         etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
@@ -692,7 +671,7 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
 
         fock = self.get_hcore(kpt=kpt_band) \
-                + self.get_veff(kpt=kpt, kpt_band=kpt_band)
+                + self.get_veff(cell, dm, kpt=kpt, kpt_band=kpt_band)
         s1e = self.get_ovlp(kpt=kpt_band)
         mo_energy, mo_coeff = self.eig(fock, s1e)
         return mo_energy, mo_coeff
@@ -703,8 +682,3 @@ class RHF(pyscf.scf.hf.RHF):
     def from_chk(self, chk=None, project=True):
         return self.init_guess_by_chkfile(chk, project)
 
-    def _safe_cast(self, a):
-        if self._dtype == np.complex128:
-            return a
-        else:
-            return a.real

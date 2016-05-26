@@ -57,7 +57,7 @@ def get_int1e_cross(intor, cell1, cell2, kpt=None, comp=1):
         _envL[ptr_coord+0] = cell2._env[ptr_coord+0] + L[0]
         _envL[ptr_coord+1] = cell2._env[ptr_coord+1] + L[1]
         _envL[ptr_coord+2] = cell2._env[ptr_coord+2] + L[2]
-        if kpt is None:
+        if kpt is None or np.all(kpt == 0):
             int1e += pyscf.gto.intor_cross(intor, cell1, cellL, comp)
         else:
             factor = np.exp(1j*np.dot(kpt, L))
