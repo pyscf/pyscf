@@ -32,7 +32,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     link_index = _unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
     assert(fcivec.size == na**2)
-    ci1 = numpy.empty_like((na,na))
+    ci1 = numpy.empty_like(fcivec)
     f1e_tril = pyscf.lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                                 fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -222,6 +222,10 @@ def get_init_guess(norb, nelec, nroots, hdiag):
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
         ci0.append(x.ravel())
+
+    # Add noise
+    ci0[0][0 ] += 1e-5
+    ci0[0][-1] -= 1e-5
     return ci0
 
 

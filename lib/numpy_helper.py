@@ -430,6 +430,18 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        ctypes.c_double(alpha), ctypes.c_double(beta))
     return c
 
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
+
+def asarray(a, dtype=None, order=None):
+    '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
+    numpy.asarray function but more efficient.
+    '''
+    if not isinstance(a, numpy.ndarray):
+        a = numpy.vstack(a).reshape(-1, *(a[0].shape))
+    return numpy.asarray(a, dtype, order)
+
 def norm(x, ord=None, axis=None):
     '''numpy.linalg.norm for numpy 1.6.*
     '''
@@ -649,10 +661,10 @@ if __name__ == '__main__':
 
     locs = numpy.arange(5)
     a = numpy.random.random((locs[-1],locs[-1])) - .5
-    print numpy.allclose(a, condense('sum', a, locs))
-    print numpy.allclose(a, condense('max', a, locs))
-    print numpy.allclose(a, condense('min', a, locs))
-    print numpy.allclose(abs(a), condense('abssum', a, locs))
-    print numpy.allclose(abs(a), condense('absmax', a, locs))
-    print numpy.allclose(abs(a), condense('absmin', a, locs))
-    print numpy.allclose(abs(a), condense('norm', a, locs))
+    print(numpy.allclose(a, condense('sum', a, locs)))
+    print(numpy.allclose(a, condense('max', a, locs)))
+    print(numpy.allclose(a, condense('min', a, locs)))
+    print(numpy.allclose(abs(a), condense('abssum', a, locs)))
+    print(numpy.allclose(abs(a), condense('absmax', a, locs)))
+    print(numpy.allclose(abs(a), condense('absmin', a, locs)))
+    print(numpy.allclose(abs(a), condense('norm', a, locs)))

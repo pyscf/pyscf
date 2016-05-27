@@ -89,6 +89,36 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                              link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
+def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    u_aa, u_ab, u_bb = u
+
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    fcivec = fcivec.reshape(na,nb)
+    fcinew = numpy.zeros_like(fcivec)
+
+    if u_aa != 0:  # u * n_alpha^+ n_alpha
+        for i in range(norb):
+            maska = (strsa & (1<<i)) > 0
+            fcinew[maska] += u_aa * fcivec[maska]
+    if u_ab != 0:  # u * (n_alpha^+ n_beta + n_beta^+ n_alpha)
+        for i in range(norb):
+            maska = (strsa & (1<<i)) > 0
+            maskb = (strsb & (1<<i)) > 0
+            fcinew[maska[:,None]&maskb] += 2*u_ab * fcivec[maska[:,None]&maskb]
+    if u_bb != 0:  # u * n_beta^+ n_beta
+        for i in range(norb):
+            maskb = (strsb & (1<<i)) > 0
+            fcinew[:,maskb] += u_bb * fcivec[:,maskb]
+    return fcinew
+
 def make_hdiag(h1e, eri, norb, nelec):
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
@@ -130,14 +160,16 @@ def make_hdiag(h1e, eri, norb, nelec):
     return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
+    if not isinstance(nelec, (int, numpy.integer)):
+        nelec = sum(nelec)
     h1e_a, h1e_b = h1e
     h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
     h2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
     h2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
     f1e_a = h1e_a - numpy.einsum('jiik->jk', h2e_aa) * .5
     f1e_b = h1e_b - numpy.einsum('jiik->jk', h2e_bb) * .5
-    f1e_a *= 1./(nelec[0]+nelec[1])
-    f1e_b *= 1./(nelec[0]+nelec[1])
+    f1e_a *= 1./(nelec+1e-100)
+    f1e_b *= 1./(nelec+1e-100)
     for k in range(norb):
         h2e_aa[:,:,k,k] += f1e_a
         h2e_aa[k,k,:,:] += f1e_a
@@ -301,4 +333,3 @@ if __name__ == '__main__':
 
     e = kernel(h1e, eri, norb, nelec)[0]
     print(e, e - -8.65159903476)
-
