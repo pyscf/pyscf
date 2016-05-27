@@ -939,8 +939,8 @@ def energy_nuc(mol):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atom))])
-    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atom))])
+    chargs = mol.atom_charges()
+    coords = mol.atom_coords()
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()
     rr = rd[:,None] + rd - rr*2
@@ -1177,8 +1177,8 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
         r = numpy.dot(coord-center, axes.T)
         return w, r
 
-    coord1 = numpy.array([mol1.atom_coord(i) for i in range(mol1.natm)])
-    coord2 = numpy.array([mol2.atom_coord(i) for i in range(mol2.natm)])
+    coord1 = mol1.atom_coords()
+    coord2 = mol2.atom_coords()
     w1, r1 = finger(mol1, chg1, coord1)
     w2, r2 = finger(mol2, chg2, coord2)
     if not (numpy.allclose(w1, w2, atol=tol)):
@@ -1900,6 +1900,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self._atm[atm_id,CHARGE_OF]
 
+    def atom_charges(self):
+        '''np.asarray([mol.atom_charge(i) for i in range(mol.natm)])'''
+        return self._atm[:,CHARGE_OF]
+
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.
         '''
@@ -1920,6 +1924,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         ptr = self._atm[atm_id,PTR_COORD]
         return self._env[ptr:ptr+3]
+
+    def atom_coords(self):
+        '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
+        ptr = self._atm[:,PTR_COORD]
+        return numpy.vstack((self._env[ptr],self._env[ptr+1],self._env[ptr+2])).T
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom

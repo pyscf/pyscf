@@ -386,6 +386,94 @@ def get_SI(cell, Gv=None):
     SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
+def ewald(cell, ew_eta=None, ew_cut=None):
+    '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
+
+    Formulation of Martin, App. F2.
+
+    Returns:
+        float
+            The Ewald energy consisting of overlap, self, and G-space sum.
+
+    See Also:
+        pyscf.pbc.gto.get_ewald_params
+    '''
+    if ew_eta is None: ew_eta = cell.ew_eta
+    if ew_cut is None: ew_cut = cell.ew_cut
+    chargs = cell.atom_charges()
+    coords = cell.atom_coords()
+
+    ewovrl = 0.
+
+    # set up real-space lattice indices [-ewcut ... ewcut]
+    ewxrange = np.arange(-ew_cut[0],ew_cut[0]+1)
+    ewyrange = np.arange(-ew_cut[1],ew_cut[1]+1)
+    ewzrange = np.arange(-ew_cut[2],ew_cut[2]+1)
+    ewxyz = lib.cartesian_prod((ewxrange,ewyrange,ewzrange)).T
+
+    nx = len(ewxrange)
+    ny = len(ewyrange)
+    nz = len(ewzrange)
+    Lall = np.einsum('ij,jk->ik', cell._h, ewxyz).reshape(3,nx,ny,nz)
+    #exclude the point where Lall == 0
+    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
+    Lall = Lall.reshape(3,nx*ny*nz)
+    Lall = Lall.T
+
+    for ia in range(cell.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(ia):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r = np.linalg.norm(ri-rj)
+            ewovrl += 2 * qi * qj / r * scipy.special.erfc(ew_eta * r)
+
+    for ia in range(cell.natm):
+        qi = chargs[ia]
+        ri = coords[ia]
+        for ja in range(cell.natm):
+            qj = chargs[ja]
+            rj = coords[ja]
+            r1 = ri-rj + Lall
+            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
+            ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
+
+    ewovrl *= 0.5
+
+    # last line of Eq. (F.5) in Martin
+    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
+    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
+
+    # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
+    SI = cell.get_SI()
+    ZSI = np.einsum("i,ij->j", chargs, SI)
+
+    # Eq. (F.6) in Martin is off by a factor of 2, the
+    # exponent is wrong (8->4) and the square is in the wrong place
+    #
+    # Formula should be
+    #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
+    # where
+    #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
+    # See also Eq. (32) of ewald.pdf at
+    #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
+
+    coulG = pbctools.get_coulG(cell)
+    absG2 = np.einsum('gi,gi->g', cell.Gv, cell.Gv)
+
+    ZSIG2 = np.abs(ZSI)**2
+    expG2 = np.exp(-absG2/(4*ew_eta**2))
+    JexpG2 = coulG*expG2
+    ewgI = np.dot(ZSIG2,JexpG2)
+    ewg = .5*np.sum(ewgI)
+    ewg /= cell.vol
+
+    #log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
+    return ewovrl + ewself + ewg
+
+energy_nuc = ewald
+
 
 class Cell(pyscf.gto.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -514,7 +602,8 @@ class Cell(pyscf.gto.Mole):
             # be parsed appropriately by Mole.build
 
         # Do regular Mole.build_ with usual kwargs
-        pyscf.gto.Mole.build_(self, dump_input, parse_arg, *args, **kwargs)
+        _built = self._built
+        pyscf.gto.Mole.build_(self, False, parse_arg, *args, **kwargs)
 
         self._h = self.lattice_vectors()
         self.vol = float(scipy.linalg.det(self._h))
@@ -529,7 +618,8 @@ class Cell(pyscf.gto.Mole):
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.gs)
 
-        if dump_input and self.verbose >= logger.INFO:
+        if dump_input and not _built and self.verbose > logger.NOTE:
+            self.dump_input()
             logger.info(self, 'lattice vector [a1        | a2        | a3       ]')
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[0])
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[1])
@@ -630,6 +720,9 @@ class Cell(pyscf.gto.Mole):
     get_Gv = get_Gv
 
     get_SI = get_SI
+
+    ewald = ewald
+    energy_nuc = ewald
 
     def pbc_intor(self, intor, comp=1, hermi=0, kpt=None):
         '''One-electron integrals with PBC. See also Mole.intor'''
