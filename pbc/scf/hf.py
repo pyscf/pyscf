@@ -251,7 +251,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
     ngs, nao = aoR_k1.shape
 
-    vjR_k2 = get_vjR_(cell, aoR_k2, dm)
+    vjR_k2 = get_vjR_(cell, dm, aoR_k2)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
     return vj
@@ -290,7 +290,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
     ngs, nao = aoR_k1.shape
 
-    vjR_k2 = get_vjR_(cell, aoR_k2, dm)
+    vjR_k2 = get_vjR_(cell, dm, aoR_k2)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
     vkR_k1k2 = get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
@@ -302,7 +302,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     return vj, vk
 
 
-def get_vjR_(cell, aoR, dm):
+def get_vjR_(cell, dm, aoR):
     '''Get the real-space Hartree potential of the given density matrix.
 
     Returns:
