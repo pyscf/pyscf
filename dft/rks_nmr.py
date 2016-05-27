@@ -134,7 +134,7 @@ class NMR(rhf_nmr.NMR):
                                        dm0, 3, mol._atm, mol._bas, mol._env)
                 h1 += vj
         else:
-            mol.set_common_origin_(gauge_orig)
+            mol.set_common_origin(gauge_orig)
             h1 = .5 * mol.intor('cint1e_cg_irxp_sph', 3)
         pyscf.lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1

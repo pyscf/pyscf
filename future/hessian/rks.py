@@ -84,7 +84,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     tmpf = tempfile.NamedTemporaryFile()
     with h5py.File(tmpf.name, 'w') as f:
         for i0, ia in enumerate(atmlst):
-            mol.set_rinv_origin_(mol.atom_coord(ia))
+            mol.set_rinv_origin(mol.atom_coord(ia))
             f['rinv2aa/%d'%ia] = (mol.atom_charge(ia) *
                                   mol.intor('cint1e_ipiprinv_sph', comp=9))
             f['rinv2ab/%d'%ia] = (mol.atom_charge(ia) *
@@ -418,7 +418,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
-        mol.set_rinv_origin_(mol.atom_coord(ia))
+        mol.set_rinv_origin(mol.atom_coord(ia))
         h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
         h1ao[:,p0:p1] += h1a[:,p0:p1]
         h1ao = h1ao + h1ao.transpose(0,2,1)
@@ -432,7 +432,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                                       3, mol._atm, mol._bas, mol._env,
                                       shls_slice=shls_slice)
             for i in range(3):
-                pyscf.lib.hermi_triu_(vj1[i], 1)
+                pyscf.lib.hermi_triu(vj1[i], 1)
             veff = vj1 - hyb*.5*vk1
             veff[:,p0:p1] += vj2 - hyb*.5*vk2
         else:
@@ -443,7 +443,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                                       3, mol._atm, mol._bas, mol._env,
                                       shls_slice=shls_slice)
             for i in range(3):
-                pyscf.lib.hermi_triu_(vj1[i], 1)
+                pyscf.lib.hermi_triu(vj1[i], 1)
             veff = vj1
             veff[:,p0:p1] += vj2
 
@@ -732,7 +732,7 @@ if __name__ == '__main__':
 # h^1
 #    e2 = h.hess_elec()
 #    dm0 = mf.make_rdm1()
-#    g1a = rks_grad.get_veff_(rks_grad.Gradients(mf), mol)
+#    g1a = rks_grad.get_veff(rks_grad.Gradients(mf), mol)
 #    #g1a = mf.get_veff(mol, dm0)
 #    ia = 0
 #    coord = mol.atom_coord(ia)
@@ -741,6 +741,6 @@ if __name__ == '__main__':
 #    coord = coord.copy()
 #    mol._env[ptr:ptr+3] = coord + numpy.asarray((0,1,0))*inc
 #    mf._eri = None
-#    g1b = rks_grad.get_veff_(rks_grad.Gradients(mf), mol)
+#    g1b = rks_grad.get_veff(rks_grad.Gradients(mf), mol)
 #    #g1b = mf.get_veff(mol, dm0)
 #    print (g1b-g1a)/inc

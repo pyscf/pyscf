@@ -205,11 +205,11 @@ class UHF(uhf.UHF):
         uhf.UHF.dump_flags(self)
         hf_symm.check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
 
-    def build_(self, mol=None):
+    def build(self, mol=None):
         for irname in self.irrep_nelec:
             if irname not in self.mol.irrep_name:
                 logger.warn(self, '!! No irrep %s', irname)
-        return uhf.UHF.build_(self, mol)
+        return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):
         nirrep = self.mol.symm_orb.__len__()
@@ -348,8 +348,8 @@ class UHF(uhf.UHF):
                 logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
-    def _finalize_(self):
-        uhf.UHF._finalize_(self)
+    def _finalize(self):
+        uhf.UHF._finalize(self)
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[0])

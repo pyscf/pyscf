@@ -11,10 +11,10 @@ libcc = lib.load_library('libcc')
 # NOTE requisite on data continuous
 
 def unpack_tril(tril, out=None):
-    return lib.unpack_tril(tril, 1, out)
+    return lib.unpack_tril(tril, 1, out=out)
 
 def pack_tril(mat, out=None):
-    return lib.pack_tril(mat, out)
+    return lib.pack_tril(mat, out=out)
 
 # v1*alpha + v2.transpose(0,2,1,3)*beta
 def make_0213(v1, v2, alpha=1, beta=1, out=None):

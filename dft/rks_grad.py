@@ -15,7 +15,7 @@ from pyscf.scf import rhf_grad
 from pyscf.dft import numint
 
 
-def get_veff_(ks_grad, mol=None, dm=None):
+def get_veff(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional
     '''
     if mol is None: mol = ks_grad.mol
@@ -24,7 +24,7 @@ def get_veff_(ks_grad, mol=None, dm=None):
 
     mf = ks_grad._scf
     if mf.grids.coords is None:
-        mf.grids.build_()
+        mf.grids.build()
     grids = mf.grids
     if mf._numint.non0tab is None:
         mf._numint.non0tab = mf._numint.make_mask(mol, mf.grids.coords)
@@ -145,7 +145,7 @@ class Gradients(rhf_grad.Gradients):
                         self._scf.grids.prune)
         return self
 
-    get_veff = get_veff_
+    get_veff = get_veff
 
 
 if __name__ == '__main__':

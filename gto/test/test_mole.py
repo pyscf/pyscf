@@ -25,7 +25,7 @@ mol0.basis['O'].extend(gto.mole.expand_etbs(((0, 4, 1, 1.8),
                                             (2, 2, 1, 1.8),)))
 mol0.verbose = 4
 mol0.ecp = {'O1': 'lanl2dz'}
-mol0.output = None
+mol0.output = 'test_mole.out'
 mol0.build()
 
 class KnowValues(unittest.TestCase):

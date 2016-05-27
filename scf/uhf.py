@@ -146,8 +146,8 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
     return vhf
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
@@ -446,15 +446,10 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
-def map_rhf_to_uhf(rhf):
-    '''Take the settings from RHF object'''
-    assert(isinstance(rhf, hf.RHF))
-    uhf = UHF(rhf.mol)
-    uhf.__dict__.update(rhf.__dict__)
-    uhf.mo_energy = numpy.array((rhf.mo_energy,rhf.mo_energy))
-    uhf.mo_coeff  = numpy.array((rhf.mo_coeff,rhf.mo_coeff))
-    uhf.mo_occ    = numpy.array((rhf.mo_occ,rhf.mo_occ))
-    return uhf
+def map_rhf_to_uhf(mf):
+    '''Create UHF object based on the RHF object'''
+    from pyscf.scf import addons
+    return addons.convert_to_uhf(mf)
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
@@ -595,7 +590,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         unit = 1.0
 
-    mol.set_common_orig_((0,0,0))
+    mol.set_common_orig((0,0,0))
     ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
 
     el_dip_x = numpy.trace(numpy.dot(dm[0], ao_dip[0]))
@@ -665,7 +660,7 @@ class UHF(hf.SCF):
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 
@@ -702,7 +697,7 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         dm = numpy.asarray(dm)

@@ -299,16 +299,16 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
-    natm = ctypes.c_int(atm.shape[0])
-    nbas = ctypes.c_int(bas.shape[0])
+    natm = atm.shape[0]
+    nbas = bas.shape[0]
 
     if '_cart' in intor_name:
         libcgto.CINTtot_cgto_cart.restype = ctypes.c_int
-        nao = libcgto.CINTtot_cgto_cart(c_bas, nbas)
+        nao = libcgto.CINTtot_cgto_cart(c_bas, ctypes.c_int(nbas))
         cgto_in_shell = 'CINTcgto_cart'
     elif '_sph' in intor_name:
         libcgto.CINTtot_cgto_spheric.restype = ctypes.c_int
-        nao = libcgto.CINTtot_cgto_spheric(c_bas, nbas)
+        nao = libcgto.CINTtot_cgto_spheric(c_bas, ctypes.c_int(nbas))
         cgto_in_shell = 'CINTcgto_spheric'
     else:
         raise NotImplementedError('cint2e spinor AO integrals')
@@ -323,13 +323,13 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         drv = _cvhf.GTO2e_cart_or_sph
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             out.ctypes.data_as(ctypes.c_void_p),
-            c_atm, natm, c_bas, nbas, c_env)
+            c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         return out
 
     else:
         from pyscf.scf import _vhf
         if shls_slice is None:
-            shls_slice = (0, nbas.value, 0, nbas.value)
+            shls_slice = (0, nbas, 0, nbas)
         else:
             assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
         bralst = numpy.arange(shls_slice[0], shls_slice[1], dtype=numpy.int32)
@@ -365,7 +365,7 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
-            cintopt, c_atm, natm, c_bas, nbas, c_env)
+            cintopt, c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         return out
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
@@ -674,7 +674,7 @@ if __name__ == '__main__':
     ])
     mol.basis = {"H": 'cc-pvdz'}
     mol.build()
-    mol.set_rinv_origin_(mol.atom_coord(0))
+    mol.set_rinv_origin(mol.atom_coord(0))
     for i in range(mol.nbas):
         for j in range(mol.nbas):
             print(i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),

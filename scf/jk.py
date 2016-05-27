@@ -149,9 +149,9 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
         for v in vs:
             if v.ndim == 3:
                 for vi in v:
-                    pyscf.lib.hermi_triu_(vi, hermi, inplace=True)
+                    pyscf.lib.hermi_triu(vi, hermi, inplace=True)
             else:
-                pyscf.lib.hermi_triu_(v, hermi, inplace=True)
+                pyscf.lib.hermi_triu(v, hermi, inplace=True)
     return vs
 
 

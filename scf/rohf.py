@@ -50,9 +50,9 @@ The first argument is chkfile file name.''')
         dm = uhf.make_rdm1((fproj(mo[0]),fproj(mo[1])), mo_occ)
     return dm
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None,
-              damp_factor=None):
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None,
+             damp_factor=None):
     '''Build fock matrix based on Roothaan's effective fock.
     See also :func:`get_roothaan_fock`
     '''
@@ -327,13 +327,7 @@ class ROHF(hf.RHF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    @pyscf.lib.with_doc(get_fock_.__doc__)
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                 diis_start_cycle=None, level_shift_factor=None,
-                 damp_factor=None):
-        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
-                              diis_start_cycle, level_shift_factor, damp_factor)
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 

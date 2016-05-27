@@ -915,29 +915,29 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
     for i in range(ncore):
         buf = fload(i, i+1)
         klshape = (0, ncore, nocc, nmo)
-        _ao2mo.nr_e2_(buf, mo, klshape,
+        _ao2mo.nr_e2(buf, mo, klshape,
                       aosym='s4', mosym='s1', out=vcv, ao_loc=ao_loc)
         cvcv[i*nvir:(i+1)*nvir] = vcv[ncas:]
         pacv[i] = vcv[:ncas]
 
         klshape = (0, nmo, ncore, nocc)
-        _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
+        _ao2mo.nr_e2(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', out=apa, ao_loc=ao_loc)
         papa[i] = apa
     for i in range(ncas):
         buf = fload(ncore+i, ncore+i+1)
         klshape = (0, ncore, nocc, nmo)
-        _ao2mo.nr_e2_(buf, mo, klshape,
+        _ao2mo.nr_e2(buf, mo, klshape,
                       aosym='s4', mosym='s1', out=vcv, ao_loc=ao_loc)
         pacv[ncore:,i] = vcv
 
         klshape = (0, nmo, ncore, nocc)
-        _ao2mo.nr_e2_(buf, mo, klshape,
+        _ao2mo.nr_e2(buf, mo, klshape,
                       aosym='s4', mosym='s1', out=vpa, ao_loc=ao_loc)
         papa[ncore:,i] = vpa
 
         klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2_(buf[:ncas], mo, klshape,
+        _ao2mo.nr_e2(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', out=app, ao_loc=ao_loc)
         aapp[i] = app
     ppaa = pyscf.lib.transpose(aapp.reshape(ncas**2,-1))

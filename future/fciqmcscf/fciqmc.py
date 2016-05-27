@@ -5,6 +5,7 @@
 #
 
 import os, sys
+from functools import reduce
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
@@ -503,7 +504,7 @@ def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
 
     f = open(os.path.join(directory, filename), 'r')
 
-    nfrzorb = fciqmcci.nfreezecore/2
+    nfrzorb = fciqmcci.nfreezecore//2
 
     norb_active = norb - nfrzorb
     two_pdm_active = numpy.zeros( (norb_active, norb_active, norb_active, norb_active) )

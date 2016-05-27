@@ -63,7 +63,7 @@ class CASSCF(mc1step.CASSCF):
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         log.note('CASSCF energy = %.15g', self.e_tot)
-        self._finalize_()
+        self._finalize()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
