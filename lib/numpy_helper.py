@@ -169,7 +169,8 @@ def hermi_triu_(mat, hermi=HERMITIAN, inplace=True):
      [ 6.  7.  8.]]
     '''
     assert(hermi == HERMITIAN or hermi == ANTIHERMI)
-    if not mat.flags.c_contiguous or not inplace:
+    if not mat.flags.c_contiguous:
+        assert(not inplace)
         mat = mat.copy(order='C')
     nd = mat.shape[0]
     if numpy.iscomplexobj(mat):
@@ -626,6 +627,8 @@ if __name__ == '__main__':
     print(abs(b[0]-x).sum())
     x = hermi_triu_(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
+    x = hermi_triu_(a, hermi=1, inplace=0)
+    print(abs(x-x.T.conj()).sum())
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))
