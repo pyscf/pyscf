@@ -8,12 +8,13 @@ See Also:
 import time
 import numpy as np
 import scipy.special
+import h5py
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.scf.hf as pbchf
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.scf import scfint
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -27,7 +28,8 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return np.asarray([scfint.get_ovlp(cell, k) for k in kpts])
+    return lib.asarray([cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=k)
+                        for k in kpts])
 
 
 def get_hcore(mf, cell=None, kpts=None):
@@ -41,7 +43,7 @@ def get_hcore(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return np.asarray([scfint.get_hcore(cell, k) for k in kpts])
+    return lib.asarray([pbchf.get_hcore(cell, k) for k in kpts])
 
 
 def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
@@ -75,7 +77,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
     else:
         vj_kpts = [cell.vol/ngs * np.dot(aoR_k.T.conj(), vjR.reshape(-1,1)*aoR_k)
                    for aoR_k in aoR_kpts]
-        vj_kpts = np.asarray(vj_kpts)
+        vj_kpts = lib.asarray(vj_kpts)
 
     return vj_kpts
 
@@ -113,17 +115,17 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
             kpt2 = kpts[k2]
             vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kband, aoR_kpts[k2],
                                      kpt_band, kpt2)
+            #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+            #:            dm_kpts[k2], aoR_kband.conj(),
+            #:            vkR_k1k2, aoR_kpts[k2])
             aoR_dm_k2 = np.dot(aoR_kpts[k2], dm_kpts[k2])
             tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
             vk_kpts = vk_kpts + 1./nkpts * (cell.vol/ngs) \
                                 * np.dot(aoR_kband.T.conj(), tmp_Rq)
-            #vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
-            #            dm_kpts[k2], aoR_kband.conj(),
-            #            vkR_k1k2, aoR_kpts[k2])
     else:
         vj_kpts = [cell.vol/ngs * np.dot(aoR_k.T.conj(), vjR.reshape(-1,1)*aoR_k)
                    for aoR_k in aoR_kpts]
-        vj_kpts = np.asarray(vj_kpts)
+        vj_kpts = lib.asarray(vj_kpts)
 
         aoR_dm_kpts = [np.dot(aoR_kpts[k], dm_kpts[k]) for k in range(nkpts)]
         def makek(k1):
@@ -133,14 +135,14 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
                 kpt2 = kpts[k2]
                 vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kpts[k1], aoR_kpts[k2],
                                          kpt1, kpt2)
+                #:vk = vk + 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+                #:                dm_kpts[k2], aoR_kpts[k1].conj(),
+                #:                vkR_k1k2, aoR_kpts[k2])
                 tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_kpts[k2])
                 vk = vk + 1./nkpts * (cell.vol/ngs) \
                            * np.dot(aoR_kpts[k1].T.conj(), tmp_Rq)
-                #vk = vk + 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
-                #                dm_kpts[k2], aoR_kpts[k1].conj(),
-                #                vkR_k1k2, aoR_kpts[k2])
             return vk
-        vk_kpts = np.asarray([makek(k1) for k1 in range(nkpts)])
+        vk_kpts = lib.asarray([makek(k1) for k1 in range(nkpts)])
 
     return vj_kpts, vk_kpts
 
@@ -162,6 +164,8 @@ def get_vjR(cell, dm_kpts, aoR_kpts):
 
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
+    if rhoR.dtype == np.double:
+        vR = vR.real
     return vR
 
 
@@ -182,11 +186,48 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
     return fock
 
 
+def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
+    '''Label the occupancies for each orbital for sampled k-points.
+
+    This is a k-point version of scf.hf.SCF.get_occ
+    '''
+    if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+    mo_occ_kpts = np.zeros_like(mo_energy_kpts)
+
+    nkpts = mo_energy_kpts.shape[0]
+    nocc = (mf.cell.nelectron * nkpts) // 2
+
+    # TODO: implement Fermi smearing
+    mo_energy = np.sort(mo_energy_kpts.ravel())
+    fermi = mo_energy[nocc-1]
+    mo_occ_kpts[mo_energy_kpts <= fermi] = 2
+
+    if nocc < mo_energy.size:
+        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                    mo_energy[nocc-1], mo_energy[nocc])
+        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+            logger.warn(mf, '!! HOMO %.12g == LUMO %.12g',
+                        mo_energy[nocc-1], mo_energy[nocc])
+    else:
+        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+    if mf.verbose >= logger.DEBUG:
+        np.set_printoptions(threshold=len(mo_energy))
+        logger.debug(mf, '  mo_energy = %s', mo_energy)
+        np.set_printoptions()
+
+    return mo_occ_kpts
+
+
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+    '''One particle density matrices for all k-points.
+
+    Returns:
+        dm_kpts : (nkpts, nao, nao) ndarray
+    '''
     nkpts = len(mo_occ_kpts)
     dm_kpts = [pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
                for k in range(nkpts)]
-    return np.asarray(dm_kpts)
+    return lib.asarray(dm_kpts)
 
 
 #FIXME: project initial guess for k-point
@@ -211,6 +252,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True):
 
 
 class KRHF(pbchf.RHF):
+#class KRHF(pyscf.scf.hf.RHF):
     '''RHF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -227,11 +269,21 @@ class KRHF(pbchf.RHF):
             self.kpts = np.zeros((1,3))
         else:
             self.kpts = np.asarray(kpts).reshape(-1,3)
-        self.mo_occ = []
-        self.mo_coeff_kpts = []
 
         self.exx_built = False
-        self._keys = self._keys.union(['exx_built', 'kpts', 'mo_coeff_kpts'])
+        self._keys = self._keys.union(['exx_built', 'kpts'])
+
+    @property
+    def mo_energy_kpts(self):
+        return self.mo_energy
+
+    @property
+    def mo_coeff_kpts(self):
+        return self.mo_coeff
+
+    @property
+    def mo_occ_kpts(self):
+        return self.mo_occ
 
     def dump_flags(self):
         pbchf.RHF.dump_flags(self)
@@ -297,7 +349,7 @@ class KRHF(pbchf.RHF):
         else:
             dm = pyscf.scf.hf.get_init_guess(cell, key)
             nkpts = len(self.kpts)
-            dm_kpts = np.asarray([dm]*nkpts)
+            dm_kpts = lib.asarray([dm]*nkpts)
 
         return dm_kpts
 
@@ -327,19 +379,9 @@ class KRHF(pbchf.RHF):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    get_fock_ = get_fock_
 
-        if diis_start_cycle is None:
-            diis_start_cycle = self.diis_start_cycle
-        if level_shift_factor is None:
-            level_shift_factor = self.level_shift
-        if damp_factor is None:
-            damp_factor = self.damp
-
-        f = get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
-                      diis_start_cycle, level_shift_factor, damp_factor)
-        return f
+    get_occ = get_occ
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpt_band=None):
@@ -372,57 +414,14 @@ class KRHF(pbchf.RHF):
     def eig(self, h_kpts, s_kpts):
         nkpts = len(h_kpts)
         nao = h_kpts.shape[1]
-        eig_kpts = np.zeros((nkpts,nao))
-        mo_coeff_kpts = np.zeros_like(h_kpts)
+        eig_kpts = np.empty((nkpts,nao))
+        mo_coeff_kpts = np.empty_like(h_kpts)
 
-        # TODO: should use superclass eig fn here?
         for k in range(nkpts):
-            eig_kpts[k,:], mo_coeff_kpts[k,:,:] = pyscf.scf.hf.eig(h_kpts[k,:,:], s_kpts[k,:,:])
+            eig_kpts[k], mo_coeff_kpts[k] = pyscf.scf.hf.RHF.eig(self, h_kpts[k], s_kpts[k])
         return eig_kpts, mo_coeff_kpts
 
-    def get_occ(self, mo_energy_kpts, mo_coeff_kpts):
-        '''Label the occupancies for each orbital for sampled k-points.
-
-        This is a k-point version of scf.hf.SCF.get_occ
-        '''
-        if mo_energy_kpts is None: mo_energy_kpts = self.mo_energy
-        mo_occ_kpts = np.zeros_like(mo_energy_kpts)
-
-        nkpts, nao = mo_coeff_kpts.shape[:2]
-        nocc = (self.cell.nelectron * nkpts) // 2
-
-        # Sort eigs in each kpt
-        mo_energy = np.reshape(mo_energy_kpts, [nkpts*nao])
-        # TODO: store mo_coeff correctly (for later analysis)
-        #self.mo_coeff = np.reshape(mo_coeff_kpts, [nao, nao*nkpts])
-        mo_idx = np.argsort(mo_energy)
-        mo_energy = mo_energy[mo_idx]
-        for ix in mo_idx[:nocc]:
-            k, ikx = divmod(ix, nao)
-            # TODO: implement Fermi smearing
-            mo_occ_kpts[k, ikx] = 2
-
-        if nocc < mo_energy.size:
-            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
-                            mo_energy[nocc-1], mo_energy[nocc])
-        else:
-            logger.info(self, 'HOMO = %.12g', mo_energy[nocc-1])
-        if self.verbose >= logger.DEBUG:
-            np.set_printoptions(threshold=len(mo_energy))
-            logger.debug(self, '  mo_energy = %s', mo_energy)
-            np.set_printoptions()
-
-        return mo_occ_kpts
-
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
-        '''One particle density matrix at each k-point.
-
-        Returns:
-            dm_kpts : (nkpts, nao, nao) ndarray
-        '''
         if mo_coeff_kpts is None:
             # Note: this is actually "self.mo_coeff_kpts"
             # which is stored in self.mo_coeff of the scf.hf.RHF superclass
@@ -444,8 +443,8 @@ class KRHF(pbchf.RHF):
         nkpts = len(dm_kpts)
         e1 = e_coul = 0.
         for k in range(nkpts):
-            e1 += 1./nkpts * np.einsum('ij,ji', dm_kpts[k,:,:], h1e_kpts[k,:,:])
-            e_coul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vhf_kpts[k,:,:])
+            e1 += 1./nkpts * np.einsum('ij,ji', dm_kpts[k], h1e_kpts[k])
+            e_coul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k], vhf_kpts[k])
         if abs(e_coul.imag > 1.e-12):
             raise RuntimeError("Coulomb energy has imaginary part, "
                                "something is wrong!", e_coul.imag)
@@ -476,4 +475,11 @@ class KRHF(pbchf.RHF):
     def init_guess_by_chkfile(self, chk=None, project=True):
         if chk is None: chk = self.chkfile
         return init_guess_by_chkfile(self.cell, chk, project)
+
+    def dump_chk(self, envs):
+        pyscf.scf.hf.RHF.dump_chk(self, envs)
+        if self.chkfile:
+            with h5py.File(self.chkfile) as fh5:
+                fh5['scf/kpts'] = self.kpts
+        return self
 

@@ -297,7 +297,7 @@ def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
     Note: This is a replica of pyscf.dft.numint.nr_rks_vxc with kpts added.
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`_NumInt` or :class:`_KNumInt`
 
         mol : an instance of :class:`Mole`
 
@@ -363,10 +363,10 @@ def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         weight = grids.weights[ip0:ip1]
         if xctype == 'LDA':
             if kpt_band is None:
-                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, deriv=0)
+                ao_k1 = ni.eval_ao(mol, coords, kpt1, deriv=0)
             else:
-                ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=0)
-            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=0)
+                ao_k1 = eval_ao(mol, coords, kpt1, deriv=0)
+            ao_k2 = ni.eval_ao(mol, coords, kpt2, deriv=0)
             rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
             exc, vxc = ni.eval_xc(xc_code, rho, spin, relativity, 1)[:2]
             vrho = vxc[0]
@@ -376,10 +376,10 @@ def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
             excsum += (den*exc).sum()
         else:
             if kpt_band is None:
-                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, deriv=1)
+                ao_k1 = ni.eval_ao(mol, coords, kpt1, deriv=1)
             else:
-                ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=1)
-            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=1)
+                ao_k1 = eval_ao(mol, coords, kpt1, deriv=1)
+            ao_k2 = ni.eval_ao(mol, coords, kpt2, deriv=1)
             rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
             exc, vxc = ni.eval_xc(xc_code, rho, spin, relativity, 1)[:2]
             vrho, vsigma = vxc[:2]
@@ -448,15 +448,20 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpts = kpts
 
-    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0,
-                shl_slice=None, non0tab=None, out=None, verbose=None):
+    def eval_ao(self, mol, coords, kpts=None, deriv=0, relativity=0,
+                shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
         '''
         Returns:
             ao_kpts: (nkpts, ngs, nao) ndarray
                 AO values at each k-point
         '''
-        if kpt is None:
-            kpt = self.kpts
+        if kpts is None:
+            if 'kpt' in kwargs:
+                sys.stderr.write('WARN: _KNumInt.eval_ao function finds keyword '
+                                 'argument "kpt" and converts it to "kpts"\n')
+                kpts = kpt
+            else:
+                kpts = self.kpts
         kpts = kpt.reshape(-1,3)
 
         nkpts = len(kpts)

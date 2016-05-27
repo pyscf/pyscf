@@ -9,32 +9,24 @@ import sys
 import time
 import numpy as np
 import scipy.linalg
+import h5py
 import pyscf.lib
-import pyscf.scf
 import pyscf.scf.hf
 import pyscf.gto
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.dft.numint
-import pyscf.pbc.scf
 from pyscf.lib import logger
-from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc import tools
 from pyscf.pbc import ao2mo
-from pyscf.pbc.gto import pseudo
-from pyscf.pbc.scf import scfint
+from pyscf.pbc.gto import pseudo, ewald
 import pyscf.pbc.scf.chkfile
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
-    ngs = len(aoR)
-
-    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
-    return s
+    return cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=kpt)
 
 
 def get_hcore(cell, kpt=np.zeros(3)):
@@ -42,7 +34,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
     '''
     hcore = get_t(cell, kpt)
     if cell.pseudo:
-        hcore += ( get_pp(cell, kpt) + get_jvloc_G0(cell, kpt) )
+        hcore += get_pp(cell, kpt) + get_jvloc_G0(cell, kpt)
     else:
         hcore += get_nuc(cell, kpt)
 
@@ -51,45 +43,8 @@ def get_hcore(cell, kpt=np.zeros(3)):
 
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
-
-    Note: Evaluated in real space using orbital gradients, for improved accuracy.
     '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, deriv=1)
-    ngs = aoR.shape[1]  # because we requested deriv=1, aoR.shape[0] = 4
-
-    t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
-             np.dot(aoR[2].T.conj(), aoR[2]) +
-             np.dot(aoR[3].T.conj(), aoR[3]))
-    t *= (cell.vol/ngs)
-
-    return t
-
-
-def get_t_pw(cell, kpt=np.zeros(3)):
-    '''Get the kinetic energy AO matrix using the PW resolution.
-
-    Note: Incurs error due to finite resolution of the gradient operator.
-    '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt, deriv=0)
-    nao = cell.nao_nr()
-
-    kG = kpt + cell.Gv
-    abskG2 = np.einsum('gi,gi->g', kG, kG)
-
-    aokG = np.empty(aoR.shape, np.complex128)
-    TaokG = np.empty(aoR.shape, np.complex128)
-    nao = cell.nao_nr()
-    for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
-        TaokG[:,i] = 0.5*abskG2*aokG[:,i]
-
-    ngs = len(aokG)
-    t = np.dot(aokG.T.conj(), TaokG)
-    t *= (cell.vol/ngs**2)
-
-    return t
+    return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpt=kpt)
 
 
 def get_nuc(cell, kpt=np.zeros(3)):
@@ -100,11 +55,11 @@ def get_nuc(cell, kpt=np.zeros(3)):
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
 
-    chargs = [cell.atom_charge(i) for i in range(cell.natm)]
+    chargs = cell.atom_charges()
     SI = cell.get_SI()
     coulG = tools.get_coulG(cell)
     vneG = -np.dot(chargs,SI) * coulG
-    vneR = tools.ifft(vneG, cell.gs)
+    vneR = tools.ifft(vneG, cell.gs).real
 
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
     return vne
@@ -121,7 +76,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpplocG = -np.sum(SI * vlocG, axis=0)
 
     # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs)
+    vpplocR = tools.ifft(vpplocG, cell.gs).real
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
@@ -165,7 +120,10 @@ def get_pp(cell, kpt=np.zeros(3)):
                 vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
     vppnl *= (1./ngs**2)
 
-    return vpploc + vppnl
+    if aoR.dtype == np.double:
+        return vpploc.real + vppnl.real
+    else:
+        return vpploc + vppnl
 
 
 def get_jvloc_G0(cell, kpt=np.zeros(3)):
@@ -272,6 +230,8 @@ def get_vjR(cell, dm, aoR):
 
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
+    if rhoR.dtype == np.double:
+        vR = vR.real
     return vR
 
 
@@ -279,7 +239,7 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r).
 
     Kwargs:
-        kpts : (nkpts, 3) ndarray
+        kpt1, kpt2 : (3,) ndarray
             The sampled k-points; may be required for G=0 correction.
 
     Returns:
@@ -296,121 +256,74 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     ngs, nao = aoR_k1.shape
 
     coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
+    def prod(i, j):
+        rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
+        rhoG = tools.fftk(rhoR, cell.gs, coords, kpt1-kpt2)
+        vG = coulG*rhoG
+        vR = tools.ifftk(vG, cell.gs, coords, kpt1-kpt2)
+        if rhoR.dtype == np.double:
+            vR = vR.real
+        return vR
 
-    vR = np.zeros((ngs,nao,nao), dtype=np.complex128)
+    if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
+        vR = np.empty((nao,nao,ngs))
+    else:
+        vR = np.empty((nao,nao,ngs), dtype=np.complex128)
     for i in range(nao):
         for j in range(nao):
-            rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
-            rhoG = tools.fftk(rhoR, cell.gs, coords, kpt1-kpt2)
-            vG = coulG*rhoG
-            vR[:,i,j] = tools.ifftk(vG, cell.gs, coords, kpt1-kpt2)
-    return vR
+            vR[i,j] = prod(i, j)
+    return vR.transpose(2,0,1)
 
+def get_veff(cell, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None,
+             kpt=np.zeros(3), kpt_band=None):
+    '''Hartree-Fock potential matrix for the given density matrix.
+    See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
+    '''
+    vj, vk = get_jk(cell, dm, hermi, vhfopt, kpt, kpt_band)
+    return vj - vk * .5
 
-def ewald(cell, ew_eta, ew_cut, verbose=logger.NOTE):
-    '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
-
-    Formulation of Martin, App. F2.
+def get_bands(mf, kpt_band, cell=None, dm=None, kpt=None):
+    '''Get energy bands at a given (arbitrary) 'band' k-point.
 
     Returns:
-        float
-            The Ewald energy consisting of overlap, self, and G-space sum.
-
-    See Also:
-        pyscf.pbc.gto.get_ewald_params
+        mo_energy : (nao,) ndarray
+            Bands energies E_n(k)
+        mo_coeff : (nao, nao) ndarray
+            Band orbitals psi_n(k)
     '''
-    #if isinstance(verbose, logger.Logger):
-    #    log = verbose
-    #else:
-    #    log = logger.Logger(cell.stdout, verbose)
+    if cell is None: cell = mf.cell
+    if dm is None: dm = mf.make_rdm1()
+    if kpt is None: kpt = mf.kpt
 
-    chargs = [cell.atom_charge(i) for i in range(len(cell._atm))]
-    coords = [cell.atom_coord(i) for i in range(len(cell._atm))]
-
-    ewovrl = 0.
-
-    # set up real-space lattice indices [-ewcut ... ewcut]
-    ewxrange = range(-ew_cut[0],ew_cut[0]+1)
-    ewyrange = range(-ew_cut[1],ew_cut[1]+1)
-    ewzrange = range(-ew_cut[2],ew_cut[2]+1)
-    ewxyz = cartesian_prod((ewxrange,ewyrange,ewzrange)).T
-
-    nx = len(ewxrange)
-    ny = len(ewyrange)
-    nz = len(ewzrange)
-    Lall = np.einsum('ij,jk->ik', cell._h, ewxyz).reshape(3,nx,ny,nz)
-    #exclude the point where Lall == 0
-    Lall[:,ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
-    Lall = Lall.reshape(3,nx*ny*nz)
-    Lall = Lall.T
-
-    for ia in range(cell.natm):
-        qi = chargs[ia]
-        ri = coords[ia]
-        for ja in range(ia):
-            qj = chargs[ja]
-            rj = coords[ja]
-            r = np.linalg.norm(ri-rj)
-            ewovrl += 2 * qi * qj / r * scipy.special.erfc(ew_eta * r)
-
-    for ia in range(cell.natm):
-        qi = chargs[ia]
-        ri = coords[ia]
-        for ja in range(cell.natm):
-            qj = chargs[ja]
-            rj = coords[ja]
-            r1 = ri-rj + Lall
-            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
-
-    ewovrl *= 0.5
-
-    # last line of Eq. (F.5) in Martin
-    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
-    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
-
-    # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
-    SI = cell.get_SI()
-    ZSI = np.einsum("i,ij->j", chargs, SI)
-
-    # Eq. (F.6) in Martin is off by a factor of 2, the
-    # exponent is wrong (8->4) and the square is in the wrong place
-    #
-    # Formula should be
-    #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
-    # where
-    #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
-    # See also Eq. (32) of ewald.pdf at
-    #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
-
-    coulG = tools.get_coulG(cell)
-    absG2 = np.einsum('gi,gi->g', cell.Gv, cell.Gv)
-
-    ZSIG2 = np.abs(ZSI)**2
-    expG2 = np.exp(-absG2/(4*ew_eta**2))
-    JexpG2 = coulG*expG2
-    ewgI = np.dot(ZSIG2,JexpG2)
-    ewg = .5*np.sum(ewgI)
-    ewg /= cell.vol
-
-    #log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
-    return ewovrl + ewself + ewg
+    fock = (mf.get_hcore(kpt=kpt_band) +
+            mf.get_veff(cell, dm, kpt=kpt, kpt_band=kpt_band))
+    s1e = mf.get_ovlp(kpt=kpt_band)
+    mo_energy, mo_coeff = mf.eig(fock, s1e)
+    return mo_energy, mo_coeff
 
 
-#FIXME: project initial guess for k-point
-def init_guess_by_chkfile(cell, chkfile_name, project=True):
+def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
     Returns:
-        Density matrix, 2D ndarray
+        Density matrix, (nao,nao) ndarray
     '''
     from pyscf.pbc.scf import addons
     chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    if kpt is None:
+        kpt = np.zeros(3)
+    if 'kpt' in scf_rec:
+        chk_kpt = scf_rec['kpt']
+    elif 'kpts' in scf_rec:
+        kpts = scf_rec['kpts'] # the closest kpt from KRHF results
+        chk_kpt = kpts[numpy.argmin(pyscf.lib.norm(kpts-kpt, axis=1))]
+    else:
+        chk_kpt = np.zeros(3)
 
     def fproj(mo):
         if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell)
+            return addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
         else:
             return mo
     if scf_rec['mo_coeff'].ndim == 2:
@@ -465,8 +378,6 @@ def dot_eri_dm_complex(eri, dm, hermi=0):
     return vj, vk
 
 
-# TODO: Maybe should create PBC SCF class derived from pyscf.scf.hf.SCF, then
-# inherit from that.
 class RHF(pyscf.scf.hf.RHF):
     '''RHF class adapted for PBCs.
 
@@ -484,7 +395,7 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None:
             self.kpt = np.zeros(3)
         else:
-            self.kpt = kpt
+            self.kpt = np.asarray(kpt).reshape(-1)
 
         self.exxdiv = exxdiv
 
@@ -494,19 +405,18 @@ class RHF(pyscf.scf.hf.RHF):
         pyscf.scf.hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'Exchange divergence treatment = %s', self.exxdiv)
+        logger.info(self, 'kpt = %s', self.kpt)
+        logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-
-        return scfint.get_hcore(cell, kpt)
+        return get_hcore(cell, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-
-        return scfint.get_ovlp(cell, kpt)
+        return get_ovlp(cell, kpt)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         return self.get_jk_(cell, dm, hermi, kpt, kpt_band)
@@ -607,30 +517,20 @@ class RHF(pyscf.scf.hf.RHF):
 
     def ewald_nuc(self, cell=None):
         if cell is None: cell = self.cell
-        return ewald(cell, cell.ew_eta, cell.ew_cut, self.verbose)
+        return cell.energy_nuc()
 
-    def get_bands(self, kpt_band, cell=None, dm=None, kpt=None):
-        '''Get energy bands at a given (arbitrary) 'band' k-point.
-
-        Returns:
-            mo_energy : (nao,) ndarray
-                Bands energies E_n(k)
-            mo_coeff : (nao, nao) ndarray
-                Band orbitals psi_n(k)
-        '''
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        if kpt is None: kpt = self.kpt
-
-        fock = self.get_hcore(kpt=kpt_band) \
-                + self.get_veff(cell, dm, kpt=kpt, kpt_band=kpt_band)
-        s1e = self.get_ovlp(kpt=kpt_band)
-        mo_energy, mo_coeff = self.eig(fock, s1e)
-        return mo_energy, mo_coeff
+    get_bands = get_bands
 
     def init_guess_by_chkfile(self, chk=None, project=True):
         if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.cell, chk, project)
+        return init_guess_by_chkfile(self.cell, chk, project, self.kpt)
     def from_chk(self, chk=None, project=True):
         return self.init_guess_by_chkfile(chk, project)
+
+    def dump_chk(self, envs):
+        pyscf.scf.hf.RHF.dump_chk(self, envs)
+        if self.chkfile:
+            with h5py.File(self.chkfile) as fh5:
+                fh5['scf/kpt'] = self.kpt
+        return self
 
