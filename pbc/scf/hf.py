@@ -10,12 +10,12 @@ import time
 import numpy as np
 import scipy.linalg
 import h5py
-import pyscf.lib
 import pyscf.scf.hf
 import pyscf.gto
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.dft.numint
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc import ao2mo
@@ -95,7 +95,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
     fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
     Gv = np.asarray(cell.Gv+kpt)
-    G_rad = pyscf.lib.norm(Gv, axis=1)
+    G_rad = lib.norm(Gv, axis=1)
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
     for ia in range(cell.natm):
@@ -311,13 +311,18 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     '''
     from pyscf.pbc.scf import addons
     chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
     if kpt is None:
         kpt = np.zeros(3)
     if 'kpt' in scf_rec:
         chk_kpt = scf_rec['kpt']
     elif 'kpts' in scf_rec:
         kpts = scf_rec['kpts'] # the closest kpt from KRHF results
-        chk_kpt = kpts[numpy.argmin(pyscf.lib.norm(kpts-kpt, axis=1))]
+        where = np.argmin(lib.norm(kpts-kpt, axis=1))
+        chk_kpt = kpts[where]
+        mo = mo[where]
+        mo_occ = mo_occ[where]
     else:
         chk_kpt = np.zeros(3)
 
@@ -326,15 +331,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
             return addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
         else:
             return mo
-    if scf_rec['mo_coeff'].ndim == 2:
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
+    if mo.ndim == 2:
         dm = pyscf.scf.hf.make_rdm1(fproj(mo), mo_occ)
     else:  # UHF
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
         dm = pyscf.scf.hf.make_rdm1(fproj(mo[0]), mo_occ[0]) \
            + pyscf.scf.hf.make_rdm1(fproj(mo[1]), mo_occ[1])
+
+    # Real DM for gamma point
+    if kpt is None or np.allclose(kpt, 0):
+        dm = dm.real
     return dm
 
 
@@ -436,7 +441,7 @@ class RHF(pyscf.scf.hf.RHF):
         #    print "self._is_mem_enough() =", self._is_mem_enough()
         #    if self._eri is None:
         #        logger.debug(self, 'Building PBC AO integrals incore')
-        #        if kpt is not None and pyscf.lib.norm(kpt) > 1.e-15:
+        #        if kpt is not None and lib.norm(kpt) > 1.e-15:
         #            raise RuntimeError("Non-zero kpts not implemented for incore eris")
         #        self._eri = ao2mo.get_ao_eri(cell)
         #    if np.iscomplexobj(dm) or np.iscomplexobj(self._eri):
@@ -500,7 +505,7 @@ class RHF(pyscf.scf.hf.RHF):
 
         if self._eri is None:
             log.debug('Building PBC AO integrals')
-            if kpt is not None and pyscf.lib.norm(kpt) > 1.e-15:
+            if kpt is not None and lib.norm(kpt) > 1.e-15:
                 raise RuntimeError("Non-zero k points not implemented for exchange")
             self._eri = ao2mo.get_ao_eri(cell)
 
@@ -521,11 +526,12 @@ class RHF(pyscf.scf.hf.RHF):
 
     get_bands = get_bands
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
+    def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.cell, chk, project, self.kpt)
-    def from_chk(self, chk=None, project=True):
-        return self.init_guess_by_chkfile(chk, project)
+        if kpt is None: kpt = self.kpt
+        return init_guess_by_chkfile(self.cell, chk, project, kpt)
+    def from_chk(self, chk=None, project=True, kpt=None):
+        return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):
         pyscf.scf.hf.RHF.dump_chk(self, envs)

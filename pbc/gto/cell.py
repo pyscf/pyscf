@@ -199,7 +199,7 @@ def loads(cellstr):
     cell._atm = np.array(cell._atm, dtype=np.int32)
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
-    cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
+    #cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
     cell._h = np.asarray(cell._h)
 
     return cell
@@ -252,7 +252,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
 
-        if kpt is None or np.all(kpt==0):
+        if kpt is None or abs(kpt).sum() < 1e-12:
             out += buf
         else:
             out += buf * np.exp(1j*np.dot(kpt, L))
@@ -650,7 +650,7 @@ class Cell(pyscf.gto.Mole):
         if self._pseudo:
             _atm, _ecpbas, _env = make_pseudo_env(self, _atm, self._pseudo, pre_env)
         else:
-            _atm, _ecpbas, _env = _atm, [], pre_env
+            _atm, _ecpbas, _env = _atm, None, pre_env
         return _atm, _ecpbas, _env
 
     def lattice_vectors(self):

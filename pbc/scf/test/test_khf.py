@@ -24,7 +24,8 @@ def make_primitive_cell(ngs):
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
 
-    #cell.verbose = 4
+    cell.verbose = 5
+    cell.output = '/dev/null'
     cell.build()
     return cell
 
@@ -54,7 +55,7 @@ class KnowValues(unittest.TestCase):
         supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2, 
                                nk[1]*ngs + (nk[1]-1)//2,
                                nk[2]*ngs + (nk[2]-1)//2])
-        print "supcell gs =", supcell.gs
+        #print "supcell gs =", supcell.gs
         supcell.build()
 
         scaled_gamma = ase.dft.kpoints.monkhorst_pack((1,1,1))
@@ -62,10 +63,41 @@ class KnowValues(unittest.TestCase):
         mf = khf.KRHF(supcell, gamma, exxdiv='vcut_sph')
         esup = mf.scf()/np.prod(nk)
 
-        print "kpt sampling energy =", ekpt
-        print "supercell energy    =", esup
-        print "difference          =", ekpt-esup
+        #print "kpt sampling energy =", ekpt
+        #print "supercell energy    =", esup
+        #print "difference          =", ekpt-esup
         self.assertAlmostEqual(ekpt, esup, 6)
+
+    def test_init_guess_by_chkfile(self):
+        ngs = 4
+        nk = (1, 1, 1)
+        cell = make_primitive_cell(ngs)
+
+        scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
+        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
+        ekpt = kmf.scf()
+        dm1 = kmf.make_rdm1()
+        dm2 = kmf.from_chk(kmf.chkfile)
+        self.assertTrue(dm2.dtype == np.double)
+        self.assertTrue(np.allclose(dm1, dm2))
+
+        mf = pbchf.RHF(cell, exxdiv='vcut_sph')
+        mf.chkfile = kmf.chkfile
+        mf.init_guess = 'chkfile'
+        dm1 = mf.from_chk(kmf.chkfile)
+        mf.max_cycle = 1
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, ekpt, 9)
+
+        nk = (3, 1, 1)
+        scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
+        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        kmf1 = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
+        dm = kmf1.from_chk(mf.chkfile)
+        kmf1.max_cycle = 1
+        ekpt = kmf1.scf(dm)
+        self.assertAlmostEqual(ekpt, -11.185182425048195, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

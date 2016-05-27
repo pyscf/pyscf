@@ -230,24 +230,56 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
     return lib.asarray(dm_kpts)
 
 
-#FIXME: project initial guess for k-point
-def init_guess_by_chkfile(cell, chkfile_name, project=True):
+def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
     Returns:
         Density matrix, 3D ndarray
     '''
-    #from pyscf.pbc.scf import addons
-    mo = pyscf.pbc.scf.chkfile.load(chkfile_name, 'scf/mo_coeff')
-    mo_occ = pyscf.pbc.scf.chkfile.load(chkfile_name, 'scf/mo_occ')
+    from pyscf.pbc.scf import addons
+    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
 
-    #def fproj(mo):
-    #    if project:
-    #        return addons.project_mo_nr2nr(chk_cell, mo, cell)
-    #    else:
-    #        return mo
-    dm = make_rdm1(mo, mo_occ)
+    if kpts is None:
+        kpts = scf_rec['kpts']
+
+    if 'kpt' in scf_rec:
+        chk_kpts = scf_rec['kpt'].reshape(-1,3)
+    elif 'kpts' in scf_rec:
+        chk_kpts = scf_rec['kpts']
+    else:
+        chk_kpts = np.zeros((1,3))
+
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    if not 'kpts' in scf_rec:
+        mo = mo.reshape((1,)+mo.shape)
+        mo_occ = mo_occ.reshape((1,)+mo_occ.shape)
+
+    def fproj(mo, kpt):
+        if project:
+            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpt)
+        else:
+            return mo
+
+    if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
+        def makedm(mos, occs):
+            mos = [fproj(mo, None) for mo in mos]
+            return make_rdm1(mos, occs)
+    else:
+        where = [np.argmin(lib.norm(chk_kpts-kpt, axis=1)) for kpt in kpts]
+        def makedm(mos, occs):
+            mos = [fproj(mos[w], chk_kpts[w]-kpts[i]) for i,w in enumerate(where)]
+            return make_rdm1(mos, occs[where])
+
+    if mo.ndim == 3:  # KRHF
+        dm = makedm(mo, mo_occ)
+    else:  # KUHF
+        dm = makedm(mo[:,0], mo_occ[:,0]) + makedm(mo[:,1], mo_occ[:,1])
+
+    # Real DM for gamma point
+    if np.allclose(kpts, 0):
+        dm = dm.real
     return dm
 
 
@@ -357,22 +389,18 @@ class KRHF(pbchf.RHF):
 
     get_ovlp = get_ovlp
 
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
-        # Must use 'kpt' kwarg
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
         if cell is None: cell = self.cell
-        if kpt is None: kpt = self.kpts
-        kpts = kpt
+        if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj = get_j(self, cell, dm_kpts, kpts, kpt_band)
         logger.timer(self, 'vj', *cpu0)
         return vj
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
-        # Must use 'kpt' kwarg
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
         if cell is None: cell = self.cell
-        if kpt is None: kpt = self.kpts
-        kpts = kpt
+        if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = get_jk(self, cell, dm_kpts, kpts, kpt_band)
@@ -472,9 +500,12 @@ class KRHF(pbchf.RHF):
         mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
         return mo_energy, mo_coeff
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
+    def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
         if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.cell, chk, project)
+        if kpts is None: kpts = self.kpts
+        return init_guess_by_chkfile(self.cell, chk, project, kpts)
+    def from_chk(self, chk=None, project=True, kpts=None):
+        return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
         pyscf.scf.hf.RHF.dump_chk(self, envs)
