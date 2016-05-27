@@ -485,10 +485,6 @@ class RHF(pyscf.scf.hf.RHF):
             self.kpt = np.zeros(3)
         else:
             self.kpt = kpt
-        if np.allclose(self.kpt, np.zeros(3)):
-            self._dtype = np.float64
-        else:
-            self._dtype = np.complex128
 
         self.exxdiv = exxdiv
 

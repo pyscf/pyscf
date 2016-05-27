@@ -366,7 +366,7 @@ class KRHF(pbchf.RHF):
         nkpts = len(self.kpts)
         grad_kpts = [pyscf.scf.hf.RHF.get_grad(self, mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
                      for k in range(nkpts)]
-        grad_kpts = np.asarray(grad_kpts)
+        grad_kpts = np.hstack(grad_kpts)
         return grad_kpts
 
     def eig(self, h_kpts, s_kpts):
@@ -414,9 +414,6 @@ class KRHF(pbchf.RHF):
             np.set_printoptions(threshold=len(mo_energy))
             logger.debug(self, '  mo_energy = %s', mo_energy)
             np.set_printoptions()
-
-        self.mo_energy = mo_energy_kpts
-        self.mo_occ = mo_occ_kpts
 
         return mo_occ_kpts
 
@@ -469,9 +466,6 @@ class KRHF(pbchf.RHF):
         if cell is None: cell = self.cell
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if kpts is None: kpts = self.kpts
-
-        if not np.allclose(kpt_band, np.zeros(3)):
-            self._dtype = np.complex128
 
         fock = self.get_hcore(cell, kpt_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)

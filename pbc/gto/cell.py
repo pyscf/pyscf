@@ -215,6 +215,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     import pyscf.gto.moleintor
     if '2c2e' in intor:
         drv_name = 'GTOint2c2e'
+        assert(hermi != lib.HERMITIAN and hermi != lib.ANTIHERMI)
     else:
         assert('2e' not in intor)
         drv_name = 'GTOint2c'
@@ -229,17 +230,17 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     env = np.asarray(env, dtype=np.double)
     natm = len(atm)
     nbas = len(bas)
-    shls_slice = (0, cell1.nbas, cell1.nbas, cell1.nbas+cell2.nbas)
+    shls_slice = (0, cell1.nbas, cell1.nbas, nbas)
     ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
 
-    xyz = np.asarray([cell2.atom_coord(i) for i in range(cell2.natm)])
+    xyz = np.array([cell2.atom_coord(i) for i in range(cell2.natm)])
     ptr_coord = atm[cell1.natm:,pyscf.gto.PTR_COORD]
     out = 0
-    buf = np.empty((ni,nj))
+    buf = np.empty((ni,nj,comp), order='F')
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    for L in cell1.get_lattice_Ls(nimgs):
+    for l,L in enumerate(cell1.get_lattice_Ls(nimgs)):
         env[ptr_coord+0] = xyz[:,0] + L[0]
         env[ptr_coord+1] = xyz[:,1] + L[1]
         env[ptr_coord+2] = xyz[:,2] + L[2]
@@ -256,8 +257,14 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
         else:
             out += buf * np.exp(1j*np.dot(kpt, L))
 
+    out = out.transpose(2,0,1)
     if hermi:
-        out = lib.hermi_triu_(out, hermi=hermi)
+        # GTOint2c fills the upper triangular of the F-order array.
+        idx = np.triu_indices(ni)
+        for i in range(comp):
+            out[i,idx[1],idx[0]] = out[i,idx[0],idx[1]].conj()
+    if comp == 1:
+        out = out.reshape(ni,nj)
     return out
 
 
