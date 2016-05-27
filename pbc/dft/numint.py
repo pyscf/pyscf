@@ -54,7 +54,7 @@ def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
     '''
     aoR = 0
     for L in tools.get_lattice_Ls(cell, cell.nimgs):
-        if kpt is None:
+        if kpt is None or numpy.all(kpt==0):
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             shl_slice, non0tab, out, verbose)
         else:
@@ -457,15 +457,17 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         '''
         if kpt is None:
             kpt = self.kpts
-        kpts = kpt
+        kpts = kpt.reshape(-1,3)
 
         nkpts = len(kpts)
         ngs = len(coords)
         nao = mol.nao_nr()
 
-        ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
-        for k in range(nkpts):
-            kpt = kpts[k,:]
+        if kpt is None or numpy.all(kpt == 0):
+            ao_kpts = numpy.empty([nkpts, ngs, nao])
+        else:
+            ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
+        for k, kpt in enumerate(kpts):
             ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, deriv, relativity,
                                      shl_slice, non0tab, out, verbose)
         return ao_kpts
@@ -486,7 +488,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nkpts, ngs, nao = ao_kpts.shape
         rhoR = numpy.zeros(ngs)
         for k in range(nkpts):
-            rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
+            rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k], dm_kpts[k])
         return rhoR
 
     def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
@@ -514,8 +516,8 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nao = ao.shape[2]
         mat = numpy.zeros((nkpts, nao, nao), dtype=ao.dtype)
         for k in range(nkpts):
-            mat[k,:,:] = eval_mat(mol, ao[k,:,:], weight,
-                                    rho, vrho, vsigma, non0tab,
-                                    xctype, verbose)
+            mat[k] = eval_mat(mol, ao[k], weight,
+                              rho, vrho, vsigma, non0tab,
+                              xctype, verbose)
         return mat
 

@@ -1,8 +1,9 @@
-import unittest 
+import unittest
 import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbchf
+from pyscf.pbc.scf import khf
 import pyscf.pbc.tools
 import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 
@@ -35,31 +36,36 @@ class KnowValues(unittest.TestCase):
         ngs = 4
         nk = (3, 1, 1)
         cell = make_primitive_cell(ngs)
-        print "cell gs =", cell.gs
+
         scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
-        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
-        kmf.verbose = 7
+        kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
+        self.assertAlmostEqual(ekpt, -11.226211828358288, 8)
+
+        nk = (5, 1, 1)
+        scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
+        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
+        ekpt = kmf.scf()
+        self.assertAlmostEqual(ekpt, -12.342301887249597, 8)
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
         supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2, 
                                nk[1]*ngs + (nk[1]-1)//2,
                                nk[2]*ngs + (nk[2]-1)//2])
         print "supcell gs =", supcell.gs
-        #supcell.verbose = 7
         supcell.build()
 
         scaled_gamma = ase.dft.kpoints.monkhorst_pack((1,1,1))
         gamma = supcell.get_abs_kpts(scaled_gamma)
-        mf = pbchf.KRHF(supcell, gamma, exxdiv='vcut_sph')
-        mf.verbose = 7
+        mf = khf.KRHF(supcell, gamma, exxdiv='vcut_sph')
         esup = mf.scf()/np.prod(nk)
 
         print "kpt sampling energy =", ekpt
         print "supercell energy    =", esup
         print "difference          =", ekpt-esup
-        self.assertAlmostEqual(ekpt, esup, 8)
+        self.assertAlmostEqual(ekpt, esup, 6)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

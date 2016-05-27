@@ -249,7 +249,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
 
-        if kpt is None:
+        if kpt is None or np.all(kpt==0):
             out += buf
         else:
             out += buf * np.exp(1j*np.dot(kpt, L))
