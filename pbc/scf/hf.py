@@ -251,7 +251,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
     ngs, nao = aoR_k1.shape
 
-    vjR_k2 = get_vjR_(cell, dm, aoR_k2)
+    vjR_k2 = get_vjR(cell, dm, aoR_k2)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
     return vj
@@ -290,10 +290,10 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
     ngs, nao = aoR_k1.shape
 
-    vjR_k2 = get_vjR_(cell, dm, aoR_k2)
+    vjR_k2 = get_vjR(cell, dm, aoR_k2)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
-    vkR_k1k2 = get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
+    vkR_k1k2 = get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
     aoR_dm_k2 = np.dot(aoR_k2, dm)
     tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
     vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
@@ -302,7 +302,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     return vj, vk
 
 
-def get_vjR_(cell, dm, aoR):
+def get_vjR(cell, dm, aoR):
     '''Get the real-space Hartree potential of the given density matrix.
 
     Returns:
@@ -319,7 +319,7 @@ def get_vjR_(cell, dm, aoR):
     return vR
 
 
-def get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
+def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r).
 
     Kwargs:

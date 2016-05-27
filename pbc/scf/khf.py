@@ -67,7 +67,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
 
     aoR_kpts = [pyscf.pbc.dft.numint.eval_ao(cell, coords, k) for k in kpts]
 
-    vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
+    vjR = get_vjR(cell, dm_kpts, aoR_kpts)
     if kpt_band is not None:
         aoR_kband = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt_band)
         vj_kpts = cell.vol/ngs * np.dot(aoR_kband.T.conj(),
@@ -103,7 +103,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
 
     aoR_kpts = [pyscf.pbc.dft.numint.eval_ao(cell, coords, k) for k in kpts]
 
-    vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
+    vjR = get_vjR(cell, dm_kpts, aoR_kpts)
     if kpt_band is not None:
         aoR_kband = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt_band)
         vj_kpts = cell.vol/ngs * np.dot(aoR_kband.T.conj(),
@@ -111,8 +111,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
         vk_kpts = 0
         for k2 in range(nkpts):
             kpt2 = kpts[k2]
-            vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kband, aoR_kpts[k2],
-                                      kpt_band, kpt2)
+            vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kband, aoR_kpts[k2],
+                                     kpt_band, kpt2)
             aoR_dm_k2 = np.dot(aoR_kpts[k2], dm_kpts[k2])
             tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
             vk_kpts = vk_kpts + 1./nkpts * (cell.vol/ngs) \
@@ -131,8 +131,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
             vk = 0
             for k2 in range(nkpts):
                 kpt2 = kpts[k2]
-                vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k1], aoR_kpts[k2],
-                                          kpt1, kpt2)
+                vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kpts[k1], aoR_kpts[k2],
+                                         kpt1, kpt2)
                 tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_kpts[k2])
                 vk = vk + 1./nkpts * (cell.vol/ngs) \
                            * np.dot(aoR_kpts[k1].T.conj(), tmp_Rq)
@@ -145,7 +145,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     return vj_kpts, vk_kpts
 
 
-def get_vjR_(cell, dm_kpts, aoR_kpts):
+def get_vjR(cell, dm_kpts, aoR_kpts):
     '''Get the real-space Hartree potential of the k-point sampled density matrix.
 
     Returns:
