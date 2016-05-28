@@ -2144,6 +2144,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             bas = numpy.vstack((self._bas, self._ecpbas))
             self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
             self._env[PTR_NECPBAS] = len(self._ecpbas)
+            if shls_slice is None:
+                shls_slice = (0, self.nbas, 0, self.nbas)
         else:
             bas = self._bas
         return moleintor.getints(intor, self._atm, bas, self._env,
