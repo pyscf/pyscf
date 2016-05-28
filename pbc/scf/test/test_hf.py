@@ -22,6 +22,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell, exxdiv='vcut_sph')
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -4.29190260870812, 9)
+        self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         mf = pscf.KRHF(cell, [[0,0,0]], exxdiv='vcut_sph')
         e0 = mf.kernel()
@@ -32,6 +33,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -4.1379172088570595, 9)
+        self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv='vcut_sph')
         e0 = mf.kernel()

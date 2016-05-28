@@ -458,19 +458,12 @@ def norm(x, ord=None, axis=None):
         return numpy.linalg.norm(x, ord, axis)
         #raise RuntimeError('Not support for axis = %d' % axis)
 
-# numpy.linalg.cond has a bug, where it
-# does not correctly generalize
-# condition number if s1e is not a matrix
 def cond(x, p=None):
     '''Compute the condition number'''
-    if p is None:
-        sigma = numpy.linalg.svd(numpy.asarray(x), compute_uv=False)
-        c = sigma.T[0]/sigma.T[-1] # values are along last dimension, so
-                                   # so must transpose. This transpose
-                                   # is omitted in numpy.linalg
-        return c
-    else:
+    if isinstance(x, numpy.ndarray) and x.ndim == 2 or p is not None:
         return numpy.linalg.cond(x, p)
+    else:
+        return numpy.asarray(numpy.linalg.cond(xi) for xi in x])
 
 def cartesian_prod(arrays, out=None):
     '''
