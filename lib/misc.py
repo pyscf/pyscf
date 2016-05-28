@@ -100,6 +100,12 @@ def find_if(test, lst):
             return l
     raise ValueError('No element of the given list matches the test condition.')
 
+def arg_first_match(test, lst):
+    for i,x in enumerate(lst):
+        if test(x):
+            return i
+    raise ValueError('No element of the given list matches the test condition.')
+
 # for give n, generate [(m1,m2),...] that
 #       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
 def tril_equal_pace(n, base=0, npace=0, minimal=1):
@@ -341,6 +347,25 @@ def with_doc(doc):
         fn.__doc__ = doc
         return fn
     return make_fn
+
+def overwrite_mro(obj, mro):
+    '''A hacky function to overwrite the __mro__ attribute'''
+    class HackMRO(type):
+        pass
+# Overwrite type.mro function so that Temp class can use the given mro
+    HackMRO.mro = lambda self: mro
+    if sys.version_info < (3,):
+        class Temp(obj.__class__):
+            __metaclass__ = HackMRO
+    else:
+        #class Temp(obj.__class__, metaclass=HackMRO):
+        #    pass
+        raise NotImplementedError()
+    obj = Temp()
+# Delete mro function otherwise all subclass of Temp are not able to
+# resolve the right mro
+    del(HackMRO.mro)
+    return obj
 
 
 if __name__ == '__main__':
