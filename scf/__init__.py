@@ -211,10 +211,10 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         if hasattr(mf, 'grids'):
             mf0.grids = approx_grids
             mf0._numint = approx_numint
-# Note: by setting small_rho_cutoff, dft.get_veff_ function may overwrite
+# Note: by setting small_rho_cutoff, dft.get_veff function may overwrite
 # approx_grids and approx_numint.  It will further changes the corresponding
 # mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
-# dft.get_veff_ are not executed so that more grid points may be found in
+# dft.get_veff are not executed so that more grid points may be found in
 # approx_grids.
             mf0.small_rho_cutoff = 1e-5
         mf0.kernel()

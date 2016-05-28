@@ -268,7 +268,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
                 buf[:nrow,col0:col1] = dat[row0:row1]
                 col0 = col1
 
-            buf1 = _ao2mo.nr_e2_(buf[:nrow], moij, ijshape, aosym_as_nr_e2, ijmosym)
+            buf1 = _ao2mo.nr_e2(buf[:nrow], moij, ijshape, aosym_as_nr_e2, ijmosym)
             if comp == 1:
                 h5d_eri[row0:row1] = buf1
             else:

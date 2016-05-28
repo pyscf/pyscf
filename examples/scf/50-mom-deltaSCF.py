@@ -55,8 +55,8 @@ b.xc = 'b3lyp'
 
 # construct new dnesity matrix with new occpuation pattern
 dm = b.make_rdm1(mo0, occ)
-# Use mom occupation principle overwirte original one
-b.get_occ = scf.addons.mom_occ(b, mo0, occ)
+# Apply mom occupation principle
+b = scf.addons.mom_occ(b, mo0, occ)
 # Start new SCF with new density matrix
 b.scf(dm)
 

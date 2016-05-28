@@ -300,7 +300,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             ti2 = log.timer('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
             tioi += ti2[1]-ti0[1]
             pbuf = bufs1[:nrow]
-            _ao2mo.nr_e2_(buf[:nrow], mokl, klshape, aosym, klmosym,
+            _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
                           ao_loc=ao_loc, out=pbuf)
 
             tw1 = time.time()
@@ -448,9 +448,9 @@ def half_e1(mol, mo_coeffs, swapfile,
             log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
                        imic+1, nmic, *aoshs)
             buf = bufs1[:comp*aoshs[2]] # (@)
-            _ao2mo.nr_e1fill_(intor, aoshs, mol._atm, mol._bas, mol._env,
-                              aosym, comp, ao2mopt, out=buf)
-            buf = _ao2mo.nr_e1_(buf, moij, ijshape, aosym, ijmosym)
+            _ao2mo.nr_e1fill(intor, aoshs, mol._atm, mol._bas, mol._env,
+                             aosym, comp, ao2mopt, out=buf)
+            buf = _ao2mo.nr_e1(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]
         ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)

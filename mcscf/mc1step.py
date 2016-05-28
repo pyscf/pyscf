@@ -778,7 +778,7 @@ class CASSCF(casci.CASCI):
                       macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
-        self._finalize_()
+        self._finalize()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
@@ -1083,9 +1083,9 @@ class CASSCF(casci.CASCI):
                            envs['e_ci'], civec, overwrite_mol=False)
         return self
 
-    def update_(self, chkfile=None):
-        return self.update_from_chk_(chkfile)
-    def update_from_chk_(self, chkfile=None):
+    def update(self, chkfile=None):
+        return self.update_from_chk(chkfile)
+    def update_from_chk(self, chkfile=None):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(lib.chkfile.load(chkfile, 'mcscf'))
         return self

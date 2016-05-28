@@ -134,7 +134,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                 moij = numpy.asarray(numpy.hstack((mo1, mo1_cas)), order='F')
                 ijshape = (0, nmo, nmo, nmo+ncas)
                 for eri1 in self.with_df.loop():
-                    bufpa = _ao2mo.nr_e2_(eri1, moij, ijshape, 's2', 's1')
+                    bufpa = _ao2mo.nr_e2(eri1, moij, ijshape, 's2', 's1')
                     bufaa = numpy.asarray(buf1[ncore:nocc,:], order='C')
                     pyscf.lib.dot(bufpa.T, bufaa, 1, paaa, 1)
                 return paaa.reshape(nmo,ncas,ncas,ncas)

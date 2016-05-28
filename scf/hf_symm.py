@@ -339,8 +339,8 @@ class RHF(hf.RHF):
                             verbose=self.verbose)
         return mo_occ
 
-    def _finalize_(self):
-        hf.RHF._finalize_(self)
+    def _finalize(self):
+        hf.RHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
@@ -448,9 +448,9 @@ class ROHF(rohf.ROHF):
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None,
-                  damp_factor=None):
+    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
 # Roothaan's effective fock
 # http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 #          |  closed     open    virtual
@@ -609,8 +609,8 @@ class ROHF(rohf.ROHF):
         dm_b = numpy.dot(mo_b, mo_b.T)
         return numpy.array((dm_a, dm_b))
 
-    def _finalize_(self):
-        rohf.ROHF._finalize_(self)
+    def _finalize(self):
+        rohf.ROHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
         c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2])

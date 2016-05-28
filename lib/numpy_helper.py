@@ -147,8 +147,6 @@ def unpack_row(tril, row_id):
 
 # for i > j of 2d mat, mat[j,i] = mat[i,j]
 def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
-    return hermi_triu_(mat, hermi, inplace)
-def hermi_triu_(mat, hermi=HERMITIAN, inplace=True):
     '''Use the elements of the lower triangular part to fill the upper triangular part.
 
     Kwargs:
@@ -230,8 +228,6 @@ def take_2d(a, idx, idy, out=None):
     return out
 
 def takebak_2d(out, a, idx, idy):
-    return takebak_2d_(out, a, idx, idy)
-def takebak_2d_(out, a, idx, idy):
     '''Reverse operation of take_2d.  out(idx,idy) = a
 
     Examples:
@@ -616,11 +612,11 @@ if __name__ == '__main__':
         a[i,i] = a[i,i].real
     b = a-a.T.conj()
     b = numpy.array((b,b))
-    x = hermi_triu_(b[0], hermi=2, inplace=0)
+    x = hermi_triu(b[0], hermi=2, inplace=0)
     print(abs(b[0]-x).sum())
-    x = hermi_triu_(b[1], hermi=2, inplace=0)
+    x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
-    x = hermi_triu_(a, hermi=1, inplace=0)
+    x = hermi_triu(a, hermi=1, inplace=0)
     print(abs(x-x.T.conj()).sum())
 
     a = numpy.random.random((400,400))

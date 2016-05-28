@@ -207,7 +207,7 @@ class UHF(hf.SCF):
         logger.info(self, 'X equation %s', self.xequation)
         return self
 
-    def build_(self, mol=None):
+    def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         if self.direct_scf:
@@ -272,7 +272,7 @@ class UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())

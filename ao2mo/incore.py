@@ -151,7 +151,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
     eri1 = half_e1(eri_ao, mo_coeffs, compact)
 
 # transform e2
-    eri1 = _ao2mo.nr_e2_(eri1, mokl, klshape, aosym='s4', mosym=klmosym)
+    eri1 = _ao2mo.nr_e2(eri1, mokl, klshape, aosym='s4', mosym=klmosym)
     return eri1
 
 def half_e1(eri_ao, mo_coeffs, compact=True):

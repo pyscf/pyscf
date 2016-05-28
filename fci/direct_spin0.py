@@ -127,7 +127,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu_(h0)
+    h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may lead to the
@@ -169,7 +169,13 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
 # dm_pq = <I|p^+ q|J>
 @pyscf.lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    link_index = _unpack(norb, nelec, link_index)
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        link_index = cistring.gen_linkstr_index(range(norb), neleca)
     rdm1a = rdm.make_rdm1('FCItrans_rdm1a', cibra, ciket,
                           norb, nelec, link_index)
     rdm1b = rdm.make_rdm1('FCItrans_rdm1b', cibra, ciket,

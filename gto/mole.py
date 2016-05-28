@@ -33,7 +33,7 @@ def M(**kwargs):
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
     '''
     mol = Mole()
-    mol.build_(**kwargs)
+    mol.build(**kwargs)
     return mol
 
 def _gaussian_int(n, alpha):
@@ -1480,11 +1480,11 @@ class Mole(pyscf.lib.StreamObject):
         return self
 
 #TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
-    def build_(self, dump_input=True, parse_arg=True,
-               verbose=None, output=None, max_memory=None,
-               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
-               charge=None, spin=None, symmetry=None,
-               symmetry_subgroup=None, light_speed=None, mass=None):
+    def build(self, dump_input=True, parse_arg=True,
+              verbose=None, output=None, max_memory=None,
+              atom=None, basis=None, unit=None, nucmod=None, ecp=None,
+              charge=None, spin=None, symmetry=None,
+              symmetry_subgroup=None, light_speed=None, mass=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -1640,12 +1640,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         self._built = True
         return self
-    def kernel(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
-    def build(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
-    kernel.__doc__ = build_.__doc__
-    build.__doc__ = build_.__doc__
+    kernel = build
 
     @pyscf.lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
@@ -1709,14 +1704,18 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
-            head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
+            head = os.path.join(pyscfdir, '.git', 'HEAD')
             with open(head, 'r') as f:
-                branch = os.path.basename(f.read().splitlines()[0])
+                head = f.read().splitlines()[0]
             # or command(git log -1 --pretty=%H)
-            head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
-            with open(head, 'r') as f:
-                self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
+            if head.startswith('ref:'):
+                branch = os.path.basename(head)
+                head = os.path.join(pyscfdir, '.git', head.split(' ')[1])
+                with open(head, 'r') as f:
+                    self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
+            else:
+                self.stdout.write('GIT HEAD %s' % head)
             self.stdout.write('\n')
         except IOError:
             pass
@@ -1783,41 +1782,44 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         logger.info(self, 'CPU time: %12.2f', time.clock())
         return self
 
-    def set_common_origin_(self, coord):
+    def set_common_orig(self, coord):
         '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
 
         Examples:
 
-        >>> mol.set_common_orig_(0)
-        >>> mol.set_common_orig_((1,0,0))
+        >>> mol.set_common_orig(0)
+        >>> mol.set_common_orig((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
         return self
-    def set_common_orig_(self, coord):
-        return self.set_common_origin_(coord)
+    set_common_origin = set_common_orig
+    set_common_orig_ = set_common_orig    # for backward compatibility
+    set_common_origin_ = set_common_orig  # for backward compatibility
 
-    def set_rinv_origin_(self, coord):
+    def set_rinv_orig(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
 
         Examples:
 
-        >>> mol.set_rinv_orig_(0)
-        >>> mol.set_rinv_orig_((0,1,0))
+        >>> mol.set_rinv_orig(0)
+        >>> mol.set_rinv_orig((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
         return self
-    def set_rinv_orig_(self, coord):
-        return self.set_rinv_origin_(coord)
+    set_rinv_origin = set_rinv_orig
+    set_rinv_orig_ = set_rinv_orig    # for backward compatibility
+    set_rinv_origin_ = set_rinv_orig  # for backward compatibility
 
-    def set_range_coulomb_(self, omega):
+    def set_range_coulomb(self, omega):
         '''Apply the long range part of range-separated Coulomb operator for
         **all** 2e integrals
         erf(omega r12) / r12
         set omega to 0 to siwtch off the range-separated Coulomb
         '''
         self._env[PTR_RANGE_OMEGA] = omega
+    set_range_coulomb_ = set_range_coulomb  # for backward compatibility
 
-    def set_nuc_mod_(self, atm_id, zeta):
+    def set_nuc_mod(self, atm_id, zeta):
         '''Change the nuclear charge distribution of the given atom ID.  The charge
         distribution is defined as: rho(r) = nuc_charge * Norm * exp(-zeta * r^2).
         This function can **only** be called after .build() method is executed.
@@ -1826,13 +1828,14 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         >>> for ia in range(mol.natm):
         ...     zeta = gto.filatov_nuc_mod(mol.atom_charge(ia))
-        ...     mol.set_nuc_mod_(ia, zeta)
+        ...     mol.set_nuc_mod(ia, zeta)
         '''
         ptr = self._atm[atm_id,PTR_ZETA]
         self._env[ptr] = zeta
         return self
+    set_nuc_mod_ = set_nuc_mod  # for backward compatibility
 
-    def set_rinv_zeta_(self, zeta):
+    def set_rinv_zeta(self, zeta):
         '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
@@ -1840,10 +1843,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         self._env[PTR_RINV_ZETA] = zeta
         return self
+    set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
-    def update_(self, chkfile):
-        return self.update_from_chk_(chkfile)
-    def update_from_chk_(self, chkfile):
+    def update(self, chkfile):
+        return self.update_from_chk(chkfile)
+    def update_from_chk(self, chkfile):
         import h5py
         with h5py.File(chkfile, 'r') as fh5:
             moldic = eval(fh5['mol'].value)
@@ -2162,6 +2166,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             bas = numpy.vstack((self._bas, self._ecpbas))
             self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
             self._env[PTR_NECPBAS] = len(self._ecpbas)
+            if shls_slice is None:
+                shls_slice = (0, self.nbas, 0, self.nbas)
         else:
             bas = self._bas
         return moleintor.getints(intor, self._atm, bas, self._env,

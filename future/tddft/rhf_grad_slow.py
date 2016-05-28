@@ -59,7 +59,7 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
-        mol.set_rinv_origin_(mol.atom_coord(ia))
+        mol.set_rinv_origin(mol.atom_coord(ia))
         h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
         h1ao[:,p0:p1] += h1[:,p0:p1]
         h1ao = h1ao + h1ao.transpose(0,2,1)

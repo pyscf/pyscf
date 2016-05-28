@@ -304,7 +304,7 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def build_(self, mol=None):
+    def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         if self.direct_scf:
@@ -364,7 +364,7 @@ class UHF(hf.SCF):
         opt_gaunt = None
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
@@ -417,7 +417,7 @@ class UHF(hf.SCF):
                          dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
-        self._finalize_()
+        self._finalize()
         return self.e_tot
 
     def analyze(self, verbose=None):
@@ -490,18 +490,18 @@ class RHF(UHF):
 def _jk_triu_(vj, vk, hermi):
     if hermi == 0:
         if vj.ndim == 2:
-            vj = pyscf.lib.hermi_triu_(vj, 1)
+            vj = pyscf.lib.hermi_triu(vj, 1)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = pyscf.lib.hermi_triu_(vj[i], 1)
+                vj[i] = pyscf.lib.hermi_triu(vj[i], 1)
     else:
         if vj.ndim == 2:
-            vj = pyscf.lib.hermi_triu_(vj, hermi)
-            vk = pyscf.lib.hermi_triu_(vk, hermi)
+            vj = pyscf.lib.hermi_triu(vj, hermi)
+            vk = pyscf.lib.hermi_triu(vk, hermi)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = pyscf.lib.hermi_triu_(vj[i], hermi)
-                vk[i] = pyscf.lib.hermi_triu_(vk[i], hermi)
+                vj[i] = pyscf.lib.hermi_triu(vj[i], hermi)
+                vk[i] = pyscf.lib.hermi_triu(vk[i], hermi)
     return vj, vk
 
 

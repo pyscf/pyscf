@@ -126,7 +126,7 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
     return DFHF()
 
 
-def get_jk_(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
+def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     t0 = t1 = (time.clock(), time.time())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
 
@@ -211,7 +211,6 @@ def get_jk_(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         buf = numpy.empty((2,dfobj.blockdim,nao,nao))
         for eri1 in dfobj.loop():
             naux, nao_pair = eri1.shape
-            assert(nao_pair == nao**2)
             for k in range(nset):
                 buf1 = buf[0,:naux]
                 fdrv(ftrans, fmmm,
@@ -240,7 +239,7 @@ def get_jk_(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     return vj, vk
 
 
-def r_get_jk_(dfobj, mol, dms, hermi=1):
+def r_get_jk(dfobj, mol, dms, hermi=1):
     '''Relativistic density fitting JK'''
     t0 = t1 = (time.clock(), time.time())
     n2c = mol.nao_2c()

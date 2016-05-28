@@ -15,7 +15,7 @@ from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
 
-def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
 
     .. note::
@@ -58,7 +58,7 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
-        ks.grids.build_()
+        ks.grids.build()
         small_rho_cutoff = ks.small_rho_cutoff
         t0 = logger.timer(ks, 'setting up grids', *t0)
     else:
@@ -69,7 +69,7 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_rks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
+        n, ks._exc, vx = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm, hermi=hermi)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -198,7 +198,7 @@ class RKS(pyscf.scf.hf.RHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    get_veff = get_veff_
+    get_veff = get_veff
     energy_elec = energy_elec
 
     def define_xc_(self, description):

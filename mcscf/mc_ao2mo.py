@@ -39,28 +39,28 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     klpashape = (0, nmo, ncore, nocc)
     aapp = numpy.empty((ncas,ncas,nmo,nmo))
     for i in range(ncas):
-        _ao2mo.nr_e2_(eri1[ncore+i,ncore:nocc], mo, klppshape,
+        _ao2mo.nr_e2(eri1[ncore+i,ncore:nocc], mo, klppshape,
                       aosym='s4', mosym='s1', out=aapp[i])
     ppaa = pyscf.lib.transpose(aapp.reshape(ncas*ncas,-1)).reshape(nmo,nmo,ncas,ncas)
     aapp = None
 
     papa = numpy.empty((nmo,ncas,nmo,ncas))
     for i in range(nmo):
-        _ao2mo.nr_e2_(eri1[i,ncore:nocc], mo, klpashape,
+        _ao2mo.nr_e2(eri1[i,ncore:nocc], mo, klpashape,
                       aosym='s4', mosym='s1', out=papa[i])
 
     pp = numpy.empty((nmo,nmo))
     j_cp = numpy.zeros((ncore,nmo))
     k_pc = numpy.zeros((nmo,ncore))
     for i in range(ncore):
-        _ao2mo.nr_e2_(eri1[i,i:i+1], mo, klppshape, aosym='s4', mosym='s1', out=pp)
+        _ao2mo.nr_e2(eri1[i,i:i+1], mo, klppshape, aosym='s4', mosym='s1', out=pp)
         j_cp[i] = pp.diagonal()
     j_pc = j_cp.T.copy()
 
     pp = numpy.empty((ncore,ncore))
     for i in range(nmo):
         klshape = (i, i+1, 0, ncore)
-        _ao2mo.nr_e2_(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', out=pp)
+        _ao2mo.nr_e2(eri1[i,:ncore], mo, klshape, aosym='s4', mosym='s1', out=pp)
         k_pc[i] = pp.diagonal()
     return j_pc, k_pc, ppaa, papa
 
@@ -118,12 +118,12 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *sh_range)
         buf = bufs1[:sh_range[2]]
-        _ao2mo.nr_e1fill_('cint2e_sph', sh_range,
-                          mol._atm, mol._bas, mol._env, 's4', 1, ao2mopt, buf)
+        _ao2mo.nr_e1fill('cint2e_sph', sh_range,
+                         mol._atm, mol._bas, mol._env, 's4', 1, ao2mopt, buf)
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
         bufpa = bufs2[:sh_range[2]]
-        _ao2mo.nr_e1_(buf, mo, pashape, 's4', 's1', out=bufpa)
+        _ao2mo.nr_e1(buf, mo, pashape, 's4', 's1', out=bufpa)
 # jc_pp, kc_pp
         if level == 1: # ppaa, papa and vhf, jcp, kcp
             if log.verbose >= logger.DEBUG1:
@@ -239,7 +239,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     log.debug1('nblk for ppaa = %d', nblk)
     dset = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
-        tmp1 = _ao2mo.nr_e2_(tmp, mo, (i0,i1,0,nmo), 's4', 's1', ao_loc=ao_loc)
+        tmp1 = _ao2mo.nr_e2(tmp, mo, (i0,i1,0,nmo), 's4', 's1', ao_loc=ao_loc)
         tmp1 = tmp1.reshape(ncas,ncas,i1-i0,nmo)
         for j in range(i1-i0):
             dset[i0+j] = tmp1[:,:,j].transpose(2,0,1)

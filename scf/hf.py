@@ -598,8 +598,8 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     else:
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''F = h^{core} + V^{HF}
 
     Args:
@@ -866,7 +866,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         unit = 1.0
 
-    mol.set_common_orig_((0,0,0))
+    mol.set_common_orig((0,0,0))
     ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
 
     el_dip_x = numpy.trace(numpy.dot(dm, ao_dip[0]))
@@ -1021,8 +1021,6 @@ class SCF(pyscf.lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def build(self, mol=None):
-        return self.build_(mol)
-    def build_(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -1067,14 +1065,7 @@ class SCF(pyscf.lib.StreamObject):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
-    # Keep both get_fock and get_fock_, needed by COSMO module
-    @pyscf.lib.with_doc(get_fock_.__doc__)
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                 diis_start_cycle=None, level_shift_factor=None,
-                 damp_factor=None):
-        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
-                              diis_start_cycle, level_shift_factor, damp_factor)
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 
@@ -1177,7 +1168,7 @@ class SCF(pyscf.lib.StreamObject):
         '''
         cput0 = (time.clock(), time.time())
 
-        self.build_(self.mol)
+        self.build(self.mol)
         self.dump_flags()
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -1185,13 +1176,13 @@ class SCF(pyscf.lib.StreamObject):
                        dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
-        self._finalize_()
+        self._finalize()
         return self.e_tot
     def kernel(self, dm0=None):
         return self.scf(dm0)
     kernel.__doc__ = scf.__doc__
 
-    def _finalize_(self):
+    def _finalize(self):
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
@@ -1209,7 +1200,7 @@ class SCF(pyscf.lib.StreamObject):
         return opt
 
     @pyscf.lib.with_doc(get_jk.__doc__)
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
@@ -1218,9 +1209,6 @@ class SCF(pyscf.lib.StreamObject):
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
-    def get_jk(self, mol=None, dm=None, hermi=1):
-        return self.get_jk_(mol, dm, hermi)
-    get_jk.__doc__ = get_jk_.__doc__
 
     def get_j(self, mol=None, dm=None, hermi=1):
         '''Compute J matrix for the given density matrix.
@@ -1291,9 +1279,9 @@ class SCF(pyscf.lib.StreamObject):
         import pyscf.scf.x2c
         return pyscf.scf.x2c.sfx2c1e(self)
 
-    def update_(self, chkfile=None):
-        return self.update_from_chk_(chkfile)
-    def update_from_chk_(self, chkfile=None):
+    def update(self, chkfile=None):
+        return self.update_from_chk(chkfile)
+    def update_from_chk(self, chkfile=None):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(pyscf.scf.chkfile.load(chkfile, 'scf'))
         return self
@@ -1358,7 +1346,7 @@ class RHF(SCF):
         SCF.__init__(self, mol)
 
     @pyscf.lib.with_doc(get_jk.__doc__)
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()

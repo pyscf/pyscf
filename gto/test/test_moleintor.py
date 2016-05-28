@@ -150,10 +150,10 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(ref, eri1))
 
     def test_rinv_with_zeta(self):
-        mol.set_rinv_orig_((.2,.3,.4))
-        mol.set_rinv_zeta_(2.2)
+        mol.set_rinv_orig((.2,.3,.4))
+        mol.set_rinv_zeta(2.2)
         v1 = mol.intor('cint1e_rinv_sph')
-        mol.set_rinv_zeta_(0)
+        mol.set_rinv_zeta(0)
         pmol = gto.M(atom='Ghost .2 .3 .4', unit='b', basis={'Ghost':[[0,(2.2*.5, 1)]]})
         pmol._atm, pmol._bas, pmol._env = \
             gto.conc_env(mol._atm, mol._bas, mol._env,

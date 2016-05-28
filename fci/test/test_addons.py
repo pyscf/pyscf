@@ -37,8 +37,8 @@ class KnowValues(unittest.TestCase):
                  ('0b1011' , '0b1011' ),
                  ('0b10101', '0b10101')]
         refci = [0.86848550920009038, 0.15130668599599939, 0.15130668599597297,
-                 -0.36620088911284837, -0.10306162063159749]
-        self.assertTrue(numpy.allclose([x[0] for x in res], refci))
+                 0.36620088911284837, 0.10306162063159749]
+        self.assertTrue(numpy.allclose([abs(x[0]) for x in res], refci))
         self.assertEqual([x[1:] for x in res], refstr)
 
     def test__init__file(self):
