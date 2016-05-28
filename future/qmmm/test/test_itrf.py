@@ -21,14 +21,14 @@ class KnowValues(unittest.TestCase):
         coords = [(0.0,0.1,0.0)]
         charges = [1.00]
         mf = itrf.mm_charge(scf.RHF(mol), coords, charges)
-        self.assertAlmostEqual(mf.kernel(), 2.0042702472400196, 9)
+        self.assertAlmostEqual(mf.kernel(), 2.0042702433049024, 9)
 
-    def test_energy(self):
+    def test_grad(self):
         coords = [(0.0,0.1,0.0)]
         charges = [1.00]
         mf = itrf.mm_charge(scf.RHF(mol), coords, charges).run()
         hfg = itrf.mm_charge_grad(grad.RHF(mf), coords, charges).run()
-        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 29.462654284449247, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 30.316453059873059, 9)
 
 
 if __name__ == "__main__":
