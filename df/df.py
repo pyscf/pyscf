@@ -29,7 +29,8 @@ class DF(lib.StreamObject):
 
         self.auxbasis = 'weigend+etb'
         self.auxmol = None
-        self._cderi = tempfile.NamedTemporaryFile()
+        self._cderi_file = tempfile.NamedTemporaryFile()
+        self._cderi = None
         self._call_count = 0
         self.blockdim = 240
 
@@ -43,11 +44,16 @@ class DF(lib.StreamObject):
         nao_pair = nao*(nao+1)//2
 
         max_memory = (self.max_memory - lib.current_memory()[0]) * .8
-        if nao_pair*nao*3*8/1e6*2 < max_memory:
+        if nao_pair*nao*3*8/1e6 < max_memory:
             self._cderi = incore.cholesky_eri(mol, auxmol=auxmol, verbose=log)
         else:
-            outcore.cholesky_eri(mol, self._cderi.name, auxmol=auxmol, verbose=log)
-            if nao_pair*nao*3*8/1e6 < max_memory:
+            if not isinstance(self._cderi, str):
+                if isinstance(self._cderi_file, str):
+                    self._cderi = self._cderi_file
+                else:
+                    self._cderi = self._cderi_file.name
+            outcore.cholesky_eri(mol, self._cderi, auxmol=auxmol, verbose=log)
+            if nao_pair*nao*8/1e6 < max_memory:
                 with addons.load(self._cderi.name) as feri:
                     cderi = numpy.asarray(feri)
                 self._cderi = cderi
@@ -56,7 +62,7 @@ class DF(lib.StreamObject):
         return self
 
     def loop(self):
-        if self.auxmol is None:
+        if self._cderi is None:
             self.build()
         with addons.load(self._cderi) as feri:
             naoaux = feri.shape[0]
@@ -76,14 +82,14 @@ class DF(lib.StreamObject):
     def get_naoaux(self):
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
-        if self.auxmol is None:
+        if self._cderi is None:
             self.build()
         with addons.load(self._cderi) as feri:
             return feri.shape[0]
 
     def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         from pyscf.df import df_jk
-        return df_jk.get_jk_(self, mol, dm, hermi, vhfopt, with_j, with_k)
+        return df_jk.get_jk(self, mol, dm, hermi, vhfopt, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):
         from pyscf.ao2mo import _ao2mo
@@ -94,8 +100,8 @@ class DF(lib.StreamObject):
         mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
         klshape = (0, nmok, nmok, nmok+nmol)
         for eri1 in self.loop():
-            buf1 = _ao2mo.nr_e2_(eri1, moij, ijshape, 's2', 's1')
-            buf2 = _ao2mo.nr_e2_(eri1, mokl, klshape, 's2', 's1')
+            buf1 = _ao2mo.nr_e2(eri1, moij, ijshape, 's2', 's1')
+            buf2 = _ao2mo.nr_e2(eri1, mokl, klshape, 's2', 's1')
             lib.dot(buf1.T, buf2, 1, mo_eri, 1)
         return mo_eri
 
@@ -138,7 +144,7 @@ class DF4C(DF):
         return self
 
     def loop(self):
-        if self.auxmol is None:
+        if self._cderi is None:
             self.build()
         with addons.load(self._cderi[0]) as ferill:
             naoaux = ferill.shape[0]
@@ -150,7 +156,7 @@ class DF4C(DF):
 
     def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         from pyscf.df import df_jk
-        return df_jk.r_get_jk_(self, mol, dm, hermi)
+        return df_jk.r_get_jk(self, mol, dm, hermi)
 
     def ao2mo(self, mo_coeffs):
         pass

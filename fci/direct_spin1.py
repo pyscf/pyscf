@@ -192,7 +192,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu_(h0)
+    h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may diverge the
@@ -237,7 +237,15 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     '''Spin searated 1-particle density matrices, (alpha,beta)
     '''
-    link_index = _unpack(norb, nelec, link_index)
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+        link_index = (link_indexa, link_indexb)
     rdm1a = rdm.make_rdm1_spin1('FCImake_rdm1a', fcivec, fcivec,
                                 norb, nelec, link_index)
     rdm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', fcivec, fcivec,

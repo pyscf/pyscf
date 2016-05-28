@@ -547,10 +547,10 @@ class CASCI(pyscf.lib.StreamObject):
                 for i, e in enumerate(self.e_cas):
                     log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
                              i, self.e_tot[i], e)
-        self._finalize_()
+        self._finalize()
         return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
-    def _finalize_(self):
+    def _finalize(self):
         pass
 
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,

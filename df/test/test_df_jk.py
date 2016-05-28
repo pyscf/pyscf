@@ -8,7 +8,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
-from pyscf.scf import dfhf
+from pyscf.df import df_jk
 
 mol = gto.M(
     verbose = 5,
@@ -89,7 +89,7 @@ class KnowValues(unittest.TestCase):
             vj0.append(numpy.einsum('kij,k->ij', cderi, v1))
             v1 = numpy.einsum('pij,jk->pki', cderi, dmi.T)
             vk0.append(numpy.einsum('pki,pkj->ij', cderi, v1))
-        vj1, vk1 = scf.dfhf.get_jk_(mf, mol, dm, 0)
+        vj1, vk1 = df_jk.get_jk(mf.with_df, mol, dm, 0)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(numpy.array(vk0), vk1))
         vhf0 = vj1 - vk1 * .5

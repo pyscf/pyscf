@@ -208,7 +208,7 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
         de[k] =(numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
               + numpy.einsum('xji,ij->x', s1[:,p0:p1], im1[:,p0:p1]))
 # h[1] \dot DM, *2 for +c.c.,  contribute to f1
-        mol.set_rinv_origin_(mol.atom_coord(k))
+        mol.set_rinv_origin(mol.atom_coord(k))
         vrinv = -mol.atom_charge(k) * mol.intor('cint1e_iprinv_sph', comp=3)
         de[k] +=(numpy.einsum('xij,ij->x', h1[:,p0:p1], dm1ao[p0:p1])
                + numpy.einsum('xji,ij->x', h1[:,p0:p1], dm1ao[:,p0:p1]))

@@ -44,10 +44,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
-            mf.grids.build_()
+            mf.grids.build()
         hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel_(mol, mf.grids, mf.xc,
-                                                     mo_coeff, mo_occ, 0)
+        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                    mo_coeff, mo_occ, 0)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
     else:
         hyb = None
@@ -132,10 +132,10 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
-            mf.grids.build_()
+            mf.grids.build()
         hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel_(mol, mf.grids, mf.xc,
-                                                     mo_coeff, mo_occ, 1)
+        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                    mo_coeff, mo_occ, 1)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T),
         #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T))
         dm0 = None
@@ -496,7 +496,7 @@ def newton(mf):
             if mo_occ is None: mo_occ = self.mo_occ
             cput0 = (time.clock(), time.time())
 
-            self.build_(self.mol)
+            self.build(self.mol)
             self.dump_flags()
             self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -506,7 +506,7 @@ def newton(mf):
                            callback=self.callback, verbose=self.verbose)
 
             logger.timer(self, 'Second order SCF', *cput0)
-            self._finalize_()
+            self._finalize()
             return self.e_tot
 
         def from_dm(self, dm):
@@ -553,15 +553,14 @@ def newton(mf):
                             mol.symm_orb, mo_coeff, s=self.get_ovlp())
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
-            def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                          diis_start_cycle=None, level_shift_factor=None,
-                          damp_factor=None):
+            def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                         diis_start_cycle=None, level_shift_factor=None,
+                         damp_factor=None):
                 fock = h1e + vhf
                 self._focka_ao = self._scf._focka_ao = fock[0]  # needed by ._scf.eig
                 self._fockb_ao = self._scf._fockb_ao = fock[1]  # needed by ._scf.eig
                 self._dm_ao = dm  # needed by .eig
                 return fock
-            get_fock = get_fock_
 
             def eig(self, fock, s1e):
                 f = (self._focka_ao, self._fockb_ao)

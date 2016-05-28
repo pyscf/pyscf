@@ -76,7 +76,7 @@ class KnowValues(unittest.TestCase):
         mol.charge = 2
         mol.build()
         mf = scf.RHF(mol)
-        mf.get_occ = scf.addons.frac_occ(mf)
+        mf = scf.addons.frac_occ(mf)
         self.assertAlmostEqual(mf.scf(), -107.13465364012296, 9)
 
     def test_dynamic_occ(self):
@@ -90,14 +90,14 @@ class KnowValues(unittest.TestCase):
         mol.charge = 2
         mol.build()
         mf = scf.RHF(mol)
-        mf.get_occ = scf.addons.dynamic_occ(mf)
+        mf = scf.addons.dynamic_occ(mf)
         self.assertAlmostEqual(mf.scf(), -74.214503776693817, 9)
 
     def test_follow_state(self):
         mf = scf.RHF(mol)
         mf.scf()
         mo0 = mf.mo_coeff[:,[0,1,2,3,5]]
-        mf.get_occ = scf.addons.follow_state(mf, mo0)
+        mf = scf.addons.follow_state(mf, mo0)
         self.assertAlmostEqual(mf.scf(), -75.178145727548511, 9)
         self.assertTrue(numpy.allclose(mf.mo_occ[:6], [2,2,2,2,0,2]))
 
@@ -112,7 +112,7 @@ class KnowValues(unittest.TestCase):
         mol.charge = 2
         mol.build()
         mf = scf.RHF(mol)
-        mf.get_occ = scf.addons.symm_allow_occ(mf)
+        mf = scf.addons.symm_allow_occ(mf)
         self.assertAlmostEqual(mf.scf(), -106.49900188208861, 9)
 
     def test_float_occ(self):
@@ -124,7 +124,7 @@ class KnowValues(unittest.TestCase):
         mol.basis = 'cc-pvdz'
         mol.build()
         mf = scf.UHF(mol)
-        mf.get_occ = scf.addons.float_occ(mf)
+        mf = scf.addons.float_occ(mf)
         self.assertAlmostEqual(mf.scf(), -37.590712883365917, 9)
 
     def test_mom_occ(self):
@@ -135,7 +135,7 @@ class KnowValues(unittest.TestCase):
         occ = mf.mo_occ
         occ[0][4] = 0.
         occ[0][5] = 1.
-        mf.get_occ = scf.addons.mom_occ(mf, mo0, occ)
+        mf = scf.addons.mom_occ(mf, mo0, occ)
         dm = mf.make_rdm1(mo0, occ)
         self.assertAlmostEqual(mf.scf(dm), -76.0606858736708, 9)
         self.assertTrue(numpy.allclose(mf.mo_occ[0][:6], [1,1,1,1,0,1]))

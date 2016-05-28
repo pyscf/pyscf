@@ -16,9 +16,9 @@ from pyscf.dft import numint
 from pyscf.dft import rks
 
 
-def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
-    :func:`get_veff_` fore more details'''
+    :func:`get_veff` fore more details'''
     if mol is None: mol = self.mol
     if dm is None:
         dm = ks.make_rdm1()
@@ -27,13 +27,13 @@ def get_veff_(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     nset = len(dm) // 2
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
-        ks.grids.build_()
+        ks.grids.build()
         small_rho_cutoff = ks.small_rho_cutoff
         t0 = logger.timer(ks, 'setting up grids', *t0)
     else:
         small_rho_cutoff = 0
 
-    n, ks._exc, vx = ks._numint.nr_uks_(mol, ks.grids, ks.xc, dm, hermi=hermi)
+    n, ks._exc, vx = ks._numint.nr_uks(mol, ks.grids, ks.xc, dm, hermi=hermi)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -109,7 +109,7 @@ class UKS(pyscf.scf.uhf.UHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    get_veff = get_veff_
+    get_veff = get_veff
     energy_elec = energy_elec
 
     def define_xc_(self, description):

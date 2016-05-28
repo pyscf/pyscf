@@ -423,7 +423,7 @@ class CASSCF(casci_uhf.CASCI):
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
-        self._finalize_()
+        self._finalize()
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
     def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,

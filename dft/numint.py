@@ -1000,8 +1000,8 @@ def nr_fxc(mol, grids, xc_code, dm0, dms, spin0, relativity=0, hermi=1,
                           hermi, rho0, vxc, fxc, max_memory, verbose)
 
 
-def cache_xc_kernel_(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
-                     max_memory=2000):
+def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
+                    max_memory=2000):
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
     DFT hessian module etc.
     '''
@@ -1059,43 +1059,39 @@ class _NumInt(object):
     def __init__(self):
         self.non0tab = None
 
-    def nr_vxc_(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
-                max_memory=2000, verbose=None):
+    def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+               max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix on given meshgrids
-        for a set of density matrices.  See :func:`nr_rks_` and :func:`nr_uks_`
+        for a set of density matrices.  See :func:`nr_rks` and :func:`nr_uks`
         for more details.
         '''
         if spin == 0:
-            return self.nr_rks_(mol, grids, xc_code, dms, relativity, hermi,
-                                max_memory, verbose)
+            return self.nr_rks(mol, grids, xc_code, dms, relativity, hermi,
+                               max_memory, verbose)
         else:
-            return self.nr_uks_(mol, grids, xc_code, dms, relativity, hermi,
-                                max_memory, verbose)
-    nr_vxc = nr_vxc_
+            return self.nr_uks(mol, grids, xc_code, dms, relativity, hermi,
+                               max_memory, verbose)
 
-    def nr_rks_(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
+    def nr_rks(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
         return nr_rks(self, mol, grids, xc_code, dms, relativity, hermi,
                       max_memory, verbose)
-    nr_rks_.__doc__ = nr_rks_vxc.__doc__
-    nr_rks = nr_rks_
+    nr_rks.__doc__ = nr_rks_vxc.__doc__
 
-    def nr_uks_(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
+    def nr_uks(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
         if self.non0tab is None:
             self.non0tab = self.make_mask(mol, grids.coords)
         return nr_uks(self, mol, grids, xc_code, dms, relativity, hermi,
                       max_memory, verbose)
-    nr_uks_.__doc__ = nr_uks_vxc.__doc__
-    nr_uks = nr_uks_
+    nr_uks.__doc__ = nr_uks_vxc.__doc__
 
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     nr_fxc = nr_fxc
-    cache_xc_kernel_ = cache_xc_kernel_
-    cache_xc_kernel  = cache_xc_kernel_
+    cache_xc_kernel  = cache_xc_kernel
 
     large_rho_indices = large_rho_indices
 
@@ -1206,7 +1202,7 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
     mf.grids.prune = None
-    mf.grids.build_()
+    mf.grids.build()
     dm = mf.get_init_guess(key='minao')
 
     numpy.random.seed(1)

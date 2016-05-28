@@ -58,7 +58,7 @@ class VHFOpt(object):
     def direct_scf_tol(self, v):
         self._this.contents.direct_scf_cutoff = v
 
-    def set_dm_(self, dm, atm, bas, env):
+    def set_dm(self, dm, atm, bas, env):
         if self._dmcondname is not None:
             c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
             c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -133,10 +133,10 @@ def incore(eri, dm, hermi=0):
          vk.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nao), fvj, fvk)
     if hermi != 0:
-        vj = pyscf.lib.hermi_triu_(vj, hermi)
-        vk = pyscf.lib.hermi_triu_(vk, hermi)
+        vj = pyscf.lib.hermi_triu(vj, hermi)
+        vk = pyscf.lib.hermi_triu(vk, hermi)
     else:
-        vj = pyscf.lib.hermi_triu_(vj, 1)
+        vj = pyscf.lib.hermi_triu(vj, 1)
     return vj, vk
 
 # use cint2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
@@ -162,7 +162,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
         cintopt = make_cintopt(c_atm, c_bas, c_env, 'cint2e_sph')
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -201,10 +201,10 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
 
     # vj must be symmetric
     for idm in range(n_dm):
-        vjk[0,idm] = pyscf.lib.hermi_triu_(vjk[0,idm], 1)
+        vjk[0,idm] = pyscf.lib.hermi_triu(vjk[0,idm], 1)
     if hermi != 0: # vk depends
         for idm in range(n_dm):
-            vjk[1,idm] = pyscf.lib.hermi_triu_(vjk[1,idm], hermi)
+            vjk[1,idm] = pyscf.lib.hermi_triu(vjk[1,idm], hermi)
     if n_dm == 1:
         vjk = vjk.reshape(2,nao,nao)
     return vjk
@@ -240,7 +240,7 @@ def direct_mapdm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -326,7 +326,7 @@ def direct_bindm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -425,7 +425,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -493,7 +493,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor

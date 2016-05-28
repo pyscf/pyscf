@@ -340,7 +340,7 @@ def cosmo_fock_o0(cosmo, dm):
             dab = numpy.linalg.norm(mol.atom_coord(iatom)-coords)
             phi += mol.atom_charge(iatom)/dab
         # Potential
-        mol.set_rinv_origin_(coords)
+        mol.set_rinv_origin(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         phi -= numpy.einsum('ij,ij',dm,vpot)
         cosmo.phi[i] = phi
@@ -355,7 +355,7 @@ def cosmo_fock_o0(cosmo, dm):
     for i in range(cosmo.nps):
         # Potential
         coords = numpy.array((cosmo.cosurf[3*i],cosmo.cosurf[3*i+1],cosmo.cosurf[3*i+2]))
-        mol.set_rinv_origin_(coords)
+        mol.set_rinv_origin(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         fock -= vpot*cosmo.qcos[i]
     fepsi = cosmo.fepsi() 
@@ -406,7 +406,7 @@ def cosmo_occ_o0(cosmo, dm):
             dab = numpy.linalg.norm(mol.atom_coord(iatom)-coords)
             phi += mol.atom_charge(iatom)/dab
         # Potential
-        mol.set_rinv_origin_(coords)
+        mol.set_rinv_origin(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         phi -= numpy.einsum('ij,ij',dm,vpot)
         cosmo.phio[i] = phi
@@ -489,7 +489,7 @@ def cosmo_for_scf(mf, cosmo):
                      damp_factor=None):
             if cosmo.dm is None:
                 cosmo._v = cosmo.cosmo_fock(dm)
-            return self.get_fock_(h1e+cosmo._v, s1e, vhf, dm, cycle, adiis,
+            return oldMF.get_fock(self, h1e+cosmo._v, s1e, vhf, dm, cycle, adiis,
                                   diis_start_cycle, level_shift_factor, damp_factor)
 
         def get_grad(self, mo_coeff, mo_occ, h1_vhf=None):
@@ -505,10 +505,10 @@ def cosmo_for_scf(mf, cosmo):
             lib.logger.debug(self, 'E_diel = %.15g', cosmo.ediel)
             return e_tot, e_coul
 
-        def _finalize_(self):
+        def _finalize(self):
             cosmo.e_tot = self.e_tot
             self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
-            return oldMF._finalize_(self)
+            return oldMF._finalize(self)
     return MF()
 
 def cosmo_for_mcscf(mc, cosmo):
@@ -581,10 +581,10 @@ def cosmo_for_mcscf(mc, cosmo):
             e_tot = e_tot - edup + cosmo.ediel
             return e_tot, e_cas, fcivec
 
-        def _finalize_(self):
+        def _finalize(self):
             cosmo.e_tot = self.e_tot
             self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
-            return oldCAS._finalize_(self)
+            return oldCAS._finalize(self)
 
     return CAS()
 
@@ -685,13 +685,13 @@ def cosmo_for_casci(mc, cosmo):
             else:
                 self.mo_coeff, _, self.mo_energy = \
                         self.canonicalize(mo_coeff, self.ci, verbose=log)
-            self._finalize_()
+            self._finalize()
             return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
-        def _finalize_(self):
+        def _finalize(self):
             cosmo.e_tot = self.e_tot
             self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
-            return oldCAS._finalize_(self)
+            return oldCAS._finalize(self)
 
     return CAS()
 

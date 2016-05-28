@@ -26,7 +26,7 @@ class RKS(pyscf.scf.hf_symm.RHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    get_veff = rks.get_veff_
+    get_veff = rks.get_veff
     energy_elec = rks.energy_elec
 
 
@@ -41,7 +41,7 @@ class ROKS(pyscf.scf.hf_symm.ROHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    get_veff = uks.get_veff_
+    get_veff = uks.get_veff
     energy_elec = uks.energy_elec
 
 

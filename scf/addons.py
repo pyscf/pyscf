@@ -12,7 +12,7 @@ from pyscf import symm
 from pyscf.scf import hf
 
 
-def frac_occ(mf, tol=1e-3):
+def frac_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
@@ -34,12 +34,12 @@ def frac_occ(mf, tol=1e-3):
             logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return get_occ
-def frac_occ_(mf, tol=1e-3):
-    mf.get_occ = frac_occ(mf, tol)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def frac_occ(mf, tol=1e-3):
+    return frac_occ_(copy.copy(mf), tol)
 
-def dynamic_occ(mf, tol=1e-3):
+def dynamic_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
@@ -58,12 +58,12 @@ def dynamic_occ(mf, tol=1e-3):
             logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return get_occ
-def dynamic_occ_(mf, tol=1e-3):
-    mf.get_occ = dynamic_occ(mf, tol)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def dynamic_occ(mf, tol=1e-3):
+    return dynamic_occ_(copy.copy(mf), tol)
 
-def float_occ(mf):
+def float_occ_(mf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
     from pyscf.scf import uhf
     assert(isinstance(mf, uhf.UHF))
@@ -78,12 +78,12 @@ def float_occ(mf):
                         mf.nelec[0], mf.nelec[1], n_a, n_b)
             mf.nelec = (n_a, n_b)
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
-    return get_occ
-def float_occ_(mf):
-    mf.get_occ = float_occ(mf)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def float_occ(mf):
+    return float_occ_(copy.copy(mf))
 
-def symm_allow_occ(mf, tol=1e-3):
+def symm_allow_occ_(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
 break symmetry as the occupied orbitals'''
     def get_occ(mo_energy, mo_coeff=None):
@@ -113,12 +113,12 @@ break symmetry as the occupied orbitals'''
                     mo_energy[nocc-1], mo_energy[nocc])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return get_occ
-def symm_allow_occ_(mf, tol=1e-3):
-    mf.get_occ = symm_allow_occ(mf, tol)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def symm_allow_occ(mf, tol=1e-3):
+    return symm_allow_occ_(copy.copy(mf), tol)
 
-def follow_state(mf, occorb=None):
+def follow_state_(mf, occorb=None):
     occstat = [occorb]
     old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
@@ -135,12 +135,12 @@ def follow_state(mf, occorb=None):
             logger.debug(mf, '  mo_energy = %s', mo_energy)
         occstat[0] = mo_coeff[:,mo_occ>0]
         return mo_occ
-    return get_occ
-def follow_state_(mf, occorb=None):
-    mf.get_occ = follow_state_(mf, occorb)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def follow_state(mf, occorb=None):
+    return follow_state_(copy.copy(mf), occorb)
 
-def mom_occ(mf, occorb, setocc):
+def mom_occ_(mf, occorb, setocc):
     '''Use maximum overlap method to determine occupation number for each orbital in every
     iteration.'''
     assert(isinstance(mf, pyscf.scf.uhf.UHF))
@@ -173,10 +173,10 @@ def mom_occ(mf, occorb, setocc):
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
         return mo_occ
-    return get_occ
-def mom_occ_(mf, occorb=None, setocc=None):
-    mf.get_occ = mom_occ_(mf, occorb, setocc)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def mom_occ(mf, occorb=None, setocc=None):
+    return mom_occ_(copy.copy(mf), occorb, setocc)
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients
