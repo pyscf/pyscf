@@ -10,9 +10,9 @@ import tempfile
 import numpy
 import scipy.linalg
 import h5py
-import pyscf.lib
+from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
-import pyscf.gto
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 from pyscf.df import incore
@@ -22,13 +22,13 @@ from pyscf.df import _ri
 # for auxe1 (P|ij)
 #
 
-libri = pyscf.lib.load_library('libri')
+libri = lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
                  int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
-                 ioblk_size=256, verbose=0):
+                 ioblk_size=256, auxmol=None, verbose=0):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -38,6 +38,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
+    if auxmol is None:
+        auxmol = incore.format_aux_basis(mol, auxbasis)
 
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
@@ -46,7 +48,6 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
     time1 = log.timer('generate (ij|L) 1 pass', *time0)
 
     nao = mol.nao_nr()
-    auxmol = incore.format_aux_basis(mol, auxbasis)
     naoaux = auxmol.nao_nr()
     aosym = _stand_sym_code(aosym)
     if aosym == 's1':
@@ -136,26 +137,15 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
         for icomp in range(comp):
             feri.create_group(str(icomp)) # for h5py old version
 
-    atm, bas, env = \
-            pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                    auxmol._atm, auxmol._bas, auxmol._env)
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(mol.natm+auxmol.natm)
-    nbas = ctypes.c_int(mol.nbas)
-    if 'ssc' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, bas)
-        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas, True)
-    elif 'cart' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, bas, True)
-        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas, True)
-    else:
-        ao_loc = _ri.make_loc(0, mol.nbas, bas)
-        kloc = _ri.make_loc(mol.nbas, mol.nbas+auxmol.nbas, bas)
-    nao = ao_loc[-1] - ao_loc[0]
-    naoaux = kloc[-1] - kloc[0]
+    def store(b, label):
+        cderi = scipy.linalg.solve_triangular(low, b, lower=True, overwrite_b=True)
+        if cderi.flags.f_contiguous:
+            cderi = lib.transpose(cderi.T)
+        feri[label] = cderi
 
+    atm, bas, env, ao_loc = incore._env_and_aoloc(int3c, mol, auxmol)
+    nao = ao_loc[mol.nbas]
+    naoaux = ao_loc[-1] - nao
     if aosym == 's1':
         nao_pair = nao * nao
         buflen = min(max(int(ioblk_size*1e6/8/naoaux/comp), 1), nao_pair)
@@ -168,30 +158,21 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     if log.verbose >= logger.DEBUG1:
         log.debug1('shranges = %s', shranges)
-    cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, int3c)
+    cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
+
     for istep, sh_range in enumerate(shranges):
         log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
-        basrange = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
-        buf = bufs1[:comp*nrow].reshape(comp,nrow,naoaux)
-        if 's1' in aosym:
-            ijkoff = ao_loc[bstart] * nao * naoaux
+        shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+        buf = _ri.nr_auxe2(int3c, atm, bas, env, shls_slice, ao_loc,
+                           aosym, comp, cintopt, bufs1)
+        if comp == 1:
+            store(buf.T, '%s/%d'%(dataname,istep))
         else:
-            ijkoff = ao_loc[bstart] * (ao_loc[bstart]+1) // 2 * naoaux
-        _ri.nr_auxe2(int3c, basrange,
-                     atm, bas, env, aosym, comp, cintopt, buf, ijkoff,
-                     ao_loc[bend]-ao_loc[bstart],
-                     nao, naoaux, ao_loc[bstart:bend+1], ao_loc, kloc)
-        for icomp in range(comp):
-            if comp == 1:
-                label = '%s/%d'%(dataname,istep)
-            else:
-                label = '%s/%d/%d'%(dataname,icomp,istep)
-            cderi = scipy.linalg.solve_triangular(low, buf[icomp].T,
-                                                  lower=True, overwrite_b=True)
-            feri[label] = cderi
+            for icomp in range(comp):
+                store(buf[icomp].T, '%s/%d/%d'%(dataname,icomp,istep))
         time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
     buf = bufs1 = None
 
@@ -355,7 +336,7 @@ def _stand_sym_code(sym):
 
 
 if __name__ == '__main__':
-    mol = pyscf.gto.Mole()
+    mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
 

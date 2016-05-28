@@ -29,14 +29,8 @@ libfci = pyscf.lib.load_library('libfci')
 @pyscf.lib.with_doc(direct_spin1.contract_1e.__doc__)
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na,nlink,_ = link_index.shape
+    link_index = _unpack(norb, nelec, link_index)
+    na, nlink = link_index.shape[:2]
     assert(fcivec.size == na**2)
     ci1 = numpy.empty_like(fcivec)
     f1e_tril = pyscf.lib.pack_tril(f1e)
@@ -62,14 +56,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na,nlink,_ = link_index.shape
+    link_index = _unpack(norb, nelec, link_index)
+    na, nlink = link_index.shape[:2]
     assert(fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
 
@@ -181,13 +169,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
 # dm_pq = <I|p^+ q|J>
 @pyscf.lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index(range(norb), neleca)
+    link_index = _unpack(norb, nelec, link_index)
     rdm1a = rdm.make_rdm1('FCItrans_rdm1a', cibra, ciket,
                           norb, nelec, link_index)
     rdm1b = rdm.make_rdm1('FCItrans_rdm1b', cibra, ciket,
@@ -258,14 +240,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
 
+    link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
     eri = numpy.ascontiguousarray(eri)
     na = link_index.shape[0]
@@ -408,6 +384,17 @@ class FCISolver(direct_spin1.FCISolver):
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
+
+def _unpack(norb, nelec, link_index):
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        return cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+    else:
+        return link_index
 
 
 if __name__ == '__main__':

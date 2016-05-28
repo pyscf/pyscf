@@ -6,203 +6,78 @@
 
 #include <stdlib.h>
 #include <assert.h>
-//#include <omp.h>
-#include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
-#include "vhf/nr_direct.h"
-#include "np_helper/np_helper.h"
 #include "ao2mo/nr_ao2mo.h"
 
+#define NCTRMAX         72
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 #define OUTPUTIJ        1
 #define INPUT_IJ        2
 
-
-void RIfill_s1_auxe2(int (*intor)(), double *eri, size_t ijkoff,
-                     int ncomp, int ish, int jsh, int naoaux,
-                     int *basrange, int *iloc, int *jloc, int *kloc,
-                     CINTOpt *cintopt, struct _VHFEnvs *envs)
-{
-        const int brastart = basrange[0];
-        const int ketstart = basrange[2];
-        const int auxstart = basrange[4];
-        const int auxcount = basrange[5];
-        const int nao = envs->nao;
-        const int di = iloc[ish+1] - iloc[ish];
-        const int dj = jloc[jsh+1] - jloc[jsh];
-        const int dij = di * dj;
-        const size_t nao2 = nao * nao;
-        const size_t neri = nao2 * naoaux;
-        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux*ncomp);
-
-        int ksh, dk;
-        int i, j, k, i0, j0, k0, icomp;
-        int shls[3];
-        size_t ij0;
-        double *peri, *pbuf;
-
-        shls[0] = brastart + ish;
-        shls[1] = ketstart + jsh;
-
-        for (ksh = 0; ksh < auxcount; ksh++) {
-                shls[2] = auxstart + ksh;
-                k0 = kloc[ksh  ];
-                dk = kloc[ksh+1] - kloc[ksh];
-                if ((*intor)(eribuf, shls, envs->atm, envs->natm,
-                             envs->bas, envs->nbas, envs->env, cintopt)) {
-                        for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = iloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jloc[jsh], j = 0; j < dj; j++, j0++) {
-                                ij0 = i0 * nao + j0;
-                                peri = eri + neri * icomp
-                                     + ij0 * naoaux + k0 - ijkoff;
-                                pbuf = eribuf + j * di + i;
-                                for (k = 0; k < dk; k++) {
-                                        peri[k] = pbuf[k*dij];
-                                }
-                        } } }
-                } else {
-                        for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
-                        for (j0 = jloc[jsh]; j0 < jloc[jsh+1]; j0++) {
-                                ij0 = i0 * nao + j0;
-                                peri = eri + neri * icomp
-                                     + ij0 * naoaux + k0 - ijkoff;
-                                for (k = 0; k < dk; k++) {
-                                        peri[k] = 0;
-                                }
-                        } } }
-                }
-        }
-        free(eribuf);
-}
-
 /*
- * [ \      ]
- * [  \     ]
- * [ ...    ]
- * [ ....   ]
- * [ .....  ]
- * [      \ ]
+ * (ij| are stored in C-order
  */
-void RIfill_s2ij_auxe2(int (*intor)(), double *eri, size_t ijkoff,
-                       int ncomp, int ish, int jsh, int naoaux,
-                       int *basrange, int *iloc, int *jloc, int *kloc,
-                       CINTOpt *cintopt, struct _VHFEnvs *envs)
+static void dcopy_s1(double *out, double *in, int comp,
+                     int nj, int nij, int nijk, int di, int dj, int dk)
 {
-        if (iloc[ish] < jloc[jsh]) {
-                return;
-        }
-
-        const int brastart = basrange[0];
-        const int ketstart = basrange[2];
-        const int auxstart = basrange[4];
-        const int auxcount = basrange[5];
-        const int di = iloc[ish+1] - iloc[ish];
-        const int dj = jloc[jsh+1] - jloc[jsh];
-        const int dij = di * dj;
-        const int nao = envs->nao;
-        const size_t nao2 = nao*(nao+1)/2;
-        const size_t neri = nao2 * naoaux;
-        double *eribuf = (double *)malloc(sizeof(double)*dij*naoaux*ncomp);
-
-        int ksh, dk;
-        int i, j, k, i0, j0, k0, icomp;
-        int shls[3];
-        size_t ij0;
-        double *peri, *pbuf;
-
-        shls[0] = brastart + ish;
-        shls[1] = ketstart + jsh;
-
-        for (ksh = 0; ksh < auxcount; ksh++) {
-                shls[2] = auxstart + ksh;
-                k0 = kloc[ksh  ];
-                dk = kloc[ksh+1] - kloc[ksh];
-                if ((*intor)(eribuf, shls, envs->atm, envs->natm,
-                             envs->bas, envs->nbas, envs->env, cintopt)) {
-                        if (iloc[ish] != jloc[jsh]) {
-                                for (icomp = 0; icomp < ncomp; icomp++) {
-                                for (i0 = iloc[ish], i = 0; i < di; i++,i0++) {
-                                for (j0 = jloc[jsh], j = 0; j < dj; j++,j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + neri * icomp
-                                             + ij0 * naoaux + k0 - ijkoff;
-                                        pbuf = eribuf + j * di + i;
-                                        for (k = 0; k < dk; k++) {
-                                                peri[k] = pbuf[k*dij];
-                                        }
-                                } } }
-                        } else {
-                                for (icomp = 0; icomp < ncomp; icomp++) {
-                                for (i0 = iloc[ish],i = 0; i < di; i++, i0++) {
-                                for (j0 = jloc[jsh],j = 0; j0 <= i0; j++, j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + neri * icomp
-                                             + ij0 * naoaux + k0 - ijkoff;
-                                        pbuf = eribuf + j * di + i;
-                                        for (k = 0; k < dk; k++) {
-                                                peri[k] = pbuf[k*dij];
-                                        }
-                                } } }
-                        }
-                } else {
-                        if (iloc[ish] != jloc[jsh]) {
-                                for (icomp = 0; icomp < ncomp; icomp++) {
-                                for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
-                                for (j0 = jloc[jsh]; j0 < jloc[jsh+1]; j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + neri * icomp
-                                             + ij0 * naoaux + k0 - ijkoff;
-                                        for (k = 0; k < dk; k++) {
-                                                peri[k] = 0;
-                                        }
-                                } } }
-                        } else {
-                                for (icomp = 0; icomp < ncomp; icomp++) {
-                                for (i0 = iloc[ish]; i0 < iloc[ish+1]; i0++) {
-                                for (j0 = jloc[jsh]; j0 <= i0; j0++) {
-                                        ij0 = i0*(i0+1)/2 + j0;
-                                        peri = eri + ij0 * naoaux + k0 - ijkoff;
-                                        for (k = 0; k < dk; k++) {
-                                                peri[k] = 0;
-                                        }
-                                } } }
-                        }
+        const size_t dij = di * dj;
+        int i, j, k, ic;
+        double *pout, *pin;
+        for (ic = 0; ic < comp; ic++) {
+                for (k = 0; k < dk; k++) {
+                        pout = out + k * nij;
+                        pin  = in  + k * dij;
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                pout[i*nj+j] = pin[j*di+i];
+                        } }
                 }
+                out += nijk;
+                in  += dij * dk;
         }
-        free(eribuf);
+}
+void RInr3c_fill_s1(int (*intor)(), double *out, int comp,
+                    int ish, int jsh, double *buf,
+                    int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                    int *atm, int natm, int *bas, int nbas, double *env)
+{
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        const int ksh0 = shls_slice[4];
+        const int ksh1 = shls_slice[5];
+        const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
+        const size_t nij = naoi * naoj;
+        const size_t nijk = nij * naok;
+
+        ish += ish0;
+        jsh += jsh0;
+        const int di = ao_loc[ish+1] - ao_loc[ish];
+        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        const int ip = ao_loc[ish] - ao_loc[ish0];
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        out += ip * naoj + jp;
+
+        int ksh, dk, k0;
+        int shls[3];
+
+        shls[0] = ish;
+        shls[1] = jsh;
+
+        for (ksh = ksh0; ksh < ksh1; ksh++) {
+                shls[2] = ksh;
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                k0 = ao_loc[ksh  ] - ao_loc[ksh0];
+                (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt);
+                dcopy_s1(out+k0*nij, buf, comp, naoj, nij, nijk, di, dj, dk);
+        }
 }
 
 
-/*
- * fill can be one of RIfill_s1_auxe2 and RIfill_s2ij_auxe2
- */
-void RInr_3c2e_auxe2_drv(int (*intor)(), void (*fill)(), double *eri,
-                         size_t ijkoff, int nao, int naoaux,
-                         int *basrange, int *iloc, int *jloc, int *kloc,
-                         int ncomp, CINTOpt *cintopt,
-                         int *atm, int natm, int *bas, int nbas, double *env)
-{
-        assert(fill == &RIfill_s1_auxe2 || fill == &RIfill_s2ij_auxe2);
-        struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao};
-#pragma omp parallel default(none) \
-        shared(eri, intor, fill, basrange, iloc, jloc, kloc, \
-               ijkoff, ncomp, naoaux, envs, cintopt)
-{
-        int i, j, ij;
-        int bracount = basrange[1];
-        int ketcount = basrange[3];
-#pragma omp for nowait schedule(dynamic, 2)
-        for (ij = 0; ij < bracount*ketcount; ij++) {
-                i = ij / ketcount;
-                j = ij - i * ketcount;
-                (*fill)(intor, eri, ijkoff, ncomp, i, j, naoaux,
-                        basrange, iloc, jloc, kloc, cintopt, &envs);
-        }
-}
-}
 
 /*
  * transform bra, s1 to label AO symmetry

@@ -4,6 +4,7 @@
 #
 
 import ctypes
+import _ctypes
 import numpy
 from pyscf.lib import misc
 
@@ -14,12 +15,14 @@ Extension to numpy module
 _np_helper = misc.load_library('libnp_helper')
 
 BLOCK_DIM = 192
+PLAIN = 0
 HERMITIAN = 1
 ANTIHERMI = 2
+SYMMETRIC = 3
 
 
 # 2d -> 1d
-def pack_tril(mat):
+def pack_tril(mat, axis=-1, out=None):
     '''flatten the lower triangular part of a matrix.
     Given mat, it returns mat[numpy.tril_indices(mat.shape[0])]
 
@@ -28,20 +31,32 @@ def pack_tril(mat):
     >>> pack_tril(numpy.arange(9).reshape(3,3))
     [0 3 4 6 7 8]
     '''
-    mat = numpy.ascontiguousarray(mat)
-    nd = mat.shape[0]
-    tril = numpy.empty(nd*(nd+1)//2, mat.dtype)
-    if numpy.iscomplexobj(mat):
-        fn = _np_helper.NPzpack_tril
+    if mat.ndim == 2:
+        count, nd = 1, mat.shape[0]
+        shape = nd*(nd+1)//2
     else:
-        fn = _np_helper.NPdpack_tril
-    fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), tril.ctypes.data_as(ctypes.c_void_p), \
-       mat.ctypes.data_as(ctypes.c_void_p))
-    return tril
+        count, nd = mat.shape[:2]
+        shape = (count, nd*(nd+1)//2)
+
+    if mat.ndim == 2 or axis == -1:
+        mat = numpy.asarray(mat, order='C')
+        out = numpy.ndarray(shape, mat.dtype, buffer=out)
+        if numpy.iscomplexobj(mat):
+            fn = _np_helper.NPzpack_tril_2d
+        else:
+            fn = _np_helper.NPdpack_tril_2d
+        fn(ctypes.c_int(count), ctypes.c_int(nd),
+           out.ctypes.data_as(ctypes.c_void_p),
+           mat.ctypes.data_as(ctypes.c_void_p))
+        return out
+
+    else:  # pack the leading two dimension
+        assert(axis == 0)
+        out = mat[numpy.tril_indices(nd)]
+        return out
 
 # 1d -> 2d, write hermitian lower triangle to upper triangle
-def unpack_tril(tril, filltriu=HERMITIAN):
+def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
     '''Reverse operation of pack_tril.  Put a vector in the lower triangular
     part of a matrix.
 
@@ -69,18 +84,41 @@ def unpack_tril(tril, filltriu=HERMITIAN):
      [ 1.  2. -4.]
      [ 3.  4.  5.]]
     '''
-    tril = numpy.ascontiguousarray(tril)
-    nd = int(numpy.sqrt(tril.size*2))
-    mat = numpy.empty((nd,nd), tril.dtype)
-    if numpy.iscomplexobj(tril):
-        fn = _np_helper.NPzunpack_tril
+    tril = numpy.asarray(tril, order='C')
+    if tril.ndim == 1:
+        count, nd = 1, tril.size
+        nd = int(numpy.sqrt(nd*2))
+        shape = (nd,nd)
     else:
-        fn = _np_helper.NPdunpack_tril
-    fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), tril.ctypes.data_as(ctypes.c_void_p),
-       mat.ctypes.data_as(ctypes.c_void_p),
-       ctypes.c_int(filltriu))
-    return mat
+        nd = tril.shape[axis]
+        count = int(tril.size // nd)
+        nd = int(numpy.sqrt(nd*2))
+        shape = (count,nd,nd)
+
+    if tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
+        out = numpy.ndarray(shape, tril.dtype, buffer=out)
+        if numpy.iscomplexobj(tril):
+            fn = _np_helper.NPzunpack_tril_2d
+        else:
+            fn = _np_helper.NPdunpack_tril_2d
+        fn(ctypes.c_int(count), ctypes.c_int(nd),
+           tril.ctypes.data_as(ctypes.c_void_p),
+           out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(filltriu))
+        return out
+
+    else:  # unpack the leading dimension
+        assert(axis == 0)
+        shape = (nd,nd) + tril.shape[1:]
+        out = numpy.ndarray(shape, tril.dtype, buffer=out)
+        idx = numpy.tril_indices(nd)
+        if filltriu == HERMITIAN:
+            for ij,(i,j) in enumerate(zip(*idx)):
+                out[i,j] = out[j,i] = tril[ij]
+        elif filltriu == ANTIHERMI:
+            raise KeyError('filltriu == ANTIHERMI')
+        else:
+            out[idx] = tril
+        return out
 
 # extract a row from a tril-packed matrix
 def unpack_row(tril, row_id):
@@ -131,7 +169,8 @@ def hermi_triu_(mat, hermi=HERMITIAN, inplace=True):
      [ 6.  7.  8.]]
     '''
     assert(hermi == HERMITIAN or hermi == ANTIHERMI)
-    if not mat.flags.c_contiguous or not inplace:
+    if not mat.flags.c_contiguous:
+        assert(not inplace)
         mat = mat.copy(order='C')
     nd = mat.shape[0]
     if numpy.iscomplexobj(mat):
@@ -232,11 +271,12 @@ def transpose(a, inplace=False, out=None):
     arow, acol = a.shape
     if inplace:
         assert(arow == acol)
-        for c0, c1 in prange(0, acol, BLOCK_DIM):
-            for r0, r1 in prange(0, c0, BLOCK_DIM):
-                tmp = a[c0:c1,r0:r1].copy()
+        tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM))
+        for c0, c1 in misc.prange(0, acol, BLOCK_DIM):
+            for r0, r1 in misc.prange(0, c0, BLOCK_DIM):
+                tmp[:c1-c0,:r1-r0] = a[c0:c1,r0:r1]
                 a[c0:c1,r0:r1] = a[r0:r1,c0:c1].T
-                a[r0:r1,c0:c1] = tmp.T
+                a[r0:r1,c0:c1] = tmp[:c1-c0,:r1-r0].T
             # diagonal blocks
             a[c0:c1,c0:c1] = a[c0:c1,c0:c1].T
         return a
@@ -289,8 +329,8 @@ def transpose_sum(a, inplace=False, out=None):
         out = numpy.empty_like(a)
     else:
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
-    for c0, c1 in prange(0, na, BLOCK_DIM):
-        for r0, r1 in prange(0, c0, BLOCK_DIM):
+    for c0, c1 in misc.prange(0, na, BLOCK_DIM):
+        for r0, r1 in misc.prange(0, c0, BLOCK_DIM):
             tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].T
             out[c0:c1,r0:r1] = tmp.T
             out[r0:r1,c0:c1] = tmp
@@ -395,7 +435,17 @@ def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
 
+def asarray(a, dtype=None, order=None):
+    '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
+    numpy.asarray function but more efficient.
+    '''
+    if not isinstance(a, numpy.ndarray):
+        a = numpy.vstack(a).reshape(-1, *(a[0].shape))
+    return numpy.asarray(a, dtype, order)
+
 def norm(x, ord=None, axis=None):
+    '''numpy.linalg.norm for numpy 1.6.*
+    '''
     if axis is None:
         return numpy.linalg.norm(x, ord)
     elif axis == 0:
@@ -530,6 +580,31 @@ def direct_sum(subscripts, *operands):
 
     return numpy.einsum('->'.join((''.join(src), dest)), out)
 
+def condense(opname, a, locs):
+    '''
+    nd = loc[-1]
+    out = numpy.empty((nd,nd))
+    for i,i0 in enumerate(loc):
+        i1 = loc[i+1]
+        for j,j0 in enumerate(loc):
+            j1 = loc[j+1]
+            out[i,j] = op(a[i0:i1,j0:j1])
+    return out
+    '''
+    assert(a.flags.c_contiguous)
+    assert(a.dtype == numpy.double)
+    if not opname.startswith('NP_'):
+        opname = 'NP_' + opname
+    op = ctypes.c_void_p(_ctypes.dlsym(_np_helper._handle, opname))
+    locs = numpy.asarray(locs, numpy.int32)
+    nloc = locs.size - 1
+    out = numpy.empty((nloc,nloc))
+    _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                          a.ctypes.data_as(ctypes.c_void_p),
+                          locs.ctypes.data_as(ctypes.c_void_p),
+                          ctypes.c_int(nloc))
+    return out
+
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))
@@ -552,6 +627,8 @@ if __name__ == '__main__':
     print(abs(b[0]-x).sum())
     x = hermi_triu_(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
+    x = hermi_triu_(a, hermi=1, inplace=0)
+    print(abs(x-x.T.conj()).sum())
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))
@@ -584,3 +661,13 @@ if __name__ == '__main__':
     cp = cartesian_prod(arrs)
     for i,x in enumerate(itertools.product(*arrs)):
         assert(numpy.allclose(x,cp[i]))
+
+    locs = numpy.arange(5)
+    a = numpy.random.random((locs[-1],locs[-1])) - .5
+    print(numpy.allclose(a, condense('sum', a, locs)))
+    print(numpy.allclose(a, condense('max', a, locs)))
+    print(numpy.allclose(a, condense('min', a, locs)))
+    print(numpy.allclose(abs(a), condense('abssum', a, locs)))
+    print(numpy.allclose(abs(a), condense('absmax', a, locs)))
+    print(numpy.allclose(abs(a), condense('absmin', a, locs)))
+    print(numpy.allclose(abs(a), condense('norm', a, locs)))

@@ -41,17 +41,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     vector.
     '''
     fcivec = numpy.asarray(fcivec, order='C')
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     assert(fcivec.size == na*nb)
@@ -102,17 +92,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     '''
     fcivec = numpy.asarray(fcivec, order='C')
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     assert(fcivec.size == na*nb)
@@ -257,15 +237,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     '''Spin searated 1-particle density matrices, (alpha,beta)
     '''
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
-        link_index = (link_indexa, link_indexb)
+    link_index = _unpack(norb, nelec, link_index)
     rdm1a = rdm.make_rdm1_spin1('FCImake_rdm1a', fcivec, fcivec,
                                 norb, nelec, link_index)
     rdm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', fcivec, fcivec,
@@ -398,17 +370,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
 
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
@@ -645,6 +607,20 @@ class FCISolver(pyscf.lib.StreamObject):
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
+
+
+def _unpack(norb, nelec, link_index):
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        return link_indexa, link_indexb
+    else:
+        return link_index
 
 
 if __name__ == '__main__':

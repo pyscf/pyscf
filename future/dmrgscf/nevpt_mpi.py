@@ -22,10 +22,10 @@ from pyscf.mcscf import casci
 import pyscf.tools
 
 def writeh2e(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
-    for i in xrange(0,h2e.shape[0]):
-        for j in xrange(0,h2e.shape[1]):
-            for k in xrange(0,h2e.shape[2]):
-                for l in xrange(0,h2e.shape[3]):
+    for i in range(0,h2e.shape[0]):
+        for j in range(0,h2e.shape[1]):
+            for k in range(0,h2e.shape[2]):
+                for l in range(0,h2e.shape[3]):
                     if (abs(h2e[i,j,k,l]) > tol):
                         #if ( j==k or j == l) :
                         #if (j==k and k==l) :
@@ -33,22 +33,22 @@ def writeh2e(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
 
 
 def writeh1e(h1e,f,tol,shift0 =1,shift1 =1):
-    for i in xrange(0,h1e.shape[0]):
-        for j in xrange(0,h1e.shape[1]):
+    for i in range(0,h1e.shape[0]):
+        for j in range(0,h1e.shape[1]):
             if (abs(h1e[i,j]) > tol):
                 f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h1e[i,j], i+shift0, j+shift1, 0, 0))
 
 def writeh2e_sym(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
-    for i in xrange(0,h2e.shape[0]):
-        for j in xrange(0,i+1):
-            for k in xrange(0,h2e.shape[2]):
-                for l in xrange(0,k+1):
+    for i in range(0,h2e.shape[0]):
+        for j in range(0,i+1):
+            for k in range(0,h2e.shape[2]):
+                for l in range(0,k+1):
                     if (abs(h2e[i,j,k,l]) > tol and i*h2e.shape[0]+j >= k*h2e.shape[2]+l ):
                         f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h2e[i,j,k,l], i+shift0, j+shift1, k+shift2, l+shift3))
 
 def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
-    for i in xrange(0,h1e.shape[0]):
-        for j in xrange(0,i+1):
+    for i in range(0,h1e.shape[0]):
+        for j in range(0,i+1):
             if (abs(h1e[i,j]) > tol):
                 f.write('% .16f  %4d  %4d  %4d  %4d\n'%(h1e[i,j], i+shift0, j+shift1, 0, 0))
 
@@ -382,7 +382,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
 
     filenames = comm.bcast(filenames, root=0)
 
-    for i in xrange(len(filenames)):
+    for i in range(len(filenames)):
         if rank == 0:
             with open('%s/node0/%s'%(scratch,filenames[i]),'rb') as f:
                 data = f.read()
@@ -393,8 +393,8 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
             print 'empty file'
         with open('%s/node0/%s'%(newscratch,filenames[i]),'wb') as f:
             f.write(data)
-        
-        
+
+
 
     f = open('%s/FCIDUMP'%newscratch,'w')
     pyscf.tools.fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)
@@ -406,7 +406,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
 
     orbe =list(orbe[:ncore]) + list(orbe[ncore+ncas:])
     orbe = orbe[num_of_orb_begin:num_of_orb_end]
-    for i in xrange(len(orbe)):
+    for i in range(len(orbe)):
         f.write('% .16f  %4d  %4d  %4d  %4d\n'%(orbe[i],i+1+ncas,i+1+ncas,0,0))
     f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     if (len(h2e_Sr)):

@@ -6,6 +6,7 @@ import _ctypes
 import numpy
 import pyscf.lib
 from pyscf import gto
+from pyscf.gto.moleintor import make_cintopt
 
 libcvhf = pyscf.lib.load_library('libcvhf')
 def _fpointer(name):
@@ -85,20 +86,6 @@ class _CVHFOpt(ctypes.Structure):
                 ('fprescreen', ctypes.c_void_p),
                 ('r_vkscreen', ctypes.c_void_p)]
 
-def make_cintopt(atm, bas, env, intor):
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-    cintopt = pyscf.lib.c_null_ptr()
-    foptinit = getattr(libcvhf, intor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-             c_env.ctypes.data_as(ctypes.c_void_p))
-    return cintopt
-
 ################################################
 # for general DM
 # hermi = 0 : arbitary
@@ -134,8 +121,8 @@ def incore(eri, dm, hermi=0):
         else:
             fvk = _fpointer('CVHFics8_jk_s1il')
         tridm = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dm))
-        for i in range(nao):
-            tridm[i*(i+1)//2+i] *= .5
+        i = numpy.arange(nao)
+        tridm[i*(i+1)//2+i] *= .5
     else:
         raise RuntimeError('Array shape not consistent: DM %s, eri %s'
                            % (dm.shape, eri.shape))

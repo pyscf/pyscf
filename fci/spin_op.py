@@ -62,10 +62,7 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     UHF-FCI wavefunction
     '''
     from pyscf.fci import direct_spin1
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
 
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mo_coeff = (mo_coeff, mo_coeff)
@@ -145,10 +142,7 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_baab(fcivec, norb, nelec):
     fcivec = numpy.asarray(fcivec, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     if neleca == norb or nelecb == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     ades_index = cistring.gen_des_str_index(range(norb), neleca+1)
@@ -180,10 +174,7 @@ def make_rdm2_baab(fcivec, norb, nelec):
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def _make_rdm2_abba(fcivec, norb, nelec):
     fcivec = numpy.asarray(fcivec, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     if nelecb == norb or neleca == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     acre_index = cistring.gen_cre_str_index(range(norb), neleca-1)
@@ -214,10 +205,7 @@ def make_rdm2_abba(fcivec, norb, nelec):
 def contract_ss(fcivec, norb, nelec):
     '''Contract spin square operator with FCI wavefunction :math:`S^2 |CI>`
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     fcivec = fcivec.reshape(na,nb)
@@ -288,6 +276,15 @@ def contract_ss(fcivec, norb, nelec):
     ci1 *= .5
     ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
+
+
+def _unpack(nelec):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+        return neleca, nelecb
+    else:
+        return nelec
 
 
 if __name__ == '__main__':

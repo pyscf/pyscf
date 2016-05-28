@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import sys
+import copy
 from functools import reduce
 import numpy
 import pyscf.lib
@@ -266,4 +268,135 @@ def remove_linear_dep(mf):
 def remove_linear_dep_(mf):
     mf.eig = remove_linear_dep(mf)
     return mf
+
+def convert_to_uhf(mf, out=None):
+    '''Convert the given mean-field object to the corresponding unrestricted
+    HF/KS object
+    '''
+    from pyscf import scf
+    from pyscf import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
+            mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
+            mf1.mo_occ = (numpy.asarray(mf.mo_occ>0, dtype=numpy.double),
+                          numpy.asarray(mf.mo_occ==2, dtype=numpy.double))
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, scf.uhf.UHF))
+        if isinstance(mf, scf.uhf.UHF):
+            out.__dict.__update(mf)
+        else:  # RHF
+            out = update_mo_(mf, out)
+        return out
+
+    else:
+        hf_class = {scf.hf.RHF        : scf.uhf.UHF,
+                    scf.rohf.ROHF     : scf.uhf.UHF,
+                    scf.hf_symm.RHF   : scf.uhf_symm.UHF,
+                    scf.hf_symm.ROHF  : scf.uhf_symm.UHF}
+        dft_class = {dft.rks.RKS      : dft.uks.UKS,
+                     dft.roks.ROKS    : dft.uks.UKS,
+                     dft.rks_symm.RKS : dft.uks_symm.UKS,
+                     dft.rks_symm.ROKS: dft.uks_symm.UKS}
+
+        if isinstance(mf, scf.uhf.UHF):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in hf_class:
+            out = update_mo_(mf, scf.UHF(mf.mol))
+
+        elif mf.__class__ in dft_class:
+            out = update_mo_(mf, dft.UKS(mf.mol))
+
+        else:
+            msg =('Warn: Converting a decorated RHF object to the decorated '
+                  'UHF object is unsafe.\nIt is recommended to create a '
+                  'decorated UHF object explicitly and pass it to '
+                  'convert_to_uhf function eg:\n'
+                  '    convert_to_uhf(mf, out=density_fit(scf.UHF(mol)))\n')
+            sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in hf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+                elif cls in dft_class:
+                    mronew = mro[:i] + dft_class[cls].__mro__
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, pyscf.lib.overwrite_mro(mf, mronew))
+
+        return out
+
+def convert_to_rhf(mf, out=None):
+    '''Convert the given mean-field object to the corresponding restricted
+    HF/KS object
+    '''
+    from pyscf import scf
+    from pyscf import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            mf1.mo_energy = mf.mo_energy[0]
+            mf1.mo_coeff =  mf.mo_coeff[0]
+            mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, scf.hf.RHF))
+        if isinstance(mf, scf.hf.RHF):
+            out.__dict.__update(mf)
+        else:  # UHF
+            out = update_mo_(mf, out)
+        return out
+
+    else:
+        hf_class = {scf.uhf.UHF      : scf.rohf.ROHF,
+                    scf.uhf_symm.UHF : scf.hf_symm.ROHF}
+        dft_class = {dft.uks.UKS     : dft.roks.ROKS,
+                     dft.uks_symm.UKS: dft.rks_symm.ROKS}
+
+        if isinstance(mf, scf.hf.RHF):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in hf_class:
+            out = update_mo_(mf, scf.RHF(mf.mol))
+
+        elif mf.__class__ in dft_class:
+            out = update_mo_(mf, dft.RKS(mf.mol))
+
+        else:
+            msg =('Warn: Converting a decorated UHF object to the decorated '
+                  'RHF object is unsafe.\nIt is recommended to create a '
+                  'decorated RHF object explicitly and pass it to '
+                  'convert_to_rhf function eg:\n'
+                  '    convert_to_rhf(mf, out=density_fit(scf.RHF(mol)))\n')
+            sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in hf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+                elif cls in dft_class:
+                    mronew = mro[:i] + dft_class[cls].__mro__
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, pyscf.lib.overwrite_mro(mf, mronew))
+
+        return out
 
