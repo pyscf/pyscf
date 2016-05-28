@@ -579,44 +579,10 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     Return:
         A list: the dipole moment on x, y and z component
     '''
-
-    if isinstance(verbose, logger.Logger):
-        log = verbose
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        return hf.dip_moment(mol, dm, unit_symbol, verbose)
     else:
-        log = logger.Logger(mol.stdout, verbose)
-
-    if unit_symbol == 'Debye':
-        unit = 2.541746    # a.u. to Debye
-    else:
-        unit = 1.0
-
-    mol.set_common_orig((0,0,0))
-    ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
-
-    el_dip_x = numpy.trace(numpy.dot(dm[0], ao_dip[0]))
-    el_dip_x += numpy.trace(numpy.dot(dm[1], ao_dip[0]))
-    el_dip_y = numpy.trace(numpy.dot(dm[0], ao_dip[1]))
-    el_dip_y += numpy.trace(numpy.dot(dm[1], ao_dip[1]))
-    el_dip_z = numpy.trace(numpy.dot(dm[0], ao_dip[2]))
-    el_dip_z += numpy.trace(numpy.dot(dm[1], ao_dip[2]))
-
-    nucl_dip_x = nucl_dip_y = nucl_dip_z = 0.0
-    for i in range(mol.natm):
-        nucl_dip_x += mol.atom_charge(i)*mol.atom_coord(i)[0]
-        nucl_dip_y += mol.atom_charge(i)*mol.atom_coord(i)[1]
-        nucl_dip_z += mol.atom_charge(i)*mol.atom_coord(i)[2]
-
-    mol_dip_x = (-el_dip_x + nucl_dip_x)*unit
-    mol_dip_y = (-el_dip_y + nucl_dip_y)*unit
-    mol_dip_z = (-el_dip_z + nucl_dip_z)*unit
-
-    if unit_symbol == 'Debye' :
-        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f',
-                mol_dip_x, mol_dip_y, mol_dip_z)
-    else:
-        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f',
-                mol_dip_x, mol_dip_y, mol_dip_z)
-    return numpy.array((mol_dip_x, mol_dip_y, mol_dip_z))
+        return hf.dip_moment(mol, dm[0]+dm[1], unit_symbol, verbose)
 
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''

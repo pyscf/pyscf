@@ -157,6 +157,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    if dump_chk:
+        mf.dump_chk(locals())
     logger.timer(mf, 'scf_cycle', *cput0)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
@@ -867,28 +869,19 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     mol.set_common_orig((0,0,0))
     ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
+    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm)
 
-    el_dip_x = numpy.trace(numpy.dot(dm, ao_dip[0]))
-    el_dip_y = numpy.trace(numpy.dot(dm, ao_dip[1]))
-    el_dip_z = numpy.trace(numpy.dot(dm, ao_dip[2]))
+    charges = mol.atom_charges()
+    coords  = mol.atom_coords()
+    nucl_dip = numpy.einsum('i,ix->x', charges, coords)
 
-    nucl_dip_x = nucl_dip_y = nucl_dip_z = 0.0
-    for i in range(mol.natm):
-        nucl_dip_x += mol.atom_charge(i)*mol.atom_coord(i)[0]
-        nucl_dip_y += mol.atom_charge(i)*mol.atom_coord(i)[1]
-        nucl_dip_z += mol.atom_charge(i)*mol.atom_coord(i)[2]
-
-    mol_dip_x = (-el_dip_x + nucl_dip_x)*unit
-    mol_dip_y = (-el_dip_y + nucl_dip_y)*unit
-    mol_dip_z = (-el_dip_z + nucl_dip_z)*unit
+    mol_dip = (nucl_dip - el_dip) * unit
 
     if unit_symbol == 'Debye' :
-        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f',
-                mol_dip_x, mol_dip_y, mol_dip_z)
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
     else:
-        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f',
-                mol_dip_x, mol_dip_y, mol_dip_z)
-    return numpy.array((mol_dip_x, mol_dip_y, mol_dip_z))
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+    return mol_dip
 
 ############
 # For orbital rotation
