@@ -15,7 +15,7 @@ import h5py
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
-from pyscf.scf import rhf_hess
+from pyscf.hessian import rhf
 from pyscf.dft import numint
 from pyscf import dft
 
@@ -612,7 +612,7 @@ def _contract_xc_kernel(mf, xc_code, dms, max_memory=2000):
     return v1ao
 
 
-class Hessian(rhf_hess.Hessian):
+class Hessian(rhf.Hessian):
     '''Non-relativistic restricted Hartree-Fock hessian'''
     def make_h1(self, mo_coeff, mo_occ, chkfile=None, atmlst=None,
                 verbose=None):
