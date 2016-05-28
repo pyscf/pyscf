@@ -629,7 +629,7 @@ class Cell(pyscf.gto.Mole):
             logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s', self.ew_cut)
-    return self
+        return self
     kernel = build
 
     @property

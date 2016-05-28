@@ -173,12 +173,12 @@ def get_fock(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
     '''Get the Fock matrices at sampled k-points.
 
-    This is a k-point version of pyscf.scf.hf.get_fock_
+    This is a k-point version of pyscf.scf.hf.get_fock
 
     Returns:
        fock : (nkpts, nao, nao) ndarray
     '''
-    # By inheritance, this is just pyscf.scf.hf.get_fock_
+    # By inheritance, this is just pyscf.scf.hf.get_fock
     fock = pbchf.RHF.get_fock(mf, h1e_kpts, s1e_kpts,
                               vhf_kpts, dm_kpts,
                               cycle, adiis, diis_start_cycle,
@@ -407,7 +407,7 @@ class KRHF(pbchf.RHF):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 
