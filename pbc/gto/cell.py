@@ -537,15 +537,12 @@ class Cell(pyscf.gto.Mole):
         self._pseudo = None
         self._keys = set(self.__dict__.keys())
 
-    def build(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
-
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
-    def build_(self, dump_input=True, parse_arg=True,
-               h=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
-               ew_eta=None, ew_cut=None, pseudo=None, basis=None,
-               dimension=None,
-               *args, **kwargs):
+    def build(self, dump_input=True, parse_arg=True,
+              h=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
+              ew_eta=None, ew_cut=None, pseudo=None, basis=None,
+              dimension=None,
+              *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -601,9 +598,9 @@ class Cell(pyscf.gto.Mole):
             # This sets self.basis to be internal format, and will
             # be parsed appropriately by Mole.build
 
-        # Do regular Mole.build_ with usual kwargs
+        # Do regular Mole.build with usual kwargs
         _built = self._built
-        pyscf.gto.Mole.build_(self, False, parse_arg, *args, **kwargs)
+        pyscf.gto.Mole.build(self, False, parse_arg, *args, **kwargs)
 
         self._h = self.lattice_vectors()
         self.vol = float(scipy.linalg.det(self._h))
@@ -632,7 +629,8 @@ class Cell(pyscf.gto.Mole):
             logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s', self.ew_cut)
-
+    return self
+    kernel = build
 
     @property
     def Gv(self):
@@ -728,13 +726,13 @@ class Cell(pyscf.gto.Mole):
         '''One-electron integrals with PBC. See also Mole.intor'''
         return intor_cross(intor, self, self, comp, hermi, kpt)
 
-    def from_ase_(self, ase_atom):
+    def from_ase(self, ase_atom):
         '''Update cell based on given ase atom object
 
         Examples:
 
         >>> from ase.lattice import bulk
-        >>> cell.from_ase_(bulk('C', 'diamond', a=LATTICE_CONST))
+        >>> cell.from_ase(bulk('C', 'diamond', a=LATTICE_CONST))
         '''
         from pyscf.pbc.tools import pyscf_ase
         self.h = ase_atom.cell

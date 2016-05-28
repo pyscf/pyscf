@@ -15,12 +15,12 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import numint
 
 
-def get_veff_(ks, cell, dm, dm_last=0, vhf_last=0, hermi=1,
-              kpt=None, kpt_band=None):
+def get_veff(ks, cell, dm, dm_last=0, vhf_last=0, hermi=1,
+             kpt=None, kpt_band=None):
     '''Coulomb + XC functional
 
     .. note::
-        This is a replica of pyscf.dft.rks.get_veff_ with kpts added.
+        This is a replica of pyscf.dft.rks.get_veff with kpts added.
         This function will change the ks object.
 
     Args:
@@ -53,7 +53,7 @@ def get_veff_(ks, cell, dm, dm_last=0, vhf_last=0, hermi=1,
     '''
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
-        ks.grids.build_()
+        ks.grids.build()
         small_rho_cutoff = ks.small_rho_cutoff
         t0 = logger.timer(ks, 'setting up grids', *t0)
     else:
@@ -138,13 +138,13 @@ class RKS(pyscf.pbc.scf.hf.RHF):
         pyscf.pbc.scf.hf.RHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
 
-    @pyscf.lib.with_doc(get_veff_.__doc__)
+    @pyscf.lib.with_doc(get_veff.__doc__)
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpt_band=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        return get_veff_(self, cell, dm, dm_last, vhf_last, hermi, kpt, kpt_band)
+        return get_veff(self, cell, dm, dm_last, vhf_last, hermi, kpt, kpt_band)
 
     def energy_elec(self, dm, h1e=None, vhf=None):
         if h1e is None: h1e = pyscf.pbc.scf.hf.get_hcore(self, self.cell)

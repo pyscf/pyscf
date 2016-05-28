@@ -186,7 +186,7 @@ if __name__ == '__main__':
     auxcell = df.format_aux_basis(cell, auxbasis)
     gds = pdft.gen_grid.BeckeGrids(cell)
     gds.level = 3
-    gds.build_()
+    gds.build()
     mf.get_j = lambda cell, dm, *args: get_j_uniform_mod(cell, dm, auxcell, grids=gds)
     mf.get_hcore = lambda cell, *args: get_nuc_uniform_mod(cell, auxcell, grids=gds) + pscf.hf.get_t(cell)
     print mf.scf() # ~ -4.32049313872

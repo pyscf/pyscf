@@ -37,9 +37,7 @@ class UniformGrids(object):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
 
-    def build_(self, cell=None):
-        return self.setup_grids_(cell)
-    def setup_grids_(self, cell=None):
+    def build(self, cell=None):
         if cell == None: cell = self.cell
 
         self.coords = gen_uniform_grids(self.cell, self.gs)
@@ -56,7 +54,7 @@ class UniformGrids(object):
 
     def kernel(self, cell=None):
         self.dump_flags()
-        return self.setup_grids_(cell)
+        return self.build(cell)
 
 
 def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
@@ -110,7 +108,7 @@ class BeckeGrids(dft.gen_grid.Grids):
         self.cell = cell
         pyscf.dft.gen_grid.Grids.__init__(self, cell)
 
-    def build_(self, cell=None):
+    def build(self, cell=None):
         if cell is None: cell = self.cell
         self.coords, self.weights = gen_becke_grids(self.cell, self.atom_grid,
                                                     radi_method=self.radi_method,
@@ -139,6 +137,6 @@ if __name__ == '__main__':
     cell.basis = {'He': [[0, (1.0, 1.0)]]}
     cell.build()
     g = BeckeGrids(cell)
-    g.build_()
+    g.build()
     print g.weights.sum()
     print cell.vol

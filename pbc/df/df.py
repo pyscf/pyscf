@@ -64,7 +64,7 @@ def aux_e2_grid(cell, auxcell, grids=None):
     '''
     if grids is None:
         grids = gen_grid.BeckeGrids(cell)
-        grids.build_()
+        grids.build()
     elif grids.weights is None:
         raise RuntimeError('grids is not initialized')
 

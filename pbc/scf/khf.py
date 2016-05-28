@@ -169,8 +169,8 @@ def get_vjR(cell, dm_kpts, aoR_kpts):
     return vR
 
 
-def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
-              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+def get_fock(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
+             diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
     '''Get the Fock matrices at sampled k-points.
 
     This is a k-point version of pyscf.scf.hf.get_fock_
@@ -179,10 +179,10 @@ def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
        fock : (nkpts, nao, nao) ndarray
     '''
     # By inheritance, this is just pyscf.scf.hf.get_fock_
-    fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
-                               vhf_kpts, dm_kpts,
-                               cycle, adiis, diis_start_cycle,
-                               level_shift_factor, damp_factor)
+    fock = pbchf.RHF.get_fock(mf, h1e_kpts, s1e_kpts,
+                              vhf_kpts, dm_kpts,
+                              cycle, adiis, diis_start_cycle,
+                              level_shift_factor, damp_factor)
     return fock
 
 
@@ -324,8 +324,8 @@ class KRHF(pbchf.RHF):
                 self.precompute_exx()
             logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
-    def build_(self, cell=None):
-        pbchf.RHF.build_(self, cell)
+    def build(self, cell=None):
+        pbchf.RHF.build(self, cell)
         if self.exxdiv == 'vcut_ws':
             self.precompute_exx()
 

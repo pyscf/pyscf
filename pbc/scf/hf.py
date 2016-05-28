@@ -424,8 +424,6 @@ class RHF(pyscf.scf.hf.RHF):
         return get_ovlp(cell, kpt)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
-        return self.get_jk_(cell, dm, hermi, kpt, kpt_band)
-    def get_jk_(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         Note the incore version, which initializes an _eri array in memory.
