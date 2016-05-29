@@ -158,8 +158,6 @@ class KnowValues(unittest.TestCase):
         pmol._atm, pmol._bas, pmol._env = \
             gto.conc_env(mol._atm, mol._bas, mol._env,
                          pmol._atm, pmol._bas, pmol._env)
-        pmol.natm = len(pmol._atm)
-        pmol.nbas = len(pmol._bas)
         shls_slice = (pmol.nbas-1,pmol.nbas, pmol.nbas-1,pmol.nbas,
                       0, pmol.nbas, 0, pmol.nbas)
         v0 = pmol.intor('cint2e_sph', shls_slice=shls_slice)

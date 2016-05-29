@@ -388,8 +388,6 @@ def conc_mol(mol1, mol2):
         else:
             mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
 
-    mol3.natm = len(mol3._atm)
-    mol3.nbas = len(mol3._bas)
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
     mol3.max_memory = mol1.max_memory
@@ -632,9 +630,7 @@ def tot_electrons(mol):
     >>> mol.tot_electrons()
     6
     '''
-    nelectron = -mol.charge
-    for ia in range(mol.natm):
-        nelectron += mol.atom_charge(ia)
+    nelectron = mol.atom_charges().sum() - mol.charge
     return int(nelectron)
 
 def copy(mol):
@@ -939,8 +935,8 @@ def energy_nuc(mol):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atom))])
-    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atom))])
+    chargs = mol.atom_charges()
+    coords = mol.atom_coords()
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()
     rr = rd[:,None] + rd - rr*2
@@ -1177,8 +1173,8 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
         r = numpy.dot(coord-center, axes.T)
         return w, r
 
-    coord1 = numpy.array([mol1.atom_coord(i) for i in range(mol1.natm)])
-    coord2 = numpy.array([mol2.atom_coord(i) for i in range(mol2.natm)])
+    coord1 = mol1.atom_coords()
+    coord2 = mol2.atom_coords()
     w1, r1 = finger(mol1, chg1, coord1)
     w2, r2 = finger(mol2, chg2, coord2)
     if not (numpy.allclose(w1, w2, atol=tol)):
@@ -1431,9 +1427,7 @@ class Mole(pyscf.lib.StreamObject):
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = []
-        self.natm = 0
         self._bas = []
-        self.nbas = 0
         self._env = [0] * PTR_ENV_START
         self._ecpbas = []
 
@@ -1451,6 +1445,13 @@ class Mole(pyscf.lib.StreamObject):
         self._built = False
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
+
+    @property
+    def natm(self):
+        return len(self._atm)
+    @property
+    def nbas(self):
+        return len(self._bas)
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -1608,8 +1609,6 @@ class Mole(pyscf.lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        self.natm = len(self._atm) # == len(self._atom)
-        self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
@@ -1903,6 +1902,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self._atm[atm_id,CHARGE_OF]
 
+    def atom_charges(self):
+        '''np.asarray([mol.atom_charge(i) for i in range(mol.natm)])'''
+        return self._atm[:,CHARGE_OF]
+
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.
         '''
@@ -1923,6 +1926,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         ptr = self._atm[atm_id,PTR_COORD]
         return self._env[ptr:ptr+3]
+
+    def atom_coords(self):
+        '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
+        ptr = self._atm[:,PTR_COORD]
+        return numpy.vstack((self._env[ptr],self._env[ptr+1],self._env[ptr+2])).T
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom
