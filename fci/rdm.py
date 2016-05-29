@@ -1,13 +1,5 @@
 #!/usr/bin/env python
 
-import ctypes
-import _ctypes
-import numpy
-import pyscf.lib
-from pyscf.fci import cistring
-
-librdm = pyscf.lib.load_library('libfci')
-
 '''FCI 1, 2, 3, 4-particle density matrices.
 '''
 
@@ -15,6 +7,14 @@ librdm = pyscf.lib.load_library('libfci')
 #         dm[p,q,r,s,...] = <p^+ q r^+ s ... >
 # rather than the mean-field DM
 #         dm[p,q] = < q^+ p >
+
+import ctypes
+import _ctypes
+import numpy
+import pyscf.lib
+from pyscf.fci import cistring
+
+librdm = pyscf.lib.load_library('libfci')
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]
@@ -30,14 +30,14 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
     if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
-    na,nlink,_ = link_index.shape
+    na, nlink = link_index.shape[:2]
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -55,12 +55,12 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
     if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     link_index = (link_index, link_index)
     return make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index, symm)
@@ -78,11 +78,12 @@ def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec//2
-    else:
-        neleca, nelecb = nelec
     if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
@@ -108,11 +109,12 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec//2
-    else:
-        neleca, nelecb = nelec
     if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:

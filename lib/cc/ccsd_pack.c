@@ -2,7 +2,7 @@
  *
  */
 
-#include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 //#include <omp.h>
 #include "config.h"
@@ -11,47 +11,12 @@
 
 void CCunpack_tril(double *tril, double *mat, int count, int n)
 {
-#pragma omp parallel default(none) \
-        shared(count, n, tril, mat)
-{
-        int ic, i, j, ij;
-        size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
-        double *pmat, *ptril;
-#pragma omp for schedule (static)
-        for (ic = 0; ic < count; ic++) {
-                ptril = tril + n2 * ic;
-                pmat = mat + nn * ic;
-                for (ij = 0, i = 0; i < n; i++) {
-                        for (j = 0; j <= i; j++, ij++) {
-                                pmat[i*n+j] = ptril[ij];
-                                pmat[j*n+i] = ptril[ij];
-                        }
-                }
-        }
-}
+        NPdunpack_tril_2d(count, n, tril, mat, HERMITIAN);
 }
 
 void CCpack_tril(double *tril, double *mat, int count, int n)
 {
-#pragma omp parallel default(none) \
-        shared(count, n, tril, mat)
-{
-        int ic, i, j, ij;
-        size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
-        double *pmat, *ptril;
-#pragma omp for schedule (static)
-        for (ic = 0; ic < count; ic++) {
-                ptril = tril + n2 * ic;
-                pmat = mat + nn * ic;
-                for (ij = 0, i = 0; i < n; i++) {
-                        for (j = 0; j <= i; j++, ij++) {
-                                ptril[ij] = pmat[i*n+j];
-                        }
-                }
-        }
-}
+        NPdpack_tril_2d(count, n, tril, mat);
 }
 
 /*

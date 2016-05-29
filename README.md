@@ -96,15 +96,6 @@ Known problems
         cc/test/test_h2o.py          test_h2o_without_scf
 
 
-* Program exits with
-```
-AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
-```
-
-  It is caused by old version of libcint.  Remove the directory
-  "pyscf/lib/deps" and rebuild pyscf to fix this problem.
-
-
 * h5py installation.
   If you got problems to install the latest h5py package,  you can try
   the old releases:

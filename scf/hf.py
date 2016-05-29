@@ -1281,9 +1281,9 @@ class SCF(pyscf.lib.StreamObject):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis='weigend+etb'):
-        import pyscf.scf.dfhf
-        return pyscf.scf.dfhf.density_fit(self, auxbasis)
+    def density_fit(self, auxbasis='weigend+etb', with_df=None):
+        import pyscf.df.df_jk
+        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 
     def x2c(self):
         import pyscf.scf.x2c
@@ -1382,6 +1382,12 @@ class RHF(SCF):
             return vj - vk * .5
         else:
             return SCF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF/ROHF'''
+        from pyscf.scf import addons
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':

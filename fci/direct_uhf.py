@@ -32,17 +32,7 @@ libfci = pyscf.lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
-    if link_index is None:
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     assert(fcivec.size == na*nb)
@@ -77,21 +67,11 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
     g2e_aa = pyscf.ao2mo.restore(4, eri[0], norb)
     g2e_ab = pyscf.ao2mo.restore(4, eri[1], norb)
     g2e_bb = pyscf.ao2mo.restore(4, eri[2], norb)
 
-    if link_index is None:
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     assert(fcivec.size == na*nb)
@@ -108,6 +88,36 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                              link_indexa.ctypes.data_as(ctypes.c_void_p),
                              link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
+
+def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    u_aa, u_ab, u_bb = u
+
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    fcivec = fcivec.reshape(na,nb)
+    fcinew = numpy.zeros_like(fcivec)
+
+    if u_aa != 0:  # u * n_alpha^+ n_alpha
+        for i in range(norb):
+            maska = (strsa & (1<<i)) > 0
+            fcinew[maska] += u_aa * fcivec[maska]
+    if u_ab != 0:  # u * (n_alpha^+ n_beta + n_beta^+ n_alpha)
+        for i in range(norb):
+            maska = (strsa & (1<<i)) > 0
+            maskb = (strsb & (1<<i)) > 0
+            fcinew[maska[:,None]&maskb] += 2*u_ab * fcivec[maska[:,None]&maskb]
+    if u_bb != 0:  # u * n_beta^+ n_beta
+        for i in range(norb):
+            maskb = (strsb & (1<<i)) > 0
+            fcinew[:,maskb] += u_bb * fcivec[:,maskb]
+    return fcinew
 
 def make_hdiag(h1e, eri, norb, nelec):
     if isinstance(nelec, (int, numpy.integer)):
@@ -323,4 +333,3 @@ if __name__ == '__main__':
 
     e = kernel(h1e, eri, norb, nelec)[0]
     print(e, e - -8.65159903476)
-

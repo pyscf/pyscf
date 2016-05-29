@@ -446,15 +446,10 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
-def map_rhf_to_uhf(rhf):
-    '''Take the settings from RHF object'''
-    assert(isinstance(rhf, hf.RHF))
-    uhf = UHF(rhf.mol)
-    uhf.__dict__.update(rhf.__dict__)
-    uhf.mo_energy = numpy.array((rhf.mo_energy,rhf.mo_energy))
-    uhf.mo_coeff  = numpy.array((rhf.mo_coeff,rhf.mo_coeff))
-    uhf.mo_occ    = numpy.array((rhf.mo_occ,rhf.mo_occ))
-    return uhf
+def map_rhf_to_uhf(mf):
+    '''Create UHF object based on the RHF object'''
+    import addons
+    return addons.convert_to_uhf(mf)
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
@@ -475,7 +470,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
-            cs[:,idx] == numpy.dot(mo_coeff[:,idx], c)
+            cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
     eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
