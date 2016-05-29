@@ -388,8 +388,6 @@ def conc_mol(mol1, mol2):
         else:
             mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
 
-    mol3.natm = len(mol3._atm)
-    mol3.nbas = len(mol3._bas)
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
     mol3.max_memory = mol1.max_memory
@@ -632,9 +630,7 @@ def tot_electrons(mol):
     >>> mol.tot_electrons()
     6
     '''
-    nelectron = -mol.charge
-    for ia in range(mol.natm):
-        nelectron += mol.atom_charge(ia)
+    nelectron = mol.atom_charges().sum() - mol.charge
     return int(nelectron)
 
 def copy(mol):
@@ -1432,9 +1428,7 @@ class Mole(pyscf.lib.StreamObject):
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = []
-        self.natm = 0
         self._bas = []
-        self.nbas = 0
         self._env = [0] * PTR_ENV_START
         self._ecpbas = []
 
@@ -1452,6 +1446,13 @@ class Mole(pyscf.lib.StreamObject):
         self._built = False
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
+
+    @property
+    def natm(self):
+        return len(self._atm)
+    @property
+    def nbas(self):
+        return len(self._bas)
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -1609,8 +1610,6 @@ class Mole(pyscf.lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        self.natm = len(self._atm) # == len(self._atom)
-        self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'

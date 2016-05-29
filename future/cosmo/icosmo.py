@@ -459,8 +459,6 @@ def _make_fakemol(coords):
     fakemol._atm = fakeatm
     fakemol._bas = fakebas
     fakemol._env = numpy.hstack(fakeenv)
-    fakemol.natm = nbas
-    fakemol.nbas = nbas
     fakemol._built = True
     return fakemol
 
