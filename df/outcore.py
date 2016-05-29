@@ -276,38 +276,15 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def _guess_shell_ranges(mol, buflen, aosym):
+    from pyscf.ao2mo.outcore import group_segs_filling_block
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
-
-    ish_seg = [0] # record the starting shell id of each buffer
-    bufrows = []
-    ij_start = 0
-
     if aosym == 's2ij':
-        for i in range(mol.nbas):
-            ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
-            if ij_end - ij_start > buflen and i != 0:
-                ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i]*(ao_loc[i]+1)//2
-                bufrows.append(ijend-ij_start)
-                ij_start = ijend
-        nao_pair = nao*(nao+1) // 2
-        ish_seg.append(mol.nbas)
-        bufrows.append(nao_pair-ij_start)
+        segs = [ao_loc[i+1]*(ao_loc[i+1]+1)//2 - ao_loc[i]*(ao_loc[i]+1)//2
+                for i in range(mol.nbas)]
     else:
-        for i in range(mol.nbas):
-            ij_end = ao_loc[i+1] * nao
-            if ij_end - ij_start > buflen and i != 0:
-                ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i] * nao
-                bufrows.append(ijend-ij_start)
-                ij_start = ijend
-        ish_seg.append(mol.nbas)
-        bufrows.append(nao*nao-ij_start)
-
-    # for each buffer, sh_ranges record (start, end, bufrow)
-    sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
-    return sh_ranges
+        segs = [(ao_loc[i+1]-ao_loc[i])*nao for i in range(mol.nbas)]
+    return group_segs_filling_block(segs, buflen)
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):
@@ -344,3 +321,4 @@ if __name__ == '__main__':
             max_memory=.5, ioblk_size=.2, verbose=6)
     with h5py.File('cderi.dat') as feri:
         print(numpy.allclose(feri['eri_mo'], cderi0))
+

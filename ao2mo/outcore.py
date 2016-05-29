@@ -720,25 +720,14 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
                 dj = ao_loc[j+1] - ao_loc[j]
                 lstdij.append(di*dj)
 
-    def div_shls(ijstart, ij_max, bufsize):
-        ij_now = ijstart + 1
-        grouped = [(ijstart, ij_now, lstdij[ijstart])]
-        while ij_now < ij_max:
-            ijstart, ijstop, buflen = grouped[-1]
-            dij = lstdij[ij_now]
-            if buflen + dij > bufsize:
-                grouped.append((ij_now, ij_now+1, dij))
-            else:
-                grouped[-1] = (ijstart, ij_now+1, buflen+dij)
-            ij_now += 1
-        return grouped
-    ijsh_range = div_shls(0, len(lstdij), max_iobuf)
+    ijsh_range = group_segs_filling_block(lstdij, max_iobuf)
 
     if max_aobuf is not None:
         max_aobuf = max(1, max_aobuf)
         def div_each_iobuf(ijstart, ijstop, buflen):
 # to fill each iobuf, AO integrals may need to be fill to aobuf several times
-            return (ijstart, ijstop, buflen, div_shls(ijstart, ijstop, max_aobuf))
+            return (ijstart, ijstop, buflen,
+                    group_segs_filling_block(lstdij, max_aobuf, ijstart, ijstop))
         ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]
     return ijsh_range
 
@@ -749,6 +738,21 @@ def _stand_sym_code(sym):
         return sym
     else:
         return 's' + sym
+
+def group_segs_filling_block(segs_lst, blksize, start_id=0, stop_id=None):
+    if stop_id is None:
+        stop_id = start_id + len(segs_lst)
+    end_id = start_id + 1
+    grouped = [(start_id, end_id, segs_lst[start_id])]
+    while end_id < stop_id:
+        start_id, ijstop, buflen = grouped[-1]
+        dij = segs_lst[end_id]
+        if buflen + dij > blksize:
+            grouped.append((end_id, end_id+1, dij))
+        else:
+            grouped[-1] = (start_id, end_id+1, buflen+dij)
+        end_id += 1
+    return grouped
 
 
 if __name__ == '__main__':
