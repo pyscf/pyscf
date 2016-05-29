@@ -5,6 +5,7 @@
 import unittest
 import tempfile
 import numpy
+import scipy.linalg
 import h5py
 from pyscf import lib
 from pyscf import gto
@@ -145,6 +146,19 @@ class KnowValues(unittest.TestCase):
         df.outcore.general(mol, (co,cv), ftmp.name, ioblk_size=.05)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0.reshape(naux,-1)))
+
+        cderi0 = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_ip1_sph',
+                                  aosym='s1', comp=3)
+        j2c = df.incore.fill_2c2e(mol, auxmol)
+        low = scipy.linalg.cholesky(j2c, lower=True)
+        cderi0 = [scipy.linalg.solve_triangular(low, j3c.T, lower=True)
+                  for j3c in cderi0]
+        nao = mol.nao_nr()
+        df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
+                           int3c='cint3c2e_ip1_sph', aosym='s1', int2c='cint2c2e_sph',
+                           comp=3, max_memory=.05, ioblk_size=.02)
+        with h5py.File(ftmp.name) as feri:
+            self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
     def test_r_incore(self):
         j3c = df.r_incore.aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1')
