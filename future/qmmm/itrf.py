@@ -142,7 +142,7 @@ def mm_charge_grad(method, coords, charges, unit=None):
                 v = 0
                 for i,q in enumerate(charges):
                     mol.set_rinv_origin_(coords[i])
-                    v += mol.intor('cint1e_iprinv_sph') * q
+                    v += mol.intor('cint1e_iprinv_sph', comp=3) * q
             else:
                 fakemol = _make_fakemol(coords)
                 j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_ip1_sph',
@@ -177,10 +177,10 @@ def _make_fakemol(coords):
     fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
     fakebas[:,gto.NPRIM_OF] = 1
     fakebas[:,gto.NCTR_OF] = 1
-# approximate point charge with gaussian distribution exp(-1e9*r^2)
+# approximate point charge with gaussian distribution exp(-1e16*r^2)
     fakebas[:,gto.PTR_EXP] = ptr
     fakebas[:,gto.PTR_COEFF] = ptr+1
-    expnt = 1e9
+    expnt = 1e16
     fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.mole._gaussian_int(2,expnt))])
     ptr += 2
     fakemol = gto.Mole()
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     #coords = [(0.0,0.0,0.0)]
     charges = [-0.5]
     mf = mm_charge(scf.RHF(mol), coords, charges)
-    print mf.kernel() # -76.3206550372
+    print(mf.kernel()) # -76.3206550372
     mycc = cc.ccsd.CCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
