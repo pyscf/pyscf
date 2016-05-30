@@ -224,9 +224,6 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
        env.ctypes.data_as(ctypes.c_void_p))
 
-#    if cintopt is None:
-#        libcgto.CINTdel_optimizer(ctypes.byref(intopt))
-
     if comp == 1:
         return mat.reshape(naoi,naoj)
     else:
@@ -281,9 +278,6 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
-    if cintopt is None:
-        libcgto.CINTdel_optimizer(ctypes.byref(intopt))
-
     if comp == 1:
         return mat.reshape(shape[:-1])
     else:
@@ -320,7 +314,7 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
             out = numpy.empty((nao_pair*(nao_pair+1)//2))
         else:
             out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
-        drv = _cvhf.GTO2e_cart_or_sph
+        drv = libcvhf.GTO2e_cart_or_sph
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             out.ctypes.data_as(ctypes.c_void_p),
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
@@ -366,6 +360,7 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
             cintopt, c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+        cintopt = None
         return out
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
@@ -650,8 +645,10 @@ def make_cintopt(atm, bas, env, intor):
              c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
              c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
              c_env.ctypes.data_as(ctypes.c_void_p))
-    return cintopt
-
+    return ctypes.cast(cintopt, _cintoptHandler)
+class _cintoptHandler(ctypes.c_void_p):
+    def __del__(self):
+        libcgto.CINTdel_optimizer(ctypes.byref(self))
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):
