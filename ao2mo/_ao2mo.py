@@ -38,9 +38,13 @@ class AO2MOpt(object):
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))
 
+        def to_del():
+            self._cintopt = None
+            libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
+        self.__to_del = to_del
+
     def __del__(self):
-        libao2mo.CINTdel_optimizer(ctypes.byref(self._cintopt))
-        libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
+        self.__to_del()
 
 
 # if out is not None, transform AO to MO in-place
@@ -97,9 +101,6 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if ao2mopt is None:
-        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
     return out
 
 def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
@@ -269,9 +270,6 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if ao2mopt is None:
-        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
     return out
 
 # if out is not None, transform AO to MO in-place

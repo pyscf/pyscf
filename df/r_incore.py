@@ -47,7 +47,6 @@ def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
                              c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                              c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                              c_env.ctypes.data_as(ctypes.c_void_p))
-    libri.CINTdel_optimizer(ctypes.byref(cintopt))
     return eri
 
 # (L|ij)

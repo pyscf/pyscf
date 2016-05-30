@@ -40,8 +40,6 @@ def nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
-        if cintopt is None:
-            libcgto.CINTdel_optimizer(ctypes.byref(intopt))
 
         if comp == 1:
             return mat.reshape(-1,naok)

@@ -26,7 +26,7 @@ class VHFOpt(object):
         # keep track of them in local stack, so that they can be correctly
         # refered in __del__
         def to_del():
-            libcvhf.CINTdel_optimizer(ctypes.byref(self._cintopt))
+            self._cintopt = None
             libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
         self.__to_del = to_del
 
@@ -203,9 +203,6 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
-
     # vj must be symmetric
     for idm in range(n_dm):
         vjk[0,idm] = pyscf.lib.hermi_triu(vjk[0,idm], 1)
@@ -288,9 +285,6 @@ def direct_mapdm(intor, aosym, jkdescript,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
-
     if n_dm * ncomp == 1:
         vjk = [v.reshape(v.shape[2:]) for v in vjk]
     elif n_dm == 1:
@@ -372,9 +366,6 @@ def direct_bindm(intor, aosym, jkdescript,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if ncomp == 1:
         vjk = [v.reshape(v.shape[1:]) for v in vjk]
@@ -460,9 +451,6 @@ def rdirect_mapdm(intor, aosym, jkdescript,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
-
     if n_dm * ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
     if njk == 1:
@@ -526,9 +514,6 @@ def rdirect_bindm(intor, aosym, jkdescript,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)

@@ -168,7 +168,6 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
     buf = bufs1 = None
 
     feri.close()
-    _ri.libri.CINTdel_optimizer(ctypes.byref(cintopt))
     return erifile
 
 
