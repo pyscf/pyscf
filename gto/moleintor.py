@@ -320,7 +320,7 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
             out = numpy.empty((nao_pair*(nao_pair+1)//2))
         else:
             out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
-        drv = _cvhf.GTO2e_cart_or_sph
+        drv = libcvhf.GTO2e_cart_or_sph
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             out.ctypes.data_as(ctypes.c_void_p),
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
