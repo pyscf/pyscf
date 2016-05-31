@@ -20,7 +20,7 @@ except:
     memory_cache = lambda f: f
 
 @memory_cache
-def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
+def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
             non0tab=None, out=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
@@ -52,9 +52,10 @@ def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
         pyscf.dft.numint.eval_ao
 
     '''
+    gamma_point = kpt is None or numpy.allclose(kpt, 0)
     aoR = 0
     for L in tools.get_lattice_Ls(cell, cell.nimgs):
-        if kpt is None:
+        if gamma_point:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             shl_slice, non0tab, out, verbose)
         else:
@@ -291,13 +292,13 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
 
 
 def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
-               max_memory=2000, verbose=None, kpt=None, kpt_band=None):
+               max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
     Note: This is a replica of pyscf.dft.numint.nr_rks_vxc with kpts added.
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`_NumInt` or :class:`_KNumInt`
 
         mol : an instance of :class:`Mole`
 
@@ -363,10 +364,10 @@ def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         weight = grids.weights[ip0:ip1]
         if xctype == 'LDA':
             if kpt_band is None:
-                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, deriv=0)
+                ao_k1 = ni.eval_ao(mol, coords, kpt1, deriv=0)
             else:
-                ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=0)
-            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=0)
+                ao_k1 = eval_ao(mol, coords, kpt1, deriv=0)
+            ao_k2 = ni.eval_ao(mol, coords, kpt2, deriv=0)
             rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
             exc, vxc = ni.eval_xc(xc_code, rho, spin, relativity, 1)[:2]
             vrho = vxc[0]
@@ -376,10 +377,10 @@ def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
             excsum += (den*exc).sum()
         else:
             if kpt_band is None:
-                ao_k1 = ni.eval_ao(mol, coords, kpt=kpt1, deriv=1)
+                ao_k1 = ni.eval_ao(mol, coords, kpt1, deriv=1)
             else:
-                ao_k1 = eval_ao(mol, coords, kpt=kpt1, deriv=1)
-            ao_k2 = ni.eval_ao(mol, coords, kpt=kpt2, deriv=1)
+                ao_k1 = eval_ao(mol, coords, kpt1, deriv=1)
+            ao_k2 = ni.eval_ao(mol, coords, kpt2, deriv=1)
             rho = ni.eval_rho(mol, ao_k2, dm, xctype=xctype)
             exc, vxc = ni.eval_xc(xc_code, rho, spin, relativity, 1)[:2]
             vrho, vsigma = vxc[:2]
@@ -401,11 +402,11 @@ class _NumInt(pyscf.dft.numint._NumInt):
     '''Generalization of pyscf's _NumInt class for a single k-point shift and
     periodic images.
     '''
-    def __init__(self, kpt=None):
+    def __init__(self, kpt=numpy.zeros(3)):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
 
-    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
+    def eval_ao(self, mol, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
                 non0tab=None, out=None, verbose=None):
         return eval_ao(mol, coords, kpt, deriv, relativity, shl_slice,
                        non0tab, out, verbose)
@@ -419,7 +420,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
     def nr_rks(self, mol, grids, xc_code, dms, hermi=1,
-               max_memory=2000, verbose=None, kpt=None, kpt_band=None):
+               max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
@@ -444,28 +445,35 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     '''Generalization of pyscf's _NumInt class for k-point sampling and
     periodic images.
     '''
-    def __init__(self, kpts=None):
+    def __init__(self, kpts=numpy.zeros((1,3))):
         pyscf.dft.numint._NumInt.__init__(self)
-        self.kpts = kpts
+        self.kpts = numpy.reshape(kpts, (-1,3))
 
-    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0,
-                shl_slice=None, non0tab=None, out=None, verbose=None):
+    def eval_ao(self, mol, coords, kpts=None, deriv=0, relativity=0,
+                shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
         '''
         Returns:
             ao_kpts: (nkpts, ngs, nao) ndarray
                 AO values at each k-point
         '''
-        if kpt is None:
-            kpt = self.kpts
-        kpts = kpt
+        if kpts is None:
+            if 'kpt' in kwargs:
+                sys.stderr.write('WARN: _KNumInt.eval_ao function finds keyword '
+                                 'argument "kpt" and converts it to "kpts"\n')
+                kpts = kpt
+            else:
+                kpts = self.kpts
+        kpts = kpt.reshape(-1,3)
 
         nkpts = len(kpts)
         ngs = len(coords)
         nao = mol.nao_nr()
 
-        ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
-        for k in range(nkpts):
-            kpt = kpts[k,:]
+        if kpt is None or numpy.all(kpt == 0):
+            ao_kpts = numpy.empty([nkpts, ngs, nao])
+        else:
+            ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
+        for k, kpt in enumerate(kpts):
             ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, deriv, relativity,
                                      shl_slice, non0tab, out, verbose)
         return ao_kpts
@@ -486,7 +494,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nkpts, ngs, nao = ao_kpts.shape
         rhoR = numpy.zeros(ngs)
         for k in range(nkpts):
-            rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k,:,:], dm_kpts[k,:,:])
+            rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k], dm_kpts[k])
         return rhoR
 
     def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
@@ -514,8 +522,8 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nao = ao.shape[2]
         mat = numpy.zeros((nkpts, nao, nao), dtype=ao.dtype)
         for k in range(nkpts):
-            mat[k,:,:] = eval_mat(mol, ao[k,:,:], weight,
-                                    rho, vrho, vsigma, non0tab,
-                                    xctype, verbose)
+            mat[k] = eval_mat(mol, ao[k], weight,
+                              rho, vrho, vsigma, non0tab,
+                              xctype, verbose)
         return mat
 

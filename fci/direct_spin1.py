@@ -40,22 +40,13 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
     vector.
     '''
-    assert(fcivec.flags.c_contiguous)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    fcivec = numpy.asarray(fcivec, order='C')
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
+    assert(fcivec.size == na*nb)
     f1e_tril = pyscf.lib.pack_tril(f1e)
-    ci1 = numpy.zeros((na,nb))
+    ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
                             ci1.ctypes.data_as(ctypes.c_void_p),
@@ -99,22 +90,12 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     See also :func:`direct_spin1.absorb_h1e`
     '''
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -211,7 +192,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu_(h0)
+    h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may diverge the
@@ -368,15 +349,20 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
 
+    # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
-    iroot = 0
-    for addr in numpy.argsort(hdiag):
+    try:
+        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+    except AttributeError:
+        addrs = numpy.argsort(hdiag)[:nroots]
+    for addr in addrs:
         x = numpy.zeros((na*nb))
         x[addr] = 1
         ci0.append(x.ravel())
-        iroot += 1
-        if iroot >= nroots:
-            break
+
+    # Add noise
+    ci0[0][0 ] += 1e-5
+    ci0[0][-1] -= 1e-5
     return ci0
 
 
@@ -392,17 +378,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
 
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
-
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
@@ -413,7 +389,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     else:
         pw = pv = addr = None
 
-    if pspace_size >= na*nb and ci0 is not None and not davidson_only:
+    if pspace_size >= na*nb and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
         if na*nb == 1:
@@ -639,6 +615,20 @@ class FCISolver(pyscf.lib.StreamObject):
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
+
+
+def _unpack(norb, nelec, link_index):
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        return link_indexa, link_indexb
+    else:
+        return link_index
 
 
 if __name__ == '__main__':

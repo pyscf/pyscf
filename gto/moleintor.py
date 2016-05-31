@@ -13,11 +13,20 @@ libcgto.CINTcgto_cart.restype = ctypes.c_int
 libcgto.CINTcgto_spheric.restype = ctypes.c_int
 libcgto.CINTcgto_spinor.restype = ctypes.c_int
 libcvhf = pyscf.lib.load_library('libcvhf')
+
+ANG_OF     = 1
+NPRIM_OF   = 2
+NCTR_OF    = 3
+KAPPA_OF   = 4
+PTR_EXP    = 5
+PTR_COEFF  = 6
+BAS_SLOTS  = 8
+
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, name))
 
-def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
-            aosym='s1', out=None):
+def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
+            aosym='s1', ao_loc=None, cintopt=None, out=None):
     r'''1e and 2e integral generator.
 
     Args:
@@ -118,10 +127,8 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
             libcint integral function argument
 
     Kwargs:
-        bras : list of int
-            shell ids for bra.  Default is all shells given by bas
-        kets : list of int
-            shell ids for ket.  Default is all shells given by bas
+        shls_slice : 8-element list
+            (ish_start, ish_end, jsh_start, jsh_end, ksh_start, ksh_end, lsh_start, lsh_end)
         comp : int
             Components of the integrals, e.g. cint1e_ipovlp has 3 components.
         hermi : int (1e integral only)
@@ -148,7 +155,7 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
     Examples:
 
     >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-    >>> gto.moleintor('cint1e_ipnuc_sph', mol._atm, mol._bas, mol._env, comp=3) # <nabla i | V_nuc | j>
+    >>> gto.getints('cint1e_ipnuc_sph', mol._atm, mol._bas, mol._env, comp=3) # <nabla i | V_nuc | j>
     [[[ 0.          0.        ]
       [ 0.          0.        ]]
      [[ 0.          0.        ]
@@ -156,74 +163,128 @@ def getints(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    if intor_name.startswith('cint1e') or intor_name.startswith('ECP'):
-        return getints1e(intor_name, atm, bas, env, bras, kets, comp, hermi)
+    if (intor_name.startswith('cint1e') or
+        intor_name.startswith('ECP') or
+        intor_name.startswith('cint2c2e')):
+        return getints2c(intor_name, atm, bas, env, shls_slice, comp,
+                         hermi, ao_loc, cintopt, out)
     elif intor_name.startswith('cint2e'):
-        return getints2e(intor_name, atm, bas, env, bras, kets, comp,
-                         aosym, out)
+        return getints2e(intor_name, atm, bas, env, shls_slice, comp,
+                         aosym, ao_loc, cintopt, out)
+    elif intor_name.startswith('cint3c'):
+        return getints3c(intor_name, atm, bas, env, shls_slice, comp,
+                         aosym, ao_loc, cintopt, out)
     else:
         raise RuntimeError('Unknown intor')
 
-def getints1e(intor_name, atm, bas, env, bras=None, kets=None, comp=1, hermi=0):
-    if bras is None:
-        bralst = numpy.arange(len(bas), dtype=numpy.int32)
-    else:
-        bralst = numpy.asarray(bras, dtype=numpy.int32)
-        assert(bralst.max() < len(bas))
-    if kets is None:
-        ketlst = numpy.arange(len(bas), dtype=numpy.int32)
-    else:
-        ketlst = numpy.asarray(kets, dtype=numpy.int32)
-        assert(ketlst.max() < len(bas))
-
+def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
+              ao_loc=None, cintopt=None, out=None):
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
-    c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
-    c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
-    c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
-    c_natm = ctypes.c_int(atm.shape[0])
-    c_nbas = ctypes.c_int(bas.shape[0])
-    nbra = len(bralst)
-    nket = len(ketlst)
-
-    if '_cart' in intor_name:
-        dtype = numpy.double
-        num_cgto_of = libcgto.CINTcgto_cart
-        drv = libcgto.GTO1eintor_cart
-    elif '_sph' in intor_name:
-        dtype = numpy.double
-        num_cgto_of = libcgto.CINTcgto_spheric
-        drv = libcgto.GTO1eintor_sph
+    natm = atm.shape[0]
+    nbas = bas.shape[0]
+    if shls_slice is None:
+        shls_slice = (0, nbas, 0, nbas)
     else:
-        dtype = numpy.complex
-        num_cgto_of = libcgto.CINTcgto_spinor
-        drv = libcgto.GTO1eintor_spinor
-    naoi = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in bralst])
-    naoj = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in ketlst])
+        assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
+    if ao_loc is None:
+        ao_loc = make_loc(bas, intor_name)
 
-    mat = numpy.empty((comp,naoi,naoj), dtype)
-    fnaddr = ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, intor_name))
-    drv(fnaddr, mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
-        ctypes.c_int(hermi),
-        bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
-        ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
-        c_atm, c_natm, c_bas, c_nbas, c_env)
+    i0, i1, j0, j1 = shls_slice[:4]
+    naoi = ao_loc[i1] - ao_loc[i0];
+    naoj = ao_loc[j1] - ao_loc[j0];
+    if '_cart' in intor_name or '_sph' in intor_name:
+        mat = numpy.ndarray((naoi,naoj,comp), numpy.double, out, order='F')
+        if '2c2e' in intor_name:
+            drv_name = 'GTOint2c2e'
+        else:
+            drv_name = 'GTOint2c'
+    else:
+        mat = numpy.ndarray((naoi,naoj,comp), numpy.complex, out, order='F')
+        if '2c2e' in intor_name:
+            drv_name = 'GTOint2c2e_spinor'
+            assert(hermi != pyscf.lib.HERMITIAN and
+                   hermi != pyscf.lib.ANTIHERMI)
+        else:
+            drv_name = 'GTOint2c_spinor'
+
+#    if cintopt is None:
+#        intopt = make_cintopt(atm, bas, env, intor_name)
+#    else:
+#        intopt = cintopt
+    intopt = pyscf.lib.c_null_ptr()
+
+    fn = getattr(libcgto, drv_name)
+    fn(_fpointer(intor_name), mat.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(comp), ctypes.c_int(hermi),
+       (ctypes.c_int*4)(*(shls_slice[:4])),
+       ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+       atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+       env.ctypes.data_as(ctypes.c_void_p))
 
     if comp == 1:
-        mat = mat.reshape(naoi,naoj)
-    if hermi == 0:
-        return mat
+        return mat.reshape(naoi,naoj)
     else:
-        if comp == 1:
-            pyscf.lib.hermi_triu_(mat, hermi=hermi)
-        else:
-            for i in range(comp):
-                pyscf.lib.hermi_triu_(mat[i], hermi=hermi)
-        return mat
+        return mat.transpose(2,0,1)
 
-def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
-              aosym='s1', out=None):
+def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
+              aosym='s1', ao_loc=None, cintopt=None, out=None):
+    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(env, dtype=numpy.double, order='C')
+    natm = atm.shape[0]
+    nbas = bas.shape[0]
+    if shls_slice is None:
+        shls_slice = (0, nbas, 0, nbas, 0, nbas)
+    else:
+        assert(shls_slice[1] <= nbas and
+               shls_slice[3] <= nbas and
+               shls_slice[5] <= nbas)
+    if ao_loc is None:
+        assert('ssc' not in intor_name)
+        ao_loc = make_loc(bas, intor_name)
+
+    i0, i1, j0, j1, k0, k1 = shls_slice[:6]
+    naok = ao_loc[k1] - ao_loc[k0];
+
+    if aosym in ('s1',):
+        naoi = ao_loc[i1] - ao_loc[i0];
+        naoj = ao_loc[j1] - ao_loc[j0];
+        shape = (naoi, naoj, naok, comp)
+    else:
+        aosym = 's2ij'
+        nij = ao_loc[i1]*(ao_loc[i1]+1)//2 - ao_loc[i0]*(ao_loc[i0]+1)//2
+        shape = (nij, naok, comp)
+
+    if '_cart' in intor_name or '_sph' in intor_name or 'ssc' in intor_name:
+        mat = numpy.ndarray(shape, numpy.double, out, order='F')
+    else:
+        raise NotImplementedError
+        mat = numpy.ndarray(shape, numpy.complex, out, order='F')
+
+    if cintopt is None:
+        intopt = make_cintopt(atm, bas, env, intor_name)
+    else:
+        intopt = cintopt
+
+    drv = libcgto.GTOnr3c_drv
+    drv(_fpointer(intor_name), _fpointer('GTOnr3c_fill_'+aosym),
+        mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+        (ctypes.c_int*6)(*(shls_slice[:6])),
+        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        env.ctypes.data_as(ctypes.c_void_p))
+
+    if comp == 1:
+        return mat.reshape(shape[:-1])
+    else:
+        return numpy.rollaxis(mat, -1, 0)
+
+def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
+              aosym='s1', ao_loc=None, cintopt=None, out=None):
     aosym = _stand_sym_code(aosym)
 
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -232,55 +293,51 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
     c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
     c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
     c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
-    natm = ctypes.c_int(atm.shape[0])
-    nbas = ctypes.c_int(bas.shape[0])
+    natm = atm.shape[0]
+    nbas = bas.shape[0]
 
     if '_cart' in intor_name:
         libcgto.CINTtot_cgto_cart.restype = ctypes.c_int
-        nao = libcgto.CINTtot_cgto_cart(c_bas, nbas)
+        nao = libcgto.CINTtot_cgto_cart(c_bas, ctypes.c_int(nbas))
         cgto_in_shell = 'CINTcgto_cart'
     elif '_sph' in intor_name:
         libcgto.CINTtot_cgto_spheric.restype = ctypes.c_int
-        nao = libcgto.CINTtot_cgto_spheric(c_bas, nbas)
+        nao = libcgto.CINTtot_cgto_spheric(c_bas, ctypes.c_int(nbas))
         cgto_in_shell = 'CINTcgto_spheric'
     else:
         raise NotImplementedError('cint2e spinor AO integrals')
 
     if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
-        assert(bras is None and kets is None)
+        assert(shls_slice is None)
         nao_pair = nao*(nao+1)//2
         if out is None:
             out = numpy.empty((nao_pair*(nao_pair+1)//2))
         else:
             out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
-        drv = _cvhf.GTO2e_cart_or_sph
+        drv = libcvhf.GTO2e_cart_or_sph
         drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
             out.ctypes.data_as(ctypes.c_void_p),
-            c_atm, natm, c_bas, nbas, c_env)
+            c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         return out
 
     else:
         from pyscf.scf import _vhf
-        if bras is None:
-            bralst = numpy.arange(len(bas), dtype=numpy.int32)
+        if shls_slice is None:
+            shls_slice = (0, nbas, 0, nbas)
         else:
-            bralst = numpy.asarray(bras, dtype=numpy.int32)
-            assert(bralst.max() < len(bas))
-        if kets is None:
-            ketlst = numpy.arange(len(bas), dtype=numpy.int32)
-        else:
-            ketlst = numpy.asarray(kets, dtype=numpy.int32)
-            assert(ketlst.max() < len(bas))
+            assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
+        bralst = numpy.arange(shls_slice[0], shls_slice[1], dtype=numpy.int32)
+        ketlst = numpy.arange(shls_slice[2], shls_slice[3], dtype=numpy.int32)
         num_cgto_of = getattr(libcgto, cgto_in_shell)
         naoi = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in bralst])
         naoj = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in ketlst])
         if aosym in ('s4', 's2ij'):
-            nij = naoi * (naoi + 1) / 2
+            nij = naoi * (naoi + 1) // 2
             assert(numpy.alltrue(bralst == ketlst))
         else:
             nij = naoi * naoj
         if aosym in ('s4', 's2kl'):
-            nkl = nao * (nao + 1) / 2
+            nkl = nao * (nao + 1) // 2
         else:
             nkl = nao * nao
         if comp == 1:
@@ -302,16 +359,10 @@ def getints2e(intor_name, atm, bas, env, bras=None, kets=None, comp=1,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
-            cintopt, c_atm, natm, c_bas, nbas, c_env)
+            cintopt, c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+        cintopt = None
         return out
 
-ANG_OF     = 1
-NPRIM_OF   = 2
-NCTR_OF    = 3
-KAPPA_OF   = 4
-PTR_EXP    = 5
-PTR_COEFF  = 6
-BAS_SLOTS  = 8
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
     r'''For given 2, 3 or 4 shells, interface for libcint to get 1e, 2e,
     2-center-2e or 3-center-2e integrals
@@ -564,6 +615,41 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         raise RuntimeError('Unknown intor %s' % intor_name)
 
 
+def make_loc(bas, key):
+    if 'cart' in key:
+        l = bas[:,ANG_OF]
+        dims = (l+1)*(l+2)//2 * bas[:,NCTR_OF]
+    elif 'sph' in key:
+        dims = (bas[:,ANG_OF]*2+1) * bas[:,NCTR_OF]
+    else:  # spinor
+        l = bas[:,ANG_OF]
+        k = bas[:,KAPPA_OF]
+        dims = (l*4+2) * bas[:,NCTR_OF]
+        dims[k<0] = l[k<0] * 2 + 2
+        dims[k>0] = l[k>0] * 2
+
+    ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
+    ao_loc[0] = 0
+    dims.cumsum(dtype=numpy.int32, out=ao_loc[1:])
+    return ao_loc
+
+def make_cintopt(atm, bas, env, intor):
+    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
+    natm = c_atm.shape[0]
+    nbas = c_bas.shape[0]
+    cintopt = pyscf.lib.c_null_ptr()
+    foptinit = getattr(libcgto, intor+'_optimizer')
+    foptinit(ctypes.byref(cintopt),
+             c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+             c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+             c_env.ctypes.data_as(ctypes.c_void_p))
+    return ctypes.cast(cintopt, _cintoptHandler)
+class _cintoptHandler(ctypes.c_void_p):
+    def __del__(self):
+        libcgto.CINTdel_optimizer(ctypes.byref(self))
+
 def _stand_sym_code(sym):
     if isinstance(sym, int):
         return 's%d' % sym
@@ -585,7 +671,7 @@ if __name__ == '__main__':
     ])
     mol.basis = {"H": 'cc-pvdz'}
     mol.build()
-    mol.set_rinv_origin_(mol.atom_coord(0))
+    mol.set_rinv_origin(mol.atom_coord(0))
     for i in range(mol.nbas):
         for j in range(mol.nbas):
             print(i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),

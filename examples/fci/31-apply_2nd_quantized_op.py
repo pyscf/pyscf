@@ -3,9 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import gto, scf, fci
-
 r'''
 Applying creation or annihilation operators on FCI wavefunction
         a |0>
@@ -14,6 +11,9 @@ Compute density matrices by
         gamma_{ij} = <0| i^+ j |0>
         Gamma_{ij,kl} = <0| i^+ j^+ l k |0>
 '''
+
+import numpy
+from pyscf import gto, scf, fci
 
 mol = gto.M(atom='H 0 0 0; Li 0 0 1.1', basis='sto3g')
 m = scf.RHF(mol).run()

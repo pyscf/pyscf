@@ -23,14 +23,6 @@ def sfx2c1e(mf):
     Args:
         mf : an SCF object
 
-    Attributes:
-        xuncontract : bool or str or list of str/int
-            Use uncontracted basis to expand X matrix.
-            When atom symbol (str type) is assigned to this attribute, the
-            uncontracted basis will be used for the specified atoms.  If a
-            list is given, the uncontracted basis will be applied for the
-            atoms or atom-ID specified by the given list.
-
     Returns:
         An SCF object
 
@@ -46,7 +38,21 @@ def sfx2c1e(mf):
     >>> mf.scf()
     '''
     mf_class = mf.__class__
-    class HF(mf_class):
+    if mf_class.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf_class.__doc__
+    class SFX2C(mf_class):
+        __doc__ = doc + \
+        '''
+        Attributes for spin-free X2C:
+            xuncontract : bool or str or list of str/int
+                Use uncontracted basis to expand X matrix.
+                When atom symbol (str type) is assigned to this attribute, the
+                uncontracted basis will be used for the specified atoms.  If a
+                list is given, the uncontracted basis will be applied for the
+                atoms or atom-ID specified by the given list.
+        '''
         def __init__(self):
             self.xuncontract = True
             self.xequation = '1e'
@@ -101,7 +107,7 @@ def sfx2c1e(mf):
                 h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
             return h1
 
-    return HF()
+    return SFX2C()
 
 sfx2c = sfx2c1e
 
@@ -201,7 +207,7 @@ class UHF(hf.SCF):
         logger.info(self, 'X equation %s', self.xequation)
         return self
 
-    def build_(self, mol=None):
+    def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         if self.direct_scf:
@@ -266,7 +272,7 @@ class UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())

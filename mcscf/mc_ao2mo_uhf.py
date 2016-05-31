@@ -152,7 +152,7 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     apCV = numpy.empty((ncas,nmo,ncore[1],nmo-ncore[1]))
     ppp = numpy.empty((nmo,nmo,nmo))
     for i in range(ncas):
-        buf = _ao2mo.nr_e2_(fload(ncore[0]+i), mo[0], klshape,
+        buf = _ao2mo.nr_e2(fload(ncore[0]+i), mo[0], klshape,
                             aosym='s4', mosym='s2', ao_loc=ao_loc)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
@@ -164,7 +164,7 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
                  - ppp[:ncore[0],:,ncore[0]:].transpose(1,0,2) \
                  - ppp[ncore[0]:,:ncore[0],:].transpose(2,1,0)
 
-        buf = _ao2mo.nr_e2_(fload(ncore[0]+i), mo[1], klshape,
+        buf = _ao2mo.nr_e2(fload(ncore[0]+i), mo[1], klshape,
                             aosym='s4', mosym='s2', ao_loc=ao_loc)
         for j in range(nmo):
             funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
@@ -190,21 +190,21 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     for i in range(ncore[0]):
         buf = fload(i)
         klshape = (0, ncore[1], ncore[1], nmo)
-        _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[1], klshape,
+        _ao2mo.nr_e2(buf[ncore[0]:nmo], mo[1], klshape,
                       aosym='s4', mosym='s1', out=cvCV[i], ao_loc=ao_loc)
 
         klshape = (0, nmo, 0, nmo)
-        tmp = _ao2mo.nr_e2_(buf[i:i+1], mo[1], klshape, aosym='s4',
+        tmp = _ao2mo.nr_e2(buf[i:i+1], mo[1], klshape, aosym='s4',
                             mosym='s1', ao_loc=ao_loc)
         jc_PP += tmp.reshape(nmo,nmo)
 
         klshape = (0, ncore[0], 0, nmo)
-        _ao2mo.nr_e2_(buf[ncore[0]:nmo], mo[0], klshape,
+        _ao2mo.nr_e2(buf[ncore[0]:nmo], mo[0], klshape,
                       aosym='s4', mosym='s1', out=vcp, ao_loc=ao_loc)
         kc_pp[i,ncore[0]:] = vcp[:,i]
 
         klshape = (0, nmo, 0, nmo)
-        _ao2mo.nr_e2_(buf[:ncore[0]], mo[0], klshape,
+        _ao2mo.nr_e2(buf[:ncore[0]], mo[0], klshape,
                       aosym='s4', mosym='s2', out=buf[:ncore[0]],
                       ao_loc=ao_loc)
         for j in range(ncore[0]):

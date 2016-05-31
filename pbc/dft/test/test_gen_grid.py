@@ -10,7 +10,7 @@ def get_ovlp(cell, kpt=None, grids=None):
     if grids is None:
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3
-        grids.build_()
+        grids.build()
 
     aoR = numint.eval_ao(cell, grids.coords, kpt)
     s = numpy.dot(aoR.T.conj(), grids.weights.reshape(-1,1)*aoR).real
@@ -33,7 +33,7 @@ class KnowValues(unittest.TestCase):
         kpt = None
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3
-        grids.build_()
+        grids.build()
         s1 = get_ovlp(cell, kpt, grids)
         s2 = scfint.get_ovlp(cell, kpt)
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)

@@ -37,8 +37,8 @@ class KnowValues(unittest.TestCase):
                  ('0b1011' , '0b1011' ),
                  ('0b10101', '0b10101')]
         refci = [0.86848550920009038, 0.15130668599599939, 0.15130668599597297,
-                 -0.36620088911284837, -0.10306162063159749]
-        self.assertTrue(numpy.allclose([x[0] for x in res], refci))
+                 0.36620088911284837, 0.10306162063159749]
+        self.assertTrue(numpy.allclose([abs(x[0]) for x in res], refci))
         self.assertEqual([x[1:] for x in res], refstr)
 
     def test__init__file(self):
@@ -164,6 +164,35 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ss[0], 0, 9)
         ss = fci.spin_op.spin_square0(ci0, norb, nelec)
         self.assertAlmostEqual(ss[0], 0, 9)
+
+    def test_fix_spin(self):
+        def check(mci):
+            mci = fci.addons.fix_spin_(mci, .2, 0)
+            mci.kernel(nelec=(8,8))
+            self.assertAlmostEqual(mci.spin_square(mci.ci, mol.nao_nr(), 16)[0], 0, 7)
+
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
+                    symmetry=1, verbose=0)
+        mf = scf.RHF(mol).run()
+        mci = fci.FCI(mol, mf.mo_coeff, False)
+        mci.wfnsym = 'A1g'
+        check(mci)
+        mci.wfnsym = 'A2g'
+        check(mci)
+
+        mci = fci.FCI(mol, mf.mo_coeff, True)
+        mci.wfnsym = 'A1g'
+        check(mci)
+        mci.wfnsym = 'A2g'
+        check(mci)
+
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
+                    verbose=0)
+        mf = scf.RHF(mol).run()
+        mci = fci.FCI(mol, mf.mo_coeff, False)
+        check(mci)
+        mci = fci.FCI(mol, mf.mo_coeff, True)
+        check(mci)
 
 
 if __name__ == "__main__":

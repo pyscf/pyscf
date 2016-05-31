@@ -455,7 +455,7 @@ from pyscf import mrpt
 #
 # Redirect output to another file
 #
-mol.build_(verbose=7, output = 'hs_dmrg.out')
+mol.build(verbose=7, output = 'hs_dmrg.out')
 
 mf = scf.sfx2c1e(scf.RHF(mol))
 mc = DMRGSCF(mf, norb, [nalpha,nbeta])

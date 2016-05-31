@@ -29,7 +29,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
 
     Kwargs:
         base : int
-            0-based (C-like) or 1-based (Fortran-like) caslst
+            0-based (C-style) or 1-based (Fortran-style) caslst
 
     Returns:
         An reoreded mo_coeff, which put the orbitals given by caslst in the CAS space
@@ -343,9 +343,14 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
         # remove core and active space from rest
         if mocc.shape[1] < mfmo.shape[1]:
             rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-            restocc = reduce(numpy.dot, (rest.T, s, rest)).diagonal()
-            restidx = numpy.sort(numpy.argsort(restocc)[nocc:])
-            mo = numpy.hstack((mocc, lo.orth.vec_lowdin(rest[:,restidx], s)))
+            e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+            restorb = numpy.dot(rest, u[:,e>1e-7])
+            if casscf.mol.symmetry:
+                t = casscf.mol.intor_symmetric('cint1e_kin_sph')
+                t = reduce(numpy.dot, (restorb.T, t, restorb))
+                e, u = numpy.linalg.eigh(t)
+                restorb = numpy.dot(restorb, u)
+            mo = numpy.hstack((mocc, restorb))
         else:
             mo = mocc
 
@@ -542,7 +547,8 @@ def state_average(casscf, weights=(0.5,0.5)):
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
-            if casscf.verbose >= logger.DEBUG:
+            if (casscf.verbose >= logger.DEBUG and
+                hasattr(fcibase_class, 'spin_square')):
                 ss = fcibase_class.spin_square(self, c, norb, nelec)
                 for i, ei in enumerate(e):
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
@@ -601,7 +607,8 @@ def state_specific(casscf, state=1):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
             self._civec = c
-            if casscf.verbose >= logger.DEBUG:
+            if (casscf.verbose >= logger.DEBUG and
+                hasattr(fcibase_class, 'spin_square')):
                 ss = fcibase_class.spin_square(self, c[state], norb, nelec)
                 logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
                              state+1, e[state], ss[0])
@@ -648,8 +655,7 @@ def hot_tuning_(casscf, configfile=None):
     for k, v in casscf.__dict__.items():
         if not (k.startswith('_') or k in exclude_keys):
             if (v is None or
-                isinstance(v, (basestring, bool, int, long, float,
-                               list, tuple, dict))):
+                isinstance(v, (str, bool, int, float, list, tuple, dict))):
                 casscf_settings[k] = v
             elif isinstance(v, set):
                 casscf_settings[k] = list(v)

@@ -139,9 +139,37 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
 
-def map_rhf_to_uhf(rhf):
-    '''Take the settings from RHF object'''
-    return uhf.map_rhf_to_uhf(rhf)
+map_rhf_to_uhf = uhf.map_rhf_to_uhf
+
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
+    subspaces separatedly (without change occupancy).
+    '''
+    mo_occ = numpy.asarray(mo_occ)
+    assert(mo_occ.ndim == 2)
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    occidxa = mo_occ[0] == 1
+    occidxb = mo_occ[1] == 1
+    viridxa = mo_occ[0] == 0
+    viridxb = mo_occ[1] == 0
+    s = mf.get_ovlp()
+    def eig_(fock, mo_coeff, idx, es, cs):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            es[idx] = e
+            c = numpy.dot(mo_coeff[:,idx], c)
+            cs[:,idx] = hf_symm._symmetrize_canonicalization_(mf.mol, e, c, s)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.shape)
+    eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
+    eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
+    eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
+    eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
+    return mo_e, mo
 
 
 class UHF(uhf.UHF):
@@ -177,11 +205,11 @@ class UHF(uhf.UHF):
         uhf.UHF.dump_flags(self)
         hf_symm.check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
 
-    def build_(self, mol=None):
+    def build(self, mol=None):
         for irname in self.irrep_nelec:
             if irname not in self.mol.irrep_name:
                 logger.warn(self, '!! No irrep %s', irname)
-        return uhf.UHF.build_(self, mol)
+        return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):
         nirrep = self.mol.symm_orb.__len__()
@@ -214,8 +242,7 @@ class UHF(uhf.UHF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if orbsym is None:
-            if (mo_coeff is not None and
-                mo_coeff[0].shape[0] != mo_coeff[0].shape[1]):  # due to linear-dep
+            if mo_coeff is not None:  # due to linear-dep
                 ovlp_ao = self.get_ovlp()
                 orbsyma = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                               mo_coeff[0], ovlp_ao, False)
@@ -321,8 +348,8 @@ class UHF(uhf.UHF):
                 logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
-    def _finalize_(self):
-        uhf.UHF._finalize_(self)
+    def _finalize(self):
+        uhf.UHF._finalize(self)
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[0])
@@ -363,4 +390,5 @@ class UHF(uhf.UHF):
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
+    canonicalize = canonicalize
 

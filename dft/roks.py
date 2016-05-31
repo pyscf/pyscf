@@ -11,7 +11,7 @@ from pyscf.lib import logger
 import pyscf.scf
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
-from pyscf.dft.uks import get_veff_, energy_elec
+from pyscf.dft.uks import get_veff, energy_elec
 from pyscf.dft import rks
 
 
@@ -27,7 +27,7 @@ class ROKS(pyscf.scf.rohf.ROHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    get_veff = get_veff_
+    get_veff = get_veff
     energy_elec = energy_elec
 
     def define_xc_(self, description):

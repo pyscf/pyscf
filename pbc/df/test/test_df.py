@@ -28,7 +28,7 @@ class KnowValues(unittest.TestCase):
         #grids = pdft.gen_grid.BeckeGrids(cell)
         #grids.level = 3
         grids = pdft.gen_grid.UniformGrids(cell)
-        grids.build_()
+        grids.build()
         a2 = df.aux_e2_grid(cell, auxcell, grids)
         self.assertAlmostEqual(np.linalg.norm(a1-a2), 0, 6)
 
@@ -48,7 +48,7 @@ class KnowValues(unittest.TestCase):
         grids = pdft.gen_grid.BeckeGrids(cell)
         grids.level = 3
         #grids = pdft.gen_grid.UniformGrids(cell)
-        grids.build_()
+        grids.build()
         a2 = df.aux_e2_grid(cell, auxcell, grids)
         self.assertAlmostEqual(np.linalg.norm(a1-a2), 0, 4)
 

@@ -115,9 +115,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
 
-    log.debug('CASSCF canonicalization')
-    mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                                casscf.natorb, casdm1, log)
+    if casscf.canonicalization:
+        log.info('CASSCF canonicalization')
+        mo, fcivec, mo_energy = \
+                casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
+
     if dump_chk:
         casscf.dump_chk(locals())
 

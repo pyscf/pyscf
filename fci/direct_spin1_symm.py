@@ -62,24 +62,15 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if not list(orbsym):
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
+    link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    fcivec = fcivec.reshape(na,nb)
+    assert(fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     eri, link_indexa, dimirrep = reorder4irrep(eri, norb, link_indexa, orbsym)
@@ -211,6 +202,9 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             iroot += 1
             if iroot >= nroots:
                 break
+    # Add noise
+    ci0[0][0 ] += 1e-5
+    ci0[0][-1] -= 1e-5
     return ci0
 
 

@@ -62,10 +62,7 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     UHF-FCI wavefunction
     '''
     from pyscf.fci import direct_spin1
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
 
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mo_coeff = (mo_coeff, mo_coeff)
@@ -144,11 +141,8 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_baab(fcivec, norb, nelec):
-    assert(fcivec.flags.c_contiguous)
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    fcivec = numpy.asarray(fcivec, order='C')
+    neleca, nelecb = _unpack(nelec)
     if neleca == norb or nelecb == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     ades_index = cistring.gen_des_str_index(range(norb), neleca+1)
@@ -170,7 +164,6 @@ def _make_rdm2_baab(fcivec, norb, nelec):
                            bcre_index.ctypes.data_as(ctypes.c_void_p))
     return dm2
 def make_rdm2_baab(fcivec, norb, nelec):
-    assert(fcivec.flags.c_contiguous)
     dm2 = _make_rdm2_baab(fcivec, norb, nelec)
     dm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', fcivec, fcivec, norb, nelec)
     dm1b, dm2 = rdm.reorder_rdm(dm1b, dm2, inplace=True)
@@ -180,10 +173,8 @@ def make_rdm2_baab(fcivec, norb, nelec):
 # dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def _make_rdm2_abba(fcivec, norb, nelec):
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    fcivec = numpy.asarray(fcivec, order='C')
+    neleca, nelecb = _unpack(nelec)
     if nelecb == norb or neleca == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     acre_index = cistring.gen_cre_str_index(range(norb), neleca-1)
@@ -214,10 +205,7 @@ def make_rdm2_abba(fcivec, norb, nelec):
 def contract_ss(fcivec, norb, nelec):
     '''Contract spin square operator with FCI wavefunction :math:`S^2 |CI>`
     '''
-    if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelecb = nelec // 2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     fcivec = fcivec.reshape(na,nb)
@@ -269,7 +257,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = pyscf.lib.take_2d(fcivec, maska, maskb)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: t1[ida.reshape(-1,1),idb] += citmp
-            pyscf.lib.takebak_2d_(t1, citmp, ida, idb)
+            pyscf.lib.takebak_2d(t1, citmp, ida, idb)
         for i in range(norb):
             signa = aindex[:,i,1]
             signb = bindex[:,i,1]
@@ -280,7 +268,7 @@ def contract_ss(fcivec, norb, nelec):
             citmp = pyscf.lib.take_2d(t1, ida, idb)
             citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
             #: ci1[maska.reshape(-1,1), maskb] += citmp
-            pyscf.lib.takebak_2d_(ci1, citmp, maska, maskb)
+            pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
 
     ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-
@@ -288,6 +276,15 @@ def contract_ss(fcivec, norb, nelec):
     ci1 *= .5
     ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
+
+
+def _unpack(nelec):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+        return neleca, nelecb
+    else:
+        return nelec
 
 
 if __name__ == '__main__':

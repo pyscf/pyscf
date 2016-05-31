@@ -6,6 +6,7 @@ import _ctypes
 import numpy
 import pyscf.lib
 from pyscf import gto
+from pyscf.gto.moleintor import make_cintopt
 
 libcvhf = pyscf.lib.load_library('libcvhf')
 def _fpointer(name):
@@ -21,9 +22,16 @@ class VHFOpt(object):
         self._dmcondname = dmcondname
         self.init_cvhf_direct(mol, intor, prescreen, qcondname)
 
+        # Python sets libcvhf and ctypes to None before calling __del__
+        # keep track of them in local stack, so that they can be correctly
+        # refered in __del__
+        def to_del():
+            self._cintopt = None
+            libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
+        self.__to_del = to_del
+
     def __del__(self):
-        libcvhf.CINTdel_optimizer(ctypes.byref(self._cintopt))
-        libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
+        self.__to_del()
 
     def init_cvhf_direct(self, mol, intor, prescreen, qcondname):
         c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
@@ -57,7 +65,7 @@ class VHFOpt(object):
     def direct_scf_tol(self, v):
         self._this.contents.direct_scf_cutoff = v
 
-    def set_dm_(self, dm, atm, bas, env):
+    def set_dm(self, dm, atm, bas, env):
         if self._dmcondname is not None:
             c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
             c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -84,20 +92,6 @@ class _CVHFOpt(ctypes.Structure):
                 ('dm_cond', ctypes.c_void_p),
                 ('fprescreen', ctypes.c_void_p),
                 ('r_vkscreen', ctypes.c_void_p)]
-
-def make_cintopt(atm, bas, env, intor):
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-    cintopt = pyscf.lib.c_null_ptr()
-    foptinit = getattr(libcvhf, intor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-             c_env.ctypes.data_as(ctypes.c_void_p))
-    return cintopt
 
 ################################################
 # for general DM
@@ -134,8 +128,8 @@ def incore(eri, dm, hermi=0):
         else:
             fvk = _fpointer('CVHFics8_jk_s1il')
         tridm = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dm))
-        for i in range(nao):
-            tridm[i*(i+1)//2+i] *= .5
+        i = numpy.arange(nao)
+        tridm[i*(i+1)//2+i] *= .5
     else:
         raise RuntimeError('Array shape not consistent: DM %s, eri %s'
                            % (dm.shape, eri.shape))
@@ -146,10 +140,10 @@ def incore(eri, dm, hermi=0):
          vk.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nao), fvj, fvk)
     if hermi != 0:
-        vj = pyscf.lib.hermi_triu_(vj, hermi)
-        vk = pyscf.lib.hermi_triu_(vk, hermi)
+        vj = pyscf.lib.hermi_triu(vj, hermi)
+        vk = pyscf.lib.hermi_triu(vk, hermi)
     else:
-        vj = pyscf.lib.hermi_triu_(vj, 1)
+        vj = pyscf.lib.hermi_triu(vj, 1)
     return vj, vk
 
 # use cint2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
@@ -175,7 +169,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
         cintopt = make_cintopt(c_atm, c_bas, c_env, 'cint2e_sph')
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -209,15 +203,12 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
-
     # vj must be symmetric
     for idm in range(n_dm):
-        vjk[0,idm] = pyscf.lib.hermi_triu_(vjk[0,idm], 1)
+        vjk[0,idm] = pyscf.lib.hermi_triu(vjk[0,idm], 1)
     if hermi != 0: # vk depends
         for idm in range(n_dm):
-            vjk[1,idm] = pyscf.lib.hermi_triu_(vjk[1,idm], hermi)
+            vjk[1,idm] = pyscf.lib.hermi_triu(vjk[1,idm], hermi)
     if n_dm == 1:
         vjk = vjk.reshape(2,nao,nao)
     return vjk
@@ -253,7 +244,7 @@ def direct_mapdm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -293,9 +284,6 @@ def direct_mapdm(intor, aosym, jkdescript,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if n_dm * ncomp == 1:
         vjk = [v.reshape(v.shape[2:]) for v in vjk]
@@ -339,7 +327,7 @@ def direct_bindm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -378,9 +366,6 @@ def direct_bindm(intor, aosym, jkdescript,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if ncomp == 1:
         vjk = [v.reshape(v.shape[1:]) for v in vjk]
@@ -438,7 +423,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -465,9 +450,6 @@ def rdirect_mapdm(intor, aosym, jkdescript,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if n_dm * ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)
@@ -506,7 +488,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
-        vhfopt.set_dm_(dms, atm, bas, env)
+        vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = vhfopt._intor
@@ -532,9 +514,6 @@ def rdirect_bindm(intor, aosym, jkdescript,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if vhfopt is None:
-        libcvhf.CINTdel_optimizer(ctypes.byref(cintopt))
 
     if ncomp == 1:
         vjk = vjk.reshape(njk,nao,nao)

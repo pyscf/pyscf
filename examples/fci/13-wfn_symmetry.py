@@ -3,12 +3,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import gto, scf, fci
-
 '''
 Assign FCI wavefunction symmetry
 '''
+
+import numpy
+from pyscf import gto, scf, fci
 
 mol = gto.M(atom='H 0 0 0; F 0 0 1.1', basis='631g', symmetry=True)
 m = scf.RHF(mol)

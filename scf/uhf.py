@@ -4,6 +4,7 @@
 import time
 from functools import reduce
 import numpy
+import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import hf
@@ -145,8 +146,8 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
     return vhf
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
@@ -361,7 +362,7 @@ def spin_square(mo, s=1):
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
-    print orbital coefficients; Mulliken population analysis
+    print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
@@ -389,7 +390,8 @@ def analyze(mf, verbose=logger.DEBUG):
         dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log),\
+            mf.dip_moment(mf.mol, dm, verbose=log)
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -444,15 +446,38 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
-def map_rhf_to_uhf(rhf):
-    '''Take the settings from RHF object'''
-    assert(isinstance(rhf, hf.RHF))
-    uhf = UHF(rhf.mol)
-    uhf.__dict__.update(rhf.__dict__)
-    uhf.mo_energy = numpy.array((rhf.mo_energy,rhf.mo_energy))
-    uhf.mo_coeff  = numpy.array((rhf.mo_coeff,rhf.mo_coeff))
-    uhf.mo_occ    = numpy.array((rhf.mo_occ,rhf.mo_occ))
-    return uhf
+def map_rhf_to_uhf(mf):
+    '''Create UHF object based on the RHF object'''
+    from pyscf.scf import addons
+    return addons.convert_to_uhf(mf)
+
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    mo_occ = numpy.asarray(mo_occ)
+    assert(mo_occ.ndim == 2)
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    occidxa = mo_occ[0] == 1
+    occidxb = mo_occ[1] == 1
+    viridxa = mo_occ[0] == 0
+    viridxb = mo_occ[1] == 0
+    def eig_(fock, mo_coeff, idx, es, cs):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            es[idx] = e
+            cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.shape)
+    eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
+    eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
+    eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
+    eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
+    return mo_e, mo
 
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     r''' Calculate the overlap between two different determinants. It is the product
@@ -534,6 +559,31 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
     dm_b = reduce(numpy.dot, (mo1_b, x[1], mo2_b.T.conj()))
     return numpy.array((dm_a, dm_b))
 
+def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+    r''' Dipole moment calculation
+
+    .. math::
+
+        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Z_A X_A
+        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Z_A Y_A
+        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Z_A Z_A
+
+    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
+    moment
+
+    Args:
+         mol: an instance of :class:`Mole`
+         dm : a list of 2D ndarrays
+              a list of density matrices
+
+    Return:
+        A list: the dipole moment on x, y and z component
+    '''
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        return hf.dip_moment(mol, dm, unit_symbol, verbose)
+    else:
+        return hf.dip_moment(mol, dm[0]+dm[1], unit_symbol, verbose)
+
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for UHF:
@@ -576,7 +626,7 @@ class UHF(hf.SCF):
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
         return numpy.array((e_a,e_b)), (c_a,c_b)
 
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 
@@ -613,7 +663,7 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         dm = numpy.asarray(dm)
@@ -673,6 +723,8 @@ class UHF(hf.SCF):
             s = self.get_ovlp()
         return spin_square(mo_coeff, s)
 
+    canonicalize = canonicalize
+
     @pyscf.lib.with_doc(det_ovlp.__doc__)
     def det_ovlp(self, mo1, mo2, occ1, occ2, ovlp=None):
         if ovlp is None: ovlp = self.get_ovlp()
@@ -681,6 +733,13 @@ class UHF(hf.SCF):
     @pyscf.lib.with_doc(make_asym_dm.__doc__)
     def make_asym_dm(self, mo1, mo2, occ1, occ2, x):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
+
+    @pyscf.lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        if unit_symbol is None: unit_symbol='Debye'
+        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
 def _makevhf(vj, vk, nset):
     if nset == 1:

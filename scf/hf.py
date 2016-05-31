@@ -158,6 +158,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    if dump_chk:
+        mf.dump_chk(locals())
     logger.timer(mf, 'scf_cycle', *cput0)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
@@ -598,8 +600,8 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     else:
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''F = h^{core} + V^{HF}
 
     Args:
@@ -701,7 +703,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
 def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
-    print orbital coefficients; Mulliken population analysis
+    print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
@@ -720,8 +722,8 @@ def analyze(mf, verbose=logger.DEBUG):
         label = mf.mol.spheric_labels(True)
         dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
-
+    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log), \
+            mf.dip_moment(mf.mol, dm, verbose=log)
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
@@ -815,6 +817,72 @@ def eig(h, s):
     c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
     return e, c
 
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the Fock matrix within occupied, open,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    coreidx = mo_occ == 2
+    viridx = mo_occ == 0
+    openidx = ~(coreidx | viridx)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.size)
+    for idx in (coreidx, openidx, viridx):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+            mo_e[idx] = e
+    return mo_e, mo
+
+def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+    r''' Dipole moment calculation
+
+    .. math::
+
+        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Z_A X_A
+        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Z_A Y_A
+        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Z_A Z_A
+
+    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
+    moment
+
+    Args:
+         mol: an instance of :class:`Mole`
+         dm : a 2D ndarrays density matrices
+
+    Return:
+        A list: the dipole moment on x, y and z component
+    '''
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+
+    if unit_symbol == 'Debye':
+        unit = 2.541746    # a.u. to Debye
+    else:
+        unit = 1.0
+
+    mol.set_common_orig((0,0,0))
+    ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
+    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm)
+
+    charges = mol.atom_charges()
+    coords  = mol.atom_coords()
+    nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+
+    mol_dip = (nucl_dip - el_dip) * unit
+
+    if unit_symbol == 'Debye' :
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+    else:
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+    return mol_dip
 
 ############
 # For orbital rotation
@@ -946,8 +1014,6 @@ class SCF(pyscf.lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def build(self, mol=None):
-        return self.build_(mol)
-    def build_(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -992,14 +1058,7 @@ class SCF(pyscf.lib.StreamObject):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
-    # Keep both get_fock and get_fock_, needed by COSMO module
-    @pyscf.lib.with_doc(get_fock_.__doc__)
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                 diis_start_cycle=None, level_shift_factor=None,
-                 damp_factor=None):
-        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
-                              diis_start_cycle, level_shift_factor, damp_factor)
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 
@@ -1102,7 +1161,7 @@ class SCF(pyscf.lib.StreamObject):
         '''
         cput0 = (time.clock(), time.time())
 
-        self.build_(self.mol)
+        self.build(self.mol)
         self.dump_flags()
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -1110,13 +1169,13 @@ class SCF(pyscf.lib.StreamObject):
                        dm0=dm0, callback=self.callback)
 
         logger.timer(self, 'SCF', *cput0)
-        self._finalize_()
+        self._finalize()
         return self.e_tot
     def kernel(self, dm0=None):
         return self.scf(dm0)
     kernel.__doc__ = scf.__doc__
 
-    def _finalize_(self):
+    def _finalize(self):
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
@@ -1134,7 +1193,7 @@ class SCF(pyscf.lib.StreamObject):
         return opt
 
     @pyscf.lib.with_doc(get_jk.__doc__)
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
@@ -1143,9 +1202,6 @@ class SCF(pyscf.lib.StreamObject):
         vj, vk = get_jk(mol, dm, hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
-    def get_jk(self, mol=None, dm=None, hermi=1):
-        return self.get_jk_(mol, dm, hermi)
-    get_jk.__doc__ = get_jk_.__doc__
 
     def get_j(self, mol=None, dm=None, hermi=1):
         '''Compute J matrix for the given density matrix.
@@ -1195,21 +1251,30 @@ class SCF(pyscf.lib.StreamObject):
         return self.mulliken_meta(*args, **kwargs)
     pop.__doc__ = mulliken_meta.__doc__
 
+    canonicalize = canonicalize
+
+    @pyscf.lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        if unit_symbol is None: unit_symbol='Debye'
+        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis='weigend+etb'):
-        import pyscf.scf.dfhf
-        return pyscf.scf.dfhf.density_fit(self, auxbasis)
+    def density_fit(self, auxbasis='weigend+etb', with_df=None):
+        import pyscf.df.df_jk
+        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 
     def x2c(self):
         import pyscf.scf.x2c
         return pyscf.scf.x2c.sfx2c1e(self)
 
-    def update_(self, chkfile=None):
-        return self.update_from_chk_(chkfile)
-    def update_from_chk_(self, chkfile=None):
+    def update(self, chkfile=None):
+        return self.update_from_chk(chkfile)
+    def update_from_chk(self, chkfile=None):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(pyscf.scf.chkfile.load(chkfile, 'scf'))
         return self
@@ -1274,7 +1339,7 @@ class RHF(SCF):
         SCF.__init__(self, mol)
 
     @pyscf.lib.with_doc(get_jk.__doc__)
-    def get_jk_(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
@@ -1300,6 +1365,12 @@ class RHF(SCF):
             return vj - vk * .5
         else:
             return SCF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF/ROHF'''
+        from pyscf.scf import addons
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':

@@ -28,16 +28,11 @@ libfci = pyscf.lib.load_library('libfci')
 
 @pyscf.lib.with_doc(direct_spin1.contract_1e.__doc__)
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
-    assert(fcivec.flags.c_contiguous)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na,nlink,_ = link_index.shape
-    ci1 = numpy.empty((na,na))
+    fcivec = numpy.asarray(fcivec, order='C')
+    link_index = _unpack(norb, nelec, link_index)
+    na, nlink = link_index.shape[:2]
+    assert(fcivec.size == na**2)
+    ci1 = numpy.empty_like(fcivec)
     f1e_tril = pyscf.lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                                 fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -46,7 +41,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
-    return pyscf.lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
 
 # Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
 # h2e = eri_{pq,rs} p^+ q r^+ s
@@ -59,16 +54,11 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 # the input fcivec should be symmetrized
 @pyscf.lib.with_doc(direct_spin1.contract_2e.__doc__)
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na,nlink,_ = link_index.shape
+    link_index = _unpack(norb, nelec, link_index)
+    na, nlink = link_index.shape[:2]
+    assert(fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
 
     libfci.FCIcontract_2e_spin0(eri.ctypes.data_as(ctypes.c_void_p),
@@ -78,7 +68,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
-    return pyscf.lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
 
 absorb_h1e = direct_spin1.absorb_h1e
 
@@ -137,7 +127,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu_(h0)
+    h0 = pyscf.lib.hermi_triu(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may lead to the
@@ -238,6 +228,10 @@ def get_init_guess(norb, nelec, nroots, hdiag):
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
         ci0.append(x.ravel())
+
+    # Add noise
+    ci0[0][0 ] += 1e-5
+    ci0[0][-1] -= 1e-5
     return ci0
 
 
@@ -252,14 +246,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
 
+    link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
     eri = numpy.ascontiguousarray(eri)
     na = link_index.shape[0]
@@ -271,7 +259,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     else:
         pw = pv = addr = None
 
-    if pspace_size >= na*na and ci0 is not None and not davidson_only:
+    if pspace_size >= na*na and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
         if na*na == 1:
@@ -402,6 +390,17 @@ class FCISolver(direct_spin1.FCISolver):
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
+
+def _unpack(norb, nelec, link_index):
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.integer)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        return cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+    else:
+        return link_index
 
 
 if __name__ == '__main__':

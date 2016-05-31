@@ -26,7 +26,7 @@ def make_grids(n):
     cell.pseudo = None
     cell.build(False, False)
     grids = gen_grid.UniformGrids(cell)
-    grids.setup_grids_()
+    grids.build()
     return cell, grids
 
 class KnowValues(unittest.TestCase):

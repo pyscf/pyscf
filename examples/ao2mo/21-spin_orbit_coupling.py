@@ -32,7 +32,7 @@ print('SSO 2e integrals shape %s' % str(h2.shape))
 # 1-electron part for atom A
 #       <i| p 1/|r-R_A| cross p |j>
 # JCP, 122, 034107 Eq (2) = h1 * (iZ_A)
-mol.set_rinv_origin_(mol.atom_coord(1))  # set the gauge origin on second atom
+mol.set_rinv_origin(mol.atom_coord(1))  # set the gauge origin on second atom
 h1 = numpy.einsum('xpq,pi,qj->xij',
                   mol.intor('cint1e_prinvxp_sph', comp=3), cas_orb, cas_orb)
 print('1e integral shape %s' % str(h1.shape))

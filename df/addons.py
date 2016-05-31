@@ -17,7 +17,7 @@ class load(ao2mo.load):
     pass
 
 
-def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Kr'):
+def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
     '''augment weigend basis with even tempered gaussian basis
     exps = alpha*beta^i for i = 1..N
     '''
@@ -27,13 +27,13 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Kr'):
     newbasis = {}
     for symb in uniq_atoms:
         nuc_charge = gto.mole._charge(symb)
-        if nuc_charge <= nuc_start:
+        if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
         #?elif symb in mol._ecp:
         else:
             conf = lib.parameters.ELEMENTS[nuc_charge][2]
             max_shells = 4 - conf.count(0)
-            emin_by_l = [1e3] * 8
+            emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
             for b in mol._basis[symb]:
                 l = b[0]
@@ -57,12 +57,12 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Kr'):
             emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max*2-1)]
             emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max*2-1)]
             # Tune emin and emax
-            emin_by_l = numpy.array(emin_by_l) * 2  # *2 for alpha+alpha on same center
+            emin_by_l = numpy.array(emin_by_l)
             emax_by_l = numpy.array(emax_by_l) / (numpy.arange(l_max*2-1)*.5+1)
 
             ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
-            etb = [(l, n, emin_by_l[l], beta)
-                   for l, n in enumerate(ns.astype(int)) if n > 0]
+            etb = [(l, max(n,1), emin_by_l[l], beta)
+                   for l, n in enumerate(ns.astype(int))]
             newbasis[symb] = gto.expand_etbs(etb)
 
     return newbasis

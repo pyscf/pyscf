@@ -23,13 +23,13 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     if shielding_nuc is None:
         shielding_nuc = range(1, mol.natm+1)
     if gauge_orig is not None:
-        mol.set_common_origin_(gauge_orig)
+        mol.set_common_origin(gauge_orig)
 
     n4c = dm0.shape[0]
     n2c = n4c // 2
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         if mb.upper() == 'RMB':
             if gauge_orig is None:
                 t11 = mol.intor('cint1e_giao_sa10sa01', 9)
@@ -60,7 +60,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     para_occ = numpy.zeros((len(shielding_nuc),3,3))
     h01 = numpy.zeros((3, n4c, n4c), complex)
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         t01 = mol.intor('cint1e_sa01sp', 3)
         for m in range(3):
             h01[m,:n2c,n2c:] = .5 * t01[m]
@@ -117,7 +117,7 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
 def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
     if gauge_orig is not None:
-        mol.set_common_origin_(gauge_orig)
+        mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -141,7 +141,7 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
 def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
     if gauge_orig is not None:
-        mol.set_common_origin_(gauge_orig)
+        mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -195,7 +195,7 @@ def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
 
 def make_s10(mol, gauge_orig=None, mb='RMB'):
     if gauge_orig is not None:
-        mol.set_common_origin_(gauge_orig)
+        mol.set_common_origin(gauge_orig)
     n2c = mol.nao_2c()
     n4c = n2c * 2
     c = mol.light_speed
@@ -241,7 +241,7 @@ class NMR(rhf_nmr.NMR):
         msc_dia = self.dia() * facppm
         t0 = logger.timer(self, 'h11', *t0)
         msc_para, para_pos, para_neg, para_occ = \
-                [x*facppm for x in self.para_(mo10=mo1)]
+                [x*facppm for x in self.para(mo10=mo1)]
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
@@ -267,10 +267,8 @@ class NMR(rhf_nmr.NMR):
             dm0 = self._scf.make_rdm1(self._scf.mo_coeff, self._scf.mo_occ)
         return dia(mol, dm0, gauge_orig, shielding_nuc, self.mb)
 
-    def para(self, *args, **kwargs):
-        return para(*args, **kwargs)
-    def para_(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
-              shielding_nuc=None):
+    def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
+             shielding_nuc=None):
         if mol is None:           mol = self.mol
         if mo_coeff is None:      mo_coeff = self._scf.mo_coeff
         if mo_occ is None:        mo_occ = self._scf.mo_occ
@@ -336,7 +334,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
                             ('ji->s2kl', 'lk->s1ij', 'jk->s1il', 'li->s1kj'),
                             dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
     for i in range(3):
-        vx[0,i] = pyscf.lib.hermi_triu_(vx[0,i], 2)
+        vx[0,i] = pyscf.lib.hermi_triu(vx[0,i], 2)
     vj[:,n2c:,n2c:] = vx[0] + vx[1]
     vk[:,n2c:,n2c:] = vx[2] + vx[3]
 
@@ -345,7 +343,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
                             (dmll,dmss,dmsl,dmls), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
     for i in range(3):
-        vx[1,i] = pyscf.lib.hermi_triu_(vx[1,i], 2)
+        vx[1,i] = pyscf.lib.hermi_triu(vx[1,i], 2)
     vj[:,n2c:,n2c:] += vx[0]
     vj[:,:n2c,:n2c] += vx[1]
     vk[:,n2c:,:n2c] += vx[2]
@@ -385,7 +383,7 @@ def _call_giao_vhf1(mol, dm):
     vj[:,n2c:,n2c:] += vx[0]
     vk[:,n2c:,:n2c] += vx[1]
     for i in range(3):
-        vj[i] = pyscf.lib.hermi_triu_(vj[i], 1)
+        vj[i] = pyscf.lib.hermi_triu(vj[i], 1)
         vk[i] = vk[i] + vk[i].T.conj()
     return vj, vk
 

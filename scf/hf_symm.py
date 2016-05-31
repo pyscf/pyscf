@@ -105,6 +105,60 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
 
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the Fock matrix in occupied, open,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    coreidx = mo_occ == 2
+    viridx = mo_occ == 0
+    openidx = ~(coreidx | viridx)
+    mo = numpy.empty_like(mo_coeff)
+    mo_e = numpy.empty(mo_occ.size)
+    s = mf.get_ovlp()
+    for idx in (coreidx, openidx, viridx):
+        if numpy.count_nonzero(idx) > 0:
+            orb = mo_coeff[:,idx]
+            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            e, c = scipy.linalg.eigh(f1)
+            c = numpy.dot(mo_coeff[:,idx], c)
+            mo[:,idx] = _symmetrize_canonicalization_(mf.mol, e, c, s)
+            mo_e[idx] = e
+    return mo_e, mo
+
+def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff, s):
+    '''Restore symmetry for canonicalized orbitals
+    '''
+    def search_for_degeneracy(mo_energy):
+        idx = numpy.where(abs(mo_energy[1:] - mo_energy[:-1]) < 1e-6)[0]
+        return numpy.unique(numpy.hstack((idx, idx+1)))
+
+    degidx = search_for_degeneracy(mo_energy)
+    logger.debug1(mol, 'degidx %s', degidx)
+    if degidx.size > 0:
+        esub = mo_energy[degidx]
+        csub = mo_coeff[:,degidx]
+        scsub = numpy.dot(s, csub)
+        emin = abs(esub).min() * .5
+        es = []
+        cs = []
+        for i,ir in enumerate(mol.irrep_id):
+            so = mol.symm_orb[i]
+            sosc = numpy.dot(so.T, scsub)
+            s_ir = reduce(numpy.dot, (so.T, s, so))
+            fock_ir = numpy.dot(sosc*esub, sosc.T)
+            mo_energy, u = scipy.linalg.eigh(fock_ir, s_ir)
+            idx = abs(mo_energy) > emin
+            es.append(mo_energy[idx])
+            cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
+        es = numpy.hstack(es)
+        idx = numpy.argsort(es)
+        assert(numpy.allclose(es[idx], esub))
+        mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
+    return mo_coeff
+
 def so2ao_mo_coeff(so, irrep_mo_coeff):
     '''Transfer the basis of MO coefficients, from spin-adapted basis to AO basis
     '''
@@ -229,8 +283,7 @@ class RHF(hf.RHF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if orbsym is None:
-            if (mo_coeff is not None and
-                mo_coeff.shape[0] != mo_coeff.shape[1]):  # due to linear-dep
+            if mo_coeff is not None:
                 orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                              mo_coeff, self.get_ovlp(), False)
                 orbsym = numpy.asarray(orbsym)
@@ -286,8 +339,8 @@ class RHF(hf.RHF):
                             verbose=self.verbose)
         return mo_occ
 
-    def _finalize_(self):
-        hf.RHF._finalize_(self)
+    def _finalize(self):
+        hf.RHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
@@ -315,6 +368,8 @@ class RHF(hf.RHF):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
+
+    canonicalize = canonicalize
 
 
 class HF1e(hf.SCF):
@@ -393,9 +448,9 @@ class ROHF(rohf.ROHF):
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
 
-    def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None,
-                  damp_factor=None):
+    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                 diis_start_cycle=None, level_shift_factor=None,
+                 damp_factor=None):
 # Roothaan's effective fock
 # http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 #          |  closed     open    virtual
@@ -447,7 +502,7 @@ class ROHF(rohf.ROHF):
         nmo = mo_ea.size
         mo_occ = numpy.zeros(nmo)
         if orbsym is None:
-            if mo_coeff is not None and mo_coeff.shape[0] != mo_coeff.shape[1]:
+            if mo_coeff is not None:
                 orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
                                              mo_coeff, self.get_ovlp(), False)
                 orbsym = numpy.asarray(orbsym)
@@ -554,8 +609,8 @@ class ROHF(rohf.ROHF):
         dm_b = numpy.dot(mo_b, mo_b.T)
         return numpy.array((dm_a, dm_b))
 
-    def _finalize_(self):
-        rohf.ROHF._finalize_(self)
+    def _finalize(self):
+        rohf.ROHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
         c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2])
@@ -655,6 +710,15 @@ class ROHF(rohf.ROHF):
         if mo_coeff is None: mo_coeff = (self.mo_coeff,self.mo_coeff)
         if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
+
+    @pyscf.lib.with_doc(canonicalize.__doc__)
+    def canonicalize(self, mo_coeff, mo_occ, fock=None):
+        dm = self.make_rdm1(mo_coeff, mo_occ)
+        if fock is None:
+            fock = self.get_hcore() + self.get_jk(mol, dm)
+        if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
+            fock = rohf.get_roothaan_fock(fock, dm, self.get_ovlp())
+        return canonicalize(self, mo_coeff, mo_occ, fock)
 
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',

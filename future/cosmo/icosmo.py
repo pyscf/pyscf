@@ -8,6 +8,7 @@ import os, sys
 import tempfile
 import shutil
 import subprocess
+from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import gto, scf, mcscf
@@ -339,7 +340,7 @@ def cosmo_fock_o0(cosmo, dm):
             dab = numpy.linalg.norm(mol.atom_coord(iatom)-coords)
             phi += mol.atom_charge(iatom)/dab
         # Potential
-        mol.set_rinv_origin_(coords)
+        mol.set_rinv_origin(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         phi -= numpy.einsum('ij,ij',dm,vpot)
         cosmo.phi[i] = phi
@@ -354,7 +355,7 @@ def cosmo_fock_o0(cosmo, dm):
     for i in range(cosmo.nps):
         # Potential
         coords = numpy.array((cosmo.cosurf[3*i],cosmo.cosurf[3*i+1],cosmo.cosurf[3*i+2]))
-        mol.set_rinv_origin_(coords)
+        mol.set_rinv_origin(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         fock -= vpot*cosmo.qcos[i]
     fepsi = cosmo.fepsi() 
@@ -405,7 +406,7 @@ def cosmo_occ_o0(cosmo, dm):
             dab = numpy.linalg.norm(mol.atom_coord(iatom)-coords)
             phi += mol.atom_charge(iatom)/dab
         # Potential
-        mol.set_rinv_origin_(coords)
+        mol.set_rinv_origin(coords)
         vpot = mol.intor('cint1e_rinv_sph')
         phi -= numpy.einsum('ij,ij',dm,vpot)
         cosmo.phio[i] = phi
@@ -440,9 +441,9 @@ def _make_fakemol(coords):
     nbas = coords.shape[0]
     fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = []
-    ptr = 0
-    fakeatm[:,gto.PTR_COORD] = numpy.arange(0, nbas*3, 3)
+    fakeenv = [0] * gto.PTR_ENV_START
+    ptr = gto.PTR_ENV_START
+    fakeatm[:,gto.PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
     fakeenv.append(coords.ravel())
     ptr += nbas*3
     fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
@@ -458,8 +459,6 @@ def _make_fakemol(coords):
     fakemol._atm = fakeatm
     fakemol._bas = fakebas
     fakemol._env = numpy.hstack(fakeenv)
-    fakemol.natm = nbas
-    fakemol.nbas = nbas
     fakemol._built = True
     return fakemol
 
@@ -488,7 +487,7 @@ def cosmo_for_scf(mf, cosmo):
                      damp_factor=None):
             if cosmo.dm is None:
                 cosmo._v = cosmo.cosmo_fock(dm)
-            return self.get_fock_(h1e+cosmo._v, s1e, vhf, dm, cycle, adiis,
+            return oldMF.get_fock(self, h1e+cosmo._v, s1e, vhf, dm, cycle, adiis,
                                   diis_start_cycle, level_shift_factor, damp_factor)
 
         def get_grad(self, mo_coeff, mo_occ, h1_vhf=None):
@@ -504,10 +503,10 @@ def cosmo_for_scf(mf, cosmo):
             lib.logger.debug(self, 'E_diel = %.15g', cosmo.ediel)
             return e_tot, e_coul
 
-        def _finalize_(self):
+        def _finalize(self):
             cosmo.e_tot = self.e_tot
             self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
-            return oldMF._finalize_(self)
+            return oldMF._finalize(self)
     return MF()
 
 def cosmo_for_mcscf(mc, cosmo):
@@ -562,16 +561,9 @@ def cosmo_for_mcscf(mc, cosmo):
             cosmo._v = v1
             return self._scf.get_hcore(mol) + v1
 
-        def casci(self, mo_coeff, ci0=None, eris=None):
-            if eris is None:
-                import copy
-                fcasci = copy.copy(self)
-                fcasci.ao2mo = self.get_h2cas
-            else:
-                fcasci = mcscf.mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
-            log = lib.logger.Logger(self.stdout, self.verbose)
-            e_tot, e_cas, fcivec = mcscf.casci.kernel(fcasci, mo_coeff,
-                                                      ci0=ci0, verbose=log)
+        def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
+            e_tot, e_cas, fcivec = oldCAS.casci(self, mo_coeff, ci0, eris,
+                                                verbose, envs)
 
             if self.fcisolver.nroots > 1 and cosmo.casci_state_id is not None:
                 c = fcivec[cosmo.casci_state_id]
@@ -587,10 +579,10 @@ def cosmo_for_mcscf(mc, cosmo):
             e_tot = e_tot - edup + cosmo.ediel
             return e_tot, e_cas, fcivec
 
-        def _finalize_(self):
+        def _finalize(self):
             cosmo.e_tot = self.e_tot
             self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
-            return oldCAS._finalize_(self)
+            return oldCAS._finalize(self)
 
     return CAS()
 
@@ -612,7 +604,7 @@ def cosmo_for_casci(mc, cosmo):
                 if cosmo._dm_guess is None:  # Initial guess
                     na = self.ncore + self.nelecas[0]
                     nb = self.ncore + self.nelecas[1]
-                    log.Initial('Initial DM: na,nb,nelec=',na,nb,na+nb)
+                    #log.Initial('Initial DM: na,nb,nelec=',na,nb,na+nb)
                     dm =(numpy.dot(self.mo_coeff[:,:na], self.mo_coeff[:,:na].T)
                        + numpy.dot(self.mo_coeff[:,:nb], self.mo_coeff[:,:nb].T))
                 else:
@@ -691,13 +683,13 @@ def cosmo_for_casci(mc, cosmo):
             else:
                 self.mo_coeff, _, self.mo_energy = \
                         self.canonicalize(mo_coeff, self.ci, verbose=log)
-            self._finalize_()
+            self._finalize()
             return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
-        def _finalize_(self):
+        def _finalize(self):
             cosmo.e_tot = self.e_tot
             self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
-            return oldCAS._finalize_(self)
+            return oldCAS._finalize(self)
 
     return CAS()
 

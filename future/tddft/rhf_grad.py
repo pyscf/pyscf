@@ -18,7 +18,7 @@ from pyscf.scf import cphf
 #
 # Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, (x, y), singlet=True, atmlst=None,
+def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -34,6 +34,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
     nao, nmo = mo_coeff.shape
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
+    x, y = x_y
     xpy = (x+y).reshape(nvir,nocc)
     xmy = (x-y).reshape(nvir,nocc)
     orbv = mo_coeff[:,nocc:]
@@ -114,7 +115,7 @@ def kernel(td_grad, (x, y), singlet=True, atmlst=None,
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
-        mol.set_rinv_origin_(mol.atom_coord(ia))
+        mol.set_rinv_origin(mol.atom_coord(ia))
         h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
         h1ao[:,p0:p1] += h1[:,p0:p1] + vhf1[0,:,p0:p1]
 

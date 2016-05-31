@@ -100,7 +100,7 @@ def test_components(pseudo=None):
     mf = pbcdft.RKS(cell)
     mf.xc = 'LDA,VWN_RPA'
 
-    rks.get_veff_(mf, cell, dm)
+    rks.get_veff(mf, cell, dm)
     print "Exc", mf._exc # -1.05967570089
 
 if __name__ == '__main__':

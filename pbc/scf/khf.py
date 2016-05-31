@@ -8,15 +8,16 @@ See Also:
 import time
 import numpy as np
 import scipy.special
+import h5py
 import pyscf.dft
 import pyscf.pbc.dft
 import pyscf.pbc.scf.hf as pbchf
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.scf import scfint
 
 
-def get_ovlp(mf, cell, kpts):
+def get_ovlp(mf, cell=None, kpts=None):
     '''Get the overlap AO matrices at sampled k-points.
 
     Args:
@@ -25,19 +26,13 @@ def get_ovlp(mf, cell, kpts):
     Returns:
         ovlp_kpts : (nkpts, nao, nao) ndarray
     '''
-    nkpts = len(kpts)
-    nao = cell.nao_nr()
-    ovlp_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-    for k in range(nkpts):
-        kpt = kpts[k,:]
-        if mf.analytic_int:
-            ovlp_kpts[k,:,:] = scfint.get_ovlp(cell, kpt)
-        else:
-            ovlp_kpts[k,:,:] = pbchf.get_ovlp(cell, kpt)
-    return ovlp_kpts
+    if cell is None: cell = mf.cell
+    if kpts is None: kpts = mf.kpts
+    return lib.asarray([cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=k)
+                        for k in kpts])
 
 
-def get_hcore(mf, cell, kpts):
+def get_hcore(mf, cell=None, kpts=None):
     '''Get the core Hamiltonian AO matrices at sampled k-points.
 
     Args:
@@ -46,16 +41,9 @@ def get_hcore(mf, cell, kpts):
     Returns:
         hcore : (nkpts, nao, nao) ndarray
     '''
-    nao = cell.nao_nr()
-    nkpts = len(kpts)
-    hcore = np.zeros((nkpts,nao,nao), np.complex128)
-    for k in range(nkpts):
-        kpt = kpts[k,:]
-        if mf.analytic_int:
-            hcore[k,:,:] = scfint.get_hcore(cell, kpt)
-        else:
-            hcore[k,:,:] = pbchf.get_hcore(cell, kpt)
-    return hcore
+    if cell is None: cell = mf.cell
+    if kpts is None: kpts = mf.kpts
+    return lib.asarray([pbchf.get_hcore(cell, k) for k in kpts])
 
 
 def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
@@ -79,21 +67,17 @@ def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
     ngs = len(coords)
     nao = cell.nao_nr()
 
-    aoR_kpts = np.zeros((nkpts,ngs,nao), np.complex128)
-    for k in range(nkpts):
-        kpt = kpts[k,:]
-        aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+    aoR_kpts = [pyscf.pbc.dft.numint.eval_ao(cell, coords, k) for k in kpts]
 
-    vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
+    vjR = get_vjR(cell, dm_kpts, aoR_kpts)
     if kpt_band is not None:
         aoR_kband = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt_band)
         vj_kpts = cell.vol/ngs * np.dot(aoR_kband.T.conj(),
                                         vjR.reshape(-1,1)*aoR_kband)
     else:
-        vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-        for k in range(nkpts):
-            vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
-                                                   vjR.reshape(-1,1)*aoR_kpts[k,:,:])
+        vj_kpts = [cell.vol/ngs * np.dot(aoR_k.T.conj(), vjR.reshape(-1,1)*aoR_k)
+                   for aoR_k in aoR_kpts]
+        vj_kpts = lib.asarray(vj_kpts)
 
     return vj_kpts
 
@@ -119,122 +103,188 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     ngs = len(coords)
     nao = cell.nao_nr()
 
-    aoR_kpts = np.zeros((nkpts,ngs,nao), np.complex128)
-    for k in range(nkpts):
-        kpt = kpts[k,:]
-        aoR_kpts[k,:,:] = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+    aoR_kpts = [pyscf.pbc.dft.numint.eval_ao(cell, coords, k) for k in kpts]
 
-    vjR = get_vjR_(cell, dm_kpts, aoR_kpts)
+    vjR = get_vjR(cell, dm_kpts, aoR_kpts)
     if kpt_band is not None:
         aoR_kband = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt_band)
         vj_kpts = cell.vol/ngs * np.dot(aoR_kband.T.conj(),
                                         vjR.reshape(-1,1)*aoR_kband)
-        vk_kpts = np.zeros((nao,nao), np.complex128)
+        vk_kpts = 0
         for k2 in range(nkpts):
-            kpt2 = kpts[k2,:]
-            vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kband, aoR_kpts[k2,:,:],
-                                      kpt_band, kpt2)
-            aoR_dm_k2 = np.dot(aoR_kpts[k2,:,:], dm_kpts[k2,:,:])
+            kpt2 = kpts[k2]
+            vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kband, aoR_kpts[k2],
+                                     kpt_band, kpt2)
+            #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+            #:            dm_kpts[k2], aoR_kband.conj(),
+            #:            vkR_k1k2, aoR_kpts[k2])
+            aoR_dm_k2 = np.dot(aoR_kpts[k2], dm_kpts[k2])
             tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
-            vk_kpts += 1./nkpts * (cell.vol/ngs) \
+            vk_kpts = vk_kpts + 1./nkpts * (cell.vol/ngs) \
                                 * np.dot(aoR_kband.T.conj(), tmp_Rq)
-            #vk_kpts += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
-            #            dm_kpts[k2,:,:], aoR_kband.conj(),
-            #            vkR_k1k2, aoR_kpts[k2,:,:])
     else:
-        vj_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-        for k in range(nkpts):
-            vj_kpts[k,:,:] = cell.vol/ngs * np.dot(aoR_kpts[k,:,:].T.conj(),
-                                                   vjR.reshape(-1,1)*aoR_kpts[k,:,:])
-        aoR_dm_kpts = np.zeros((nkpts,ngs,nao), np.complex128)
-        for k in range(nkpts):
-            aoR_dm_kpts[k,:,:] = np.dot(aoR_kpts[k,:,:], dm_kpts[k,:,:])
-        vk_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-        for k1 in range(nkpts):
-            kpt1 = kpts[k1,:]
+        vj_kpts = [cell.vol/ngs * np.dot(aoR_k.T.conj(), vjR.reshape(-1,1)*aoR_k)
+                   for aoR_k in aoR_kpts]
+        vj_kpts = lib.asarray(vj_kpts)
+
+        aoR_dm_kpts = [np.dot(aoR_kpts[k], dm_kpts[k]) for k in range(nkpts)]
+        def makek(k1):
+            kpt1 = kpts[k1]
+            vk = 0
             for k2 in range(nkpts):
-                kpt2 = kpts[k2,:]
-                vkR_k1k2 = pbchf.get_vkR_(mf, cell, aoR_kpts[k1,:,:], aoR_kpts[k2,:,:],
-                                          kpt1, kpt2)
-                tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_kpts[k2,:,:])
-                vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) \
-                                    * np.dot(aoR_kpts[k1,:,:].T.conj(), tmp_Rq)
-                #vk_kpts[k1,:,:] += 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
-                #                    dm_kpts[k2,:,:], aoR_kpts[k1,:,:].conj(),
-                #                    vkR_k1k2, aoR_kpts[k2,:,:])
+                kpt2 = kpts[k2]
+                vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kpts[k1], aoR_kpts[k2],
+                                         kpt1, kpt2)
+                #:vk = vk + 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+                #:                dm_kpts[k2], aoR_kpts[k1].conj(),
+                #:                vkR_k1k2, aoR_kpts[k2])
+                tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_kpts[k2])
+                vk = vk + 1./nkpts * (cell.vol/ngs) \
+                           * np.dot(aoR_kpts[k1].T.conj(), tmp_Rq)
+            return vk
+        vk_kpts = lib.asarray([makek(k1) for k1 in range(nkpts)])
 
     return vj_kpts, vk_kpts
 
 
-def get_vjR_(cell, dm_kpts, aoR_kpts):
+def get_vjR(cell, dm_kpts, aoR_kpts):
     '''Get the real-space Hartree potential of the k-point sampled density matrix.
 
     Returns:
         vR : (ngs,) ndarray
             The real-space Hartree potential at every grid point.
     '''
-    nkpts, ngs, nao = aoR_kpts.shape
+    nkpts = len(aoR_kpts)
     coulG = tools.get_coulG(cell)
 
-    rhoR = np.zeros(ngs)
+    rhoR = 0
     for k in range(nkpts):
-        rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(cell, aoR_kpts[k,:,:], dm_kpts[k,:,:])
+        rhoR += 1./nkpts*pyscf.pbc.dft.numint.eval_rho(cell, aoR_kpts[k], dm_kpts[k])
     rhoG = tools.fft(rhoR, cell.gs)
 
     vG = coulG*rhoG
     vR = tools.ifft(vG, cell.gs)
+    if rhoR.dtype == np.double:
+        vR = vR.real
     return vR
 
 
-def get_fock_(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
-              diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
+def get_fock(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
+             diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
     '''Get the Fock matrices at sampled k-points.
 
-    This is a k-point version of pyscf.scf.hf.get_fock_
+    This is a k-point version of pyscf.scf.hf.get_fock
 
     Returns:
        fock : (nkpts, nao, nao) ndarray
     '''
-    fock = np.zeros_like(h1e_kpts)
-    # By inheritance, this is just pyscf.scf.hf.get_fock_
-    fock = pbchf.RHF.get_fock_(mf, h1e_kpts, s1e_kpts,
-                               vhf_kpts, dm_kpts,
-                               cycle, adiis, diis_start_cycle,
-                               level_shift_factor, damp_factor)
+    # By inheritance, this is just pyscf.scf.hf.get_fock
+    fock = pbchf.RHF.get_fock(mf, h1e_kpts, s1e_kpts,
+                              vhf_kpts, dm_kpts,
+                              cycle, adiis, diis_start_cycle,
+                              level_shift_factor, damp_factor)
     return fock
 
 
+def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
+    '''Label the occupancies for each orbital for sampled k-points.
+
+    This is a k-point version of scf.hf.SCF.get_occ
+    '''
+    if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+    mo_occ_kpts = np.zeros_like(mo_energy_kpts)
+
+    nkpts = mo_energy_kpts.shape[0]
+    nocc = (mf.cell.nelectron * nkpts) // 2
+
+    # TODO: implement Fermi smearing
+    mo_energy = np.sort(mo_energy_kpts.ravel())
+    fermi = mo_energy[nocc-1]
+    mo_occ_kpts[mo_energy_kpts <= fermi] = 2
+
+    if nocc < mo_energy.size:
+        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                    mo_energy[nocc-1], mo_energy[nocc])
+        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+            logger.warn(mf, '!! HOMO %.12g == LUMO %.12g',
+                        mo_energy[nocc-1], mo_energy[nocc])
+    else:
+        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+    if mf.verbose >= logger.DEBUG:
+        np.set_printoptions(threshold=len(mo_energy))
+        logger.debug(mf, '  mo_energy = %s', mo_energy)
+        np.set_printoptions()
+
+    return mo_occ_kpts
+
+
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+    '''One particle density matrices for all k-points.
+
+    Returns:
+        dm_kpts : (nkpts, nao, nao) ndarray
+    '''
     nkpts = len(mo_occ_kpts)
-    dm_kpts = np.zeros_like(mo_coeff_kpts)
-    for k in range(nkpts):
-        dm_kpts[k,:,:] = pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k,:,:],
-                                                mo_occ_kpts[k,:]).T.conj()
-    return dm_kpts
+    dm_kpts = [pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
+               for k in range(nkpts)]
+    return lib.asarray(dm_kpts)
 
 
-#FIXME: project initial guess for k-point
-def init_guess_by_chkfile(cell, chkfile_name, project=True):
+def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
     Returns:
         Density matrix, 3D ndarray
     '''
-    #from pyscf.pbc.scf import addons
-    mo = pyscf.pbc.scf.chkfile.load(chkfile_name, 'scf/mo_coeff')
-    mo_occ = pyscf.pbc.scf.chkfile.load(chkfile_name, 'scf/mo_occ')
+    from pyscf.pbc.scf import addons
+    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
 
-    #def fproj(mo):
-    #    if project:
-    #        return addons.project_mo_nr2nr(chk_cell, mo, cell)
-    #    else:
-    #        return mo
-    dm = make_rdm1(mo, mo_occ)
+    if kpts is None:
+        kpts = scf_rec['kpts']
+
+    if 'kpt' in scf_rec:
+        chk_kpts = scf_rec['kpt'].reshape(-1,3)
+    elif 'kpts' in scf_rec:
+        chk_kpts = scf_rec['kpts']
+    else:
+        chk_kpts = np.zeros((1,3))
+
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    if not 'kpts' in scf_rec:
+        mo = mo.reshape((1,)+mo.shape)
+        mo_occ = mo_occ.reshape((1,)+mo_occ.shape)
+
+    def fproj(mo, kpt):
+        if project:
+            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpt)
+        else:
+            return mo
+
+    if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
+        def makedm(mos, occs):
+            mos = [fproj(mo, None) for mo in mos]
+            return make_rdm1(mos, occs)
+    else:
+        where = [np.argmin(lib.norm(chk_kpts-kpt, axis=1)) for kpt in kpts]
+        def makedm(mos, occs):
+            mos = [fproj(mos[w], chk_kpts[w]-kpts[i]) for i,w in enumerate(where)]
+            return make_rdm1(mos, occs[where])
+
+    if mo.ndim == 3:  # KRHF
+        dm = makedm(mo, mo_occ)
+    else:  # KUHF
+        dm = makedm(mo[:,0], mo_occ[:,0]) + makedm(mo[:,1], mo_occ[:,1])
+
+    # Real DM for gamma point
+    if np.allclose(kpts, 0):
+        dm = dm.real
     return dm
 
 
 class KRHF(pbchf.RHF):
+#class KRHF(pyscf.scf.hf.RHF):
     '''RHF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -245,23 +295,24 @@ class KRHF(pbchf.RHF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpts, exxdiv='ewald'):
+    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
         pbchf.RHF.__init__(self, cell, exxdiv=exxdiv)
-        if kpts is None:
-            self.kpts = np.zeros((1,3))
-        else:
-            self.kpts = kpts
-        if len(self.kpts) == 1 and np.allclose(self.kpts[0], np.zeros(3)):
-            self._dtype = np.float64
-        else:
-            self._dtype = np.complex128
-        self.mo_occ = []
-        self.mo_coeff_kpts = []
+        self.kpts = np.reshape(kpts, (-1,3))
 
         self.exx_built = False
-        if self.exxdiv == 'vcut_ws':
-            self.precompute_exx()
-        self._keys = self._keys.union(['exx_built', 'kpts', 'mo_coeff_kpts'])
+        self._keys = self._keys.union(['exx_built', 'kpts'])
+
+    @property
+    def mo_energy_kpts(self):
+        return self.mo_energy
+
+    @property
+    def mo_coeff_kpts(self):
+        return self.mo_coeff
+
+    @property
+    def mo_occ_kpts(self):
+        return self.mo_occ
 
     def dump_flags(self):
         pbchf.RHF.dump_flags(self)
@@ -269,6 +320,11 @@ class KRHF(pbchf.RHF):
             if self.exx_built is False:
                 self.precompute_exx()
             logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+    def build(self, cell=None):
+        pbchf.RHF.build(self, cell)
+        if self.exxdiv == 'vcut_ws':
+            self.precompute_exx()
 
     def precompute_exx(self):
         print "# Precomputing Wigner-Seitz EXX kernel"
@@ -321,61 +377,36 @@ class KRHF(pbchf.RHF):
             return self.init_guess_by_chkfile()
         else:
             dm = pyscf.scf.hf.get_init_guess(cell, key)
-            nao = cell.nao_nr()
             nkpts = len(self.kpts)
-            dm_kpts = np.zeros((nkpts,nao,nao), np.complex128)
-
-            # Use the molecular "unit cell" dm for each k-point
-            for k in range(nkpts):
-                dm_kpts[k,:,:] = dm
+            dm_kpts = lib.asarray([dm]*nkpts)
 
         return dm_kpts
 
-    def get_hcore(self, cell=None, kpts=None):
+    get_hcore = get_hcore
+
+    get_ovlp = get_ovlp
+
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
-        return self._safe_cast(get_hcore(self, cell, kpts))
-
-    def get_ovlp(self, cell=None, kpts=None):
-        if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
-        return self._safe_cast(get_ovlp(self, cell, kpts))
-
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
-        # Must use 'kpt' kwarg
-        if cell is None: cell = self.cell
-        if kpt is None: kpt = self.kpts
-        kpts = kpt
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj = get_j(self, cell, dm_kpts, kpts, kpt_band)
         logger.timer(self, 'vj', *cpu0)
-        return self._safe_cast(vj)
+        return vj
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpt=None, kpt_band=None):
-        # Must use 'kpt' kwarg
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
         if cell is None: cell = self.cell
-        if kpt is None: kpt = self.kpts
-        kpts = kpt
+        if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = get_jk(self, cell, dm_kpts, kpts, kpt_band)
         logger.timer(self, 'vj and vk', *cpu0)
-        return self._safe_cast(vj), self._safe_cast(vk)
+        return vj, vk
 
-    def get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle=-1, adiis=None,
-                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    get_fock = get_fock
 
-        if diis_start_cycle is None:
-            diis_start_cycle = self.diis_start_cycle
-        if level_shift_factor is None:
-            level_shift_factor = self.level_shift
-        if damp_factor is None:
-            damp_factor = self.damp
-
-        f = get_fock_(self, h1e_kpts, s1e, vhf, dm_kpts, cycle, adiis,
-                      diis_start_cycle, level_shift_factor, damp_factor)
-        return self._safe_cast(f)
+    get_occ = get_occ
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpt_band=None):
@@ -400,73 +431,22 @@ class KRHF(pbchf.RHF):
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
         nkpts = len(self.kpts)
-
-        # make this closer to the non-kpt one
-        grad_kpts = np.empty(0,)
-
-        for k in range(nkpts):
-            grad = pyscf.scf.hf.RHF.get_grad(self,
-                        mo_coeff_kpts[k,:,:], mo_occ_kpts[k,:], fock[k,:,:])
-            grad_kpts = np.hstack((grad_kpts, grad))
-        return self._safe_cast(grad_kpts)
+        grad_kpts = [pyscf.scf.hf.RHF.get_grad(self, mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
+                     for k in range(nkpts)]
+        grad_kpts = np.hstack(grad_kpts)
+        return grad_kpts
 
     def eig(self, h_kpts, s_kpts):
         nkpts = len(h_kpts)
         nao = h_kpts.shape[1]
-        eig_kpts = np.zeros((nkpts,nao))
-        mo_coeff_kpts = np.zeros_like(h_kpts)
+        eig_kpts = np.empty((nkpts,nao))
+        mo_coeff_kpts = np.empty_like(h_kpts)
 
-        # TODO: should use superclass eig fn here?
         for k in range(nkpts):
-            eig_kpts[k,:], mo_coeff_kpts[k,:,:] = pyscf.scf.hf.eig(h_kpts[k,:,:], s_kpts[k,:,:])
+            eig_kpts[k], mo_coeff_kpts[k] = pyscf.scf.hf.RHF.eig(self, h_kpts[k], s_kpts[k])
         return eig_kpts, mo_coeff_kpts
 
-    def get_occ(self, mo_energy_kpts, mo_coeff_kpts):
-        '''Label the occupancies for each orbital for sampled k-points.
-
-        This is a k-point version of scf.hf.SCF.get_occ
-        '''
-        if mo_energy_kpts is None: mo_energy_kpts = self.mo_energy
-        mo_occ_kpts = np.zeros_like(mo_energy_kpts)
-
-        nkpts, nao = mo_coeff_kpts.shape[:2]
-        nocc = (self.cell.nelectron * nkpts) // 2
-
-        # Sort eigs in each kpt
-        mo_energy = np.reshape(mo_energy_kpts, [nkpts*nao])
-        # TODO: store mo_coeff correctly (for later analysis)
-        #self.mo_coeff = np.reshape(mo_coeff_kpts, [nao, nao*nkpts])
-        mo_idx = np.argsort(mo_energy)
-        mo_energy = mo_energy[mo_idx]
-        for ix in mo_idx[:nocc]:
-            k, ikx = divmod(ix, nao)
-            # TODO: implement Fermi smearing
-            mo_occ_kpts[k, ikx] = 2
-
-        if nocc < mo_energy.size:
-            logger.info(self, 'HOMO = %.12g  LUMO = %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self, '!! HOMO %.12g == LUMO %.12g',
-                            mo_energy[nocc-1], mo_energy[nocc])
-        else:
-            logger.info(self, 'HOMO = %.12g', mo_energy[nocc-1])
-        if self.verbose >= logger.DEBUG:
-            np.set_printoptions(threshold=len(mo_energy))
-            logger.debug(self, '  mo_energy = %s', mo_energy)
-            np.set_printoptions()
-
-        self.mo_energy = mo_energy_kpts
-        self.mo_occ = mo_occ_kpts
-
-        return mo_occ_kpts
-
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
-        '''One particle density matrix at each k-point.
-
-        Returns:
-            dm_kpts : (nkpts, nao, nao) ndarray
-        '''
         if mo_coeff_kpts is None:
             # Note: this is actually "self.mo_coeff_kpts"
             # which is stored in self.mo_coeff of the scf.hf.RHF superclass
@@ -476,7 +456,7 @@ class KRHF(pbchf.RHF):
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
             mo_occ_kpts = self.mo_occ
 
-        return self._safe_cast(make_rdm1(mo_coeff_kpts, mo_occ_kpts))
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         '''Following pyscf.scf.hf.energy_elec()
@@ -488,8 +468,8 @@ class KRHF(pbchf.RHF):
         nkpts = len(dm_kpts)
         e1 = e_coul = 0.
         for k in range(nkpts):
-            e1 += 1./nkpts * np.einsum('ij,ji', dm_kpts[k,:,:], h1e_kpts[k,:,:])
-            e_coul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k,:,:], vhf_kpts[k,:,:])
+            e1 += 1./nkpts * np.einsum('ij,ji', dm_kpts[k], h1e_kpts[k])
+            e_coul += 1./nkpts * 0.5 * np.einsum('ij,ji', dm_kpts[k], vhf_kpts[k])
         if abs(e_coul.imag > 1.e-12):
             raise RuntimeError("Coulomb energy has imaginary part, "
                                "something is wrong!", e_coul.imag)
@@ -511,17 +491,23 @@ class KRHF(pbchf.RHF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if kpts is None: kpts = self.kpts
 
-        if not np.allclose(kpt_band, np.zeros(3)):
-            self._dtype = np.complex128
-
-        fock = pbchf.get_hcore(cell, kpt_band)
-        fock += self.get_veff(kpts=kpts, kpt_band=kpt_band)
-        s1e = pbchf.get_ovlp(cell, kpt_band)
-        fock = self._safe_cast(fock)
-        s1e = self._safe_cast(s1e)
+        fock = self.get_hcore(cell, kpt_band)
+        fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
+        s1e = self.get_ovlp(cell, kpt_band)
         mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
         return mo_energy, mo_coeff
 
-    def init_guess_by_chkfile(self, chk=None, project=True):
+    def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
         if chk is None: chk = self.chkfile
-        return init_guess_by_chkfile(self.cell, chk, project)
+        if kpts is None: kpts = self.kpts
+        return init_guess_by_chkfile(self.cell, chk, project, kpts)
+    def from_chk(self, chk=None, project=True, kpts=None):
+        return self.init_guess_by_chkfile(chk, project, kpts)
+
+    def dump_chk(self, envs):
+        pyscf.scf.hf.RHF.dump_chk(self, envs)
+        if self.chkfile:
+            with h5py.File(self.chkfile) as fh5:
+                fh5['scf/kpts'] = self.kpts
+        return self
+

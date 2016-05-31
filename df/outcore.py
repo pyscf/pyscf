@@ -10,9 +10,9 @@ import tempfile
 import numpy
 import scipy.linalg
 import h5py
-import pyscf.lib
+from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
-import pyscf.gto
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 from pyscf.df import incore
@@ -22,13 +22,13 @@ from pyscf.df import _ri
 # for auxe1 (P|ij)
 #
 
-libri = pyscf.lib.load_library('libri')
+libri = lib.load_library('libri')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
                  int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
-                 ioblk_size=256, verbose=0):
+                 ioblk_size=256, auxmol=None, verbose=0):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -38,6 +38,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
+    if auxmol is None:
+        auxmol = incore.format_aux_basis(mol, auxbasis)
 
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
@@ -46,7 +48,6 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
     time1 = log.timer('generate (ij|L) 1 pass', *time0)
 
     nao = mol.nao_nr()
-    auxmol = incore.format_aux_basis(mol, auxbasis)
     naoaux = auxmol.nao_nr()
     aosym = _stand_sym_code(aosym)
     if aosym == 's1':
@@ -64,32 +65,25 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
         chunks = (min(int(16e3/nao),naoaux), nao) # 128K
         h5d_eri = feri.create_dataset(dataname, (naoaux,nao_pair), 'f8',
                                       chunks=chunks)
-        aopairblks = len(fswap[dataname])
     else:
         chunks = (1, min(int(16e3/nao),naoaux), nao) # 128K
         h5d_eri = feri.create_dataset(dataname, (comp,naoaux,nao_pair), 'f8',
                                       chunks=chunks)
-        aopairblks = len(fswap[dataname+'/0'])
-    if comp > 1:
-        for icomp in range(comp):
-            feri.create_group(str(icomp)) # for h5py old version
+    aopairblks = len(fswap[dataname+'/0'])
 
     iolen = min(int(ioblk_size*1e6/8/nao_pair), naoaux)
     totstep = (naoaux+iolen-1)//iolen * comp
     buf = numpy.empty((iolen, nao_pair))
-    istep = 0
     ti0 = time1
     for icomp in range(comp):
+        istep = 0
         for row0, row1 in prange(0, naoaux, iolen):
             nrow = row1 - row0
             istep += 1
 
             col0 = 0
             for ic in range(aopairblks):
-                if comp == 1:
-                    dat = fswap['%s/%d'%(dataname,ic)]
-                else:
-                    dat = fswap['%s/%d/%d'%(dataname,icomp,ic)]
+                dat = fswap['%s/%d/%d'%(dataname,icomp,ic)]
                 col1 = col0 + dat.shape[1]
                 buf[:nrow,col0:col1] = dat[row0:row1]
                 col0 = col1
@@ -112,7 +106,6 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
-    assert(comp == 1)
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -132,30 +125,18 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
             del(feri[dataname])
     else:
         feri = h5py.File(erifile, 'w')
-    if comp > 1:
-        for icomp in range(comp):
-            feri.create_group(str(icomp)) # for h5py old version
+    for icomp in range(comp):
+        feri.create_group('%s/%d'%(dataname,icomp)) # for h5py old version
 
-    atm, bas, env = \
-            pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                    auxmol._atm, auxmol._bas, auxmol._env)
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(mol.natm+auxmol.natm)
-    nbas = ctypes.c_int(mol.nbas)
-    if 'ssc' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, bas)
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas, True)
-    elif 'cart' in int3c:
-        ao_loc = _ri.make_loc(0, mol.nbas, bas, True)
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas, True)
-    else:
-        ao_loc = _ri.make_loc(0, mol.nbas, bas)
-        kloc = _ri.make_loc(mol.nbas, auxmol.nbas, bas)
-    nao = ao_loc[-1] - ao_loc[0]
-    naoaux = kloc[-1] - kloc[0]
+    def store(b, label):
+        cderi = scipy.linalg.solve_triangular(low, b, lower=True, overwrite_b=True)
+        if cderi.flags.f_contiguous:
+            cderi = lib.transpose(cderi.T)
+        feri[label] = cderi
 
+    atm, bas, env, ao_loc = incore._env_and_aoloc(int3c, mol, auxmol)
+    nao = ao_loc[mol.nbas]
+    naoaux = ao_loc[-1] - nao
     if aosym == 's1':
         nao_pair = nao * nao
         buflen = min(max(int(ioblk_size*1e6/8/naoaux/comp), 1), nao_pair)
@@ -168,35 +149,25 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     if log.verbose >= logger.DEBUG1:
         log.debug1('shranges = %s', shranges)
-    cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, int3c)
+    cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
+
     for istep, sh_range in enumerate(shranges):
         log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
-        basrange = (bstart, bend-bstart, 0, mol.nbas, mol.nbas, auxmol.nbas)
-        buf = bufs1[:comp*nrow].reshape(comp,nrow,naoaux)
-        if 's1' in aosym:
-            ijkoff = ao_loc[bstart] * nao * naoaux
+        shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+        buf = _ri.nr_auxe2(int3c, atm, bas, env, shls_slice, ao_loc,
+                           aosym, comp, cintopt, bufs1)
+        if comp == 1:
+            store(buf.T, '%s/0/%d'%(dataname,istep))
         else:
-            ijkoff = ao_loc[bstart] * (ao_loc[bstart]+1) // 2 * naoaux
-        _ri.nr_auxe2(int3c, basrange,
-                     atm, bas, env, aosym, comp, cintopt, buf, ijkoff,
-                     ao_loc[bend]-ao_loc[bstart],
-                     nao, naoaux, ao_loc[bstart:bend+1], ao_loc, kloc)
-        for icomp in range(comp):
-            if comp == 1:
-                label = '%s/%d'%(dataname,istep)
-            else:
-                label = '%s/%d/%d'%(dataname,icomp,istep)
-            cderi = scipy.linalg.solve_triangular(low, buf[icomp].T,
-                                                  lower=True, overwrite_b=True)
-            feri[label] = cderi
+            for icomp in range(comp):
+                store(buf[icomp].T, '%s/%d/%d'%(dataname,icomp,istep))
         time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
     buf = bufs1 = None
 
     feri.close()
-    _ri.libri.CINTdel_optimizer(ctypes.byref(cintopt))
     return erifile
 
 
@@ -206,7 +177,6 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     ''' Transform ij of (ij|L) to MOs.
     '''
     assert(aosym in ('s1', 's2ij'))
-    assert(comp == 1)
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -255,22 +225,18 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
         chunks = (min(int(16e3/nmoj),naoaux), nmoj) # 128K
         h5d_eri = feri.create_dataset(dataname, (naoaux,nij_pair), 'f8',
                                       chunks=chunks)
-        aopairblks = len(fswap[dataname])
     else:
         chunks = (1, min(int(16e3/nmoj),naoaux), nmoj) # 128K
         h5d_eri = feri.create_dataset(dataname, (comp,naoaux,nij_pair), 'f8',
                                       chunks=chunks)
-        aopairblks = len(fswap[dataname+'/0'])
-    if comp > 1:
-        for icomp in range(comp):
-            feri.create_group(str(icomp)) # for h5py old version
+    aopairblks = len(fswap[dataname+'/0'])
 
     iolen = min(int(ioblk_size*1e6/8/(nao_pair+nij_pair)), naoaux)
     totstep = (naoaux+iolen-1)//iolen * comp
     buf = numpy.empty((iolen, nao_pair))
-    istep = 0
     ti0 = time1
     for icomp in range(comp):
+        istep = 0
         for row0, row1 in prange(0, naoaux, iolen):
             nrow = row1 - row0
             istep += 1
@@ -279,15 +245,12 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
                       istep, totstep, icomp, row0, row1, nrow)
             col0 = 0
             for ic in range(aopairblks):
-                if comp == 1:
-                    dat = fswap['%s/%d'%(dataname,ic)]
-                else:
-                    dat = fswap['%s/%d/%d'%(dataname,icomp,ic)]
+                dat = fswap['%s/%d/%d'%(dataname,icomp,ic)]
                 col1 = col0 + dat.shape[1]
                 buf[:nrow,col0:col1] = dat[row0:row1]
                 col0 = col1
 
-            buf1 = _ao2mo.nr_e2_(buf[:nrow], moij, ijshape, aosym_as_nr_e2, ijmosym)
+            buf1 = _ao2mo.nr_e2(buf[:nrow], moij, ijshape, aosym_as_nr_e2, ijmosym)
             if comp == 1:
                 h5d_eri[row0:row1] = buf1
             else:
@@ -312,42 +275,15 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def _guess_shell_ranges(mol, buflen, aosym):
-    bas_dim = [(mol.bas_angular(i)*2+1)*(mol.bas_nctr(i)) \
-               for i in range(mol.nbas)]
-    ao_loc = [0]
-    for i in bas_dim:
-        ao_loc.append(ao_loc[-1]+i)
+    from pyscf.ao2mo.outcore import group_segs_filling_block
+    ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
-
-    ish_seg = [0] # record the starting shell id of each buffer
-    bufrows = []
-    ij_start = 0
-
-    if aosym in ('s2ij'):
-        for i in range(mol.nbas):
-            ij_end = ao_loc[i+1]*(ao_loc[i+1]+1)//2
-            if ij_end - ij_start > buflen and i != 0:
-                ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i]*(ao_loc[i]+1)//2
-                bufrows.append(ijend-ij_start)
-                ij_start = ijend
-        nao_pair = nao*(nao+1) // 2
-        ish_seg.append(mol.nbas)
-        bufrows.append(nao_pair-ij_start)
+    if aosym == 's2ij':
+        segs = [ao_loc[i+1]*(ao_loc[i+1]+1)//2 - ao_loc[i]*(ao_loc[i]+1)//2
+                for i in range(mol.nbas)]
     else:
-        for i in range(mol.nbas):
-            ij_end = ao_loc[i+1] * nao
-            if ij_end - ij_start > buflen and i != 0:
-                ish_seg.append(i) # put present shell to next segments
-                ijend = ao_loc[i] * nao
-                bufrows.append(ijend-ij_start)
-                ij_start = ijend
-        ish_seg.append(mol.nbas)
-        bufrows.append(nao*nao-ij_start)
-
-    # for each buffer, sh_ranges record (start, end, bufrow)
-    sh_ranges = list(zip(ish_seg[:-1], ish_seg[1:], bufrows))
-    return sh_ranges
+        segs = [(ao_loc[i+1]-ao_loc[i])*nao for i in range(mol.nbas)]
+    return group_segs_filling_block(segs, buflen)
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):
@@ -359,7 +295,7 @@ def _stand_sym_code(sym):
 
 
 if __name__ == '__main__':
-    mol = pyscf.gto.Mole()
+    mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
 
@@ -384,3 +320,4 @@ if __name__ == '__main__':
             max_memory=.5, ioblk_size=.2, verbose=6)
     with h5py.File('cderi.dat') as feri:
         print(numpy.allclose(feri['eri_mo'], cderi0))
+

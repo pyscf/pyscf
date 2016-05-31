@@ -5,6 +5,7 @@
 #
 
 import os, sys
+from functools import reduce
 import numpy
 import pyscf.tools
 import pyscf.lib.logger as logger
@@ -503,7 +504,7 @@ def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
 
     f = open(os.path.join(directory, filename), 'r')
 
-    nfrzorb = fciqmcci.nfreezecore/2
+    nfrzorb = fciqmcci.nfreezecore//2
 
     norb_active = norb - nfrzorb
     two_pdm_active = numpy.zeros( (norb_active, norb_active, norb_active, norb_active) )
@@ -577,7 +578,7 @@ def one_from_two_pdm(two_pdm, nelec):
 
     # Last two indices refer to middle two second quantized operators in the 2RDM
     one_pdm = numpy.einsum('ikjj->ik', two_pdm)
-    one_pdm /= (nelec-1)
+    one_pdm /= (numpy.sum(nelec)-1)
     return one_pdm
 
 def find_full_casscf_12rdm(fciqmcci, mo_coeff, filename, norbcas, neleccas, directory='.'):
@@ -718,7 +719,7 @@ if __name__ == '__main__':
     mc.max_cycle_macro = 10
     # Return natural orbitals from mc2step in casscf_mo.
     mc.natorb = True
-    emc_1, e_ci, fcivec, casscf_mo = mc.mc2step(m.mo_coeff)
+    emc_1, e_ci, fcivec, casscf_mo, mo_energy = mc.mc2step(m.mo_coeff)
 
     # Write orbitals to molden output.
     with open( 'output.molden', 'w' ) as fout:

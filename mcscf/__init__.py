@@ -35,6 +35,8 @@ There are some parameters to control the CASSCF/CASCI method.
         Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
+    canonicalization : bool
+        Whether to canonicalize orbitals.  Default is True.
     fcisolver : an instance of :class:`FCISolver`
         The pyscf.fci module provides several FCISolver for different scenario.  Generally,
         fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -239,15 +241,15 @@ def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
 def _convert_to_rhf(mf, convert_df=True):
     import copy
     import numpy
-    if not (isinstance(mf.mo_coeff, numpy.ndarray) and mf.mo_coeff.ndim == 2):
+    if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
         mf = copy.copy(mf)
-        mf.mo_energy = mf.mo_energy[0]
-        mf.mo_coeff  = mf.mo_coeff[0]
-        mf.mo_occ    = mf.mo_occ[0]
+        if mf.mo_energy is not None: mf.mo_energy = mf.mo_energy[0]
+        if mf.mo_coeff is not None:  mf.mo_coeff  = mf.mo_coeff[0]
+        if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
 
     # Avoid doing density fitting
-    if convert_df and hasattr(mf, '_tag_df') and mf._tag_df:
+    if convert_df and hasattr(mf, 'with_df') and mf.with_df:
         from pyscf.lib import logger
         mf = copy.copy(mf)
         logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
@@ -255,15 +257,14 @@ def _convert_to_rhf(mf, convert_df=True):
                     'The CASSCF object is the normal solver (no approximated integrals). '
                     'mcscf.DFCASSCF is the function to create density fitting CASSCF '
                     '(with approximate 2e integrals).')
-        mf._cderi = None
-        mf._tag_df = False
+        mf.with_df = False
     return mf
 
 approx_hessian = df.approx_hessian
 
-def density_fit(mc, auxbasis=None):
-    if hasattr(mc._scf, '_tag_df') and mc._scf._tag_df:
-        return df.density_fit(mc, auxbasis)
+def density_fit(mc, auxbasis=None, with_df=None):
+    if hasattr(mc._scf, 'with_df') and mc._scf.with_df:
+        return df.density_fit(mc, auxbasis, with_df)
     else:
         from pyscf.lib import logger
         logger.warn(mc, 'NOTE: approx_hessian function is available for DF orbital hessian!\n'
@@ -274,4 +275,4 @@ def density_fit(mc, auxbasis=None):
                     'In the future release, it will be removed and the '
                     'density_fit function will only generate DF-CASSCF method.',
                     mc._scf.__class__)
-        return approx_hessian(mc, auxbasis)
+        return approx_hessian(mc, auxbasis, with_df)

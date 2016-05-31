@@ -38,14 +38,18 @@ class AO2MOpt(object):
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))
 
+        def to_del():
+            self._cintopt = None
+            libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
+        self.__to_del = to_del
+
     def __del__(self):
-        libao2mo.CINTdel_optimizer(ctypes.byref(self._cintopt))
-        libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
+        self.__to_del()
 
 
 # if out is not None, transform AO to MO in-place
-def nr_e1fill_(intor, sh_range, atm, bas, env,
-               aosym='s1', comp=1, ao2mopt=None, out=None):
+def nr_e1fill(intor, sh_range, atm, bas, env,
+              aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
 
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -97,12 +101,9 @@ def nr_e1fill_(intor, sh_range, atm, bas, env,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if ao2mopt is None:
-        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
     return out
 
-def nr_e1_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
+def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
     assert(mosym in ('s2', 's1'))
@@ -153,10 +154,10 @@ def nr_e1_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
 
 # if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
-def nr_e2_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
+def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
            ao_loc=None):
     assert(eri.flags.c_contiguous)
-    assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
+    assert(aosym in ('s4', 's2ij', 's2kl', 's2', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
@@ -165,7 +166,7 @@ def nr_e2_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     lc = l1 - l0
     kl_count = kc * lc
 
-    if aosym in ('s4', 's2kl'):
+    if aosym in ('s4', 's2', 's2kl'):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(kc == lc)
@@ -212,8 +213,8 @@ def nr_e2_(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
 
 
 # if out is not None, transform AO to MO in-place
-def r_e1_(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
-          tao, aosym='s1', comp=1, ao2mopt=None, out=None):
+def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
+         tao, aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
@@ -269,20 +270,17 @@ def r_e1_(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if ao2mopt is None:
-        libao2mo.CINTdel_optimizer(ctypes.byref(cintopt))
     return out
 
 # if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
-def r_e2_(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
+def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
-    k0, k1, l0, l1 = shape
+    k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
     lc = l1 - l0
     kl_count = kc * lc

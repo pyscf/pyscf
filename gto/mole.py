@@ -18,7 +18,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
-from pyscf.gto import eval_gto
+from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
 
@@ -33,7 +33,7 @@ def M(**kwargs):
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
     '''
     mol = Mole()
-    mol.build_(**kwargs)
+    mol.build(**kwargs)
     return mol
 
 def _gaussian_int(n, alpha):
@@ -206,8 +206,9 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
                 if isinstance(atom[0], int):
                     symb = param.ELEMENTS[atom[0]][0]
                 else:
-                    rawsymb = _rm_digit(atom[0])
-                    symb = atom[0].replace(rawsymb, _std_symbol(rawsymb))
+                    a = atom[0].strip()
+                    rawsymb = _rm_digit(a)
+                    symb = a.replace(rawsymb, _std_symbol(rawsymb))
                 if isinstance(atom[1], (int, float)):
                     c = numpy.asarray(atom[1:4]) - origin
                 else:
@@ -362,7 +363,8 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     bas2[:,ATOM_OF  ] += natm_off
     bas2[:,PTR_EXP  ] += off
     bas2[:,PTR_COEFF] += off
-    return (numpy.vstack((atm1,atm2)), numpy.vstack((bas1,bas2)),
+    return (numpy.asarray(numpy.vstack((atm1,atm2)), dtype=numpy.int32),
+            numpy.asarray(numpy.vstack((bas1,bas2)), dtype=numpy.int32),
             numpy.hstack((env1,env2)))
 
 def conc_mol(mol1, mol2):
@@ -374,14 +376,18 @@ def conc_mol(mol1, mol2):
                      mol2._atm, mol2._bas, mol2._env)
     off = len(mol1._env)
     natm_off = len(mol1._atm)
-    ecpbas2 = numpy.copy(mol2._ecpbas)
-    ecpbas2[:,ATOM_OF  ] += natm_off
-    ecpbas2[:,PTR_EXP  ] += off
-    ecpbas2[:,PTR_COEFF] += off
-    mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+    if len(mol2._ecpbas) == 0:
+        mol3._ecpbas = mol1._ecpbas
+    else:
+        ecpbas2 = numpy.copy(mol2._ecpbas)
+        ecpbas2[:,ATOM_OF  ] += natm_off
+        ecpbas2[:,PTR_EXP  ] += off
+        ecpbas2[:,PTR_COEFF] += off
+        if len(mol1._ecpbas) == 0:
+            mol3._ecpbas = ecpbas2
+        else:
+            mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
 
-    mol3.natm = len(mol3._atm)
-    mol3.nbas = len(mol3._bas)
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
     mol3.max_memory = mol1.max_memory
@@ -395,8 +401,13 @@ def conc_mol(mol1, mol2):
     mol3.unit = mol1.unit
     mol3._basis = dict(mol2._basis)
     mol3._basis.update(mol1._basis)
-    mol3._ecp = dict(mol2._ecp)
-    mol3._ecp.update(mol1._ecp)
+    if mol2._ecp is None:
+        mol3._ecp = mol1._ecp
+    elif mol1._ecp is None:
+        mol3._ecp = mol2._ecp
+    else:
+        mol3._ecp = dict(mol2._ecp)
+        mol3._ecp.update(mol1._ecp)
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
@@ -436,9 +447,8 @@ def intor_cross(intor, mol1, mol2, comp=1):
     nbas2 = len(mol2._bas)
     atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env,
                                 mol2._atm, mol2._bas, mol2._env)
-    bras = range(nbas1)
-    kets = range(nbas1, nbas1+nbas2)
-    return moleintor.getints(intor, atmc, basc, envc, bras, kets, comp, 0)
+    shls_slice = (0, nbas1, nbas1, nbas1+nbas2)
+    return moleintor.getints(intor, atmc, basc, envc, shls_slice, comp, 0)
 
 # append (charge, pointer to coordinates, nuc_mod) to _atm
 def make_atm_env(atom, ptr=0):
@@ -495,7 +505,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
     _env = pyscf.lib.flatten(_env) # flatten nested lists
-    return numpy.array(_bas, numpy.int32), numpy.array(_env, numpy.double)
+    return (numpy.array(_bas, numpy.int32).reshape(-1,BAS_SLOTS),
+            numpy.array(_env, numpy.double))
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal
@@ -528,6 +539,8 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
     _basdic = {}
     for symb, basis_add in basis.items():
         bas0, env0 = make_bas_env(basis_add, 0, ptr_env)
+        if bas0.size == 0:
+            sys.stderr.write('No basis found for atom %s\n' % symb)
         ptr_env = ptr_env + len(env0)
         _basdic[symb] = bas0
         _env.append(env0)
@@ -617,9 +630,7 @@ def tot_electrons(mol):
     >>> mol.tot_electrons()
     6
     '''
-    nelectron = -mol.charge
-    for ia in range(mol.natm):
-        nelectron += mol.atom_charge(ia)
+    nelectron = mol.atom_charges().sum() - mol.charge
     return int(nelectron)
 
 def copy(mol):
@@ -698,7 +709,7 @@ def dumps(mol):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (basestring, bool, int, long, float))):
+                    isinstance(v, (str, bool, int, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -801,14 +812,19 @@ def nao_nr_range(mol, bas_id0, bas_id1):
     >>> gto.nao_nr_range(mol, 2, 4)
     (2, 6)
     '''
-    nao_id0 = ((mol._bas[:bas_id0,ANG_OF]*2+1) * mol._bas[:bas_id0,NCTR_OF]).sum()
-    n = ((mol._bas[bas_id0:bas_id1,ANG_OF]*2+1)* mol._bas[bas_id0:bas_id1,NCTR_OF]).sum()
-    return nao_id0, nao_id0+n
+    ao_loc = moleintor.make_loc(mol._bas[:bas_id1], 'sph')
+    nao_id0 = ao_loc[bas_id0]
+    nao_id1 = ao_loc[-1]
+    return nao_id0, nao_id1
 
 def nao_2c(mol):
     '''Total number of contracted spinor GTOs for the given :class:`Mole` object'''
-    return sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
-                for b in range(len(mol._bas))])
+    l = mol._bas[:,ANG_OF]
+    kappa = mol._bas[:,KAPPA_OF]
+    dims = (l*4+2) * mol._bas[:,NCTR_OF]
+    dims[kappa<0] = l[kappa<0] * 2 + 2
+    dims[kappa>0] = l[kappa>0] * 2
+    return dims.sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_2c_range(mol, bas_id0, bas_id1):
@@ -832,11 +848,10 @@ def nao_2c_range(mol, bas_id0, bas_id1):
     >>> gto.nao_2c_range(mol, 2, 4)
     (4, 12)
     '''
-    nao_id0 = sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
-                   for b in range(bas_id0)])
-    n = sum([mol.bas_len_spinor(b) * mol.bas_nctr(b) \
-             for b in range(bas_id0, bas_id1)])
-    return nao_id0, nao_id0+n
+    ao_loc = moleintor.make_loc(mol._bas[:bas_id1], '')
+    nao_id0 = ao_loc[bas_id0]
+    nao_id1 = ao_loc[-1]
+    return nao_id0, nao_id1
 
 def ao_loc_nr(mol, cart=False):
     '''Offset of every shell in the spherical basis function spectrum
@@ -851,14 +866,9 @@ def ao_loc_nr(mol, cart=False):
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
     if cart:
-        l = mol._bas[:,ANG_OF]
-        dims = (l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]
+        return moleintor.make_loc(mol._bas, 'cart')
     else:
-        dims = (mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]
-    ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
-    ao_loc[0] = 0
-    dims.cumsum(dtype=numpy.int32, out=ao_loc[1:])
-    return ao_loc
+        return moleintor.make_loc(mol._bas, 'sph')
 
 def ao_loc_2c(mol):
     '''Offset of every shell in the spinor basis function spectrum
@@ -872,13 +882,7 @@ def ao_loc_2c(mol):
     >>> gto.ao_loc_2c(mol)
     [0, 2, 4, 6, 12, 18, 20, 22, 24, 30, 36]
     '''
-    off = 0
-    ao_loc = []
-    for i in range(len(mol._bas)):
-        ao_loc.append(off)
-        off += mol.bas_len_spinor(i) * mol.bas_nctr(i)
-    ao_loc.append(off)
-    return ao_loc
+    return moleintor.make_loc(mol._bas, 'spinor')
 
 def time_reversal_map(mol):
     r'''The index to map the spinor functions and its time reversal counterpart.
@@ -931,8 +935,8 @@ def energy_nuc(mol):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    chargs = numpy.array([mol.atom_charge(i) for i in range(len(mol._atom))])
-    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atom))])
+    chargs = mol.atom_charges()
+    coords = mol.atom_coords()
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()
     rr = rd[:,None] + rd - rr*2
@@ -1129,15 +1133,131 @@ def offset_nr_by_atom(mol):
     aorange.append((b0, mol.nbas, p0, p1))
     return aorange
 
-#FIXME:
-def is_same_mol(mol1, mol2):
+def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
+    '''Compare the two molecules whether they have the same structure.
+
+    Kwargs:
+        tol : float
+            In Bohr
+        cmp_basis : bool
+            Whether to compare basis functions for the two molecules
+    '''
+    import pyscf.symm
+
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
-    for a1, a2 in zip(mol1._atom, mol2._atom):
-        if a1[0] != a2[0] \
-           or numpy.linalg.norm(numpy.array(a1[1])-numpy.array(a2[1])) > 2:
-            return False
-    return True
+
+    chg1 = mol1._atm[:,CHARGE_OF]
+    chg2 = mol2._atm[:,CHARGE_OF]
+    if not numpy.all(numpy.sort(chg1) == numpy.sort(chg2)):
+        return False
+
+    if cmp_basis:
+        atomtypes1 = atom_types(mol1._atom, mol1._basis)
+        atomtypes2 = atom_types(mol2._atom, mol2._basis)
+        for k in atomtypes1:
+            if k not in atomtypes2:
+                return False
+            elif len(atomtypes1[k]) != len(atomtypes2[k]):
+                return False
+            elif mol1._basis[k] != mol2._basis[k]:
+                return False
+
+    def finger(mol, chgs, coord):
+        center = charge_center(mol._atom, chgs, coord)
+        im = inertia_momentum(mol._atom, chgs, coord)
+        w, v = numpy.linalg.eigh(im)
+        axes = v.T
+        if numpy.linalg.det(axes) < 0:
+            axes *= -1
+        r = numpy.dot(coord-center, axes.T)
+        return w, r
+
+    coord1 = mol1.atom_coords()
+    coord2 = mol2.atom_coords()
+    w1, r1 = finger(mol1, chg1, coord1)
+    w2, r2 = finger(mol2, chg2, coord2)
+    if not (numpy.allclose(w1, w2, atol=tol)):
+        return False
+
+    rotate_xy  = numpy.array([[-1., 0., 0.],
+                              [ 0.,-1., 0.],
+                              [ 0., 0., 1.]])
+    rotate_yz  = numpy.array([[ 1., 0., 0.],
+                              [ 0.,-1., 0.],
+                              [ 0., 0.,-1.]])
+    rotate_zx  = numpy.array([[-1., 0., 0.],
+                              [ 0., 1., 0.],
+                              [ 0., 0.,-1.]])
+
+    def inspect(z1, r1, z2, r2):
+        place = int(-numpy.log10(tol)) - 1
+        idx = pyscf.symm.argsort_coords(r2, place)
+        z2 = z2[idx]
+        r2 = r2[idx]
+        for rot in (1, rotate_xy, rotate_yz, rotate_zx):
+            r1new = numpy.dot(r1, rot)
+            idx = pyscf.symm.argsort_coords(r1new, place)
+            if (numpy.all(z1[idx] == z2) and
+                numpy.allclose(r1new[idx], r2, atol=tol)):
+                return True
+        return False
+
+    return (inspect(chg1, r1, chg2, r2) or
+            (ignore_chiral and inspect(chg1, r1, chg2, -r2)))
+is_same_mol = same_mol
+
+def chiral_mol(mol1, mol2=None):
+    '''Detect whether the given molelcule is chiral molecule or two molecules
+    are chiral isomers.
+    '''
+    if mol2 is None:
+        mol2 = mol1.copy()
+        ptr_coord = mol2._atm[:,PTR_COORD]
+        mol2._env[ptr_coord  ] *= -1
+        mol2._env[ptr_coord+1] *= -1
+        mol2._env[ptr_coord+2] *= -1
+    return (not same_mol(mol1, mol2, ignore_chiral=False) and
+            same_mol(mol1, mol2, ignore_chiral=True))
+
+def inertia_momentum(atoms, charges=None, coords=None):
+    if charges is None:
+        charges = numpy.array([_charge(a[0]) for a in atoms])
+    if coords is None:
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+    chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
+    coords = coords - chgcenter
+    im = numpy.einsum('i,ij,ik->jk', charges, coords, coords)/charges.sum()
+    return im
+
+def charge_center(atoms, charges=None, coords=None):
+    if charges is None:
+        charges = numpy.array([_charge(a[0]) for a in atoms])
+    if coords is None:
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+    rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
+    return rbar
+
+def mass_center(atoms):
+    mass = numpy.array([param.ELEMENTS[_charge(a[0])][1] for a in atoms])
+    return charge_center(atoms, mass)
+
+def condense_to_shell(mol, mat, compressor=numpy.max):
+    '''The given matrix is first partitioned to blocks, based on AO shell as
+    delimiter.  Then call compressor function to abstract each block.
+    '''
+    ao_loc = mol.ao_loc_nr()
+    abstract = numpy.empty((mol.nbas,mol.nbas))
+    for i, i0 in enumerate(ao_loc[:mol.nbas]):
+        for j, j0 in enumerate(ao_loc[:mol.nbas]):
+            abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    return abstract
+
+
+def check_sanity(obj, keysref, stdout=sys.stdout):
+    sys.stderr.write('Function pyscg.gto.mole.check_sanity will be removed in PySCF-1.1. '
+                     'It is replaced by pyscg.lib.check_sanity\n')
+    return pyscf.lib.check_sanity(obj, keysref, stdout)
 
 
 # for _atm, _bas, _env
@@ -1160,8 +1280,9 @@ PTR_LIGHT_SPEED = 0
 PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
-PTR_ECPBAS_OFFSET = 8
-PTR_NECPBAS     = 9
+PTR_RANGE_OMEGA = 8
+PTR_ECPBAS_OFFSET = 18
+PTR_NECPBAS     = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -1307,9 +1428,7 @@ class Mole(pyscf.lib.StreamObject):
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = []
-        self.natm = 0
         self._bas = []
-        self.nbas = 0
         self._env = [0] * PTR_ENV_START
         self._ecpbas = []
 
@@ -1327,6 +1446,13 @@ class Mole(pyscf.lib.StreamObject):
         self._built = False
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
+
+    @property
+    def natm(self):
+        return len(self._atm)
+    @property
+    def nbas(self):
+        return len(self._bas)
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -1355,11 +1481,11 @@ class Mole(pyscf.lib.StreamObject):
         return self
 
 #TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
-    def build_(self, dump_input=True, parse_arg=True,
-               verbose=None, output=None, max_memory=None,
-               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
-               charge=None, spin=None, symmetry=None,
-               symmetry_subgroup=None, light_speed=None, mass=None):
+    def build(self, dump_input=True, parse_arg=True,
+              verbose=None, output=None, max_memory=None,
+              atom=None, basis=None, unit=None, nucmod=None, ecp=None,
+              charge=None, spin=None, symmetry=None,
+              symmetry_subgroup=None, light_speed=None, mass=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -1428,8 +1554,13 @@ class Mole(pyscf.lib.StreamObject):
 
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            self._basis = self.format_basis(dict([(a, self.basis)
-                                                  for a in uniq_atoms]))
+            if self.basis.lower().startswith('unc'):
+                cbas = self.format_basis(dict([(a, self.basis[3:])
+                                               for a in uniq_atoms]))
+                self._basis = dict((a,uncontract(cbas[a])) for a in cbas)
+            else:
+                self._basis = self.format_basis(dict([(a, self.basis)
+                                                      for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)
 
@@ -1457,8 +1588,7 @@ class Mole(pyscf.lib.StreamObject):
                     _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
                     _atom = '\n'.join([str(a) for a in _atom])
                     raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                         'It is recommended to use symmetry="%s" with '
-                                         'geometry (unit="Bohr")\n%s' %
+                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
                                          (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \
@@ -1480,8 +1610,6 @@ class Mole(pyscf.lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        self.natm = len(self._atm) # == len(self._atom)
-        self.nbas = len(self._bas) # == len(self._basis)
         self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
@@ -1511,12 +1639,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         self._built = True
         return self
-    def kernel(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
-    def build(self, *args, **kwargs):
-        return self.build_(*args, **kwargs)
-    kernel.__doc__ = build_.__doc__
-    build.__doc__ = build_.__doc__
+    kernel = build
 
     @pyscf.lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
@@ -1580,14 +1703,18 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
-            head = os.path.join(pyscfdir, '.git', 'HEAD')
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
+            head = os.path.join(pyscfdir, '.git', 'HEAD')
             with open(head, 'r') as f:
-                branch = os.path.basename(f.read().splitlines()[0])
+                head = f.read().splitlines()[0]
             # or command(git log -1 --pretty=%H)
-            head = os.path.join(pyscfdir, '.git', 'refs', 'heads', branch)
-            with open(head, 'r') as f:
-                self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
+            if head.startswith('ref:'):
+                branch = os.path.basename(head)
+                head = os.path.join(pyscfdir, '.git', head.split(' ')[1])
+                with open(head, 'r') as f:
+                    self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
+            else:
+                self.stdout.write('GIT HEAD %s' % head)
             self.stdout.write('\n')
         except IOError:
             pass
@@ -1654,33 +1781,44 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         logger.info(self, 'CPU time: %12.2f', time.clock())
         return self
 
-    def set_common_origin_(self, coord):
+    def set_common_orig(self, coord):
         '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
 
         Examples:
 
-        >>> mol.set_common_orig_(0)
-        >>> mol.set_common_orig_((1,0,0))
+        >>> mol.set_common_orig(0)
+        >>> mol.set_common_orig((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
         return self
-    def set_common_orig_(self, coord):
-        return self.set_common_origin_(coord)
+    set_common_origin = set_common_orig
+    set_common_orig_ = set_common_orig    # for backward compatibility
+    set_common_origin_ = set_common_orig  # for backward compatibility
 
-    def set_rinv_origin_(self, coord):
+    def set_rinv_orig(self, coord):
         r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
 
         Examples:
 
-        >>> mol.set_rinv_orig_(0)
-        >>> mol.set_rinv_orig_((0,1,0))
+        >>> mol.set_rinv_orig(0)
+        >>> mol.set_rinv_orig((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
         return self
-    def set_rinv_orig_(self, coord):
-        return self.set_rinv_origin_(coord)
+    set_rinv_origin = set_rinv_orig
+    set_rinv_orig_ = set_rinv_orig    # for backward compatibility
+    set_rinv_origin_ = set_rinv_orig  # for backward compatibility
 
-    def set_nuc_mod_(self, atm_id, zeta):
+    def set_range_coulomb(self, omega):
+        '''Apply the long range part of range-separated Coulomb operator for
+        **all** 2e integrals
+        erf(omega r12) / r12
+        set omega to 0 to siwtch off the range-separated Coulomb
+        '''
+        self._env[PTR_RANGE_OMEGA] = omega
+    set_range_coulomb_ = set_range_coulomb  # for backward compatibility
+
+    def set_nuc_mod(self, atm_id, zeta):
         '''Change the nuclear charge distribution of the given atom ID.  The charge
         distribution is defined as: rho(r) = nuc_charge * Norm * exp(-zeta * r^2).
         This function can **only** be called after .build() method is executed.
@@ -1689,13 +1827,14 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         >>> for ia in range(mol.natm):
         ...     zeta = gto.filatov_nuc_mod(mol.atom_charge(ia))
-        ...     mol.set_nuc_mod_(ia, zeta)
+        ...     mol.set_nuc_mod(ia, zeta)
         '''
         ptr = self._atm[atm_id,PTR_ZETA]
         self._env[ptr] = zeta
         return self
+    set_nuc_mod_ = set_nuc_mod  # for backward compatibility
 
-    def set_rinv_zeta_(self, zeta):
+    def set_rinv_zeta(self, zeta):
         '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
@@ -1703,10 +1842,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         self._env[PTR_RINV_ZETA] = zeta
         return self
+    set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
-    def update_(self, chkfile):
-        return self.update_from_chk_(chkfile)
-    def update_from_chk_(self, chkfile):
+    def update(self, chkfile):
+        return self.update_from_chk(chkfile)
+    def update_from_chk(self, chkfile):
         import h5py
         with h5py.File(chkfile, 'r') as fh5:
             moldic = eval(fh5['mol'].value)
@@ -1763,6 +1903,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self._atm[atm_id,CHARGE_OF]
 
+    def atom_charges(self):
+        '''np.asarray([mol.atom_charge(i) for i in range(mol.natm)])'''
+        return self._atm[:,CHARGE_OF]
+
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.
         '''
@@ -1783,6 +1927,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         ptr = self._atm[atm_id,PTR_COORD]
         return self._env[ptr:ptr+3]
+
+    def atom_coords(self):
+        '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
+        ptr = self._atm[:,PTR_COORD]
+        return numpy.vstack((self._env[ptr],self._env[ptr+1],self._env[ptr+2])).T
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom
@@ -1974,7 +2123,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
-              bras=None, kets=None):
+              shls_slice=None):
         '''Integral generator.
 
         Args:
@@ -2016,12 +2165,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             bas = numpy.vstack((self._bas, self._ecpbas))
             self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
             self._env[PTR_NECPBAS] = len(self._ecpbas)
-            if bras is None: bras = numpy.arange(self.nbas, dtype=numpy.int32)
-            if kets is None: kets = numpy.arange(self.nbas, dtype=numpy.int32)
+            if shls_slice is None:
+                shls_slice = (0, self.nbas, 0, self.nbas)
         else:
             bas = self._bas
         return moleintor.getints(intor, self._atm, bas, self._env,
-                                 bras=bras, kets=kets, comp=comp, hermi=hermi,
+                                 shls_slice, comp=comp, hermi=hermi,
                                  aosym=aosym, out=out)
 
     def intor_symmetric(self, intor, comp=1):
@@ -2076,43 +2225,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self.intor(intor, comp, 2, aosym='a4')
 
-    def intor_cross(self, intor, bras, kets, comp=1, aosym='s1', out=None):
-        r'''Cross 1-electron integrals like
-
-        .. math::
-
-            \langle \mu | intor | \nu \rangle, \mu \in bras, \nu \in kets
-
-        Args:
-            intor : str
-                Name of the 1-electron integral.  Ref to :func:`getints` for the
-                full list of available 1-electron integral names
-            bras : list of int
-                A list of shell ids for bra
-            kets : list of int
-                A list of shell ids for ket
-
-        Kwargs:
-            comp : int
-                Components of the integrals, e.g. cint1e_ipovlp has 3 components
-
-        Returns:
-            ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
-
-        Examples:
-            Compute the overlap between H2 molecule and O atom
-
-        >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-        >>> mol.intor_cross('cint1e_ovlp_sph', range(0,3), range(3,5))
-        [[ 0.04875181  0.04875181]
-         [ 0.44714688  0.44714688]
-         [ 0.          0.        ]
-         [ 0.37820346  0.        ]
-         [ 0.          0.37820346]]
-        '''
-        return self.intor(intor, comp=comp, hermi=0, aosym=aosym, out=out,
-                          bras=bras, kets=kets)
-
     @pyscf.lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=1):
         if 'ECP' in intor:
@@ -2125,11 +2237,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    @pyscf.lib.with_doc(eval_gto.eval_gto.__doc__)
+    @pyscf.lib.with_doc(eval_gto.__doc__)
     def eval_gto(self, eval_name, coords,
                  comp=1, shls_slice=None, non0tab=None, out=None):
-        return eval_gto.eval_gto(eval_name, self._atm, self._bas, self._env,
-                                 coords, comp, shls_slice, non0tab, out)
+        return eval_gto(eval_name, self._atm, self._bas, self._env,
+                        coords, comp, shls_slice, non0tab, out)
 
     def energy_nuc(self):
         return energy_nuc(self)
@@ -2155,6 +2267,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
         return spinor_labels(self)
+
+    condense_to_shell = condense_to_shell
 
 _ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 

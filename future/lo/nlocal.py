@@ -109,7 +109,8 @@ def dumpLUNO(fname,thresh=0.01):
    #=====================
    # Population analysis
    #=====================
-   aux = s12inv
+   from pyscf import lo
+   aux = lo.orth_ao(mol,method='meta_lowdin')
    #clmo = ulocal.scdm(cOrbs,ova,aux)
    #almo = ulocal.scdm(aOrbs,ova,aux)
    clmo = cOrbs

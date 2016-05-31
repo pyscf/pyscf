@@ -50,9 +50,37 @@ The first argument is chkfile file name.''')
         dm = uhf.make_rdm1((fproj(mo[0]),fproj(mo[1])), mo_occ)
     return dm
 
-def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-              diis_start_cycle=None, level_shift_factor=None,
-              damp_factor=None):
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None,
+             damp_factor=None):
+    '''Build fock matrix based on Roothaan's effective fock.
+    See also :func:`get_roothaan_fock`
+    '''
+    if diis_start_cycle is None:
+        diis_start_cycle = mf.diis_start_cycle
+    if level_shift_factor is None:
+        level_shift_factor = mf.level_shift
+    if damp_factor is None:
+        damp_factor = mf.damp
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
+# To Get orbital energy in get_occ, we saved alpha and beta fock, because
+# Roothaan effective Fock cannot provide correct orbital energy with `eig`
+# TODO, check other treatment  J. Chem. Phys. 133, 141102
+    mf._focka_ao = h1e + vhf[0]
+    mf._fockb_ao = h1e + vhf[1]
+    f = get_roothaan_fock((mf._focka_ao,mf._fockb_ao), dm, s1e)
+
+    if 0 <= cycle < diis_start_cycle-1:
+        f = hf.damping(s1e, dm[0], f, damp_factor)
+    if adiis and cycle >= diis_start_cycle:
+        #f = adiis.update(s1e, dmsf*.5, f)
+        f = adiis.update(s1e, dm[0], f)
+    #f = level_shift(s1e, dmsf*.5, f, level_shift_factor)
+    f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
+    return f
+
+def get_roothaan_fock(focka_fockb, dma_dmb, s):
     '''Roothaan's effective fock.
     Ref. http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
 
@@ -69,43 +97,22 @@ def get_fock_(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     Returns:
         Roothaan effective Fock matrix
     '''
-    if diis_start_cycle is None:
-        diis_start_cycle = mf.diis_start_cycle
-    if level_shift_factor is None:
-        level_shift_factor = mf.level_shift
-    if damp_factor is None:
-        damp_factor = mf.damp
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        dm = numpy.array((dm*.5, dm*.5))
-# Fc = (Fa+Fb)/2
-    mf._focka_ao = h1e + vhf[0]
-    mf._fockb_ao = h1e + vhf[1]
-    fc = (mf._focka_ao + mf._fockb_ao) * .5
+    nao = s.shape[0]
+    focka, fockb = focka_fockb
+    dma, dmb = dma_dmb
+    fc = (focka + fockb) * .5
 # Projector for core, open-shell, and virtual
-    nao = s1e.shape[0]
-    pc = numpy.dot(dm[1], s1e)
-    po = numpy.dot(dm[0]-dm[1], s1e)
-    pv = numpy.eye(nao) - numpy.dot(dm[0], s1e)
-    f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
-    f += reduce(numpy.dot, (po.T, fc, po)) * .5
-    f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-    f += reduce(numpy.dot, (po.T, mf._fockb_ao, pc))
-    f += reduce(numpy.dot, (po.T, mf._focka_ao, pv))
-    f += reduce(numpy.dot, (pv.T, fc, pc))
-    f = f + f.T
-
-    if 0 <= cycle < diis_start_cycle-1:
-        f = hf.damping(s1e, dm[0], f, damp_factor)
-    if adiis and cycle >= diis_start_cycle:
-        #f = adiis.update(s1e, dmsf*.5, f)
-        f = adiis.update(s1e, dm[0], f)
-    #f = level_shift(s1e, dmsf*.5, f, level_shift_factor)
-    f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
-# attach alpha and beta fock, because Roothaan effective Fock cannot provide
-# correct orbital energy.  To define orbital energy in mf.eig, we use alpha
-# fock and beta fock.
-# TODO, check other treatment  J. Chem. Phys. 133, 141102
-    return f
+    pc = numpy.dot(dmb, s)
+    po = numpy.dot(dma-dmb, s)
+    pv = numpy.eye(nao) - numpy.dot(dma, s)
+    fock  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
+    fock += reduce(numpy.dot, (po.T, fc, po)) * .5
+    fock += reduce(numpy.dot, (pv.T, fc, pv)) * .5
+    fock += reduce(numpy.dot, (po.T, fockb, pc))
+    fock += reduce(numpy.dot, (po.T, focka, pv))
+    fock += reduce(numpy.dot, (pv.T, fc, pc))
+    fock = fock + fock.T
+    return fock
 
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
@@ -262,6 +269,16 @@ def analyze(mf, verbose=logger.DEBUG):
     #return mf.mulliken_pop(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
     return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
 
+def canonicalize(mf, mo_coeff, mo_occ, fock=None):
+    '''Canonicalization diagonalizes the Fock matrix within occupied, open,
+    virtual subspaces separatedly (without change occupancy).
+    '''
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    if fock is None:
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
+        fock = get_roothaan_fock(fock, dm, mf.get_ovlp())
+    return hf.canonicalize(mf, mo_coeff, mo_occ, fock)
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
 # keep mo_energy, mo_coeff, mo_occ as RHF structure
@@ -310,13 +327,7 @@ class ROHF(hf.RHF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    @pyscf.lib.with_doc(get_fock_.__doc__)
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                 diis_start_cycle=None, level_shift_factor=None,
-                 damp_factor=None):
-        return self.get_fock_(h1e, s1e, vhf, dm, cycle, adiis,
-                              diis_start_cycle, level_shift_factor, damp_factor)
-    get_fock_ = get_fock_
+    get_fock = get_fock
 
     get_occ = get_occ
 
@@ -363,5 +374,5 @@ class ROHF(hf.RHF):
         return vhf
 
     analyze = analyze
-
+    canonicalize = canonicalize
 

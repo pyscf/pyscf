@@ -80,6 +80,8 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None, eris=None):
     nmo = nocc + nvir
     dm1 = numpy.zeros((nmo,nmo))
     dm1[:nocc,:nocc] = doo + doo.T
+    dm1[:nocc,nocc:] = dov + dvo.T
+    dm1[nocc:,:nocc] = dm1[:nocc,nocc:].T
     dm1[nocc:,nocc:] = dvv + dvv.T
     for i in range(nocc):
         dm1[i,i] += 2

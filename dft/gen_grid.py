@@ -368,7 +368,7 @@ class Grids(pyscf.lib.StreamObject):
         >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
         >>> grids = dft.gen_grid.Grids(mol)
         >>> grids.level = 4
-        >>> grids.build_()
+        >>> grids.build()
         '''
     def __init__(self, mol):
         self.mol = mol
@@ -409,8 +409,6 @@ class Grids(pyscf.lib.StreamObject):
         return self
 
     def build(self, mol=None):
-        return self.build_(mol)
-    def build_(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -423,12 +421,17 @@ class Grids(pyscf.lib.StreamObject):
                                    self.becke_scheme)
         pyscf.lib.logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
-    setup_grids = build
-    setup_grids_ = build
+    def setup_grids(self, mol=None):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("once")
+            warnings.warn('API updates: setup_grids method is depercated '
+                          'and will be removed in future release.\n')
+        return self.build(mol)
 
     def kernel(self, mol=None):
         self.dump_flags()
-        return self.build_(mol)
+        return self.build(mol)
 
     @pyscf.lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
@@ -450,6 +453,7 @@ class Grids(pyscf.lib.StreamObject):
 
     @property
     def prune_scheme(self):
+        import sys
         sys.stderr.write('WARN: Attribute .prune_scheme will be removed in PySCF v1.1. '
                          'Please use .prune instead\n')
         return self.prune
@@ -499,7 +503,7 @@ def prange(start, end, step):
 
 
 if __name__ == '__main__':
-    import gto
+    from pyscf import gto
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None#"out_h2o"
@@ -511,7 +515,7 @@ if __name__ == '__main__':
     import time
     t0 = time.clock()
     g = Grids(h2o)
-    g.setup_grids()
+    g.build()
     print(g.coords.shape)
     print(time.clock() - t0)
 

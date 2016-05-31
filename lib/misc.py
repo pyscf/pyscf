@@ -100,6 +100,12 @@ def find_if(test, lst):
             return l
     raise ValueError('No element of the given list matches the test condition.')
 
+def arg_first_match(test, lst):
+    for i,x in enumerate(lst):
+        if test(x):
+            return i
+    raise ValueError('No element of the given list matches the test condition.')
+
 # for give n, generate [(m1,m2),...] that
 #       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
 def tril_equal_pace(n, base=0, npace=0, minimal=1):
@@ -235,20 +241,20 @@ class StreamObject(object):
     '''For most methods, there are three stream functions to pipe computing stream:
 
     1 ``.set_`` function to update object attributes, eg
-    ``mf = scf.RHF(mol).set_(conv_tol=1e-5)`` is identical to proceed in two steps
+    ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
     ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
 
-    2 ``.run_`` function to execute the kenerl function (the function arguments
+    2 ``.run`` function to execute the kenerl function (the function arguments
     are passed to kernel function).  If keyword arguments is given, it will first
-    call ``.set_`` function to update object attributes then execute the kernel
+    call ``.set`` function to update object attributes then execute the kernel
     function.  Eg
-    ``mf = scf.RHF(mol).run_(dm_init, conv_tol=1e-5)`` is identical to three steps
+    ``mf = scf.RHF(mol).run(dm_init, conv_tol=1e-5)`` is identical to three steps
     ``mf = scf.RHF(mol); mf.conv_tol=1e-5; mf.kernel(dm_init)``
 
     3 ``.apply`` function to apply the given function/class to the current object
     (function arguments and keyword arguments are passed to the given function).
     Eg
-    ``mol.apply(scf.RHF).run_().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
+    ``mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
     ``mf = scf.RHF(mol); mf.kernel(); mcscf.CASSCF(mf, 6, 4, frozen=4)``
     '''
 
@@ -256,19 +262,16 @@ class StreamObject(object):
     stdout = sys.stdout
     _keys = set(['verbose', 'stdout'])
 
-    def run_(self, *args, **kwargs):
+    def run(self, *args, **kwargs):
         '''Call the kernel function of current object.  `args` will be passed
         to kernel function.  `kwargs` will be used to update the attributes of
         current object.
         '''
-        self.set_(**kwargs)
+        self.set(**kwargs)
         self.kernel(*args)
         return self
-    def run(self, *args, **kwargs):
-        return self.run_(*args, **kwargs)
-    run.__doc__ = run_.__doc__
 
-    def set_(self, **kwargs):
+    def set(self, **kwargs):
         '''Update the attributes of the current object.
         '''
         #if hasattr(self, '_keys'):
@@ -281,9 +284,6 @@ class StreamObject(object):
         for k,v in kwargs.items():
             setattr(self, k, v)
         return self
-    def set(self, **kwargs):
-        return self.set_(**kwargs)
-    set.__doc__ = set_.__doc__
 
     def apply(self, fn, *args, **kwargs):
         '''Apply the fn to rest arguments:  return fn(*args, **kwargs)
@@ -336,11 +336,38 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
 
 def with_doc(doc):
     '''Use this decorator to add doc string for function
+
+        @with_doc(doc)
+        def fn:
+            ...
+
+    makes
+
+        fn.__doc__ = doc
     '''
     def make_fn(fn):
         fn.__doc__ = doc
         return fn
     return make_fn
+
+def overwrite_mro(obj, mro):
+    '''A hacky function to overwrite the __mro__ attribute'''
+    class HackMRO(type):
+        pass
+# Overwrite type.mro function so that Temp class can use the given mro
+    HackMRO.mro = lambda self: mro
+    if sys.version_info < (3,):
+        class Temp(obj.__class__):
+            __metaclass__ = HackMRO
+    else:
+        #class Temp(obj.__class__, metaclass=HackMRO):
+        #    pass
+        raise NotImplementedError()
+    obj = Temp()
+# Delete mro function otherwise all subclass of Temp are not able to
+# resolve the right mro
+    del(HackMRO.mro)
+    return obj
 
 
 if __name__ == '__main__':

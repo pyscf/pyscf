@@ -102,8 +102,8 @@ both class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
 ``SCF(mol).get_jk(mol, dm)`` have the same functionality.  As a result, most
 functions and class are **pure**, i.e. no status are saved, and the argument
 are not changed inplace.  Exceptions (destructive functions and methods) are
-suffixed with underscore in the function name,  eg  ``scf.hf.get_fock_``
-function may change the status of the argument ``adiis``
+suffixed with underscore in the function name,  eg  ``mcscf.state_average_(mc)``
+changes the attribute of its argument ``mc``
 
 
 Stream functions
@@ -147,3 +147,6 @@ from pyscf import ao2mo
 
 __path__.append(os.path.join(os.path.dirname(__file__), 'future'))
 __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
+
+DEBUG = False
+

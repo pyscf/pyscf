@@ -8,91 +8,45 @@ import _ctypes
 import numpy
 import pyscf.lib
 from pyscf import gto
-from pyscf.scf import _vhf
 
 libri = pyscf.lib.load_library('libri')
+libcgto = gto.moleintor.libcgto
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
-def nr_auxe2(intor, basrange, atm, bas, env,
-             aosym='s1', comp=1, cintopt=None, out=None, ijkoff=0,
-             naoi=None, naoj=None, naoaux=None,
-             iloc=None, jloc=None, kloc=None):
-    assert(aosym[:2] in ('s1', 's2'))
-    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(len(atm))
-    nbas = ctypes.c_int(len(bas))
-    i0, ic, j0, jc, k0, kc = basrange
-    if 'ssc' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, bas)
-        if jloc is None: jloc = make_loc(j0, jc, bas)
-        if kloc is None: kloc = make_loc(k0, kc, bas, True)
-    elif 'cart' in intor:
-        if iloc is None: iloc = make_loc(i0, ic, bas, True)
-        if jloc is None: jloc = make_loc(j0, jc, bas, True)
-        if kloc is None: kloc = make_loc(k0, kc, bas, True)
-    else:
-        if iloc is None: iloc = make_loc(i0, ic, bas)
-        if jloc is None: jloc = make_loc(j0, jc, bas)
-        if kloc is None: kloc = make_loc(k0, kc, bas)
-    if naoi is None:
-        naoi = iloc[-1] - iloc[0]
-    if naoj is None:
-        naoj = jloc[-1] - jloc[0]
-    if naoaux is None:
-        naoaux = kloc[-1] - kloc[0]
+def nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
+             aosym='s1', comp=1, cintopt=None, out=None):
+    if aosym == 's1':
+        atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+        bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+        env = numpy.asarray(env, dtype=numpy.double, order='C')
+        natm = atm.shape[0]
+        nbas = bas.shape[0]
+        i0, i1, j0, j1, k0, k1 = shls_slice
+        naoi = ao_loc[i1] - ao_loc[i0];
+        naoj = ao_loc[j1] - ao_loc[j0];
+        naok = ao_loc[k1] - ao_loc[k0];
+        mat = numpy.ndarray((naoi*naoj, naok, comp), numpy.double,
+                            buffer=out, order='F')
+        if cintopt is None:
+            intopt = gto.moleintor.make_cintopt(atm, bas, env, intor)
+        else:
+            intopt = cintopt
+        drv = libcgto.GTOnr3c_drv
+        drv(_fpointer(intor), _fpointer('RInr3c_fill_s1'),
+            mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+            (ctypes.c_int*6)(*(shls_slice[:6])),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
 
-    if aosym in ('s1'):
-        fill = _fpointer('RIfill_s1_auxe2')
-        ij_count = naoi * naoj
-    else:
-        fill = _fpointer('RIfill_s2ij_auxe2')
-        ij_count = iloc[-1]*(iloc[-1]+1)//2 - iloc[0]*(iloc[0]+1)//2
-    if comp == 1:
-        shape = (ij_count,naoaux)
-    else:
-        shape = (comp,ij_count,naoaux)
-    if out is None:
-        out = numpy.empty(shape)
-    else:
-        out = numpy.ndarray(shape, buffer=out)
+        if comp == 1:
+            return mat.reshape(-1,naok)
+        else:
+            return numpy.rollaxis(mat, -1, 0)
 
-    basrange = numpy.asarray(basrange, numpy.int32)
-    fintor = _fpointer(intor)
-    if cintopt is None:
-        intopt = _vhf.make_cintopt(atm, bas, env, intor)
     else:
-        intopt = cintopt
-    libri.RInr_3c2e_auxe2_drv(fintor, fill,
-                              out.ctypes.data_as(ctypes.c_void_p),
-                              ctypes.c_size_t(ijkoff),
-                              ctypes.c_int(naoj), ctypes.c_int(naoaux),
-                              basrange.ctypes.data_as(ctypes.c_void_p),
-                              iloc.ctypes.data_as(ctypes.c_void_p),
-                              jloc.ctypes.data_as(ctypes.c_void_p),
-                              kloc.ctypes.data_as(ctypes.c_void_p),
-                              ctypes.c_int(comp), intopt,
-                              atm.ctypes.data_as(ctypes.c_void_p), natm,
-                              bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                              env.ctypes.data_as(ctypes.c_void_p))
-    if cintopt is None:
-        libri.CINTdel_optimizer(ctypes.byref(intopt))
-    return out
+        return gto.moleintor.getints3c(intor, atm, bas, env, shls_slice, comp,
+                                       aosym, ao_loc, cintopt, out)
 
-def totcart(bas):
-    return ((bas[:,gto.ANG_OF]+1) * (bas[:,gto.ANG_OF]+2)//2 *
-            bas[:,gto.NCTR_OF]).sum()
-def totspheric(bas):
-    return ((bas[:,gto.ANG_OF]*2+1) * bas[:,gto.NCTR_OF]).sum()
-def make_loc(shl0, shlc, bas, cart=False):
-    l = bas[shl0:shl0+shlc,gto.ANG_OF]
-    if cart:
-        dims = (l+1)*(l+2)//2 * bas[shl0:shl0+shlc,gto.NCTR_OF]
-    else:
-        dims = (l*2+1) * bas[shl0:shl0+shlc,gto.NCTR_OF]
-    loc = numpy.empty(shlc+1, dtype=numpy.int32)
-    loc[0] = 0
-    dims.cumsum(dtype=numpy.int32, out=loc[1:])
-    return loc

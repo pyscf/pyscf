@@ -41,19 +41,14 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 # Please refer to the treatment in direct_spin1.absorb_h1e
 # the input fcivec should be symmetrized
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
-    assert(fcivec.flags.c_contiguous)
+    fcivec = numpy.asarray(fcivec, order='C')
     if not list(orbsym):
         return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
-        link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    na,nlink,_ = link_index.shape
+    link_index = direct_spin0._unpack(norb, nelec, link_index)
+    na, nlink = link_index.shape[:2]
+    assert(fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
 
     eri, link_index, dimirrep = \
@@ -68,7 +63,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
                                      link_index.ctypes.data_as(ctypes.c_void_p),
                                      dimirrep.ctypes.data_as(ctypes.c_void_p),
                                      ctypes.c_int(len(dimirrep)))
-    return pyscf.lib.transpose_sum(ci1, inplace=True)
+    return pyscf.lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
@@ -176,6 +171,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
         ci0.append(x.ravel())
+
     return ci0
 
 

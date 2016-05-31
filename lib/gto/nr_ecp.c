@@ -14,7 +14,7 @@
 #define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define CUTOFF          460  // ~ 1e200
-#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-12*fabs(y))
+#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-10*fabs(y) || fabs(x-y) < 1e-10)
 #define SQUARE(r)       (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define CART_CUM        (455+1) // upto l = 12
 #define K_TAYLOR_MAX    7
@@ -24,8 +24,8 @@
 #define MAX(X,Y)        (X)>(Y)?(X):(Y)
 
 // Held in env, to get *ecpbas, necpbas
-#define PTR_ECPBAS_OFFSET       8
-#define PTR_NECPBAS             9
+#define PTR_ECPBAS_OFFSET       18
+#define PTR_NECPBAS             19
 
 
 // for radial grids

@@ -5,12 +5,14 @@
 import unittest
 import tempfile
 import numpy
+import scipy.linalg
 import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import df
+from pyscf.df import _ri
 
 mol = gto.Mole()
 mol.build(
@@ -28,11 +30,8 @@ atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
 
 class KnowValues(unittest.TestCase):
     def test_aux_e2(self):
-        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1')
         nao = mol.nao_nr()
         naoaux = auxmol.nao_nr()
-        j3c = j3c.reshape(nao,nao,naoaux)
-
         eri0 = numpy.empty((nao,nao,naoaux))
         pi = 0
         for i in range(mol.nbas):
@@ -48,21 +47,30 @@ class KnowValues(unittest.TestCase):
                     pk += dk
                 pj += dj
             pi += di
-        self.assertTrue(numpy.allclose(eri0, j3c))
+
+        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1')
+        self.assertTrue(numpy.allclose(eri0, j3c.reshape(nao,nao,naoaux)))
+
+        idx = numpy.tril_indices(nao)
+        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s2ij')
+        self.assertTrue(numpy.allclose(eri0[idx], j3c))
 
     def test_aux_e2_diff_bra_ket(self):
         mol1 = mol.copy()
         mol1.basis = 'sto3g'
         mol1.build(0, 0, verbose=0)
-        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1',
-                               mol1=mol1)
+        atm1, bas1, env1 = gto.conc_env(atm, bas, env,
+                                        mol1._atm, mol1._bas, mol1._env)
+        ao_loc = gto.moleintor.make_loc(bas1, 'cint3c2e_sph')
+        shls_slice = (0, mol.nbas,
+                      mol.nbas+auxmol.nbas, mol.nbas+auxmol.nbas+mol1.nbas,
+                      mol.nbas, mol.nbas+auxmol.nbas)
+        j3c = _ri.nr_auxe2('cint3c2e_sph', atm1, bas1, env1, shls_slice,
+                           ao_loc, 's1', 1)
+
         nao = mol.nao_nr()
         naoj = mol1.nao_nr()
         naoaux = auxmol.nao_nr()
-        j3c = j3c.reshape(nao,naoj,naoaux)
-        atm1, bas1, env1 = gto.conc_env(atm, bas, env,
-                                        mol1._atm, mol1._bas, mol1._env)
-
         eri0 = numpy.empty((nao,naoj,naoaux))
         pi = 0
         for i in range(mol.nbas):
@@ -78,9 +86,9 @@ class KnowValues(unittest.TestCase):
                     pk += dk
                 pj += dj
             pi += di
-        self.assertTrue(numpy.allclose(eri0, j3c))
+        self.assertTrue(numpy.allclose(eri0.reshape(-1,naoaux), j3c))
 
-    def test_2c2e(self):
+    def test_cholesky_eri(self):
         j2c = df.incore.fill_2c2e(mol, auxmol)
         eri0 = numpy.empty_like(j2c)
         pi = 0
@@ -139,6 +147,19 @@ class KnowValues(unittest.TestCase):
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0.reshape(naux,-1)))
 
+        cderi0 = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_ip1_sph',
+                                  aosym='s1', comp=3)
+        j2c = df.incore.fill_2c2e(mol, auxmol)
+        low = scipy.linalg.cholesky(j2c, lower=True)
+        cderi0 = [scipy.linalg.solve_triangular(low, j3c.T, lower=True)
+                  for j3c in cderi0]
+        nao = mol.nao_nr()
+        df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
+                           int3c='cint3c2e_ip1_sph', aosym='s1', int2c='cint2c2e_sph',
+                           comp=3, max_memory=.05, ioblk_size=.02)
+        with h5py.File(ftmp.name) as feri:
+            self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
+
     def test_r_incore(self):
         j3c = df.r_incore.aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1')
         nao = mol.nao_2c()
@@ -166,6 +187,21 @@ class KnowValues(unittest.TestCase):
         for i in range(naoaux):
             j3c[:,:,i] = lib.unpack_tril(eri1[:,i])
         self.assertTrue(numpy.allclose(eri0, j3c))
+
+    def test_ao2mo(self):
+        dfobj = df.DF(mol)
+        dfobj.build()
+        cderi = dfobj._cderi
+
+        nao = mol.nao_nr()
+        eri0 = ao2mo.restore(8, numpy.dot(cderi.T, cderi), nao)
+        numpy.random.seed(1)
+        mos = numpy.random.random((nao,nao*10))
+        mos = (mos[:,:5], mos[:,5:11], mos[:,3:9], mos[:,2:4])
+        mo_eri0 = ao2mo.kernel(eri0, mos)
+
+        mo_eri1 = dfobj.ao2mo(mos)
+        self.assertTrue(numpy.allclose(mo_eri0, mo_eri1))
 
 
 if __name__ == "__main__":

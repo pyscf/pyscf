@@ -24,11 +24,11 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     if shielding_nuc is None:
         shielding_nuc = range(1, mol.natm+1)
     if gauge_orig is not None:
-        mol.set_common_origin_(gauge_orig)
+        mol.set_common_origin(gauge_orig)
 
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         if gauge_orig is None:
             h11 = mol.intor('cint1e_giao_a11part_sph', 9)
         else:
@@ -54,7 +54,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     para_vir = numpy.zeros((len(shielding_nuc),3,3))
     para_occ = numpy.zeros((len(shielding_nuc),3,3))
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin_(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p>
         h01 = mol.intor_asymmetric('cint1e_ia01p_sph', 3)
         # *2 for doubly occupied orbitals
@@ -81,7 +81,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         log.debug('First-order GIAO Fock matrix')
         h1 += make_h10giao(mol, dm0)
     else:
-        mol.set_common_origin_(gauge_orig)
+        mol.set_common_origin(gauge_orig)
         h1 = .5 * mol.intor('cint1e_cg_irxp_sph', 3)
     return h1
 
@@ -186,7 +186,7 @@ class NMR(pyscf.lib.StreamObject):
             self.check_sanity()
 
         facppm = 1e6/param.LIGHTSPEED**2
-        msc_para, para_vir, para_occ = [x*facppm for x in self.para_(mo10=mo1)]
+        msc_para, para_vir, para_occ = [x*facppm for x in self.para(mo10=mo1)]
         msc_dia = self.dia() * facppm
         e11 = msc_para + msc_dia
 
@@ -211,10 +211,8 @@ class NMR(pyscf.lib.StreamObject):
         if dm0 is None: dm0 = self._scf.make_rdm1()
         return dia(mol, dm0, gauge_orig, shielding_nuc)
 
-    def para(self, *args, **kwargs):
-        return self.para_(*args, **kwargs)
-    def para_(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
-              shielding_nuc=None):
+    def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
+             shielding_nuc=None):
         if mol is None:           mol = self.mol
         if mo_coeff is None:      mo_coeff = self._scf.mo_coeff
         if mo_occ is None:        mo_occ = self._scf.mo_occ

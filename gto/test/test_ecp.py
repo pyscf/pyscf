@@ -25,7 +25,7 @@ class KnowValues(unittest.TestCase):
                     ecp = {'Na':'lanl2dz'},
                     verbose=0)
         mf = scf.RHF(mol)
-        self.assertAlmostEqual(mf.kernel(), -0.45002315562861461, 10)
+        self.assertAlmostEqual(mf.kernel(), -0.45002331958981223, 10)
 
 
 if __name__ == '__main__':

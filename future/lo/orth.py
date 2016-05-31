@@ -45,11 +45,13 @@ def pre_orth_ao(mol, method='ANO'):
     the ANO/MINAO projected basis or fraction-averaged RHF'''
     if method.upper() in ('ANO', 'MINAO'):
 # Use ANO/MINAO basis to define the strongly occupied set
-        return pre_orth_project_ano(mol, method)
+        return project_to_atomic_orbitals(mol, method)
     else:
         return pre_orth_ao_atm_scf(mol)
 
-def pre_orth_project_ano(mol, basname):
+def project_to_atomic_orbitals(mol, basname):
+    '''projected AO = |bas><bas|ANO>
+    '''
     import pyscf.scf
     def search_atm_l(atm, l):
         idx = []
@@ -118,6 +120,7 @@ def pre_orth_project_ano(mol, basname):
         c[p0:p1,p0:p1] = ano
         p0 = p1
     return c
+pre_orth_project_ano = project_to_atomic_orbitals
 
 def pre_orth_ao_atm_scf(mol):
     from pyscf.scf import atom_hf
@@ -155,17 +158,17 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
 
     if pre_orth_ao is None:
 #        pre_orth_ao = numpy.eye(mol.nao_nr())
-        pre_orth_ao = pre_orth_project_ano(mol, 'ANO')
+        pre_orth_ao = project_to_atomic_orbitals(mol, 'ANO')
 
     if method.lower() == 'lowdin':
         s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
         c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method.lower() == 'nao':
-        c_orth = nao.nao(mol, scf_method)
+        c_orth = nao.nao(mol, scf_method, s)
     else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
           # orthogonalizing within each set
         weight = numpy.ones(pre_orth_ao.shape[0])
-        c_orth = nao._nao_sub(mol, weight, pre_orth_ao)
+        c_orth = nao._nao_sub(mol, weight, pre_orth_ao, s)
     # adjust phase
     for i in range(c_orth.shape[1]):
         if c_orth[i,i] < 0:

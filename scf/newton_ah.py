@@ -44,10 +44,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
-            mf.grids.build_()
+            mf.grids.build()
         hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel_(mol, mf.grids, mf.xc,
-                                                     mo_coeff, mo_occ, 0)
+        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                    mo_coeff, mo_occ, 0)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
     else:
         hyb = None
@@ -132,10 +132,10 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
-            mf.grids.build_()
+            mf.grids.build()
         hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel_(mol, mf.grids, mf.xc,
-                                                     mo_coeff, mo_occ, 1)
+        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                    mo_coeff, mo_occ, 1)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T),
         #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T))
         dm0 = None
@@ -374,8 +374,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
-        mo_energy, mo_tmp = mf.eig(fock, s1e)
-        mf.get_occ(mo_energy, mo_tmp)
+        if mf.verbose >= logger.DEBUG:
+            mo_energy, mo_tmp = mf.eig(fock, s1e)
+            mf.get_occ(mo_energy, mo_tmp)
 # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         e_tot = mf._scf.energy_tot(dm, h1e, vhf)
 
@@ -401,8 +402,12 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         jktot += jkcount
 
     rotaiter.close()
-    mo_energy, mo_coeff = mf.eig(fock, s1e)
-    mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    if mf.canonicalization:
+        logger.info(mf, 'Canonicalize SCF orbitals')
+        mo_energy, mo_coeff = mf.canonicalize(mo_coeff, mo_occ, fock)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    else:
+        mo_energy = mf.canonicalize(mo_coeff, mo_occ, fock)[0]
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
              imacro+1, e_tot, norm_gorb, jktot)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
@@ -411,11 +416,27 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 def newton(mf):
     import pyscf.scf
     from pyscf.mcscf import mc1step_symm
+    if mf.__class__.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf.__class__.__doc__
     class RHF(mf.__class__):
+        __doc__ = doc + \
+        '''
+        Attributes for Newton solver:
+            max_cycle_inner : int
+                AH iterations within eacy macro iterations. Default is 10
+            max_stepsize : int
+                The step size for orbital rotation.  Small step is prefered.  Default is 0.05.
+            canonicalization : bool
+                To control whether to canonicalize the orbitals optimized by
+                Newton solver.  Default is True.
+        '''
         def __init__(self):
             self._scf = mf
             self.max_cycle_inner = 10
             self.max_stepsize = .05
+            self.canonicalization = True
 
             self.ah_start_tol = 5.
             self.ah_start_cycle = 1
@@ -440,6 +461,7 @@ def newton(mf):
         def dump_flags(self):
             log = logger.Logger(self.stdout, self.verbose)
             log.info('\n')
+            self._scf.dump_flags()
             log.info('******** %s Newton solver flags ********', self._scf.__class__)
             log.info('SCF tol = %g', self.conv_tol)
             log.info('conv_tol_grad = %s',    self.conv_tol_grad)
@@ -474,7 +496,7 @@ def newton(mf):
             if mo_occ is None: mo_occ = self.mo_occ
             cput0 = (time.clock(), time.time())
 
-            self.build_(self.mol)
+            self.build(self.mol)
             self.dump_flags()
             self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -484,11 +506,14 @@ def newton(mf):
                            callback=self.callback, verbose=self.verbose)
 
             logger.timer(self, 'Second order SCF', *cput0)
-            self._finalize_()
+            self._finalize()
             return self.e_tot
 
         def from_dm(self, dm):
             '''Transform density matrix to the initial guess'''
+            if isinstance(dm, str):
+                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
+                dm = self.from_chk(dm, True)
             mol = self._scf.mol
             h1e = self._scf.get_hcore(mol)
             s1e = self._scf.get_ovlp(mol)
@@ -518,6 +543,7 @@ def newton(mf):
 
     if isinstance(mf, pyscf.scf.rohf.ROHF):
         class ROHF(RHF):
+            __doc__ = RHF.__doc__
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 mol = self._scf.mol
                 if mol.symmetry:
@@ -527,31 +553,18 @@ def newton(mf):
                             mol.symm_orb, mo_coeff, s=self.get_ovlp())
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
-            def get_fock_(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                          diis_start_cycle=None, level_shift_factor=None,
-                          damp_factor=None):
+            def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+                         diis_start_cycle=None, level_shift_factor=None,
+                         damp_factor=None):
                 fock = h1e + vhf
                 self._focka_ao = self._scf._focka_ao = fock[0]  # needed by ._scf.eig
                 self._fockb_ao = self._scf._fockb_ao = fock[1]  # needed by ._scf.eig
                 self._dm_ao = dm  # needed by .eig
                 return fock
-            get_fock = get_fock_
 
             def eig(self, fock, s1e):
-                dm = self._dm_ao
-                fc = (self._focka_ao + self._fockb_ao) * .5
-# Projector for core, open-shell, and virtual
-                nao = s1e.shape[0]
-                pc = numpy.dot(dm[1], s1e)
-                po = numpy.dot(dm[0]-dm[1], s1e)
-                pv = numpy.eye(nao) - numpy.dot(dm[0], s1e)
-                f  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
-                f += reduce(numpy.dot, (po.T, fc, po)) * .5
-                f += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-                f += reduce(numpy.dot, (po.T, self._fockb_ao, pc))
-                f += reduce(numpy.dot, (po.T, self._focka_ao, pv))
-                f += reduce(numpy.dot, (pv.T, fc, pc))
-                f = f + f.T
+                f = (self._focka_ao, self._fockb_ao)
+                f = pyscf.scf.rohf.get_roothaan_fock(f, self._dm_ao, s1e)
                 return self._scf.eig(f, s1e)
                 #fc = numpy.dot(fock[0], mo_coeff)
                 #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
@@ -560,6 +573,7 @@ def newton(mf):
 
     elif isinstance(mf, pyscf.scf.uhf.UHF):
         class UHF(RHF):
+            __doc__ = RHF.__doc__
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 mol = self._scf.mol
                 if mol.symmetry:

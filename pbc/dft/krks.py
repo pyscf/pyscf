@@ -22,7 +22,7 @@ class KRKS(pyscf.pbc.scf.khf.KRHF):
     def __init__(self, cell, kpts):
         pyscf.pbc.scf.khf.KRHF.__init__(self, cell, kpts)
         self.xc = 'LDA,VWN'
-        self.small_rho_cutoff = 0  # FIX rks.get_veff_
+        self.small_rho_cutoff = 0  # FIX rks.get_veff
         self._numint = numint._KNumInt(kpts) # use periodic images of AO in
                                              # numerical integration
         self._ecoul = 0
@@ -51,11 +51,11 @@ class KRKS(pyscf.pbc.scf.khf.KRHF):
 
         dm = np.array(dm, np.complex128) # e.g. if passed initial DM
 
-        #vhf = pyscf.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
-        #                              hermi)
+        #vhf = pyscf.dft.rks.get_veff(self, cell, dm, dm_last, vhf_last,
+        #                             hermi)
         # This version correctly updates _exc and _ecoul
-        vhf = pyscf.pbc.dft.rks.get_veff_(self, cell, dm, dm_last, vhf_last,
-                                          hermi, kpts, kpt_band)
+        vhf = pyscf.pbc.dft.rks.get_veff(self, cell, dm, dm_last, vhf_last,
+                                         hermi, kpts, kpt_band)
         return vhf
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):

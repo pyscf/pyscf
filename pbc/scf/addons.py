@@ -3,10 +3,10 @@
 from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf.pbc.scf import scfint
+from pyscf.pbc import gto as pbcgto
 
 
-def project_mo_nr2nr(cell1, mo1, cell2):
+def project_mo_nr2nr(cell1, mo1, cell2, kpt=None):
     r''' Project orbital coefficients
 
     .. math::
@@ -17,8 +17,8 @@ def project_mo_nr2nr(cell1, mo1, cell2):
 
         C2 = S^{-1}<AO2|AO1> C1
     '''
-    s22 = scfint.get_ovlp(cell2)
-    s21 = scfint.get_int1e_cross('cint1e_ovlp_sph', cell2, cell1)
+    s22 = cell2.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=kpt)
+    s21 = pbcgto.intor_cross('cint1e_ovlp_sph', cell2, cell1, kpt=kpt)
     mo2 = numpy.dot(s21, mo1)
     return scipy.linalg.cho_solve(scipy.linalg.cho_factor(s22), mo2)
 

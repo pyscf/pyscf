@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import sys
+import copy
 from functools import reduce
 import numpy
 import pyscf.lib
@@ -10,7 +12,7 @@ from pyscf import symm
 from pyscf.scf import hf
 
 
-def frac_occ(mf, tol=1e-3):
+def frac_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
@@ -32,12 +34,12 @@ def frac_occ(mf, tol=1e-3):
             logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return get_occ
-def frac_occ_(mf, tol=1e-3):
-    mf.get_occ = frac_occ(mf, tol)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def frac_occ(mf, tol=1e-3):
+    return frac_occ_(copy.copy(mf), tol)
 
-def dynamic_occ(mf, tol=1e-3):
+def dynamic_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
@@ -56,12 +58,12 @@ def dynamic_occ(mf, tol=1e-3):
             logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return get_occ
-def dynamic_occ_(mf, tol=1e-3):
-    mf.get_occ = dynamic_occ(mf, tol)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def dynamic_occ(mf, tol=1e-3):
+    return dynamic_occ_(copy.copy(mf), tol)
 
-def float_occ(mf):
+def float_occ_(mf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
     from pyscf.scf import uhf
     assert(isinstance(mf, uhf.UHF))
@@ -76,12 +78,12 @@ def float_occ(mf):
                         mf.nelec[0], mf.nelec[1], n_a, n_b)
             mf.nelec = (n_a, n_b)
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
-    return get_occ
-def float_occ_(mf):
-    mf.get_occ = float_occ(mf)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def float_occ(mf):
+    return float_occ_(copy.copy(mf))
 
-def symm_allow_occ(mf, tol=1e-3):
+def symm_allow_occ_(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
 break symmetry as the occupied orbitals'''
     def get_occ(mo_energy, mo_coeff=None):
@@ -111,12 +113,12 @@ break symmetry as the occupied orbitals'''
                     mo_energy[nocc-1], mo_energy[nocc])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
-    return get_occ
-def symm_allow_occ_(mf, tol=1e-3):
-    mf.get_occ = symm_allow_occ(mf, tol)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def symm_allow_occ(mf, tol=1e-3):
+    return symm_allow_occ_(copy.copy(mf), tol)
 
-def follow_state(mf, occorb=None):
+def follow_state_(mf, occorb=None):
     occstat = [occorb]
     old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
@@ -133,12 +135,12 @@ def follow_state(mf, occorb=None):
             logger.debug(mf, '  mo_energy = %s', mo_energy)
         occstat[0] = mo_coeff[:,mo_occ>0]
         return mo_occ
-    return get_occ
-def follow_state_(mf, occorb=None):
-    mf.get_occ = follow_state_(mf, occorb)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def follow_state(mf, occorb=None):
+    return follow_state_(copy.copy(mf), occorb)
 
-def mom_occ(mf, occorb, setocc):
+def mom_occ_(mf, occorb, setocc):
     '''Use maximum overlap method to determine occupation number for each orbital in every
     iteration.'''
     assert(isinstance(mf, pyscf.scf.uhf.UHF))
@@ -171,10 +173,10 @@ def mom_occ(mf, occorb, setocc):
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
         return mo_occ
-    return get_occ
-def mom_occ_(mf, occorb=None, setocc=None):
-    mf.get_occ = mom_occ_(mf, occorb, setocc)
-    return mf.get_occ
+    mf.get_occ = get_occ
+    return mf
+def mom_occ(mf, occorb=None, setocc=None):
+    return mom_occ_(copy.copy(mf), occorb, setocc)
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients
@@ -203,21 +205,10 @@ def project_mo_nr2r(mol1, mo1, mol2):
     return pyscf.lib.cho_solve(s22, mo2)
 
 def project_mo_r2r(mol1, mo1, mol2):
-    nbas1 = len(mol1._bas)
-    nbas2 = len(mol2._bas)
-    atm, bas, env = mole.conc_env(mol2._atm, mol2._bas, mol2._env,
-                                  mol1._atm, mol1._bas, mol1._env)
-    bras = kets = range(nbas2)
-    s22 = moleintor.getints('cint1e_ovlp', atm, bas, env,
-                            bras, kets, comp=1, hermi=1)
-    t22 = moleintor.getints('cint1e_spsp', atm, bas, env,
-                            bras, kets, comp=1, hermi=1)
-    bras = range(nbas2)
-    kets = range(nbas2, nbas1+nbas2)
-    s21 = moleintor.getints('cint1e_ovlp', atm, bas, env,
-                            bras, kets, comp=1, hermi=0)
-    t21 = moleintor.getints('cint1e_spsp', atm, bas, env,
-                            bras, kets, comp=1, hermi=0)
+    s22 = mol2.intor_symmetric('cint1e_ovlp')
+    t22 = mol2.intor_symmetric('cint1e_spsp')
+    s21 = mole.intor_cross('cint1e_ovlp', mol2, mol1)
+    t21 = mole.intor_cross('cint1e_spsp', mol2, mol1)
     n2c = s21.shape[1]
     pl = pyscf.lib.cho_solve(s22, s21)
     ps = pyscf.lib.cho_solve(t22, t21)
@@ -277,4 +268,135 @@ def remove_linear_dep(mf):
 def remove_linear_dep_(mf):
     mf.eig = remove_linear_dep(mf)
     return mf
+
+def convert_to_uhf(mf, out=None):
+    '''Convert the given mean-field object to the corresponding unrestricted
+    HF/KS object
+    '''
+    from pyscf import scf
+    from pyscf import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
+            mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
+            mf1.mo_occ = (numpy.asarray(mf.mo_occ>0, dtype=numpy.double),
+                          numpy.asarray(mf.mo_occ==2, dtype=numpy.double))
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, scf.uhf.UHF))
+        if isinstance(mf, scf.uhf.UHF):
+            out.__dict.__update(mf)
+        else:  # RHF
+            out = update_mo_(mf, out)
+        return out
+
+    else:
+        hf_class = {scf.hf.RHF        : scf.uhf.UHF,
+                    scf.rohf.ROHF     : scf.uhf.UHF,
+                    scf.hf_symm.RHF   : scf.uhf_symm.UHF,
+                    scf.hf_symm.ROHF  : scf.uhf_symm.UHF}
+        dft_class = {dft.rks.RKS      : dft.uks.UKS,
+                     dft.roks.ROKS    : dft.uks.UKS,
+                     dft.rks_symm.RKS : dft.uks_symm.UKS,
+                     dft.rks_symm.ROKS: dft.uks_symm.UKS}
+
+        if isinstance(mf, scf.uhf.UHF):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in hf_class:
+            out = update_mo_(mf, scf.UHF(mf.mol))
+
+        elif mf.__class__ in dft_class:
+            out = update_mo_(mf, dft.UKS(mf.mol))
+
+        else:
+            msg =('Warn: Converting a decorated RHF object to the decorated '
+                  'UHF object is unsafe.\nIt is recommended to create a '
+                  'decorated UHF object explicitly and pass it to '
+                  'convert_to_uhf function eg:\n'
+                  '    convert_to_uhf(mf, out=density_fit(scf.UHF(mol)))\n')
+            sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in hf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+                elif cls in dft_class:
+                    mronew = mro[:i] + dft_class[cls].__mro__
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, pyscf.lib.overwrite_mro(mf, mronew))
+
+        return out
+
+def convert_to_rhf(mf, out=None):
+    '''Convert the given mean-field object to the corresponding restricted
+    HF/KS object
+    '''
+    from pyscf import scf
+    from pyscf import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            mf1.mo_energy = mf.mo_energy[0]
+            mf1.mo_coeff =  mf.mo_coeff[0]
+            mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, scf.hf.RHF))
+        if isinstance(mf, scf.hf.RHF):
+            out.__dict.__update(mf)
+        else:  # UHF
+            out = update_mo_(mf, out)
+        return out
+
+    else:
+        hf_class = {scf.uhf.UHF      : scf.rohf.ROHF,
+                    scf.uhf_symm.UHF : scf.hf_symm.ROHF}
+        dft_class = {dft.uks.UKS     : dft.roks.ROKS,
+                     dft.uks_symm.UKS: dft.rks_symm.ROKS}
+
+        if isinstance(mf, scf.hf.RHF):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in hf_class:
+            out = update_mo_(mf, scf.RHF(mf.mol))
+
+        elif mf.__class__ in dft_class:
+            out = update_mo_(mf, dft.RKS(mf.mol))
+
+        else:
+            msg =('Warn: Converting a decorated UHF object to the decorated '
+                  'RHF object is unsafe.\nIt is recommended to create a '
+                  'decorated RHF object explicitly and pass it to '
+                  'convert_to_rhf function eg:\n'
+                  '    convert_to_rhf(mf, out=density_fit(scf.RHF(mol)))\n')
+            sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in hf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+                elif cls in dft_class:
+                    mronew = mro[:i] + dft_class[cls].__mro__
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, pyscf.lib.overwrite_mro(mf, mronew))
+
+        return out
 

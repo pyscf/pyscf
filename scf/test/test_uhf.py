@@ -168,6 +168,11 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.trace(x[0]), mf.nelec[0]*1.000000000, 9)
         self.assertAlmostEqual(numpy.trace(x[0]), mf.nelec[1]*1.000000000, 9)
 
+    def test_dip_moment(self):
+        mf = scf.UHF(mol)
+        mf.scf()
+        dip = mf.dip_moment(unit_symbol='au')
+        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985])) 
 
 if __name__ == "__main__":
     print("Full Tests for uhf")

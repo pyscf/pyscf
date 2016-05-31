@@ -3,13 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from functools import reduce
-import numpy
-from pyscf import gto, scf, ao2mo, fci
-
 '''
 Energy curve by FCI
 '''
+
+from functools import reduce
+import numpy
+from pyscf import gto, scf, ao2mo, fci
 
 for r in numpy.arange(2.4, 5.1, .2):
     mol = gto.M(

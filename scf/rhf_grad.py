@@ -166,7 +166,7 @@ class Gradients(pyscf.lib.StreamObject):
 
     def _grad_rinv(self, mol, ia):
         r''' for given atom, <|\nabla r^{-1}|> '''
-        mol.set_rinv_origin_(mol.atom_coord(ia))
+        mol.set_rinv_origin(mol.atom_coord(ia))
         return -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
 
     grad_elec = grad_elec

@@ -219,10 +219,10 @@ class CASCI(pyscf.lib.StreamObject):
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         logger.note(self, 'CASCI E = %.15g', self.e_tot)
-        self._finalize_()
+        self._finalize()
         return self.e_tot, e_cas, self.ci
 
-    def _finalize_(self):
+    def _finalize(self):
         pass
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
@@ -314,8 +314,8 @@ class CASCI(pyscf.lib.StreamObject):
 
 
 if __name__ == '__main__':
-    import gto
-    import scf
+    from pyscf import gto
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"

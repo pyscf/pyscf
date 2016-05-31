@@ -66,7 +66,7 @@ mc.kernel()
 #
 # Here by assigning symmetry=1, mol.irrep_name, mol.irrep_id and mol.symm_orb
 # (see pyscf/gto/mole.py) are initialized in the mol object.  They are the
-# symbols, IDs, and symmetry-adapted-basis.
+# irrep symbols, IDs, and symmetry-adapted-basis.
 #
 mol = gto.M(atom=['H 0 0 %f'%i for i in range(10)], unit='Bohr',
             basis='ccpvtz', symmetry=1)

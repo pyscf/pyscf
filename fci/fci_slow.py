@@ -17,16 +17,16 @@ def contract_1e(f1e, fcivec, norb, nelec):
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    fcivec = fcivec.reshape(na,nb)
+    ci0 = fcivec.reshape(na,nb)
     t1 = numpy.zeros((norb,norb,na,nb))
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
-            t1[a,i,str1] += sign * fcivec[str0]
+            t1[a,i,str1] += sign * ci0[str0]
     for str0, tab in enumerate(link_indexb):
         for a, i, str1, sign in tab:
-            t1[a,i,:,str1] += sign * fcivec[:,str0]
-    fcinew = numpy.dot(f1e.reshape(-1), t1.reshape(-1,na))
-    return fcinew
+            t1[a,i,:,str1] += sign * ci0[:,str0]
+    fcinew = numpy.dot(f1e.reshape(-1), t1.reshape(-1,na*nb))
+    return fcinew.reshape(fcivec.shape)
 
 
 def contract_2e(eri, fcivec, norb, nelec, opt=None):
@@ -39,25 +39,75 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    fcivec = fcivec.reshape(na,nb)
+    ci0 = fcivec.reshape(na,nb)
     t1 = numpy.zeros((norb,norb,na,nb))
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
-            t1[a,i,str1] += sign * fcivec[str0]
+            t1[a,i,str1] += sign * ci0[str0]
     for str0, tab in enumerate(link_indexb):
         for a, i, str1, sign in tab:
-            t1[a,i,:,str1] += sign * fcivec[:,str0]
+            t1[a,i,:,str1] += sign * ci0[:,str0]
     t1 = numpy.dot(eri.reshape(norb*norb,-1), t1.reshape(norb*norb,-1))
     t1 = t1.reshape(norb,norb,na,nb)
-    fcinew = numpy.zeros_like(fcivec)
+    fcinew = numpy.zeros_like(ci0)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             fcinew[str1] += sign * t1[a,i,str0]
     for str0, tab in enumerate(link_indexb):
         for a, i, str1, sign in tab:
             fcinew[:,str1] += sign * t1[a,i,:,str0]
-    return fcinew
+    return fcinew.reshape(fcivec.shape)
 
+def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    u_aa, u_ab, u_bb = u
+
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    fcivec = fcivec.reshape(na,nb)
+    t1a = numpy.zeros((norb,na,nb))
+    t1b = numpy.zeros((norb,na,nb))
+    fcinew = numpy.zeros_like(fcivec)
+
+    for addr, s in enumerate(strsa):
+        for i in range(norb):
+            if s & (1<<i):
+                t1a[i,addr] += fcivec[addr]
+    for addr, s in enumerate(strsb):
+        for i in range(norb):
+            if s & (1<<i):
+                t1b[i,:,addr] += fcivec[:,addr]
+
+    if u_aa != 0:
+        # u * n_alpha^+ n_alpha
+        for addr, s in enumerate(strsa):
+            for i in range(norb):
+                if s & (1<<i):
+                    fcinew[addr] += t1a[i,addr] * u_aa
+    if u_ab != 0:
+        # u * n_alpha^+ n_beta
+        for addr, s in enumerate(strsa):
+            for i in range(norb):
+                if s & (1<<i):
+                    fcinew[addr] += t1b[i,addr] * u_ab
+        # u * n_beta^+ n_alpha
+        for addr, s in enumerate(strsb):
+            for i in range(norb):
+                if s & (1<<i):
+                    fcinew[:,addr] += t1a[i,:,addr] * u_ab
+    if u_bb != 0:
+        # u * n_beta^+ n_beta
+        for addr, s in enumerate(strsb):
+            for i in range(norb):
+                if s & (1<<i):
+                    fcinew[:,addr] += t1b[i,:,addr] * u_bb
+    return fcinew
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
@@ -198,4 +248,3 @@ if __name__ == '__main__':
 
     e1 = kernel(h1e, eri, norb, nelec)
     print(e1, e1 - -7.9766331504361414)
-
