@@ -223,6 +223,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     fintor = pyscf.gto.moleintor._fpointer(intor)
     intopt = lib.c_null_ptr()
 
+    gamma_point = kpt is None or np.allclose(kpt, 0)
     atm, bas, env = pyscf.gto.conc_env(cell1._atm, cell1._bas, cell1._env,
                                        cell2._atm, cell2._bas, cell2._env)
     atm = np.asarray(atm, dtype=np.int32)
@@ -252,7 +253,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
 
-        if kpt is None or abs(kpt).sum() < 1e-12:
+        if gamma_point:
             out += buf
         else:
             out += buf * np.exp(1j*np.dot(kpt, L))

@@ -20,7 +20,7 @@ except:
     memory_cache = lambda f: f
 
 @memory_cache
-def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
+def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
             non0tab=None, out=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
@@ -52,9 +52,10 @@ def eval_ao(cell, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
         pyscf.dft.numint.eval_ao
 
     '''
+    gamma_point = kpt is None or numpy.allclose(kpt, 0)
     aoR = 0
     for L in tools.get_lattice_Ls(cell, cell.nimgs):
-        if kpt is None or numpy.all(kpt==0):
+        if gamma_point:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             shl_slice, non0tab, out, verbose)
         else:
@@ -291,7 +292,7 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
 
 
 def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
-               max_memory=2000, verbose=None, kpt=None, kpt_band=None):
+               max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
     Note: This is a replica of pyscf.dft.numint.nr_rks_vxc with kpts added.
@@ -401,11 +402,11 @@ class _NumInt(pyscf.dft.numint._NumInt):
     '''Generalization of pyscf's _NumInt class for a single k-point shift and
     periodic images.
     '''
-    def __init__(self, kpt=None):
+    def __init__(self, kpt=numpy.zeros(3)):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
 
-    def eval_ao(self, mol, coords, kpt=None, deriv=0, relativity=0, shl_slice=None,
+    def eval_ao(self, mol, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
                 non0tab=None, out=None, verbose=None):
         return eval_ao(mol, coords, kpt, deriv, relativity, shl_slice,
                        non0tab, out, verbose)
@@ -419,7 +420,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
 
     def nr_rks(self, mol, grids, xc_code, dms, hermi=1,
-               max_memory=2000, verbose=None, kpt=None, kpt_band=None):
+               max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
@@ -444,9 +445,9 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     '''Generalization of pyscf's _NumInt class for k-point sampling and
     periodic images.
     '''
-    def __init__(self, kpts=None):
+    def __init__(self, kpts=numpy.zeros((1,3))):
         pyscf.dft.numint._NumInt.__init__(self)
-        self.kpts = kpts
+        self.kpts = numpy.reshape(kpts, (-1,3))
 
     def eval_ao(self, mol, coords, kpts=None, deriv=0, relativity=0,
                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):

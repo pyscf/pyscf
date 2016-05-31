@@ -295,12 +295,9 @@ class KRHF(pbchf.RHF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpts, exxdiv='ewald'):
+    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
         pbchf.RHF.__init__(self, cell, exxdiv=exxdiv)
-        if kpts is None:
-            self.kpts = np.zeros((1,3))
-        else:
-            self.kpts = np.asarray(kpts).reshape(-1,3)
+        self.kpts = np.reshape(kpts, (-1,3))
 
         self.exx_built = False
         self._keys = self._keys.union(['exx_built', 'kpts'])

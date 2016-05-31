@@ -86,7 +86,6 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         rr = np.einsum('ix,ix->i', dr, dr)
         mask |= rr < r_cutoff**2
     scell._atm = scell._atm[mask]
-    scell.natm = len(scell._atm)
     logger.debug(cell, 'r_cutoff %.9g  natm = %d', r_cutoff, scell.natm)
 
     atom_grids_tab = dft.gen_grid.gen_atomic_grids(scell, atom_grid, radi_method,

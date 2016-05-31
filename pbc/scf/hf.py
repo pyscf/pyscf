@@ -207,12 +207,12 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     vjR_k2 = get_vjR(cell, dm, aoR_k2)
     vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
+    #:vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
+    #:                                vkR_k1k2, aoR_k2)
     vkR_k1k2 = get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
     aoR_dm_k2 = np.dot(aoR_k2, dm)
     tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
     vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
-    #vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
-    #                                vkR_k1k2, aoR_k2)
     return vj, vk
 
 
@@ -236,7 +236,8 @@ def get_vjR(cell, dm, aoR):
 
 
 def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
-    '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r).
+    '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r)
+    where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
 
     Kwargs:
         kpt1, kpt2 : (3,) ndarray
