@@ -81,8 +81,9 @@ def get_t_pw(cell, kpt=np.zeros(3)):
     aokG = np.empty(aoR.shape, np.complex128)
     TaokG = np.empty(aoR.shape, np.complex128)
     nao = cell.nao_nr()
+    expmikr = np.exp(-1j*np.dot(kpt,coords.T)) 
     for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
+        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, expmikr)
         TaokG[:,i] = 0.5*abskG2*aokG[:,i]
 
     ngs = len(aokG)
@@ -126,9 +127,10 @@ def get_pp_o0(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
+    expmikr = np.exp(-1j*np.dot(kpt,coords.T)) 
     aokG = np.empty(aoR.shape, np.complex128)
     for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
+        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, expmikr)
     ngs = len(aokG)
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
@@ -167,9 +169,10 @@ def get_pp_o1(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
+    expmikr = np.exp(-1j*np.dot(kpt,coords.T)) 
     aokG = np.empty(aoR.shape, np.complex128)
     for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
+        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, expmikr)
     ngs = len(aokG)
 
     fakemol = pyscf.gto.Mole()
@@ -341,13 +344,14 @@ def get_vkR_(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
 
     coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
 
+    expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T)) 
     vR = np.zeros((ngs,nao,nao), dtype=np.complex128)
     for i in range(nao):
         for j in range(nao):
             rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
-            rhoG = tools.fftk(rhoR, cell.gs, coords, kpt1-kpt2)
+            rhoG = tools.fftk(rhoR, cell.gs, expmikr)
             vG = coulG*rhoG
-            vR[:,i,j] = tools.ifftk(vG, cell.gs, coords, kpt1-kpt2)
+            vR[:,i,j] = tools.ifftk(vG, cell.gs, expmikr.conj())
     return vR
 
 

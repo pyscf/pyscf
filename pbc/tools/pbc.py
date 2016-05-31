@@ -3,6 +3,8 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 
+#import pyfftw
+
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
 
@@ -29,8 +31,9 @@ def fft(f, gs):
     ngs = 2*np.asarray(gs)+1
     f3d = np.reshape(f, ngs)
     g3d = np.fft.fftn(f3d)
+    #pyfftw.interfaces.cache.enable()
+    #g3d = pyfftw.interfaces.numpy_fft.fftn(f3d)
     return np.ravel(g3d)
-
 
 def ifft(g, gs):
     '''Perform the 3D inverse FFT from reciprocal (G) space to real (R) space.
@@ -54,23 +57,25 @@ def ifft(g, gs):
     ngs = 2*np.asarray(gs)+1
     g3d = np.reshape(g, ngs)
     f3d = np.fft.ifftn(g3d)
+    #pyfftw.interfaces.cache.enable()
+    #f3d = pyfftw.interfaces.numpy_fft.ifftn(g3d)
     return np.ravel(f3d)
 
 
-def fftk(f, gs, r, k):
+def fftk(f, gs, expmikr):
     '''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
 
     fk(k+G) = \sum_r fk(r) e^{-i(k+G)r} = \sum_r [f(k)e^{-ikr}] e^{-iGr}
     '''
-    return fft(f*np.exp(-1j*np.dot(k,r.T)), gs)
+    return fft(f*expmikr, gs)
 
 
-def ifftk(g, gs, r, k):
+def ifftk(g, gs, expikr):
     '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
 
     fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
-    return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
+    return ifft(g, gs) * expikr
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None):
