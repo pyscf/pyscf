@@ -2,13 +2,13 @@ import numpy as np
 from pyscf.pbc import cc as pbccc
 
 def run_kccsd(mf):
-    cc = pbccc.KCCSD(mf, mf.kpts)
+    cc = pbccc.KCCSD(mf)
     cc.verbose = 7
     cc.ccsd()
     return cc
 
 def run_krccsd(mf):
-    cc = pbccc.KRCCSD(mf, mf.kpts)
+    cc = pbccc.KRCCSD(mf)
     cc.verbose = 7
     cc.ccsd()
     return cc
