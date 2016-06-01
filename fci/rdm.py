@@ -31,7 +31,7 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
@@ -56,7 +56,7 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 2: particle permutation symmetry
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
@@ -79,7 +79,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -110,7 +110,7 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -155,7 +155,7 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec
@@ -222,7 +222,7 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         neleca = nelecb = nelec//2
     else:
         neleca, nelecb = nelec

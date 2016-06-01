@@ -279,7 +279,7 @@ def contract_ss(fcivec, norb, nelec):
 
 
 def _unpack(nelec):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
         return neleca, nelecb

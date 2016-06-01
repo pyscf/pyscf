@@ -52,7 +52,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     '''
     neleca, nelecb = _unpack(nelec)
     orbsym = numpy.asarray(orbsym)
-    if not isinstance(orbsym[0], numpy.integer):
+    if not isinstance(orbsym[0], numpy.number):
         raise RuntimeError('TODO: convert irrep symbol to irrep id')
 
     na = cistring.num_strings(norb, neleca)
@@ -67,7 +67,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     if irrep_nelec is not None:
         for k,n in irrep_nelec.items():
             orbleft[orbsym==k] = False
-            if isinstance(n, (int, numpy.integer)):
+            if isinstance(n, (int, numpy.number)):
                 idx = numpy.where(orbsym==k)[0][:n//2]
                 stra[idx] = True
                 strb[idx] = True
@@ -478,7 +478,7 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
     from pyscf.fci import direct_spin0
     fciobj.davidson_only = True
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             sz = (nelec % 2) * .5
         else:
             sz = abs(nelec[0]-nelec[1]) * .5
@@ -516,7 +516,7 @@ def fix_spin(fciobj, shift=.1, ss_value=None):
 
 
 def _unpack(nelec):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
         return neleca, nelecb
