@@ -107,9 +107,15 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
 
         if ci is not None:
             log.info('** Largest CI components **')
-            log.info(' string alpha, string beta, CI coefficients')
-            for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
-                log.info('  %9s    %9s    %.12f', ia, ib, c)
+            if ci[0].ndim == 2:
+                for i, state in ci:
+                    log.info(' string alpha, string beta, state %d CI coefficients', i)
+                    for c,ia,ib in fci.addons.large_ci(state, casscf.ncas, casscf.nelecas):
+                        log.info('  %9s    %9s    %.12f', ia, ib, c)
+            else:
+                log.info(' string alpha, string beta, CI coefficients')
+                for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
+                    log.info('  %9s    %9s    %.12f', ia, ib, c)
 
         s = casscf._scf.get_ovlp()
         #casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
