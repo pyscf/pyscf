@@ -419,6 +419,9 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     if isinstance(DMRGCI.wfnsym, str):
         wfnsym = dmrg_sym.irrep_name2id(DMRGCI.groupname, DMRGCI.wfnsym)
     else:
+        import pyscf.symm
+        gpname = pyscf.symm.std_symb(DMRGCI.groupname)
+        assert(DMRGCI.wfnsym in dmrg_sym.IRREP_MAP[gpname])
         wfnsym = DMRGCI.wfnsym
     f.write('irrep %i\n' % wfnsym)
 
