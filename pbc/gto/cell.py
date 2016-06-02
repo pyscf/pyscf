@@ -19,6 +19,20 @@ from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
 
+
+def M(**kwargs):
+    r'''This is a shortcut to build up Cell object.
+
+    Examples:
+
+    >>> from pyscf.pbc import gto
+    >>> cell = gto.M(h=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g', gs=[10]*3)
+    '''
+    cell = Cell()
+    cell.build(**kwargs)
+    return cell
+
+
 def format_pseudo(pseudo_tab):
     '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
 
@@ -688,6 +702,18 @@ class Cell(pyscf.gto.Mole):
             scaled_kpts : (nkpts, 3) ndarray of floats
         '''
         return 1./(2*np.pi)*np.dot(abs_kpts, self._h)
+
+    def make_kpts(self, nks):
+        '''Given number of kpoints along x,y,z , generate kpoints
+
+        Args:
+            nks : (3,) ndarray
+
+        Returns:
+            kpts in absolute value (unit 1/Bohr)
+        '''
+        from pyscf.pbc.tools import pyscf_ase
+        return pyscf_ase.make_kpts(self, nks)
 
     def copy(self):
         return copy(self)

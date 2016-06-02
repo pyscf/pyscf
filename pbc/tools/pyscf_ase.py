@@ -10,6 +10,7 @@ ASE package interface
 import numpy as np
 import pyscf.gto.mole
 from ase.calculators.calculator import Calculator
+import ase.dft.kpoints
 
 def ase_atoms_to_pyscf(ase_atoms):
     '''Convert ASE atoms to PySCF atom.
@@ -73,3 +74,10 @@ class PySCF(Calculator):
 
         self.results['energy']=self.mf.scf()
         self.results['mf']=self.mf
+
+
+def make_kpts(cell, nks):
+    scaled_kpts = ase.dft.kpoints.monkhorst_pack(nks)
+    kpts = cell.get_abs_kpts(scaled_kpts)
+    return kpts
+
