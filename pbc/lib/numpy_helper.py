@@ -1,6 +1,5 @@
 import numpy as np
 import re
-import collections
 
 DEBUG = False
 
@@ -15,8 +14,7 @@ def einsum(idx_str, *tensors):
 
     idx_str = idx_str.replace(' ','')
     indices  = "".join(re.split(',|->',idx_str))
-    counter = collections.Counter(indices)
-    if np.any(np.array(counter.values() > 2)) or '->' not in idx_str:
+    if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
         return np.einsum(idx_str,*tensors)
 
     if idx_str.count(',') > 1:
