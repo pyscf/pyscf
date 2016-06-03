@@ -25,7 +25,7 @@ mol.build(
 
 mf = scf.sfx2c(scf.RHF(mol))
 energy = mf.kernel()
-print('E = %.12f, ref = -76.081765438082' % energy)
+print('E = %.12f, ref = -76.075429084850' % energy)
 
 
 mol.spin = 1
@@ -34,5 +34,6 @@ mol.build(0, 0)
 
 mf = scf.sfx2c(scf.UKS(mol))
 energy = mf.kernel()
-print('E = %.12f, ref = -75.439677572099' % energy)
+print('E = %.12f, ref = -75.439160951099' % energy)
+
 
