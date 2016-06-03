@@ -25,7 +25,7 @@ mf.kernel()
 
 mc = mcscf.CASSCF(mf, 6, 8)
 mc.kernel()
-print('E = %.12f, ref = -76.129000779493' % mc.e_tot)
+print('E = %.12f, ref = -76.128478294795' % mc.e_tot)
 
 #
 # Decorating CASSCF with scf.sfx2c has the same effects as decorating SCF object
@@ -35,5 +35,5 @@ mf.kernel()
 
 mc = scf.sfx2c(mcscf.CASSCF(mf, 6, 8))
 mc.kernel()
-print('E = %.12f, ref = -76.129000779493' % mc.e_tot)
+print('E = %.12f, ref = -76.128478294795' % mc.e_tot)
 
