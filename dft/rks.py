@@ -166,7 +166,7 @@ class RKS(pyscf.scf.hf.RHF):
                 | gen_grid.stratmann
 
             grids.prune  scheme to reduce number of grids
-            | gen_grid.nwchem_prune  (default)
+                | gen_grid.nwchem_prune  (default)
                 | gen_grid.sg1_prune
                 | gen_grid.treutler_prune
                 | None : to switch off grids pruning
