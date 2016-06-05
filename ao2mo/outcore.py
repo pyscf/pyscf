@@ -9,6 +9,7 @@ import h5py
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
+from pyscf.ao2mo import incore
 
 # default ioblk_size is 256 MB
 
@@ -203,9 +204,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         log = logger.Logger(mol.stdout, verbose)
 
-    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
-    klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
-
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     nmok = mo_coeffs[2].shape[1]
@@ -217,22 +215,15 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         nao_pair = nao * nao
 
-    if compact and ijsame and aosym in ('s4', 's2ij'):
+    if (compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
+        aosym in ('s4', 's2ij')):
         nij_pair = nmoi*(nmoi+1) // 2
     else:
         nij_pair = nmoi*nmoj
 
-    if compact and klsame and aosym in ('s4', 's2kl'):
-        log.debug('k-mo == l-mo')
-        klmosym = 's2'
-        nkl_pair = nmok*(nmok+1) // 2
-        mokl = numpy.asarray(mo_coeffs[2], order='F')
-        klshape = (0, nmok, 0, nmok)
-    else:
-        klmosym = 's1'
-        nkl_pair = nmok*nmol
-        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
-        klshape = (0, nmok, nmok, nmok+nmol)
+    klmosym, nkl_pair, mokl, klshape = \
+            incore._conc_mos(mo_coeffs[2], mo_coeffs[3],
+                             compact and aosym in ('s4', 's2kl'))
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')
@@ -385,10 +376,6 @@ def half_e1(mol, mo_coeffs, swapfile,
     else:
         log = logger.Logger(mol.stdout, verbose)
 
-    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
-
-    nmoi = mo_coeffs[0].shape[1]
-    nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2ij'):
@@ -396,17 +383,9 @@ def half_e1(mol, mo_coeffs, swapfile,
     else:
         nao_pair = nao * nao
 
-    if compact and ijsame and aosym in ('s4', 's2ij'):
-        log.debug('i-mo == j-mo')
-        ijmosym = 's2'
-        nij_pair = nmoi*(nmoi+1) // 2
-        moij = numpy.asarray(mo_coeffs[0], order='F')
-        ijshape = (0, nmoi, 0, nmoi)
-    else:
-        ijmosym = 's1'
-        nij_pair = nmoi*nmoj
-        moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
+    ijmosym, nij_pair, moij, ijshape = \
+            incore._conc_mos(mo_coeffs[0], mo_coeffs[1],
+                             compact and aosym in ('s4', 's2ij'))
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
@@ -758,7 +737,6 @@ def group_segs_filling_block(segs_lst, blksize, start_id=0, stop_id=None):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    from pyscf.ao2mo import incore
     from pyscf.ao2mo import addons
     mol = gto.Mole()
     mol.verbose = 5
