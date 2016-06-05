@@ -162,7 +162,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 
 def _id_wfnsym(cis, norb, nelec, wfnsym):
     if wfnsym is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -175,7 +175,7 @@ def _id_wfnsym(cis, norb, nelec, wfnsym):
     return wfnsym
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -222,7 +222,7 @@ class FCISolver(direct_spin1.FCISolver):
         log = pyscf.lib.logger.Logger(self.stdout, verbose)
         if isinstance(self.wfnsym, str):
             log.info('specified CI wfn symmetry = %s', self.wfnsym)
-        elif isinstance(self.wfnsym, (int, numpy.integer)):
+        elif isinstance(self.wfnsym, (int, numpy.number)):
             log.info('specified CI wfn symmetry = %s',
                      symm.irrep_id2name(self.mol.groupname, self.wfnsym))
         return self

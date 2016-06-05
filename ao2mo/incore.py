@@ -111,44 +111,20 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True):
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
-    klsame = compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3])
-
-    nmoi = mo_coeffs[0].shape[1]
-    nmoj = mo_coeffs[1].shape[1]
-    nmok = mo_coeffs[2].shape[1]
-    nmol = mo_coeffs[3].shape[1]
-
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
     assert(eri_ao.size in (nao_pair**2, nao_pair*(nao_pair+1)//2))
 
-    if compact and ijsame:
-        nij_pair = nmoi*(nmoi+1) // 2
-    else:
-        nij_pair = nmoi*nmoj
+# transform e1
+    eri1 = half_e1(eri_ao, mo_coeffs, compact)
+    klmosym, nkl_pair, mokl, klshape = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
 
-    if compact and klsame:
-        klmosym = 's2'
-        nkl_pair = nmok*(nmok+1) // 2
-        mokl = numpy.array(mo_coeffs[2], order='F', copy=False)
-        klshape = (0, nmok, 0, nmok)
-    else:
-        klmosym = 's1'
-        nkl_pair = nmok*nmol
-        mokl = numpy.array(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), \
-                           order='F', copy=False)
-        klshape = (0, nmok, nmok, nmok+nmol)
-
-    if nij_pair == 0 or nkl_pair == 0:
+    if eri1.shape[0] == 0 or nkl_pair == 0:
         # 0 dimension sometimes causes blas problem
         return numpy.zeros((nij_pair,nkl_pair))
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')
-
-# transform e1
-    eri1 = half_e1(eri_ao, mo_coeffs, compact)
 
 # transform e2
     eri1 = _ao2mo.nr_e2(eri1, mokl, klshape, aosym='s4', mosym=klmosym)
@@ -197,25 +173,15 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     (55, 28)
     '''
     eri_ao = numpy.asarray(eri_ao, order='C')
-    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
-
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
-
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
+    ijmosym, nij_pair, moij, ijshape = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
 
-    if compact and ijsame:
-        ijmosym = 's2'
-        nij_pair = nmoi*(nmoi+1) // 2
-        moij = numpy.array(mo_coeffs[0], order='F', copy=False)
-        ijshape = (0, nmoi, 0, nmoi)
-    else:
-        ijmosym = 's1'
-        nij_pair = nmoi*nmoj
-        moij = numpy.array(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), \
-                           order='F', copy=False)
-        ijshape = (0, nmoi, nmoi, nmoj)
+    eri1 = numpy.empty((nij_pair,nao_pair))
+    if nij_pair == 0:
+        return eri1
 
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
         ftrans = _ao2mo._fpointer('AO2MOtranse1_incore_s4')
@@ -228,7 +194,6 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     else:
         fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_igtj')
     fdrv = getattr(_ao2mo.libao2mo, 'AO2MOnr_e1incore_drv')
-    eri1 = numpy.empty((nij_pair,nao_pair))
 
     bufs = numpy.empty((BLOCK, nij_pair))
     for blk0 in range(0, nao_pair, BLOCK):
@@ -249,6 +214,21 @@ def iden_coeffs(mo1, mo2):
     return (id(mo1) == id(mo2)) or \
             (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
 
+
+def _conc_mos(moi, moj, compact):
+    nmoi = moi.shape[1]
+    nmoj = moj.shape[1]
+    if compact and iden_coeffs(moi, moj):
+        ijmosym = 's2'
+        nij_pair = nmoi * (nmoi+1) // 2
+        moij = numpy.asarray(moi, order='F')
+        ijshape = (0, nmoi, 0, nmoi)
+    else:
+        ijmosym = 's1'
+        nij_pair = nmoi * nmoj
+        moij = numpy.asarray(numpy.hstack((moi,moj)), order='F')
+        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
+    return ijmosym, nij_pair, moij, ijshape
 
 if __name__ == '__main__':
     from pyscf import scf

@@ -111,7 +111,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 def make_hdiag(h1e, eri, norb, nelec):
     '''Diagonal Hamiltonian for Davidson preconditioner
     '''
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -146,7 +146,7 @@ def make_hdiag(h1e, eri, norb, nelec):
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
     '''
-    if not isinstance(nelec, (int, numpy.integer)):
+    if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
     eri = eri.copy()
     h2e = pyscf.ao2mo.restore(1, eri, norb)
@@ -160,7 +160,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -238,7 +238,7 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
     '''Spin searated 1-particle density matrices, (alpha,beta)
     '''
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -341,7 +341,7 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
 def get_init_guess(norb, nelec, nroots, hdiag):
     '''Initial guess is the single Slater determinant
     '''
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -619,7 +619,7 @@ class FCISolver(pyscf.lib.StreamObject):
 
 def _unpack(norb, nelec, link_index):
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:

@@ -90,7 +90,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     return ci1
 
 def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -120,7 +120,7 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
     return fcinew
 
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -160,7 +160,7 @@ def make_hdiag(h1e, eri, norb, nelec):
     return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
-    if not isinstance(nelec, (int, numpy.integer)):
+    if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
     h1e_a, h1e_b = h1e
     h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
@@ -182,7 +182,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
             pyscf.ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:

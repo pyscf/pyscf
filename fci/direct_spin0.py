@@ -74,7 +74,7 @@ absorb_h1e = direct_spin1.absorb_h1e
 
 @pyscf.lib.with_doc(direct_spin1.make_hdiag.__doc__)
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec
@@ -100,7 +100,7 @@ def make_hdiag(h1e, eri, norb, nelec):
 
 @pyscf.lib.with_doc(direct_spin1.pspace.__doc__)
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         neleca = nelec//2
     else:
         neleca, nelecb = nelec
@@ -170,7 +170,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
 @pyscf.lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
@@ -202,7 +202,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
 def get_init_guess(norb, nelec, nroots, hdiag):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -393,7 +393,7 @@ class FCISolver(direct_spin1.FCISolver):
 
 def _unpack(norb, nelec, link_index):
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec

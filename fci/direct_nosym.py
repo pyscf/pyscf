@@ -49,7 +49,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     '''
     fcivec = numpy.asarray(fcivec, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:
@@ -77,7 +77,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
     '''
-    if not isinstance(nelec, (int, numpy.integer)):
+    if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
     h2e = eri.copy()
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
@@ -109,7 +109,7 @@ class FCISolver(direct_spin1.FCISolver):
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, **kwargs):
-        if isinstance(nelec, (int, numpy.integer)):
+        if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
         else:

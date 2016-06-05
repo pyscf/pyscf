@@ -779,12 +779,19 @@ def len_cart(l):
     '''
     return (l + 1) * (l + 2) // 2
 
-def npgto_nr(mol):
+def npgto_nr(mol, cart=False):
     '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
-    return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NPRIM_OF]).sum()
-def nao_nr(mol):
+    l = mol._bas[:,ANG_OF]
+    if cart:
+        return ((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum()
+    else:
+        return ((l*2+1) * mol._bas[:,NPRIM_OF]).sum()
+def nao_nr(mol, cart=False):
     '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
-    return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
+    if cart:
+        return nao_cart(mol)
+    else:
+        return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
 def nao_cart(mol):
     '''Total number of contracted cartesian GTOs for the given :class:`Mole` object'''
     l = mol._bas[:,ANG_OF]
@@ -1931,7 +1938,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def atom_coords(self):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return numpy.vstack((self._env[ptr],self._env[ptr+1],self._env[ptr+2])).T
+        return self._env[numpy.vstack((ptr,ptr+1,ptr+2))].T
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom

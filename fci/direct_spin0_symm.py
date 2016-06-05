@@ -137,7 +137,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    if isinstance(nelec, (int, numpy.integer)):
+    if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -189,7 +189,7 @@ class FCISolver(direct_spin0.FCISolver):
         log = logger.Logger(self.stdout, verbose)
         if isinstance(self.wfnsym, str):
             log.info('specified CI wfn symmetry = %s', self.wfnsym)
-        elif isinstance(self.wfnsym, (int, numpy.integer)):
+        elif isinstance(self.wfnsym, (int, numpy.number)):
             log.info('specified CI wfn symmetry = %s',
                      symm.irrep_id2name(self.mol.groupname, self.wfnsym))
 

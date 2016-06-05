@@ -13,6 +13,7 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 from pyscf.df import incore
@@ -189,7 +190,6 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     fswap = h5py.File(swapfile.name, 'r')
     time1 = log.timer('AO->MO eri transformation 1 pass', *time0)
 
-    ijsame = compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1])
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
@@ -203,17 +203,9 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
         nao_pair = nao * (nao+1) // 2
         aosym_as_nr_e2 = 's2kl'
 
-    if compact and ijsame and aosym != 's1':
-        log.debug('i-mo == j-mo')
-        ijmosym = 's2'
-        nij_pair = nmoi*(nmoi+1) // 2
-        moij = numpy.asarray(mo_coeffs[0], order='F')
-        ijshape = (0, nmoi, 0, nmoi)
-    else:
-        ijmosym = 's1'
-        nij_pair = nmoi*nmoj
-        moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
+    ijmosym, nij_pair, moij, ijshape = \
+            ao2mo.incore._conc_mos(mo_coeffs[0], mo_coeffs[1],
+                                   compact and aosym != 's1')
 
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
