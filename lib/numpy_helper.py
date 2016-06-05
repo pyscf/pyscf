@@ -338,7 +338,7 @@ def transpose_sum(a, inplace=False, out=None):
 # NOTE: NOT assume array a, b to be C-contiguous, since a and b are two
 # pointers we want to pass in.
 # numpy.dot might not call optimized blas
-def dot(a, b, alpha=1, c=None, beta=0):
+def ddot(a, b, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double precision arrays
     '''
     m = a.shape[0]
@@ -371,38 +371,52 @@ def zdot(a, b, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double complex arrays using Gauss's
     complex multiplication algorithm
     '''
-    if numpy.iscomplexobj(a):
-        if numpy.iscomplexobj(b):
-            k1 = dot(a.real+a.imag, b.real.copy())
-            k2 = dot(a.real.copy(), b.imag-b.real)
-            k3 = dot(a.imag.copy(), b.real+b.imag)
-            if c is None:
-                return k1-k3 + (k1+k2)*1j
-            else:
-                c[:] = c * beta + alpha * (k1-k3 + (k1+k2)*1j)
-                return c
-        else:
-            ar = a.real.copy()
-            ai = a.imag.copy()
-            cr = dot(ar, b, alpha)
-            ci = dot(ai, b, alpha)
-            if c is None:
-                return cr + ci*1j
-            else:
-                c[:] = c*beta + (cr+ci*1j)
-                return c
-    elif numpy.iscomplexobj(b):
+    atype = a.dtype
+    btype = b.dtype
+
+    if atype == numpy.float64 and btype == numpy.float64:
+        c = ddot(a, b, alpha, c, beta)
+
+    elif atype == numpy.float64 and btype == numpy.complex128:
         br = b.real.copy()
         bi = b.imag.copy()
-        cr = dot(a, br, alpha)
-        ci = dot(a, bi, alpha)
+        cr = ddot(a, br, alpha)
+        ci = ddot(a, bi, alpha)
         if c is None:
-            return cr + ci*1j
+            c = cr + ci*1j
         else:
-            c[:] = c*beta + (cr+ci*1j)
-            return c
+            c *= beta
+            c += cr + ci*1j
+
+    elif atype == numpy.complex128 and btype == numpy.float64:
+        ar = a.real.copy()
+        ai = a.imag.copy()
+        cr = ddot(ar, b, alpha)
+        ci = ddot(ai, b, alpha)
+        if c is None:
+            c = cr + ci*1j
+        else:
+            c *= beta
+            c += cr + ci*1j
+
+    elif atype == numpy.complex128 and btype == numpy.complex128:
+        k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
+        k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
+        k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
+        if c is None:
+            c = k1-k3 + (k1+k2)*1j
+        else:
+            c *= beta
+            c += k1-k3 + (k1+k2)*1j
+
     else:
-        return dot(a, b, alpha, c, beta)
+        if c is None:
+            c = numpy.dot(a, b) * alpha
+        else:
+            c *= beta
+            c += numpy.dot(a, b) * alpha
+    return c
+dot = zdot
 
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
@@ -410,9 +424,6 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
-    assert(0 < m < 2147483648)
-    assert(0 < n < 2147483648)
-    assert(0 < k < 2147483648)
 
     _np_helper.NPdgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -578,14 +589,16 @@ def direct_sum(subscripts, *operands):
 
 def condense(opname, a, locs):
     '''
-    nd = loc[-1]
-    out = numpy.empty((nd,nd))
-    for i,i0 in enumerate(loc):
-        i1 = loc[i+1]
-        for j,j0 in enumerate(loc):
-            j1 = loc[j+1]
-            out[i,j] = op(a[i0:i1,j0:j1])
-    return out
+    .. code-block:: python
+
+        nd = loc[-1]
+        out = numpy.empty((nd,nd))
+        for i,i0 in enumerate(loc):
+            i1 = loc[i+1]
+            for j,j0 in enumerate(loc):
+                j1 = loc[j+1]
+                out[i,j] = op(a[i0:i1,j0:j1])
+        return out
     '''
     assert(a.flags.c_contiguous)
     assert(a.dtype == numpy.double)
@@ -650,7 +663,9 @@ if __name__ == '__main__':
     b = numpy.random.random((400,400))
     c = numpy.random.random((400,400))
     d = numpy.random.random((400,400))
-    print(numpy.allclose(numpy.dot(a+b*1j, c+d*1j), zdot(a+b*1j, c+d*1j)))
+    print(numpy.allclose(numpy.dot(a+b*1j, c+d*1j), dot(a+b*1j, c+d*1j)))
+    print(numpy.allclose(numpy.dot(a, c+d*1j), dot(a, c+d*1j)))
+    print(numpy.allclose(numpy.dot(a+b*1j, c), dot(a+b*1j, c)))
 
     import itertools
     arrs = (range(3,9), range(4))
