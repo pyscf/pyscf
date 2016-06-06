@@ -3,9 +3,9 @@ PySCF
 
 Python module for quantum chemistry
 
-2016-04-11
+2016-06-04
 
-* [Release 1.1 beta](../../releases/latest)
+* [Release 1.1](../../releases/latest) ([development branch](https://github.com/sunqm/pyscf/tree/master))
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
@@ -73,7 +73,7 @@ Installation
 Known problems
 --------------
 
-* Error message "Library not loaded: libcint.2.7.dylib" On OS X.
+* Error message "Library not loaded: libcint.2.9.dylib" On OS X.
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
