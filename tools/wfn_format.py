@@ -45,12 +45,34 @@ import numpy
 # 33 GXXYZ
 # 34 GXYYZ
 # 35 GXYZZ
+# 36 HZZZZZ
+# 37 HYZZZZ
+# 38 HYYZZZ
+# 39 HYYYZZ
+# 40 HYYYYZ
+# 41 HYYYYY
+# 42 HXZZZZ
+# 43 HXYZZZ
+# 44 HXYYZZ
+# 45 HXYYYZ
+# 46 HXYYYY
+# 47 HXXZZZ
+# 48 HXXYZZ
+# 49 HXXYYZ
+# 50 HXXYYY
+# 51 HXXXZZ
+# 52 HXXXYZ
+# 53 HXXXYY
+# 54 HXXXXZ
+# 55 HXXXXY
+# 56 HXXXXX
 TYPE_MAP = [
     [1],  # S
     [2, 3, 4],  # P
     [5, 8, 9, 6, 10, 7],  # D
     [11,14,15,17,20,18,12,16,19,13],  # F
     [21,24,25,30,33,31,26,34,35,28,22,27,32,29,23],  # G
+    [56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36],  # H
 ]
 def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     nmo = mo_coeff.shape[1]
@@ -96,7 +118,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     for i0, i1 in lib.prange(0, nprim, 20):
         fout.write('TYPE ASSIGNMENTS    %s\n' % ''.join('%3d'%x for x in types[i0:i1]))
     for i0, i1 in lib.prange(0, nprim, 5):
-        fout.write('EXPONENTS %s\n' % ' '.join('%14.7e'%x for x in exps[i0:i1]))
+        fout.write('EXPONENTS %s\n' % ' '.join('%14.7E'%x for x in exps[i0:i1]))
 
     for k in range(nmo):
         mo = mo_cart[:,k]
@@ -107,7 +129,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
             fout.write('MO  %-4d                  OCC NO = %12.8f ORB. ENERGY = %12.8f\n' %
                        (k, mo_occ[k], mo_energy[k]))
         for i0, i1 in lib.prange(0, nprim, 5):
-            fout.write('%s\n' % ' '.join('%15.8e'%x for x in mo[i0:i1]))
+            fout.write('%s\n' % ' '.join('%15.8E'%x for x in mo[i0:i1]))
 
 def write_ci(fout, fcivec, norb, nelec, ncore=0):
     from pyscf import fci
@@ -132,7 +154,7 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
         addra, addrb = divmod(iaddr, nb)
         idxa = ['%3d' % x for x in str2orbidx(stringsa[addra], ncore)]
         idxb = ['%3d' % (-x) for x in str2orbidx(stringsb[addrb], ncore)]
-        fout.write('%18.10e %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
+        fout.write('%18.10E %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
 
 
 #if __name__ == '__main__':
