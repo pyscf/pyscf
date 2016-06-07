@@ -29,7 +29,8 @@ double FCIrdm2_a_t1ci(double *ci0, double *t1,
 {
         ci0 += strb_id;
         const int nnorb = norb * norb;
-        int i, j, k, a, str1, sign;
+        int i, j, k, a, sign;
+        size_t str1;
         const _LinkT *tab = clink_indexa + stra_id * nlinka;
         double *pt1, *pci;
         double csum = 0;
@@ -56,7 +57,6 @@ double FCIrdm2_a_t1ci(double *ci0, double *t1,
         return csum;
 }
 
-/*
 double FCIrdm2_b_t1ci(double *ci0, double *t1,
                       int bcount, int stra_id, int strb_id,
                       int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
@@ -64,7 +64,7 @@ double FCIrdm2_b_t1ci(double *ci0, double *t1,
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*nstrb;
+        double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -80,7 +80,7 @@ double FCIrdm2_b_t1ci(double *ci0, double *t1,
                 tab += nlinkb;
         }
         return csum;
-} */
+}
 double FCIrdm2_0b_t1ci(double *ci0, double *t1,
                        int bcount, int stra_id, int strb_id,
                        int norb, int nstrb, int nlinkb, _LinkT *clink_indexb)
@@ -88,7 +88,7 @@ double FCIrdm2_0b_t1ci(double *ci0, double *t1,
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*nstrb;
+        double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -213,10 +213,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                nlinkb, clinka, clinkb, rdm1, rdm2, symm), \
         private(strk, i, ib, blen, pdm1, pdm2)
 {
-        pdm1 = (double *)malloc(sizeof(double) * nnorb);
-        pdm2 = (double *)malloc(sizeof(double) * nnorb*nnorb);
-        memset(pdm1, 0, sizeof(double) * nnorb);
-        memset(pdm2, 0, sizeof(double) * nnorb*nnorb);
+        pdm1 = calloc(nnorb, sizeof(double));
+        pdm2 = calloc(nnorb*nnorb, sizeof(double));
 #pragma omp for schedule(guided, 2) nowait
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += bufbase) {
@@ -333,23 +331,22 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
         const int nnorb = norb * norb;
         int fill0, fill1, i;
         double csum = 0;
-        double *buf = malloc(sizeof(double) * nnorb * na);
+        double *buf = calloc(nnorb * na, sizeof(double));
 
         if (strb_id+bcount <= stra_id) {
                 fill0 = bcount;
                 fill1 = bcount;
-                csum = FCIrdm2_0b_t1ci(ket, buf, fill0, stra_id, strb_id,
-                                       norb, na, nlinka, clink_indexa)
-                     + FCIrdm2_a_t1ci (ket, buf, fill1, stra_id, strb_id,
-                                       norb, na, nlinka, clink_indexa);
+                csum = FCIrdm2_b_t1ci(ket, buf, fill0, stra_id, strb_id,
+                                      norb, na, nlinka, clink_indexa)
+                     + FCIrdm2_a_t1ci(ket, buf, fill1, stra_id, strb_id,
+                                      norb, na, nlinka, clink_indexa);
         } else if (stra_id >= strb_id) {
                 fill0 = stra_id - strb_id;
                 fill1 = stra_id - strb_id + 1;
-                memset(buf+fill0*nnorb, 0, sizeof(double)*nnorb);
-                csum = FCIrdm2_0b_t1ci(ket, buf, fill0, stra_id, strb_id,
-                                       norb, na, nlinka, clink_indexa)
-                     + FCIrdm2_a_t1ci (ket, buf, fill1, stra_id, strb_id,
-                                       norb, na, nlinka, clink_indexa);
+                csum = FCIrdm2_b_t1ci(ket, buf, fill0, stra_id, strb_id,
+                                      norb, na, nlinka, clink_indexa)
+                     + FCIrdm2_a_t1ci(ket, buf, fill1, stra_id, strb_id,
+                                      norb, na, nlinka, clink_indexa);
         }
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fill1, &D2, buf, &nnorb,
@@ -437,9 +434,8 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb*bcount);
+        double *buf = calloc(nnorb*bcount, sizeof(double));
 
-        memset(buf, 0, sizeof(double)*nnorb*bcount);
         csum = FCIrdm2_a_t1ci(ket, buf, bcount, stra_id, strb_id,
                               norb, nb, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
@@ -476,10 +472,10 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb*bcount);
+        double *buf = calloc(nnorb*bcount, sizeof(double));
 
-        csum = FCIrdm2_0b_t1ci(ket, buf, bcount, stra_id, strb_id,
-                               norb, nb, nlinkb, clink_indexb);
+        csum = FCIrdm2_b_t1ci(ket, buf, bcount, stra_id, strb_id,
+                              norb, nb, nlinkb, clink_indexb);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
                        ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
@@ -511,14 +507,12 @@ void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*bcount);
-        double *buf1 = malloc(sizeof(double) * nnorb*bcount);
+        double *buf0 = calloc(nnorb*bcount, sizeof(double));
+        double *buf1 = calloc(nnorb*bcount, sizeof(double));
 
-        memset(buf1, 0, sizeof(double)*nnorb*bcount);
         csum = FCIrdm2_a_t1ci(bra, buf1, bcount, stra_id, strb_id,
                               norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        memset(buf0, 0, sizeof(double)*nnorb*bcount);
         csum = FCIrdm2_a_t1ci(ket, buf0, bcount, stra_id, strb_id,
                               norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
@@ -548,14 +542,14 @@ void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *buf0 = malloc(sizeof(double) * nnorb*bcount);
-        double *buf1 = malloc(sizeof(double) * nnorb*bcount);
+        double *buf0 = calloc(nnorb*bcount, sizeof(double));
+        double *buf1 = calloc(nnorb*bcount, sizeof(double));
 
-        csum = FCIrdm2_0b_t1ci(bra, buf1, bcount, stra_id, strb_id,
-                               norb, nb, nlinkb, clink_indexb);
+        csum = FCIrdm2_b_t1ci(bra, buf1, bcount, stra_id, strb_id,
+                              norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
-        csum = FCIrdm2_0b_t1ci(ket, buf0, bcount, stra_id, strb_id,
-                               norb, nb, nlinkb, clink_indexb);
+        csum = FCIrdm2_b_t1ci(ket, buf0, bcount, stra_id, strb_id,
+                              norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
                bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
@@ -582,15 +576,14 @@ void FCItdm12kern_ab(double *tdm1, double *tdm2, double *bra, double *ket,
         const double D1 = 1;
         const int nnorb = norb * norb;
         double csum;
-        double *bufb = malloc(sizeof(double) * nnorb*bcount);
-        double *bufa = malloc(sizeof(double) * nnorb*bcount);
+        double *bufb = calloc(nnorb*bcount, sizeof(double));
+        double *bufa = calloc(nnorb*bcount, sizeof(double));
 
-        memset(bufa, 0, sizeof(double)*nnorb*bcount);
         csum = FCIrdm2_a_t1ci(bra, bufa, bcount, stra_id, strb_id,
                               norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
-        csum = FCIrdm2_0b_t1ci(ket, bufb, bcount, stra_id, strb_id,
-                               norb, nb, nlinkb, clink_indexb);
+        csum = FCIrdm2_b_t1ci(ket, bufb, bcount, stra_id, strb_id,
+                              norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
 // no particle symmetry between alpha-alpha-beta-beta 2pdm
         dgemm_(&TRANS_N, &TRANS_T, &nnorb, &nnorb, &bcount,
