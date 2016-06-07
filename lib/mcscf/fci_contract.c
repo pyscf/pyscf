@@ -61,7 +61,8 @@ static double prog_a_t1(double *ci0, double *t1,
 {
         ci0 += strb_id;
         const int nnorb = norb * (norb+1)/2;
-        int j, k, ia, str1, sign;
+        int j, k, ia, sign;
+        size_t str1;
         const _LinkTrilT *tab = clink_indexa + stra_id * nlinka;
         double *pt1, *pci;
         double csum = 0;
@@ -71,7 +72,7 @@ static double prog_a_t1(double *ci0, double *t1,
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 pt1 = t1 + ia;
-                pci = ci0 + str1*(size_t)nstrb;
+                pci = ci0 + str1*nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] += pci[k];
@@ -158,7 +159,8 @@ static void spread_a_t1(double *ci1, double *t1,
 {
         ci1 += strb_id;
         const int nnorb = norb * (norb+1)/2;
-        int j, k, ia, str1, sign;
+        int j, k, ia, sign;
+        size_t str1;
         const _LinkTrilT *tab = clink_indexa + stra_id * nlinka;
         double *cp0, *cp1;
 
@@ -167,7 +169,7 @@ static void spread_a_t1(double *ci1, double *t1,
                 str1 = EXTRACT_ADDR(tab[j]);
                 sign = EXTRACT_SIGN(tab[j]);
                 cp0 = t1 + ia;
-                cp1 = ci1 + str1*(size_t)nstrb;
+                cp1 = ci1 + str1*nstrb;
                 if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 cp1[k] += cp0[k*nnorb];
@@ -208,7 +210,8 @@ void FCIcontract_a_1e(double *f1e_tril, double *ci0, double *ci1,
                       int norb, int nstra, int nstrb, int nlinka, int nlinkb,
                       int *link_indexa, int *link_indexb)
 {
-        int j, k, ia, str0, str1, sign;
+        int j, k, ia, sign;
+        size_t str0, str1;
         double *pci0, *pci1;
         double tmp;
         _LinkTrilT *tab;
@@ -221,8 +224,8 @@ void FCIcontract_a_1e(double *f1e_tril, double *ci0, double *ci1,
                         ia   = EXTRACT_IA  (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
-                        pci0 = ci0 + str0 * (size_t)nstrb;
-                        pci1 = ci1 + str1 * (size_t)nstrb;
+                        pci0 = ci0 + str0 * nstrb;
+                        pci1 = ci1 + str1 * nstrb;
                         tmp = sign * f1e_tril[ia];
                         for (k = 0; k < nstrb; k++) {
                                 pci1[k] += tmp * pci0[k];
@@ -497,7 +500,8 @@ void FCImake_hdiag_uhf(double *hdiag, double *h1e_a, double *h1e_b,
                        jdiag_aa, jdiag_ab, jdiag_bb, kdiag_aa, kdiag_bb, \
                        norb, nstra, nstrb, nocca, noccb, occslista, occslistb)
 {
-        int ia, ib, j, j0, k0, jk, jk0;
+        int j, j0, k0, jk, jk0;
+        size_t ia, ib;
         double e1, e2;
         int *paocc, *pbocc;
 #pragma omp for schedule(static)
