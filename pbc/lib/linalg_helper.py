@@ -10,7 +10,7 @@ method = 'davidson'
 
 VERBOSE = False 
 
-def eigs(matvec,size,nroots,Adiag=None):
+def eigs(matvec,size,nroots,Adiag=None,guess=False):
     '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.
     '''
@@ -22,7 +22,10 @@ def eigs(matvec,size,nroots,Adiag=None):
     nroots = min(nroots,size)
 
     if method == 'davidson':
-        e, c, niter = davidson(matvec,size,nroots,Adiag)
+        if guess == False:
+            e, c, niter = davidson(matvec,size,nroots,Adiag)
+        else:
+            e, c, niter = davidson_guess(matvec,size,nroots,Adiag)
         print "Davidson converged in %d iterations"%(niter)
         return e,c
     elif method == 'arnoldi':
@@ -41,6 +44,7 @@ def eigs(matvec,size,nroots,Adiag=None):
         david.matvec = matvec
 
         return david.solve_iter()
+
 
 #@profile
 def davidson(mult_by_A,N,neig,Adiag=None):
@@ -122,6 +126,91 @@ def davidson(mult_by_A,N,neig,Adiag=None):
     # Express alpha in original basis
     evecs = np.dot(b,alpha) # b is N x M, alpha is M x M
     return lamda[:neig], evecs[:,:neig], M
+
+
+def davidson_guess(mult_by_A,N,neig,Adiag=None):
+    """Diagonalize a matrix via non-symmetric Davidson algorithm.
+
+    mult_by_A() is a function which takes a vector of length N
+        and returns a vector of length N.
+    neig is the number of eigenvalues requested
+
+    Targets the first nroots closest in amplitude to the first
+    nroots of the basis. This is useful for the QP peaks in IP/EA.
+    """
+    Mmax = min(N,2000)
+    tol = 1e-6
+
+    #Adiagcheck = np.zeros(N,np.complex)
+    #for i in range(N):
+    #    test = np.zeros(N,np.complex)
+    #    test[i] = 1.0
+    #    Adiagcheck[i] = mult_by_A(test)[i]
+    #print "Analytical Adiag == numerical Adiag?", np.allclose(Adiag,Adiagcheck)
+
+    if Adiag is None:
+        Adiag = np.zeros(N,np.complex)
+        for i in range(N):
+            test = np.zeros(N,np.complex)
+            test[i] = 1.0
+            Adiag[i] = mult_by_A(test)[i]
+
+    xi = np.zeros(N,np.complex)
+
+    evals = np.zeros(neig)
+    evecs = np.zeros((N,neig),np.complex)
+
+    Mtot = 0
+    for guess in range(neig):
+        for M in range(1,Mmax+1):
+            if M == 1:
+                # Unit vector 'target' as the guess
+                b = np.zeros((N,1))
+                b[guess,0] = 1.0
+                Ab = np.zeros((N,1),np.complex)
+                Ab[:,0] = mult_by_A(b[:,0])
+            else:
+                Ab = np.column_stack( (Ab,mult_by_A(b[:,M-1])) )
+
+            Atilde = np.dot(b.conj().transpose(),Ab)
+            lamda, alpha = diagonalize_asymm(Atilde)
+
+            overlap_guess_j_max = -99
+            target = 0
+            for j, overlap_guess_j in enumerate(alpha[0,:]):
+                if overlap_guess_j > overlap_guess_j_max:
+                    overlap_guess_j_max = overlap_guess_j
+                    target = j
+            
+            lamda_k = lamda[target]
+            alpha_k = alpha[:,target]
+
+            if M == Mmax:
+                break
+
+            q = np.dot( Ab-lamda_k*b, alpha_k )
+            if np.linalg.norm(q) < tol:
+                evals[guess] = lamda_k
+                evecs[:,guess] = np.dot(b,alpha_k)
+                Mtot += M
+                break
+
+            for i in range(N):
+                eps = 0.
+                if np.allclose(lamda_k,Adiag[i]):
+                    eps = 1e-8
+                xi[i] = q[i]/(lamda_k-Adiag[i]+eps)
+
+            # orthonormalize xi wrt b
+            bxi,R = np.linalg.qr(np.column_stack((b,xi)))
+            # append orthonormalized xi to b
+            b = np.column_stack((b,bxi[:,-1]))
+
+    if M > 1 and M == Mmax:
+        print("WARNING: Davidson algorithm reached max basis size "
+              "M = %d without converging."%(M))
+
+    return evals, evecs, Mtot
 
 
 def diagonalize_asymm(H):
