@@ -528,12 +528,14 @@ class CASCI(pyscf.lib.StreamObject):
                 kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
 
         log = logger.Logger(self.stdout, self.verbose)
-        if not isinstance(self.e_cas, (float, numpy.number)):
-            self.mo_coeff, _, self.mo_energy = \
-                    self.canonicalize(mo_coeff, self.ci[0], verbose=log)
-        else:
-            self.mo_coeff, _, self.mo_energy = \
-                    self.canonicalize(mo_coeff, self.ci, verbose=log)
+
+        if self.canonicalization:
+            if not isinstance(self.e_cas, (float, numpy.number)):
+                self.mo_coeff, _, self.mo_energy = \
+                        self.canonicalize(mo_coeff, self.ci[0], verbose=log)
+            else:
+                self.mo_coeff, _, self.mo_energy = \
+                        self.canonicalize(mo_coeff, self.ci, verbose=log)
 
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
             ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
