@@ -301,9 +301,15 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
         return out
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
-    ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
-    c_nbas = ctypes.c_int(ao_loc.shape[0]-1)
-    ftrans = _fpointer('AO2MOsortranse2_r_' + aosym)
+    if ao_loc is None:
+        c_ao_loc = ctypes.POINTER(ctypes.c_void_p)()
+        c_nbas = ctypes.c_int(0)
+        ftrans = _fpointer('AO2MOtranse2_r_' + aosym)
+    else:
+        ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
+        c_ao_loc = ao_loc.ctypes.data_as(ctypes.c_void_p)
+        c_nbas = ctypes.c_int(ao_loc.shape[0]-1)
+        ftrans = _fpointer('AO2MOsortranse2_r_' + aosym)
 
     fdrv = getattr(libao2mo, 'AO2MOr_e2_drv')
     fdrv(ftrans, fmmm,
@@ -313,8 +319,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
          ctypes.c_int(nrow), ctypes.c_int(nao),
          ctypes.c_int(k0), ctypes.c_int(kc),
          ctypes.c_int(l0), ctypes.c_int(lc),
-         tao.ctypes.data_as(ctypes.c_void_p),
-         ao_loc.ctypes.data_as(ctypes.c_void_p), c_nbas)
+         tao.ctypes.data_as(ctypes.c_void_p), c_ao_loc, c_nbas)
     return out
 
 

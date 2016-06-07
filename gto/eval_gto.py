@@ -65,7 +65,7 @@ def eval_gto(eval_name, atm, bas, env, coords,
             If provided, results are written into this array.
 
     Returns:
-        2D array of shape (N,nao) Or 3D array of shape (*,N,nao) for AO values
+        2D array of shape (N,nao) Or 3D array of shape (\*,N,nao) for AO values
 
     Examples:
 

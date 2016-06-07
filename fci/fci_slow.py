@@ -13,8 +13,8 @@ def contract_1e(f1e, fcivec, norb, nelec):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    link_indexa = cistring.gen_linkstr_index_o0(range(norb), neleca)
+    link_indexb = cistring.gen_linkstr_index_o0(range(norb), nelecb)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
@@ -35,8 +35,8 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    link_indexa = cistring.gen_linkstr_index_o0(range(norb), neleca)
+    link_indexb = cistring.gen_linkstr_index_o0(range(norb), nelecb)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
@@ -130,8 +130,8 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    link_indexa = cistring.gen_linkstr_index_o0(range(norb), neleca)
+    link_indexb = cistring.gen_linkstr_index_o0(range(norb), nelecb)
     occslista = [tab[:neleca,0] for tab in link_indexa]
     occslistb = [tab[:nelecb,0] for tab in link_indexb]
     g2e = ao2mo.restore(1, g2e, norb)

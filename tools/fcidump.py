@@ -66,8 +66,8 @@ def from_chkfile(output, chkfile, tol=1e-15):
         mo_coeff = numpy.array(scf_rec['mo_coeff'])
         nmo = mo_coeff.shape[1]
         if mol.symmetry:
-            orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name,
-                                               mol.irrep_id, mo_coeff)
+            orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id,
+                                               mol.symm_orb, mo_coeff)
             write_head(fout, nmo, mol.nelectron, mol.spin, orbsym)
         else:
             write_head(fout, nmo, mol.nelectron, mol.spin)

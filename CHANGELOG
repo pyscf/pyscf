@@ -1,3 +1,38 @@
+Version 1.2 alpha (2016-8-?):
+* Added
+  - GAMESS WFN wirter
+
+
+Version 1.1 (2016-6-4):
+* Modify
+  - "unc-" prefix for uncontracted basis in the input
+  - linear dependence problem in mcscf.project_init_guess
+* Bug fixing
+  - CCSD(T) rdm
+  - CASCI.analyze for multiple CI roots
+  - function to write FCIDUMP when system has symmetry
+
+
+Version 1.1 beta (2016-4-11):
+* Added
+  - Orbital hessian for SCF Newton solver
+  - (maximum overlap method) for Delta SCF
+  - determinant overlap
+  - Canonicalization flag for Newton solver
+* Modify
+  - Default density fitting basis for heavy atoms
+  - Density fitting MCSCF to allow inputing 3-center integrals
+  - Rewriting NEVPT2 interface
+  - Mole object serialization with json
+  - Orbital energy output format for ROHF
+* Bug fixing
+  - meta-lowdin orthogonalization for high angular memontum basis
+  - Orbital occupancy for ROHF with symmetry
+  - CASSCF initializing from x2c-UHF
+  - ECP accuracy
+  - COSMO and QMMM interface
+
+
 Version 1.1 alpha-2 (2016-3-8):
 * Added
   - CCSD(T) and CCSD(T) gradients

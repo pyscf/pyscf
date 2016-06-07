@@ -175,8 +175,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
             addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
-    addra = addr // nb
-    addrb = addr % nb
+    addra, addrb = divmod(addr, nb)
     stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
                        dtype=numpy.uint64)
     strb = numpy.array([cistring.addr2str(norb,nelecb,ib) for ib in addrb],
