@@ -99,7 +99,10 @@ def get_pp(cell, kpt=np.zeros(3)):
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
     for ia in range(cell.natm):
-        pp = cell._pseudo[cell.atom_symbol(ia)]
+        symb = cell.atom_symbol(ia)
+        if symb not in cell._pseudo:
+            continue
+        pp = cell._pseudo[symb]
         for l, proj in enumerate(pp[5:]):
             rl, nl, hl = proj
             if nl > 0:

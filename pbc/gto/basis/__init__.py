@@ -66,7 +66,7 @@ def load(file_or_basis_name, symb):
         return parse_cp2k.load(file_or_basis_name, symb)
 
     name = file_or_basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
-    if file_or_basis_name not in ALIAS:
+    if name not in ALIAS:
         return pyscf.gto.basis.load(file_or_basis_name, symb)
     basmod = ALIAS[name]
     symb = ''.join(i for i in symb if i.isalpha())

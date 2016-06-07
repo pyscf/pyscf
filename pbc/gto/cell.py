@@ -14,7 +14,7 @@ import pyscf.lib.parameters as param
 import pyscf.gto.mole
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.gto.mole import format_atom, _symbol, _rm_digit, _std_symbol, _charge
+from pyscf.gto.mole import _symbol, _rm_digit, _std_symbol, _charge
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
@@ -79,7 +79,8 @@ def format_pseudo(pseudo_tab):
 def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
     for ia, atom in enumerate(cell._atom):
         symb = atom[0]
-        _atm[ia,0] = sum(_pseudo[symb][0])
+        if symb in _pseudo:
+            _atm[ia,0] = sum(_pseudo[symb][0])
     _pseudobas = None
     return _atm, _pseudobas, pre_env
 
@@ -106,16 +107,12 @@ def format_basis(basis_tab):
     '''
     fmt_basis = {}
     for atom in basis_tab.keys():
-        symb = _symbol(atom)
-        rawsymb = _rm_digit(symb)
-        stdsymb = _std_symbol(rawsymb)
-        symb = symb.replace(rawsymb, stdsymb)
-
-        if isinstance(basis_tab[atom], str):
-            fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
+        atom_basis = basis_tab[atom]
+        if isinstance(atom_basis, str) and 'gth' in atom_basis:
+            fmt_basis[atom] = basis.load(atom_basis, _std_symbol(atom))
         else:
-            fmt_basis[symb] = basis_tab[atom]
-    return fmt_basis
+            fmt_basis[atom] = atom_basis
+    return pyscf.gto.mole.format_basis(fmt_basis)
 
 def copy(cell):
     '''Deepcopy of the given :class:`Cell` object
@@ -218,7 +215,7 @@ def loads(cellstr):
 
     return cell
 
-def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
+def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     r'''1-electron integrals from two cells like
 
     .. math::
@@ -233,11 +230,20 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     else:
         assert('2e' not in intor)
         drv_name = 'GTOint2c'
+
     drv = getattr(pyscf.gto.moleintor.libcgto, drv_name)
     fintor = pyscf.gto.moleintor._fpointer(intor)
     intopt = lib.c_null_ptr()
 
-    gamma_point = kpt is None or np.allclose(kpt, 0)
+    if kpts is None:
+        if kpt is not None:
+            kpts_lst = np.reshape(kpt, (1,3))
+        else:
+            kpts_lst = np.zeros((1,3))
+    else:
+        kpts_lst = np.reshape(kpts, (-1,3))
+    gamma_point = abs(kpts_lst).sum() < 1e-8
+
     atm, bas, env = pyscf.gto.conc_env(cell1._atm, cell1._bas, cell1._env,
                                        cell2._atm, cell2._bas, cell2._env)
     atm = np.asarray(atm, dtype=np.int32)
@@ -250,15 +256,14 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
 
-    xyz = np.array([cell2.atom_coord(i) for i in range(cell2.natm)])
+    xyz = cell2.atom_coords()
     ptr_coord = atm[cell1.natm:,pyscf.gto.PTR_COORD]
-    out = 0
+    ptr_coord = np.vstack((ptr_coord,ptr_coord+1,ptr_coord+2)).T.copy('C')
+    out = [0] * len(kpts_lst)
     buf = np.empty((ni,nj,comp), order='F')
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
     for l,L in enumerate(cell1.get_lattice_Ls(nimgs)):
-        env[ptr_coord+0] = xyz[:,0] + L[0]
-        env[ptr_coord+1] = xyz[:,1] + L[1]
-        env[ptr_coord+2] = xyz[:,2] + L[2]
+        env[ptr_coord] = xyz + L
         drv(fintor, buf.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(comp), ctypes.c_int(hermi),
             (ctypes.c_int*4)(*(shls_slice[:4])),
@@ -267,19 +272,36 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpt=None):
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
 
-        if gamma_point:
-            out += buf
-        else:
-            out += buf * np.exp(1j*np.dot(kpt, L))
+        for k, kpt in enumerate(kpts_lst):
+            if gamma_point:
+                out[k] += buf
+            else:
+                out[k] += buf * np.exp(1j*np.dot(kpt, L))
 
-    out = out.transpose(2,0,1)
-    if hermi:
-        # GTOint2c fills the upper triangular of the F-order array.
-        idx = np.triu_indices(ni)
-        for i in range(comp):
-            out[i,idx[1],idx[0]] = out[i,idx[0],idx[1]].conj()
-    if comp == 1:
-        out = out.reshape(ni,nj)
+    def trans(out):
+        out = out.transpose(2,0,1)
+        if hermi == lib.HERMITIAN:
+            # GTOint2c fills the upper triangular of the F-order array.
+            idx = np.triu_indices(ni)
+            for i in range(comp):
+                out[i,idx[1],idx[0]] = out[i,idx[0],idx[1]].conj()
+        elif hermi == lib.ANTIHERMI:
+            idx = np.triu_indices(ni)
+            for i in range(comp):
+                out[i,idx[1],idx[0]] = -out[i,idx[0],idx[1]].conj()
+        elif hermi == lib.SYMMETRIC:
+            idx = np.triu_indices(ni)
+            for i in range(comp):
+                out[i,idx[1],idx[0]] = out[i,idx[0],idx[1]]
+        if comp == 1:
+            out = out.reshape(ni,nj)
+        return out
+
+    if kpts is None or np.shape(kpts) == (3,):
+# A single k-point
+        out = trans(out[0])
+    else:
+        out = [trans(out[k]) for k,kpt in enumerate(kpts_lst)]
     return out
 
 
@@ -397,7 +419,7 @@ def get_SI(cell, Gv=None):
     '''
     if Gv is None:
         Gv = cell.get_Gv()
-    coords = [cell.atom_coord(ia) for ia in range(cell.natm)]
+    coords = cell.atom_coords()
     SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
@@ -587,7 +609,6 @@ class Cell(pyscf.gto.Mole):
 
         if 'atom' in kwargs:
             self.atom = kwargs['atom']
-        _atom = format_atom(self.atom, unit=self.unit)
 
         # Set-up pseudopotential if it exists
         # This must happen before build() because it affects
@@ -595,23 +616,12 @@ class Cell(pyscf.gto.Mole):
         if self.pseudo is not None:
             if isinstance(self.pseudo, str):
                 # specify global pseudo for whole molecule
+                _atom = self.format_atom(self.atom, unit=self.unit)
                 uniq_atoms = set([a[0] for a in _atom])
                 self._pseudo = self.format_pseudo(dict([(a, self.pseudo)
                                                       for a in uniq_atoms]))
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
-
-        # Check if we're using a GTH basis
-        # This must happen before build() because it prepares self.basis
-        if isinstance(self.basis, str):
-            basis_name = self.basis.lower().replace(' ', '').replace('-', '').replace('_', '')
-            if 'gth' in basis_name:
-                # specify global basis for whole molecule
-                uniq_atoms = set([a[0] for a in _atom])
-                self.basis = self.format_basis(dict([(a, basis_name)
-                                                     for a in uniq_atoms]))
-            # This sets self.basis to be internal format, and will
-            # be parsed appropriately by Mole.build
 
         # Do regular Mole.build with usual kwargs
         _built = self._built
@@ -637,7 +647,8 @@ class Cell(pyscf.gto.Mole):
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[1])
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[2])
             logger.info(self, 'Cell volume = %g', self.vol)
-            logger.info(self, 'nimgs = %s', self.nimgs)
+            logger.info(self, 'nimgs = %s  lattice sum = %d cells',
+                        self.nimgs, len(self.get_lattice_Ls(self.nimgs)))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'gs (grid size) = %s', self.gs)
             logger.info(self, 'pseudo = %s', self.pseudo)
@@ -649,7 +660,7 @@ class Cell(pyscf.gto.Mole):
 
     @property
     def Gv(self):
-        return self.get_Gv()
+        return self.get_Gv(self.gs)
 
     @lib.with_doc(format_pseudo.__doc__)
     def format_pseudo(self, pseudo_tab):
@@ -749,9 +760,9 @@ class Cell(pyscf.gto.Mole):
     ewald = ewald
     energy_nuc = ewald
 
-    def pbc_intor(self, intor, comp=1, hermi=0, kpt=None):
+    def pbc_intor(self, intor, comp=1, hermi=0, kpts=None, kpt=None):
         '''One-electron integrals with PBC. See also Mole.intor'''
-        return intor_cross(intor, self, self, comp, hermi, kpt)
+        return intor_cross(intor, self, self, comp, hermi, kpts, kpt)
 
     def from_ase(self, ase_atom):
         '''Update cell based on given ase atom object
