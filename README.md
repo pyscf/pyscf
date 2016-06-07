@@ -3,9 +3,9 @@ PySCF
 
 Python module for quantum chemistry
 
-2016-04-11
+2016-06-04
 
-* [Release 1.1 beta](../../releases/latest)
+* [Release 1.1](../../releases/latest) ([development branch](https://github.com/sunqm/pyscf/tree/master))
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
@@ -73,7 +73,7 @@ Installation
 Known problems
 --------------
 
-* Error message "Library not loaded: libcint.2.7.dylib" On OS X.
+* Error message "Library not loaded: libcint.2.9.dylib" On OS X.
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
@@ -88,22 +88,6 @@ Known problems
   disable mkl_avx:
 
         BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
-
-* tests fail
-
-        mcscf/test/test_bz_df.py     test_mc2step_9o8e
-        mcscf/test/test_addons.py    test_ucasscf_spin_square
-        cc/test/test_h2o.py          test_h2o_without_scf
-
-
-* Program exits with
-```
-AttributeError: ..../libri.so: undefined symbol: RInr_fill2c2e_sph
-```
-
-  It is caused by old version of libcint.  Remove the directory
-  "pyscf/lib/deps" and rebuild pyscf to fix this problem.
-
 
 * h5py installation.
   If you got problems to install the latest h5py package,  you can try

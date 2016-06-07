@@ -143,7 +143,7 @@ SCF
 To control the HF determinant symmetry,  one can assign occupancy for
 particular irreps, e.g.
 
-.. literalinclude:: ../../examples/scf/30-hf_with_irrep_nelec.py
+.. literalinclude:: ../../examples/scf/13-symmetry.py
 
 FCI
 ---
