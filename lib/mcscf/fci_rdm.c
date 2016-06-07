@@ -29,7 +29,8 @@ double FCIrdm2_a_t1ci(double *ci0, double *t1,
 {
         ci0 += strb_id;
         const int nnorb = norb * norb;
-        int i, j, k, a, str1, sign;
+        int i, j, k, a, sign;
+        size_t str1;
         const _LinkT *tab = clink_indexa + stra_id * nlinka;
         double *pt1, *pci;
         double csum = 0;
@@ -64,7 +65,7 @@ double FCIrdm2_b_t1ci(double *ci0, double *t1,
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*nstrb;
+        double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
@@ -88,7 +89,7 @@ double FCIrdm2_0b_t1ci(double *ci0, double *t1,
         const int nnorb = norb * norb;
         int i, j, a, str0, str1, sign;
         const _LinkT *tab = clink_indexb + strb_id * nlinkb;
-        double *pci = ci0 + stra_id*nstrb;
+        double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
