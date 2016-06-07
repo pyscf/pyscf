@@ -178,6 +178,8 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
     ijmosym, nij_pair, moij, ijshape = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
+    ijshape = (ijshape[0], ijshape[1]-ijshape[0],
+               ijshape[2], ijshape[3]-ijshape[2])
 
     eri1 = numpy.empty((nij_pair,nao_pair))
     if nij_pair == 0:
@@ -211,8 +213,8 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     return eri1
 
 def iden_coeffs(mo1, mo2):
-    return (id(mo1) == id(mo2)) or \
-            (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
+    return (id(mo1) == id(mo2) or
+            (mo1.shape==mo2.shape and numpy.linalg.norm(mo1,mo2) < 1e-13))
 
 
 def _conc_mos(moi, moj, compact):

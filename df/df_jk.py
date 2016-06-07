@@ -145,6 +145,7 @@ def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
 
     vj = numpy.zeros((nset,nao,nao))
     vk = numpy.zeros((nset,nao,nao))
+    null = pyscf.lib.c_null_ptr()
 
     #:vj = reduce(numpy.dot, (cderi.reshape(-1,nao*nao), dm.reshape(-1),
     #:                        cderi.reshape(-1,nao*nao))).reshape(nao,nao)
@@ -187,7 +188,7 @@ def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                          cpos[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(naux), ctypes.c_int(nao),
                          ctypes.c_int(0), ctypes.c_int(cpos[k].shape[1]),
-                         ctypes.c_int(0), ctypes.c_int(0))
+                         ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
                     vk[k] += pyscf.lib.dot(buf1.T, buf1)
                 if with_k and cneg[k].shape[1] > 0:
                     buf1 = buf[:naux*cneg[k].shape[1]]
@@ -197,7 +198,7 @@ def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                          cneg[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(naux), ctypes.c_int(nao),
                          ctypes.c_int(0), ctypes.c_int(cneg[k].shape[1]),
-                         ctypes.c_int(0), ctypes.c_int(0))
+                         ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
                     vk[k] -= pyscf.lib.dot(buf1.T, buf1)
             t1 = log.timer_debug1('jk', *t1)
     else:
@@ -206,7 +207,7 @@ def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         fcopy = _ri._fpointer('RImmm_nr_s2_copy')
         rargs = (ctypes.c_int(nao),
                  ctypes.c_int(0), ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(0))
+                 ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
         dms = [numpy.asarray(dm, order='F') for dm in dms]
         buf = numpy.empty((2,dfobj.blockdim,nao,nao))
         for eri1 in dfobj.loop():
