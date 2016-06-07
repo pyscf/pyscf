@@ -214,7 +214,7 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
 
 def iden_coeffs(mo1, mo2):
     return (id(mo1) == id(mo2) or
-            (mo1.shape==mo2.shape and numpy.linalg.norm(mo1,mo2) < 1e-13))
+            (mo1.shape==mo2.shape and numpy.linalg.norm(mo1-mo2) < 1e-13))
 
 
 def _conc_mos(moi, moj, compact):
