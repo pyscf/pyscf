@@ -137,13 +137,12 @@ def general(pwdf, mo_coeffs, kpts=None, compact=True):
         mo_ij_G *= coulG.reshape(-1,1)
 # mo_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         mo_kl_G = get_mo_pairs_G(pwdf, (mo_coeffs[3],mo_coeffs[2]),
-                                 (kptl,kptk)).reshape(-1,nmol,nmok)
-        mo_kl_G = mo_kl_G.transpose(0,2,1).conj().reshape(ngs,-1)
+                                 (kptl,kptk)).conj()
         eri = lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
         if mo_ij_G.shape[1] == nmoi*(nmoi+1)//2:
-            eri = lib.unpack_tirl(eri, axis=0)
+            eri = lib.unpack_tirl(eri, axis=0).reshape(-1,nmol,nmok).transpose(0,2,1)
         elif mo_kl_G.shape[1] == nmok*(nmok+1)//2:
-            eri = lib.unpack_tirl(eri, axis=1)
+            eri = lib.unpack_tirl(eri, axis=1).transpose(0,2,1)
         return eri.reshape(nmoi*nmoj,-1)
 
 
