@@ -89,7 +89,7 @@ def general(pwdf, mo_coeffs, kpts=None, compact=False):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < 1e-9:
+    if 0 and abs(kptijkl).sum() < 1e-9:
         mo_pairs_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2], compact)
         if ((ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[2]) and
              ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[3]))):
@@ -211,7 +211,7 @@ def get_mo_pairs_G(pwdf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
             def fftprod(ij):
                 i = int(numpy.sqrt(ij*2+.25)-.5)
                 j = ij - i*(i+1)//2
-                return tools.fft(moR[:,i] * moR[:,j], pwdf.gs)
+                return tools.fft(moR[:,i].conj() * moR[:,j], pwdf.gs)
             mo_pairs_G = tools.pbc._map(fftprod, ngs, npair)
         else:
             moiR = lib.dot(aoR, mo_coeffs[0])
@@ -219,7 +219,7 @@ def get_mo_pairs_G(pwdf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
             npair = nmoi * nmoj
             def fftprod(ij):
                 i, j = divmod(ij, nmoj)
-                return tools.fft(moiR[:,i] * mojR[:,j], pwdf.gs)
+                return tools.fft(moiR[:,i].conj() * mojR[:,j], pwdf.gs)
             mo_pairs_G = tools.pbc._map(fftprod, ngs, npair)
 
     elif abs(kpts[0]-kpts[1]).sum() < 1e-9:
