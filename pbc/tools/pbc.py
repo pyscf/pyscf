@@ -1,4 +1,6 @@
 import sys
+from multiprocessing import sharedctypes, Process
+import threading
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -71,6 +73,33 @@ def ifftk(g, gs, r, k):
     fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
     return ifft(g, gs) * np.exp(1j*np.dot(k,r.T))
+
+def _map(fn, ngs, nv):
+    buf_ctypes = sharedctypes.RawArray('d', ngs*nv*2)  # *2 for complex number
+    out = np.ndarray((nv,ngs), dtype=np.complex128, buffer=buf_ctypes)
+    def f(i0, i1):
+        for i in range(i0,i1):
+            out[i] = fn(i)
+    nproc = lib.num_threads()
+    seg = (nv+nproc-1) // nproc
+    ps = [Process(target=f, args=(i0,i1)) for i0,i1 in lib.prange(0, nv, seg)]
+    [p.start() for p in ps]
+    [p.join() for p in ps]
+    return out.T
+
+def map_fft(vs, gs):
+    return _map(lambda i: fft(vs[:,i], gs), *(vs.shape))
+
+def map_ifft(vs, gs):
+    return _map(lambda i: ifft(vs[:,i], gs), *(vs.shape))
+
+def map_fftk(vs, gs, rk, k):
+    fac = np.exp(-1j*np.dot(rk,k))
+    return _map(lambda i: fft(vs[:,i], gs)*fac, *(vs.shape))
+
+def map_ifftk(vs, gs, rk, k):
+    fac = np.exp(1j*np.dot(rk,k))
+    return _map(lambda i: ifft(vs[:,i]*fac, gs), *(vs.shape))
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):

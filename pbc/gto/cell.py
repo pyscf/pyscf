@@ -226,7 +226,6 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     import pyscf.gto.moleintor
     if '2c2e' in intor:
         drv_name = 'GTOint2c2e'
-        assert(hermi != lib.HERMITIAN and hermi != lib.ANTIHERMI)
     else:
         assert('2e' not in intor)
         drv_name = 'GTOint2c'
