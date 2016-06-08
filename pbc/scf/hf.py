@@ -371,19 +371,18 @@ def dot_eri_dm(eri, dm, hermi=0):
         input density matrices.
     '''
 
-    if np.iscomplexobj(dm) or np.iscomplexobj(eri):
+    if np.iscomplexobj(eri) or np.iscomplexobj(dm):
         def contract(dm):
             n = dm.shape[0]
-            eri = eri.reshape((n,)*4)
-            vj = np.einsum('ijkl,ji->kl', eri, dm)
-            vk = np.einsum('ijkl,jk->il', eri, dm)
+            vj = np.einsum('ijkl,ji->kl', eri.reshape((n,)*4), dm)
+            vk = np.einsum('ijkl,jk->il', eri.reshape((n,)*4), dm)
             return vj, vk
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        if isinstance(dm, np.ndarray) and dm.ndim == 2:
             vj, vk = contract(dm)
         else:
             vjk = [contract(dmi) for dmi in dm]
-            vj = numpy.asarray([v[0] for v in vjk])
-            vk = numpy.asarray([v[1] for v in vjk])
+            vj = np.asarray([v[0] for v in vjk])
+            vk = np.asarray([v[1] for v in vjk])
     else:
         vj, vk = pyscf.scf.hf.dot_eri_dm(eri, dm, hermi)
     return vj, vk
@@ -440,7 +439,7 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
 
         cpu0 = (time.clock(), time.time())
-        if (kpt_band is None and
+        if 0 and (kpt_band is None and
             (self.exxdiv == 'ewald' or self.exxdiv is None) and
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:

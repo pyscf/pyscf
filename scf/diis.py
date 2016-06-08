@@ -29,19 +29,14 @@ class DIIS(pyscf.lib.diis.DIIS):
         if isinstance(f, numpy.ndarray) and f.ndim == 2:
             sdf = reduce(numpy.dot, (s,d,f))
             errvec = sdf.T.conj() - sdf
-
-        elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
+        else:
+            if isinstance(s, numpy.ndarray) and s.ndim == 2:
+                s = [s] * len(f)
             errvec = []
-            for i in range(f.shape[0]):
+            for i in range(len(f)):
                 sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
                 errvec.append((sdf.T.conj() - sdf))
             errvec = numpy.hstack(errvec)
-
-        else:
-            sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
-            sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
-            errvec = numpy.hstack((sdf_a.T.conj() - sdf_a,
-                                   sdf_b.T.conj() - sdf_b))
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         xnew = pyscf.lib.diis.DIIS.update(self, f, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:

@@ -418,24 +418,18 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    if abs(factor) < 1e-4:
-        return f
-    else:
-        dm_vir = s - reduce(numpy.dot, (s, d, s))
-        return f + dm_vir * factor
+    dm_vir = s - reduce(numpy.dot, (s, d, s))
+    return f + dm_vir * factor
 
 
 def damping(s, d, f, factor):
-    if abs(factor) < 1e-4:
-        return f
-    else:
-        #dm_vir = s - reduce(numpy.dot, (s,d,s))
-        #sinv = numpy.linalg.inv(s)
-        #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
-        dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
-        f0 = reduce(numpy.dot, (dm_vir, f, d, s))
-        f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
-        return f - f0
+    #dm_vir = s - reduce(numpy.dot, (s,d,s))
+    #sinv = numpy.linalg.inv(s)
+    #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
+    dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
+    f0 = reduce(numpy.dot, (dm_vir, f, d, s))
+    f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
+    return f - f0
 
 
 # full density matrix for RHF
@@ -632,11 +626,12 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         damp_factor = mf.damp
 
     f = h1e + vhf
-    if 0 <= cycle < diis_start_cycle-1:
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
     if adiis and cycle >= diis_start_cycle:
         f = adiis.update(s1e, dm, f)
-    f = level_shift(s1e, dm*.5, f, level_shift_factor)
+    if abs(level_shift_factor) > 1e-4:
+        f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
@@ -1047,7 +1042,6 @@ class SCF(pyscf.lib.StreamObject):
 
     @pyscf.lib.with_doc(eig.__doc__)
     def eig(self, h, s):
-        import numpy.linalg
         return eig(h, s)
 
     def get_hcore(self, mol=None):

@@ -57,12 +57,12 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
             emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max*2-1)]
             emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max*2-1)]
             # Tune emin and emax
-            emin_by_l = numpy.array(emin_by_l)
-            emax_by_l = numpy.array(emax_by_l) / (numpy.arange(l_max*2-1)*.5+1)
+            emin_by_l = numpy.array(emin_by_l) * 2  # *2 for alpha+alpha on same center
+            emax_by_l = numpy.array(emax_by_l) * 2  #/ (numpy.arange(l_max*2-1)*.5+1)
 
             ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
             etb = [(l, max(n,1), emin_by_l[l], beta)
-                   for l, n in enumerate(ns.astype(int))]
+                   for l, n in enumerate(numpy.ceil(ns).astype(int))]
             newbasis[symb] = gto.expand_etbs(etb)
 
     return newbasis

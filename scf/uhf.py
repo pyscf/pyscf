@@ -169,13 +169,14 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         f = (f, f)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = [dm*.5] * 2
-    if 0 <= cycle < diis_start_cycle-1:
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
         f = (hf.damping(s1e, dm[0], f[0], dampa),
              hf.damping(s1e, dm[1], f[1], dampb))
     if adiis and cycle >= diis_start_cycle:
-        f = adiis.update(s1e, dm, numpy.array(f))
-    f = (hf.level_shift(s1e, dm[0], f[0], shifta),
-         hf.level_shift(s1e, dm[1], f[1], shiftb))
+        f = adiis.update(s1e, dm, f)
+    if abs(shifta)+abs(shiftb) > 1e-4:
+        f = (hf.level_shift(s1e, dm[0], f[0], shifta),
+             hf.level_shift(s1e, dm[1], f[1], shiftb))
     return numpy.array(f)
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):

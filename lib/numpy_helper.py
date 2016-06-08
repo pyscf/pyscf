@@ -113,9 +113,15 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         idx = numpy.tril_indices(nd)
         if filltriu == HERMITIAN:
             for ij,(i,j) in enumerate(zip(*idx)):
-                out[i,j] = out[j,i] = tril[ij]
+                out[i,j] = tril[ij]
+                out[j,i] = tril[ij].conj()
         elif filltriu == ANTIHERMI:
-            raise KeyError('filltriu == ANTIHERMI')
+            for ij,(i,j) in enumerate(zip(*idx)):
+                out[i,j] = tril[ij]
+                out[j,i] =-tril[ij].conj()
+        elif filltriu == SYMMETRIC:
+            for ij,(i,j) in enumerate(zip(*idx)):
+                out[i,j] = out[j,i] = tril[ij]
         else:
             out[idx] = tril
         return out
@@ -375,46 +381,39 @@ def zdot(a, b, alpha=1, c=None, beta=0):
     btype = b.dtype
 
     if atype == numpy.float64 and btype == numpy.float64:
-        c = ddot(a, b, alpha, c, beta)
+        return ddot(a, b, alpha, c, beta)
 
-    elif atype == numpy.float64 and btype == numpy.complex128:
+    if atype == numpy.float64 and btype == numpy.complex128:
         br = b.real.copy()
         bi = b.imag.copy()
         cr = ddot(a, br, alpha)
         ci = ddot(a, bi, alpha)
-        if c is None:
-            c = cr + ci*1j
-        else:
-            c *= beta
-            c += cr + ci*1j
+        ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.float64:
         ar = a.real.copy()
         ai = a.imag.copy()
         cr = ddot(ar, b, alpha)
         ci = ddot(ai, b, alpha)
-        if c is None:
-            c = cr + ci*1j
-        else:
-            c *= beta
-            c += cr + ci*1j
+        ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.complex128:
         k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
         k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
         k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
-        if c is None:
-            c = k1-k3 + (k1+k2)*1j
-        else:
-            c *= beta
-            c += k1-k3 + (k1+k2)*1j
+        ab = k1-k3 + (k1+k2)*1j
 
     else:
-        if c is None:
-            c = numpy.dot(a, b) * alpha
+        ab = numpy.dot(a, b) * alpha
+
+    if c is None:
+        c = ab
+    else:
+        if beta == 0:
+            c[:] = 0
         else:
             c *= beta
-            c += numpy.dot(a, b) * alpha
+        c += ab
     return c
 dot = zdot
 

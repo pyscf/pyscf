@@ -225,7 +225,7 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
        env.ctypes.data_as(ctypes.c_void_p))
 
     if comp == 1:
-        return mat.reshape(naoi,naoj)
+        return mat.reshape((naoi,naoj), order='A')
     else:
         return mat.transpose(2,0,1)
 
@@ -279,7 +279,7 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         env.ctypes.data_as(ctypes.c_void_p))
 
     if comp == 1:
-        return mat.reshape(shape[:-1])
+        return mat.reshape(shape[:-1], order='A')
     else:
         return numpy.rollaxis(mat, -1, 0)
 

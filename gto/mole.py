@@ -1418,7 +1418,7 @@ class Mole(pyscf.lib.StreamObject):
     >>> print(mol.intor('cint1e_ovlp_sph'))
     [[ 0.99999999  0.43958641]
      [ 0.43958641  0.99999999]]
-    >>> mol.Charge = 1
+    >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
 
