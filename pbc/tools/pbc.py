@@ -100,11 +100,11 @@ def map_ifft(vs, gs):
 
 def map_fftk(vs, gs, rk, k):
     fac = np.exp(-1j*np.dot(rk,k))
-    return _map(lambda i: fft(vs[:,i], gs)*fac, *(vs.shape))
+    return _map(lambda i: fft(vs[:,i]*fac, gs), *(vs.shape))
 
 def map_ifftk(vs, gs, rk, k):
     fac = np.exp(1j*np.dot(rk,k))
-    return _map(lambda i: ifft(vs[:,i]*fac, gs), *(vs.shape))
+    return _map(lambda i: ifft(vs[:,i], gs)*fac, *(vs.shape))
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
