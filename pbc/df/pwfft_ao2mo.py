@@ -17,7 +17,7 @@ from pyscf.pbc import dft as pdft
 from pyscf.pbc import tools
 
 
-def get_eri(pwdf, kpts=None):
+def get_eri(pwdf, kpts=None, compact=False):
     cell = pwdf.cell
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
@@ -35,7 +35,7 @@ def get_eri(pwdf, kpts=None):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
-        ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2])
+        ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2], compact)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         aoijR = ao_pairs_G.real.copy()
         aoijI = ao_pairs_G.imag.copy()
@@ -50,7 +50,7 @@ def get_eri(pwdf, kpts=None):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
-        ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2])
+        ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2], False)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         ao_pairs_invG = ao_pairs_G.reshape(-1,nao,nao).transpose(0,2,1).conj()
         ao_pairs_invG = ao_pairs_invG.reshape(ngs,-1)
@@ -60,19 +60,15 @@ def get_eri(pwdf, kpts=None):
 # aosym = s1, complex integrals
 #
     else:
-        ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2])
+        ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2], False)
 # ao_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
-        ao_pairs_invG = get_ao_pairs_G(pwdf, -kptijkl[2:]).conj()
+        ao_pairs_invG = get_ao_pairs_G(pwdf, -kptijkl[2:], False).conj()
         ao_pairs_G *= coulG.reshape(-1,1)
         eri = lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
-        if ao_pairs_G.shape[1] == nao_pair:
-            eri = lib.unpack_tril(eri, axis=0)
-        elif ao_pairs_invG.shape[1] == nao_pair:
-            eri = lib.unpack_tril(eri, axis=1)
         return eri.reshape(nao*nao,-1)
 
 
-def general(pwdf, mo_coeffs, kpts=None, compact=True):
+def general(pwdf, mo_coeffs, kpts=None, compact=False):
     cell = pwdf.cell
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
@@ -142,7 +138,7 @@ def general(pwdf, mo_coeffs, kpts=None, compact=True):
         return lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
 
 
-def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3))):
+def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3)), compact=False):
     '''Calculate forward (G|ij) FFT of all AO pairs.
 
     Returns:
@@ -158,7 +154,7 @@ def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3))):
     nao = cell.nao_nr()
     ngs = len(coords)
 
-    if abs(kpts).sum() < 1e-9:  # gamma point
+    if compact and abs(kpts).sum() < 1e-9:  # gamma point
         aoR = pwdf._ni.eval_ao(cell, coords, kpts[:1])[0]
         npair = nao*(nao+1)//2
         def fftprod(ij):
@@ -186,7 +182,7 @@ def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3))):
 
     return ao_pairs_G
 
-def get_mo_pairs_G(pwdf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=True):
+def get_mo_pairs_G(pwdf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
     '''Calculate forward (G|ij) FFT of all MO pairs.
 
     Args:
