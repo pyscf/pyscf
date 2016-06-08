@@ -64,7 +64,11 @@ def get_eri(pwdf, kpts=None):
 # ao_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         ao_pairs_invG = get_ao_pairs_G(pwdf, -kptijkl[2:]).conj()
         ao_pairs_G *= coulG.reshape(-1,1)
-        return lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
+        eri = lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
+        if ao_pairs_G.shape[1] == nao_pair:
+            return lib.unpack_tirl(eri, axis=0)
+        elif ao_pairs_invG.shape[1] == nao_pair:
+            return lib.unpack_tirl(eri, axis=1)
 
 
 def general(pwdf, mo_coeffs, kpts=None, compact=True):
@@ -81,13 +85,18 @@ def general(pwdf, mo_coeffs, kpts=None, compact=True):
         mo_coeffs = (mo_coeffs,) * 4
     coulG = tools.get_coulG(cell, kptj-kpti, gs=pwdf.gs)
     ngs = len(coulG)
+    nmoi = mo_coeffs[0].shape[1]
+    nmoj = mo_coeffs[1].shape[1]
+    nmok = mo_coeffs[2].shape[1]
+    nmol = mo_coeffs[3].shape[1]
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
         mo_pairs_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2])
-        if (ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[2]) and
-            ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[3])):
+        if (compact and
+            (ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[2]) and
+             ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[3]))):
             mo_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
             moijR = moklR = mo_pairs_G.real.copy()
             moijI = moklI = mo_pairs_G.imag.copy()
@@ -113,8 +122,6 @@ def general(pwdf, mo_coeffs, kpts=None, compact=True):
     elif ((abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9) and
           ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[3]) and
           ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[2])):
-        nmoi = mo_coeffs[0].shape[1]
-        nmoj = mo_coeffs[1].shape[1]
         mo_ij_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2])
         mo_ij_G *= numpy.sqrt(coulG).reshape(-1,1)
         mo_kl_G = mo_ij_G.reshape(-1,nmoi,nmoj).transpose(0,2,1).conj()
@@ -125,15 +132,17 @@ def general(pwdf, mo_coeffs, kpts=None, compact=True):
 # aosym = s1, complex integrals
 #
     else:
-        nmok = mo_coeffs[2].shape[1]
-        nmol = mo_coeffs[3].shape[1]
         mo_ij_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2])
         mo_ij_G *= coulG.reshape(-1,1)
 # mo_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         mo_kl_G = get_mo_pairs_G(pwdf, (mo_coeffs[3],mo_coeffs[2]),
                                  (kptl,kptk)).reshape(-1,nmol,nmok)
         mo_kl_G = mo_kl_G.transpose(0,2,1).conj().reshape(ngs,-1)
-        return lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
+        eri = lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
+        if mo_ij_G.shape[1] == nmoi*(nmoi+1)//2:
+            return lib.unpack_tirl(eri, axis=0)
+        elif mo_kl_G.shape[1] == nmok*(nmok+1)//2:
+            return lib.unpack_tirl(eri, axis=1)
 
 
 def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3))):

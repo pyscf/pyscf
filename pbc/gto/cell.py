@@ -641,7 +641,7 @@ class Cell(pyscf.gto.Mole):
 
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
-            logger.info(self, 'lattice vector [a1        | a2        | a3       ]')
+            logger.info(self, 'lattice vector [a1          | a2          | a3         ]')
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[0])
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[1])
             logger.info(self, '               [%.9f | %.9f | %.9f]', *self._h[2])
