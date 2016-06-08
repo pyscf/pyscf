@@ -1432,13 +1432,13 @@ void PBC_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), double complex *mat,
         const int nrow = ao_loc[ish1] - ao_loc[ish0];
         const int ncol = ao_loc[jsh1] - ao_loc[jsh0];
         const size_t off0 = ao_loc[ish0] + ao_loc[jsh0] * nrow;
-        const int dims[2] = {nrow, ncol};
         const double complex fac = cos(phase) + sin(phase)*_Complex_I;
 
 #pragma omp parallel default(none) \
         shared(intor, mat, Gv, invh, gxyz, gs, nGv, ao_loc, \
                eval_gz, hermi, atm, natm, bas, nbas, env)
 {
+        int dims[2] = {nrow, ncol};
         int i, j, k, ij, di, dj;
         int shls[2];
         size_t off;
