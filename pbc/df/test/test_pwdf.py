@@ -104,11 +104,11 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
     mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
+    fac = np.exp(-1j*np.dot(coords, q))
     for i in xrange(nmoi):
         for j in xrange(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
-            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.gs,
-                                                coords, q)
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.gs, fac)
 
     return mo_pairs_G
 
@@ -156,11 +156,11 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
     #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
     mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
+    fac = np.exp(1j*np.dot(coords, q))
     for i in xrange(nmoi):
         for j in xrange(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.gs,
-                                                           coords, -q))
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.gs, fac))
 
     return mo_pairs_invG
 
@@ -209,12 +209,12 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
     mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
     mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
 
+    fac = np.exp(-1j*np.dot(coords, q))
     for i in xrange(nmoi):
         for j in xrange(nmoj):
-            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.gs,
-                                                coords, q)
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.gs, fac)
             mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.gs,
-                                                                   coords, -q))
+                                                                   fac.conj()))
 
     return mo_pairs_G, mo_pairs_invG
 
@@ -383,6 +383,7 @@ cell.build()
 np.random.seed(1)
 kpts = np.random.random((4,3))
 kpts[3] = kpts[0]-kpts[1]+kpts[2]
+kpt0 = np.zeros(3)
 
 cell1 = pgto.Cell()
 cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
@@ -391,7 +392,7 @@ cell1.h = np.eye(3) * 2.5
 cell1.gs = [10] * 3
 cell1.build()
 kdf0 = xdf.XDF(cell1)
-kdf0.kpts = kpts
+kdf0.kpts = kpts[:,:4]
 
 
 def finger(a):
@@ -522,6 +523,14 @@ class KnowValues(unittest.TestCase):
 
         eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],kpts[1],kpts[1],kpts[0],))
         eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],kpts[1],kpts[1],kpts[0],))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpt0,kpt0,kpts[0],kpts[0],))
+        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpt0,kpt0,kpts[0],kpts[0],))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],kpts[0],kpt0,kpt0,))
+        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],kpts[0],kpt0,kpt0,))
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
 
         odf.analytic_ft = True
