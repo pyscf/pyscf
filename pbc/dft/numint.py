@@ -52,9 +52,9 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
         pyscf.dft.numint.eval_ao
 
     '''
-    gamma_point = kpt is None or numpy.allclose(kpt, 0)
+    gamma_point = kpt is None or abs(kpt).sum() < 1e-9
     aoR = 0
-    for L in tools.get_lattice_Ls(cell, cell.nimgs):
+    for L in cell.get_lattice_Ls(cell.nimgs):
         if gamma_point:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             shl_slice, non0tab, out, verbose)
@@ -406,38 +406,38 @@ class _NumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
 
-    def eval_ao(self, mol, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
+    def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
                 non0tab=None, out=None, verbose=None):
-        return eval_ao(mol, coords, kpt, deriv, relativity, shl_slice,
+        return eval_ao(cell, coords, kpt, deriv, relativity, shl_slice,
                        non0tab, out, verbose)
 
-    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
+    def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
+        return eval_rho(cell, ao, dm, non0tab, xctype, verbose)
 
-    def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
+    def eval_rho2(self, cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   verbose=None):
         dm = numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
-        return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
+        return eval_rho(cell, ao, dm, non0tab, xctype, verbose)
 
-    def nr_rks(self, mol, grids, xc_code, dms, hermi=1,
+    def nr_rks(self, cell, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, mol, grids, xc_code, dms,
+        return nr_rks_vxc(self, cell, grids, xc_code, dms,
                           spin=0, relativity=0, hermi=1,
                           max_memory=max_memory, verbose=verbose,
                           kpt=kpt, kpt_band=kpt_band)
 
-    def nr_uks(self, mol, grids, xc_code, dms, hermi=1,
+    def nr_uks(self, cell, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None):
         raise NotImplementedError
 
-    def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+    def eval_mat(self, cell, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                  xctype='LDA', verbose=None):
         # use local function for complex eval_mat
-        return eval_mat(mol, ao, weight, rho, vrho, vsigma, non0tab,
+        return eval_mat(cell, ao, weight, rho, vrho, vsigma, non0tab,
                         xctype, verbose)
 
 
@@ -449,7 +449,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpts = numpy.reshape(kpts, (-1,3))
 
-    def eval_ao(self, mol, coords, kpts=None, deriv=0, relativity=0,
+    def eval_ao(self, cell, coords, kpts=None, deriv=0, relativity=0,
                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
         '''
         Returns:
@@ -463,26 +463,28 @@ class _KNumInt(pyscf.dft.numint._NumInt):
                 kpts = kpt
             else:
                 kpts = self.kpts
-        kpts = kpt.reshape(-1,3)
+        kpts = kpts.reshape(-1,3)
 
-        nkpts = len(kpts)
-        ngs = len(coords)
-        nao = mol.nao_nr()
-
-        if kpt is None or numpy.all(kpt == 0):
-            ao_kpts = numpy.empty([nkpts, ngs, nao])
-        else:
-            ao_kpts = numpy.empty([nkpts, ngs, nao],numpy.complex128)
-        for k, kpt in enumerate(kpts):
-            ao_kpts[k,:,:] = eval_ao(mol, coords, kpt, deriv, relativity,
-                                     shl_slice, non0tab, out, verbose)
+        #ao_kpts = [0] * len(kpts)
+        #for L in cell.get_lattice_Ls(cell.nimgs):
+        #    aoR = pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
+        #                                   shl_slice, non0tab, out, verbose)
+        #    for k, kpt in enumerate(kpts):
+        #        if abs(kpt).sum() < 1e-9:
+        #            ao_kpts[k] += aoR
+        #        else:
+        #            factor = numpy.exp(1j*numpy.dot(kpt,L))
+        #            ao_kpts[k] += aoR * factor
+        ao_kpts = [eval_ao(cell, coords, kpt, deriv, relativity,
+                           shl_slice, non0tab, out, verbose)
+                   for kpt in kpts]
         return ao_kpts
 
-    def eval_rho(self, mol, ao_kpts, dm_kpts, non0tab=None,
+    def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None,
                  xctype='LDA', verbose=None):
         '''
         Args:
-            mol : Mole or Cell object
+            cell : Mole or Cell object
             ao_kpts : (nkpts, ngs, nao) ndarray
                 AO values at each k-point
             dm_kpts: (nkpts, nao, nao) ndarray
@@ -494,35 +496,35 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         nkpts, ngs, nao = ao_kpts.shape
         rhoR = numpy.zeros(ngs)
         for k in range(nkpts):
-            rhoR += 1./nkpts*eval_rho(mol, ao_kpts[k], dm_kpts[k])
+            rhoR += 1./nkpts*eval_rho(cell, ao_kpts[k], dm_kpts[k])
         return rhoR
 
-    def eval_rho2(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
+    def eval_rho2(self, cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         raise NotImplementedError
 
-    def nr_rks(self, mol, grids, xc_code, dms, hermi=1,
+    def nr_rks(self, cell, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None, kpt=None, kpt_band=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, mol, grids, xc_code, dms,
+        return nr_rks_vxc(self, cell, grids, xc_code, dms,
                           spin=0, relativity=0, hermi=1,
                           max_memory=max_memory, verbose=verbose,
                           kpt=kpt, kpt_band=kpt_band)
 
-    def nr_uks(self, mol, grids, xc_code, dms, hermi=1,
+    def nr_uks(self, cell, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None):
         raise NotImplementedError
 
-    def eval_mat(self, mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
+    def eval_mat(self, cell, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                  xctype='LDA', verbose=None):
         # use local function for complex eval_mat
         nkpts = len(self.kpts)
         nao = ao.shape[2]
         mat = numpy.zeros((nkpts, nao, nao), dtype=ao.dtype)
         for k in range(nkpts):
-            mat[k] = eval_mat(mol, ao[k], weight,
+            mat[k] = eval_mat(cell, ao[k], weight,
                               rho, vrho, vsigma, non0tab,
                               xctype, verbose)
         return mat

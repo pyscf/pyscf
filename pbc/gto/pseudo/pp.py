@@ -59,7 +59,11 @@ def get_gth_vlocG(cell, G):
     vlocG = np.zeros((cell.natm,len(G)))
     for ia in range(cell.natm):
         Zia = cell.atom_charge(ia)
-        pp = cell._pseudo[ cell.atom_symbol(ia) ]
+        symb = cell.atom_symbol(ia)
+        if symb not in cell._pseudo:
+            vlocG[ia] = cell.atom_charge(ia)
+            continue
+        pp = cell._pseudo[symb]
         rloc, nexp, cexp = pp[1:3+1]
 
         G_red = G*rloc

@@ -21,3 +21,4 @@ def KRHF(mol, *args, **kwargs):
     from pyscf.pbc.scf import khf
     from pyscf.pbc.scf import khf as krhf
     return krhf.KRHF(mol, *args, **kwargs)
+

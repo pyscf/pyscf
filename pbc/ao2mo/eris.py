@@ -1,5 +1,6 @@
 import numpy as np
 
+from pyscf import lib
 from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft.gen_grid import gen_uniform_grids
 from pyscf.pbc.dft.numint import eval_ao
@@ -209,7 +210,7 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
 
     return mo_pairs_G, mo_pairs_invG
 
-def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.DEBUG):
+def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.INFO):
     '''Assemble 4-index electron repulsion integrals.
 
     Returns:
@@ -230,10 +231,10 @@ def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.DEBUG
     coulqG = tools.get_coulG(cell, -1.0*q)
     ngs = orb_pair_invG1.shape[0]
     Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngs**2)
-    eri = einsum('gm,gn->mn',orb_pair_invG1, Jorb_pair_G2)
+    eri = np.dot(orb_pair_invG1.T, Jorb_pair_G2)
     return eri
 
-def get_ao_pairs_G(cell):
+def get_ao_pairs_G(cell, kpt=np.zeros(3)):
     '''Calculate forward (G|ij) and "inverse" (ij|G) FFT of all AO pairs.
 
     Args:
@@ -245,25 +246,39 @@ def get_ao_pairs_G(cell):
 
     '''
     coords = gen_uniform_grids(cell)
-    aoR = eval_ao(cell, coords) # shape = (coords, nao)
+    aoR = eval_ao(cell, coords, kpt) # shape = (coords, nao)
     ngs, nao = aoR.shape
-    npair = nao*(nao+1)/2
-    ao_pairs_G = np.zeros([coords.shape[0], npair], np.complex128)
-    ao_pairs_invG = np.zeros([coords.shape[0], npair], np.complex128)
-    ij = 0
-    for i in range(nao):
-        for j in range(i+1):
-            ao_ij_R = np.einsum('r,r->r', np.conj(aoR[:,i]), aoR[:,j])
-            ao_pairs_G[:,ij] = tools.fft(ao_ij_R, cell.gs)
-            ao_pairs_invG[:,ij] = ngs*tools.ifft(ao_ij_R, cell.gs)
-            ij += 1
+    gamma_point = abs(kpt).sum() < 1e-9
+    if gamma_point:
+        npair = nao*(nao+1)//2
+        ao_pairs_G = np.empty([ngs, npair], np.complex128)
+
+        ij = 0
+        for i in range(nao):
+            for j in range(i+1):
+                ao_ij_R = np.conj(aoR[:,i]) * aoR[:,j]
+                ao_pairs_G[:,ij] = tools.fft(ao_ij_R, cell.gs)
+                #ao_pairs_invG[:,ij] = ngs*tools.ifft(ao_ij_R, cell.gs)
+                ij += 1
+        ao_pairs_invG = ao_pairs_G.conj()
+    else:
+        ao_pairs_G = np.zeros([ngs, nao,nao], np.complex128)
+        for i in range(nao):
+            for j in range(nao):
+                ao_ij_R = np.conj(aoR[:,i]) * aoR[:,j]
+                ao_pairs_G[:,i,j] = tools.fft(ao_ij_R, cell.gs)
+        ao_pairs_invG = ao_pairs_G.transpose(0,2,1).conj().reshape(-1,nao**2)
+        ao_pairs_G = ao_pairs_G.reshape(-1,nao**2)
     return ao_pairs_G, ao_pairs_invG
 
-def get_ao_eri(cell):
+def get_ao_eri(cell, kpt=np.zeros(3)):
     '''Convenience function to return AO 2-el integrals.'''
 
-    ao_pairs_G, ao_pairs_invG = get_ao_pairs_G(cell)
-    return assemble_eri(cell, ao_pairs_invG, ao_pairs_G)
+    ao_pairs_G, ao_pairs_invG = get_ao_pairs_G(cell, kpt)
+    eri = assemble_eri(cell, ao_pairs_invG, ao_pairs_G)
+    if abs(kpt).sum() < 1e-9:
+        eri = eri.real
+    return eri
 
 """
 
@@ -303,3 +318,15 @@ def get_mo_eri_kpts(cell, kpts, mo_coeff_kpts):
     return eris
 
 """
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto as pgto
+    cell = pgto.Cell()
+    cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
+    cell.basis = 'ccpvdz'
+    cell.h = np.eye(3) * 4.
+    cell.gs = [5,5,5]
+    cell.build()
+    np.random.seed(1)
+    kpt = np.random.random(3)
+    get_ao_eri(cell, kpt)

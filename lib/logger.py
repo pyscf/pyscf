@@ -26,7 +26,7 @@ ERROR   1
 QUIET   0 
 ======= ======
 
-Big ``verbose`` number means more noise in the output file.
+Big ``verbose`` value means more noise in the output file.
 
 .. note::
     At log level 1 (ERROR) and 2 (WARN), the messages are also output to stderr.

@@ -621,6 +621,14 @@ void AO2MOtranse1_r_a4(int (*fmmm)(),
 }
 
 
+void AO2MOtranse2_r_s1(int (*fmmm)(),
+                       double complex *vout, double complex *vin, int row_id,
+                       struct _AO2MOEnvs *envs)
+{
+        AO2MOtranse1_r_s1(fmmm, vout, vin, row_id, envs);
+}
+
+
 /*
  * ************************************************
  * sort (shell-based) integral blocks then transform

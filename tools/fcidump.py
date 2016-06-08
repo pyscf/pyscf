@@ -5,6 +5,9 @@ import numpy
 
 
 def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
+    if not isinstance(nelec, (int, numpy.number)):
+        ms = abs(nelec[0] - nelec[1])
+        nelec = nelec[0] + nelec[1]
     fout.write(' &FCI NORB=%4d,NELEC=%2d,MS2=%d,\n' % (nmo, nelec, ms))
     if orbsym:
         fout.write('  ORBSYM=%s\n' % ','.join([str(x) for x in orbsym]))
@@ -63,8 +66,8 @@ def from_chkfile(output, chkfile, tol=1e-15):
         mo_coeff = numpy.array(scf_rec['mo_coeff'])
         nmo = mo_coeff.shape[1]
         if mol.symmetry:
-            orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_name,
-                                               mol.irrep_id, mo_coeff)
+            orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id,
+                                               mol.symm_orb, mo_coeff)
             write_head(fout, nmo, mol.nelectron, mol.spin, orbsym)
         else:
             write_head(fout, nmo, mol.nelectron, mol.spin)

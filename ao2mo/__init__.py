@@ -293,6 +293,11 @@ def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):
     else:
         return general(eri_or_mol, mo_coeffs, *args, **kwargs)
 
+def get_ao_eri(mol):
+    '''2-electron integrals in AO basis'''
+    return mol.intor('cint2e_sph', aosym='s4')
+get_mo_eri = general
+
 
 if __name__ == '__main__':
     from pyscf import scf

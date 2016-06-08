@@ -23,7 +23,7 @@ import pyscf.gto.ecp
 
 
 def M(**kwargs):
-    r'''This is a simple way to build up Mole object quickly.
+    r'''This is a shortcut to build up Mole object.
 
     Args: Same to :func:`Mole.build`
 
@@ -241,6 +241,17 @@ def format_basis(basis_tab):
         [0.82454700000000003, 0.90469100000000002]],
         [0, [0.18319199999999999, 1.0]]]}
     '''
+    def nparray_to_list(item):
+        val = []
+        for x in item:
+            if isinstance(x, (tuple, list)):
+                val.append(nparray_to_list(x))
+            elif isinstance(x, numpy.ndarray):
+                val.append(x.tolist())
+            else:
+                val.append(x)
+        return val
+
     fmt_basis = {}
     for atom in basis_tab.keys():
         symb = _symbol(atom)
@@ -248,11 +259,14 @@ def format_basis(basis_tab):
         stdsymb = _std_symbol(rawsymb)
         symb = symb.replace(rawsymb, stdsymb)
 
-        if isinstance(basis_tab[atom], str):
-            fmt_basis[symb] = basis.load(basis_tab[atom], stdsymb)
+        atom_basis = basis_tab[atom]
+        if isinstance(atom_basis, str):
+            if atom_basis.lower().startswith('unc'):
+                fmt_basis[symb] = uncontract(basis.load(atom_basis[3:], stdsymb))
+            else:
+                fmt_basis[symb] = basis.load(atom_basis, stdsymb)
         else:
-#TODO: check and replace numpy.ndarray with list
-            fmt_basis[symb] = basis_tab[atom]
+            fmt_basis[symb] = nparray_to_list(atom_basis)
     return fmt_basis
 
 def uncontract_basis(_basis):
@@ -779,12 +793,19 @@ def len_cart(l):
     '''
     return (l + 1) * (l + 2) // 2
 
-def npgto_nr(mol):
+def npgto_nr(mol, cart=False):
     '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
-    return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NPRIM_OF]).sum()
-def nao_nr(mol):
+    l = mol._bas[:,ANG_OF]
+    if cart:
+        return ((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum()
+    else:
+        return ((l*2+1) * mol._bas[:,NPRIM_OF]).sum()
+def nao_nr(mol, cart=False):
     '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
-    return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
+    if cart:
+        return nao_cart(mol)
+    else:
+        return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
 def nao_cart(mol):
     '''Total number of contracted cartesian GTOs for the given :class:`Mole` object'''
     l = mol._bas[:,ANG_OF]
@@ -1387,8 +1408,7 @@ class Mole(pyscf.lib.StreamObject):
 
     Examples:
 
-    >>> mol = Mole()
-    >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
+    >>> mol = Mole(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g').build()
     >>> print(mol.atom_symbol(0))
     H^2
     >>> print(mol.atom_pure_symbol(0))
@@ -1398,7 +1418,7 @@ class Mole(pyscf.lib.StreamObject):
     >>> print(mol.intor('cint1e_ovlp_sph'))
     [[ 0.99999999  0.43958641]
      [ 0.43958641  0.99999999]]
-    >>> mol.Charge = 1
+    >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
 
@@ -1453,6 +1473,9 @@ class Mole(pyscf.lib.StreamObject):
     @property
     def nbas(self):
         return len(self._bas)
+    @property
+    def nelec(self):
+        return (self.nelectron+self.spin)//2, (self.nelectron-self.spin)//2
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -1554,13 +1577,8 @@ class Mole(pyscf.lib.StreamObject):
 
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            if self.basis.lower().startswith('unc'):
-                cbas = self.format_basis(dict([(a, self.basis[3:])
-                                               for a in uniq_atoms]))
-                self._basis = dict((a,uncontract(cbas[a])) for a in cbas)
-            else:
-                self._basis = self.format_basis(dict([(a, self.basis)
-                                                      for a in uniq_atoms]))
+            self._basis = self.format_basis(dict([(a, self.basis)
+                                                  for a in uniq_atoms]))
         else:
             self._basis = self.format_basis(self.basis)
 
@@ -1931,7 +1949,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def atom_coords(self):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return numpy.vstack((self._env[ptr],self._env[ptr+1],self._env[ptr+2])).T
+        return self._env[numpy.vstack((ptr,ptr+1,ptr+2))].T
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom

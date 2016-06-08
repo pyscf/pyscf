@@ -49,13 +49,13 @@ def get_int1e_cross(intor, cell1, cell2, kpt=None, comp=1):
 
 def get_int1e(intor, cell, kpt=None):
     '''Get the one-electron integral defined by `intor` using lattice sums.'''
-    return cell.pbc_intor(intor, kpt=kpt)
+    return cell.pbc_intor(intor, kpts=kpt)
 
 def get_ovlp(cell, kpt=None):
     '''Get the overlap AO matrix.'''
-    return cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=kpt)
+    return cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
 
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.'''
-    return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpt=kpt)
+    return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=kpt)
 
