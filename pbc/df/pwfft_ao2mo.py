@@ -66,9 +66,10 @@ def get_eri(pwdf, kpts=None):
         ao_pairs_G *= coulG.reshape(-1,1)
         eri = lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
         if ao_pairs_G.shape[1] == nao_pair:
-            return lib.unpack_tirl(eri, axis=0)
+            eri = lib.unpack_tirl(eri, axis=0)
         elif ao_pairs_invG.shape[1] == nao_pair:
-            return lib.unpack_tirl(eri, axis=1)
+            eri = lib.unpack_tirl(eri, axis=1)
+        return eri.reshape(nao*nao,-1)
 
 
 def general(pwdf, mo_coeffs, kpts=None, compact=True):
@@ -140,9 +141,10 @@ def general(pwdf, mo_coeffs, kpts=None, compact=True):
         mo_kl_G = mo_kl_G.transpose(0,2,1).conj().reshape(ngs,-1)
         eri = lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
         if mo_ij_G.shape[1] == nmoi*(nmoi+1)//2:
-            return lib.unpack_tirl(eri, axis=0)
+            eri = lib.unpack_tirl(eri, axis=0)
         elif mo_kl_G.shape[1] == nmok*(nmok+1)//2:
-            return lib.unpack_tirl(eri, axis=1)
+            eri = lib.unpack_tirl(eri, axis=1)
+        return eri.reshape(nmoi*nmoj,-1)
 
 
 def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3))):
