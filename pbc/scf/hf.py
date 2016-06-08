@@ -26,7 +26,7 @@ import pyscf.pbc.scf.chkfile
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    return cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=kpt)
+    return cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
 
 
 def get_hcore(cell, kpt=np.zeros(3)):
@@ -44,7 +44,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
     '''
-    return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpt=kpt)
+    return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=kpt)
 
 
 def get_nuc(cell, kpt=np.zeros(3)):
@@ -80,9 +80,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
-    aokG = np.empty(aoR.shape, np.complex128)
-    for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
+    aokG = tools.map_fftk(aoR, cell.gs, coords, kpt)
     ngs = len(aokG)
 
     fakemol = pyscf.gto.Mole()
@@ -260,23 +258,19 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     ngs, nao = aoR_k1.shape
 
     coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
-    def prod(i, j):
+    def prod(ij):
+        i, j = divmod(ij, nao)
         rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
         rhoG = tools.fftk(rhoR, cell.gs, coords, kpt1-kpt2)
         vG = coulG*rhoG
         vR = tools.ifftk(vG, cell.gs, coords, kpt1-kpt2)
-        if rhoR.dtype == np.double:
-            vR = vR.real
         return vR
 
     if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
-        vR = np.empty((nao,nao,ngs))
+        vR = tools.pbc._map(prod, ngs, nao**2).real
     else:
-        vR = np.empty((nao,nao,ngs), dtype=np.complex128)
-    for i in range(nao):
-        for j in range(nao):
-            vR[i,j] = prod(i, j)
-    return vR.transpose(2,0,1)
+        vR = tools.pbc._map(prod, ngs, nao**2)
+    return vR.reshape(-1,nao,nao)
 
 #def get_veff(mf, cell, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None,
 #             kpt=np.zeros(3), kpt_band=None):
@@ -371,11 +365,12 @@ def dot_eri_dm(eri, dm, hermi=0):
         input density matrices.
     '''
 
-    if np.iscomplexobj(eri) or np.iscomplexobj(dm):
+    if np.iscomplexobj(dm) or np.iscomplexobj(eri):
+        n = dm[0].shape[0]
+        eri = eri.reshape((n,)*4)
         def contract(dm):
-            n = dm.shape[0]
-            vj = np.einsum('ijkl,ji->kl', eri.reshape((n,)*4), dm)
-            vk = np.einsum('ijkl,jk->il', eri.reshape((n,)*4), dm)
+            vj = np.einsum('ijkl,ji->kl', eri, dm)
+            vk = np.einsum('ijkl,jk->il', eri, dm)
             return vj, vk
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             vj, vk = contract(dm)
@@ -395,33 +390,43 @@ class RHF(pyscf.scf.hf.RHF):
         kpt : (3,) ndarray
             The AO k-point in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpt=None, exxdiv='ewald'):
+    def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
+        from pyscf.pbc.df import PWDF
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
 
-        if kpt is None:
-            self.kpt = np.zeros(3)
-        else:
-            self.kpt = np.asarray(kpt).reshape(-1)
-
         self.exxdiv = exxdiv
+        self.with_df = PWDF(cell)
+        self.kpt = kpt
 
-        self._keys = self._keys.union(['cell', 'kpt', 'exxdiv'])
+        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
+
+    @property
+    def kpt(self):
+        return self.with_df.kpts.reshape(3)
+    @kpt.setter
+    def kpt(self, x):
+        self.with_df.kpts = np.reshape(x, (-1,3))
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
+        logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        return get_hcore(cell, kpt)
+        if cell.pseudo is None:
+            nuc = self.with_df.get_nuc(cell, kpt)
+            return nuc + cell.pbc_intor('cint1e_kin_sph', 1, 1, kpt)
+        else:
+            return get_hcore(cell, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -433,26 +438,25 @@ class RHF(pyscf.scf.hf.RHF):
 
         Note the incore version, which initializes an _eri array in memory.
         '''
-        from pyscf.pbc.df import ft_ao
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
 
         cpu0 = (time.clock(), time.time())
-        if 0 and (kpt_band is None and
+        if (kpt_band is None and
             (self.exxdiv == 'ewald' or self.exxdiv is None) and
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
-                self._eri = ao2mo.get_ao_eri(cell, kpt)
+                self._eri = self.with_df.get_ao_eri(kpt)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
 
             # G=0 is not inculded in the ._eri integrals
-            if self.exxdiv == 'ewald' and abs(kpt).sum() < 1e-9:
+            if self.exxdiv == 'ewald':
                 gs = (0,0,0)
                 Gv = np.zeros((1,3))
                 ovlp = self.get_ovlp(cell, kpt)
-                coulGk = tools.get_coulG(cell, kpt, True, self, gs, Gv)[0]
+                coulGk = tools.get_coulG(cell, kpt-kpt, True, self, gs, Gv)[0]
                 logger.debug(self, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
                              coulGk/cell.vol*cell.nelectron * -.5)
                 if isinstance(dm, np.ndarray) and dm.ndim == 2:
@@ -463,16 +467,14 @@ class RHF(pyscf.scf.hf.RHF):
                     for k, dmi in enumerate(dm):
                         vk[k] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
                         nelec += np.einsum('ij,ij', ovlp, dm)
-                if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
-                    logger.debug(self, 'Tr(dm,S) = %g', nelec)
-                    sys.stderr.write('Warning: The input dm is not SCF density matrix. '
-                                     'The Ewald treatment on G=0 term for K matrix '
-                                     'might not be well defined.  Set mf.exxdiv=None '
-                                     'to switch off the Ewald term.\n')
+                #if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
+                #    logger.debug(self, 'Tr(dm,S) = %g', nelec)
+                #    sys.stderr.write('Warning: The input dm is not SCF density matrix. '
+                #                     'The Ewald treatment on G=0 term for K matrix '
+                #                     'might not be well defined.  Set mf.exxdiv=None '
+                #                     'to switch off the Ewald term.\n')
         else:
-            #if self.direct_scf:
-            #    self.opt = self.init_direct_scf(cell)
-            vj, vk = get_jk(self, cell, dm, hermi, self.opt, kpt, kpt_band)
+            vj, vk = self.with_df.get_jk(cell, dm, hermi, kpt, kpt_band, mf=self)
 
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -489,10 +491,11 @@ class RHF(pyscf.scf.hf.RHF):
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
-                self._eri = ao2mo.get_ao_eri(cell, kpt)
+                self._eri = self.with_df.get_ao_eri(kpt)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
-            vj = get_j(cell, dm, hermi, self.opt, kpt, kpt_band)
+            vj = self.with_df.get_jk(cell, dm, hermi, kpt, kpt_band,
+                                     with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
         return vj
 
@@ -551,5 +554,9 @@ class RHF(pyscf.scf.hf.RHF):
 
     def _is_mem_enough(self):
         nao = self.cell.nao_nr()
-        return nao**4*16/4/1e6+lib.current_memory()[0] < self.max_memory*.95
+        if abs(self.kpt).sum() < 1e-9:
+            mem_need = nao**4*8/4/1e6
+        else:
+            mem_need = nao**4*16/1e6
+        return mem_need + lib.current_memory()[0] < self.max_memory*.95
 

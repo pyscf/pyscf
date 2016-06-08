@@ -9,7 +9,7 @@ import time
 import numpy as np
 import scipy.special
 import h5py
-import pyscf.dft
+import pyscf.scf.hf
 import pyscf.pbc.dft
 import pyscf.pbc.scf.hf as pbchf
 from pyscf import lib
@@ -28,8 +28,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return lib.asarray([cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpt=k)
-                        for k in kpts])
+    return lib.asarray(cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts))
 
 
 def get_hcore(mf, cell=None, kpts=None):
@@ -169,22 +168,6 @@ def get_vjR(cell, dm_kpts, aoR_kpts):
     return vR
 
 
-def get_fock(mf, h1e_kpts, s1e_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
-             diis_start_cycle=0, level_shift_factor=0, damp_factor=0):
-    '''Get the Fock matrices at sampled k-points.
-
-    This is a k-point version of pyscf.scf.hf.get_fock
-
-    Returns:
-       fock : (nkpts, nao, nao) ndarray
-    '''
-    # By inheritance, this is just pyscf.scf.hf.get_fock
-    fock = pbchf.RHF.get_fock(mf, h1e_kpts, s1e_kpts,
-                              vhf_kpts, dm_kpts,
-                              cycle, adiis, diis_start_cycle,
-                              level_shift_factor, damp_factor)
-    return fock
-
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''Label the occupancies for each orbital for sampled k-points.
@@ -283,8 +266,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm
 
 
-class KRHF(pbchf.RHF):
-#class KRHF(pyscf.scf.hf.RHF):
+class KRHF(pyscf.scf.hf.RHF):
     '''RHF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -296,11 +278,26 @@ class KRHF(pbchf.RHF):
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
-        pbchf.RHF.__init__(self, cell, exxdiv=exxdiv)
-        self.kpts = np.reshape(kpts, (-1,3))
+        from pyscf.pbc.df import PWDF
+        if not cell._built:
+            sys.stderr.write('Warning: cell.build() is not called in input\n')
+            cell.build()
+        self.cell = cell
+        pyscf.scf.hf.RHF.__init__(self, cell)
+
+        self.exxdiv = exxdiv
+        self.with_df = PWDF(cell)
+        self.kpts = kpts
 
         self.exx_built = False
-        self._keys = self._keys.union(['exx_built', 'kpts'])
+        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
+
+    @property
+    def kpts(self):
+        return self.with_df.kpts
+    @kpts.setter
+    def kpts(self, x):
+        self.with_df.kpts = np.reshape(x, (-1,3))
 
     @property
     def mo_energy_kpts(self):
@@ -315,44 +312,51 @@ class KRHF(pbchf.RHF):
         return self.mo_occ
 
     def dump_flags(self):
-        pbchf.RHF.dump_flags(self)
+        pyscf.scf.hf.RHF.dump_flags(self)
+        logger.info(self, '\n')
+        logger.info(self, '******** PBC SCF flags ********')
+        logger.info(self, 'N kpts = %d', len(self.kpts))
+        logger.debug(self, 'kpts = %s', self.kpts)
+        logger.info(self, 'DF object = %s', self.with_df)
+        logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
         if self.exxdiv == 'vcut_ws':
             if self.exx_built is False:
                 self.precompute_exx()
             logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
     def build(self, cell=None):
-        pbchf.RHF.build(self, cell)
+        pyscf.scf.hf.RHF.build(self, cell)
         if self.exxdiv == 'vcut_ws':
             self.precompute_exx()
 
     def precompute_exx(self):
-        print "# Precomputing Wigner-Seitz EXX kernel"
         from pyscf.pbc import gto as pbcgto
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info("# Precomputing Wigner-Seitz EXX kernel")
         Nk = tools.get_monkhorst_pack_size(self.cell, self.kpts)
-        print "# Nk =", Nk
+        log.info("# Nk = %d", Nk)
         kcell = pbcgto.Cell()
         kcell.atom = 'H 0. 0. 0.'
         kcell.spin = 1
         kcell.unit = 'B'
-        kcell.h = self.cell._h * Nk
+        kcell.h = kcell._h = self.cell._h * Nk
         Lc = 1.0/np.linalg.norm(np.linalg.inv(kcell.h.T), axis=0)
-        print "# Lc =", Lc
+        log.info("# Lc = %d", Lc)
         Rin = Lc.min() / 2.0
-        print "# Rin =", Rin
+        log.info("# Rin = %d", Rin)
         # ASE:
         alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
         kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc])
         # QE:
         #alpha = 3./Rin * np.sqrt(0.5)
         #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
-        print "# kcell.gs FFT =", kcell.gs
+        log.info("# kcell.gs FFT = %d", kcell.gs)
         kcell.build(False,False)
         vR = tools.ifft( tools.get_coulG(kcell), kcell.gs )
         kngs = len(vR)
-        print "# kcell kngs =", kngs
+        log.info("# kcell kngs = %d", kngs)
         rs = pyscf.pbc.dft.gen_grid.gen_uniform_grids(kcell)
-        corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell._h.T)
+        corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.h.T)
         for i, rv in enumerate(rs):
             # Minimum image convention to corners of kcell parallelepiped
             r = np.linalg.norm(rv-corners, axis=1).min()
@@ -366,7 +370,7 @@ class KRHF(pbchf.RHF):
         self.exx_q = kcell.Gv
         self.exx_vq = vG
         self.exx_built = True
-        print "# Finished precomputing"
+        log.info("# Finished precomputing")
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
@@ -382,7 +386,15 @@ class KRHF(pbchf.RHF):
 
         return dm_kpts
 
-    get_hcore = get_hcore
+    def get_hcore(self, cell=None, kpts=None):
+        if cell is None: cell = self.cell
+        if kpts is None: kpts = self.kpts
+        if cell.pseudo is None:
+            nuc = self.with_df.get_nuc(cell, kpts)
+            t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
+            return [nuc[k] + t[k] for k, kpt in enumerate(self.kpts)]
+        else:
+            return get_hcore(self, cell, kpts)
 
     get_ovlp = get_ovlp
 
@@ -391,33 +403,31 @@ class KRHF(pbchf.RHF):
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj = get_j(self, cell, dm_kpts, kpts, kpt_band)
+        vj = self.with_df.get_jk(cell, dm_kpts, hermi, kpts, kpt_band,
+                                 with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
         return vj
+
+    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpt_band)[1]
 
     def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj, vk = get_jk(self, cell, dm_kpts, kpts, kpt_band)
+        vj, vk = self.with_df.get_jk(cell, dm_kpts, hermi, kpts, kpt_band, mf=self)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    get_fock = get_fock
-
     get_occ = get_occ
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpt_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        if kpts is None: kpts = self.kpts
-        # TODO: Check incore, direct_scf, _eri's, etc
-        vj, vk = self.get_jk(cell, dm, hermi, kpts, kpt_band)
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpt_band)
         return vj - vk * .5
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):

@@ -19,7 +19,7 @@ def gen_uniform_grids(cell, gs=None):
     '''
     if gs is None:
         gs = cell.gs
-    ngs = 2*np.asarray(cell.gs)+1
+    ngs = 2*np.asarray(gs)+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
     invN = np.diag(1./ngs)
     coords = np.dot(qv, np.dot(cell._h, invN).T)
@@ -70,7 +70,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         weights : (ngx*ngy*ngz) ndarray
     '''
     scell = tools.pbc.cell_plus_imgs(cell, [min(x,2) for x in cell.nimgs])
-    coords = np.asarray([scell.atom_coord(ia) for ia in range(scell.natm)])
+    coords = scell.atom_coords()
 # Generating grids for the entire super cell is slow.  We don't need generate
 # grids for the super cell because out of certain region the weights obtained
 # from Becke partitioning are no longer important.  The region is controlled

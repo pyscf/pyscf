@@ -120,7 +120,7 @@ class RKS(pyscf.pbc.scf.hf.RHF):
     variables replaced by `cell`.
 
     '''
-    def __init__(self, cell, kpt=None):
+    def __init__(self, cell, kpt=numpy.zeros(3)):
         pyscf.pbc.scf.hf.RHF.__init__(self, cell, kpt)
         self.xc = 'LDA,VWN'
         #self.grids = None # initialized in pbc.scf.hf.RHF

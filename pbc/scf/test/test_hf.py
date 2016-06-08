@@ -54,7 +54,7 @@ class KnowValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.7862168430230341, 9)
+        self.assertAlmostEqual(e1, -4.2048655827967139, 9)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv='ewald')

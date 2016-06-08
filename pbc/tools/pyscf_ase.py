@@ -79,6 +79,7 @@ class PySCF(Calculator):
 
 
 def make_kpts(cell, nks):
+    '''make_kpts(cell, (3,3,3))'''
     scaled_kpts = ase.dft.kpoints.monkhorst_pack(nks)
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
