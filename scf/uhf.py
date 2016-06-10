@@ -364,6 +364,7 @@ def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -382,16 +383,19 @@ def analyze(mf, verbose=logger.DEBUG):
         log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
                  i+1, mo_energy[0][i], mo_energy[1][i],
                  mo_occ[0][i], mo_occ[1][i])
+    ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients for alpha spin **')
+        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
         label = mf.mol.spheric_labels(True)
-        dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1)
-        log.debug(' ** MO coefficients for beta spin **')
-        dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
+        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1)
+        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
+        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log),\
-            mf.dip_moment(mf.mol, dm, verbose=log)
+    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+            mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis

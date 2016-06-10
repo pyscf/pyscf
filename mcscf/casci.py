@@ -51,6 +51,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     return h1eff, energy_core
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ci is None: ci = casscf.ci
@@ -88,19 +89,20 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
         dm1 = dm1a
 
     if log.verbose >= logger.INFO:
+        ovlp_ao = casscf._scf.get_ovlp()
         # note the last two args of ._eig for mc1step_symm
         occ, ucas = casscf._eig(-casdm1, ncore, nocc)
         log.info('Natural occ %s', str(-occ))
         for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
             if ucas[k,i] < 0:
                 ucas[:,i] *= -1
-        mo_cas = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
-        log.info('Natural orbital in CAS space')
+        orth_coeff = orth.orth_ao(casscf.mol, 'meta_lowdin', s=ovlp_ao)
+        mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff[:,ncore:nocc], ucas))
+        log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
         dump_mat.dump_rec(log.stdout, mo_cas, label, start=1)
 
         if casscf._scf.mo_coeff is not None:
-            s = reduce(numpy.dot, (casscf.mo_coeff.T, casscf._scf.get_ovlp(),
-                                   casscf._scf.mo_coeff))
+            s = reduce(numpy.dot, (casscf.mo_coeff.T, ovlp_ao, casscf._scf.mo_coeff))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
                 log.info('<mo-mcscf|mo-hf> %d  %d  %12.8f', i+1, j+1, s[i,j])
@@ -117,9 +119,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
                 for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
                     log.info('  %9s    %9s    %.12f', ia, ib, c)
 
-        s = casscf._scf.get_ovlp()
-        #casscf._scf.mulliken_pop(casscf.mol, dm1, s, verbose=log)
-        casscf._scf.mulliken_pop_meta_lowdin_ao(casscf.mol, dm1, verbose=log)
+        casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
     return dm1a, dm1b
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
@@ -170,6 +170,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         coefficients, the third is the natural occupancy associated to the
         natural orbitals.
     '''
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     from pyscf.tools.mo_mapping import mo_1to1map
     if isinstance(verbose, logger.Logger):
@@ -228,9 +229,11 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if log.verbose >= logger.INFO:
         log.debug('where_natorb %s', str(where_natorb))
         log.info('Natural occ %s', str(occ))
-        log.info('Natural orbital in CAS space')
+        log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
         label = mc.mol.spheric_labels(True)
-        dump_mat.dump_rec(log.stdout, mo_coeff1[:,ncore:nocc], label, start=1)
+        orth_coeff = orth.orth_ao(mc.mol, 'meta_lowdin', s=ovlp_ao)
+        mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff1[:,ncore:nocc]))
+        dump_mat.dump_rec(log.stdout, mo_cas, label, start=1)
 
         if mc._scf.mo_coeff is not None:
             s = reduce(numpy.dot, (mo_coeff1[:,ncore:nocc].T,

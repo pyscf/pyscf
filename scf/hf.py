@@ -704,6 +704,7 @@ def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -716,13 +717,16 @@ def analyze(mf, verbose=logger.DEBUG):
     log.note('**** MO energy ****')
     for i,c in enumerate(mo_occ):
         log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+    ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients **')
+        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         label = mf.mol.spheric_labels(True)
-        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
+        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        dump_mat.dump_rec(mf.stdout, c, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log), \
-            mf.dip_moment(mf.mol, dm, verbose=log)
+    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+            mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis

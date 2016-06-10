@@ -17,6 +17,7 @@ from pyscf.scf import chkfile
 
 
 def analyze(mf, verbose=logger.DEBUG):
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -77,6 +78,7 @@ def analyze(mf, verbose=logger.DEBUG):
             log.note('beta  MO #%d (%s #%d), energy= %.15g occ= %g',
                      k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
 
+    ovlp_ao = mf.get_ovlp()
     if mf.verbose >= logger.DEBUG:
         label = mol.spheric_labels(True)
         molabel = []
@@ -87,8 +89,10 @@ def analyze(mf, verbose=logger.DEBUG):
             else:
                 irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** alpha MO coefficients **')
-        dump_mat.dump_rec(mol.stdout, mo_coeff[0], label, molabel, start=1)
+        log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
+        orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[0]), label, molabel, start=1)
 
         molabel = []
         irorbcnt = {}
@@ -98,8 +102,8 @@ def analyze(mf, verbose=logger.DEBUG):
             else:
                 irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** beta MO coefficients **')
-        dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
+        log.debug(' ** beta MO coefficients (expansion on meta-Lowdin AOs) **')
+        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[1]), label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
