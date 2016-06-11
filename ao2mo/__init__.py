@@ -2,6 +2,7 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
+import tempfile
 import numpy
 import h5py
 from pyscf.ao2mo import incore
@@ -129,6 +130,9 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
             mod = outcore
         if len(args) > 0 and isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
             fn = getattr(mod, 'full')
+        elif isinstance(args[0], tempfile._TemporaryFileWrapper):
+            fn = getattr(mod, 'full')
+            args = [args[0].name] + args[1:]  # take the tmpfile name
         else:
             fn = getattr(mod, 'full_iofree')
         return fn(eri_or_mol, mo_coeff, *args, **kwargs)
@@ -280,6 +284,9 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
             mod = outcore
         if len(args) > 0 and isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
             fn = getattr(mod, 'general')
+        elif isinstance(args[0], tempfile._TemporaryFileWrapper):
+            fn = getattr(mod, 'general')
+            args = [args[0].name] + args[1:]  # take the tmpfile name
         else:
             fn = getattr(mod, 'general_iofree')
         return fn(eri_or_mol, mo_coeffs, *args, **kwargs)
