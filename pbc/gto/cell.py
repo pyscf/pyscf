@@ -7,6 +7,7 @@
 
 import sys
 import json
+import ctypes
 import numpy as np
 import scipy.linalg
 import scipy.optimize
@@ -19,6 +20,7 @@ from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
 
+libpbc = lib.load_library('libpbc')
 
 def M(**kwargs):
     r'''This is a shortcut to build up Cell object.
@@ -222,18 +224,6 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
-    import ctypes
-    import pyscf.gto.moleintor
-    if '2c2e' in intor:
-        drv_name = 'GTOint2c2e'
-    else:
-        assert('2e' not in intor)
-        drv_name = 'GTOint2c'
-
-    drv = getattr(pyscf.gto.moleintor.libcgto, drv_name)
-    fintor = pyscf.gto.moleintor._fpointer(intor)
-    intopt = lib.c_null_ptr()
-
     if kpts is None:
         if kpt is not None:
             kpts_lst = np.reshape(kpt, (1,3))
@@ -241,7 +231,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
             kpts_lst = np.zeros((1,3))
     else:
         kpts_lst = np.reshape(kpts, (-1,3))
-    gamma_point = abs(kpts_lst).sum() < 1e-8
+    nkpts = len(kpts_lst)
 
     atm, bas, env = pyscf.gto.conc_env(cell1._atm, cell1._bas, cell1._env,
                                        cell2._atm, cell2._bas, cell2._env)
@@ -254,28 +244,40 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+    out = [np.zeros((ni,nj,comp), order='F', dtype=np.complex128)
+           for k in range(nkpts)]
+    out_ptrs = (ctypes.c_void_p*nkpts)(
+            *[x.ctypes.data_as(ctypes.c_void_p) for x in out])
 
-    xyz = cell2.atom_coords()
-    ptr_coord = atm[cell1.natm:,pyscf.gto.PTR_COORD]
-    ptr_coord = np.vstack((ptr_coord,ptr_coord+1,ptr_coord+2)).T.copy('C')
-    out = [0] * len(kpts_lst)
-    buf = np.empty((ni,nj,comp), order='F')
+    if hermi == 0:
+        aosym = 's1'
+    else:
+        aosym = 's2'
+    if '2c2e' in intor:
+        fill = getattr(libpbc, 'PBCnr2c2e_fill_'+aosym)
+    else:
+        assert('2e' not in intor)
+        fill = getattr(libpbc, 'PBCnr2c_fill_'+aosym)
+
+    fintor = pyscf.gto.moleintor._fpointer(intor)
+    intopt = lib.c_null_ptr()
+
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    for l,L in enumerate(cell1.get_lattice_Ls(nimgs)):
-        env[ptr_coord] = xyz + L
-        drv(fintor, buf.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(comp), ctypes.c_int(hermi),
-            (ctypes.c_int*4)(*(shls_slice[:4])),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
-            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-            env.ctypes.data_as(ctypes.c_void_p))
-
-        for k, kpt in enumerate(kpts_lst):
-            if gamma_point:
-                out[k] += buf
-            else:
-                out[k] += buf * np.exp(1j*np.dot(kpt, L))
+    Ls = np.asarray(cell1.get_lattice_Ls(nimgs), order='C')
+    expLk = np.asarray(np.exp(1j*np.dot(Ls, kpts_lst.T)), order='C')
+    xyz = np.asarray(cell2.atom_coords(), order='C')
+    ptr_coords = np.asarray(atm[cell1.natm:,pyscf.gto.PTR_COORD],
+                            dtype=np.int32, order='C')
+    drv = libpbc.PBCnr2c_drv
+    drv(fintor, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
+        ptr_coords.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell2.natm),
+        Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
+        expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
+        ctypes.c_int(comp), (ctypes.c_int*4)(*(shls_slice[:4])),
+        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        env.ctypes.data_as(ctypes.c_void_p))
 
     def trans(out):
         out = out.transpose(2,0,1)
@@ -296,11 +298,13 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
             out = out.reshape(ni,nj)
         return out
 
+    if abs(kpts_lst).sum() < 1e-8:  # gamma_point
+        out = [out[k].real.copy(order='F') for k in range(nkpts)]
     if kpts is None or np.shape(kpts) == (3,):
 # A single k-point
         out = trans(out[0])
     else:
-        out = [trans(out[k]) for k,kpt in enumerate(kpts_lst)]
+        out = [trans(out[k]) for k in range(nkpts)]
     return out
 
 

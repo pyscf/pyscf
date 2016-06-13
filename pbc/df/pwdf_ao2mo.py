@@ -15,7 +15,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
 
 
-def get_eri(pwdf, kpts=None, compact=False):
+def get_eri(pwdf, kpts=None):
     cell = pwdf.cell
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
@@ -92,7 +92,7 @@ def get_eri(pwdf, kpts=None, compact=False):
         return (eriR+eriI*1j)
 
 
-def general(pwdf, mo_coeffs, kpts=None, compact=False):
+def general(pwdf, mo_coeffs, kpts=None, compact=True):
     from pyscf.pbc.df import xdf_ao2mo
     return xdf_ao2mo.general(pwdf, mo_coeffs, kpts, compact)
 

@@ -261,7 +261,7 @@ def takebak_2d(out, a, idx, idy):
                                  ctypes.c_int(idy.size))
     return out
 
-def transpose(a, inplace=False, out=None):
+def transpose(a, axes=None, inplace=False, out=None):
     '''Transpose array for better memory efficiency
 
     Examples:
@@ -270,8 +270,8 @@ def transpose(a, inplace=False, out=None):
     [[ 1.  1.  1.]
      [ 1.  1.  1.]]
     '''
-    arow, acol = a.shape
     if inplace:
+        arow, acol = a.shape
         assert(arow == acol)
         tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM))
         for c0, c1 in misc.prange(0, acol, BLOCK_DIM):
@@ -283,23 +283,31 @@ def transpose(a, inplace=False, out=None):
             a[c0:c1,c0:c1] = a[c0:c1,c0:c1].T
         return a
     else:
-        if out is None:
-            out = numpy.empty((acol,arow), a.dtype)
+        if a.ndim == 2:
+            d0 = 1
+            arow, acol = a.shape
+            shape = acol, arow
+        elif a.ndim == 3 and axes == (0,2,1):
+            d0, arow, acol = a.shape
+            shape = (d0, acol, arow)
         else:
-            out = numpy.ndarray((acol,arow), a.dtype, buffer=out)
-# C code is ~5% faster for acol=arow=10000
-# Note: when the input a is a submatrix of another array, cannot call NPd(z)transpose
-# since NPd(z)transpose assumes data continuity
+            return a.transpose(axes)
+        if out is None:
+            out = numpy.empty(shape, a.dtype)
+        else:
+            out = numpy.ndarray(shape, a.dtype, buffer=out)
         if a.flags.c_contiguous:
             if numpy.iscomplexobj(a):
-                fn = _np_helper.NPztranspose
+                fn = _np_helper.NPztranspose_021
             else:
-                fn = _np_helper.NPdtranspose
+                fn = _np_helper.NPdtranspose_021
             fn.restype = ctypes.c_void_p
-            fn(ctypes.c_int(arow), ctypes.c_int(acol),
+            fn(ctypes.c_int(d0), ctypes.c_int(arow), ctypes.c_int(acol),
                a.ctypes.data_as(ctypes.c_void_p),
                out.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(BLOCK_DIM))
+        elif a.ndim >= 2:
+            raise NotImplementedError
         else:
             r1 = c1 = 0
             for c0 in range(0, acol-BLOCK_DIM, BLOCK_DIM):
@@ -384,15 +392,15 @@ def zdot(a, b, alpha=1, c=None, beta=0):
         return ddot(a, b, alpha, c, beta)
 
     if atype == numpy.float64 and btype == numpy.complex128:
-        br = b.real.copy()
-        bi = b.imag.copy()
+        br = numpy.asarray(b.real, order='C')
+        bi = numpy.asarray(b.imag, order='C')
         cr = ddot(a, br, alpha)
         ci = ddot(a, bi, alpha)
         ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.float64:
-        ar = a.real.copy()
-        ai = a.imag.copy()
+        ar = numpy.asarray(a.real, order='C')
+        ai = numpy.asarray(a.imag, order='C')
         cr = ddot(ar, b, alpha)
         ci = ddot(ai, b, alpha)
         ab = cr + ci*1j
@@ -613,6 +621,8 @@ if __name__ == '__main__':
     b = a[:400,:400]
     c = numpy.copy(b)
     print(abs(b.T - transpose(c,inplace=True)).sum())
+    a = a.reshape(40,10,-1)
+    print(abs(a.transpose(0,2,1) - transpose(a,(0,2,1))).sum())
 
     a = numpy.random.random((400,400))
     b = a + a.T.conj()

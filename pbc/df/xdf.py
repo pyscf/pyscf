@@ -17,7 +17,6 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF
 import pyscf.df
 import pyscf.df.xdf
 from pyscf.pbc import gto as pgto
@@ -75,7 +74,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         np = auxcell.bas_nprim(ib)
         nc = auxcell.bas_nctr(ib)
         es = auxcell.bas_exp(ib)
-        ptr = auxcell._bas[ib,PTR_COEFF]
+        ptr = auxcell._bas[ib,gto.PTR_COEFF]
         cs = auxcell._env[ptr:ptr+np*nc].reshape(nc,np).T
 
 #        if l > 0:
@@ -84,8 +83,8 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             es = es[es>=drop_eta]
             cs = cs[es>=drop_eta]
             np, ndrop = len(es), ndrop+np-len(es)
-            pe = auxcell._bas[ib,PTR_EXP]
-            auxcell._bas[ib,NPRIM_OF] = np
+            pe = auxcell._bas[ib,gto.PTR_EXP]
+            auxcell._bas[ib,gto.NPRIM_OF] = np
             auxcell._env[pe:pe+np] = es
 
         if np > 0:
@@ -113,7 +112,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
     for ia in range(auxcell.natm):
-        for l in set(auxcell._bas[auxcell._bas[:,ATOM_OF]==ia, ANG_OF]):
+        for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
             if l <= l_max:
                 chg_bas.append([ia, l, 1, 1, 0, ptr_eta, ptr, 0])
                 chg_env.append(half_sph_norm/gto.mole._gaussian_int(l+2, smooth_eta))
@@ -138,6 +137,7 @@ def get_nuc_less_accurate(xdf, cell=None, kpts=None):
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
     if xdf._cderi is None:
         xdf.build()
 
@@ -164,18 +164,17 @@ def get_nuc_less_accurate(xdf, cell=None, kpts=None):
 
     vj = [0] * len(kpts_lst)
     max_memory = xdf.max_memory - lib.current_memory()[0]
-    for k, kpt in enumerate(kpts_lst):
-        p0 = 0
-        for pqkR, LkR, pqkI, LkI, coulG \
-                in xdf.pw_loop(cell, auxcell, xdf.gs, (kpt,kpt), max_memory):
-            nG = coulG.size
-            vGR = rhoz[p0:p0+nG].real * coulG
-            vGI = rhoz[p0:p0+nG].imag * coulG
-            vj[k] += numpy.einsum('k,xk->x', vGR, pqkR)
-            vj[k] += numpy.einsum('k,xk->x', vGI, pqkI)
-            if k == 0:
-                jaux -= numpy.einsum('k,xk->x', vGR, LkR)
-                jaux -= numpy.einsum('k,xk->x', vGI, LkI)
+    p0 = 0
+    for k, kpt, pqkR, LkR, pqkI, LkI, coulG \
+            in xdf.ft_loop(cell, auxcell, xdf.gs, numpy.zeros(3), kpts_lst, max_memory):
+        nG = coulG.size
+        vGR = rhoz[p0:p0+nG].real * coulG
+        vGI = rhoz[p0:p0+nG].imag * coulG
+        vj[k] += numpy.einsum('k,xk->x', vGR, pqkR)
+        vj[k] += numpy.einsum('k,xk->x', vGI, pqkI)
+        if k+1 == nkpts:
+            jaux -= numpy.einsum('k,xk->x', vGR, LkR)
+            jaux -= numpy.einsum('k,xk->x', vGI, LkI)
             p0 += nG
 
     nao = cell.nao_nr()
@@ -199,8 +198,6 @@ def get_nuc_less_accurate(xdf, cell=None, kpts=None):
 
 
 def get_nuc(xdf, cell=None, kpts=None):
-    log = logger.Logger(xdf.stdout, xdf.verbose)
-    t1 = t0 = (time.clock(), time.time())
     if cell is not None:
         assert(id(cell) == id(xdf.cell))
     cell = xdf.cell
@@ -211,9 +208,11 @@ def get_nuc(xdf, cell=None, kpts=None):
     if xdf._cderi is None:
         xdf.build()
 
+    log = logger.Logger(xdf.stdout, xdf.verbose)
+    t1 = t0 = (time.clock(), time.time())
     auxcell = xdf.auxcell
     nuccell = make_modchg_basis(cell, xdf.eta, 0)
-    nuccell._bas = numpy.asarray(nuccell._bas[nuccell._bas[:,ANG_OF]==0],
+    nuccell._bas = numpy.asarray(nuccell._bas[nuccell._bas[:,gto.ANG_OF]==0],
                                  dtype=numpy.int32, order='C')
 
     charge = -cell.atom_charges()
@@ -235,21 +234,20 @@ def get_nuc(xdf, cell=None, kpts=None):
     naux = auxcell.nao_nr()
 
     max_memory = xdf.max_memory - lib.current_memory()[0]
-    for k, kpt in enumerate(kpts_lst):
-        for pqkR, LkR, pqkI, LkI, coulG \
-                in xdf.pw_loop(cell, nuccell, xdf.gs, (kpt,kpt), max_memory):
+    for k, kpt, pqkR, LkR, pqkI, LkI, coulG \
+            in xdf.ft_loop(cell, nuccell, xdf.gs, numpy.zeros(3), kpts_lst, max_memory):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-            vGR = numpy.einsum('i,ix->x', charge, LkR[naux:]) * coulG
-            vGI = numpy.einsum('i,ix->x', charge, LkI[naux:]) * coulG
-            if abs(kpt).sum() > 1e-9:  # if not gamma point
-                vj[k] += numpy.einsum('k,xk->x', vGR, pqkI) * 1j
-                vj[k] += numpy.einsum('k,xk->x', vGI, pqkR) *-1j
-            vj[k] += numpy.einsum('k,xk->x', vGR, pqkR)
-            vj[k] += numpy.einsum('k,xk->x', vGI, pqkI)
-            if k == 0:
-                jaux -= numpy.einsum('k,xk->x', vGR, LkR[:naux])
-                jaux -= numpy.einsum('k,xk->x', vGI, LkI[:naux])
+        vGR = numpy.einsum('i,ix->x', charge, LkR[naux:]) * coulG
+        vGI = numpy.einsum('i,ix->x', charge, LkI[naux:]) * coulG
+        if abs(kpt).sum() > 1e-9:  # if not gamma point
+            vj[k] += numpy.einsum('k,xk->x', vGR, pqkI) * 1j
+            vj[k] += numpy.einsum('k,xk->x', vGI, pqkR) *-1j
+        vj[k] += numpy.einsum('k,xk->x', vGR, pqkR)
+        vj[k] += numpy.einsum('k,xk->x', vGI, pqkI)
+        if k == 0:
+            jaux -= numpy.einsum('k,xk->x', vGR, LkR[:naux])
+            jaux -= numpy.einsum('k,xk->x', vGI, LkI[:naux])
     t1 = log.timer('contracting Vnuc', *t1)
 
     ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
@@ -493,21 +491,82 @@ class XDF(lib.StreamObject):
 
         for p0, p1 in lib.prange(0, ngs, blksize):
             aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], None, hermi, invh, gxyz[p0:p1],
-                                   gs, (kpti, kptj)).reshape(-1,nao**2)
+                                   gs, (kpti, kptj))
             aoaux = ft_ao.ft_ao(auxcell, Gv[p0:p1], None, invh, gxyz[p0:p1],
                                 gs, kptj-kpti)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
-                pqkR = numpy.ndarray((nao*nao,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nao*nao,nG), buffer=pqkIbuf)
-                LkR = numpy.ndarray((naux,nG), buffer=LkRbuf)
-                LkI = numpy.ndarray((naux,nG), buffer=LkIbuf)
-                pqkR[:] = aoao[i0:i1].real.T
-                LkR [:] = aoaux[i0:i1].real.T
-                pqkI[:] = aoao[i0:i1].imag.T
-                LkI [:] = aoaux[i0:i1].imag.T
-                yield pqkR, LkR, pqkI, LkI, coulG[p0+i0:p0+i1]
+                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
+                pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
+                pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
+                kLR = numpy.ndarray((nG,naux), buffer=LkRbuf)
+                kLI = numpy.ndarray((nG,naux), buffer=LkIbuf)
+                kLR [:] = aoaux[i0:i1].real
+                kLI [:] = aoaux[i0:i1].imag
+                yield (pqkR.reshape(-1,nG), kLR.T,
+                       pqkI.reshape(-1,nG), kLI.T, coulG[p0+i0:p0+i1])
+
+    def ft_loop(self, cell, auxcell, gs=None, kpt=numpy.zeros(3),
+                kpts=None, max_memory=4000):
+        '''
+        Fourier transform iterator for all kpti and kptj which satisfy  kpt = kptj - kpti
+        '''
+        if gs is None: gs = self.gs
+
+        if kpts is None:
+            # search for kpti,kptj pair which satisfies kptj-kpti=kpt
+            kptj_allowed = kpts + kpt
+            kptjs = []
+            for k, kptj in enumerate(self.kpts):
+                if numpy.any(numpy.einsum('ix->i', abs(kptj_allowed-kptj)) < 1e-9):
+                    kptjs.append(kptj)
+            kptjs = numpy.asarray(kptjs)
+        else:
+            kptjs = numpy.asarray(kpts)
+        nkptj = len(kptjs)
+
+        nao = cell.nao_nr()
+        naux = auxcell.nao_nr()
+        gxrange = numpy.append(range(gs[0]+1), range(-gs[0],0))
+        gyrange = numpy.append(range(gs[1]+1), range(-gs[1],0))
+        gzrange = numpy.append(range(gs[2]+1), range(-gs[2],0))
+        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
+        invh = numpy.linalg.inv(cell._h)
+        Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
+        ngs = gxyz.shape[0]
+        coulG = tools.get_coulG(cell, kpt, gs=gs, Gv=Gv) / cell.vol
+
+        blksize = min(max(16, int(max_memory*1e6*.9/(nao**2*(nkptj+1)*16))), 16384)
+        buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)
+               for k in range(nkptj)]
+        pqkRbuf = numpy.empty(nao*nao*blksize)
+        pqkIbuf = numpy.empty(nao*nao*blksize)
+        LkRbuf = numpy.empty(naux*blksize)
+        LkIbuf = numpy.empty(naux*blksize)
+
+        for p0, p1 in lib.prange(0, ngs, blksize):
+            aoaux = ft_ao.ft_ao(auxcell, Gv[p0:p1], None, invh, gxyz[p0:p1],
+                                gs, kpt)
+            nG = p1 - p0
+            LkR = numpy.ndarray((naux,nG), buffer=LkRbuf)
+            LkI = numpy.ndarray((naux,nG), buffer=LkIbuf)
+            LkR [:] = aoaux.real.T
+            LkI [:] = aoaux.imag.T
+
+            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], None, True, invh,
+                                  gxyz[p0:p1], gs, kpt, kptjs, out=buf)
+            for k, kptj in enumerate(kptjs):
+                aoao = numpy.ndarray((nG,nao,nao), dtype=numpy.complex128,
+                                     order='F', buffer=buf[k])
+                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
+                pqkR[:] = aoao.real.transpose(1,2,0)
+                pqkI[:] = aoao.imag.transpose(1,2,0)
+                yield (k, kptj, pqkR.reshape(-1,nG), LkR,
+                       pqkI.reshape(-1,nG), LkI, coulG[p0:p1])
+                aoao[:] = 0
 
 
     get_nuc = get_nuc
@@ -527,9 +586,11 @@ class XDF(lib.StreamObject):
 
         vj, vk = None, None
         if with_k:
-            vk = xdf_jk.get_k_kpts(self, cell, dm, hermi, mf, kpts, kpt_band)
+            vk = lib.asarray(xdf_jk.get_k_kpts(self, cell, dm, hermi, mf,
+                                               kpts, kpt_band))
         if with_j:
-            vj = xdf_jk.get_j_kpts(self, cell, dm, hermi, mf, kpts, kpt_band)
+            vj = lib.asarray(xdf_jk.get_j_kpts(self, cell, dm, hermi, mf,
+                                               kpts, kpt_band))
         return vj, vk
 
     def get_eri(self, kpts=None):
@@ -615,8 +676,8 @@ def build_Lpq_1c_approx(xdf, auxcell, chgcell):
     i0 = 0
     j0 = 0
     for ia in range(xdf.cell.natm):
-        mol1._bas = xdf.cell._bas[xdf.cell._bas[:,ATOM_OF] == ia]
-        mol2._bas = auxcell._bas[auxcell._bas[:,ATOM_OF] == ia]
+        mol1._bas = xdf.cell._bas[xdf.cell._bas[:,gto.ATOM_OF] == ia]
+        mol2._bas = auxcell._bas[auxcell._bas[:,gto.ATOM_OF] == ia]
         tmp = fsolve(mol1, mol2)
         di = tmp.shape[0]
         dj = mol1.nao_nr()
@@ -662,7 +723,7 @@ def build_Lpq_atomic(xdf, auxcell, chgcell, drop_eta):
                 es = es[es>=drop_eta]
                 cs = cs[es>=drop_eta]
                 np = len(es)
-                pe = auxmol._bas[ib,PTR_EXP]
+                pe = auxmol._bas[ib,gto.PTR_EXP]
 
             if np > 0:
                 norm2 = 1/numpy.einsum('pi,p->i', cs, gto.mole._gaussian_int(l+2, es))
@@ -709,59 +770,64 @@ def _int_nuc_vloc(cell, nuccell, kpts):
     '''Vnuc - Vloc'''
     # sum over largest number of images in either cell or auxcell
     Ls = nuccell.get_lattice_Ls(nuccell.nimgs)
-    expks = numpy.exp(1j*numpy.dot(Ls, numpy.reshape(kpts, (-1,3)).T))
+    expks = numpy.dot(Ls, numpy.reshape(kpts, (-1,3)).T)
+    expks = numpy.exp(1j*numpy.asarray(expks, order='C'))
     nkpts = len(kpts)
 
-# Use the 3c2e code with steep gaussians to mimic nuclear density
-    fakenuc = copy.copy(nuccell)
-    fakenuc._env = nuccell._env.copy()
+    charge = cell.atom_charges()
+    coords = cell.atom_coords()
+# Use the 3c2e code with steep s gaussians to mimic nuclear density
+    fakenuc = gto.Mole()
+    fakenuc._atm = nuccell._atm.copy()
+    fakenuc._atm[:,gto.PTR_COORD] = numpy.arange(0,cell.natm*3,3)
+    _bas = nuccell._bas.copy()
+    _env = [coords.ravel()]
+    ptr = cell.natm * 3
+    steep_exp = 1e16
     half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    for b in nuccell._bas:
-        ptr = b[PTR_EXP]
-        fakenuc._env[ptr] = 1e16
-        ptr = b[PTR_COEFF]
-        fakenuc._env[ptr] = half_sph_norm/gto.mole._gaussian_int(2, 1e16)
-    fakenuc._atm, fakenuc._bas, fakenuc._env = \
-        atm, bas, env = pyscf.gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
-                                           fakenuc._atm, fakenuc._bas, fakenuc._env)
+    for ib in range(nuccell.nbas):
+        _env.append((nuccell.bas_exp(ib)[0], steep_exp))
+        _env.append((charge[ib] * nuccell.bas_ctr_coeff(ib)[0,0],
+                    -charge[ib] * half_sph_norm/gto.mole._gaussian_int(2, steep_exp)))
+        _bas[ib,gto.PTR_EXP]   = ptr
+        _bas[ib,gto.PTR_COEFF] = ptr + 2
+        ptr += 4
+    _bas[:,gto.NPRIM_OF] = 2
+    _bas[:,gto.NCTR_OF] = 1
+    fakenuc._bas = _bas
+    fakenuc._env = numpy.hstack(_env)
+    fakenuc.nimgs = cell.nimgs
 
     nao = cell.nao_nr()
-    naoaux = fakenuc.nao_nr()
-    buf = numpy.empty((nao*nao,naoaux), order='F')
-    ints = incore._wrap_int3c(cell, fakenuc, 'cint3c2e_sph', 1, buf)
-    atm, bas, env, ao_loc = ints._envs[:4]
-    shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2, cell.nbas*2, len(bas))
-    c_shls_slice = (ctypes.c_int*6)(*(shls_slice[:6]))
+    buf = [numpy.zeros((nao,nao), order='F', dtype=numpy.complex128)
+           for k in range(nkpts)]
+    ints = incore._wrap_int3c(cell, fakenuc, 'cint3c2e_sph', 1, Ls, buf)
+    atm, bas, env = ints._envs[:3]
+    c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2, 0, 0)
 
     xyz = cell.atom_coords().copy('C')
-    ptr_coordL = atm[         :cell.natm  ,pyscf.gto.PTR_COORD]
-    ptr_coordR = atm[cell.natm:cell.natm*2,pyscf.gto.PTR_COORD]
+    ptr_coordL = atm[:cell.natm,gto.PTR_COORD]
     ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    ptr_coordR = numpy.vstack((ptr_coordR,ptr_coordR+1,ptr_coordR+2)).T.copy('C')
-    # charges associated to nuccell and fakenuc
-    charge_coeff = numpy.hstack((cell.atom_charges(), -cell.atom_charges()))
 
-    mat = [0] * nkpts
+    natm = cell.natm
+    ksh0 = cell.nbas * 2
     for l, L1 in enumerate(Ls):
         env[ptr_coordL] = xyz + L1
-        for m in range(l):
-            env[ptr_coordR] = xyz + Ls[m]
-            v = numpy.dot(ints(c_shls_slice), charge_coeff)
-            for k in range(nkpts):
-                mat[k] += v * (expks[l,k].conj() * expks[m,k])
-
-        env[ptr_coordR] = xyz + L1
-        v = numpy.dot(ints(c_shls_slice), charge_coeff)
-        for k in range(nkpts):
-            mat[k] += v * (.5+0j)
+        exp_Lk = numpy.einsum('k,ik->ik', expks[l].conj(), expks[:l+1])
+        exp_Lk = numpy.asarray(exp_Lk, order='C')
+        exp_Lk[l] = .5
+        for ia in range(natm):
+            c_shls_slice[4] = ksh0 + ia
+            c_shls_slice[5] = ksh0 + ia + 1
+            ints(exp_Lk, c_shls_slice)
 
     tril_idx = numpy.tril_indices(nao)
     for k, kpt in enumerate(kpts):
-        v = mat[k].reshape(nao,nao)
+        v = buf[k].reshape(nao,nao)
         if abs(kpt).sum() < 1e-9:  # gamma_point:
             v = v.real + v.real.T
         else:
             v = v + v.T.conj()
-        mat[k] = v[tril_idx]
-    return mat
+        buf[k] = v[tril_idx]
+    return buf
 

@@ -16,6 +16,9 @@ cell.gs = (15,)*3
 cell.h = numpy.diag([2.2, 1.9, 2.])
 cell.build()
 
+def finger(a):
+    w = numpy.cos(numpy.arange(a.size))
+    return numpy.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
     def test_ft_ao(self):
@@ -73,6 +76,17 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,2:]-dat[:,2:,2:]), 3.9231124086361633e-14, 9)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,2:]-dat[:,0,2:])  , 3.6949758392853562e-11, 9)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,0]-dat[:,2:,0])  , 4.1245047267152665e-11, 9)
+
+    def test_ft_aoao_with_kpts(self):
+        numpy.random.seed(1)
+        kpti, kptj = kpts = numpy.random.random((2,3))
+        Gv = cell.get_Gv([5]*3)
+        kpt = numpy.random.random(3)
+        dat = ft_ao._ft_aopair_kpts(cell, Gv, kpt=kpt, kptjs=kpts)
+        self.assertAlmostEqual(finger(dat[0]), (2.3753953914129382-2.5365192689115088j), 9)
+        self.assertAlmostEqual(finger(dat[1]), (2.4951510097641840-3.1990956672116355j), 9)
+        dat = ft_ao.ft_aopair(cell, Gv)
+        self.assertAlmostEqual(finger(dat), (1.2534723618134684+1.830086071817564j), 9)
 
 
 if __name__ == '__main__':

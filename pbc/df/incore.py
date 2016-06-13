@@ -11,6 +11,8 @@ import pyscf.df
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
+libpbc = pyscf.lib.load_library('libpbc')
+
 try:
 ## Moderate speedup by caching eval_ao
     from joblib import Memory
@@ -36,7 +38,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
 
 @memory_cache
 def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
-           kpti_kptj=numpy.zeros((2,3)), out=None):
+           kpti_kptj=numpy.zeros((2,3))):
     '''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
 
@@ -51,61 +53,46 @@ def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
     logger.debug3(cell, "Ls = %s", Ls)
 
     kpti, kptj = kpti_kptj
-    expkL = numpy.exp(1j*numpy.dot(Ls, numpy.reshape(kpti, 3)))
-    expkR = numpy.exp(1j*numpy.dot(Ls, numpy.reshape(kptj, 3)))
+    expkL = numpy.exp(1j*numpy.asarray(numpy.dot(Ls, numpy.reshape(kpti, (1,3)).T), order='C'))
+    expkR = numpy.exp(1j*numpy.asarray(numpy.dot(Ls, numpy.reshape(kptj, (1,3)).T), order='C'))
     gamma_point = abs(kpti).sum() < 1e-9 and abs(kptj).sum() < 1e-9
 
     nao = cell.nao_nr()
-    #naoaux = auxcell.nao_nr('ssc' in intor)
-    naoaux = auxcell.nao_nr()
-    buf = numpy.empty((nao,nao,naoaux,comp), order='F')
-    ints = _wrap_int3c(cell, auxcell, intor, comp, buf)
-    atm, bas, env, ao_loc = ints._envs[:4]
+    #naux = auxcell.nao_nr('ssc' in intor)
+    naux = auxcell.nao_nr()
+    buf = [numpy.zeros((nao,nao,naux,comp), order='F', dtype=numpy.complex128)]
+    ints = _wrap_int3c(cell, auxcell, intor, comp, Ls, buf)
+    atm, bas, env = ints._envs[:3]
     shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2,
                   cell.nbas*2, cell.nbas*2+auxcell.nbas)
     c_shls_slice = (ctypes.c_int*6)(*(shls_slice[:6]))
 
     xyz = cell.atom_coords().copy('C')
-    ptr_coordL = atm[         :cell.natm  ,pyscf.gto.PTR_COORD]
-    ptr_coordR = atm[cell.natm:cell.natm*2,pyscf.gto.PTR_COORD]
+    ptr_coordL = atm[:cell.natm,pyscf.gto.PTR_COORD]
     ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    ptr_coordR = numpy.vstack((ptr_coordR,ptr_coordR+1,ptr_coordR+2)).T.copy('C')
 
-    mat = 0
     if aosym == 's1' or abs(kpti-kptj).sum() > 1e-9:
         for l, L1 in enumerate(Ls):
             env[ptr_coordL] = xyz + L1
-            for m, L2 in enumerate(Ls):
-                env[ptr_coordR] = xyz + L2
-                if gamma_point:
-                    mat += ints(c_shls_slice)
-                else:
-                    mat += ints(c_shls_slice) * (expkL[l].conj() * expkR[m])
-        mat = mat.reshape((nao*nao,naoaux,comp), order='A')
+            exp_Lk = expkL[l].conj() * expkR
+            ints(exp_Lk, c_shls_slice)
+        mat, buf = buf[0], None
     else:
         for l, L1 in enumerate(Ls):
             env[ptr_coordL] = xyz + L1
-            for m in range(l):
-                env[ptr_coordR] = xyz + Ls[m]
-                if gamma_point:
-                    mat += ints(c_shls_slice)
-                else:
-                    mat += ints(c_shls_slice) * (expkL[l].conj() * expkR[m])
-
-            env[ptr_coordR] = xyz + L1
-            if gamma_point:
-                mat += ints(c_shls_slice) * .5
-            else:
-                mat += ints(c_shls_slice) * (.5+0j)
+            exp_Lk = expkL[l].conj() * expkR[:l+1]
+            exp_Lk[l] = .5
+            ints(exp_Lk, c_shls_slice)
+        mat, buf = buf[0], None
         if gamma_point:
-            mat = mat + mat.swapaxes(0,1)
+            mat = mat.real + mat.real.swapaxes(0,1)
         else:
             mat = mat + mat.swapaxes(0,1).conj()
         mat = mat[numpy.tril_indices(nao)]
     if comp == 1:
-        mat = mat.reshape(mat.shape[:-1], order='A')
+        mat = mat.reshape(-1,naux)
     else:
-        mat = numpy.rollaxis(mat, -1, 0)
+        mat = numpy.rollaxis(mat, -1, 0).reshape(comp,-1,naux)
     return mat
 
 
@@ -117,7 +104,7 @@ def fill_2c2e(cell, auxcell, intor='cint2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
     return auxcell.pbc_intor(intor, 1, hermi, kpt)
 
 
-def _wrap_int3c(cell, auxcell, intor, comp, buf):
+def _wrap_int3c(cell, auxcell, intor, comp, Ls, out_lst):
     atm, bas, env = pyscf.gto.conc_env(cell._atm, cell._bas, cell._env,
                                        cell._atm, cell._bas, cell._env)
     atm, bas, env = pyscf.gto.conc_env(atm, bas, env,
@@ -135,16 +122,20 @@ def _wrap_int3c(cell, auxcell, intor, comp, buf):
     else:
         ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
 
-    if buf is None:
-        nao = ao_loc[cell.nbas]
-        naoaux = ao_loc[-1] - ao_loc[cell.nbas*2]
-        buf = numpy.empty((nao,nao,naoaux,comp), order='F')
-
     cintopt = _vhf.make_cintopt(atm, bas, env, intor)
     fintor = pyscf.gto.moleintor._fpointer(intor)
-    fill = pyscf.gto.moleintor._fpointer('GTOnr3c_fill_s1')
-    drv = pyscf.gto.moleintor.libcgto.GTOnr3c_drv
-    c_buf = buf.ctypes.data_as(ctypes.c_void_p)
+    fill = getattr(libpbc, 'PBCnr3c_fill_s1')
+    drv = libpbc.PBCnr3c_drv
+    outs = (ctypes.c_void_p*len(out_lst))(
+            *[out.ctypes.data_as(ctypes.c_void_p) for out in out_lst])
+    xyz = numpy.asarray(cell.atom_coords(), order='C')
+    ptr_coords = numpy.asarray(atm[cell.natm:cell.natm*2,pyscf.gto.PTR_COORD],
+                               dtype=numpy.int32, order='C')
+    c_ptr_coords = ptr_coords.ctypes.data_as(ctypes.c_void_p)
+    c_xyz = xyz.ctypes.data_as(ctypes.c_void_p)
+    c_nxyz = ctypes.c_int(len(xyz))
+    Ls = numpy.asarray(Ls, order='C')
+    c_Ls = Ls.ctypes.data_as(ctypes.c_void_p)
     c_comp = ctypes.c_int(comp)
     c_ao_loc = ao_loc.ctypes.data_as(ctypes.c_void_p)
     c_atm = atm.ctypes.data_as(ctypes.c_void_p)
@@ -152,12 +143,13 @@ def _wrap_int3c(cell, auxcell, intor, comp, buf):
     c_env = env.ctypes.data_as(ctypes.c_void_p)
     c_natm = ctypes.c_int(natm)
     c_nbas = ctypes.c_int(nbas)
-    def ints(c_shls_slice):
-        drv(fintor, fill, c_buf, c_comp, c_shls_slice, c_ao_loc, cintopt,
-            c_atm, c_natm, c_bas, c_nbas, c_env)
-        return buf
+    def ints(facs, c_shls_slice):
+        nimgs, nkpts = facs.shape
+        drv(fintor, fill, outs, c_xyz, c_ptr_coords, c_nxyz,
+            c_Ls, ctypes.c_int(nimgs),
+            facs.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts), c_comp,
+            c_shls_slice, c_ao_loc, cintopt, c_atm, c_natm, c_bas, c_nbas, c_env)
     # Save the numpy arrays in envs because ctypes does not increase their
     # reference counting.
-    # MUST be keeping track them out of this function scope.
-    ints._envs = (atm, bas, env, ao_loc, buf)
+    ints._envs = (atm, bas, env, ao_loc, xyz, ptr_coords, Ls)
     return ints

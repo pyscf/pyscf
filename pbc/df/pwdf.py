@@ -7,6 +7,7 @@
 
 import time
 import numpy
+import copy
 from pyscf import lib
 from pyscf import gto
 from pyscf import dft
@@ -31,6 +32,7 @@ def get_nuc(pwdf, cell=None, kpts=None):
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
 
     nao = cell.nao_nr()
     charge = -cell.atom_charges()
@@ -40,19 +42,19 @@ def get_nuc(pwdf, cell=None, kpts=None):
     max_memory = pwdf.max_memory - lib.current_memory()[0]
 
     vne = [0] * len(kpts_lst)
-    for k, kpt in enumerate(kpts_lst):
-        p0 = 0
-        for pqkR, pqkI, coulG \
-                in pwdf.pw_loop(cell, pwdf.gs, (kpt,kpt), max_memory):
+    p0 = 0
+    for k, kpt, pqkR, pqkI, coulG \
+            in pwdf.ft_loop(cell, pwdf.gs, numpy.zeros(3), kpts_lst, max_memory):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-            nG = len(coulG)
-            vG = rhoG[p0:p0+nG] * coulG
-            if abs(kpt).sum() > 1e-9:  # if not gamma point
-                vne[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
-                vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
-            vne[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
-            vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
+        nG = len(coulG)
+        vG = rhoG[p0:p0+nG] * coulG
+        if abs(kpt).sum() > 1e-9:  # if not gamma point
+            vne[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
+            vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
+        vne[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
+        vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
+        if k+1 == nkpts:
             p0 += nG
     vne = [v.reshape(nao,nao) for v in vne]
     t1 = log.timer('contracting Vnuc', *t1)
@@ -74,7 +76,7 @@ def get_pp(pwdf, cell=None, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    gs = cell.gs  # use xdf.gs?
+    gs = cell.gs  # use pwdf.gs?
 
     SI = cell.get_SI()
     vpplocG = -numpy.einsum('ij,ij->j', SI, pseudo.get_vlocG(cell)) / cell.vol
@@ -207,20 +209,69 @@ class PWDF(lib.StreamObject):
         hermi = abs(kpti).sum() < 1e-9 and abs(kptj).sum() < 1e-9  # gamma point
 
         blksize = min(max(16, int(max_memory*1e6*.7/16/nao**2)), 16384)
-        sublk = max(16, int(blksize//8))
+        sublk = blksize#max(16, int(blksize//8))
         pqkRbuf = numpy.empty(nao*nao*sublk)
         pqkIbuf = numpy.empty(nao*nao*sublk)
 
         for p0, p1 in lib.prange(0, ngs, blksize):
             aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], None, hermi, invh, gxyz[p0:p1],
-                                   gs, (kpti, kptj)).reshape(-1,nao**2)
+                                   gs, (kpti, kptj))
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
-                pqkR = numpy.ndarray((nao*nao,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nao*nao,nG), buffer=pqkIbuf)
-                pqkR[:] = aoao[i0:i1].real.T
-                pqkI[:] = aoao[i0:i1].imag.T
-                yield pqkR, pqkI, coulG[p0+i0:p0+i1]
+                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
+                pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
+                pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
+                yield pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), coulG[p0+i0:p0+i1]
+
+    def ft_loop(self, cell, gs=None, kpt=numpy.zeros(3), kpts=None, max_memory=4000):
+        '''
+        Fourier transform iterator for all kpti and kptj which satisfy  kpt = kptj - kpti
+        '''
+        if gs is None: gs = self.gs
+
+        if kpts is None:
+            # search for kpti,kptj pair which satisfies kptj-kpti=kpt
+            kptj_allowed = kpts + kpt
+            kptjs = []
+            for k, kptj in enumerate(self.kpts):
+                if numpy.any(numpy.einsum('ix->i', abs(kptj_allowed-kptj)) < 1e-9):
+                    kptjs.append(kptj)
+            kptjs = numpy.asarray(kptjs)
+        else:
+            kptjs = numpy.asarray(kpts)
+        nkptj = len(kptjs)
+
+        nao = cell.nao_nr()
+        gxrange = numpy.append(range(gs[0]+1), range(-gs[0],0))
+        gyrange = numpy.append(range(gs[1]+1), range(-gs[1],0))
+        gzrange = numpy.append(range(gs[2]+1), range(-gs[2],0))
+        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
+        invh = numpy.linalg.inv(cell._h)
+        Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
+        ngs = gxyz.shape[0]
+        coulG = tools.get_coulG(cell, kpt, gs=gs, Gv=Gv) / cell.vol
+
+        blksize = min(max(16, int(max_memory*1e6*.9/(nao**2*(nkptj+1)*16))), 16384)
+        buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)
+               for k in range(nkptj)]
+        pqkRbuf = numpy.empty(nao*nao*blksize)
+        pqkIbuf = numpy.empty(nao*nao*blksize)
+
+        for p0, p1 in lib.prange(0, ngs, blksize):
+            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], None, True, invh,
+                                  gxyz[p0:p1], gs, kpt, kptjs, out=buf)
+            nG = p1 - p0
+            for k, kptj in enumerate(kptjs):
+                aoao = numpy.ndarray((nG,nao,nao), dtype=numpy.complex128,
+                                     order='F', buffer=buf[k])
+                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
+                pqkR[:] = aoao.real.transpose(1,2,0)
+                pqkI[:] = aoao.imag.transpose(1,2,0)
+                yield (k, kptj, pqkR.reshape(-1,nG), pqkI.reshape(-1,nG),
+                       coulG[p0:p1])
+                aoao[:] = 0
 
     def aoR_loop(self, cell, gs=None, kpts=None, max_memory=2000):
         if gs is None: gs = self.gs
@@ -305,9 +356,11 @@ class PWDF(lib.StreamObject):
         if self.analytic_ft:
             vj, vk = None, None
             if with_k:
-                vk = pwdf_jk.get_k_kpts(self, cell, dm, hermi, mf, kpts, kpt_band)
+                vk = lib.asarray(pwdf_jk.get_k_kpts(self, cell, dm, hermi, mf,
+                                                    kpts, kpt_band))
             if with_j:
-                vj = pwdf_jk.get_j_kpts(self, cell, dm, hermi, mf, kpts, kpt_band)
+                vj = lib.asarray(pwdf_jk.get_j_kpts(self, cell, dm, hermi, mf,
+                                                    kpts, kpt_band))
         else:
             if with_k:
                 vj, vk = pscf.khf.get_jk(mf, cell, dm, kpts, kpt_band)
@@ -315,22 +368,27 @@ class PWDF(lib.StreamObject):
                 vj = pscf.khf.get_j(mf, cell, dm, kpts, kpt_band)
         return vj, vk
 
-    def get_eri(self, kpts=None, compact=False):
+    def get_eri(self, kpts=None):
         if self.analytic_ft:
-            return pwdf_ao2mo.get_eri(self, kpts, compact)
+            return pwdf_ao2mo.get_eri(self, kpts)
         else:
-            return pwfft_ao2mo.get_eri(self, kpts, compact)
+            return pwfft_ao2mo.get_eri(self, kpts)
     get_ao_eri = get_eri
 
-    def ao2mo(self, mo_coeffs, kpts=None, compact=False):
+    def ao2mo(self, mo_coeffs, kpts=None, compact=True):
         if self.analytic_ft:
-            return pwdf_ao2mo.general(self, mo_coeffs, kpts, compact)
+            return pwdf_ao2mo.general(self, mo_coeffs, kpts, compact=True)
         else:
-            return pwfft_ao2mo.general(self, mo_coeffs, kpts, compact)
+            return pwfft_ao2mo.general(self, mo_coeffs, kpts, compact=True)
     get_mo_eri = ao2mo
 
     get_ao_pairs_G = get_ao_pairs = pwfft_ao2mo.get_ao_pairs_G
     get_mo_pairs_G = get_mo_pairs = pwfft_ao2mo.get_mo_pairs_G
+
+    def update_mf(self, mf):
+        mf = copy.copy(mf)
+        mf.with_df = self
+        return mf
 
 
 if __name__ == '__main__':

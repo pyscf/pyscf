@@ -383,16 +383,15 @@ cell.build()
 np.random.seed(1)
 kpts = np.random.random((4,3))
 kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpt0 = np.zeros(3)
 
 cell1 = pgto.Cell()
 cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
-cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
+cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
 cell1.h = np.eye(3) * 2.5
 cell1.gs = [10] * 3
 cell1.build()
 kdf0 = xdf.XDF(cell1)
-kdf0.kpts = kpts[:,:4]
+kdf0.kpts = kpts
 
 
 def finger(a):
@@ -400,21 +399,21 @@ def finger(a):
     return np.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
-#    def test_pwdf_get_nuc(self):
-#        df = pwdf.PWDF(cell)
-#        df.analytic_ft = True
-#        v0 = get_nuc(cell, kpts[0])
-#        v1 = df.get_nuc(cell, kpts[0])
-#        self.assertTrue(np.allclose(v0, v1, atol=1e-4, rtol=1e-4))
-#        self.assertAlmostEqual(finger(v1), (-5.7646030917912663+0.19126291999423831j), 8)
-#
-#    def test_pwdf_get_pp(self):
-#        v0 = get_pp(cell, kpts[0])
-#        df = pwdf.PWDF(cell)
-#        df.analytic_ft = True
-#        v1 = df.get_pp(cell, kpts[0])
-#        self.assertTrue(np.allclose(v0, v1, atol=1e-4, rtol=1e-4))
-#        self.assertAlmostEqual(finger(v1), (-3.8223144482114702-0.0036417891676014755j), 8)
+    def test_pwdf_get_nuc(self):
+        df = pwdf.PWDF(cell)
+        df.analytic_ft = True
+        v0 = get_nuc(cell, kpts[0])
+        v1 = df.get_nuc(cell, kpts[0])
+        self.assertTrue(np.allclose(v0, v1, atol=1e-4, rtol=1e-4))
+        self.assertAlmostEqual(finger(v1), (-5.7646030917912663+0.19126291999423831j), 8)
+
+    def test_pwdf_get_pp(self):
+        v0 = get_pp(cell, kpts[0])
+        df = pwdf.PWDF(cell)
+        df.analytic_ft = True
+        v1 = df.get_pp(cell, kpts[0])
+        self.assertTrue(np.allclose(v0, v1, atol=1e-4, rtol=1e-4))
+        self.assertAlmostEqual(finger(v1), (-3.8223144482114702-0.0036417891676014755j), 8)
 
     def test_pwdf_get_ao_eri(self):
         df = pwdf.PWDF(cell)
@@ -443,105 +442,114 @@ class KnowValues(unittest.TestCase):
 
         eri1 = df.get_ao_eri(kpts)
         self.assertTrue(np.allclose(eri4, eri1, atol=1e-4, rtol=1e-4))
-        self.assertAlmostEqual(finger(eri1), (0.35162840030024972-0.82189976890224758j), 8)
-#
-#    def test_get_eri_gamma(self):
-#        odf0 = xdf.XDF(cell1)
-#        odf = pwdf.PWDF(cell1)
-#        odf.analytic_ft = True
-#        ref = odf0.get_eri()
-#        eri0000 = odf.get_eri(compact=True)
-#        self.assertTrue(eri0000.dtype == numpy.double)
-#        self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
-#        self.assertAlmostEqual(finger(eri0000), 0.38589093063479452, 9)
-#
-#        ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
-#        eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
-#        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
-#        self.assertAlmostEqual(finger(eri1111), (0.14725629846687405+0.0043128770303510278j), 9)
-#
-#        eri1111 = odf.get_eri((kpts[0]+1e-8,kpts[0]+1e-8,kpts[0],kpts[0]))
-#        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
-#        self.assertAlmostEqual(finger(eri1111), (0.1472562984459091+0.0043128765932982354j), 9)
-#
-#    def test_get_eri_0011(self):
-#        odf = pwdf.PWDF(cell1)
-#        odf.analytic_ft = True
-#        ref = kdf0.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
-#        eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
-#        self.assertTrue(np.allclose(eri0011, ref, atol=1e-3, rtol=1e-3))
-#        self.assertAlmostEqual(finger(eri0011), (0.14957163940251322-0.0071352564357119435j), 9)
-#
-#        odf.analytic_ft = False
-#        ref = get_mo_eri(cell1, [numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[0],kpts[1],kpts[1]))
-#        eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
-#        self.assertTrue(np.allclose(eri0011, ref, atol=1e-9, rtol=1e-9))
-#        self.assertAlmostEqual(finger(eri0011), (0.14957134428124308-0.0071352576828324337j), 9)
-#
-#    def test_get_eri_0110(self):
-#        odf = pwdf.PWDF(cell1)
-#        odf.analytic_ft = True
-#        ref = kdf0.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
-#        eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
-#        self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
-#        eri0110 = odf.get_eri((kpts[0]+1e-8,kpts[1]+1e-8,kpts[1],kpts[0]))
-#        self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
-#        self.assertAlmostEqual(finger(eri0110), (0.24326566744097633-0.035129660071516813j), 9)
-#
-#        odf.analytic_ft = False
-#        ref = get_mo_eri(cell1, [numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[1],kpts[1],kpts[0]))
-#        eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
-#        self.assertTrue(np.allclose(eri0110, ref, atol=1e-9, rtol=1e-9))
-#        self.assertAlmostEqual(finger(eri0110), (0.24326536565251655-0.035129657042400113j), 9)
-#
-#    def test_get_eri_0123(self):
-#        odf = pwdf.PWDF(cell1)
-#        odf.analytic_ft = True
-#        ref = kdf0.get_eri(kpts)
-#        eri1111 = kdf0.get_eri(kpts)
-#        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
-#        self.assertAlmostEqual(finger(eri1111), (0.19620248106840443-0.11722346519890783j), 9)
-#
-#        odf.analytic_ft = False
-#        ref = get_mo_eri(cell1, [numpy.eye(cell1.nao_nr())]*4, kpts)
-#        eri1111 = odf.get_eri(kpts)
-#        self.assertTrue(np.allclose(eri1111, ref, atol=1e-9, rtol=1e-9))
-#        self.assertAlmostEqual(finger(eri1111), (0.19619293640896973-0.11341278078550028j), 9)
-#
-#    def test_get_mo_eri(self):
-#        odf = pwdf.PWDF(cell)
-#        nao = cell.nao_nr()
-#        numpy.random.seed(5)
-#        mo = numpy.random.random((nao,nao))
-#        eri_mo0 = get_mo_eri(cell, (mo,)*4, kpts)
-#        eri_mo1 = odf.get_mo_eri((mo,)*4, kpts)
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
-#
-#        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],)*4)
-#        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],)*4)
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
-#
-#        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],kpts[1],kpts[1],kpts[0],))
-#        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],kpts[1],kpts[1],kpts[0],))
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
-#
-#        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpt0,kpt0,kpts[0],kpts[0],))
-#        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpt0,kpt0,kpts[0],kpts[0],))
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
-#
-#        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],kpts[0],kpt0,kpt0,))
-#        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],kpts[0],kpt0,kpt0,))
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
-#
-#        odf.analytic_ft = True
-#        mo1 = mo[:,:nao//2+1]
-#        eri_mo0 = get_mo_eri(cell, (mo1,mo,mo,mo1), (kpts[0],)*4)
-#        eri_mo1 = odf.get_mo_eri((mo1,mo,mo,mo1), (kpts[0],)*4)
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-6, rtol=1e-6))
-#
-#        eri_mo0 = get_mo_eri(cell, (mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
-#        eri_mo1 = odf.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
-#        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(finger(eri1), (0.33709287302019619-0.94185725020966538j), 8)
+
+    def test_get_eri_gamma(self):
+        odf0 = xdf.XDF(cell1)
+        odf = pwdf.PWDF(cell1)
+        odf.analytic_ft = True
+        ref = odf0.get_eri()
+        eri0000 = odf.get_eri(compact=True)
+        self.assertTrue(eri0000.dtype == numpy.double)
+        self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(finger(eri0000), 0.23714016293926865, 9)
+
+        ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
+        eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
+        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(finger(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
+
+        eri1111 = odf.get_eri((kpts[0]+1e-8,kpts[0]+1e-8,kpts[0],kpts[0]))
+        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(finger(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
+
+    def test_get_eri_0011(self):
+        odf = pwdf.PWDF(cell1)
+        odf.analytic_ft = True
+        ref = kdf0.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
+        eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
+        self.assertTrue(np.allclose(eri0011, ref, atol=1e-3, rtol=1e-3))
+        self.assertAlmostEqual(finger(eri0011), (1.2410162858084512+0.00074485383749912936j), 9)
+
+        odf.analytic_ft = False
+        ref = get_mo_eri(cell1, [numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[0],kpts[1],kpts[1]))
+        eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
+        self.assertTrue(np.allclose(eri0011, ref, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(eri0011), (1.2410162860852818+0.00074485383748954838j), 9)
+
+    def test_get_eri_0110(self):
+        odf = pwdf.PWDF(cell1)
+        odf.analytic_ft = True
+        ref = kdf0.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
+        eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
+        self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
+        eri0110 = odf.get_eri((kpts[0]+1e-8,kpts[1]+1e-8,kpts[1],kpts[0]))
+        self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
+
+        odf.analytic_ft = False
+        ref = get_mo_eri(cell1, [numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[1],kpts[1],kpts[0]))
+        eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
+        self.assertTrue(np.allclose(eri0110, ref, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
+        eri0110 = odf.get_eri((kpts[0]+1e-8,kpts[1]+1e-8,kpts[1],kpts[0]))
+        self.assertTrue(np.allclose(eri0110, ref, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
+
+    def test_get_eri_0123(self):
+        odf = pwdf.PWDF(cell1)
+        odf.analytic_ft = True
+        ref = kdf0.get_eri(kpts)
+        eri1111 = kdf0.get_eri(kpts)
+        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(finger(eri1111), (1.2917703732167864-0.01477364902643963j), 9)
+
+        odf.analytic_ft = False
+        ref = get_mo_eri(cell1, [numpy.eye(cell1.nao_nr())]*4, kpts)
+        eri1111 = odf.get_eri(kpts)
+        self.assertTrue(np.allclose(eri1111, ref, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
+
+    def test_get_mo_eri(self):
+        odf = pwdf.PWDF(cell)
+        nao = cell.nao_nr()
+        numpy.random.seed(5)
+        mo =(numpy.random.random((nao,nao)) +
+             numpy.random.random((nao,nao))*1j)
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, kpts)
+        eri_mo1 = odf.get_mo_eri((mo,)*4, kpts)
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        kpts_t = (kpts[2],kpts[3],kpts[0],kpts[1])
+        eri_mo2 = get_mo_eri(cell, (mo,)*4, kpts_t)
+        eri_mo2 = eri_mo2.reshape((nao,)*4).transpose(2,3,0,1).reshape(nao**2,-1)
+        self.assertTrue(np.allclose(eri_mo2, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],)*4)
+        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],)*4)
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],kpts[1],kpts[1],kpts[0],))
+        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],kpts[1],kpts[1],kpts[0],))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpt0,kpt0,kpts[0],kpts[0],))
+        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpt0,kpt0,kpts[0],kpts[0],))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        eri_mo0 = get_mo_eri(cell, (mo,)*4, (kpts[0],kpts[0],kpt0,kpt0,))
+        eri_mo1 = odf.get_mo_eri((mo,)*4, (kpts[0],kpts[0],kpt0,kpt0,))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+        odf.analytic_ft = True
+        mo1 = mo[:,:nao//2+1]
+        eri_mo0 = get_mo_eri(cell, (mo1,mo,mo,mo1), (kpts[0],)*4)
+        eri_mo1 = odf.get_mo_eri((mo1,mo,mo,mo1), (kpts[0],)*4)
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-6, rtol=1e-6))
+
+        eri_mo0 = get_mo_eri(cell, (mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
+        eri_mo1 = odf.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-6, rtol=1e-6))
 
 
 if __name__ == '__main__':

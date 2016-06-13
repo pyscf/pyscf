@@ -13,7 +13,7 @@ def finger(a):
     return numpy.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
-    def test_aux_e2_uniform(self):
+    def test_aux_e2(self):
         cell = pgto.Cell()
         cell.unit = 'B'
         cell.h = numpy.eye(3) * 3.

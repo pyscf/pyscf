@@ -83,15 +83,16 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
     buflen = max(8, int(max_memory*1e6/16/(nkptij*nao**2*comp)))
     auxranges = pyscf.ao2mo.outcore.group_segs_filling_block(aux_loc[1:]-aux_loc[:-1], buflen)
     buflen = max([x[2] for x in auxranges])
-    buf = numpy.empty((nao,nao,buflen,comp), order='F')
-    ints = incore._wrap_int3c(cell, auxcell, intor, comp, buf)
-    atm, bas, env, ao_loc = ints._envs[:4]
+    buf = [numpy.zeros(nao*nao*buflen*comp, dtype=numpy.complex128)
+           for k in range(nkptij)]
+    ints = incore._wrap_int3c(cell, auxcell, intor, comp, Ls, buf)
+    atm, bas, env = ints._envs[:3]
 
     xyz = cell.atom_coords().copy('C')
-    ptr_coordL = atm[         :cell.natm  ,pyscf.gto.PTR_COORD]
-    ptr_coordR = atm[cell.natm:cell.natm*2,pyscf.gto.PTR_COORD]
+    ptr_coordL = atm[:cell.natm,pyscf.gto.PTR_COORD]
     ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    ptr_coordR = numpy.vstack((ptr_coordR,ptr_coordR+1,ptr_coordR+2)).T.copy('C')
+    kpti = kptij_lst[:,0]
+    kptj = kptij_lst[:,1]
 
     if numpy.all(aosym_s2):
         def ccsum_or_reorder(Lpq):
@@ -107,39 +108,26 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
         sh0, sh1, nrow = auxrange
         c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2,
                                         cell.nbas*2+sh0, cell.nbas*2+sh1)
-        mat = [0] * nkptij
         if numpy.all(aosym_s2):
             for l, L1 in enumerate(Ls):
                 env[ptr_coordL] = xyz + L1
-                for m in range(l):
-                    L2 = Ls[m]
-                    env[ptr_coordR] = xyz + L2
-                    j3c = numpy.ndarray((nao,nao,nrow,comp), order='F',
-                                        buffer=ints(c_shls_slice))
-                    for k, (kpti, kptj) in enumerate(kptij_lst):
-                        e = numpy.dot(L2-L1, kptj)
-                        mat[k] += j3c * numpy.exp(1j*e)
-
-                env[ptr_coordR] = xyz + L1
-                j3c = numpy.ndarray((nao,nao,nrow,comp), order='F',
-                                    buffer=ints(c_shls_slice))
-                for k, (kpti, kptj) in enumerate(kptij_lst):
-                    mat[k] += j3c * (.5+0j)
+                e = numpy.dot(Ls[:l+1]-L1, kptj.T)
+                exp_Lk = numpy.exp(1j * numpy.asarray(e, order='C'))
+                exp_Lk[l] = .5
+                ints(exp_Lk, c_shls_slice)
         else:
             for l, L1 in enumerate(Ls):
                 env[ptr_coordL] = xyz + L1
-                for m, L2 in enumerate(Ls):
-                    env[ptr_coordR] = xyz + L2
-                    j3c = numpy.ndarray((nao,nao,nrow,comp), order='F',
-                                        buffer=ints(c_shls_slice))
-                    for k, (kpti, kptj) in enumerate(kptij_lst):
-                        e = numpy.dot(L2, kptj) - numpy.dot(L1, kpti)
-                        mat[k] += j3c * numpy.exp(1j*e)
+                e = numpy.dot(Ls, kptj.T) - numpy.dot(L1, kpti.T)
+                exp_Lk = numpy.exp(1j * numpy.asarray(e, order='C'))
+                ints(exp_Lk, c_shls_slice)
 
         for k, kptij in enumerate(kptij_lst):
             h5dat = feri['%s/%d'%(dataname,k)]
             # transpose 3201 as (comp,L,i,j)
-            for icomp, vi in enumerate(mat[k].transpose(3,2,0,1)):
+            mat = numpy.ndarray((nao,nao,nrow,comp), order='F',
+                                dtype=numpy.complex128, buffer=buf[k])
+            for icomp, vi in enumerate(mat.transpose(3,2,0,1)):
                 v = ccsum_or_reorder(vi)
                 if abs(kptij).sum() < 1e-9:  # gamma_point:
                     v = v.real
@@ -151,6 +139,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
                     h5dat[naux0:naux0+nrow] = v
                 else:
                     h5dat[icomp,naux0:naux0+nrow] = v
+            mat[:] = 0
         naux0 += nrow
 
     feri.close()

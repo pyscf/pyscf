@@ -52,9 +52,9 @@ def get_eri(pwdf, kpts=None, compact=False):
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
         ao_pairs_G = get_ao_pairs_G(pwdf, kptijkl[:2], False)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
-        ao_pairs_invG = ao_pairs_G.reshape(-1,nao,nao).transpose(0,2,1).conj()
-        ao_pairs_invG = ao_pairs_invG.reshape(ngs,-1)
-        return lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
+        ao_pairs_invG = ao_pairs_G.T.reshape(nao,nao,-1).transpose(1,0,2).conj()
+        ao_pairs_invG = ao_pairs_invG.reshape(-1,ngs)
+        return lib.dot(ao_pairs_G.T, ao_pairs_invG.T, cell.vol/ngs**2)
 
 ####################
 # aosym = s1, complex integrals
@@ -64,8 +64,7 @@ def get_eri(pwdf, kpts=None, compact=False):
 # ao_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         ao_pairs_invG = get_ao_pairs_G(pwdf, -kptijkl[2:], False).conj()
         ao_pairs_G *= coulG.reshape(-1,1)
-        eri = lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
-        return eri.reshape(nao*nao,-1)
+        return lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
 
 
 def general(pwdf, mo_coeffs, kpts=None, compact=False):
@@ -82,14 +81,11 @@ def general(pwdf, mo_coeffs, kpts=None, compact=False):
         mo_coeffs = (mo_coeffs,) * 4
     coulG = tools.get_coulG(cell, kptj-kpti, gs=pwdf.gs)
     ngs = len(coulG)
-    nmoi = mo_coeffs[0].shape[1]
-    nmoj = mo_coeffs[1].shape[1]
-    nmok = mo_coeffs[2].shape[1]
-    nmol = mo_coeffs[3].shape[1]
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if 0 and abs(kptijkl).sum() < 1e-9:
+    if 0 and (abs(kptijkl).sum() < 1e-9 and
+        not any((numpy.iscomplexobj(mo) for mo in mo_coeffs))):
         mo_pairs_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2], compact)
         if ((ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[2]) and
              ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[3]))):
@@ -119,23 +115,28 @@ def general(pwdf, mo_coeffs, kpts=None, compact=False):
     elif ((abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9) and
           ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[3]) and
           ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[2])):
-        mo_ij_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2], False)
+        nmoi = mo_coeffs[0].shape[1]
+        nmoj = mo_coeffs[1].shape[1]
+        mo_ij_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2])
         mo_ij_G *= numpy.sqrt(coulG).reshape(-1,1)
-        mo_kl_G = mo_ij_G.reshape(-1,nmoi,nmoj).transpose(0,2,1).conj()
-        mo_kl_G = mo_kl_G.reshape(ngs,-1)
-        return lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
+        mo_kl_G = mo_ij_G.T.reshape(nmoi,nmoj,-1).transpose(1,0,2).conj()
+        mo_kl_G = mo_kl_G.reshape(-1,ngs)
+        return lib.dot(mo_ij_G.T, mo_kl_G.T, cell.vol/ngs**2)
 
 ####################
 # aosym = s1, complex integrals
 #
     else:
-        mo_ij_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2], False)
+        nmok = mo_coeffs[2].shape[1]
+        nmol = mo_coeffs[3].shape[1]
+        mo_ij_G = get_mo_pairs_G(pwdf, mo_coeffs[:2], kptijkl[:2])
         mo_ij_G *= coulG.reshape(-1,1)
 # mo_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         mo_kl_G = get_mo_pairs_G(pwdf, (mo_coeffs[3],mo_coeffs[2]),
-                                 (kptl,kptk), False)
-        mo_kl_G = mo_kl_G.reshape(-1,nmol,nmok).transpose(0,2,1).conj().reshape(ngs,-1)
-        return lib.dot(mo_ij_G.T, mo_kl_G, cell.vol/ngs**2)
+                                 (kptl,kptk))
+        mo_kl_G = mo_kl_G.T.reshape(nmol,nmok,-1).transpose(1,0,2).conj()
+        mo_kl_G = mo_kl_G.reshape(-1,ngs)
+        return lib.dot(mo_ij_G.T, mo_kl_G.T, cell.vol/ngs**2)
 
 
 def get_ao_pairs_G(pwdf, kpts=numpy.zeros((2,3)), compact=False):

@@ -26,7 +26,7 @@ def finger(a):
     return numpy.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
-    def test_aux_e2_uniform(self):
+    def test_aux_e2(self):
         tmpfile = tempfile.NamedTemporaryFile()
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((3,2,3))
