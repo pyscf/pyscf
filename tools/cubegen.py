@@ -4,7 +4,7 @@
 #
 
 import numpy
-from pyscf.dft import numint
+from pyscf.dft import numint, gen_grid
 
 '''
 Gaussian cube file format
@@ -24,7 +24,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     ngrids = nx * ny * nz
     blksize = min(200, ngrids)
     rho = numpy.empty(ngrids)
-    for ip0, ip1 in numint.prange(0, ngrids, blksize):
+    for ip0, ip1 in gen_grid.prange(0, ngrids, blksize):
         ao = numint.eval_ao(mol, coords[ip0:ip1])
         rho[ip0:ip1] = numint.eval_rho(mol, ao, dm)
     rho = rho.reshape(nx,ny,nz)
@@ -41,17 +41,17 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
             chg = mol.atom_charge(ia)
             f.write('%5d %f' % (chg, chg))
             f.write(' %14.8f %14.8f %14.8f\n' % tuple(mol.atom_coord(ia).tolist()))
-        fmt = ' %14.8f' * nz + '\n'
+        fmt = ' %14.8e' * nz + '\n'
         for ix in range(nx):
             for iy in range(ny):
                 f.write(fmt % tuple(rho[ix,iy].tolist()))
 
 
 if __name__ == '__main__':
-    from pyscf.dft import gen_grid
     from pyscf import gto, scf
+    from pyscf.tools import cubegen
     mol = gto.M(atom='H 0 0 0; H 0 0 1')
     mf = scf.RHF(mol)
-    mf.kernel()
-    density(mol, 'h2.cube', mf.make_rdm1())
+    mf.scf()
+    cubegen.density(mol, 'h2.cube', mf.make_rdm1())
 
