@@ -1,4 +1,4 @@
-Version 1.1 beta (2016-6-4):
+Version 1.1 (2016-6-4):
 * Modify
   - "unc-" prefix for uncontracted basis in the input
   - linear dependence problem in mcscf.project_init_guess
