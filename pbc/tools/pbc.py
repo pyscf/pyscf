@@ -218,7 +218,7 @@ def get_lattice_Ls(cell, nimgs=None):
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
     Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= 1./3*np.dot(nimgs,nimgs)]
-    Ls = np.dot(cell._h, Ts.T).T
+    Ls = np.dot(Ts, cell._h.astype(np.double).T)
     return Ls
 
 

@@ -368,11 +368,11 @@ class PWDF(lib.StreamObject):
                 vj = pscf.khf.get_j(mf, cell, dm, kpts, kpt_band)
         return vj, vk
 
-    def get_eri(self, kpts=None):
+    def get_eri(self, kpts=None, compact=False):
         if self.analytic_ft:
-            return pwdf_ao2mo.get_eri(self, kpts)
+            return pwdf_ao2mo.get_eri(self, kpts, compact)
         else:
-            return pwfft_ao2mo.get_eri(self, kpts)
+            return pwfft_ao2mo.get_eri(self, kpts, compact)
     get_ao_eri = get_eri
 
     def ao2mo(self, mo_coeffs, kpts=None, compact=True):

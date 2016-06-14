@@ -449,7 +449,7 @@ class RHF(pyscf.scf.hf.RHF):
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
-                self._eri = self.with_df.get_ao_eri(kpt)
+                self._eri = self.with_df.get_ao_eri(kpt, compact=True)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
 
             # G=0 is not inculded in the ._eri integrals
@@ -492,7 +492,7 @@ class RHF(pyscf.scf.hf.RHF):
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
-                self._eri = self.with_df.get_ao_eri(kpt)
+                self._eri = self.with_df.get_ao_eri(kpt, compact=True)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
             vj = self.with_df.get_jk(cell, dm, hermi, kpt, kpt_band,
@@ -526,7 +526,7 @@ class RHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
         if self._eri is None:
-            self._eri = ao2mo.get_ao_eri(cell, kpt)
+            self._eri = self.with_df.get_ao_eri(kpt, compact=True)
         return self.get_jk(cell, dm, hermi, verbose, kpt)
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
