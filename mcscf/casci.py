@@ -107,8 +107,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
             for i,j in idx:
                 log.info('<mo-mcscf|mo-hf> %d  %d  %12.8f', i+1, j+1, s[i,j])
 
-        if (isinstance(ci, (tuple, list, numpy.ndarray)) and
-            isinstance(ci[0], numpy.ndarray)):
+        if ci is not None and numpy.ndim(ci) >= 2:
             log.info('** Largest CI components **')
             if ci[0].ndim == 2:
                 for i, state in enumerate(ci):

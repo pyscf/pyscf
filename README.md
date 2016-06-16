@@ -77,6 +77,7 @@ Known problems
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
+
 * Fails at runtime with error message
 ```
   OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
@@ -89,11 +90,19 @@ Known problems
 
         BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
 
-* tests fail
 
-        mcscf/test/test_bz_df.py     test_mc2step_9o8e
-        mcscf/test/test_addons.py    test_ucasscf_spin_square
-        cc/test/test_h2o.py          test_h2o_without_scf
+* Runtime error message
+```
+  MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.
+```
+  This is MKL 11.* bug for "dlopen" function.  Preloading the two libraries
+  works fine with most system:
+
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_core.so
+
+  or 
+
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:/share/apps/ifc/mkl/lib/em64t/libmkl_sequential.so
 
 
 * h5py installation.

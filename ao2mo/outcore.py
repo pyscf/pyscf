@@ -13,12 +13,13 @@ from pyscf.ao2mo import incore
 
 # default ioblk_size is 256 MB
 
-IOBUF_WORDS_PREFER = 1e8
+IOBUF_WORDS_PREFER = 1e8 # 800 MB
+IOBLK_SIZE = 256  # MB
 IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
          intor='cint2e_sph', aosym='s4', comp=1,
-         max_memory=2000, ioblk_size=256, verbose=logger.WARN, compact=True):
+         max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
     Args:
@@ -104,7 +105,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             intor='cint2e_sph', aosym='s4', comp=1,
-            max_memory=2000, ioblk_size=256, verbose=logger.WARN, compact=True):
+            max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
 
@@ -284,11 +285,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         for icomp in range(comp):
             istep += 1
             tioi = 0
-            log.debug('step 2 [%d/%d], [%d,%d:%d], row = %d', \
-                      istep, ijmoblks, icomp, row0, row1, nrow)
+            log.debug1('step 2 [%d/%d], [%d,%d:%d], row = %d', \
+                       istep, ijmoblks, icomp, row0, row1, nrow)
 
             buf = _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
-            ti2 = log.timer('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
+            ti2 = log.timer_debug1('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
             tioi += ti2[1]-ti0[1]
             pbuf = bufs1[:nrow]
             _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
@@ -302,8 +303,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             tioi += time.time()-tw1
 
             ti1 = (time.clock(), time.time())
-            log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
-                      istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
+            log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
+                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
     fswap.close()
     if isinstance(erifile, str):
@@ -317,7 +318,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
             intor='cint2e_sph', aosym='s4', comp=1,
-            max_memory=2000, ioblk_size=256, verbose=logger.WARN, compact=True,
+            max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True,
             ao2mopt=None):
     r'''Half transform arbitrary spherical AO integrals to MO integrals
     for the given two sets of orbitals
@@ -399,16 +400,16 @@ def half_e1(mol, mo_coeffs, swapfile,
         else:
             ao2mopt = _ao2mo.AO2MOpt(mol, intor)
 
-    log.debug('step1: tmpfile %.8g MB', nij_pair*nao_pair*8/1e6)
-    log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
-              nij_pair, nao_pair, mem_words*8/1e6, iobuf_words*8/1e6)
-
     if isinstance(swapfile, str):
         fswap = h5py.File(swapfile, 'w')
     else:
         fswap = swapfile
     for icomp in range(comp):
         g = fswap.create_group(str(icomp)) # for h5py old version
+
+    log.debug('step1: tmpfile %s  %.8g MB', fswap.filename, nij_pair*nao_pair*8/1e6)
+    log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
+              nij_pair, nao_pair, mem_words*8/1e6, iobuf_words*8/1e6)
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
@@ -417,14 +418,14 @@ def half_e1(mol, mo_coeffs, swapfile,
     bufs1 = numpy.empty((comp*maxbuflen,nao_pair))
     bufs2 = numpy.empty((comp*maxbuflen,nij_pair))
     for istep,sh_range in enumerate(shranges):
-        log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
-                  istep+1, nstep, *(sh_range[:3]))
+        log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
+                   istep+1, nstep, *(sh_range[:3]))
         buflen = sh_range[2]
         iobuf = bufs2[:comp*buflen].reshape(comp,buflen,nij_pair)
         nmic = len(sh_range[3])
         p0 = 0
         for imic, aoshs in enumerate(sh_range[3]):
-            log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
+            log.debug2('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
                        imic+1, nmic, *aoshs)
             buf = bufs1[:comp*aoshs[2]] # (@)
             _ao2mo.nr_e1fill(intor, aoshs, mol._atm, mol._bas, mol._env,
@@ -432,13 +433,13 @@ def half_e1(mol, mo_coeffs, swapfile,
             buf = _ao2mo.nr_e1(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]
-        ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
+        ti2 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
         e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
         for icomp in range(comp):
             _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf[icomp],
                               e2buflen, None)
-        ti0 = log.timer('transposing to disk', *ti2)
+        ti0 = log.timer_debug1('transposing to disk', *ti2)
     bufs1 = bufs2 = None
     if isinstance(swapfile, str):
         fswap.close()
@@ -655,10 +656,7 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
-    if mem_words > 2e8:
-        iobuf_words = int(IOBUF_WORDS_PREFER) # 1.2GB
-    else:
-        iobuf_words = int(mem_words // 2)
+    iobuf_words = max(int(mem_words//4), IOBUF_WORDS_PREFER)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
     e1buflen = int(min(iobuf_words//(comp*nij_pair),
