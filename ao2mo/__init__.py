@@ -128,13 +128,14 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
             mod = r_outcore
         else:
             mod = outcore
-        if len(args) > 0 and isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
-            fn = getattr(mod, 'full')
-        elif isinstance(args[0], tempfile._TemporaryFileWrapper):
-            fn = getattr(mod, 'full')
-            args = [args[0].name] + args[1:]  # take the tmpfile name
-        else:
-            fn = getattr(mod, 'full_iofree')
+
+        fn = getattr(mod, 'full_iofree')
+        if len(args) > 0:
+            if isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
+                fn = getattr(mod, 'full')
+            elif isinstance(args[0], tempfile._TemporaryFileWrapper):
+                fn = getattr(mod, 'full')
+                args = [args[0].name] + args[1:]  # take the tmpfile name
         return fn(eri_or_mol, mo_coeff, *args, **kwargs)
 
 def general(eri_or_mol, mo_coeffs, *args, **kwargs):
@@ -282,13 +283,14 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
             mod = r_outcore
         else:
             mod = outcore
-        if len(args) > 0 and isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
-            fn = getattr(mod, 'general')
-        elif isinstance(args[0], tempfile._TemporaryFileWrapper):
-            fn = getattr(mod, 'general')
-            args = [args[0].name] + args[1:]  # take the tmpfile name
-        else:
-            fn = getattr(mod, 'general_iofree')
+
+        fn = getattr(mod, 'general_iofree')
+        if len(args) > 0:
+            if isinstance(args[0], (str, h5py.Group)): # args[0] is erifile
+                fn = getattr(mod, 'general')
+            elif isinstance(args[0], tempfile._TemporaryFileWrapper):
+                fn = getattr(mod, 'general')
+                args = [args[0].name] + args[1:]  # take the tmpfile name
         return fn(eri_or_mol, mo_coeffs, *args, **kwargs)
 
 def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):
