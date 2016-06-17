@@ -13,6 +13,7 @@ import pyscf.pbc.scf.khf
 import pyscf.pbc.dft
 import pyscf.pbc.dft.rks
 from pyscf.lib import logger
+from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 
 
@@ -22,6 +23,7 @@ class KRKS(pyscf.pbc.scf.khf.KRHF):
     def __init__(self, cell, kpts):
         pyscf.pbc.scf.khf.KRHF.__init__(self, cell, kpts)
         self.xc = 'LDA,VWN'
+        self.grids = gen_grid.UniformGrids(cell)
         self.small_rho_cutoff = 0  # FIX rks.get_veff
         self._numint = numint._KNumInt(kpts) # use periodic images of AO in
                                              # numerical integration

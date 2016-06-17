@@ -292,7 +292,8 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
 
 
 def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
-               max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
+               kpt=numpy.zeros(3), kpt_band=None, max_memory=2000,
+               verbose=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
     Note: This is a replica of pyscf.dft.numint.nr_rks_vxc with kpts added.
@@ -321,7 +322,7 @@ def nr_rks_vxc(ni, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
             No effects.
-        kpt : (3,) ndarray or (3,nkpts) ndarray
+        kpt : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.
         kpt_band : (3,) ndarray
             An arbitrary "band" k-point at which to evaluate the XC matrix.
@@ -420,15 +421,13 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return eval_rho(cell, ao, dm, non0tab, xctype, verbose)
 
     def nr_rks(self, cell, grids, xc_code, dms, hermi=1,
-               max_memory=2000, verbose=None, kpt=numpy.zeros(3), kpt_band=None):
+               kpt=numpy.zeros(3), kpt_band=None, max_memory=2000, verbose=None):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
         return nr_rks_vxc(self, cell, grids, xc_code, dms,
-                          spin=0, relativity=0, hermi=1,
-                          max_memory=max_memory, verbose=verbose,
-                          kpt=kpt, kpt_band=kpt_band)
+                          0, 0, hermi, kpt, kpt_band, max_memory, verbose)
 
     def nr_uks(self, cell, grids, xc_code, dms, hermi=1,
                max_memory=2000, verbose=None):
@@ -493,7 +492,8 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         Returns:
            rhoR : (ngs,) ndarray
         '''
-        nkpts, ngs, nao = ao_kpts.shape
+        nkpts = len(dm_kpts)
+        ngs = ao_kpts[0].shape[0]
         rhoR = numpy.zeros(ngs)
         for k in range(nkpts):
             rhoR += 1./nkpts*eval_rho(cell, ao_kpts[k], dm_kpts[k])
@@ -503,26 +503,34 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         raise NotImplementedError
 
     def nr_rks(self, cell, grids, xc_code, dms, hermi=1,
-               max_memory=2000, verbose=None, kpt=None, kpt_band=None):
+               kpts=None, kpt_band=None, max_memory=2000, verbose=None,
+               **kwargs):
         '''
         Use slow function in numint, which only calls eval_rho, eval_mat.
         Faster function uses eval_rho2 which is not yet implemented.
         '''
-        return nr_rks_vxc(self, cell, grids, xc_code, dms,
-                          spin=0, relativity=0, hermi=1,
-                          max_memory=max_memory, verbose=verbose,
-                          kpt=kpt, kpt_band=kpt_band)
+        if kpts is None:
+            if 'kpt' in kwargs:
+                sys.stderr.write('WARN: _KNumInt.eval_ao function finds keyword '
+                                 'argument "kpt" and converts it to "kpts"\n')
+                kpts = kpt
+            else:
+                kpts = self.kpts
+        kpts = kpts.reshape(-1,3)
+
+        return nr_rks_vxc(self, cell, grids, xc_code, dms, 0, 0,
+                          hermi, kpts, kpt_band, max_memory, verbose)
 
     def nr_uks(self, cell, grids, xc_code, dms, hermi=1,
-               max_memory=2000, verbose=None):
+               kpts=None, kpt_band=None, max_memory=2000, verbose=None):
         raise NotImplementedError
 
     def eval_mat(self, cell, ao, weight, rho, vrho, vsigma=None, non0tab=None,
                  xctype='LDA', verbose=None):
         # use local function for complex eval_mat
         nkpts = len(self.kpts)
-        nao = ao.shape[2]
-        mat = numpy.zeros((nkpts, nao, nao), dtype=ao.dtype)
+        nao = cell.nao_nr()
+        mat = numpy.zeros((nkpts, nao, nao), dtype=numpy.complex128)
         for k in range(nkpts):
             mat[k] = eval_mat(cell, ao[k], weight,
                               rho, vrho, vsigma, non0tab,

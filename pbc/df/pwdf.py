@@ -353,8 +353,8 @@ class PWDF(lib.StreamObject):
                 return pscf.hf.get_jk(mf, cell, dm, hermi, None, kpts,
                                       kpt_band)
 
+        vj, vk = None, None
         if self.analytic_ft:
-            vj, vk = None, None
             if with_k:
                 vk = lib.asarray(pwdf_jk.get_k_kpts(self, cell, dm, hermi, mf,
                                                     kpts, kpt_band))

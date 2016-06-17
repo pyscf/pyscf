@@ -12,6 +12,7 @@ import pyscf.lib
 import pyscf.dft
 import pyscf.pbc.scf
 from pyscf.lib import logger
+from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 
 
@@ -60,8 +61,8 @@ def get_veff(ks, cell, dm, dm_last=0, vhf_last=0, hermi=1,
         small_rho_cutoff = 0
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=(cell.spin>0)+1)
-    n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, kpt=kpt,
-                                       kpt_band=kpt_band)
+    n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, kpt,
+                                       kpt_band)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -70,10 +71,10 @@ def get_veff(ks, cell, dm, dm_last=0, vhf_last=0, hermi=1,
         if (ks._eri is not None or not ks.direct_scf or
             not hasattr(ks, '_dm_last') or
             not isinstance(vhf_last, numpy.ndarray)):
-            vhf = vj = ks.get_j(cell, dm, hermi, kpt=kpt, kpt_band=kpt_band)
+            vhf = vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
         else:
             ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
-            vj = ks.get_j(cell, ddm, hermi, kpt=kpt, kpt_band=kpt_band)
+            vj = ks.get_j(cell, ddm, hermi, kpt, kpt_band)
             vj += ks._vj_last
             ks._dm_last = dm
             vhf = ks._vj_last = vj
@@ -81,10 +82,10 @@ def get_veff(ks, cell, dm, dm_last=0, vhf_last=0, hermi=1,
         if (ks._eri is not None or not ks.direct_scf or
             not hasattr(ks, '_dm_last') or
             not isinstance(vhf_last, numpy.ndarray)):
-            vj, vk = ks.get_jk(cell, dm, hermi, kpt=kpt, kpt_band=kpt_band)
+            vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpt_band)
         else:
             ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
-            vj, vk = ks.get_jk(cell, ddm, hermi, kpt=kpt, kpt_band=kpt_band)
+            vj, vk = ks.get_jk(cell, ddm, hermi, kpt, kpt_band)
             vj += ks._vj_last
             vk += ks._vk_last
             ks._dm_last = dm
@@ -123,8 +124,8 @@ class RKS(pyscf.pbc.scf.hf.RHF):
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pyscf.pbc.scf.hf.RHF.__init__(self, cell, kpt)
         self.xc = 'LDA,VWN'
-        #self.grids = None # initialized in pbc.scf.hf.RHF
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
+        self.grids = gen_grid.UniformGrids(cell)
+        self.small_rho_cutoff = 1e-14  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
 #FIXME (Q): lazy create self._numint, since self.kpt might be changed
