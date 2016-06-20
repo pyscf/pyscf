@@ -3,9 +3,10 @@ import numpy
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
-#from pyscf.pbc.df import poisson_jk
+import pyscf.pbc
 from pyscf.pbc.df import xdf
 from pyscf.pbc.df import xdf_jk
+pyscf.pbc.DEBUG = False
 
 L = 5.
 n = 5

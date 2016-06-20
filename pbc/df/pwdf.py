@@ -168,7 +168,7 @@ class PWDF(lib.StreamObject):
         self.kpts = numpy.zeros((1,3))  # default is gamma point
         self.gs = cell.gs
         self.analytic_ft = False
-        self.exxdiv = 'ewald'
+        self.exxdiv = None
 
 # Not input options
         self._ni = None
@@ -353,7 +353,7 @@ class PWDF(lib.StreamObject):
                 return pscf.hf.get_jk(mf, cell, dm, hermi, None, kpts,
                                       kpt_band)
 
-        vj, vk = None, None
+        vj = vk = None
         if self.analytic_ft:
             if with_k:
                 vk = lib.asarray(pwdf_jk.get_k_kpts(self, cell, dm, hermi, mf,

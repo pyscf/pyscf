@@ -8,19 +8,16 @@ See Also:
 import sys
 import time
 import numpy as np
-import scipy.linalg
 import h5py
-import pyscf.scf.hf
 import pyscf.gto
-import pyscf.dft
-import pyscf.pbc.dft
-import pyscf.pbc.dft.numint
+import pyscf.scf.hf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
-from pyscf.pbc import ao2mo
 from pyscf.pbc.gto import pseudo, ewald
-import pyscf.pbc.scf.chkfile
+from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import addons
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
@@ -52,8 +49,10 @@ def get_nuc(cell, kpt=np.zeros(3)):
 
     See Martin (12.16)-(12.21).
     '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    coords = gen_grid.gen_uniform_grids(cell)
+    aoR = numint.eval_ao(cell, coords, kpt)
 
     chargs = cell.atom_charges()
     SI = cell.get_SI()
@@ -67,8 +66,11 @@ def get_nuc(cell, kpt=np.zeros(3)):
 def get_pp(cell, kpt=np.zeros(3)):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt)
+    import pyscf.dft
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    coords = gen_grid.gen_uniform_grids(cell)
+    aoR = numint.eval_ao(cell, coords, kpt)
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
@@ -80,7 +82,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
-    aokG = tools.map_fftk(aoR, cell.gs, coords, kpt)
+    aokG = tools.map_fftk(aoR, cell.gs, np.exp(-1j*np.dot(coords, kpt)))
     ngs = len(aokG)
 
     fakemol = pyscf.gto.Mole()
@@ -136,6 +138,10 @@ def get_jvloc_G0(cell, kpt=np.zeros(3)):
 def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     '''Get the Coulomb (J) AO matrix for the given density matrix.
 
+    Args:
+        dm : ndarray or list of ndarrays
+            A density matrix or a list of density matrices
+
     Kwargs:
         hermi : int
             Whether J, K matrix is hermitian
@@ -153,27 +159,42 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
 
     Returns:
         The function returns one J matrix, corresponding to the input
-        density matrix.
+        density matrix (both order and shape).
     '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    dm = np.asarray(dm)
+    nao = dm.shape[-1]
+
+    coords = gen_grid.gen_uniform_grids(cell)
     if kpt_band is None:
         kpt1 = kpt2 = kpt
+        aoR_k1 = aoR_k2 = numint.eval_ao(cell, coords, kpt)
     else:
         kpt1 = kpt_band
         kpt2 = kpt
-
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR_k1 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt1)
-    aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
+        aoR_k1 = numint.eval_ao(cell, coords, kpt1)
+        aoR_k2 = numint.eval_ao(cell, coords, kpt2)
     ngs, nao = aoR_k1.shape
 
-    vjR_k2 = get_vjR(cell, dm, aoR_k2)
-    vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+    def contract(dm):
+        vjR_k2 = get_vjR(cell, dm, aoR_k2)
+        vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+        return vj
 
-    return vj
+    if dm.ndim == 2:
+        vj = contract(dm)
+    else:
+        vj = lib.asarray([contract(x) for x in dm.reshape(-1,nao,nao)])
+    return vj.reshape(dm.shape)
 
 
 def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
+
+    Args:
+        dm : ndarray or list of ndarrays
+            A density matrix or a list of density matrices
 
     Kwargs:
         hermi : int
@@ -192,29 +213,44 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
 
     Returns:
         The function returns one J and one K matrix, corresponding to the input
-        density matrix.
+        density matrix (both order and shape).
     '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    dm = np.asarray(dm)
+    nao = dm.shape[-1]
+
+    coords = gen_grid.gen_uniform_grids(cell)
     if kpt_band is None:
         kpt1 = kpt2 = kpt
+        aoR_k1 = aoR_k2 = numint.eval_ao(cell, coords, kpt)
     else:
         kpt1 = kpt_band
         kpt2 = kpt
+        aoR_k1 = numint.eval_ao(cell, coords, kpt1)
+        aoR_k2 = numint.eval_ao(cell, coords, kpt2)
 
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR_k1 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt1)
-    aoR_k2 = pyscf.pbc.dft.numint.eval_ao(cell, coords, kpt2)
-    ngs, nao = aoR_k1.shape
-
-    vjR_k2 = get_vjR(cell, dm, aoR_k2)
-    vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
-
-    #:vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
-    #:                                vkR_k1k2, aoR_k2)
     vkR_k1k2 = get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
-    aoR_dm_k2 = np.dot(aoR_k2, dm)
-    tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
-    vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
-    return vj, vk
+
+    ngs, nao = aoR_k1.shape
+    def contract(dm):
+        vjR_k2 = get_vjR(cell, dm, aoR_k2)
+        vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+
+        #:vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
+        #:                                vkR_k1k2, aoR_k2)
+        aoR_dm_k2 = np.dot(aoR_k2, dm)
+        tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
+        vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
+        return vj, vk
+
+    if dm.ndim == 2:
+        vj, vk = contract(dm)
+    else:
+        jk = [contract(x) for x in dm.reshape(-1,nao,nao)]
+        vj = lib.asarray([x[0] for x in jk])
+        vk = lib.asarray([x[1] for x in jk])
+    return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
 def get_vjR(cell, dm, aoR):
@@ -224,9 +260,10 @@ def get_vjR(cell, dm, aoR):
         vR : (ngs,) ndarray
             The real-space Hartree potential at every grid point.
     '''
+    from pyscf.pbc.dft import numint
     coulG = tools.get_coulG(cell)
 
-    rhoR = pyscf.pbc.dft.numint.eval_rho(cell, aoR, dm)
+    rhoR = numint.eval_rho(cell, aoR, dm)
     rhoG = tools.fft(rhoR, cell.gs)
 
     vG = coulG*rhoG
@@ -254,7 +291,8 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
         The returned object is of size ngs*nao**2 and could be precomputed and
         saved in vhfopt.
     '''
-    coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
+    from pyscf.pbc.dft import gen_grid
+    coords = gen_grid.gen_uniform_grids(cell)
     ngs, nao = aoR_k1.shape
 
     expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
@@ -278,7 +316,7 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
 #    '''Hartree-Fock potential matrix for the given density matrix.
 #    See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
 #    '''
-#    vj, vk = get_jk(mf, cell, dm, hermi, vhfopt, kpt, kpt_band)
+#    vj, vk = mf.get_jk(cell, dm, hermi, kpt, kpt_band)
 #    return vj - vk * .5
 
 def get_bands(mf, kpt_band, cell=None, dm=None, kpt=None):
@@ -308,8 +346,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     Returns:
         Density matrix, (nao,nao) ndarray
     '''
-    from pyscf.pbc.scf import addons
-    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
     if kpt is None:
@@ -320,9 +357,13 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
         kpts = scf_rec['kpts'] # the closest kpt from KRHF results
         where = np.argmin(lib.norm(kpts-kpt, axis=1))
         chk_kpt = kpts[where]
-        mo = mo[where]
-        mo_occ = mo_occ[where]
-    else:
+        if mo.ndim == 3:  # KRHF:
+            mo = mo[where]
+            mo_occ = mo_occ[where]
+        else:
+            mo = mo[:,where]
+            mo_occ = mo_occ[:,where]
+    else:  # from molecular code
         chk_kpt = np.zeros(3)
 
     def fproj(mo):
@@ -331,10 +372,10 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
         else:
             return mo
     if mo.ndim == 2:
-        dm = pyscf.scf.hf.make_rdm1(fproj(mo), mo_occ)
+        dm = make_rdm1(fproj(mo), mo_occ)
     else:  # UHF
-        dm = pyscf.scf.hf.make_rdm1(fproj(mo[0]), mo_occ[0]) \
-           + pyscf.scf.hf.make_rdm1(fproj(mo[1]), mo_occ[1])
+        dm =(make_rdm1(fproj(mo[0]), mo_occ[0]) +
+             make_rdm1(fproj(mo[1]), mo_occ[1]))
 
     # Real DM for gamma point
     if kpt is None or np.allclose(kpt, 0):
@@ -367,8 +408,8 @@ def dot_eri_dm(eri, dm, hermi=0):
     '''
 
     if np.iscomplexobj(dm) or np.iscomplexobj(eri):
-        n = dm[0].shape[0]
-        eri = eri.reshape((n,)*4)
+        nao = dm.shape[-1]
+        eri = eri.reshape((nao,)*4)
         def contract(dm):
             vj = np.einsum('ijkl,ji->kl', eri, dm)
             vk = np.einsum('ijkl,jk->il', eri, dm)
@@ -377,8 +418,8 @@ def dot_eri_dm(eri, dm, hermi=0):
             vj, vk = contract(dm)
         else:
             vjk = [contract(dmi) for dmi in dm]
-            vj = np.asarray([v[0] for v in vjk])
-            vk = np.asarray([v[1] for v in vjk])
+            vj = lib.asarray([v[0] for v in vjk])
+            vk = lib.asarray([v[1] for v in vjk])
     else:
         vj, vk = pyscf.scf.hf.dot_eri_dm(eri, dm, hermi)
     return vj, vk
@@ -402,6 +443,7 @@ class RHF(pyscf.scf.hf.RHF):
         self.exxdiv = exxdiv
         self.with_df = PWDF(cell)
         self.kpt = kpt
+        self.direct_scf = False
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
 
@@ -414,7 +456,6 @@ class RHF(pyscf.scf.hf.RHF):
 
     def dump_flags(self):
         pyscf.scf.hf.RHF.dump_flags(self)
-        logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'DF object = %s', self.with_df)
@@ -444,41 +485,25 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
 
         cpu0 = (time.clock(), time.time())
+        dm = np.asarray(dm)
+        nao = dm.shape[-1]
+
         if (kpt_band is None and
             (self.exxdiv == 'ewald' or self.exxdiv is None) and
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
 
-            # G=0 is not inculded in the ._eri integrals
             if self.exxdiv == 'ewald':
-                gs = (0,0,0)
-                Gv = np.zeros((1,3))
-                ovlp = self.get_ovlp(cell, kpt)
-                coulGk = tools.get_coulG(cell, kpt-kpt, True, self, gs, Gv)[0]
-                logger.debug(self, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
-                             coulGk/cell.vol*cell.nelectron * -.5)
-                if isinstance(dm, np.ndarray) and dm.ndim == 2:
-                    vk += coulGk/cell.vol * reduce(np.dot, (ovlp, dm, ovlp))
-                    nelec = np.einsum('ij,ij', ovlp, dm)
-                else:
-                    nelec = 0
-                    for k, dmi in enumerate(dm):
-                        vk[k] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
-                        nelec += np.einsum('ij,ij', ovlp, dm)
-                #if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
-                #    logger.debug(self, 'Tr(dm,S) = %g', nelec)
-                #    sys.stderr.write('Warning: The input dm is not SCF density matrix. '
-                #                     'The Ewald treatment on G=0 term for K matrix '
-                #                     'might not be well defined.  Set mf.exxdiv=None '
-                #                     'to switch off the Ewald term.\n')
+                # G=0 is not inculded in the ._eri integrals
+                vk = _ewald_exxdiv_for_G0(self, dm.reshape(-1,nao,nao), kpt, vk)
         else:
             vj, vk = self.with_df.get_jk(cell, dm, hermi, kpt, kpt_band, mf=self)
 
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj, vk
+        return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute J matrix for the given density matrix.
@@ -487,18 +512,22 @@ class RHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
+
         cpu0 = (time.clock(), time.time())
+        dm = np.asarray(dm)
+        nao = dm.shape[-1]
+
         if (kpt_band is None and
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
-            vj = self.with_df.get_jk(cell, dm, hermi, kpt, kpt_band,
-                                     with_k=False)[0]
+            vj = self.with_df.get_jk(cell, dm.reshape(-1,nao,nao), hermi,
+                                     kpt, kpt_band, with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
-        return vj
+        return vj.reshape(dm.shape)
 
     def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute K matrix for the given density matrix.
@@ -530,12 +559,8 @@ class RHF(pyscf.scf.hf.RHF):
         return self.get_jk(cell, dm, hermi, verbose, kpt)
 
     def energy_tot(self, dm=None, h1e=None, vhf=None):
-        etot = self.energy_elec(dm, h1e, vhf)[0] + self.ewald_nuc()
+        etot = self.energy_elec(dm, h1e, vhf)[0] + self.cell.energy_nuc()
         return etot.real
-
-    def ewald_nuc(self, cell=None):
-        if cell is None: cell = self.cell
-        return cell.energy_nuc()
 
     get_bands = get_bands
 
@@ -560,4 +585,29 @@ class RHF(pyscf.scf.hf.RHF):
         else:
             mem_need = nao**4*16/1e6
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
+
+
+def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
+    cell = mf.cell
+    gs = (0,0,0)
+    Gv = np.zeros((1,3))
+    ovlp = mf.get_ovlp(cell, kpt)
+    coulGk = tools.get_coulG(cell, kpt-kpt, True, mf, gs, Gv)[0]
+    logger.debug(mf, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                 coulGk/cell.vol*cell.nelectron * -.5)
+    if isinstance(dm, np.ndarray) and dm.ndim == 2:
+        vk += coulGk/cell.vol * reduce(np.dot, (ovlp, dm, ovlp))
+        nelec = np.einsum('ij,ij', ovlp, dm)
+    else:
+        nelec = 0
+        for k, dmi in enumerate(dm):
+            vk[k] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
+            nelec += np.einsum('ij,ij', ovlp, dmi)
+    #if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
+    #    logger.debug(mf, 'Tr(dm,S) = %g', nelec)
+    #    sys.stderr.write('Warning: The input dm is not SCF density matrix. '
+    #                     'The Ewald treatment on G=0 term for K matrix '
+    #                     'might not be well defined.  Set mf.exxdiv=None '
+    #                     'to switch off the Ewald term.\n')
+    return vk
 

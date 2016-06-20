@@ -9,16 +9,13 @@
 
 from pyscf.pbc.scf import hf
 from pyscf.pbc.scf import hf as rhf
+from pyscf.pbc.scf import uhf
+from pyscf.pbc.scf import khf
+from pyscf.pbc.scf import khf as krhf
+from pyscf.pbc.scf import kuhf
 
-def RHF(mol, *args, **kwargs):
-    '''This is a wrap function to mimic pyscf 
-    '''
-    return rhf.RHF(mol, *args, **kwargs)
+RHF = rhf.RHF
+UHF = uhf.UHF
 
-def KRHF(mol, *args, **kwargs):
-    '''This is a wrap function to mimic pyscf 
-    '''
-    from pyscf.pbc.scf import khf
-    from pyscf.pbc.scf import khf as krhf
-    return krhf.KRHF(mol, *args, **kwargs)
-
+KRHF = krhf.KRHF
+KUHF = kuhf.KUHF

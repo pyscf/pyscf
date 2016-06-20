@@ -322,7 +322,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
-    aokG = tools.map_fftk(aoR, cell.gs, coords, kpt)
+    aokG = tools.map_fftk(aoR, cell.gs, np.exp(-1j*np.dot(coords, kpt)))
     ngs = len(aokG)
 
     fakemol = pyscf.gto.Mole()
@@ -383,6 +383,7 @@ cell.build()
 np.random.seed(1)
 kpts = np.random.random((4,3))
 kpts[3] = kpts[0]-kpts[1]+kpts[2]
+kpt0 = np.zeros(3)
 
 cell1 = pgto.Cell()
 cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'

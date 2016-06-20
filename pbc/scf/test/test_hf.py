@@ -96,6 +96,19 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -4.29190260870812, 9)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
+    def test_uhf_exx_ewald(self):
+        mf = pscf.UHF(cell, exxdiv=None)
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, -2.9325094887283196, 9)
+        self.assertTrue(mf.mo_coeff[0].dtype == numpy.double)
+
+        numpy.random.seed(1)
+        k = numpy.random.random(3)
+        mf = pbchf.RHF(cell, k, exxdiv=None)
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, -2.7862168430230341, 9)
+        self.assertTrue(mf.mo_coeff[0].dtype == numpy.complex128)
+
 
 
 if __name__ == '__main__':

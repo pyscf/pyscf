@@ -584,7 +584,7 @@ class XDF(lib.StreamObject):
             return xdf_jk.get_jk(self, cell, dm, hermi, mf, kpts, kpt_band,
                                  with_j, with_k)
 
-        vj, vk = None, None
+        vj = vk = None
         if with_k:
             vk = lib.asarray(xdf_jk.get_k_kpts(self, cell, dm, hermi, mf,
                                                kpts, kpt_band))
