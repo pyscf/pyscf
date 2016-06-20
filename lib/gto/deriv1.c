@@ -16,8 +16,8 @@ static int _len_cart[] = {
         1, 3, 6, 10, 15, 21, 28, 36
 };
 
-static int contract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                         int l, int nprim, int nctr, int blksize, double fac)
+int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
+                     int l, int nprim, int nctr, int blksize, double fac)
 {
         int i, j;
         double arr, maxc;
@@ -81,9 +81,9 @@ static int contract_exp0(double *ectr, double *coord, double *alpha, double *coe
 
 // pre-contracted grid AO evaluator
 // contracted factors = \sum c_{i} exp(-a_i*r_i**2)
-static void shell_eval_grid_cart(double *gto, double *ri, double *exps,
-                double *coord, double *alpha, double *coeff,
-                int l, int np, int nc, int blksize)
+void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
+                             double *coord, double *alpha, double *coeff,
+                             int l, int np, int nc, int blksize)
 {
         int lx, ly, lz, i, k;
         double ce[3];
@@ -300,9 +300,9 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
         return not0;
 }
 
-static void shell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
-                double *coord, double *alpha, double *coeff,
-                int l, int np, int nc, int blksize)
+void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
+                                double *coord, double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
 {
         const int degen = _len_cart[l];
         const int gtosize = nc*degen*blksize;
@@ -684,7 +684,7 @@ void GTOval_cart(int nao, int ngrids,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
-        GTOeval_cart_drv(shell_eval_grid_cart, contract_exp0,
+        GTOeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
                          param, nao, ngrids, blksize, bastart, bascount,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -694,7 +694,7 @@ void GTOval_sph(int nao, int ngrids,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
-        GTOeval_sph_drv(shell_eval_grid_cart, contract_exp0,
+        GTOeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
                         param, nao, ngrids, blksize, bastart, bascount,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -705,7 +705,7 @@ void GTOval_ip_cart(int nao, int ngrids,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
-        GTOeval_cart_drv(shell_eval_grid_ip_cart, GTOcontract_exp1,
+        GTOeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                          param, nao, ngrids, blksize, bastart, bascount,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -715,7 +715,7 @@ void GTOval_ip_sph(int nao, int ngrids,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
-        GTOeval_sph_drv(shell_eval_grid_ip_cart, GTOcontract_exp1,
+        GTOeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                         param, nao, ngrids, blksize, bastart, bascount,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
