@@ -51,11 +51,6 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        nset = 1
-    else:
-        nset = len(dm)
-
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
         ks.grids.build()
@@ -64,7 +59,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         small_rho_cutoff = 0
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
+    dm = numpy.asarray(dm)
+    nao = dm.shape[-1]
+    ground_state = (dm.ndim == 2)
 
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
@@ -73,6 +70,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
+    hyb = ks._numint.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
     if abs(hyb) < 1e-10:
         if (ks._eri is not None or not ks.direct_scf or
             not hasattr(ks, '_dm_last') or
@@ -98,13 +96,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             ks._vj_last, ks._vk_last = vj, vk
         vhf = vj - vk * (hyb * .5)
 
-        if nset == 1:
+        if ground_state:
             ks._exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
 
-    if nset == 1:
+    if ground_state:
         ks._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
 
-    if small_rho_cutoff > 1e-20 and nset == 1:
+    if small_rho_cutoff > 1e-20 and ground_state:
         # Filter grids the first time setup grids
         idx = ks._numint.large_rho_indices(mol, dm, ks.grids, small_rho_cutoff)
         logger.debug(ks, 'Drop grids %d',
@@ -131,7 +129,7 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     '''
     if h1e is None:
         h1e = ks.get_hcore()
-    e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
+    e1 = numpy.einsum('ij,ji', h1e, dm).real
     tot_e = e1 + ks._ecoul + ks._exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', ks._ecoul, ks._exc)
     return tot_e, ks._ecoul+ks._exc
@@ -202,8 +200,8 @@ class RKS(pyscf.scf.hf.RHF):
     energy_elec = energy_elec
 
     def define_xc_(self, description):
-        self.xc = description
-        return self
+        raise RuntimeError('define_xc_ method is depercated.  '
+                           'Set mf.xc = %s instead.' % description)
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'

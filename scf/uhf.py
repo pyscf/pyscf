@@ -57,16 +57,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
     return dm
 
 def get_init_guess(mol, key='minao'):
-    if callable(key):
-        return key(mol)
-    elif key.lower() == '1e':
-        return init_guess_by_1e(mol)
-    elif key.lower() == 'atom':
-        return init_guess_by_atom(mol)
-    elif key.lower() == 'chkfile':
-        raise DeprecationWarning('Call pyscf.scf.uhf.init_guess_by_chkfile instead')
-    else:
-        return init_guess_by_minao(mol)
+    return UHF(mol).get_init_guess(mol, key)
 
 def make_rdm1(mo_coeff, mo_occ):
     '''One-particle density matrix
@@ -135,15 +126,13 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     >>> vhfb.shape
     (3, 2, 2)
     '''
-    if ((isinstance(dm, numpy.ndarray) and dm.ndim == 4) or
-        (isinstance(dm[0], numpy.ndarray) and dm[0].ndim == 3) or
-        (isinstance(dm[0][0], numpy.ndarray) and dm[0][0].ndim == 2)):
-        # remove first dim, compress (dma,dmb)
-        dm = numpy.vstack(dm)
-    ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
-    vj, vk = hf.get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
-    nset = len(dm) // 2
-    vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
+    dm = numpy.asarray(dm)
+    nao = dm.shape[-1]
+    ddm = dm - numpy.asarray(dm_last)
+    # dm.reshape(-1,nao,nao) to remove first dim, compress (dma,dmb)
+    vj, vk = hf.get_jk(mol, ddm.reshape(-1,nao,nao), hermi=hermi, vhfopt=vhfopt)
+    vhf = _makevhf(vj.reshape(dm.shape), vk.reshape(dm.shape))
+    vhf += numpy.asarray(vhf_last)
     return vhf
 
 def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
@@ -228,8 +217,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
-    fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+    focka = reduce(numpy.dot, (mo_coeff[0].T.conj(), fock_ao[0], mo_coeff[0]))
+    fockb = reduce(numpy.dot, (mo_coeff[1].T.conj(), fock_ao[1], mo_coeff[1]))
     g = numpy.hstack((focka[viridxa.reshape(-1,1) & occidxa],
                       fockb[viridxb.reshape(-1,1) & occidxb]))
     return g.reshape(-1)
@@ -248,9 +237,8 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
-    e_coul = numpy.einsum('ij,ji', vhf[0].conj(), dm[0]) \
-           + numpy.einsum('ij,ji', vhf[1].conj(), dm[1])
-    e_coul *= .5
+    e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
+             numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
     return e1+e_coul, e_coul
 
 # mo_a and mo_b are occupied orbitals
@@ -624,7 +612,7 @@ class UHF(hf.SCF):
     def eig(self, fock, s):
         e_a, c_a = hf.SCF.eig(self, fock[0], s)
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
-        return numpy.array((e_a,e_b)), (c_a,c_b)
+        return pyscf.lib.asarray((e_a,e_b)), pyscf.lib.asarray((c_a,c_b))
 
     get_fock = get_fock
 
@@ -648,53 +636,61 @@ class UHF(hf.SCF):
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
-        if mol is None: mol = self.mol
-        return init_guess_by_minao(mol)
+        dm = hf.SCF.init_guess_by_minao(self, mol)
+        return numpy.array([dm*.5]*2)
 
     def init_guess_by_atom(self, mol=None):
-        if mol is None: mol = self.mol
-        return init_guess_by_atom(mol)
+        dm = hf.SCF.init_guess_by_atom(self, mol)
+        return numpy.array([dm*.5]*2)
 
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
-        return init_guess_by_1e(mol)
+        logger.info(self, 'Initial guess from hcore.')
+        h1e = self.get_hcore(mol)
+        s1e = self.get_ovlp(mol)
+        mo_energy, mo_coeff = self.eig((h1e,h1e), s1e)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        return self.make_rdm1(mo_coeff, mo_occ)
 
     def init_guess_by_chkfile(self, chkfile=None, project=True):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     def get_jk(self, mol=None, dm=None, hermi=1):
+        '''Coulomb (J) and exchange (K)
+
+        Args:
+            dm : a list of 2D arrays or a list of 3D arrays
+                (alpha_dm, beta_dm) or (alpha_dms, beta_dms)
+        '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         dm = numpy.asarray(dm)
-        nao = dm.shape[-1]
-        cpu0 = (time.clock(), time.time())
+        nao = dm.shape[-1]  # Get nao from dm shape because the hamiltonian
+                            # might be not defined from mol
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
-            if self.direct_scf:
-                self.opt = self.init_direct_scf(mol)
-            vj, vk = hf.get_jk(mol, dm.reshape(-1,nao,nao), hermi, self.opt)
-        logger.timer(self, 'vj and vk', *cpu0)
+            vj, vk = hf.SCF.get_jk(self, mol, dm.reshape(-1,nao,nao), hermi)
         return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
     @pyscf.lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            dm = numpy.array((dm*.5,dm*.5))
-        nset = len(dm) // 2
+        dm = numpy.asarray(dm)
+        if dm.ndim == 2:
+            dm = numpy.asarray((dm*.5,dm*.5))
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = _makevhf(vj, vk, nset)
+            vhf = _makevhf(vj, vk)
         else:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last,copy=False)
+            ddm = dm - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = _makevhf(vj, vk, nset) + numpy.array(vhf_last, copy=False)
+            vhf = _makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
 
     def analyze(self, verbose=None):
@@ -741,13 +737,8 @@ class UHF(hf.SCF):
         if unit_symbol is None: unit_symbol='Debye'
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
-def _makevhf(vj, vk, nset):
-    if nset == 1:
-        vj = vj[0] + vj[1]
-        v_a = vj - vk[0]
-        v_b = vj - vk[1]
-    else:
-        vj = vj[:nset] + vj[nset:]
-        v_a = vj - vk[:nset]
-        v_b = vj - vk[nset:]
-    return numpy.array((v_a,v_b))
+def _makevhf(vj, vk):
+    vj = vj[0] + vj[1]
+    v_a = vj - vk[0]
+    v_b = vj - vk[1]
+    return pyscf.lib.asarray((v_a,v_b))
