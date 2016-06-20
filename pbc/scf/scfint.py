@@ -8,11 +8,6 @@ See Also:
 '''
 
 import numpy as np
-import pyscf.scf
-import pyscf.scf.hf
-import pyscf.dft
-import pyscf.gto
-import pyscf.lib
 import pyscf.pbc.scf
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc import gto as pgto

@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#         Qiming Sun <osirpt.sun@gmail.com>
+#
+
+import ctypes
 import numpy
 from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 import pyscf.lib
