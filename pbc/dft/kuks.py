@@ -8,7 +8,10 @@ See Also:
 
 import time
 import numpy as np
-from pyscf.pbc.scf import khf
+from pyscf import lib
+from pyscf.pbc.scf import uhf as pbcuhf
+from pyscf.pbc.scf import kuhf
+from pyscf.pbc.dft import krks
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
@@ -16,24 +19,8 @@ from pyscf.pbc.dft import numint
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpt_band=None):
-    '''Coulomb + XC functional
-
-    .. note::
-        This is a replica of pyscf.dft.rks.get_veff with kpts added.
-        This function will change the ks object.
-
-    Args:
-        ks : an instance of :class:`RKS`
-            XC functional are controlled by ks.xc attribute.  Attribute
-            ks.grids might be initialized.  The ._exc and ._ecoul attributes
-            will be updated after return.  Attributes ._dm_last, ._vj_last and
-            ._vk_last might be changed if direct SCF method is applied.
-        dm : ndarray or list of ndarrays
-            A density matrix or a list of density matrices
-
-    Returns:
-        Veff : (nkpts, nao, nao) or (*, nkpts, nao, nao) ndarray
-        Veff = J + Vxc.
+    '''Coulomb + XC functional for UKS.  See pyscf/pbc/dft/uks.py
+    :func:`get_veff` fore more details.
     '''
     if cell is None: cell = ks.cell
     if dm is None: dm = ks.make_rdm1()
@@ -48,29 +35,32 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     dm = np.asarray(dm)
     nao = dm.shape[-1]
-    ground_state = (dm.ndim == 3 and kpt_band is None)
+    # ndim = 4 : dm.shape = (alpha_beta, nkpts, nao, nao)
+    ground_state = (dm.ndim == 4 and kpt_band is None)
     nkpts = len(kpts)
 
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 1,
+        n, ks._exc, vx = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 1,
                                            kpts, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=(cell.spin>0)+1)
     if abs(hyb) < 1e-10:
-        vhf = vj = ks.get_j(cell, dm, hermi, kpts, kpt_band)
+        vj = ks.get_j(cell, dm, hermi, kpts, kpt_band)
+        vhf = lib.asarray([vj[0]+vj[1]] * 2)
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpt_band)
-        vhf = vj - vk * (hyb * .5)
+        vhf = pbcuhf._makevhf(vj, vk*hyb)
 
         if ground_state:
-            ks._exc -= (1./nkpts) * np.einsum('Kij,Kji', dm, vk).real * .5 * hyb*.5
+            ks._exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
+                        np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * hyb * (1./nkpts)
 
     if ground_state:
-        ks._ecoul = (1./nkpts) * np.einsum('Kij,Kji', dm, vj).real * .5
+        ks._ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj[0]+vj[1]).real * .5 * (1./nkpts)
 
     if small_rho_cutoff > 1e-20 and ground_state:
         # Filter grids the first time setup grids
@@ -84,11 +74,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return vhf + vx
 
 
-class KRKS(khf.KRHF):
+class KUKS(kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts):
-        khf.KRHF.__init__(self, cell, kpts)
+        kuhf.KUHF.__init__(self, cell, kpts)
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.UniformGrids(cell)
         self.small_rho_cutoff = 1e-7  # Use rho to filter grids
@@ -100,11 +90,11 @@ class KRKS(khf.KRHF):
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):
-        khf.KRHF.dump_flags(self)
+        kuhf.KUHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    @khf.KRHF.kpts.setter
+    @kuhf.KUHF.kpts.setter
     def kpts(self, x):
         x = np.reshape(x, (-1,3))
         if abs(self.with_df.kpts-x).sum() > 1e-9:
@@ -118,9 +108,11 @@ class KRKS(khf.KRHF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
 
         nkpts = len(h1e_kpts)
-        e1 = 1./nkpts * np.einsum('kij,kji', h1e_kpts, dm_kpts).real
+        e1 = 1./nkpts *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
+                        np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
 
         tot_e = e1 + self._ecoul + self._exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, self._ecoul, self._exc)
         return tot_e, self._ecoul + self._exc
+
 

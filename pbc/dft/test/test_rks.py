@@ -1,44 +1,28 @@
 import unittest
 import numpy as np
-
-from pyscf import gto
-from pyscf.dft import rks
-
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc.dft import rks as pbcrks
+from pyscf.pbc import dft as pbcdft
+import pyscf.pbc
+pyscf.pbc.DEBUG = False
 
-
-mol = gto.Mole()
-mol.unit = 'B'
-L = 60
-mol.atom.extend([['He', (L/2.,L/2.,L/2.)], ])
-# these are some exponents which are not hard to integrate
-mol.basis = { 'He': [[0, (0.8, 1.0)],
-                     [0, (1.0, 1.0)],
-                     [0, (1.2, 1.0)]] }
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
-
-
-def make_cell(n):
-    pseudo = None
-    cell = pbcgto.Cell()
-    cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
-    cell.gs = np.array([n,n,n])
-    #cell.nimgs = [0,0,0]
-
-    cell.atom = mol.atom
-    cell.basis = mol.basis
-    cell.pseudo = pseudo
-    cell.build()
-    return cell
 
 class KnowValues(unittest.TestCase):
     def test_lda_grid30(self):
-        cell = make_cell(30)
-        mf = pbcrks.RKS(cell)
+        cell = pbcgto.Cell()
+        cell.unit = 'B'
+        L = 60
+        cell.h = np.diag([L]*3)
+        cell.gs = np.array([30]*3)
+        cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
+# these are some exponents which are not hard to integrate
+        cell.basis = { 'He': [[0, (0.8, 1.0)],
+                              [0, (1.0, 1.0)],
+                              [0, (1.2, 1.0)]] }
+        cell.verbose = 5
+        cell.output = '/dev/null'
+        cell.pseudo = None
+        cell.build()
+        mf = pbcdft.RKS(cell)
         mf.xc = 'LDA,VWN_RPA'
         mf.kpt = np.ones(3)
         e1 = mf.scf()
@@ -69,10 +53,9 @@ class KnowValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
 
-        self.assertTrue(np.all(cell.nimgs == [4, 4, 4]))
-        kmf = pbcrks.RKS(cell)
-        kmf.xc = 'lda,vwn'
-        self.assertAlmostEqual(kmf.scf(), -31.0816167311604, 8)
+        mf = pbcdft.RKS(cell)
+        mf.xc = 'lda,vwn'
+        self.assertAlmostEqual(mf.scf(), -31.0816167311604, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")

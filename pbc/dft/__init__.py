@@ -1,12 +1,12 @@
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft.gen_grid import UniformGrids, BeckeGrids
+from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import uks
+from pyscf.pbc.dft import krks
+from pyscf.pbc.dft import kuks
 
+RKS = rks.RKS
+UKS = uks.UKS
+KRKS = krks.KRKS
+KUKS = kuks.KUKS
 
-def RKS(mol, *args, **kwargs):
-    from pyscf.pbc.dft import rks
-    return rks.RKS(mol, *args, **kwargs)
-
-
-def KRKS(mol, *args, **kwargs):
-    from pyscf.pbc.dft import krks
-    return krks.KRKS(mol, *args, **kwargs)

@@ -2,6 +2,11 @@ Version 1.2 alpha (2016-8-?):
 * Added
   - XDF method
   - GAMESS WFN wirter
+  - Periodic boundary condition (PBC) for gamma point RHF, UHF, RKS, UKS
+  - PBC RHF, UHF, RKS, UKS with k-point sampling
+  - PBC AO integrals
+  - PBC MO integral transformation
+  - PBC density fitting
 
 
 Version 1.1 (2016-6-4):
