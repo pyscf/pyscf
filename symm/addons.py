@@ -255,6 +255,23 @@ def route(target, nelec, orbsym):
         orbsym = orbsym.tolist()
     return riter(target, nelec, orbsym)
 
+def eigh(h, orbsym):
+    '''Solve eigenvalue problem based on the symmetry information for basis.
+    See also pyscf/lib/linalg_helper.py :func:`eigh_by_blocks`
+
+    Examples:
+
+    >>> from pyscf import gto, symm
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', symmetry=True)
+    >>> c = numpy.hstack(mol.symm_orb)
+    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('cint1e_nuc_sph'), c))
+    >>> orbsym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)
+    >>> symm.eigh(vnuc_so, orbsym)
+    (array([-4.50766885, -1.80666351, -1.7808565 , -1.7808565 , -1.74189134,
+            -0.98998583, -0.98998583, -0.40322226, -0.30242374, -0.07608981]),
+     ...)
+    '''
+    return pyscf.lib.eigh_by_blocks(h, labels=orbsym)
 
 if __name__ == "__main__":
     from pyscf import gto

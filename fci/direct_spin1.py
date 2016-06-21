@@ -223,7 +223,8 @@ def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))
-    return cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
+    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
+    return e, c
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.

@@ -48,6 +48,82 @@ def safe_eigh(h, s, lindep=1e-15):
         w, v = scipy.linalg.eigh(h, s)
     return w, v, seig
 
+def eigh_by_blocks(h, s=None, labels=None):
+    '''Solve an ordinary or generalized eigenvalue problem for diagonal blocks.
+    The diagonal blocks are extracted based on the given basis "labels".  The
+    rows and columns which have the same labels are put in the same block.
+    One common scenario one needs the block-wise diagonalization is to
+    diagonalize the matrix in symmetry adapted basis, in which "labels" is the
+    irreps of each basis.
+
+    Args:
+        h, s : 2D array
+            Complex Hermitian or real symmetric matrix.
+
+    Kwargs:
+        labels : list
+
+    Returns:
+        w, v.  w is the eigenvalue vector; v is the eigenfunction array;
+        seig is the eigenvalue vector of the metric s.
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> a = numpy.ones((4,4))
+    >>> a[0::3,0::3] = 0
+    >>> a[1::3,1::3] = 2
+    >>> a[2::3,2::3] = 4
+    >>> labels = ['a', 'b', 'c', 'a']
+    >>> lib.eigh_by_blocks(a, labels)
+    (array([ 0.,  0.,  2.,  4.]),
+     array([[ 1.,  0.,  0.,  0.],
+            [ 0.,  0.,  1.,  0.],
+            [ 0.,  0.,  0.,  1.],
+            [ 0.,  1.,  0.,  0.]]))
+    >>> numpy.linalg.eigh(a)
+    (array([ -8.82020545e-01,  -1.81556477e-16,   1.77653793e+00,   5.10548262e+00]),
+     array([[  6.40734630e-01,  -7.07106781e-01,   1.68598330e-01,   -2.47050070e-01],
+            [ -3.80616542e-01,   9.40505244e-17,   8.19944479e-01,   -4.27577008e-01],
+            [ -1.84524565e-01,   9.40505244e-17,  -5.20423152e-01,   -8.33732828e-01],
+            [  6.40734630e-01,   7.07106781e-01,   1.68598330e-01,   -2.47050070e-01]]))
+
+    >>> from pyscf import gto, lib, symm
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', symmetry=True)
+    >>> c = numpy.hstack(mol.symm_orb)
+    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('cint1e_nuc_sph'), c))
+    >>> orbsym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)
+    >>> lib.eigh_by_blocks(vnuc_so, labels=orbsym)
+    (array([-4.50766885, -1.80666351, -1.7808565 , -1.7808565 , -1.74189134,
+            -0.98998583, -0.98998583, -0.40322226, -0.30242374, -0.07608981]),
+     ...)
+    '''
+    if labels is None:
+        return scipy.linalg.eigh(h, s)
+
+    labels = numpy.asarray(labels)
+    es = []
+    cs = numpy.zeros_like(h)
+    if s is None:
+        p0 = 0
+        for label in set(labels):
+            idx = labels == label
+            e, c = scipy.linalg.eigh(h[idx][:,idx])
+            cs[idx,p0:p0+e.size] = c
+            es.append(e)
+            p0 = p0 + e.size
+    else:
+        p0 = 0
+        for label in set(labels):
+            idx = labels == label
+            e, c = scipy.linalg.eigh(h[idx][:,idx], s[idx][:,idx])
+            cs[idx,p0:p0+e.size] = c
+            es.append(e)
+            p0 = p0 + e.size
+    es = numpy.hstack(es)
+    idx = numpy.argsort(es)
+    return es[idx], cs[:,idx]
+
 # default max_memory 2000 MB
 def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
              lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,

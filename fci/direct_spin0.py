@@ -135,9 +135,10 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, **kwargs):
-    return direct_spin1._kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
+    e, c = direct_spin1._kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                                   tol, lindep, max_cycle, max_space, nroots,
                                   davidson_only, pspace_size, **kwargs)
+    return e, c
 
 # dm_pq = <|p^+ q|>
 @pyscf.lib.with_doc(direct_spin1.make_rdm1.__doc__)
