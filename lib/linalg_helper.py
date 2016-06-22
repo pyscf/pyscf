@@ -422,8 +422,8 @@ def eigh(a, *args, **kwargs):
 dsyev = eigh
 
 
-def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
-           lindep=1e-16, callback=None, hermi=False, verbose=logger.WARN):
+def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
+           lindep=1e-15, callback=None, hermi=False, verbose=logger.WARN):
     '''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -474,13 +474,19 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
 
     if x0 is None:
         xs = [b]
-        ax = [aop(xs[0])]
     else:
         xs = [b-(x0 + aop(x0))]
-        ax = [aop(xs[0])]
 
     innerprod = [dot(xs[0].conj(), xs[0])]
+    if innerprod[0] < lindep:
+        if x0 is None:
+            return numpy.zeros_like(b)
+        else:
+            return x0
 
+    ax = [aop(xs[0])]
+
+    max_cycle = min(max_cycle, b.size)
     h = numpy.empty((max_cycle,max_cycle), dtype=b.dtype)
     for cycle in range(max_cycle):
         x1 = ax[-1].copy()
@@ -491,7 +497,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
         h[cycle,cycle] += innerprod[cycle]                      # (*)
         innerprod.append(dot(x1.conj(), x1).real)
         log.debug('krylov cycle %d  r = %g', cycle, numpy.sqrt(innerprod[-1]))
-        if innerprod[-1] < lindep:
+        if innerprod[-1] < lindep or innerprod[-1] < tol**2:
             break
         xs.append(x1)
         ax.append(aop(x1))

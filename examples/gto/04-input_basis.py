@@ -31,7 +31,9 @@ O    SP
 
 mol = gto.M(
     atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
-    basis = {'O': gto.uncontract(gto.load('ccpvdz', 'O')),
+    basis = {'O': 'unc-ccpvdz', # prefix "unc-" will uncontract the ccpvdz basis.
+                                # It is equivalent to assigning
+                                #   'O': gto.uncontract(gto.load('ccpvdz', 'O')),
              'H': 'ccpvdz'  # H1 H2 will use the same basis ccpvdz
             }
 )
