@@ -1,14 +1,14 @@
-import numpy as np
-import scipy.linalg
-import scipy.special
-from pyscf import lib
-
-'''PP module.
+'''PP with numeric integration.  See also pyscf/pbc/gto/pesudo/pp_int.py
 
 For GTH/HGH PPs, see:
     Goedecker, Teter, Hutter, PRB 54, 1703 (1996)
     Hartwigsen, Goedecker, and Hutter, PRB 58, 3641 (1998)
 '''
+
+import numpy as np
+import scipy.linalg
+import scipy.special
+from pyscf import lib
 
 def get_alphas(cell):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
@@ -104,7 +104,8 @@ def get_gth_projG(cell, Gvs):
     hs = []
     projs = []
     for ia in range(cell.natm):
-        pp = cell._pseudo[ cell.atom_symbol(ia) ]
+        symb = cell.atom_symbol(ia)
+        pp = cell._pseudo[symb]
         nproj_types = pp[4]
         h_ia = []
         proj_ia = []
@@ -194,3 +195,76 @@ def cart2polar(rvec):
     phi = np.arctan2(y,x)
     return r, theta, phi
 
+
+def get_pp(cell, kpt=np.zeros(3)):
+    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''
+    import pyscf.dft
+    from pyscf.pbc import tools
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    coords = gen_grid.gen_uniform_grids(cell)
+    aoR = numint.eval_ao(cell, coords, kpt)
+    nao = cell.nao_nr()
+
+    SI = cell.get_SI()
+    vlocG = get_vlocG(cell)
+    vpplocG = -np.sum(SI * vlocG, axis=0)
+
+    # vpploc evaluated in real-space
+    vpplocR = tools.ifft(vpplocG, cell.gs).real
+    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
+
+    # vppnonloc evaluated in reciprocal space
+    aokG = tools.map_fftk(aoR, cell.gs, np.exp(-1j*np.dot(coords, kpt)))
+    ngs = len(aokG)
+
+    fakemol = pyscf.gto.Mole()
+    fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
+    fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
+    ptr = pyscf.gto.PTR_ENV_START
+    fakemol._env = np.zeros(ptr+10)
+    fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
+    fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
+    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
+    fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
+    Gv = np.asarray(cell.Gv+kpt)
+    G_rad = lib.norm(Gv, axis=1)
+
+    vppnl = np.zeros((nao,nao), dtype=np.complex128)
+    for ia in range(cell.natm):
+        symb = cell.atom_symbol(ia)
+        if symb not in cell._pseudo:
+            continue
+        pp = cell._pseudo[symb]
+        for l, proj in enumerate(pp[5:]):
+            rl, nl, hl = proj
+            if nl > 0:
+                hl = np.asarray(hl)
+                fakemol._bas[0,pyscf.gto.ANG_OF] = l
+                fakemol._env[ptr+3] = .5*rl**2
+                fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
+                pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
+
+                pYlm = np.empty((nl,l*2+1,ngs))
+                for k in range(nl):
+                    qkl = _qli(G_rad*rl, l, k)
+                    pYlm[k] = pYlm_part.T * qkl
+                # pYlm is real
+                SPG_lmi = np.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
+                SPG_lm_aoG = np.einsum('nmg,gp->nmp', SPG_lmi, aokG)
+                tmp = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+    vppnl *= (1./ngs**2)
+
+    if aoR.dtype == np.double:
+        return vpploc.real + vppnl.real
+    else:
+        return vpploc + vppnl
+
+
+def get_jvloc_G0(cell, kpt=np.zeros(3)):
+    '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
+    '''
+    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
+    return 1./cell.vol * np.sum(get_alphas(cell)) * ovlp

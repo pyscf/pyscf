@@ -768,10 +768,9 @@ def compress_Lpq_to_chgcell(Lpq, auxcell, chgcell):
 
 def _int_nuc_vloc(cell, nuccell, kpts):
     '''Vnuc - Vloc'''
-    # sum over largest number of images in either cell or auxcell
-    Ls = nuccell.get_lattice_Ls(nuccell.nimgs)
-    expks = numpy.dot(Ls, numpy.reshape(kpts, (-1,3)).T)
-    expks = numpy.exp(1j*numpy.asarray(expks, order='C'))
+    nimgs = numpy.max((cell.nimgs, nuccell.nimgs), axis=0)
+    Ls = numpy.asarray(cell.get_lattice_Ls(nimgs), order='C')
+    expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
     nkpts = len(kpts)
 
     charge = cell.atom_charges()
@@ -796,7 +795,6 @@ def _int_nuc_vloc(cell, nuccell, kpts):
     _bas[:,gto.NCTR_OF] = 1
     fakenuc._bas = _bas
     fakenuc._env = numpy.hstack(_env)
-    fakenuc.nimgs = cell.nimgs
 
     nao = cell.nao_nr()
     buf = [numpy.zeros((nao,nao), order='F', dtype=numpy.complex128)
@@ -813,7 +811,7 @@ def _int_nuc_vloc(cell, nuccell, kpts):
     ksh0 = cell.nbas * 2
     for l, L1 in enumerate(Ls):
         env[ptr_coordL] = xyz + L1
-        exp_Lk = numpy.einsum('k,ik->ik', expks[l].conj(), expks[:l+1])
+        exp_Lk = numpy.einsum('k,ik->ik', expLk[l].conj(), expLk[:l+1])
         exp_Lk = numpy.asarray(exp_Lk, order='C')
         exp_Lk[l] = .5
         for ia in range(natm):

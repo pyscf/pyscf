@@ -69,48 +69,6 @@ def get_t(cell, kpt=np.zeros(3)):
     t *= (cell.vol/ngs)
     return t
 
-def get_pp(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
-    '''
-    from pyscf.pbc import tools
-    from pyscf.pbc.gto import pseudo
-    coords = pdft.gen_grid.gen_uniform_grids(cell)
-    aoR = pdft.numint.eval_ao(cell, coords, kpt)
-    nao = cell.nao_nr()
-
-    SI = cell.get_SI()
-    vlocG = pseudo.get_vlocG(cell)
-    vpplocG = -np.sum(SI * vlocG, axis=0)
-
-    # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs)
-    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
-
-    # vppnonloc evaluated in reciprocal space
-    aokG = np.empty(aoR.shape, np.complex128)
-    for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, coords, kpt)
-    ngs = len(aokG)
-
-    vppnl = np.zeros((nao,nao), dtype=np.complex128)
-    hs, projGs = pseudo.get_projG(cell, kpt)
-    for ia, [h_ia,projG_ia] in enumerate(zip(hs,projGs)):
-        for l, h in enumerate(h_ia):
-            nl = h.shape[0]
-            for m in range(-l,l+1):
-                SPG_lm_aoG = np.zeros((nl,nao), dtype=np.complex128)
-                for i in range(nl):
-                    SPG_lmi = SI[ia,:] * projG_ia[l][m][i]
-                    SPG_lm_aoG[i,:] = np.einsum('g,gp->p', SPG_lmi.conj(), aokG)
-                for i in range(nl):
-                    for j in range(nl):
-                        # Note: There is no (-1)^l here.
-                        vppnl += h[i,j]*np.einsum('p,q->pq',
-                                                   SPG_lm_aoG[i,:].conj(),
-                                                   SPG_lm_aoG[j,:])
-    vppnl *= (1./ngs**2)
-
-    return vpploc + vppnl
 
 
 class KnowValues(unittest.TestCase):
@@ -130,19 +88,6 @@ class KnowValues(unittest.TestCase):
         t0 = get_t(cell, kpt=k)
         t1 = scfint.get_t(cell, kpt=k)
         self.assertAlmostEqual(numpy.linalg.norm(t0-t1), 0, 8)
-
-    def test_pp(self):
-        cell = pbcgto.Cell()
-        cell.verbose = 0
-        cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-        cell.h = np.diag([4, 4, 4])
-        cell.basis = 'gth-szv'
-        cell.pseudo = 'gth-pade'
-        cell.gs = [10, 10, 10]
-        cell.build()
-        v0 = get_pp(cell, k)
-        v1 = phf.get_pp(cell, k)
-        self.assertAlmostEqual(numpy.linalg.norm(v0-v1), 0, 8)
 
     def test_vkR(self):
         cell = make_cell1(4, 20, [2,2,2])

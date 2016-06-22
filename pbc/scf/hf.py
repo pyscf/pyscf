@@ -15,7 +15,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
-from pyscf.pbc.gto import pseudo, ewald
+from pyscf.pbc.gto import ewald
+from pyscf.pbc.gto.pseudo import get_pp, get_jvloc_G0
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc.scf import addons
 
@@ -62,77 +63,6 @@ def get_nuc(cell, kpt=np.zeros(3)):
 
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
     return vne
-
-def get_pp(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
-    '''
-    import pyscf.dft
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    aoR = numint.eval_ao(cell, coords, kpt)
-    nao = cell.nao_nr()
-
-    SI = cell.get_SI()
-    vlocG = pseudo.get_vlocG(cell)
-    vpplocG = -np.sum(SI * vlocG, axis=0)
-
-    # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs).real
-    vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
-
-    # vppnonloc evaluated in reciprocal space
-    aokG = tools.map_fftk(aoR, cell.gs, np.exp(-1j*np.dot(coords, kpt)))
-    ngs = len(aokG)
-
-    fakemol = pyscf.gto.Mole()
-    fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
-    fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
-    ptr = pyscf.gto.PTR_ENV_START
-    fakemol._env = np.zeros(ptr+10)
-    fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
-    fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
-    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
-    fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
-    Gv = np.asarray(cell.Gv+kpt)
-    G_rad = lib.norm(Gv, axis=1)
-
-    vppnl = np.zeros((nao,nao), dtype=np.complex128)
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
-        if symb not in cell._pseudo:
-            continue
-        pp = cell._pseudo[symb]
-        for l, proj in enumerate(pp[5:]):
-            rl, nl, hl = proj
-            if nl > 0:
-                hl = np.asarray(hl)
-                fakemol._bas[0,pyscf.gto.ANG_OF] = l
-                fakemol._env[ptr+3] = .5*rl**2
-                fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
-                pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
-
-                pYlm = np.empty((nl,l*2+1,ngs))
-                for k in range(nl):
-                    qkl = pseudo.pp._qli(G_rad*rl, l, k)
-                    pYlm[k] = pYlm_part.T * qkl
-                # pYlm is real
-                SPG_lmi = np.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
-                SPG_lm_aoG = np.einsum('nmg,gp->nmp', SPG_lmi, aokG)
-                tmp = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-    vppnl *= (1./ngs**2)
-
-    if aoR.dtype == np.double:
-        return vpploc.real + vppnl.real
-    else:
-        return vpploc + vppnl
-
-
-def get_jvloc_G0(cell, kpt=np.zeros(3)):
-    '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
-    '''
-    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 
 def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):

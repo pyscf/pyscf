@@ -175,7 +175,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
         return getints3c(intor_name, atm, bas, env, shls_slice, comp,
                          aosym, ao_loc, cintopt, out)
     else:
-        raise RuntimeError('Unknown intor')
+        raise RuntimeError('Unknown intor %s' % intor_name)
 
 def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
               ao_loc=None, cintopt=None, out=None):
