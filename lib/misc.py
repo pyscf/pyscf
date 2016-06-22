@@ -53,6 +53,14 @@ def current_memory():
     else:
         return 0, 0
 
+def num_threads():
+    if 'OMP_NUM_THREADS' in os.environ:
+        return int(os.environ['OMP_NUM_THREADS'])
+    else:
+        import multiprocessing
+        return multiprocessing.cpu_count()
+
+
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
     arr = (ctypes.c_int * npm.size)(*npm)
@@ -368,6 +376,13 @@ def overwrite_mro(obj, mro):
 # resolve the right mro
     del(HackMRO.mro)
     return obj
+
+def izip(*args):
+    '''python2 izip == python3 zip'''
+    if sys.version_info < (3,):
+        return itertools.izip(*args)
+    else:
+        return zip(*args)
 
 
 if __name__ == '__main__':

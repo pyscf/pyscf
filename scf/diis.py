@@ -10,6 +10,7 @@ DIIS
 from functools import reduce
 import numpy
 import scipy.linalg
+import pyscf.lib
 import pyscf.lib.diis
 from pyscf.lib import logger
 
@@ -29,11 +30,20 @@ class DIIS(pyscf.lib.diis.DIIS):
         if isinstance(f, numpy.ndarray) and f.ndim == 2:
             sdf = reduce(numpy.dot, (s,d,f))
             errvec = sdf.T.conj() - sdf
+
+        elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
+            errvec = []
+            for i in range(f.shape[0]):
+                sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
+                errvec.append((sdf.T.conj() - sdf))
+            errvec = numpy.hstack(errvec)
+
+        elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
+            s = pyscf.lib.asarray((s,s)).reshape(-1,s.shape[-2],s.shape[-1])
+            fnew = self.update(s, d.reshape(s.shape), f.reshape(s.shape))
+            return fnew.reshape(f.shape)
         else:
-            sdf_a = reduce(numpy.dot, (s, d[0], f[0]))
-            sdf_b = reduce(numpy.dot, (s, d[1], f[1]))
-            errvec = numpy.hstack((sdf_a.T.conj() - sdf_a,
-                                   sdf_b.T.conj() - sdf_b))
+            raise RuntimeError('Unknown SCF DIIS type')
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         xnew = pyscf.lib.diis.DIIS.update(self, f, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:

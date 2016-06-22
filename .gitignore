@@ -76,3 +76,6 @@ POPSFILE*
 INITIATORStats
 NodeFile*
 OneRDM*
+
+# Memoization and caching
+tmp/

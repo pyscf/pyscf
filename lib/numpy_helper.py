@@ -113,9 +113,15 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         idx = numpy.tril_indices(nd)
         if filltriu == HERMITIAN:
             for ij,(i,j) in enumerate(zip(*idx)):
-                out[i,j] = out[j,i] = tril[ij]
+                out[i,j] = tril[ij]
+                out[j,i] = tril[ij].conj()
         elif filltriu == ANTIHERMI:
-            raise KeyError('filltriu == ANTIHERMI')
+            for ij,(i,j) in enumerate(zip(*idx)):
+                out[i,j] = tril[ij]
+                out[j,i] =-tril[ij].conj()
+        elif filltriu == SYMMETRIC:
+            for ij,(i,j) in enumerate(zip(*idx)):
+                out[i,j] = out[j,i] = tril[ij]
         else:
             out[idx] = tril
         return out
@@ -255,7 +261,7 @@ def takebak_2d(out, a, idx, idy):
                                  ctypes.c_int(idy.size))
     return out
 
-def transpose(a, inplace=False, out=None):
+def transpose(a, axes=None, inplace=False, out=None):
     '''Transpose array for better memory efficiency
 
     Examples:
@@ -264,8 +270,8 @@ def transpose(a, inplace=False, out=None):
     [[ 1.  1.  1.]
      [ 1.  1.  1.]]
     '''
-    arow, acol = a.shape
     if inplace:
+        arow, acol = a.shape
         assert(arow == acol)
         tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM))
         for c0, c1 in misc.prange(0, acol, BLOCK_DIM):
@@ -277,23 +283,31 @@ def transpose(a, inplace=False, out=None):
             a[c0:c1,c0:c1] = a[c0:c1,c0:c1].T
         return a
     else:
-        if out is None:
-            out = numpy.empty((acol,arow), a.dtype)
+        if a.ndim == 2:
+            d0 = 1
+            arow, acol = a.shape
+            shape = acol, arow
+        elif a.ndim == 3 and axes == (0,2,1):
+            d0, arow, acol = a.shape
+            shape = (d0, acol, arow)
         else:
-            out = numpy.ndarray((acol,arow), a.dtype, buffer=out)
-# C code is ~5% faster for acol=arow=10000
-# Note: when the input a is a submatrix of another array, cannot call NPd(z)transpose
-# since NPd(z)transpose assumes data continuity
+            return a.transpose(axes)
+        if out is None:
+            out = numpy.empty(shape, a.dtype)
+        else:
+            out = numpy.ndarray(shape, a.dtype, buffer=out)
         if a.flags.c_contiguous:
             if numpy.iscomplexobj(a):
-                fn = _np_helper.NPztranspose
+                fn = _np_helper.NPztranspose_021
             else:
-                fn = _np_helper.NPdtranspose
+                fn = _np_helper.NPdtranspose_021
             fn.restype = ctypes.c_void_p
-            fn(ctypes.c_int(arow), ctypes.c_int(acol),
+            fn(ctypes.c_int(d0), ctypes.c_int(arow), ctypes.c_int(acol),
                a.ctypes.data_as(ctypes.c_void_p),
                out.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(BLOCK_DIM))
+        elif a.ndim >= 2:
+            raise NotImplementedError
         else:
             r1 = c1 = 0
             for c0 in range(0, acol-BLOCK_DIM, BLOCK_DIM):
@@ -375,46 +389,39 @@ def zdot(a, b, alpha=1, c=None, beta=0):
     btype = b.dtype
 
     if atype == numpy.float64 and btype == numpy.float64:
-        c = ddot(a, b, alpha, c, beta)
+        return ddot(a, b, alpha, c, beta)
 
-    elif atype == numpy.float64 and btype == numpy.complex128:
-        br = b.real.copy()
-        bi = b.imag.copy()
+    if atype == numpy.float64 and btype == numpy.complex128:
+        br = numpy.asarray(b.real, order='C')
+        bi = numpy.asarray(b.imag, order='C')
         cr = ddot(a, br, alpha)
         ci = ddot(a, bi, alpha)
-        if c is None:
-            c = cr + ci*1j
-        else:
-            c *= beta
-            c += cr + ci*1j
+        ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.float64:
-        ar = a.real.copy()
-        ai = a.imag.copy()
+        ar = numpy.asarray(a.real, order='C')
+        ai = numpy.asarray(a.imag, order='C')
         cr = ddot(ar, b, alpha)
         ci = ddot(ai, b, alpha)
-        if c is None:
-            c = cr + ci*1j
-        else:
-            c *= beta
-            c += cr + ci*1j
+        ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.complex128:
         k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
         k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
         k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
-        if c is None:
-            c = k1-k3 + (k1+k2)*1j
-        else:
-            c *= beta
-            c += k1-k3 + (k1+k2)*1j
+        ab = k1-k3 + (k1+k2)*1j
 
     else:
-        if c is None:
-            c = numpy.dot(a, b) * alpha
+        ab = numpy.dot(a, b) * alpha
+
+    if c is None:
+        c = ab
+    else:
+        if beta == 0:
+            c[:] = 0
         else:
             c *= beta
-            c += numpy.dot(a, b) * alpha
+        c += ab
     return c
 dot = zdot
 
@@ -465,19 +472,12 @@ def norm(x, ord=None, axis=None):
         return numpy.linalg.norm(x, ord, axis)
         #raise RuntimeError('Not support for axis = %d' % axis)
 
-# numpy.linalg.cond has a bug, where it
-# does not correctly generalize
-# condition number if s1e is not a matrix
 def cond(x, p=None):
     '''Compute the condition number'''
-    if p is None:
-        sigma = numpy.linalg.svd(numpy.asarray(x), compute_uv=False)
-        c = sigma.T[0]/sigma.T[-1] # values are along last dimension, so
-                                   # so must transpose. This transpose
-                                   # is omitted in numpy.linalg
-        return c
-    else:
+    if isinstance(x, numpy.ndarray) and x.ndim == 2 or p is not None:
         return numpy.linalg.cond(x, p)
+    else:
+        return numpy.asarray([numpy.linalg.cond(xi) for xi in x])
 
 def cartesian_prod(arrays, out=None):
     '''
@@ -621,6 +621,8 @@ if __name__ == '__main__':
     b = a[:400,:400]
     c = numpy.copy(b)
     print(abs(b.T - transpose(c,inplace=True)).sum())
+    a = a.reshape(40,10,-1)
+    print(abs(a.transpose(0,2,1) - transpose(a,(0,2,1))).sum())
 
     a = numpy.random.random((400,400))
     b = a + a.T.conj()

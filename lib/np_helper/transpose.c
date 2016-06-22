@@ -40,6 +40,7 @@ void NPdtranspose(int n, int m, double *a, double *at, int blk)
                 }
         }
 }
+
 void NPztranspose(int n, int m, double complex *a, double complex *at, int blk)
 {
         int ic, jc;
@@ -71,5 +72,35 @@ void NPztranspose(int n, int m, double complex *a, double complex *at, int blk)
                         po[i] = pi[i*m];
                 }
         }
+}
+
+
+void NPdtranspose_021(int count, int n, int m, double *a, double *at, int blk)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, m, a, at, blk)
+{
+        int ic;
+        size_t nm = n * m;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                NPdtranspose(n, m, a+ic*nm, at+ic*nm, blk);
+        }
+}
+}
+
+void NPztranspose_021(int count, int n, int m,
+                      double complex *a, double complex *at, int blk)
+{
+#pragma omp parallel default(none) \
+        shared(count, n, m, a, at, blk)
+{
+        int ic;
+        size_t nm = n * m;
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                NPztranspose(n, m, a+ic*nm, at+ic*nm, blk);
+        }
+}
 }
 

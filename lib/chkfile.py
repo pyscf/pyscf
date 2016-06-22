@@ -109,7 +109,7 @@ def load_mol(chkfile):
             Name of chkfile.
 
     Returns:
-        A Mole object
+        A (initialized/built) Mole object
 
     Examples:
 

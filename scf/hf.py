@@ -101,11 +101,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
 
-    cond = numpy.linalg.cond(s1e)
-    logger.debug(mf, 'cond(S) = %.9g' % cond)
-    if cond*1e-17 > conv_tol:
+    cond = pyscf.lib.cond(s1e)
+    logger.debug(mf, 'cond(S) = %s', cond)
+    if numpy.max(cond)*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                    'SCF may be inaccurate and hard to converge.', cond)
+                    'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     if mf.diis and mf.DIIS:
         adiis = mf.DIIS(mf, mf.diis_file)
@@ -120,6 +120,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     if dump_chk:
         # Explicit overwrite the mol object in chkfile
+        # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
         pyscf.scf.chkfile.save_mol(mol, mf.chkfile)
 
     scf_conv = False
@@ -385,16 +386,7 @@ def get_init_guess(mol, key='minao'):
         key : str
             One of 'minao', 'atom', '1e', 'chkfile'.
     '''
-    if callable(key):
-        return key(mol)
-    elif key.lower() == '1e':
-        return init_guess_by_1e(mol)
-    elif key.lower() == 'atom':
-        return init_guess_by_atom(mol)
-    elif key.lower() == 'chkfile':
-        raise DeprecationWarning('Call pyscf.scf.hf.init_guess_by_chkfile instead')
-    else:
-        return init_guess_by_minao(mol)
+    return RHF(mol).get_init_guess(mol, key)
 
 
 # eigenvalue of d is 1
@@ -417,24 +409,18 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    if abs(factor) < 1e-4:
-        return f
-    else:
-        dm_vir = s - reduce(numpy.dot, (s, d, s))
-        return f + dm_vir * factor
+    dm_vir = s - reduce(numpy.dot, (s, d, s))
+    return f + dm_vir * factor
 
 
 def damping(s, d, f, factor):
-    if abs(factor) < 1e-4:
-        return f
-    else:
-        #dm_vir = s - reduce(numpy.dot, (s,d,s))
-        #sinv = numpy.linalg.inv(s)
-        #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
-        dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
-        f0 = reduce(numpy.dot, (dm_vir, f, d, s))
-        f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
-        return f - f0
+    #dm_vir = s - reduce(numpy.dot, (s,d,s))
+    #sinv = numpy.linalg.inv(s)
+    #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
+    dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
+    f0 = reduce(numpy.dot, (dm_vir, f, d, s))
+    f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
+    return f - f0
 
 
 # full density matrix for RHF
@@ -539,10 +525,11 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     >>> print(j.shape)
     (3, 2, 2)
     '''
-    vj, vk = _vhf.direct(numpy.array(dm, copy=False),
-                         mol._atm, mol._bas, mol._env,
+    dm = numpy.asarray(dm, order='C')
+    nao = dm.shape[-1]
+    vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
                          vhfopt=vhfopt, hermi=hermi)
-    return vj, vk
+    return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
 def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
@@ -590,13 +577,11 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     True
     '''
     if dm_last is None:
-        ddm = numpy.asarray(dm)
-    else:
-        ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-    vj, vk = get_jk(mol, ddm, hermi=hermi, vhfopt=vhfopt)
-    if vhf_last is None:
+        vj, vk = get_jk(mol, numpy.asarray(dm), hermi, vhfopt)
         return vj - vk * .5
     else:
+        ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+        vj, vk = get_jk(mol, ddm, hermi, vhfopt)
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
 def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
@@ -631,11 +616,12 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
         damp_factor = mf.damp
 
     f = h1e + vhf
-    if 0 <= cycle < diis_start_cycle-1:
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
     if adiis and cycle >= diis_start_cycle:
         f = adiis.update(s1e, dm, f)
-    f = level_shift(s1e, dm*.5, f, level_shift_factor)
+    if abs(level_shift_factor) > 1e-4:
+        f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
@@ -1130,7 +1116,7 @@ class SCF(pyscf.lib.StreamObject):
             dm = self.init_guess_by_minao(mol)
         if self.verbose >= logger.DEBUG1:
             logger.debug1(self, 'Nelec from initial guess = %g',
-                          (dm*self.get_ovlp()).sum())
+                          (dm*self.get_ovlp()).sum().real)
         return dm
 
     # full density matrix for RHF
@@ -1201,9 +1187,11 @@ class SCF(pyscf.lib.StreamObject):
         cpu0 = (time.clock(), time.time())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt)
+        dm = numpy.asarray(dm)
+        nao = dm.shape[-1]
+        vj, vk = get_jk(mol, dm.reshape(-1,nao,nao), hermi, self.opt)
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj, vk
+        return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
     def get_j(self, mol=None, dm=None, hermi=1):
         '''Compute J matrix for the given density matrix.
@@ -1223,7 +1211,7 @@ class SCF(pyscf.lib.StreamObject):
         if self.direct_scf:
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.array(vhf_last, copy=False) + vj - vk * .5
+            return numpy.asarray(vhf_last) + vj - vk * .5
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
@@ -1345,28 +1333,13 @@ class RHF(SCF):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
-            if self.direct_scf:
-                self.opt = self.init_direct_scf(mol)
-            vj, vk = get_jk(mol, dm, hermi, self.opt)
-        logger.timer(self, 'vj and vk', *cpu0)
+            vj, vk = SCF.get_jk(self, mol, dm, hermi)
         return vj, vk
-
-    @pyscf.lib.with_doc(get_veff.__doc__)
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if (self._eri is not None or not self.direct_scf or
-            mol.incore_anyway or self._is_mem_enough()):
-            vj, vk = self.get_jk(mol, dm, hermi)
-            return vj - vk * .5
-        else:
-            return SCF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''

@@ -349,31 +349,28 @@ class ROHF(hf.RHF):
 
     energy_elec = energy_elec
 
-    # pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
     @pyscf.lib.with_doc(uhf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.asarray(dm)
+        nao = dm.shape[-1]
+        if dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
-        nset = len(dm) // 2
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
-            dm = numpy.array(dm, copy=False)
-            dm = numpy.vstack((dm[nset:], dm[:nset]-dm[nset:]))
-            vj, vk = self.get_jk(mol, dm, hermi)
-            vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
-            vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
-            vhf = uhf._makevhf(vj, vk, nset)
+            vj, vk = self.get_jk(mol, (dm[1], dm[0]-dm[1]), hermi)
+            vj = numpy.asarray((vj[0]+vj[1], vj[0]))
+            vk = numpy.asarray((vk[0]+vk[1], vk[0]))
+            vhf = uhf._makevhf(vj, vk)
         else:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            ddm = numpy.vstack((ddm[nset:],             # closed shell
-                                ddm[:nset]-ddm[nset:])) # open shell
+            ddm = dm - numpy.asarray(dm_last)
+            ddm = numpy.asarray((ddm[1],                # closed shell
+                                 ddm[0]-ddm[1]))        # open shell
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vj = numpy.vstack((vj[:nset]+vj[nset:], vj[:nset]))
-            vk = numpy.vstack((vk[:nset]+vk[nset:], vk[:nset]))
-            vhf = uhf._makevhf(vj, vk, nset) \
-                + numpy.array(vhf_last, copy=False)
+            vj = numpy.asarray((vj[0]+vj[1], vj[0]))
+            vk = numpy.asarray((vk[0]+vk[1], vk[0]))
+            vhf = uhf._makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
 
     analyze = analyze

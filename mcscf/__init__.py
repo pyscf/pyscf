@@ -241,6 +241,8 @@ def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
 def _convert_to_rhf(mf, convert_df=True):
     import copy
     import numpy
+    from pyscf.lib import logger
+    import pyscf.df
     if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
         mf = copy.copy(mf)
@@ -249,8 +251,8 @@ def _convert_to_rhf(mf, convert_df=True):
         if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
 
     # Avoid doing density fitting
-    if convert_df and hasattr(mf, 'with_df') and mf.with_df:
-        from pyscf.lib import logger
+    if (convert_df and hasattr(mf, 'with_df') and
+        isinstance(mf.with_df, (pyscf.df.DF, pyscf.df.XDF))):
         mf = copy.copy(mf)
         logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
                     'Its orbitals are taken as the initial guess of CASSCF.\n'
