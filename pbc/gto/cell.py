@@ -574,7 +574,7 @@ class Cell(pyscf.gto.Mole):
 # don't modify the following variables, they are not input arguments
         self.vol = None
         self._h = None
-        self._pseudo = None
+        self._pseudo = []
         self._keys = set(self.__dict__.keys())
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
@@ -780,4 +780,12 @@ class Cell(pyscf.gto.Mole):
         self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         return self
 
+    def to_mol(self):
+        '''Return a Mole object using the same atoms and basis functions as
+        the Cell object.
+        '''
+        mol = pyscf.gto.mole.Mole()
+        cell_dic = [(key, getattr(self, key)) for key in mol.__dict__.keys()]
+        mol.__dict__.update(cell_dic)
+        return mol
 

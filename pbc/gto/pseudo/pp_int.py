@@ -58,19 +58,22 @@ def get_pp_nl(cell, kpts=None):
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
 
     ppnl = [0] * nkpts
-    for k in range(nkpts):
-        dtype = ppnl_half[0][0].dtype
+    for k, kpt in enumerate(kpts_lst):
         offset = [0] * 3
         for ib, hl in enumerate(hl_blocks):
             l = fakecell.bas_angular(ib)
             nd = 2 * l + 1
             hl_dim = hl.shape[0]
-            ilp = numpy.ndarray((hl_dim,nd,nao), dtype=dtype, buffer=buf)
+            ilp = numpy.ndarray((hl_dim,nd,nao), dtype=numpy.complex128, buffer=buf)
             for i in range(hl_dim):
                 p0 = offset[i]
                 ilp[i] = ppnl_half[i][k][p0:p0+nd]
                 offset[i] = p0 + nd
             ppnl[k] += numpy.einsum('ilp,ij,jlq->pq', ilp.conj(), hl, ilp)
+
+        if abs(kpt).sum() < 1e-9:  # gamma_point:
+            ppnl[k] = ppnl[k].real
+
 
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
@@ -94,6 +97,9 @@ def fake_cell_vloc(cell, cn=0):
     fake_bas = []
     half_sph_norm = .5/numpy.sqrt(numpy.pi)
     for ia in range(cell.natm):
+        if cell.atom_charge(ia) == 0:  # pass ghost atoms
+            continue
+
         symb = cell.atom_symbol(ia)
         if cn == 0:
             if symb in cell._pseudo:
@@ -146,16 +152,19 @@ def fake_cell_vnl(cell):
     fake_bas = []
     hl_blocks = []
     for ia in range(cell.natm):
+        if cell.atom_charge(ia) == 0:  # pass ghost atoms
+            continue
+
         symb = cell.atom_symbol(ia)
         if symb in cell._pseudo:
             pp = cell._pseudo[symb]
             nproj_types = pp[4]
-            for l, proj in enumerate(pp[5:]):
-                rl, nl, hl = proj
-                alpha = .5 / rl**2
-                norm = gto.gto_norm(l, alpha)
-                fake_env.append([alpha, norm])
-                fake_bas.append([ia, l, 1, 1, 0, ptr, ptr+1, 0])
+            for l, (rl, nl, hl) in enumerate(pp[5:]):
+                if nl > 0:
+                    alpha = .5 / rl**2
+                    norm = gto.gto_norm(l, alpha)
+                    fake_env.append([alpha, norm])
+                    fake_bas.append([ia, l, 1, 1, 0, ptr, ptr+1, 0])
 # Function p_i^l (PRB, 58, 3641 Eq 3) is (r^{2(i-1)})^2 square normalized to 1.
 # But here the fake basis is square normalized to 1.  A factor ~ p_i^l / p_1^l
 # is attached to h^l_ij (for i>1,j>1) so that (factor * fake-basis * r^{2(i-1)})
@@ -163,10 +172,10 @@ def fake_cell_vnl(cell):
 #       r_l^{l+(4-1)/2} sqrt(Gamma(l+(4-1)/2))      sqrt(Gamma(l+3/2))
 #     ------------------------------------------ = ----------------------------------
 #      r_l^{l+(4i-1)/2} sqrt(Gamma(l+(4i-1)/2))     sqrt(Gamma(l+2i-1/2)) r_l^{2i-2}
-                fac = numpy.array([_PLI_FAC[l,i]/rl**(i*2) for i in range(nl)])
-                hl = numpy.einsum('i,ij,j->ij', fac, numpy.asarray(hl), fac)
-                hl_blocks.append(hl)
-                ptr += 2
+                    fac = numpy.array([_PLI_FAC[l,i]/rl**(i*2) for i in range(nl)])
+                    hl = numpy.einsum('i,ij,j->ij', fac, numpy.asarray(hl), fac)
+                    hl_blocks.append(hl)
+                    ptr += 2
 
     fakecell = copy.copy(cell)
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
@@ -225,6 +234,8 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
     intopt = lib.c_null_ptr()
 
     def int_ket(_bas, intor):
+        if len(_bas) == 0:
+            return []
         atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                      fakecell._atm, _bas, fakecell._env)
         atm = numpy.asarray(atm, dtype=numpy.int32)
