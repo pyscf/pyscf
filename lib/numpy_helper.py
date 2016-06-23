@@ -286,7 +286,7 @@ def transpose(a, axes=None, inplace=False, out=None):
         if a.ndim == 2:
             d0 = 1
             arow, acol = a.shape
-            shape = acol, arow
+            shape = (acol, arow)
         elif a.ndim == 3 and axes == (0,2,1):
             d0, arow, acol = a.shape
             shape = (d0, acol, arow)
@@ -306,7 +306,7 @@ def transpose(a, axes=None, inplace=False, out=None):
                a.ctypes.data_as(ctypes.c_void_p),
                out.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(BLOCK_DIM))
-        elif a.ndim >= 2:
+        elif a.ndim > 2:
             raise NotImplementedError
         else:
             r1 = c1 = 0

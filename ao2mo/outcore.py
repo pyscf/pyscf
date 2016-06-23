@@ -265,7 +265,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
-    mem_words = max_memory * 1e6 / 8
+    ioblk_size = max(max_memory//4, ioblk_size)
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
