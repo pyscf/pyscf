@@ -35,7 +35,7 @@
 #include <math.h>
 #include <assert.h>
 #include <complex.h>
-#include <omp.h>
+#include "config.h"
 #include "cint.h"
 
 #define NCTRMAX         72
