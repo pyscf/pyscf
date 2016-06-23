@@ -4,7 +4,7 @@
 
 #include <string.h>
 #include <complex.h>
-#include <omp.h>
+#include "config.h"
 #include "np_helper.h"
 
 void NPdsymm_triu(int n, double *mat, int hermi)
