@@ -60,7 +60,7 @@ class COSMO(object):
         self.dm = None   # given system density, avoid potential being updated SCFly
         #self.x2c_correction = False
         self.casci_conv_tol = 1e-7
-        self.casci_state_id = None
+        self.casci_state_id = 0
         self.casci_max_cycle = 50
 
 ##################################################
@@ -565,11 +565,19 @@ def cosmo_for_mcscf(mc, cosmo):
             e_tot, e_cas, fcivec = oldCAS.casci(self, mo_coeff, ci0, eris,
                                                 verbose, envs)
 
-            if self.fcisolver.nroots > 1 and cosmo.casci_state_id is not None:
-                c = fcivec[cosmo.casci_state_id]
-                casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
-            else:
+            if not isinstance(e_cas, (float, numpy.number)):
+                raise RuntimeError('Multiple roots are detected in fcisolver.  '
+                                   'CASSCF does not know which state to optimize.\n'
+                                   'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
+
+            try:
                 casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
+            except Exception as err:
+                if self.fcisolver.nroots > 1:
+                    c = fcivec[cosmo.casci_state_id]
+                    casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
+                else:
+                    raise err
             mocore = mo_coeff[:,:self.ncore]
             mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
             cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
@@ -628,11 +636,16 @@ def cosmo_for_casci(mc, cosmo):
                 # casci.kernel call get_hcore, which initialized cosmo._v
                 e_tot, e_cas, fcivec = mcscf.casci.kernel(self, mo_coeff,
                                                           ci0=ci0, verbose=log)
-                if self.fcisolver.nroots > 1 and cosmo.casci_state_id is not None:
-                    c = fcivec[cosmo.casci_state_id]
-                    casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
-                else:
+
+                try:
                     casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
+                except Exception as err:
+                    if self.fcisolver.nroots > 1:
+                        log.debug('COSMO responses to DM of state %d', cosmo.casci_state_id)
+                        c = fcivec[cosmo.casci_state_id]
+                        casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
+                    else:
+                        raise err
                 mocore = mo_coeff[:,:self.ncore]
                 mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
                 cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))

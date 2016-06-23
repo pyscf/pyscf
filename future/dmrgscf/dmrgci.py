@@ -416,19 +416,20 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         neleca, nelecb = nelec
     f.write('nelec %i\n'%(neleca+nelecb))
     f.write('spin %i\n' %(neleca-nelecb))
-    if isinstance(DMRGCI.wfnsym, str):
-        wfnsym = dmrg_sym.irrep_name2id(DMRGCI.groupname, DMRGCI.wfnsym)
-    else:
-        import pyscf.symm
-        if DMRGCI.groupname.lower() == 'dooh':
-            gpname = 'D2h'
-        elif DMRGCI.groupname.lower() == 'coov':
-            gpname = 'C2v'
+    if DMRGCI.groupname is not None:
+        if isinstance(DMRGCI.wfnsym, str):
+            wfnsym = dmrg_sym.irrep_name2id(DMRGCI.groupname, DMRGCI.wfnsym)
         else:
-            gpname = pyscf.symm.std_symb(DMRGCI.groupname)
-        assert(DMRGCI.wfnsym in dmrg_sym.IRREP_MAP[gpname])
-        wfnsym = DMRGCI.wfnsym
-    f.write('irrep %i\n' % wfnsym)
+            import pyscf.symm
+            if DMRGCI.groupname.lower() == 'dooh':
+                gpname = 'D2h'
+            elif DMRGCI.groupname.lower() == 'coov':
+                gpname = 'C2v'
+            else:
+                gpname = pyscf.symm.std_symb(DMRGCI.groupname)
+            assert(DMRGCI.wfnsym in dmrg_sym.IRREP_MAP[gpname])
+            wfnsym = DMRGCI.wfnsym
+        f.write('irrep %i\n' % wfnsym)
 
     if (not Restart):
         #f.write('schedule\n')
