@@ -12,3 +12,7 @@ def EOMCCSD(mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
 def RCCSD(mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
     from pyscf.cc import rccsd_eom
     return rccsd_eom.RCCSD(mf, frozen, mo_energy, mo_coeff, mo_occ)
+
+def UCCSD(mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+    from pyscf.cc import uccsd_eom
+    return uccsd_eom.UCCSD(mf, frozen, mo_energy, mo_coeff, mo_occ)
