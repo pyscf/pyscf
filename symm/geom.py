@@ -130,10 +130,13 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             else:
                 n = 1
         except RotationAxisNotFound:
-# Some quasi symmetric system may cheat the inertia momentum.  If any of
-# the symmetry inequivalent single atom does not sit on the possible rotation
-# axis, RotationAxisNotFound will be raised. We temporarily label this system
-# with highest rotation axis C1
+# FIXME:
+# Some quasi symmetric system may cheat the inertia momentum.  It's common
+# when two high symmetric clusters eg Td and I sit on the same charge center
+# and have different orientation.  The eniter system of the two cluster has
+# low symmetry.  We temporarily label this system with highest rotation axis
+# C1.
+            sys.stderr.write('High rotation axis is not found. Inertia momentum %s\n' % w)
             n = 1
 
         #print('Highest C_n = C%d' % n)
@@ -237,17 +240,31 @@ def subgroup(gpname, axes):
             return 'Ci', axes
     else:
         n = int(re.search(r'\d+', gpname).group(0))
-        if re.search(r'D\d+d', gpname):
-            gpname = 'C%dv' % n
         if n % 2 == 0:
-            subname = re.sub(r'\d+', '2', gpname)
+            if re.search(r'D\d+d', gpname):
+                subname = 'D2'
+            elif re.search(r'D\d+h', gpname):
+                subname = 'D2h'
+            elif re.search(r'D\d+', gpname):
+                subname = 'D2'
+            elif re.search(r'C\d+h', gpname):
+                subname = 'C2h'
+            elif re.search(r'C\d+v', gpname):
+                subname = 'C2v'
+            else:
+                subname = 'C2'
         else:
+            # rotate axes and
             # Dnh -> C2v
             # Dn  -> C2
+            # Dnd -> Ci
             # Cnh -> Cs
             # Cnv -> Cs
             if re.search(r'D\d+h', gpname):
                 subname = 'C2v'
+                axes = axes[[1,2,0]]
+            elif re.search(r'D\d+d', gpname):
+                subname = 'C2h'
                 axes = axes[[1,2,0]]
             elif re.search(r'D\d+', gpname):
                 subname = 'C2'
@@ -259,8 +276,6 @@ def subgroup(gpname, axes):
                 axes = axes[[1,2,0]]
             else:
                 subname = 'C1'
-        if subname[-1] == 'd':
-            subname = subname[:-1]
         return subname, axes
 
 
@@ -488,11 +503,12 @@ class SymmSys(object):
                     possible_cn.append(i)
         possible_cn = set(possible_cn)
 
-        cn = 1
         for i in sorted(possible_cn, reverse=True):
             if all(self.symmetric_for(rotation_mat(zaxis, numpy.pi*2/i))):
                 cn = i
                 break
+        else:
+            raise RotationAxisNotFound
 
         #
         # Search for C2 perp to Cn and mirros on Cn
@@ -574,19 +590,15 @@ def _search_toi(rawsys):
     maybe_cn = maybe_cn[d>TOLERANCE**2]
     maybe_cn = _remove_dupvec(maybe_cn) # also transfer to pseudo-vector
 
-#    maybe_cn = [numpy.array((0,0,1.))]
-#    print maybe_cn
-
     def search_c5_c4_c3(maybe_cn):
         for n in (5, 4, 3):
             for zaxis in maybe_cn:
                 if has_rotation(zaxis, n):
                     return n, zaxis
-        return 1, None
+        else:
+            raise RotationAxisNotFound
 
     cn, zaxis = search_c5_c4_c3(maybe_cn)
-    if cn == 1:
-        raise RotationAxisNotFound
 
     def make_axes(z, x):
         y = numpy.cross(z, x)
@@ -605,6 +617,8 @@ def _search_toi(rawsys):
         for c3 in maybe_c3:
             if has_rotation(c3, 3):
                 break
+        else:
+            raise RotationAxisNotFound('Only find one C3 axis')
 
         if rawsys.detect_icenter():
             gpname = 'Th'
@@ -630,6 +644,8 @@ def _search_toi(rawsys):
             if has_rotation(c4, 4):
                 xaxis = c4
                 break
+        else:
+            raise RotationAxisNotFound('Only find one C4 axis')
 
     else:  # cn == 5
         if rawsys.detect_icenter():
@@ -643,8 +659,10 @@ def _search_toi(rawsys):
         maybe_c5 = maybe_cn[(abs(cos+cos_c5) < TOLERANCE) |
                             (abs(cos-cos_c5) < TOLERANCE)]
         for c5 in maybe_c5:
-            if has_rotation(c5, 3):
+            if has_rotation(c5, 5):
                 break
+        else:
+            raise RotationAxisNotFound('Only find one C5 axis')
 
         if abs(numpy.dot(c5, zaxis)+cos_c5) < TOLERANCE:
             c5 = -c5
