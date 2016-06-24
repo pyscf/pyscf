@@ -306,7 +306,7 @@ def transpose(a, axes=None, inplace=False, out=None):
                a.ctypes.data_as(ctypes.c_void_p),
                out.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(BLOCK_DIM))
-        elif a.ndim >= 2:
+        elif a.ndim > 2:
             raise NotImplementedError
         else:
             r1 = c1 = 0
