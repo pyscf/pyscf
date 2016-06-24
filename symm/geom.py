@@ -13,7 +13,6 @@ from pyscf.lib import logger
 import pyscf.symm.param
 
 TOLERANCE = 1e-5
-PLACE = int(-numpy.log10(TOLERANCE))
 
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
@@ -22,14 +21,18 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
         v3 = numpy.cross(v1/numpy.linalg.norm(v1), v2/numpy.linalg.norm(v2))
         return numpy.linalg.norm(v3) < TOLERANCE
 
-def argsort_coords(coords, decimals=PLACE-1):
-    coords = numpy.around(coords, decimals=PLACE-1)
+def argsort_coords(coords, decimals=None):
+    if decimals is None:
+        decimals = int(-numpy.log10(TOLERANCE)) - 1
+    coords = numpy.around(coords, decimals=decimals)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
-def sort_coords(coords, decimals=PLACE-1):
+def sort_coords(coords, decimals=None):
+    if decimals is None:
+        decimals = int(-numpy.log10(TOLERANCE)) - 1
     coords = numpy.asarray(coords)
-    idx = argsort_coords(coords, decimals=PLACE-1)
+    idx = argsort_coords(coords, decimals=decimals)
     return coords[idx]
 
 # ref. http://en.wikipedia.org/wiki/Rotation_matrix
@@ -49,7 +52,7 @@ def rotation_mat(vec, theta):
 
 # reflection operation with householder
 def householder(vec):
-    vec = numpy.array(vec)
+    vec = numpy.array(vec) / numpy.linalg.norm(vec)
     return numpy.eye(3) - vec[:,None]*vec*2
 
 def closest_axes(axes, ref):
@@ -66,11 +69,10 @@ def alias_axes(axes, ref):
     '''
     x_id, y_id, z_id = closest_axes(axes, ref)
     new_axes = axes[[x_id,y_id,z_id]]
-    if numpy.linalg.det(new_axes) < 0:  # Avoid breaking chirality
+    if numpy.linalg.det(new_axes) < 0:
         new_axes = axes[[y_id,x_id,z_id]]
     return new_axes
 
-#TODO: Sn, T, Th, O, I
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
     '''Detect the point group symmetry for given molecule.
 
@@ -115,6 +117,8 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
     else:
         try:
             if numpy.allclose(w, w[0], atol=tol): # T, O, I
+                # Because rotation vectors Rx Ry Rz are 3-degenerated T representation
+                # See http://www.webqc.org/symmetrypointgroup-td.html
                 gpname, axes = _search_toi(rawsys)
                 return gpname, rawsys.charge_center, axes
 
@@ -127,7 +131,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 n = 1
         except RotationAxisNotFound:
 # Some quasi symmetric system may cheat the inertia momentum.  If any of
-# the symmetry inequivalent single atom does not sit the possible rotation
+# the symmetry inequivalent single atom does not sit on the possible rotation
 # axis, RotationAxisNotFound will be raised. We temporarily label this system
 # with highest rotation axis C1
             n = 1
@@ -135,7 +139,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
         #print('Highest C_n = C%d' % n)
         if n >= 2:
             if c2x is not None:
-                if rawsys.iden_op(householder(axes[2])):
+                if all(rawsys.symmetric_for(householder(axes[2]))):
                     gpname = 'D%dh' % n
                 elif rawsys.detect_icenter():
                     gpname = 'D%dd' % n
@@ -147,18 +151,19 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 gpname = 'C%dv' % n
                 yaxis = numpy.cross(axes[2], mirrorx)
                 axes = numpy.array((mirrorx, yaxis, axes[2]))
-            elif rawsys.iden_op(householder(axes[2])): # xy-mirror
+            elif all(rawsys.symmetric_for(householder(axes[2]))): # xy-mirror
                 gpname = 'C%dh' % n
-            elif rawsys.iden_op(-rotation_mat(axes[2], numpy.pi/n)): # rotate and inverse
+            elif all(rawsys.symmetric_for(numpy.dot(rotation_mat(axes[2], numpy.pi/n),
+                                                    householder(axes[2])))): # improper rotation
                 gpname = 'S%d' % (n*2)
             else:
                 gpname = 'C%d' % n
             return gpname, rawsys.charge_center, axes
 
         else:
-            is_c2x = rawsys.iden_op(rotation_mat(axes[0], numpy.pi))
-            is_c2y = rawsys.iden_op(rotation_mat(axes[1], numpy.pi))
-            is_c2z = rawsys.iden_op(rotation_mat(axes[2], numpy.pi))
+            is_c2x = all(rawsys.symmetric_for(rotation_mat(axes[0], numpy.pi)))
+            is_c2y = all(rawsys.symmetric_for(rotation_mat(axes[1], numpy.pi)))
+            is_c2z = all(rawsys.symmetric_for(rotation_mat(axes[2], numpy.pi)))
 # rotate to old axes, as close as possible?
             if is_c2z and is_c2x and is_c2y:
                 if rawsys.detect_icenter():
@@ -171,22 +176,22 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                     axes = axes[[1,2,0]]
                 if is_c2y:
                     axes = axes[[2,0,1]]
-                if rawsys.iden_op(householder(axes[2])):
+                if all(rawsys.symmetric_for(householder(axes[2]))):
                     gpname = 'C2h'
-                elif rawsys.iden_op(householder(axes[0])):
+                elif all(rawsys.symmetric_for(householder(axes[0]))):
                     gpname = 'C2v'
                 else:
                     gpname = 'C2'
             else:
                 if rawsys.detect_icenter():
                     gpname = 'Ci'
-                elif rawsys.iden_op(householder(axes[0])):
+                elif all(rawsys.symmetric_for(householder(axes[0]))):
                     gpname = 'Cs'
                     axes = axes[[1,2,0]]
-                elif rawsys.iden_op(householder(axes[1])):
+                elif all(rawsys.symmetric_for(householder(axes[1]))):
                     gpname = 'Cs'
                     axes = axes[[2,0,1]]
-                elif rawsys.iden_op(householder(axes[2])):
+                elif all(rawsys.symmetric_for(householder(axes[2]))):
                     gpname = 'Cs'
                 else:
                     gpname = 'C1'
@@ -212,9 +217,13 @@ def subgroup(gpname, axes):
         return 'Coov', axes
     elif gpname in ('Oh',):
         return 'D2h', alias_axes(axes, numpy.eye(3))
+    elif gpname in ('O',):
+        return 'D2', alias_axes(axes, numpy.eye(3))
     elif gpname in ('Ih',):
-        return 'Cs', axes[[2,0,1]]
-    elif gpname in ('Td',):
+        return 'Ci', alias_axes(axes, numpy.eye(3))
+    elif gpname in ('I',):
+        return 'C1', axes
+    elif gpname in ('Td', 'T', 'Th'):
         #x,y,z = axes
         #x = (x+y) / numpy.linalg.norm(x+y)
         #y = numpy.cross(z, x)
@@ -222,7 +231,10 @@ def subgroup(gpname, axes):
         return 'D2', alias_axes(axes, numpy.eye(3))
     elif re.search(r'S\d+', gpname):
         n = int(re.search(r'\d+', gpname).group(0))
-        return 'C%d'%(n//2), axes
+        if n % 2 == 0:
+            return 'C%d'%(n//2), axes
+        else:
+            return 'Ci', axes
     else:
         n = int(re.search(r'\d+', gpname).group(0))
         if re.search(r'D\d+d', gpname):
@@ -376,6 +388,7 @@ class SymmSys(object):
             coords.append([atoms[i][1] for i in lst])
             ksymb = mole._rm_digit(k)
             if ksymb != k or ksymb == 'GHOST':
+                # Put random charges on the decorated atoms
                 fake_chgs.append([chg1] * len(lst))
                 chg1 *= numpy.pi-2
             else:
@@ -403,18 +416,19 @@ class SymmSys(object):
         return groups
 
     def detect_icenter(self):
-        return self.iden_op(-1)
+        return all(self.symmetric_for(-1))
 
-    def iden_op(self, op):
+    def symmetric_for(self, op, decimals=None):
+        if decimals is None:
+            decimals = int(-numpy.log10(TOLERANCE)) - 1
         for lst in self.atomtypes.values():
             r0 = self.atoms[lst,1:]
             r1 = numpy.dot(r0, op)
-            if not numpy.allclose(sort_coords(r0), sort_coords(r1),
-                                  atol=TOLERANCE):
-                return False
-        return True
+            yield numpy.allclose(sort_coords(r0, decimals),
+                                 sort_coords(r1, decimals), atol=TOLERANCE)
 
     def search_c_highest(self, zaxis):
+        decimals = int(-numpy.log10(TOLERANCE)) - 1
         has_c2x = True
         has_mirrorx = True
         maybe_cn = []
@@ -425,7 +439,7 @@ class SymmSys(object):
             for lst in groups:
                 r0 = self.atoms[lst,1:]
                 zcos = numpy.around(numpy.einsum('ij,j->i', r0, zaxis),
-                                    decimals=PLACE-1)
+                                    decimals=decimals)
                 uniq_zcos = numpy.unique(zcos)
                 for d in uniq_zcos:
                     cn = (zcos==d).sum()
@@ -439,19 +453,20 @@ class SymmSys(object):
                 # distance to xy-mirror are identical
                 if has_c2x:
                     for d in uniq_zcos:
-                        if numpy.allclose(d, 0, atol=TOLERANCE): # plain which cross the orig
+                        if numpy.allclose(d, 0, atol=TOLERANCE): # plane which crosses the orig
                             r1 = r0[zcos==d]
-                            i1, i2 = numpy.tril_indices(len(r1))
-                            maybe_c2x.append(r1[i1] + r1[i2])
+                            maybe_c2x.extend([r1[i1]+r1[i2]
+                                              for i1 in range(len(r1))
+                                              for i2 in range(i1+1)])
                         elif d > TOLERANCE:
                             mirrord = abs(zcos+d)<TOLERANCE
                             if mirrord.sum() == (zcos==d).sum():
                                 above = r0[zcos==d]
                                 below = r0[mirrord]
                                 nelem = len(above)
-                                i1, i2 = numpy.indices((nelem,nelem))
-                                maybe_c2x.append(above[i1.flatten()] +
-                                                 below[i2.flatten()])
+                                maybe_c2x.extend([above[i1] + below[i2]
+                                                  for i1 in range(nelem)
+                                                  for i2 in range(nelem)])
                             else:
                                 # if the number of mirrored vectors are diff,
                                 # it's impossible to have c2x
@@ -461,35 +476,34 @@ class SymmSys(object):
                 if has_mirrorx:
                     for d in uniq_zcos:
                         r1 = r0[zcos==d]
-                        i1, i2 = numpy.tril_indices(len(r1))
-                        maybe_mirrorx.append(numpy.cross(zaxis, r1[i1]+r1[i2]))
+                        maybe_mirrorx.extend([numpy.cross(zaxis, r1[i1]+r1[i2])
+                                              for i1 in range(len(r1))
+                                              for i2 in range(i1+1)])
 
+        # C_{n/m} is also possible highest Cn if n is not prime number
         possible_cn = []
         for n in sorted(set(maybe_cn)):
             for i in range(2, n+1):
                 if n % i == 0:
                     possible_cn.append(i)
+        possible_cn = set(possible_cn)
 
-        r0 = self.atoms[:,1:]
-        n = 1
-        for i in sorted(set(possible_cn), reverse=True):
-            op = rotation_mat(zaxis, numpy.pi*2/i)
-            r1 = numpy.dot(r0, op)
-            if numpy.allclose(sort_coords(r0), sort_coords(r1),
-                              atol=TOLERANCE):
-                n = i
+        cn = 1
+        for i in sorted(possible_cn, reverse=True):
+            if all(self.symmetric_for(rotation_mat(zaxis, numpy.pi*2/i))):
+                cn = i
                 break
 
         #
-        # C2 perp to Cn and mirros on Cn
+        # Search for C2 perp to Cn and mirros on Cn
         #
 
         def pick_vectors(maybe_vec):
             maybe_vec = numpy.vstack(maybe_vec)
             # remove zero-vectors and duplicated vectors
             d = numpy.einsum('ij,ij->i', maybe_vec, maybe_vec)
+            maybe_vec /= numpy.sqrt(d + 1e-200).reshape(-1,1)
             maybe_vec = maybe_vec[d>TOLERANCE**2]
-            maybe_vec /= numpy.sqrt(d[d>TOLERANCE**2]).reshape(-1,1)
             maybe_vec = _remove_dupvec(maybe_vec) # also transfer to pseudo-vector
 
             # remove the C2x which can be related by Cn rotation along z axis
@@ -497,127 +511,154 @@ class SymmSys(object):
             for k, r1 in enumerate(maybe_vec):
                 if not seen[k]:
                     cos2r1 = numpy.einsum('j,ij->i', r1, maybe_vec[k+1:])
-                    for i in range(1,n):
-                        c = numpy.cos(numpy.pi*i/n) # no 2pi because of pseudo-vector
+                    for i in range(1,cn):
+                        c = numpy.cos(numpy.pi*i/cn) # no 2pi because of pseudo-vector
                         seen[k+1:][abs(cos2r1-c) < TOLERANCE] = True
 
-            possible_vec = maybe_vec[numpy.logical_not(seen)]
+            possible_vec = maybe_vec[~seen]
             return possible_vec
 
         c2x = None
         if has_c2x:
             possible_c2x = pick_vectors(maybe_c2x)
-            r0 = sort_coords(self.atoms[:,1:])
             for c in possible_c2x:
-                op = rotation_mat(c, numpy.pi)
-                r1 = numpy.dot(r0, op)
-                if numpy.allclose(sort_coords(r1), r0, atol=TOLERANCE):
+                if all(self.symmetric_for(rotation_mat(c, numpy.pi))):
                     c2x = c
                     break
 
         mirrorx = None
         if has_mirrorx:
             possible_mirrorx = pick_vectors(maybe_mirrorx)
-            r0 = sort_coords(self.atoms[:,1:])
             for c in possible_mirrorx:
-                op = householder(c)
-                r1 = numpy.dot(r0, op)
-                if numpy.allclose(sort_coords(r1), r0, atol=TOLERANCE):
+                if all(self.symmetric_for(householder(c))):
                     mirrorx = c
                     break
 
-        return n, c2x, mirrorx
+        return cn, c2x, mirrorx
 
 
 # T/Td/Th/O/Oh/I/Ih
 def _search_toi(rawsys):
-    def has_rotation(zaxis, n, coords):
-        op = rotation_mat(zaxis, numpy.pi*2/n)
-        r1 = numpy.dot(coords, op)
-        return numpy.allclose(sort_coords(coords), sort_coords(r1),
-                              atol=TOLERANCE)
-
-    def highest_c(zaxis, coords):
-        for n in (5, 4, 3):
-            if has_rotation(zaxis, n, coords):
-                return n
-        return 1
-
     maybe = []
-    maybe_axes = []
+    maybe_cn = []
     for atype in rawsys.atomtypes.values():
         groups = rawsys.group_atoms_by_distance(atype)
         for lst in groups:
-            if len(lst) > 1:
+            if len(lst) == 2:
+                r0 = coords[lst[0],1:]
+                r1 = coords[lst[1],1:]
+                maybe_cn.append(r1-r0)
+            elif len(lst) > 2:
                 coords = rawsys.atoms[lst,1:]
-                zaxis = rawsys.atoms[lst[0],1:]
-                if not parallel_vectors(zaxis, rawsys.atoms[lst[1],1:]):
-                    xaxis = rawsys.atoms[lst[1],1:]
-                else:
-                    xaxis = rawsys.atoms[lst[2],1:]
-                maybe_axes.append([zaxis,xaxis])
+                r0 = coords - coords[0]
+                distance_to_ref = pyscf.lib.norm(r0, axis=1)
+                equal_distance = abs(distance_to_ref[:,None] - distance_to_ref) < TOLERANCE
+# atoms of equal distances may be associated with rotation axis.
+                for i in range(2, len(coords)):
+                    for j in range(1,i):
+                        if equal_distance[i,j]:
+                            maybe_cn.append(numpy.cross(r0[i],r0[j]))
 
-                cn = highest_c(zaxis, coords)
-                if cn == 5:
-                    maybe.append('I')
-                    break
-                elif cn == 4:
-                    maybe.append('O')
-                    break
-                else: # C3 axis or fullerene
-                    zcos = numpy.around(numpy.einsum('ij,j->i', coords, zaxis),
-                                        decimals=PLACE-1)
-                    uniq_zcos = numpy.unique(zcos)
-                    for d in reversed(uniq_zcos):
-                        idx = numpy.where(zcos==d)[0]
-                        if len(idx) >= 2:
-                            r1, r2 = coords[idx[:2]]
-                            zaxis1 = numpy.cross(r2-zaxis, r1-zaxis)
-                            cn = highest_c(zaxis1, coords)
-                            if cn == 5:
-                                maybe.append('I')
-                                # xaxis on mirror
-                                maybe_axes[-1] = [zaxis1,zaxis]
-                                break
-                            elif cn == 4:
-                                maybe.append('O')
-                                maybe_axes[-1] = [zaxis1,zaxis]
-                                break
-                            elif cn == 3:
-                                maybe.append('T')
-                                xaxis = zaxis+r2
-                                zaxis = zaxis+r1
-                                maybe_axes[-1] = [zaxis,xaxis]
-                                break
-                            else:
-                                raise RotationAxisNotFound
-                    break # lst in rawsys.group_atoms_by_distance(atype)
+#
+# Determine the Highest C
+#
+    decimals = int(-numpy.log10(TOLERANCE)) - 1
+    def has_rotation(zaxis, n):
+        op = rotation_mat(zaxis, numpy.pi*2/n)
+        return all(rawsys.symmetric_for(op, decimals))
 
-    def make_axes(zx):
-        z, x = zx
+    maybe_cn = numpy.vstack(maybe_cn)
+    # remove zero-vectors and duplicated vectors
+    d = numpy.einsum('ij,ij->i', maybe_cn, maybe_cn)
+    maybe_cn /= numpy.sqrt(d + 1e-200).reshape(-1,1)
+    maybe_cn = maybe_cn[d>TOLERANCE**2]
+    maybe_cn = _remove_dupvec(maybe_cn) # also transfer to pseudo-vector
+
+#    maybe_cn = [numpy.array((0,0,1.))]
+#    print maybe_cn
+
+    def search_c5_c4_c3(maybe_cn):
+        for n in (5, 4, 3):
+            for zaxis in maybe_cn:
+                if has_rotation(zaxis, n):
+                    return n, zaxis
+        return 1, None
+
+    cn, zaxis = search_c5_c4_c3(maybe_cn)
+    if cn == 1:
+        raise RotationAxisNotFound
+
+    def make_axes(z, x):
         y = numpy.cross(z, x)
         x = numpy.cross(y, z) # because x might not perp to z
         x /= numpy.linalg.norm(x)
         y /= numpy.linalg.norm(y)
         z /= numpy.linalg.norm(z)
         return numpy.array((x,y,z))
-    if 'T' in maybe:
-# FIXME
-        gpname = 'Td'
-        axes = make_axes(maybe_axes[maybe.index('T')])
-    elif 'O' in maybe:
+
+    if cn == 3:
+# There are more C3 axes associated to one atom, search for other C3 axes.
+# The angular between two C3 axes is arccos(-1/3)
+        cos = numpy.dot(maybe_cn, zaxis)
+        maybe_c3 = maybe_cn[(abs(cos+1./3) < TOLERANCE) |
+                            (abs(cos-1./3) < TOLERANCE)]
+        for c3 in maybe_c3:
+            if has_rotation(c3, 3):
+                break
+
+        if rawsys.detect_icenter():
+            gpname = 'Th'
+# Because C3 axes are on the mirror of Td, two C3 can determine a mirror.
+        elif all(rawsys.symmetric_for(householder(numpy.cross(zaxis, c3)))):
+            gpname = 'Td'
+        else:
+            gpname = 'T'
+
+        c3a = c3
+        c3b = numpy.dot(c3, rotation_mat(zaxis, numpy.pi*2/3))
+        c3c = numpy.dot(c3, rotation_mat(zaxis,-numpy.pi*2/3))
+        zaxis, xaxis = c3c+c3b, c3a+c3b
+
+    elif cn == 4:
         if rawsys.detect_icenter():
             gpname = 'Oh'
         else:
             gpname = 'O'
-        axes = make_axes(maybe_axes[maybe.index('O')])
-    else:
+
+        maybe_c4 = maybe_cn[(abs(numpy.dot(maybe_cn, zaxis)) < TOLERANCE)]
+        for c4 in maybe_c4:
+            if has_rotation(c4, 4):
+                xaxis = c4
+                break
+
+    else:  # cn == 5
         if rawsys.detect_icenter():
             gpname = 'Ih'
         else:
             gpname = 'I'
-        axes = make_axes(maybe_axes[maybe.index('I')])
-    return gpname, axes
+
+# The angular between two C5 axes is arccos(1/numpy.sqrt(5))
+        cos_c5 = 1/numpy.sqrt(5)
+        cos = numpy.dot(maybe_cn, zaxis)
+        maybe_c5 = maybe_cn[(abs(cos+cos_c5) < TOLERANCE) |
+                            (abs(cos-cos_c5) < TOLERANCE)]
+        for c5 in maybe_c5:
+            if has_rotation(c5, 3):
+                break
+
+        if abs(numpy.dot(c5, zaxis)+cos_c5) < TOLERANCE:
+            c5 = -c5
+        c5s = numpy.array([c5,
+                           numpy.dot(c5, rotation_mat(zaxis, numpy.pi*2/5)),
+                           numpy.dot(c5, rotation_mat(zaxis, numpy.pi*4/5)),
+                           numpy.dot(c5, rotation_mat(zaxis, numpy.pi*6/5)),
+                           numpy.dot(c5, rotation_mat(zaxis, numpy.pi*8/5)),])
+        xaxis = c5s[0] + c5s[1]
+        maybe_zaxis = zaxis + c5s
+        where_zaxis = numpy.argmin(abs(numpy.dot(maybe_zaxis, xaxis)))
+        zaxis = maybe_zaxis[where_zaxis]
+
+    return gpname, make_axes(zaxis, xaxis)
 
 
 def _pesudo_vectors(vs):
