@@ -631,7 +631,7 @@ def cosmo_for_casci(mc, cosmo):
             if ci0 is None:
                 ci0 = self.ci
 
-            if self.verbose >= logger.WARN:
+            if self.verbose >= lib.logger.WARN:
                 self.check_sanity()
             self.dump_flags()
 
@@ -709,6 +709,7 @@ def cosmo_for_casci(mc, cosmo):
                 self.e_tot += e_cosmo
 
             if self.canonicalization:
+                log = lib.logger.Logger(self.stdout, self.verbose)
                 if isinstance(self.e_cas, (float, numpy.number)):
                     self.canonicalize_(self.mo_coeff, self.ci,
                                        cas_natorb=self.natorb, verbose=log)
