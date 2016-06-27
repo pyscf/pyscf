@@ -645,11 +645,15 @@ class _NumInt(pyscf.dft.numint._NumInt):
             self.cell = cell
             self.kpt = kpt
             self.coords = grids.coords
+            if comp == 1:
+                shape = (ngrids, nao)
+            else:
+                shape = (comp, ngrids, nao)
             with h5py.File(self.ao.name, 'w') as f:
                 if abs(kpt).sum() < 1e-9:  # gamma point
-                    f.create_dataset('ao', (ngrids,nao), 'f8')
+                    f.create_dataset('ao', shape, 'f8')
                 else:
-                    f.create_dataset('ao', (ngrids,nao), 'c16')
+                    f.create_dataset('ao', shape, 'c16')
                 for ip0 in range(0, ngrids, blksize):
                     ip1 = min(ngrids, ip0+blksize)
                     coords = grids.coords[ip0:ip1]
@@ -795,12 +799,16 @@ class _KNumInt(pyscf.dft.numint._NumInt):
             id(self.coords) != id(grids.coords)):
             self.cell = cell
             self.kpts = kpts
+            if comp == 1:
+                shape = (ngrids, nao)
+            else:
+                shape = (comp, ngrids, nao)
             with h5py.File(self.ao.name, 'w') as f:
                 for k, kpt in enumerate(kpts):
                     if abs(kpt).sum() < 1e-9:  # gamma point
-                        f.create_dataset('ao/%d'%k, (ngrids,nao), 'f8')
+                        f.create_dataset('ao/%d'%k, shape, 'f8')
                     else:
-                        f.create_dataset('ao/%d'%k, (ngrids,nao), 'c16')
+                        f.create_dataset('ao/%d'%k, shape, 'c16')
                 for ip0 in range(0, ngrids, blksize):
                     ip1 = min(ngrids, ip0+blksize)
                     coords = grids.coords[ip0:ip1]
