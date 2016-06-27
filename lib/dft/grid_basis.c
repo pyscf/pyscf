@@ -2,6 +2,7 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "cint.h"
@@ -68,18 +69,80 @@ next_blk:
         }
 }
 
-void VXCoriginal_becke(double *out, double *g, int n)
+void VXCgen_grid(double *out, double *coords, double *atm_coords,
+                 double *radii_table, int natm, int ngrids)
 {
-        int i;
-        double s;
-#pragma omp parallel default(none) \
-        shared(out, g, n) private(i, s)
-{
-#pragma omp for nowait schedule(static)
-        for (i = 0; i < n; i++) {
-                s = (3 - g[i]*g[i]) * g[i] * .5;
-                s = (3 - s*s) * s * .5;
-                out[i] = (3 - s*s) * s * .5;
+        int i, j, n;
+        double dx, dy, dz, dist;
+        double *grid_dist = malloc(sizeof(double) * natm*ngrids);
+        for (i = 0; i < natm; i++) {
+                for (n = 0; n < ngrids; n++) {
+                        dx = coords[n*3+0] - atm_coords[i*3+0];
+                        dy = coords[n*3+1] - atm_coords[i*3+1];
+                        dz = coords[n*3+2] - atm_coords[i*3+2];
+                        grid_dist[i*ngrids+n] = sqrt(dx*dx + dy*dy + dz*dz);
+                }
         }
+
+        for (n = 0; n < natm*ngrids; n++) {
+                out[n] = 1;
+        }
+
+#pragma omp parallel default(none) \
+        shared(out, grid_dist, atm_coords, radii_table, natm, ngrids) \
+        private(i, j, n, dx, dy, dz)
+{
+        double *buf = malloc(sizeof(double) * natm*ngrids);
+        for (i = 0; i < natm*ngrids; i++) {
+                buf[i] = 1;
+        }
+        int ij;
+        double fac;
+        double g[ngrids];
+#pragma omp for nowait schedule(static)
+        for (ij = 0; ij < natm*natm; ij++) {
+                i = ij / natm;
+                j = ij % natm;
+                if (i <= j) {
+                        continue;
+                }
+
+                dx = atm_coords[i*3+0] - atm_coords[j*3+0];
+                dy = atm_coords[i*3+1] - atm_coords[j*3+1];
+                dz = atm_coords[i*3+2] - atm_coords[j*3+2];
+                fac = 1 / sqrt(dx*dx + dy*dy + dz*dz);
+
+                for (n = 0; n < ngrids; n++) {
+                        g[n] = grid_dist[i*ngrids+n] - grid_dist[j*ngrids+n];
+                        g[n] *= fac;
+                }
+                if (radii_table != NULL) {
+                        fac = radii_table[i*natm+j];
+                        for (n = 0; n < ngrids; n++) {
+                                g[n] += fac * (1 - g[n]*g[n]);
+                        }
+                }
+                for (n = 0; n < ngrids; n++) {
+                        g[n] = (3 - g[n]*g[n]) * g[n] * .5;
+                }
+                for (n = 0; n < ngrids; n++) {
+                        g[n] = (3 - g[n]*g[n]) * g[n] * .5;
+                }
+                for (n = 0; n < ngrids; n++) {
+                        g[n] = (3 - g[n]*g[n]) * g[n] * .5;
+                        g[n] *= .5;
+                }
+                for (n = 0; n < ngrids; n++) {
+                        buf[i*ngrids+n] *= .5 - g[n];
+                        buf[j*ngrids+n] *= .5 + g[n];
+                }
+        }
+#pragma omp critical
+        for (i = 0; i < natm*ngrids; i++) {
+                out[i] *= buf[i];
+        }
+        free(buf);
 }
+        free(grid_dist);
 }
+
