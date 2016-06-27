@@ -10,9 +10,9 @@ class KnowValues(unittest.TestCase):
     def test_lda_grid30(self):
         cell = pbcgto.Cell()
         cell.unit = 'B'
-        L = 60
+        L = 10
         cell.h = np.diag([L]*3)
-        cell.gs = np.array([30]*3)
+        cell.gs = np.array([20]*3)
         cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
 # these are some exponents which are not hard to integrate
         cell.basis = { 'He': [[0, (0.8, 1.0)],
@@ -26,7 +26,7 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'LDA,VWN_RPA'
         mf.kpt = np.ones(3)
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -2.3464949914151378, 8)
+        self.assertAlmostEqual(e1, -2.6409616064015591, 8)
 
     def test_pp_RKS(self):
         cell = pbcgto.Cell()

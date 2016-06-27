@@ -4,8 +4,10 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import tempfile
 import ctypes
 import numpy
+import h5py
 from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 import pyscf.lib
 import pyscf.dft
@@ -570,6 +572,9 @@ class _NumInt(pyscf.dft.numint._NumInt):
     def __init__(self, kpt=numpy.zeros(3)):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpt = kpt
+        self.cell = None
+        self.coords = numpy.zeros((1,3))
+        self.ao = tempfile.NamedTemporaryFile(prefix='numint')
 
     def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0,
                 shl_slice=None, non0tab=None, out=None, verbose=None):
@@ -634,18 +639,37 @@ class _NumInt(pyscf.dft.numint._NumInt):
             kpt1 = kpt_band
             kpt2 = kpt
 
-        for ip0 in range(0, ngrids, blksize):
-            ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0 = non0tab[ip0//BLKSIZE:]
-            if kpt_band is None or abs(kpt1-kpt2).sum() < 1e-9:
-                ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpt, deriv=deriv)
-            else:
-                ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
-                ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv)
-            yield ao_k1, ao_k2, non0, weight, coords
-            ao_k1 = ao_k2 = None
+        if (self.cell is None or id(cell) != id(self.cell) or
+            abs(self.kpt - kpt).sum() > 1e-9 or
+            id(self.coords) != id(grids.coords)):
+            self.cell = cell
+            self.kpt = kpt
+            self.coords = grids.coords
+            with h5py.File(self.ao.name, 'w') as f:
+                if abs(kpt).sum() < 1e-9:  # gamma point
+                    f.create_dataset('ao', (ngrids,nao), 'f8')
+                else:
+                    f.create_dataset('ao', (ngrids,nao), 'c16')
+                for ip0 in range(0, ngrids, blksize):
+                    ip1 = min(ngrids, ip0+blksize)
+                    coords = grids.coords[ip0:ip1]
+                    f['ao'][ip0:ip1] = self.eval_ao(cell, coords, kpt, deriv=deriv)
+
+        with h5py.File(self.ao.name, 'r') as f:
+            for ip0 in range(0, ngrids, blksize):
+                ip1 = min(ngrids, ip0+blksize)
+                coords = grids.coords[ip0:ip1]
+                weight = grids.weights[ip0:ip1]
+                non0 = non0tab[ip0//BLKSIZE:]
+                if kpt_band is None or abs(kpt1-kpt2).sum() < 1e-9:
+                    #:ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpt, deriv=deriv)
+                    ao_k1 = ao_k2 = f['ao'][ip0:ip1]
+                else:
+                    ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
+                    #:ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv)
+                    ao_k2 = f['ao'][ip0:ip1]
+                yield ao_k1, ao_k2, non0, weight, coords
+                ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
         return pyscf.dft.numint._NumInt._gen_rho_evaluator(self, cell, dms, 0)
@@ -660,6 +684,9 @@ class _KNumInt(pyscf.dft.numint._NumInt):
     def __init__(self, kpts=numpy.zeros((1,3))):
         pyscf.dft.numint._NumInt.__init__(self)
         self.kpts = numpy.reshape(kpts, (-1,3))
+        self.cell = None
+        self.coords = numpy.zeros((1,3))
+        self.ao = tempfile.NamedTemporaryFile(prefix='numint')
 
     def eval_ao(self, cell, coords, kpts=numpy.zeros((1,3)), deriv=0, relativity=0,
                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
@@ -763,21 +790,42 @@ class _KNumInt(pyscf.dft.numint._NumInt):
             if abs(kpts[where]-kpt1).sum() > 1e-9:
                 where = None
 
-        for ip0 in range(0, ngrids, blksize):
-            ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            non0 = non0tab[ip0//BLKSIZE:]
-            if kpt_band is None:
-                ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv)
-            else:
-                ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv)
-                if where is None:
-                    ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
+        if (self.cell is None or id(cell) != id(self.cell) or
+            abs(self.kpts - kpts).sum() > 1e-9 or
+            id(self.coords) != id(grids.coords)):
+            self.cell = cell
+            self.kpts = kpts
+            with h5py.File(self.ao.name, 'w') as f:
+                for k, kpt in enumerate(kpts):
+                    if abs(kpt).sum() < 1e-9:  # gamma point
+                        f.create_dataset('ao/%d'%k, (ngrids,nao), 'f8')
+                    else:
+                        f.create_dataset('ao/%d'%k, (ngrids,nao), 'c16')
+                for ip0 in range(0, ngrids, blksize):
+                    ip1 = min(ngrids, ip0+blksize)
+                    coords = grids.coords[ip0:ip1]
+                    ao_kpts = self.eval_ao(cell, coords, kpts, deriv=deriv)
+                    for k in range(nkpts):
+                        f['ao/%d'%k][ip0:ip1] = ao_kpts[k]
+
+        with h5py.File(self.ao.name, 'r') as f:
+            for ip0 in range(0, ngrids, blksize):
+                ip1 = min(ngrids, ip0+blksize)
+                coords = grids.coords[ip0:ip1]
+                weight = grids.weights[ip0:ip1]
+                non0 = non0tab[ip0//BLKSIZE:]
+                if kpt_band is None:
+                    #:ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv)
+                    ao_k1 = ao_k2 = [f['ao/%d'%k][ip0:ip1] for k in range(nkpts)]
                 else:
-                    ao_k1 = [ao_k2[where]]
-            yield ao_k1, ao_k2, non0, weight, coords
-            ao_k1 = ao_k2 = None
+                    #:ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv)
+                    ao_k2 = [f['ao/%d'%k][ip0:ip1] for k in range(nkpts)]
+                    if where is None:
+                        ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
+                    else:
+                        ao_k1 = [ao_k2[where]]
+                yield ao_k1, ao_k2, non0, weight, coords
+                ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=1):
         if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
