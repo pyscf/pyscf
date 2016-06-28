@@ -8,11 +8,9 @@ import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 
 import ase
 import ase.dft.kpoints
-
-NGS = 8
+from ase.lattice import bulk
 
 def make_primitive_cell(ngs):
-    from ase.lattice import bulk
     ase_atom = bulk('C', 'diamond', a=3.5668)
 
     cell = pbcgto.Cell()
@@ -25,13 +23,13 @@ def make_primitive_cell(ngs):
     cell.gs = np.array([ngs,ngs,ngs])
 
     #cell.nimgs = np.array([7,7,7])
-    #cell.verbose = 4
+    cell.verbose = 0
     cell.build()
     return cell
 
 class KnowValues(unittest.TestCase):
     def xtest_gamma(self):
-        cell = make_primitive_cell(NGS)
+        cell = make_primitive_cell(8)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
@@ -39,7 +37,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -10.2214263103747, 8)
 
     def xtest_kpt_222(self):
-        cell = make_primitive_cell(NGS)
+        cell = make_primitive_cell(8)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
         kmf = pbcdft.KRKS(cell, abs_kpts)
@@ -64,7 +62,7 @@ class KnowValues(unittest.TestCase):
         ekpt = kmf.scf()
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
-        supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2, 
+        supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2,
                                nk[1]*ngs + (nk[1]-1)//2,
                                nk[2]*ngs + (nk[2]-1)//2])
         #supcell.verbose = 7
@@ -75,9 +73,9 @@ class KnowValues(unittest.TestCase):
         #mf.verbose = 7
         esup = mf.scf()/np.prod(nk)
 
-        print "kpt sampling energy =", ekpt
-        print "supercell energy    =", esup
-        self.assertAlmostEqual(ekpt, esup, 8)
+        #print("kpt sampling energy =", ekpt)
+        #print("supercell energy    =", esup)
+        self.assertAlmostEqual(ekpt, esup, 5)
 
 
 if __name__ == '__main__':

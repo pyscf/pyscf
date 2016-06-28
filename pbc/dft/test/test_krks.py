@@ -8,6 +8,8 @@ import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 import ase
 import ase.lattice
 import ase.dft.kpoints
+from ase.lattice.cubic import Diamond
+from ase.lattice import bulk
 
 LATTICE_CONST = 3.5668
 
@@ -20,25 +22,23 @@ def build_cell(ase_atom, ngs):
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    #cell.verbose = 4
+    cell.verbose = 0
     cell.build()
     return cell
 
 class KnowValues(unittest.TestCase):
     def test_klda8_cubic_gamma(self):
-        from ase.lattice.cubic import Diamond
         ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
         cell = build_cell(ase_atom, 8)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
         e1 = mf.scf()
-        print "mf._ecoul =", mf._ecoul
-        print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -44.8952124954005, 8)
+        #print "mf._ecoul =", mf._ecoul
+        #print "mf._exc =", mf._exc
+        self.assertAlmostEqual(e1, -44.892671432668408, 8)
 
     def test_klda8_cubic_kpt_222(self):
-        from ase.lattice.cubic import Diamond
         ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
         cell = build_cell(ase_atom, 8)
@@ -48,24 +48,22 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
         e1 = mf.scf()
-        print "mf._ecoul =", mf._ecoul
-        print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -45.4292039673842, 8)
+        #print "mf._ecoul =", mf._ecoul
+        #print "mf._exc =", mf._exc
+        self.assertAlmostEqual(e1, -45.426092381006072, 8)
 
     def test_klda8_primitive_gamma(self):
-        from ase.lattice import bulk
         ase_atom = bulk('C', 'diamond', a=LATTICE_CONST)
         cell = build_cell(ase_atom, 8)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
         e1 = mf.scf()
-        print "mf._ecoul =", mf._ecoul
-        print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -10.2214263103746, 8)
+        #print "mf._ecoul =", mf._ecoul
+        #print "mf._exc =", mf._exc
+        self.assertAlmostEqual(e1, -10.221426938778345, 8)
 
     def test_klda8_primitive_kpt_222(self):
-        from ase.lattice import bulk
         ase_atom = bulk('C', 'diamond', a=LATTICE_CONST)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
         cell = build_cell(ase_atom, 8)
@@ -75,9 +73,9 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
         e1 = mf.scf()
-        print "mf._ecoul =", mf._ecoul
-        print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -11.3536435234899, 8)
+        #print "mf._ecoul =", mf._ecoul
+        #print "mf._exc =", mf._exc
+        self.assertAlmostEqual(e1, -11.353643738291005, 8)
 
 
 if __name__ == '__main__':

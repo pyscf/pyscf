@@ -104,13 +104,6 @@ class KRKS(khf.KRHF):
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
-    @khf.KRHF.kpts.setter
-    def kpts(self, x):
-        x = np.reshape(x, (-1,3))
-        if abs(self.with_df.kpts-x).sum() > 1e-9:
-            self._numint = numint._KNumInt(x)
-            self.with_df.kpts = x
-
     get_veff = get_veff
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
