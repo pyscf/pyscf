@@ -93,7 +93,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
-          --enable-shared LIBS=-lm
+          --enable-shared --disable-fortran LIBS=-lm
   )
 endif()
 if(ENABLE_XCFUN)
