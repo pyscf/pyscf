@@ -12,14 +12,20 @@ import sys
 import time
 from functools import reduce
 import numpy
-import pyscf.lib
-import pyscf.gto
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.lib.parameters as param
+from pyscf.lib import parameters as param
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
 
-
+# flatten([[XX, XY, XZ],
+#          [YX, YY, YZ],
+#          [ZX, ZY, ZZ]])
+TENSOR_IDX = numpy.arange(9)
+# flatten([[XX, YX, ZX],
+#          [XY, YY, ZY],
+#          [XZ, YZ, ZZ]])
+TENSOR_TRANSPOSE = TENSOR_IDX.reshape(3,3).T.flatten()
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     if shielding_nuc is None:
         shielding_nuc = range(1, mol.natm+1)
@@ -39,8 +45,7 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
         h11[8] += trh11
         if gauge_orig is None:
             g11 = mol.intor('cint1e_a01gp_sph', 9)
-            # (mu,B) => (B,mu)
-            h11 = h11 + g11[numpy.array((0,3,6,1,4,7,2,5,8))]
+            h11 = h11 + g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
         a11 = [numpy.einsum('ij,ji', dm0, (x+x.T)*.5) for x in h11]
         msc_dia.append(a11)
         #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
@@ -134,7 +139,7 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
     return mo10, mo_e10
 
 
-class NMR(pyscf.lib.StreamObject):
+class NMR(lib.StreamObject):
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
@@ -233,7 +238,7 @@ class NMR(pyscf.lib.StreamObject):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         log = logger.Logger(self.stdout, self.verbose)
         h1 = make_h10(mol, dm0, gauge_orig, log)
-        pyscf.lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
     def make_s10(self, mol=None, gauge_orig=None):

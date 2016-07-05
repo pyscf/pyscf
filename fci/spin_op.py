@@ -108,7 +108,8 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
 def spin_square0(fcivec, norb, nelec):
     '''Spin square for RHF-FCI CI wfn only (obtained from spin-degenerated
     Hamiltonian)'''
-    ss = numpy.einsum('ij,ij->', fcivec, contract_ss(fcivec, norb, nelec))
+    ci1 = contract_ss(fcivec, norb, nelec)
+    ss = numpy.einsum('ij,ij->', fcivec.reshape(ci1.shape), ci1)
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
@@ -121,6 +122,12 @@ def _bi_trace(dm2, ovlp1, ovlp2):
     return numpy.einsum('jilk,ij,kl->', dm2, ovlp1, ovlp2)
 
 def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
+    '''Local spin expectation value, which is defined as
+
+    <CI|ao><ao|S^2|CI>
+
+    For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
+    '''
     if isinstance(ovlp, numpy.ndarray):
         nao = ovlp.shape[0]
         if len(aolst) == 0:

@@ -13,8 +13,7 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
-import pyscf.gto
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
@@ -490,18 +489,18 @@ class RHF(UHF):
 def _jk_triu_(vj, vk, hermi):
     if hermi == 0:
         if vj.ndim == 2:
-            vj = pyscf.lib.hermi_triu(vj, 1)
+            vj = lib.hermi_triu_(vj, 1)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = pyscf.lib.hermi_triu(vj[i], 1)
+                vj[i] = lib.hermi_triu_(vj[i], 1)
     else:
         if vj.ndim == 2:
-            vj = pyscf.lib.hermi_triu(vj, hermi)
-            vk = pyscf.lib.hermi_triu(vk, hermi)
+            vj = lib.hermi_triu_(vj, hermi)
+            vk = lib.hermi_triu_(vk, hermi)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = pyscf.lib.hermi_triu(vj[i], hermi)
-                vk[i] = pyscf.lib.hermi_triu(vk[i], hermi)
+                vj[i] = lib.hermi_triu_(vj[i], hermi)
+                vk[i] = lib.hermi_triu_(vk[i], hermi)
     return vj, vk
 
 
@@ -635,6 +634,7 @@ def _proj_dmll(mol_nr, dm_nr, mol):
 
 
 if __name__ == '__main__':
+    import pyscf.gto
     mol = pyscf.gto.Mole()
     mol.verbose = 5
     mol.output = 'out_dhf'

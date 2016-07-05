@@ -10,7 +10,7 @@ Restricted Open-shell Hartree-Fock
 from functools import reduce
 import numpy
 import pyscf.gto
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
@@ -331,17 +331,16 @@ class ROHF(hf.RHF):
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     get_fock = get_fock
-
     get_occ = get_occ
 
-    @pyscf.lib.with_doc(get_grad.__doc__)
+    @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
 
-    @pyscf.lib.with_doc(make_rdm1.__doc__)
+    @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
@@ -349,7 +348,7 @@ class ROHF(hf.RHF):
 
     energy_elec = energy_elec
 
-    @pyscf.lib.with_doc(uhf.get_veff.__doc__)
+    @lib.with_doc(uhf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()

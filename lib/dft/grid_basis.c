@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include "cint.h"
+#include "config.h"
 
 // 128s42p21d12f8g6h4i3j 
 #define NCTR_CART      128

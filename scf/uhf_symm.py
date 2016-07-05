@@ -7,9 +7,9 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
-from pyscf.lib import logger
+from pyscf import lib
 from pyscf import symm
+from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
@@ -23,7 +23,7 @@ def analyze(mf, verbose=logger.DEBUG):
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     mol = mf.mol
-    log = pyscf.lib.logger.Logger(mf.stdout, verbose)
+    log = logger.Logger(mf.stdout, verbose)
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
     orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -386,7 +386,7 @@ class UHF(uhf.UHF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
-    @pyscf.lib.with_doc(get_irrep_nelec.__doc__)
+    @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ

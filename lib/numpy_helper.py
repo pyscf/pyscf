@@ -307,7 +307,7 @@ def transpose(a, axes=None, inplace=False, out=None):
                out.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(BLOCK_DIM))
         elif a.ndim > 2:
-            raise NotImplementedError
+            raise NotImplementedError('input array is not C-contiguous')
         else:
             r1 = c1 = 0
             for c0 in range(0, acol-BLOCK_DIM, BLOCK_DIM):
@@ -453,8 +453,11 @@ def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
     numpy.asarray function but more efficient.
     '''
-    if not isinstance(a, numpy.ndarray):
-        a = numpy.vstack(a).reshape(-1, *(a[0].shape))
+    try:
+        a0_shape = numpy.shape(a[0])
+        a = numpy.vstack(a).reshape(-1, *a0_shape)
+    except (TypeError, ValueError):
+        pass
     return numpy.asarray(a, dtype, order)
 
 def norm(x, ord=None, axis=None):

@@ -5,7 +5,7 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
@@ -616,7 +616,7 @@ class UHF(hf.SCF):
     def eig(self, fock, s):
         e_a, c_a = hf.SCF.eig(self, fock[0], s)
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
-        return pyscf.lib.asarray((e_a,e_b)), pyscf.lib.asarray((c_a,c_b))
+        return lib.asarray((e_a,e_b)), lib.asarray((c_a,c_b))
 
     get_fock = get_fock
 
@@ -628,7 +628,7 @@ class UHF(hf.SCF):
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
 
-    @pyscf.lib.with_doc(make_rdm1.__doc__)
+    @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -680,7 +680,7 @@ class UHF(hf.SCF):
             vj, vk = hf.SCF.get_jk(self, mol, dm.reshape(-1,nao,nao), hermi)
         return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
-    @pyscf.lib.with_doc(get_veff.__doc__)
+    @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
@@ -714,7 +714,7 @@ class UHF(hf.SCF):
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    @pyscf.lib.with_doc(spin_square.__doc__)
+    @lib.with_doc(spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
@@ -725,16 +725,16 @@ class UHF(hf.SCF):
 
     canonicalize = canonicalize
 
-    @pyscf.lib.with_doc(det_ovlp.__doc__)
+    @lib.with_doc(det_ovlp.__doc__)
     def det_ovlp(self, mo1, mo2, occ1, occ2, ovlp=None):
         if ovlp is None: ovlp = self.get_ovlp()
         return det_ovlp(mo1, mo2, occ1, occ2, ovlp)
 
-    @pyscf.lib.with_doc(make_asym_dm.__doc__)
+    @lib.with_doc(make_asym_dm.__doc__)
     def make_asym_dm(self, mo1, mo2, occ1, occ2, x):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
 
-    @pyscf.lib.with_doc(dip_moment.__doc__)
+    @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()

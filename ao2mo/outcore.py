@@ -697,14 +697,14 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
                 dj = ao_loc[j+1] - ao_loc[j]
                 lstdij.append(di*dj)
 
-    ijsh_range = group_segs_filling_block(lstdij, max_iobuf)
+    ijsh_range = balance_segs(lstdij, max_iobuf)
 
     if max_aobuf is not None:
         max_aobuf = max(1, max_aobuf)
         def div_each_iobuf(ijstart, ijstop, buflen):
 # to fill each iobuf, AO integrals may need to be fill to aobuf several times
             return (ijstart, ijstop, buflen,
-                    group_segs_filling_block(lstdij, max_aobuf, ijstart, ijstop))
+                    balance_segs(lstdij, max_aobuf, ijstart, ijstop))
         ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]
     return ijsh_range
 
@@ -716,7 +716,7 @@ def _stand_sym_code(sym):
     else:
         return 's' + sym
 
-def group_segs_filling_block(segs_lst, blksize, start_id=0, stop_id=None):
+def balance_segs(segs_lst, blksize, start_id=0, stop_id=None):
     if stop_id is None:
         stop_id = start_id + len(segs_lst)
     end_id = start_id + 1

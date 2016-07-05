@@ -27,7 +27,6 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1, 4], [2, 3], [5, 6]])
 
-
         atoms = ringhat(5, u)
         atoms = atoms[5:]
         atoms[1][0] = 'C1'

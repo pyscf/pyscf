@@ -13,7 +13,7 @@ import copy
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf import gto
 from pyscf import symm
 from pyscf.lib import logger
@@ -484,7 +484,7 @@ def newton(mf):
             log.info('keyframe_interval_rate = %g', self.keyframe_interval_rate)
             log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
             log.info('max_memory %d MB (current use %d MB)',
-                     self.max_memory, pyscf.lib.current_memory()[0])
+                     self.max_memory, lib.current_memory()[0])
 
         def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                      diis_start_cycle=None, level_shift_factor=None,

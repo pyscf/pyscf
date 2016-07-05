@@ -17,9 +17,9 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
-from pyscf.lib import logger
+from pyscf import lib
 from pyscf import symm
+from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import rohf
 from pyscf.scf import chkfile
@@ -35,7 +35,7 @@ def analyze(mf, verbose=logger.DEBUG):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    log = pyscf.lib.logger.Logger(mf.stdout, verbose)
+    log = logger.Logger(mf.stdout, verbose)
     mol = mf.mol
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
@@ -364,7 +364,7 @@ class RHF(hf.RHF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
-    @pyscf.lib.with_doc(get_irrep_nelec.__doc__)
+    @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ
@@ -717,7 +717,7 @@ class ROHF(rohf.ROHF):
         if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
 
-    @pyscf.lib.with_doc(canonicalize.__doc__)
+    @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
         dm = self.make_rdm1(mo_coeff, mo_occ)
         if fock is None:

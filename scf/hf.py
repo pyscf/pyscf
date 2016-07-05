@@ -13,9 +13,8 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.gto
-import pyscf.lib
-import pyscf.gto.ecp
+from pyscf import gto
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
@@ -101,7 +100,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
 
-    cond = pyscf.lib.cond(s1e)
+    cond = lib.cond(s1e)
     logger.debug(mf, 'cond(S) = %s', cond)
     if numpy.max(cond)*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
@@ -256,11 +255,11 @@ def init_guess_by_minao(mol):
     from pyscf.scf import addons
 
     def minao_basis(symb, nelec_ecp):
-        basis_add = pyscf.gto.basis.load('ano', symb)
+        basis_add = gto.basis.load('ano', symb)
         occ = []
         basis_new = []
 # coreshl defines the core shells to be removed in the initial guess
-        coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+        coreshl = gto.ecp.core_configuration(nelec_ecp)
         #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, nfrac = atom_hf.frac_occ(symb, l)
@@ -288,7 +287,7 @@ def init_guess_by_minao(mol):
     for symb in atmlst:
         if symb != 'GHOST':
             nelec_ecp = nelec_ecp_dic[symb]
-            stdsymb = pyscf.gto.mole._std_symbol(symb)
+            stdsymb = gto.mole._std_symbol(symb)
             occ_add, basis_add = minao_basis(stdsymb, nelec_ecp)
             occdic[symb] = occ_add
             basis[symb] = basis_add
@@ -301,7 +300,7 @@ def init_guess_by_minao(mol):
             new_atom.append(mol._atom[ia])
     occ = numpy.hstack(occ)
 
-    pmol = pyscf.gto.Mole()
+    pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     c = addons.project_mo_nr2nr(pmol, 1, mol)
 
@@ -898,7 +897,7 @@ def unpack_uniq_var(dx, mo_occ):
 
 
 
-class SCF(pyscf.lib.StreamObject):
+class SCF(lib.StreamObject):
     '''SCF base class.   non-relativistic RHF.
 
     Attributes:
@@ -1030,11 +1029,11 @@ class SCF(pyscf.lib.StreamObject):
         if self.chkfile:
             logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
         logger.info(self, 'max_memory %d MB (current use %d MB)',
-                    self.max_memory, pyscf.lib.current_memory()[0])
+                    self.max_memory, lib.current_memory()[0])
         return self
 
 
-    @pyscf.lib.with_doc(eig.__doc__)
+    @lib.with_doc(eig.__doc__)
     def eig(self, h, s):
         return eig(h, s)
 
@@ -1047,10 +1046,9 @@ class SCF(pyscf.lib.StreamObject):
         return get_ovlp(mol)
 
     get_fock = get_fock
-
     get_occ = get_occ
 
-    @pyscf.lib.with_doc(get_grad.__doc__)
+    @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
@@ -1065,18 +1063,18 @@ class SCF(pyscf.lib.StreamObject):
                                        overwrite_mol=False)
         return self
 
-    @pyscf.lib.with_doc(init_guess_by_minao.__doc__)
+    @lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
         return init_guess_by_minao(mol)
 
-    @pyscf.lib.with_doc(init_guess_by_atom.__doc__)
+    @lib.with_doc(init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from superpostion of atomic densties.')
         return init_guess_by_atom(mol)
 
-    @pyscf.lib.with_doc(init_guess_by_1e.__doc__)
+    @lib.with_doc(init_guess_by_1e.__doc__)
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
@@ -1086,9 +1084,9 @@ class SCF(pyscf.lib.StreamObject):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    @pyscf.lib.with_doc(init_guess_by_chkfile.__doc__)
+    @lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=True):
-        if isinstance(chkfile, pyscf.gto.Mole):
+        if isinstance(chkfile, gto.Mole):
             raise TypeError('''
     You see this error message because of the API updates.
     The first argument is chkfile name.''')
@@ -1120,7 +1118,7 @@ class SCF(pyscf.lib.StreamObject):
         return dm
 
     # full density matrix for RHF
-    @pyscf.lib.with_doc(make_rdm1.__doc__)
+    @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -1180,7 +1178,7 @@ class SCF(pyscf.lib.StreamObject):
         opt.direct_scf_tol = self.direct_scf_tol
         return opt
 
-    @pyscf.lib.with_doc(get_jk.__doc__)
+    @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
@@ -1203,7 +1201,7 @@ class SCF(pyscf.lib.StreamObject):
         '''
         return self.get_jk(mol, dm, hermi)[1]
 
-    @pyscf.lib.with_doc(get_veff.__doc__)
+    @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 # Be carefule with the effects of :attr:`SCF.direct_scf` on this function
         if mol is None: mol = self.mol
@@ -1216,19 +1214,19 @@ class SCF(pyscf.lib.StreamObject):
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5
 
-    @pyscf.lib.with_doc(analyze.__doc__)
+    @lib.with_doc(analyze.__doc__)
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
-    @pyscf.lib.with_doc(mulliken_pop.__doc__)
+    @lib.with_doc(mulliken_pop.__doc__)
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
-    @pyscf.lib.with_doc(mulliken_meta.__doc__)
+    @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
@@ -1243,7 +1241,7 @@ class SCF(pyscf.lib.StreamObject):
 
     canonicalize = canonicalize
 
-    @pyscf.lib.with_doc(dip_moment.__doc__)
+    @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
@@ -1252,7 +1250,7 @@ class SCF(pyscf.lib.StreamObject):
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
-        return nbf**4/1e6+pyscf.lib.current_memory()[0] < self.max_memory*.95
+        return nbf**4/1e6+lib.current_memory()[0] < self.max_memory*.95
 
     def density_fit(self, auxbasis='weigend+etb', with_df=None):
         import pyscf.df.df_jk
@@ -1328,7 +1326,7 @@ class RHF(SCF):
 # Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
 
-    @pyscf.lib.with_doc(get_jk.__doc__)
+    @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
@@ -1349,7 +1347,7 @@ class RHF(SCF):
 
 
 if __name__ == '__main__':
-    mol = pyscf.gto.Mole()
+    mol = gto.Mole()
     mol.verbose = 5
     mol.output = None
 
