@@ -109,7 +109,7 @@ def load_mol(chkfile):
             Name of chkfile.
 
     Returns:
-        A Mole object
+        A (initialized/built) Mole object
 
     Examples:
 
@@ -122,7 +122,7 @@ def load_mol(chkfile):
     try:
         with h5py.File(chkfile, 'r') as fh5:
             mol = pyscf.gto.loads(fh5['mol'].value)
-    except TypeError:
+    except:
 # Compatibility to the old serialization format
 # TODO: remove it in future release
         from numpy import array
