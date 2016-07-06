@@ -59,7 +59,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     t1 = (time.clock(), time.time())
     if mydf._cderi is None:
         mydf.build()
-        t1 = log.timer('Init get_j_kpts', *t1)
+        t1 = log.timer_debug1('Init get_j_kpts', *t1)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = pwdf_jk._format_dms(dm_kpts, kpts)
@@ -120,7 +120,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     vI *= weight
 
     pqkR = LkR = pqkI = LkI = coulG = None
-    t1 = log.timer('get_j pass 1 to compute J(G)', *t1)
+    t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
 
     if kpt_band is None:
         kpts_band = kpts
@@ -162,7 +162,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         vj_kpts[:,k] += numpy.dot(jaux, Lpq)
         vj_kpts[:,k] += numpy.dot(rho_tot, jpq)
     vj_kpts = vj_kpts.reshape(-1,nband,nao,nao)
-    t1 = log.timer('get_j pass 2', *t1)
+    t1 = log.timer_debug1('get_j pass 2', *t1)
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
         if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
@@ -179,7 +179,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     t1 = (time.clock(), time.time())
     if mydf._cderi is None:
         mydf.build()
-        t1 = log.timer('Init get_k_kpts', *t1)
+        t1 = log.timer_debug1('Init get_k_kpts', *t1)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = pwdf_jk._format_dms(dm_kpts, kpts)
@@ -330,6 +330,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
                 make_kpt(kptj-kpti)
 
     vk_kpts *= 1./nkpts
+    if abs(kpts).sum() < 1e-9 and abs(kpts_band).sum() < 1e-9:
+        vk_kpts = vk_kpts.real
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
         if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
@@ -363,7 +365,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     t1 = (time.clock(), time.time())
     if mydf._cderi is None:
         mydf.build()
-        t1 = log.timer('Init get_jk', *t1)
+        t1 = log.timer_debug1('Init get_jk', *t1)
 
     dm = numpy.asarray(dm, order='C')
     dms = pwdf_jk._format_dms(dm, [kpt])

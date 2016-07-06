@@ -59,7 +59,7 @@ def ft_aopair(mol, Gv, shls_slice=None, hermi=False,
     ao_loc = numpy.asarray(mol.ao_loc_nr(), dtype=numpy.int32)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    mat = numpy.empty((nGv,ni,nj), order='F', dtype=numpy.complex)
+    mat = numpy.empty((nGv,ni,nj), order='F', dtype=numpy.complex128)
 
     fn(intor, eval_gz, mat.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*4)(*shls_slice),

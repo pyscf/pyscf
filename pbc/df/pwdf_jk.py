@@ -158,6 +158,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
                 make_kpt(kptj-kpti)
 
     vk_kpts *= 1./nkpts
+    if abs(kpts).sum() < 1e-9 and abs(kpts_band).sum() < 1e-9:
+        vk_kpts = vk_kpts.real
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
         if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF

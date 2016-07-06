@@ -12,7 +12,7 @@ from pyscf.lib import logger
 from pyscf.pbc import tools
 
 
-def get_eri(mydf, kpts=None):
+def get_eri(mydf, kpts=None, compact=True):
     cell = mydf.cell
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
@@ -58,6 +58,8 @@ def get_eri(mydf, kpts=None):
             pqkI *= vG
             lib.dot(pqkR, pqkR.T, 1, eriR, 1)
             lib.dot(pqkI, pqkI.T, 1, eriR, 1)
+        if not compact:
+            eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
         return eriR
 
 ####################
