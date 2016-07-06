@@ -86,10 +86,13 @@ def _map(fn, ngs, nv):
         for i in range(i0,i1):
             out[i] = fn(i)
     nproc = lib.num_threads()
-    seg = (nv+nproc-1) // nproc
-    ps = [Process(target=f, args=(i0,i1)) for i0,i1 in lib.prange(0, nv, seg)]
-    [p.start() for p in ps]
-    [p.join() for p in ps]
+    if nproc > 1:
+        seg = (nv+nproc-1) // nproc
+        ps = [Process(target=f, args=(i0,i1)) for i0,i1 in lib.prange(0, nv, seg)]
+        [p.start() for p in ps]
+        [p.join() for p in ps]
+    else:
+        f(0, nv)
     return out.T
 
 def map_fft(vs, gs):
