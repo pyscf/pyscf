@@ -9,28 +9,29 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
+from pyscf.pbc import tools
 
 
-def get_eri(xdf, kpts=None):
-    cell = xdf.cell
+def get_eri(mydf, kpts=None):
+    cell = mydf.cell
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
     elif numpy.shape(kpts) == (3,):
         kptijkl = numpy.vstack([kpts]*4)
     else:
         kptijkl = numpy.reshape(kpts, (4,3))
-    if xdf._cderi is None:
-        xdf.build()
+    if mydf._cderi is None:
+        mydf.build()
 
     kpti, kptj, kptk, kptl = kptijkl
-    auxcell = xdf.auxcell
+    auxcell = mydf.auxcell
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
-    for Lpq in xdf.load_Lpq(kptijkl[:2]):
+    for Lpq in mydf.load_Lpq(kptijkl[:2]):
         pass
-    for jpq in xdf.load_j3c(kptijkl[:2]):
+    for jpq in mydf.load_j3c(kptijkl[:2]):
         pass
 
 ####################
@@ -42,18 +43,19 @@ def get_eri(xdf, kpts=None):
         lib.dot(lib.dot(Lpq.T, j2c), Lpq, -1, eriR, 1)
         jpq = j2c = None
 
-        max_memory = (xdf.max_memory - lib.current_memory()[0]) * .8
+        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         trilidx = numpy.tril_indices(nao)
-        for pqkR, LkR, pqkI, LkI, coulG \
-                in xdf.pw_loop(cell, auxcell, xdf.gs, kptijkl[:2], max_memory):
+        for pqkR, LkR, pqkI, LkI, p0, p1 \
+                in mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory):
             pqkR = numpy.asarray(pqkR.reshape(nao,nao,-1)[trilidx], order='C')
             pqkI = numpy.asarray(pqkI.reshape(nao,nao,-1)[trilidx], order='C')
             # Lpq is real here
             lib.dot(Lpq.T, LkR, -1, pqkR, 1)
             lib.dot(Lpq.T, LkI, -1, pqkI, 1)
-            coulG = numpy.sqrt(coulG)
-            pqkR *= coulG
-            pqkI *= coulG
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
             lib.dot(pqkR, pqkR.T, 1, eriR, 1)
             lib.dot(pqkI, pqkI.T, 1, eriR, 1)
         return eriR
@@ -84,16 +86,17 @@ def get_eri(xdf, kpts=None):
         LpqI = Lpq.imag.copy()
         Lpq = Lpqc = None
 
-        max_memory = (xdf.max_memory - lib.current_memory()[0]) * .8
-        for pqkR, LkR, pqkI, LkI, coulG \
-                in xdf.pw_loop(cell, auxcell, xdf.gs, kptijkl[:2], max_memory):
-            coulG = numpy.sqrt(coulG)
+        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+        for pqkR, LkR, pqkI, LkI, p0, p1 \
+                in mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory):
+            vG = numpy.sqrt(coulG[p0:p1])
             lib.dot(LpqR.T, LkR, -1, pqkR, 1)
             lib.dot(LpqR.T, LkI, -1, pqkI, 1)
             lib.dot(LpqI.T, LkR, -1, pqkI, 1)
             lib.dot(LpqI.T, LkI,  1, pqkR, 1)
-            pqkR *= coulG
-            pqkI *= coulG
+            pqkR *= vG
+            pqkI *= vG
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
             lib.dot(pqkR, pqkR.T, 1, eriR, 1)
             lib.dot(pqkI, pqkI.T, 1, eriR, 1)
@@ -119,10 +122,10 @@ def get_eri(xdf, kpts=None):
             Lpq = lib.unpack_tril(Lpq).reshape(naux, -1)
         if jpq.shape[1] == nao_pair:
             jpq = lib.unpack_tril(jpq).reshape(naux, -1)
-        for Mrs in xdf.load_Lpq(kptijkl[2:]):
+        for Mrs in mydf.load_Lpq(kptijkl[2:]):
             if Mrs.shape[1] == nao_pair:
                 Mrs = lib.unpack_tril(Mrs).reshape(naux, -1)
-        for jrs in xdf.load_j3c(kptijkl[2:]):
+        for jrs in mydf.load_j3c(kptijkl[2:]):
             if jrs.shape[1] == nao_pair:
                 jrs = lib.unpack_tril(jrs).reshape(naux, -1)
 
@@ -143,11 +146,13 @@ def get_eri(xdf, kpts=None):
         MrsR = Mrs.real.copy()
         MrsI = Mrs.imag.copy()
         Lpq = Mrs = None
-        max_memory = (xdf.max_memory - lib.current_memory()[0]) * .4
+
+        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
 
 #:        for (pqkR, LkR, pqkI, LkI, coulG), (rskR, MkR, rskI, MkI, coulG1) in \
-#:                lib.izip(xdf.pw_loop(cell, auxcell, xdf.gs, kptijkl[:2], max_memory),
-#:                         xdf.pw_loop(cell, auxcell, xdf.gs,-kptijkl[2:], max_memory)):
+#:                lib.izip(mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory),
+#:                         mydf.pw_loop(cell, auxcell, mydf.gs,-kptijkl[2:], max_memory)):
 #:            coulG = numpy.sqrt(coulG)
 #:            pqk = pqkR + pqkI*1j
 #:            Lk  = LkR  + LkI *1j
@@ -161,15 +166,15 @@ def get_eri(xdf, kpts=None):
 #:            eriR += v.real
 #:            eriI += v.imag
 
-        for (pqkR, LkR, pqkI, LkI, coulG), (rskR, MkR, rskI, MkI, coulG1) in \
-                lib.izip(xdf.pw_loop(cell, auxcell, xdf.gs, kptijkl[:2], max_memory),
-                         xdf.pw_loop(cell, auxcell, xdf.gs,-kptijkl[2:], max_memory)):
+        for (pqkR, LkR, pqkI, LkI, p0, p1), (rskR, MkR, rskI, MkI, q0, q1) in \
+                lib.izip(mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory),
+                         mydf.pw_loop(cell, auxcell, mydf.gs,-kptijkl[2:], max_memory)):
             lib.dot(LpqR.T, LkR, -1, pqkR, 1)
             lib.dot(LpqR.T, LkI, -1, pqkI, 1)
             lib.dot(LpqI.T, LkR, -1, pqkI, 1)
             lib.dot(LpqI.T, LkI,  1, pqkR, 1)
-            pqkR *= coulG
-            pqkI *= coulG
+            pqkR *= coulG[p0:p1]
+            pqkI *= coulG[p0:p1]
             lib.dot(MrsR.T, MkR, -1, rskR, 1)
             lib.dot(MrsR.T, MkI, -1, rskI, 1)
             lib.dot(MrsI.T, MkR, -1, rskI, 1)
@@ -182,11 +187,11 @@ def get_eri(xdf, kpts=None):
         return eriR + eriI*1j
 
 
-def general(xdf, mo_coeffs, kpts=None, compact=True):
+def general(mydf, mo_coeffs, kpts=None, compact=True):
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
 
-    eri = xdf.get_eri(kpts)
+    eri = mydf.get_eri(kpts)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry

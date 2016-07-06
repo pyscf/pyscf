@@ -21,6 +21,7 @@ Installation
     - Numpy 1.8.0 or higher
     - Scipy 0.10 or higher (0.12.0 or higher for python 3.3, 3.4)
     - h5py 1.3.0 or higher (requires HDF5 1.8.4 or higher)
+    - ASE (optional, for PBC k-point sampling)
 
 * Compile core module
 

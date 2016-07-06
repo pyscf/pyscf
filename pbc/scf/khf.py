@@ -63,36 +63,8 @@ def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
         vj : (nkpts, nao, nao) ndarray
         or list of vj if the input dm_kpts is a list of DMs
     '''
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    nkpts = len(kpts)
-    ngs = len(coords)
-    dm_kpts = np.asarray(dm_kpts)
-    nao = dm_kpts.shape[-1]
-
-    ni = numint._KNumInt(kpts)
-    aoR_kpts = ni.eval_ao(cell, coords, kpts)
-    if kpt_band is not None:
-        aoR_kband = numint.eval_ao(cell, coords, kpt_band)
-
-    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
-    nset = dms.shape[0]
-
-    vjR = [get_vjR(cell, dms[i], aoR_kpts) for i in range(nset)]
-    if kpt_band is not None:
-        vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
-                   for i in range(nset)]
-        if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
-            vj_kpts = vj_kpts[0]
-        return lib.asarray(vj_kpts)
-    else:
-        vj_kpts = []
-        for i in range(nset):
-            vj = [cell.vol/ngs * lib.dot(aoR_k.T.conj()*vjR[i], aoR_k)
-                  for aoR_k in aoR_kpts]
-            vj_kpts.append(lib.asarray(vj))
-        return lib.asarray(vj_kpts).reshape(dm_kpts.shape)
+    from pyscf.pbc import df
+    return df.DF(cell).get_jk(dm_kpts, kpts, kpt_band, with_k=False)[0]
 
 
 def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
@@ -112,89 +84,9 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
         vk : (nkpts, nao, nao) ndarray
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    nkpts = len(kpts)
-    ngs = len(coords)
-    dm_kpts = np.asarray(dm_kpts)
-    nao = dm_kpts.shape[-1]
-
-    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
-    nset = dms.shape[0]
-
-    ni = numint._KNumInt(kpts)
-    aoR_kpts = ni.eval_ao(cell, coords, kpts)
-    if kpt_band is not None:
-        aoR_kband = numint.eval_ao(cell, coords, kpt_band)
-
-# J
-    vjR = [get_vjR(cell, dms[i], aoR_kpts) for i in range(nset)]
-    if kpt_band is not None:
-        vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
-                   for i in range(nset)]
-    else:
-        vj_kpts = []
-        for i in range(nset):
-            vj = [cell.vol/ngs * lib.dot(aoR_k.T.conj()*vjR[i], aoR_k)
-                  for aoR_k in aoR_kpts]
-            vj_kpts.append(lib.asarray(vj))
-    vj_kpts = lib.asarray(vj_kpts)
-    vjR = None
-
-# K
-    weight = 1./nkpts * (cell.vol/ngs)
-    vk_kpts = np.zeros_like(vj_kpts)
-    if kpt_band is not None:
-        for k2, kpt2 in enumerate(kpts):
-            aoR_dms = [lib.dot(aoR_kpts[k2], dms[i,k2]) for i in range(nset)]
-            vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kband, aoR_kpts[k2],
-                                     kpt_band, kpt2)
-            #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
-            #:            dm_kpts[k2], aoR_kband.conj(),
-            #:            vkR_k1k2, aoR_kpts[k2])
-            for i in range(nset):
-                tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
-                vk_kpts[i] += weight * lib.dot(aoR_kband.T.conj(), tmp_Rq)
-            vkR_k1k2 = None
-        if dm_kpts.ndim == 3:
-            vj_kpts = vj_kpts[0]
-            vk_kpts = vk_kpts[0]
-        return lib.asarray(vj_kpts), lib.asarray(vk_kpts)
-    else:
-        for k2, kpt2 in enumerate(kpts):
-            aoR_dms = [lib.dot(aoR_kpts[k2], dms[i,k2]) for i in range(nset)]
-            for k1, kpt1 in enumerate(kpts):
-                vkR_k1k2 = pbchf.get_vkR(mf, cell, aoR_kpts[k1], aoR_kpts[k2],
-                                         kpt1, kpt2)
-                for i in range(nset):
-                    tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
-                    vk_kpts[i,k1] += weight * lib.dot(aoR_kpts[k1].T.conj(), tmp_Rq)
-            vkR_k1k2 = None
-        return vj_kpts.reshape(dm_kpts.shape), vk_kpts.reshape(dm_kpts.shape)
-
-
-def get_vjR(cell, dm_kpts, aoR_kpts):
-    '''Get the real-space Hartree potential of the k-point sampled density matrix.
-
-    Returns:
-        vR : (ngs,) ndarray
-            The real-space Hartree potential at every grid point.
-    '''
-    from pyscf.pbc.dft import numint
-    nkpts = len(aoR_kpts)
-    coulG = tools.get_coulG(cell)
-
-    rhoR = 0
-    for k in range(nkpts):
-        rhoR += 1./nkpts*numint.eval_rho(cell, aoR_kpts[k], dm_kpts[k])
-    rhoG = tools.fft(rhoR, cell.gs)
-
-    vG = coulG*rhoG
-    vR = tools.ifft(vG, cell.gs)
-    if rhoR.dtype == np.double:
-        vR = vR.real
-    return vR
+    from pyscf.pbc import df
+    return df.DF(cell).get_jk(dm_kpts, kpts, kpt_band, with_j=False,
+                              exxdiv=mf.exxdiv)[0]
 
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
@@ -334,15 +226,15 @@ class KRHF(pyscf.scf.hf.RHF):
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
-        from pyscf.pbc.df import PWDF
+        from pyscf.pbc import df
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
 
+        self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
-        self.with_df = PWDF(cell)
         self.kpts = kpts
         self.direct_scf = False
 
@@ -376,59 +268,15 @@ class KRHF(pyscf.scf.hf.RHF):
         logger.debug(self, 'kpts = %s', self.kpts)
         logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        if self.exxdiv == 'vcut_ws':
-            if self.exx_built is False:
-                self.precompute_exx()
-            logger.info(self, 'WS alpha = %s', self.exx_alpha)
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
     def build(self, cell=None):
         pyscf.scf.hf.RHF.build(self, cell)
-        if self.exxdiv == 'vcut_ws':
-            self.precompute_exx()
-
-    def precompute_exx(self):
-        from pyscf.pbc import gto as pbcgto
-        from pyscf.pbc.dft import gen_grid
-        log = logger.Logger(self.stdout, self.verbose)
-        log.info("# Precomputing Wigner-Seitz EXX kernel")
-        Nk = tools.get_monkhorst_pack_size(self.cell, self.kpts)
-        log.info("# Nk = %d", Nk)
-        kcell = pbcgto.Cell()
-        kcell.atom = 'H 0. 0. 0.'
-        kcell.spin = 1
-        kcell.unit = 'B'
-        kcell.h = kcell._h = self.cell._h * Nk
-        Lc = 1.0/np.linalg.norm(np.linalg.inv(kcell.h.T), axis=0)
-        log.info("# Lc = %d", Lc)
-        Rin = Lc.min() / 2.0
-        log.info("# Rin = %d", Rin)
-        # ASE:
-        alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
-        kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc])
-        # QE:
-        #alpha = 3./Rin * np.sqrt(0.5)
-        #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
-        log.info("# kcell.gs FFT = %d", kcell.gs)
-        kcell.build(False,False)
-        vR = tools.ifft( tools.get_coulG(kcell), kcell.gs )
-        kngs = len(vR)
-        log.info("# kcell kngs = %d", kngs)
-        rs = gen_grid.gen_uniform_grids(kcell)
-        corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.h.T)
-        for i, rv in enumerate(rs):
-            # Minimum image convention to corners of kcell parallelepiped
-            r = np.linalg.norm(rv-corners, axis=1).min()
-            if np.isclose(r, 0.):
-                vR[i] = 2*alpha / np.sqrt(np.pi)
-            else:
-                vR[i] = scipy.special.erf(alpha*r) / r
-        vG = (kcell.vol/kngs) * tools.fft(vR, kcell.gs)
-        self.exx_alpha = alpha
-        self.exx_kcell = kcell
-        self.exx_q = kcell.Gv
-        self.exx_vq = vG
-        self.exx_built = True
-        log.info("# Finished precomputing")
+        #if self.exxdiv == 'vcut_ws':
+        #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
@@ -443,11 +291,11 @@ class KRHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if cell.pseudo is None:
-            nuc = self.with_df.get_nuc(cell, kpts)
-            t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
-            return [nuc[k] + t[k] for k, kpt in enumerate(self.kpts)]
+            nuc = self.with_df.get_nuc(kpts)
         else:
-            return get_hcore(self, cell, kpts)
+            nuc = self.with_df.get_pp(kpts)
+        t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
+        return lib.asarray(nuc) + lib.asarray(t)
 
     get_ovlp = get_ovlp
     get_occ = get_occ
@@ -458,7 +306,7 @@ class KRHF(pyscf.scf.hf.RHF):
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj = self.with_df.get_jk(cell, dm_kpts, hermi, kpts, kpt_band,
+        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpt_band,
                                  with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
         return vj
@@ -471,7 +319,8 @@ class KRHF(pyscf.scf.hf.RHF):
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj, vk = self.with_df.get_jk(cell, dm_kpts, hermi, kpts, kpt_band, mf=self)
+        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpt_band,
+                                     exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 

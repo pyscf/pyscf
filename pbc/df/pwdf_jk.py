@@ -14,43 +14,39 @@ from pyscf.lib import logger
 from pyscf.pbc import tools
 
 
-def get_j_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
-               kpts=numpy.zeros((1,3)), kpt_band=None, jkops=None):
-    log = logger.Logger(pwdf.stdout, pwdf.verbose)
+def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+    cell = mydf.cell
+    log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    dm_kpts = numpy.asarray(dm_kpts)
-    nao = dm_kpts.shape[-1]
-    nao_pair = nao * (nao+1) // 2
-    nkpts = len(kpts)
 
-    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
-    nset = dms.shape[0]
+    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
 
-    ngs = numpy.prod(pwdf.gs*2+1)
+    kpt_allow = numpy.zeros(3)
+    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs) / cell.vol
+
+    dmsR = dms.real.reshape(nset,nkpts,nao**2)
+    dmsI = dms.imag.reshape(nset,nkpts,nao**2)
+    ngs = len(coulG)
     vR = numpy.zeros((nset,ngs))
     vI = numpy.zeros((nset,ngs))
-    max_memory = (pwdf.max_memory - lib.current_memory()[0]) * .8
-    p0 = 0
-    for k, kpt, pqkR, pqkI, coulG \
-            in pwdf.ft_loop(cell, pwdf.gs, numpy.zeros(3), kpts, max_memory):
-        nG = len(coulG)
+    max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+    for k, pqkR, pqkI, p0, p1 \
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory):
         for i in range(nset):
-            dmR = dms[i,k].real.ravel()
-            dmI = dms[i,k].imag.ravel()
-            rhoR = numpy.dot(dmR, pqkR)
-            rhoR-= numpy.dot(dmI, pqkI)
-            rhoI = numpy.dot(dmR, pqkI)
-            rhoI+= numpy.dot(dmI, pqkR)
-            vR[i,p0:p0+nG] += rhoR * coulG
-            vI[i,p0:p0+nG] += rhoI * coulG
-        if k+1 == nkpts:
-            p0 += nG
+            rhoR = numpy.dot(dmsR[i,k], pqkR)
+            rhoR-= numpy.dot(dmsI[i,k], pqkI)
+            rhoI = numpy.dot(dmsR[i,k], pqkI)
+            rhoI+= numpy.dot(dmsI[i,k], pqkR)
+            vR[i,p0:p1] += rhoR * coulG[p0:p1]
+            vI[i,p0:p1] += rhoI * coulG[p0:p1]
     pqkR = pqkI = coulG = None
     weight = 1./len(kpts)
     vR *= weight
     vI *= weight
 
-    t1 = log.timer('get_j pass 1 to compute J(G)', *t1)
+    t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
 
     if kpt_band is None:
         kpts_band = kpts
@@ -60,19 +56,15 @@ def get_j_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
 
     vjR = numpy.zeros((nset,nband,nao*nao))
     vjI = numpy.zeros((nset,nband,nao*nao))
-    p0 = 0
-    for k, kpt, pqkR, pqkI, coulG \
-            in pwdf.ft_loop(cell, pwdf.gs, numpy.zeros(3), kpts_band, max_memory):
-        nG = len(coulG)
+    for k, pqkR, pqkI, p0, p1 \
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_band, max_memory):
         for i in range(nset):
-            vjR[i,k] += numpy.dot(pqkR, vR[i,p0:p0+nG])
-            vjR[i,k] += numpy.dot(pqkI, vI[i,p0:p0+nG])
-        if abs(kpt).sum() > 1e-9:  # if not gamma point
+            vjR[i,k] += numpy.dot(pqkR, vR[i,p0:p1])
+            vjR[i,k] += numpy.dot(pqkI, vI[i,p0:p1])
+        if abs(kpts_band[k]).sum() > 1e-9:  # if not gamma point
             for i in range(nset):
-                vjI[i,k] += numpy.dot(pqkI, vR[i,p0:p0+nG])
-                vjI[i,k] -= numpy.dot(pqkR, vI[i,p0:p0+nG])
-        if k+1 == nband:
-            p0 += nG
+                vjI[i,k] += numpy.dot(pqkI, vR[i,p0:p1])
+                vjI[i,k] -= numpy.dot(pqkR, vI[i,p0:p1])
     pqkR = pqkI = coulG = None
 
     if abs(kpts_band).sum() < 1e-9:  # gamma point
@@ -80,7 +72,7 @@ def get_j_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
     else:
         vj_kpts = vjR + vjI*1j
     vj_kpts = vj_kpts.reshape(-1,nband,nao,nao)
-    t1 = log.timer('get_j pass 2', *t1)
+    t1 = log.timer_debug1('get_j pass 2', *t1)
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
         if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
@@ -90,17 +82,14 @@ def get_j_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
     else:
         return vj_kpts.reshape(dm_kpts.shape)
 
-def get_k_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
-               kpts=numpy.zeros((1,3)), kpt_band=None):
-    log = logger.Logger(pwdf.stdout, pwdf.verbose)
+def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+    cell = mydf.cell
+    log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    dm_kpts = numpy.asarray(dm_kpts)
-    nao = dm_kpts.shape[-1]
-    nao_pair = nao * (nao+1) // 2
-    nkpts = len(kpts)
 
-    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
-    nset = dms.shape[0]
+    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
 
     if kpt_band is None:
         kpts_band = kpts
@@ -112,7 +101,7 @@ def get_k_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
     kk_todo = numpy.ones(kk_table.shape[:2], dtype=bool)
     vk_kpts = numpy.zeros((nset,nband,nao,nao), dtype=numpy.complex128)
 
-    max_memory = (pwdf.max_memory - lib.current_memory()[0]) * .8
+    max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     # K_pq = ( p{k1} i{k2} | i{k2} q{k1} )
     def make_kpt(kpt):  # kpt = kptj - kpti
         # search for all possible ki and kj that has ki-kj+kpt=0
@@ -126,18 +115,13 @@ def get_k_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
         if swap_2e and abs(kpt).sum() > 1e-9:
             kk_todo[kptj_idx,kpti_idx] = False
 
-        if vhfopt_or_mf is None:
-            vkcoulG = tools.get_coulG(cell, kpt, True, pwdf, pwdf.gs) / cell.vol
-        else:
-            vkcoulG = tools.get_coulG(cell, kpt, True, vhfopt_or_mf, pwdf.gs) / cell.vol
-        p0 = 0
+        vkcoulG = tools.get_coulG(cell, kpt, True, mydf, mydf.gs) / cell.vol
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
-        for k, kptj, pqkR, pqkI, coulG \
-                in pwdf.ft_loop(cell, pwdf.gs, kpt, kpts[kptj_idx], max_memory):
+        for k, pqkR, pqkI, p0, p1 \
+                in mydf.ft_loop(cell, mydf.gs, kpt, kpts[kptj_idx], max_memory):
             ki = kpti_idx[k]
             kj = kptj_idx[k]
-            nG = len(coulG)
-            coulG = numpy.sqrt(vkcoulG[p0:p0+nG])
+            coulG = numpy.sqrt(vkcoulG[p0:p1])
 
 # case 1: k_pq = (pi|iq)
             pqkR *= coulG
@@ -147,7 +131,9 @@ def get_k_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
             qpk = rsk.conj()
             for i in range(nset):
                 qsk = lib.dot(dms[i,kj], rsk.reshape(nao,-1)).reshape(nao,nao,-1)
-                vk_kpts[i,ki] += numpy.einsum('qpk,qsk->ps', qpk, qsk)
+                #:vk_kpts[i,ki] += numpy.einsum('qpk,qsk->ps', qpk, qsk)
+                vk_kpts[i,ki] += lib.dot(qpk.transpose(1,0,2).reshape(nao,-1),
+                                         qsk.transpose(1,0,2).reshape(nao,-1).T)
                 qsk = None
             rsk = qpk = None
 
@@ -157,12 +143,12 @@ def get_k_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
                 pqk = srk.reshape(nao,nao,-1).conj()
                 for i in range(nset):
                     prk = lib.dot(dms[i,ki].T, srk.reshape(nao,-1)).reshape(nao,nao,-1)
-                    vk_kpts[i,kj] += numpy.einsum('prk,pqk->rq', prk, pqk)
+                    #:vk_kpts[i,kj] += numpy.einsum('prk,pqk->rq', prk, pqk)
+                    vk_kpts[i,kj] += lib.dot(prk.transpose(1,0,2).reshape(nao,-1),
+                                             pqk.transpose(1,0,2).reshape(nao,-1).T)
                     prk = None
                 srk = pqk = None
 
-            if k+1 == nkptj:
-                p0 += nG
         pqkR = pqkI = coulG = None
         return None
 
@@ -188,53 +174,51 @@ def get_k_kpts(pwdf, cell, dm_kpts, hermi=1, vhfopt_or_mf=None,
 #
 ##################################################
 
-def get_j_kpt(pwdf, cell, dm, hermi=1, vhfopt_or_mf=None, kpt=numpy.zeros(3),
-              kpt_band=None):
-    return get_jk_kpt(pwdf, cell, dm, hermi, vhfopt, kpt, True, False)[0]
-
-def get_k_kpt(pwdf, cell, dm, hermi=1, vhfopt_or_mf=None, kpt=numpy.zeros(3),
-              kpt_band=None):
-    return get_jk_kpt(pwdf, cell, dm, hermi, vhfopt, kpt, True, False)[1]
-
-def get_jk(pwdf, cell, dm, hermi=1, vhfopt_or_mf=None, kpt=numpy.zeros(3),
+def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
            kpt_band=None, with_j=True, with_k=True):
     '''JK for given k-point'''
     vj = vk = None
     if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(pwdf, cell, [dm], hermi, vhfopt_or_mf, kpt, kpt_band)
+            vk = get_k_kpts(mydf, [dm], hermi, kpt, kpt_band)
         if with_j:
-            vj = get_j_kpts(pwdf, cell, [dm], hermi, vhfopt_or_mf, kpt, kpt_band)
+            vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
         return vj, vk
 
-    log = logger.Logger(pwdf.stdout, pwdf.verbose)
+    cell = mydf.cell
+    log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    dm = numpy.asarray(dm)
-    nao = dm.shape[-1]
-    nao_pair = nao * (nao+1) // 2
+
+    dm = numpy.asarray(dm, order='C')
+    dms = _format_dms(dm, [kpt])
+    nset, _, nao = dms.shape[:3]
+    dms = dms.reshape(nset,nao,nao)
+
     kptii = numpy.asarray((kpt,kpt))
+    kpt_allow = numpy.zeros(3)
     gamma_point = abs(kpt).sum() < 1e-9
 
-    dms = dm.reshape(-1,nao,nao)
-    nset = dms.shape[0]
-
+    if with_j:
+        vjcoulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs) / cell.vol
     if with_k:
         vk = numpy.zeros((nset,nao,nao), dtype=numpy.complex128)
-        if vhfopt_or_mf is None:
-            vkcoulG = tools.get_coulG(cell, kpt-kpt, True, pwdf, pwdf.gs)
-        else:
-            vkcoulG = tools.get_coulG(cell, kpt-kpt, True, vhfopt_or_mf, pwdf.gs)
-        vkcoulG *=  1./cell.vol
-    vjR = numpy.zeros((nset,nao*nao))
-    vjI = numpy.zeros((nset,nao*nao))
-    p0 = 0
-    max_memory = (pwdf.max_memory - lib.current_memory()[0]) * .8
-    for pqkR, pqkI, coulG in pwdf.pw_loop(cell, pwdf.gs, kptii, max_memory):
+        vkcoulG = tools.get_coulG(cell, kpt_allow, True, mydf, mydf.gs) / cell.vol
+
+    dmsR = dms.real.reshape(nset,nao**2)
+    dmsI = dms.imag.reshape(nset,nao**2)
+    vjR = numpy.zeros((nset,nao**2))
+    vjI = numpy.zeros((nset,nao**2))
+    max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+    for pqkR, pqkI, p0, p1 \
+            in mydf.pw_loop(cell, mydf.gs, kptii, max_memory):
         if with_j:
             for i in range(nset):
-                rhoR = numpy.dot(dms[i].ravel(), pqkR.reshape(nao**2,-1))
-                rhoI = numpy.dot(dms[i].ravel(), pqkI.reshape(nao**2,-1))
+                rhoR = numpy.dot(dmsR[i], pqkR)
+                rhoR-= numpy.dot(dmsI[i], pqkI)
+                rhoI = numpy.dot(dmsR[i], pqkI)
+                rhoI+= numpy.dot(dmsI[i], pqkR)
+                coulG = vjcoulG[p0:p1]
                 rhoR *= coulG
                 rhoI *= coulG
                 vjR[i] += numpy.dot(pqkR, rhoR)
@@ -244,11 +228,7 @@ def get_jk(pwdf, cell, dm, hermi=1, vhfopt_or_mf=None, kpt=numpy.zeros(3),
                     vjI[i] -= numpy.dot(pqkR, rhoI)
 
         if with_k:
-            if vhfopt_or_mf is not None:
-                nG = len(coulG)
-                coulG = vkcoulG[p0:p0+nG]
-                p0 += nG
-            coulG = numpy.sqrt(coulG)
+            coulG = numpy.sqrt(vkcoulG[p0:p1])
             pqkR *= coulG
             pqkI *= coulG
             rsk =(pqkR.reshape(nao,nao,-1).transpose(1,0,2) -
@@ -256,7 +236,9 @@ def get_jk(pwdf, cell, dm, hermi=1, vhfopt_or_mf=None, kpt=numpy.zeros(3),
             pqk =(pqkR+pqkI*1j).reshape(nao,nao,-1)
             for i in range(nset):
                 qsk = numpy.dot(dms[i], rsk.reshape(nao,-1)).reshape(nao,nao,-1)
-                vk[i] += numpy.einsum('ijG,jlG->il', pqk, qsk)
+                #:vk[i] += numpy.einsum('ijG,jlG->il', pqk, qsk)
+                vk[i] += lib.dot(pqk.reshape(nao,-1),
+                                 qsk.transpose(1,0,2).reshape(nao,-1).T)
     pqkR = pqkI = coulG = None
 
     if with_j:
@@ -271,6 +253,12 @@ def get_jk(pwdf, cell, dm, hermi=1, vhfopt_or_mf=None, kpt=numpy.zeros(3),
             vk = vk.real
         vk = vk.reshape(dm.shape)
     return vj, vk
+
+def _format_dms(dm_kpts, kpts):
+    nkpts = len(kpts)
+    nao = dm_kpts.shape[-1]
+    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
+    return dms
 
 
 if __name__ == '__main__':

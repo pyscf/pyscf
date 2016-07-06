@@ -81,7 +81,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
 
     aux_loc = auxcell.ao_loc_nr('ssc' in intor)
     buflen = max(8, int(max_memory*1e6/16/(nkptij*nao**2*comp)))
-    auxranges = pyscf.ao2mo.outcore.group_segs_filling_block(aux_loc[1:]-aux_loc[:-1], buflen)
+    auxranges = pyscf.ao2mo.outcore.balance_segs(aux_loc[1:]-aux_loc[:-1], buflen)
     buflen = max([x[2] for x in auxranges])
     buf = [numpy.zeros(nao*nao*buflen*comp, dtype=numpy.complex128)
            for k in range(nkptij)]

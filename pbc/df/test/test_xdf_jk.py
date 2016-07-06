@@ -146,7 +146,7 @@ class KnowValues(unittest.TestCase):
         mydf.kpts = numpy.random.random((4,3))
         mydf.gs = numpy.asarray((5,)*3)
         mydf.auxbasis = 'weigend'
-        vj = xdf_jk.get_j_kpts(mydf, cell, dm, 1, None, mydf.kpts)
+        vj = xdf_jk.get_j_kpts(mydf, dm, 1, None, mydf.kpts)
         self.assertAlmostEqual(finger(vj[0]), (0.75809296258436376-0.47108542280677335j)/4, 9)
         self.assertAlmostEqual(finger(vj[1]), (0.99241082422673799-0.18223267233036788j)/4, 9)
         self.assertAlmostEqual(finger(vj[2]), (0.94179957013540516-0.33286536411836043j)/4, 9)
@@ -162,7 +162,7 @@ class KnowValues(unittest.TestCase):
         mydf.gs = numpy.asarray((5,)*3)
         mydf.exxdiv = None
         mydf.auxbasis = 'weigend'
-        vk = xdf_jk.get_k_kpts(mydf, cell, dm, 0, mydf, mydf.kpts)
+        vk = xdf_jk.get_k_kpts(mydf, dm, 0, mydf, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (-11.344881397590214-4.2410705105331532j)  /4, 9)
         self.assertAlmostEqual(finger(vk[1]), (-29.79023682381176+0.29675103120189483j)  /4, 9)
         self.assertAlmostEqual(finger(vk[2]), (-10.326273314290356-5.7194950445332005j)  /4, 9)
@@ -185,7 +185,7 @@ class KnowValues(unittest.TestCase):
         mydf.kpts = kpts
         mydf.auxbasis = 'weigend'
         mydf.exxdiv = None
-        vk = xdf_jk.get_k_kpts(mydf, cell, dm, 0, mydf, mydf.kpts)
+        vk = xdf_jk.get_k_kpts(mydf, dm, 0, mydf, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (4.3347841925298098-0.062977291500864604j)/8, 9)
         self.assertAlmostEqual(finger(vk[1]), (2.8761015271990602+0.028849511945164479j)/8, 9)
         self.assertAlmostEqual(finger(vk[2]), (3.7000171799264021-0.052042703595784535j)/8, 9)
@@ -198,7 +198,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((8,nao,nao))
         dm = dm + dm.transpose(0,2,1)
-        vk = xdf_jk.get_k_kpts(mydf, cell, dm, 1, mydf, mydf.kpts)
+        vk = xdf_jk.get_k_kpts(mydf, dm, 1, mydf, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (8.7466094134745447-0.11794451574393096j) /8, 9)
         self.assertAlmostEqual(finger(vk[1]), (5.7628099655244203+0.069496695923544183j)/8, 9)
         self.assertAlmostEqual(finger(vk[2]), (7.1835369226567716-0.088737617515686484j)/8, 9)

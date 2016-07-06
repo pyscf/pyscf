@@ -96,6 +96,7 @@ class KRKS(khf.KRHF):
 # don't modify the following attributes, they are not input options
         self._ecoul = 0
         self._exc = 0
+        # Note Do not refer to .with_df._numint because gs/coords may be different
         self._numint = numint._KNumInt(kpts)
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 

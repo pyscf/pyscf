@@ -22,7 +22,7 @@ def get_pp_loc_part2(cell, kpt=np.zeros(3)):
         Zia = cell.atom_charge(ia)
         symb = cell.atom_symbol(ia)
         if symb not in cell._pseudo:
-            vlocG[ia] = cell.atom_charge(ia)
+            vlocG[ia] = 0
             continue
         pp = cell._pseudo[symb]
         rloc, nexp, cexp = pp[1:3+1]
@@ -140,6 +140,8 @@ def get_pp(cell, kpt=np.zeros(3)):
                                                    SPG_lm_aoG[j,:])
     vppnl *= (1./ngs**2)
 
+    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
+    vpploc += 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * ovlp
     return vpploc + vppnl
 
 
@@ -177,6 +179,26 @@ He
         dat = pp_int.get_pp_nl(cell, (kpt,kpt))
         self.assertAlmostEqual(np.linalg.norm(ref-dat[0]), 0, 12)
         self.assertAlmostEqual(np.linalg.norm(ref-dat[1]), 0, 12)
+
+        ref = get_pp_loc_part2(cell)
+        dat = pp_int.get_pp_loc_part2(cell)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+
+        ref = get_pp_loc_part2(cell, kpt)
+        dat = pp_int.get_pp_loc_part2(cell, kpt)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+
+    def test_pp_loc_part2(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
+        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
+                      'C' :'gth-szv',}
+        cell.pseudo = {'C':'gth-pade'}
+        cell.h = np.eye(3) * 2.5
+        cell.gs = [15] * 3
+        cell.build()
+        np.random.seed(1)
+        kpt = np.random.random(3)
 
         ref = get_pp_loc_part2(cell)
         dat = pp_int.get_pp_loc_part2(cell)

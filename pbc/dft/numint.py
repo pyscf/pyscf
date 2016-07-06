@@ -644,24 +644,9 @@ class _NumInt(pyscf.dft.numint._NumInt):
         if (self.cell is None or id(cell) != id(self.cell) or
             self._deriv < deriv or
             abs(self._kpt - kpt).sum() > 1e-9 or
-            id(self._coords) != id(grids.coords)):
-            self.cell = cell
-            self._kpt = kpt
-            self._deriv = deriv
-            self._coords = grids.coords
-            if comp == 1:
-                shape = (ngrids, nao)
-            else:
-                shape = (comp, ngrids, nao)
-            with h5py.File(self._ao.name, 'w') as f:
-                if abs(kpt).sum() < 1e-9:  # gamma point
-                    f.create_dataset('ao', shape, 'f8')
-                else:
-                    f.create_dataset('ao', shape, 'c16')
-                for ip0 in range(0, ngrids, blksize):
-                    ip1 = min(ngrids, ip0+blksize)
-                    coords = grids.coords[ip0:ip1]
-                    f['ao'][ip0:ip1] = self.eval_ao(cell, coords, kpt, deriv=deriv)
+            self._coords.shape != grids.coords.shape or
+            abs(self._coords[::64] - grids.coords[::64]).sum() > 1e-7):
+            self.cache_ao(cell, kpt, deriv, grids.coords, nao, blksize)
 
         with h5py.File(self._ao.name, 'r') as f:
             for ip0 in range(0, ngrids, blksize):
@@ -683,6 +668,26 @@ class _NumInt(pyscf.dft.numint._NumInt):
                     ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
                 yield ao_k1, ao_k2, non0, weight, coords
                 ao_k1 = ao_k2 = None
+
+    def cache_ao(self, cell, kpt, deriv, coords, nao, blksize=BLKSIZE):
+        self.cell = cell
+        self._kpt = kpt
+        self._deriv = deriv
+        self._coords = coords
+        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+        ngrids = coords.shape[0]
+        if comp == 1:
+            shape = (ngrids, nao)
+        else:
+            shape = (comp, ngrids, nao)
+        with h5py.File(self._ao.name, 'w') as f:
+            if abs(kpt).sum() < 1e-9:  # gamma point
+                f.create_dataset('ao', shape, 'f8')
+            else:
+                f.create_dataset('ao', shape, 'c16')
+            for ip0 in range(0, ngrids, blksize):
+                ip1 = min(ngrids, ip0+blksize)
+                f['ao'][ip0:ip1] = self.eval_ao(cell, coords[ip0:ip1], kpt, deriv=deriv)
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
         return pyscf.dft.numint._NumInt._gen_rho_evaluator(self, cell, dms, 0)
@@ -807,28 +812,11 @@ class _KNumInt(pyscf.dft.numint._NumInt):
 
         if (self.cell is None or id(cell) != id(self.cell) or
             self._deriv < deriv or
+            self._kpts.shape != kpts.shape or
             abs(self._kpts - kpts).sum() > 1e-9 or
-            id(self._coords) != id(grids.coords)):
-            self.cell = cell
-            self._kpts = kpts
-            self._deriv = deriv
-            self._coords = grids.coords
-            if comp == 1:
-                shape = (ngrids, nao)
-            else:
-                shape = (comp, ngrids, nao)
-            with h5py.File(self._ao.name, 'w') as f:
-                for k, kpt in enumerate(kpts):
-                    if abs(kpt).sum() < 1e-9:  # gamma point
-                        f.create_dataset('ao/%d'%k, shape, 'f8')
-                    else:
-                        f.create_dataset('ao/%d'%k, shape, 'c16')
-                for ip0 in range(0, ngrids, blksize):
-                    ip1 = min(ngrids, ip0+blksize)
-                    coords = grids.coords[ip0:ip1]
-                    ao_kpts = self.eval_ao(cell, coords, kpts, deriv=deriv)
-                    for k in range(nkpts):
-                        f['ao/%d'%k][ip0:ip1] = ao_kpts[k]
+            self._coords.shape != grids.coords.shape or
+            abs(self._coords[::64] - grids.coords[::64]).sum() > 1e-7):
+            self.cache_ao(cell, kpts, deriv, grids.coords, nao, blksize)
 
         with h5py.File(self._ao.name, 'r') as f:
             for ip0 in range(0, ngrids, blksize):
@@ -853,6 +841,31 @@ class _KNumInt(pyscf.dft.numint._NumInt):
                         ao_k1 = [ao_k2[where]]
                 yield ao_k1, ao_k2, non0, weight, coords
                 ao_k1 = ao_k2 = None
+
+    def cache_ao(self, cell, kpts, deriv, coords, nao, blksize=BLKSIZE):
+        with h5py.File(self._ao.name, 'w') as f:
+            self.cell = cell
+            self._kpts = kpts
+            self._deriv = deriv
+            self._coords = coords
+            nkpts = len(kpts)
+            comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+            ngrids = coords.shape[0]
+            if comp == 1:
+                shape = (ngrids, nao)
+            else:
+                shape = (comp, ngrids, nao)
+
+            for k, kpt in enumerate(kpts):
+                if abs(kpt).sum() < 1e-9:  # gamma point
+                    f.create_dataset('ao/%d'%k, shape, 'f8')
+                else:
+                    f.create_dataset('ao/%d'%k, shape, 'c16')
+            for ip0 in range(0, ngrids, blksize):
+                ip1 = min(ngrids, ip0+blksize)
+                ao_kpts = self.eval_ao(cell, coords[ip0:ip1], kpts, deriv=deriv)
+                for k in range(nkpts):
+                    f['ao/%d'%k][ip0:ip1] = ao_kpts[k]
 
     def _gen_rho_evaluator(self, cell, dms, hermi=1):
         if isinstance(dms, numpy.ndarray) and dms.ndim == 3:

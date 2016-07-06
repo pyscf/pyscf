@@ -131,9 +131,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
     # Here we 'wrap around' the high frequency k+G vectors into their lower
     # frequency counterparts.  Important if you want the gamma point and k-point
     # answers to agree
-    box_edge = np.dot(2.*np.pi*np.diag(np.asarray(gs)+0.5),
-                      np.linalg.inv(cell._h))
-    reduced_coords = np.dot(kG, np.linalg.inv(box_edge))
+    box_edge = np.linalg.solve(cell._h.T, 2.*np.pi*np.diag(np.asarray(gs)+0.5)).T
+    reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
     equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
     factor = np.trunc(reduced_coords)
     kG -= 2.*np.dot(np.sign(factor), box_edge)
@@ -166,26 +165,81 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = Nk*cell.vol*madelung(cell, kpts)
     elif mf.exxdiv == 'vcut_ws':
-        if mf.exx_built == False:
-            mf.precompute_exx()
+        if not hasattr(mf, '_ws_exx'):
+            mf._ws_exx = precompute_exx(cell, kpts)
+        exx_alpha = mf._ws_exx['alpha']
+        exx_kcell = mf._ws_exx['kcell']
+        exx_q = mf._ws_exx['q']
+        exx_vq = mf._ws_exx['vq']
+
         with np.errstate(divide='ignore',invalid='ignore'):
-            coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*mf.exx_alpha**2))) + 0j
+            coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*exx_alpha**2)))
         if np.linalg.norm(k) < 1e-8:
-            coulG[0] = np.pi / mf.exx_alpha**2
+            coulG[0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
-        gxyz = np.round(np.dot(kG, mf.exx_kcell.h)/(2*np.pi)).astype(int)
-        ngs = 2*np.asarray(mf.exx_kcell.gs)+1
+        gxyz = np.round(np.dot(kG, exx_kcell.h)/(2*np.pi)).astype(int)
+        ngs = 2*np.asarray(exx_kcell.gs)+1
         gxyz = (gxyz + ngs)%(ngs)
         qidx = (gxyz[:,0]*ngs[1] + gxyz[:,1])*ngs[2] + gxyz[:,2]
-        #qidx = [np.linalg.norm(mf.exx_q-kGi,axis=1).argmin() for kGi in kG]
-        maxqv = abs(mf.exx_q).max(axis=0)
+        #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
+        maxqv = abs(exx_q).max(axis=0)
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
-        coulG += mf.exx_vq[qidx] * is_lt_maxqv
+        coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
     #coulG[ coulG == np.inf ] = 0.0
     coulG[equal2boundary] = 0.0
 
     return coulG
+
+def precompute_exx(cell, kpts):
+    from pyscf.pbc import gto as pbcgto
+    from pyscf.pbc.dft import gen_grid
+    log = lib.logger.Logger(cell.stdout, cell.verbose)
+    log.debug("# Precomputing Wigner-Seitz EXX kernel")
+    Nk = get_monkhorst_pack_size(cell, kpts)
+    log.debug("# Nk = %s", Nk)
+
+    kcell = pbcgto.Cell()
+    kcell.atom = 'H 0. 0. 0.'
+    kcell.spin = 1
+    kcell.unit = 'B'
+    kcell.verbose = 0
+    kcell.h = kcell._h = cell._h * Nk
+    Lc = 1.0/lib.norm(np.linalg.inv(kcell.h.T), axis=0)
+    log.debug("# Lc = %s", Lc)
+    Rin = Lc.min() / 2.0
+    log.debug("# Rin = %s", Rin)
+    # ASE:
+    alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
+    log.info("WS alpha = %s", alpha)
+    kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
+    # QE:
+    #alpha = 3./Rin * np.sqrt(0.5)
+    #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
+    log.debug("# kcell.gs FFT = %s", kcell.gs)
+    kcell.build(False,False)
+    rs = gen_grid.gen_uniform_grids(kcell)
+    kngs = len(rs)
+    log.debug("# kcell kngs = %d", kngs)
+    corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.h.T)
+    #vR = np.empty(kngs)
+    #for i, rv in enumerate(rs):
+    #    # Minimum image convention to corners of kcell parallelepiped
+    #    r = lib.norm(rv-corners, axis=1).min()
+    #    if np.isclose(r, 0.):
+    #        vR[i] = 2*alpha / np.sqrt(np.pi)
+    #    else:
+    #        vR[i] = scipy.special.erf(alpha*r) / r
+    r = np.min([lib.norm(rs-c, axis=1) for c in corners], axis=0)
+    vR = scipy.special.erf(alpha*r) / (r+1e-200)
+    vR[r<1e-9] = 2*alpha / np.sqrt(np.pi)
+    vG = (kcell.vol/kngs) * fft(vR, kcell.gs)
+    ws_exx = {'alpha': alpha,
+              'kcell': kcell,
+              'q'    : kcell.Gv,
+              'vq'   : vG}
+    log.debug("# Finished precomputing")
+    return ws_exx
 
 
 def madelung(cell, kpts):
@@ -205,7 +259,7 @@ def madelung(cell, kpts):
 
 
 def get_monkhorst_pack_size(cell, kpts):
-    skpts = cell.get_scaled_kpts(kpts)
+    skpts = cell.get_scaled_kpts(kpts).round(9)
     Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
     return Nk
 

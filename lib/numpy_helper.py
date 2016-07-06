@@ -286,7 +286,7 @@ def transpose(a, axes=None, inplace=False, out=None):
         if a.ndim == 2:
             d0 = 1
             arow, acol = a.shape
-            shape = (acol, arow)
+            shape = acol, arow
         elif a.ndim == 3 and axes == (0,2,1):
             d0, arow, acol = a.shape
             shape = (d0, acol, arow)
@@ -456,7 +456,7 @@ def asarray(a, dtype=None, order=None):
     try:
         a0_shape = numpy.shape(a[0])
         a = numpy.vstack(a).reshape(-1, *a0_shape)
-    except (TypeError, ValueError):
+    except:
         pass
     return numpy.asarray(a, dtype, order)
 
@@ -500,7 +500,7 @@ def cartesian_prod(arrays, out=None):
 
     Examples:
 
-    >>> cartesian(([1, 2, 3], [4, 5], [6, 7]))
+    >>> cartesian_prod(([1, 2, 3], [4, 5], [6, 7]))
     array([[1, 4, 6],
            [1, 4, 7],
            [1, 5, 6],

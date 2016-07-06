@@ -13,10 +13,11 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
+from pyscf.pbc import tools
 
 
-def get_eri(pwdf, kpts=None, compact=True):
-    cell = pwdf.cell
+def get_eri(mydf, kpts=None, compact=True):
+    cell = mydf.cell
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
     elif numpy.shape(kpts) == (3,):
@@ -31,16 +32,17 @@ def get_eri(pwdf, kpts=None, compact=True):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
+        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         eriR = numpy.zeros((nao_pair,nao_pair))
-        max_memory = (pwdf.max_memory - lib.current_memory()[0]) * .8
+        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         trilidx = numpy.tril_indices(nao)
-        for pqkR, pqkI, coulG \
-                in pwdf.pw_loop(cell, pwdf.gs, kptijkl[:2], max_memory):
+        for pqkR, pqkI, p0, p1 \
+                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory):
             pqkR = numpy.asarray(pqkR.reshape(nao,nao,-1)[trilidx], order='C')
             pqkI = numpy.asarray(pqkI.reshape(nao,nao,-1)[trilidx], order='C')
-            coulG = numpy.sqrt(coulG)
-            pqkR *= coulG
-            pqkI *= coulG
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
             lib.dot(pqkR, pqkR.T, 1, eriR, 1)
             lib.dot(pqkI, pqkI.T, 1, eriR, 1)
         pqkR = LkR = pqkI = LkI = coulG = None
@@ -54,14 +56,15 @@ def get_eri(pwdf, kpts=None, compact=True):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
+        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
-        max_memory = (pwdf.max_memory - lib.current_memory()[0]) * .8
-        for pqkR, pqkI, coulG \
-                in pwdf.pw_loop(cell, pwdf.gs, kptijkl[:2], max_memory):
-            coulG = numpy.sqrt(coulG)
-            pqkR *= coulG
-            pqkI *= coulG
+        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+        for pqkR, pqkI, p0, p1 \
+                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory):
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
             lib.dot(pqkR, pqkR.T, 1, eriR, 1)
             lib.dot(pqkI, pqkI.T, 1, eriR, 1)
@@ -78,14 +81,15 @@ def get_eri(pwdf, kpts=None, compact=True):
 # So  kptl/b - kptk/b  must be -1 < k/b < 1.  =>  kptl == kptk
 #
     else:
+        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
-        max_memory = (pwdf.max_memory - lib.current_memory()[0]) * .4
-        for (pqkR, pqkI, coulG), (rskR, rskI, coulG1) in \
-                lib.izip(pwdf.pw_loop(cell, pwdf.gs, kptijkl[:2], max_memory),
-                         pwdf.pw_loop(cell, pwdf.gs,-kptijkl[2:], max_memory)):
-            pqkR *= coulG
-            pqkI *= coulG
+        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
+        for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
+                lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory),
+                         mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], max_memory)):
+            pqkR *= coulG[p0:p1]
+            pqkI *= coulG[p0:p1]
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
             lib.dot(pqkR, rskR.T, 1, eriR, 1)
             lib.dot(pqkI, rskI.T, 1, eriR, 1)
@@ -94,9 +98,9 @@ def get_eri(pwdf, kpts=None, compact=True):
         return (eriR+eriI*1j)
 
 
-def general(pwdf, mo_coeffs, kpts=None, compact=True):
+def general(mydf, mo_coeffs, kpts=None, compact=True):
     from pyscf.pbc.df import xdf_ao2mo
-    return xdf_ao2mo.general(pwdf, mo_coeffs, kpts, compact)
+    return xdf_ao2mo.general(mydf, mo_coeffs, kpts, compact)
 
 
 if __name__ == '__main__':

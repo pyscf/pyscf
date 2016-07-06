@@ -12,10 +12,12 @@ import numpy as np
 import scipy.linalg
 import scipy.optimize
 import pyscf.lib.parameters as param
-import pyscf.gto.mole
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.gto import mole
+from pyscf.gto import moleintor
 from pyscf.gto.mole import _symbol, _rm_digit, _std_symbol, _charge
+from pyscf.gto.mole import conc_env
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
@@ -114,13 +116,13 @@ def format_basis(basis_tab):
             fmt_basis[atom] = basis.load(atom_basis, _std_symbol(atom))
         else:
             fmt_basis[atom] = atom_basis
-    return pyscf.gto.mole.format_basis(fmt_basis)
+    return mole.format_basis(fmt_basis)
 
 def copy(cell):
     '''Deepcopy of the given :class:`Cell` object
     '''
     import copy
-    newcell = pyscf.gto.mole.copy(cell)
+    newcell = mole.copy(cell)
     newcell._pseudo = copy.deepcopy(cell._pseudo)
     return newcell
 
@@ -128,7 +130,7 @@ def pack(cell):
     '''Pack the input args of :class:`Cell` to a dict, which can be serialized
     with :mod:`pickle`
     '''
-    cldic = pyscf.gto.mole.pack(cell)
+    cldic = mole.pack(cell)
     cldic['h'] = cell.h
     cldic['gs'] = cell.gs
     cldic['precision'] = cell.precision
@@ -233,15 +235,15 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         kpts_lst = np.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    atm, bas, env = pyscf.gto.conc_env(cell1._atm, cell1._bas, cell1._env,
-                                       cell2._atm, cell2._bas, cell2._env)
+    atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
+                             cell2._atm, cell2._bas, cell2._env)
     atm = np.asarray(atm, dtype=np.int32)
     bas = np.asarray(bas, dtype=np.int32)
     env = np.asarray(env, dtype=np.double)
     natm = len(atm)
     nbas = len(bas)
     shls_slice = (0, cell1.nbas, cell1.nbas, nbas)
-    ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
+    ao_loc = moleintor.make_loc(bas, intor)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     out = [np.zeros((ni,nj,comp), order='F', dtype=np.complex128)
@@ -259,14 +261,14 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         assert('2e' not in intor)
         fill = getattr(libpbc, 'PBCnr2c_fill_'+aosym)
 
-    fintor = pyscf.gto.moleintor._fpointer(intor)
+    fintor = moleintor._fpointer(intor)
     intopt = lib.c_null_ptr()
 
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
     Ls = np.asarray(cell1.get_lattice_Ls(nimgs), order='C')
     expLk = np.asarray(np.exp(1j*np.dot(Ls, kpts_lst.T)), order='C')
     xyz = np.asarray(cell2.atom_coords(), order='C')
-    ptr_coords = np.asarray(atm[cell1.natm:,pyscf.gto.PTR_COORD],
+    ptr_coords = np.asarray(atm[cell1.natm:,mole.PTR_COORD],
                             dtype=np.int32, order='C')
     drv = libpbc.PBCnr2c_drv
     drv(fintor, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
@@ -298,13 +300,14 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
             out = out.reshape(ni,nj)
         return out
 
-    if abs(kpts_lst).sum() < 1e-8:  # gamma_point
-        out = [out[k].real.copy(order='F') for k in range(nkpts)]
+    for k, kpt in enumerate(kpts_lst):
+        if abs(kpt).sum() < 1e-9:  # gamma_point
+            out[k] = np.asarray(trans(out[k].real), order='C')
+        else:
+            out[k] = np.asarray(trans(out[k]), order='C')
     if kpts is None or np.shape(kpts) == (3,):
 # A single k-point
-        out = trans(out[0])
-    else:
-        out = [trans(out[k]) for k in range(nkpts)]
+        out = out[0]
     return out
 
 
@@ -515,7 +518,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 energy_nuc = ewald
 
 
-class Cell(pyscf.gto.Mole):
+class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
 
     Attributes:
@@ -555,7 +558,7 @@ class Cell(pyscf.gto.Mole):
     [3,3,3]
     '''
     def __init__(self, **kwargs):
-        pyscf.gto.Mole.__init__(self, **kwargs)
+        mole.Mole.__init__(self, **kwargs)
         self.h = None # lattice vectors, three *columns*: array((a1,a2,a3))
         self.gs = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
@@ -574,7 +577,7 @@ class Cell(pyscf.gto.Mole):
 # don't modify the following variables, they are not input arguments
         self.vol = None
         self._h = None
-        self._pseudo = None
+        self._pseudo = []
         self._keys = set(self.__dict__.keys())
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
@@ -628,7 +631,7 @@ class Cell(pyscf.gto.Mole):
 
         # Do regular Mole.build with usual kwargs
         _built = self._built
-        pyscf.gto.Mole.build(self, False, parse_arg, *args, **kwargs)
+        mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
         self._h = self.lattice_vectors()
         self.vol = float(scipy.linalg.det(self._h))
@@ -780,4 +783,12 @@ class Cell(pyscf.gto.Mole):
         self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         return self
 
+    def to_mol(self):
+        '''Return a Mole object using the same atoms and basis functions as
+        the Cell object.
+        '''
+        mol = mole.Mole()
+        cell_dic = [(key, getattr(self, key)) for key in mol.__dict__.keys()]
+        mol.__dict__.update(cell_dic)
+        return mol
 

@@ -64,12 +64,12 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
     '''UHF class for PBCs.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
-        from pyscf.pbc.df import PWDF
+        from pyscf.pbc import df
         self.cell = cell
         pyscf.scf.uhf.UHF.__init__(self, cell)
 
+        self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
-        self.with_df = PWDF(cell)
         self.kpt = kpt
         self.direct_scf = False
 
