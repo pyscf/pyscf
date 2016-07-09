@@ -295,7 +295,7 @@ static int vrr1d(double complex *g, double *rijri, double aij,
         int startx, starty, startz;
         double a2;
         double complex *p0, *p1, *p2, *dec1, *dec2;
-        double ka2[nGv*3];
+        double *ka2 = malloc(sizeof(double) * nGv*3);
         double *kxa2 = ka2;
         double *kya2 = kxa2 + nGv;
         double *kza2 = kya2 + nGv;
@@ -337,6 +337,7 @@ static int vrr1d(double complex *g, double *rijri, double aij,
                 }
                 cumxyz += _LEN_CART[l+1];
         }
+        free(ka2);
         return cumxyz;
 }
 

@@ -60,6 +60,14 @@ def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
     nao = cell.nao_nr()
     #naux = auxcell.nao_nr('ssc' in intor)
     naux = auxcell.nao_nr()
+    if naux == 0:
+        if aosym == 's1' or abs(kpti-kptj).sum() > 1e-9:
+            nao_pair = nao * (nao+1) // 2
+        else:
+            nao_pair = nao * nao
+        mat = numpy.zeros((comp,nao_pair,naux))
+        return mat
+
     buf = [numpy.zeros((nao,nao,naux,comp), order='F', dtype=numpy.complex128)]
     ints = _wrap_int3c(cell, auxcell, intor, comp, Ls, buf)
     atm, bas, env = ints._envs[:3]

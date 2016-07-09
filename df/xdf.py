@@ -53,12 +53,10 @@ def make_modrho_basis(mol, auxbasis=None):
         ptr = auxmol._bas[ib,PTR_COEFF]
         cs = auxmol._env[ptr:ptr+np*nc].reshape(nc,np).T
 
-        int1 = gto.mole._gaussian_int(l+2, es)
+        int1 = gto.mole._gaussian_int(l*2+2, es)
         s = numpy.einsum('pi,p->i', cs, int1)
         cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
         auxmol._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
-    auxmol.natm = mol.natm
-    auxmol.nbas = len(auxmol._bas)
     auxmol._built = True
     logger.debug(mol, 'aux basis, num shells = %d, num cGTO = %d',
                  auxmol.nbas, auxmol.nao_nr())
@@ -295,12 +293,9 @@ def _atomic_envs(mol, auxmol, symbol):
         es = mol2.bas_exp(ib)
         ptr = mol2._bas[ib,PTR_COEFF]
         cs = mol2._env[ptr:ptr+np*nc].reshape(nc,np).T
-        s = numpy.einsum('pi,p->i', cs, gto.mole._gaussian_int(l+2, es))
+        s = numpy.einsum('pi,p->i', cs, gto.mole._gaussian_int(l*2+2, es))
         cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
         mol2._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
-    mol1.natm = mol2.natm = 1
-    mol1.nbas = mol1._bas.shape[0]
-    mol2.nbas = mol2._bas.shape[0]
     return mol1, mol2
 
 def _make_Lpq_atomic_approx(mol, auxmol, fLpq):

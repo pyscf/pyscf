@@ -126,6 +126,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         kpts_band = kpts
     else:
         kpts_band = numpy.reshape(kpt_band, (-1,3))
+    gamma_point = abs(kpts_band).sum() < 1e-9
     nband = len(kpts_band)
 
     vjR = numpy.zeros((nset,nband,nao*nao))
@@ -135,7 +136,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         for i in range(nset):
             vjR[i,k] += numpy.dot(pqkR, vR[i,p0:p1])
             vjR[i,k] += numpy.dot(pqkI, vI[i,p0:p1])
-        if abs(kpts_band[k]).sum() > 1e-9:  # if not gamma point
+        if not gamma_point:
             for i in range(nset):
                 vjI[i,k] += numpy.dot(pqkI, vR[i,p0:p1])
                 vjI[i,k] -= numpy.dot(pqkR, vI[i,p0:p1])
@@ -145,7 +146,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
                 jaux[i] -= numpy.dot(LkI, vI[i,p0:p1])
         pqkR = LkR = pqkI = LkI = coulG = None
 
-    if abs(kpts_band).sum() < 1e-9:  # gamma point only
+    if gamma_point:
         vj_kpts = vjR
     else:
         vj_kpts = vjR + vjI*1j

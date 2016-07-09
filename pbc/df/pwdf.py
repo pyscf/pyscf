@@ -14,16 +14,15 @@ from pyscf import dft
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
-from pyscf.pbc.dft import numint
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import pwdf_jk
 from pyscf.pbc.df import pwdf_ao2mo
 
 
-def get_nuc(pwdf, kpts=None):
-    log = logger.Logger(pwdf.stdout, pwdf.verbose)
+def get_nuc(mydf, kpts=None):
+    log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = t0 = (time.clock(), time.time())
-    cell = pwdf.cell
+    cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
@@ -32,44 +31,47 @@ def get_nuc(pwdf, kpts=None):
 
     nao = cell.nao_nr()
     charge = -cell.atom_charges()
-    Gv = cell.get_Gv(pwdf.gs)
+    Gv = cell.get_Gv(mydf.gs)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
     kpt_allow = numpy.zeros(3)
-    coulG = tools.get_coulG(cell, kpt_allow, gs=pwdf.gs, Gv=Gv) / cell.vol
+    gamma_point = abs(kpts_lst).sum() < 1e-9
+    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv) / cell.vol
     vneG = rhoG * coulG
-    max_memory = pwdf.max_memory - lib.current_memory()[0]
 
-    vne = [0] * len(kpts_lst)
+    if gamma_point:
+        vne = numpy.zeros((nkpts,nao**2))
+    else:
+        vne = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
+    max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
-            in pwdf.ft_loop(cell, pwdf.gs, kpt_allow, kpts_lst, max_memory):
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst, max_memory):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
         vG = vneG[p0:p1]
-        if abs(kpts_lst[k]).sum() > 1e-9:  # if not gamma point
+        if not gamma_point:
             vne[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
             vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vne[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
         vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
-    if isinstance(vne[0], numpy.ndarray):
-        vne = [v.reshape(nao,nao) for v in vne]
+    vne = vne.reshape(-1,nao,nao)
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
     return vne
 
-def get_pp(pwdf, kpts=None):
+def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    cell = pwdf.cell
+    cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    vloc1 = get_pp_loc_part1(pwdf, cell, kpts_lst)
+    vloc1 = get_pp_loc_part1(mydf, cell, kpts_lst)
     vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
     vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
     for k in range(nkpts):
@@ -79,34 +81,35 @@ def get_pp(pwdf, kpts=None):
         vpp = vpp[0]
     return vpp
 
-def get_pp_loc_part1(pwdf, cell, kpts):
-    log = logger.Logger(pwdf.stdout, pwdf.verbose)
+def get_pp_loc_part1(mydf, cell, kpts):
+    log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = t0 = (time.clock(), time.time())
     nkpts = len(kpts)
 
-    gs = pwdf.gs
+    gs = mydf.gs
+    nao = cell.nao_nr()
     Gv = cell.get_Gv(gs)
     SI = cell.get_SI(Gv)
     vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
     vpplocG = -1./cell.vol * numpy.einsum('ij,ij->j', SI, vpplocG)
     kpt_allow = numpy.zeros(3)
-    max_memory = pwdf.max_memory - lib.current_memory()[0]
+    gamma_point = abs(kpts).sum() < 1e-9
 
-    vloc = [0] * nkpts
+    if gamma_point:
+        vloc = numpy.zeros((nkpts,nao**2))
+    else:
+        vloc = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
+    max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
-            in pwdf.ft_loop(cell, pwdf.gs, kpt_allow, kpts, max_memory):
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory):
         vG = vpplocG[p0:p1]
-        if abs(kpts[k]).sum() > 1e-9:  # if not gamma point
+        if not gamma_point:
             vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
             vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
         vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
     t1 = log.timer_debug1('contracting vloc part1', *t1)
-
-    nao = cell.nao_nr()
-    if isinstance(vloc[0], numpy.ndarray):
-        vloc = [v.reshape(nao,nao) for v in vloc]
-    return vloc
+    return vloc.reshape(-1,nao,nao)
 
 
 class PWDF(lib.StreamObject):
@@ -123,7 +126,6 @@ class PWDF(lib.StreamObject):
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
-        self._numint = numint._KNumInt()
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
