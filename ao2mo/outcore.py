@@ -243,14 +243,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         chunks = (nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
-        def save(icomp, row0, row1, buf):
-            h5d_eri[row0:row1] = pbuf
     else:
         chunks = (1,nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
-        def save(icomp, row0, row1, buf):
-            h5d_eri[icomp,row0:row1] = pbuf
 
     if nij_pair == 0 or nkl_pair == 0:
         if isinstance(erifile, str):
@@ -271,6 +267,22 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     ioblk_size = max(max_memory//4, ioblk_size)
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
+    buf_save = numpy.empty((comp,iobuflen,nkl_pair))
+    def save(icomp, row0, row1, buf):
+        buf1 = numpy.ndarray(buf.shape, buffer=buf_save)
+        buf1[:] = buf
+        if comp == 1:
+            h5d_eri[row0:row1] = buf1
+        else:
+            h5d_eri[icomp,row0:row1] = buf1
+    def prefetch(icomp, row0, row1, buf):
+        if icomp+1 < comp:
+            icomp += 1
+        else:
+            row0, row1 = row1, min(nij_pair, row1+iobuflen)
+            icomp = 0
+        if row0 < row1:
+            _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
@@ -282,6 +294,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     ti0 = time_1pass
     bufs1 = numpy.empty((iobuflen,nkl_pair))
     buf = numpy.empty((iobuflen, nao_pair))
+    buf_prefetch = numpy.empty((iobuflen, nao_pair))
     istep = 0
     thread_io = None
     for row0, row1 in prange(0, nij_pair, iobuflen):
@@ -290,22 +303,28 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         for icomp in range(comp):
             istep += 1
             tioi = 0
-            log.debug1('step 2 [%d/%d], [%d,%d:%d], row = %d', \
+            log.debug1('step 2 [%d/%d], [%d,%d:%d], row = %d',
                        istep, ijmoblks, icomp, row0, row1, nrow)
 
-            buf = _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
-            ti2 = log.timer_debug1('step 2 [%d/%d], load buf'%(istep,ijmoblks), *ti0)
-            tioi += ti2[1]-ti0[1]
+            if row0 == 0 and icomp == 0:
+                _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
+            else:
+                thread_read.join()
+                buf, buf_prefetch = buf_prefetch, buf
+            thread_read = lib.background(prefetch, icomp, row0, row1, buf_prefetch)
+            tioi += time.time()-ti0[1]
             pbuf = bufs1[:nrow]
             _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
-                          ao_loc=ao_loc, out=pbuf)
+                         ao_loc=ao_loc, out=pbuf)
 
+            tw1 = time.time()
             if thread_io is not None:
                 thread_io.join()
             thread_io = lib.background(save, icomp, row0, row1, pbuf)
+            tioi += time.time()-tw1
 
             ti1 = (time.clock(), time.time())
-            log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
+            log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f',
                        istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
     thread_io.join()
