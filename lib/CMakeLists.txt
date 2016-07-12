@@ -99,7 +99,7 @@ endif()
 if(ENABLE_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG origin/master
+    GIT_TAG origin/stable-1.x
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
