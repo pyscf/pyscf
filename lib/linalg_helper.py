@@ -277,7 +277,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         for i in range(1, len(xs)):
             xi = xs[i].copy()
             for j in range(len(qs)):
-                xi -= qs[j] * numpy.dot(qs[j], xi)
+                xi -= qs[j] * numpy.dot(qs[j].conj(), xi)
             norm = numpy_helper.norm(xi)
             if norm > 1e-7:
                 qs.append(xi/norm)
@@ -387,7 +387,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         for i in range(space):
             for xi in xt:
                 xsi = xs[i]
-                xi -= xsi * numpy.dot(xi, xsi)
+                xi -= xsi * numpy.dot(xsi.conj(), xi)
         norm_min = 1
         for i,xi in enumerate(xt):
             norm = numpy_helper.norm(xi)
