@@ -201,7 +201,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         for i in range(1, len(xs)):
             xi = xs[i].copy()
             for j in range(len(qs)):
-                xi -= qs[j] * numpy.dot(qs[j], xi)
+                xi -= qs[j] * numpy.dot(qs[j].conj(), xi)
             norm = numpy_helper.norm(xi)
             if norm > 1e-7:
                 qs.append(xi/norm)
@@ -215,7 +215,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     max_space = max_space + nroots * 2
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*2
-    heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
+    heff = None
     fresh_start = True
 
     for icyc in range(max_cycle):
@@ -242,6 +242,9 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+len(xt)
+
+        if heff is None:  # Lazy initilize heff to determine the dtype
+            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=ax[0].dtype)
 
         for i in range(space):
             if head <= i < head+rnow:
@@ -311,7 +314,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         for i in range(space):
             for xi in xt:
                 xsi = xs[i]
-                xi -= xsi * numpy.dot(xi, xsi)
+                xi -= xsi * numpy.dot(xsi.conj(), xi)
         norm_min = 1
         for i,xi in enumerate(xt):
             norm = numpy_helper.norm(xi)
@@ -327,7 +330,8 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max(dx_norm), e, de[ide], norm_min)
 
-        fresh_start = fresh_start or (space+len(xt) > max_space)
+        fresh_start = (icyc+nroots < max_cycle and
+                       (fresh_start or space+nroots > max_space))
 
         if callable(callback):
             callback(locals())
@@ -405,7 +409,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot, \
 
     innerprod = [dot(xs[0].conj(), xs[0])]
 
-    h = numpy.empty((max_cycle,max_cycle), dtype=b.dtype)
+    h = numpy.empty((max_cycle,max_cycle), dtype=ax[0].dtype)
     for cycle in range(max_cycle):
         x1 = ax[-1].copy()
 # Schmidt orthogonalization
@@ -458,8 +462,8 @@ def dsolve(aop, b, precond, tol=1e-14, max_cycle=30, dot=numpy.dot,
     xs = [precond(b)]
     ax = [aop(xs[-1])]
 
-    aeff = numpy.zeros((max_cycle,max_cycle), dtype=b.dtype)
-    beff = numpy.zeros((max_cycle), dtype=b.dtype)
+    aeff = numpy.zeros((max_cycle,max_cycle), dtype=ax[0].dtype)
+    beff = numpy.zeros((max_cycle), dtype=ax[0].dtype)
     for istep in range(max_cycle):
         beff[istep] = dot(xs[istep], b)
         for i in range(istep+1):
@@ -530,8 +534,8 @@ if __name__ == '__main__':
     n = 1000
     #a = numpy.random.random((n,n))
     a = numpy.arange(n*n).reshape(n,n)
-    a = numpy.sin(numpy.sin(a))
-    a = a + a.T + numpy.diag(numpy.random.random(n))*10
+    a = numpy.sin(numpy.sin(a)) + a*1e-3j
+    a = a + a.T.conj() + numpy.diag(numpy.random.random(n))*10
 
     e,u = scipy.linalg.eigh(a)
     #a = numpy.dot(u[:,:15]*e[:15], u[:,:15].T)
