@@ -384,6 +384,12 @@ def izip(*args):
     else:
         return zip(*args)
 
+def background(func, *args):
+    '''applying function in background'''
+    thread = threading.Thread(target=func, args=args)
+    thread.start()
+    return thread
+
 
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):

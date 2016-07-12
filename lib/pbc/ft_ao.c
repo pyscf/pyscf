@@ -126,9 +126,9 @@ int CINTinit_int1e_EnvVars(CINTEnvVars *envs, const int *ng, const int *shls,
                            const int *atm, const int natm,
                            const int *bas, const int nbas, const double *env);
 
-static int init1e_envs(CINTEnvVars *envs, const int *shls,
-                       const int *atm, const int natm,
-                       const int *bas, const int nbas, const double *env)
+static void init1e_envs(CINTEnvVars *envs, const int *shls,
+                        const int *atm, const int natm,
+                        const int *bas, const int nbas, const double *env)
 {
         int ng[] = {0, 0, 0, 0, 0, 0, 0, 0};
         CINTinit_int1e_EnvVars(envs, ng, shls, atm, natm, bas, nbas, env);
@@ -292,7 +292,6 @@ static int vrr1d(double complex *g, double *rijri, double aij,
         double *ky = kx + nGv;
         double *kz = ky + nGv;
         int i, n, m, l;
-        int startx, starty, startz;
         double a2;
         double complex *p0, *p1, *p2, *dec1, *dec2;
         double *ka2 = malloc(sizeof(double) * nGv*3);
@@ -587,7 +586,7 @@ static void aopair_rr_igtj_lazy(double complex *g, double ai, double aj,
         double *kz = ky + nGv;
         size_t off0, off1, off2;
         int i, j, n, ptr;
-        double fackk, ia2, kr;
+        double ia2;
 
         rirj[0] = ri[0] - rj[0];
         rirj[1] = ri[1] - rj[1];
@@ -652,8 +651,6 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
 {
         const int nmax = envs->li_ceil + envs->lj_ceil;
         const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
-        const int di = envs->g_stride_i;
         const int dj = envs->g_stride_j;
         const double aij = ai + aj;
         const double a2 = .5 / aij;
@@ -667,8 +664,8 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
         double *ky = kx + nGv;
         double *kz = ky + nGv;
         size_t off0, off1, off2;
-        int i, j, n, ptr;
-        double fackk, ia2, kr;
+        int i, j, n;
+        double ia2;
 
         rirj[0] = rj[0] - ri[0];
         rirj[1] = rj[1] - ri[1];
@@ -926,7 +923,7 @@ int PBC_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         const double *cj = env + bas(PTR_COEFF, j_sh);
         double fac1i, fac1j;
         double aij, dij, eij;
-        int ip, jp, n;
+        int ip, jp;
         int empty[3] = {1, 1, 1};
         int *jempty = empty + 0;
         int *iempty = empty + 1;
@@ -1277,8 +1274,6 @@ static void zcopy_ij(double complex *out, const double complex *gctr,
 static void aopair_c2s_cart(double complex *out, double complex *gctr,
                             CINTEnvVars *envs, int *dims, int nGv)
 {
-        const int i_l = envs->i_l;
-        const int j_l = envs->j_l;
         const int i_ctr = envs->i_ctr;
         const int j_ctr = envs->j_ctr;
         const int nfi = envs->nfi;
@@ -1286,7 +1281,7 @@ static void aopair_c2s_cart(double complex *out, double complex *gctr,
         const int ni = nfi*i_ctr;
         const int nj = nfj*j_ctr;
         const int nf = envs->nf;
-        int ic, jc, i, j, k;
+        int ic, jc;
         double complex *pout;
 
         for (jc = 0; jc < nj; jc += nfj) {
@@ -1314,7 +1309,7 @@ static void aopair_c2s_sph(double complex *out, double complex *gctr,
         const int nj = dj*j_ctr;
         const int nfi = envs->nfi;
         const int nf = envs->nf;
-        int ic, jc, i, j, k;
+        int ic, jc, k;
         const int buflen = nfi*dj;
         double complex *buf1 = malloc(sizeof(double complex) * buflen*2 * nGv);
         double complex *buf2 = buf1 + buflen * nGv;
@@ -1325,7 +1320,7 @@ static void aopair_c2s_sph(double complex *out, double complex *gctr,
                 buf = C2S(buf1, nfi*nGv*OF_CMPLX, gctr, j_l);
                 pij = C2S(buf2, nGv*OF_CMPLX, buf, i_l);
                 for (k = nGv; k < dj*nGv; k+=nGv) {
-                        C2S(buf2+k*di, nGv*OF_CMPLX, buf+k*nfi, i_l);
+                        pout = C2S(buf2+k*di, nGv*OF_CMPLX, buf+k*nfi, i_l);
                 }
 
                 pout = out + (dims[0] * jc + ic) * nGv;
@@ -1441,7 +1436,7 @@ void PBC_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), double complex *mat,
         shared(intor, mat, Gv, invh, gxyz, gs, nGv, ao_loc, \
                eval_gz, hermi, atm, natm, bas, nbas, env)
 {
-        int i, j, k, ij, di, dj;
+        int i, j, ij, di, dj;
         int shls[2];
         size_t off;
 #pragma omp for schedule(dynamic)
@@ -1560,7 +1555,7 @@ void ft_ovlp_kpts(int (*intor)(), void (*eval_gz)(), double complex **out,
         shared(intor, out, exp_Lk, nkpts, Gv, invh, gxyz, gs, nGv, ao_loc, \
                eval_gz, hermi, atm, natm, bas, nbas, env)
 {
-        int i, j, k, ij, di, dj;
+        int i, j, ij, di, dj;
         int shls[2];
         size_t off;
         int dims[2];
@@ -1608,3 +1603,4 @@ void PBC_ft_latsum_kpts(int (*intor)(), void (*eval_gz)(), double complex **out,
                              atm, natm, bas, nbas, env);
         }
 }
+

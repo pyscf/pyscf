@@ -6,7 +6,7 @@ import time
 import tempfile
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import incore
@@ -243,10 +243,14 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         chunks = (nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
+        def save(icomp, row0, row1, buf):
+            h5d_eri[row0:row1] = pbuf
     else:
         chunks = (1,nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
+        def save(icomp, row0, row1, buf):
+            h5d_eri[icomp,row0:row1] = pbuf
 
     if nij_pair == 0 or nkl_pair == 0:
         if isinstance(erifile, str):
@@ -279,6 +283,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     bufs1 = numpy.empty((iobuflen,nkl_pair))
     buf = numpy.empty((iobuflen, nao_pair))
     istep = 0
+    thread_io = None
     for row0, row1 in prange(0, nij_pair, iobuflen):
         nrow = row1 - row0
 
@@ -295,17 +300,15 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
                           ao_loc=ao_loc, out=pbuf)
 
-            tw1 = time.time()
-            if comp == 1:
-                h5d_eri[row0:row1] = pbuf
-            else:
-                h5d_eri[icomp,row0:row1] = pbuf
-            tioi += time.time()-tw1
+            if thread_io is not None:
+                thread_io.join()
+            thread_io = lib.background(save, icomp, row0, row1, pbuf)
 
             ti1 = (time.clock(), time.time())
             log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
                        istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
+    thread_io.join()
     fswap.close()
     if isinstance(erifile, str):
         feri.close()
@@ -410,36 +413,46 @@ def half_e1(mol, mo_coeffs, swapfile,
     log.debug('step1: tmpfile %s  %.8g MB', fswap.filename, nij_pair*nao_pair*8/1e6)
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
               nij_pair, nao_pair, mem_words*8/1e6, iobuf_words*8/1e6)
+    nstep = len(shranges)
+    maxbuflen = max([x[2] for x in shranges])
+
+    bufs0 = numpy.empty((comp*maxbuflen*nij_pair))
+    def save(istep, iobuf):
+        iobuf1 = numpy.ndarray(iobuf.shape, buffer=bufs0)
+        iobuf1[:] = iobuf
+        buflen = iobuf.shape[1]
+        e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
+        for icomp in range(comp):
+            _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf1[icomp],
+                              e2buflen, None)
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
-    nstep = len(shranges)
-    maxbuflen = max([x[2] for x in shranges])
     bufs1 = numpy.empty((comp*maxbuflen,nao_pair))
     bufs2 = numpy.empty((comp*maxbuflen,nij_pair))
+    thread_io = None
     for istep,sh_range in enumerate(shranges):
         log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
                    istep+1, nstep, *(sh_range[:3]))
         buflen = sh_range[2]
-        iobuf = bufs2[:comp*buflen].reshape(comp,buflen,nij_pair)
+        iobuf = numpy.ndarray((comp,buflen,nij_pair), buffer=bufs2)
         nmic = len(sh_range[3])
         p0 = 0
         for imic, aoshs in enumerate(sh_range[3]):
             log.debug2('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
                        imic+1, nmic, *aoshs)
-            buf = bufs1[:comp*aoshs[2]] # (@)
+            buf = numpy.ndarray((comp*aoshs[2],nao_pair), buffer=bufs1) # (@)
             _ao2mo.nr_e1fill(intor, aoshs, mol._atm, mol._bas, mol._env,
                              aosym, comp, ao2mopt, out=buf)
             buf = _ao2mo.nr_e1(buf, moij, ijshape, aosym, ijmosym)
             iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
             p0 += aoshs[2]
-        ti2 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
+        ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
-        e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
-        for icomp in range(comp):
-            _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf[icomp],
-                              e2buflen, None)
-        ti0 = log.timer_debug1('transposing to disk', *ti2)
+        if thread_io is not None:
+            thread_io.join()
+        thread_io = lib.background(save, istep, iobuf)
+    thread_io.join()
     bufs1 = bufs2 = None
     if isinstance(swapfile, str):
         fswap.close()
@@ -459,7 +472,7 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     nrow, ncol = dat.shape
     dset = h5group.create_dataset(key, (ncol,nrow), 'f8', chunks=chunks)
     for col0, col1 in prange(0, ncol, blksize):
-        dset[col0:col1] = pyscf.lib.transpose(dat[:,col0:col1])
+        dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
 def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
                 verbose=logger.WARN, compact=True):
