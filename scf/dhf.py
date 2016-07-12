@@ -489,18 +489,18 @@ class RHF(UHF):
 def _jk_triu_(vj, vk, hermi):
     if hermi == 0:
         if vj.ndim == 2:
-            vj = lib.hermi_triu_(vj, 1)
+            vj = lib.hermi_triu(vj, 1)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = lib.hermi_triu_(vj[i], 1)
+                vj[i] = lib.hermi_triu(vj[i], 1)
     else:
         if vj.ndim == 2:
-            vj = lib.hermi_triu_(vj, hermi)
-            vk = lib.hermi_triu_(vk, hermi)
+            vj = lib.hermi_triu(vj, hermi)
+            vk = lib.hermi_triu(vk, hermi)
         else:
             for i in range(vj.shape[0]):
-                vj[i] = lib.hermi_triu_(vj[i], hermi)
-                vk[i] = lib.hermi_triu_(vk[i], hermi)
+                vj[i] = lib.hermi_triu(vj[i], hermi)
+                vk[i] = lib.hermi_triu(vk[i], hermi)
     return vj, vk
 
 
