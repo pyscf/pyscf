@@ -384,9 +384,21 @@ def izip(*args):
     else:
         return zip(*args)
 
-def background(func, *args):
+from multiprocessing import Queue, Process
+class ProcessWithReturnValue(Process):
+    def __init__(self, target=None, *args, **kwargs):
+        self._q = Queue()
+        def qwrap(*args, **kwargs):
+            self._q.put(target(*args, **kwargs))
+        Process.__init__(self, target=qwrap, *args, **kwargs)
+    def join(self):
+        Process.join(self)
+        return self._q.get()
+    get = join
+
+def background(func, *args, **kwargs):
     '''applying function in background'''
-    thread = threading.Thread(target=func, args=args)
+    thread = ProcessWithReturnValue(target=func, args=args, kwargs=kwargs)
     thread.start()
     return thread
 

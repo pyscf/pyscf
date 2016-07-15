@@ -45,9 +45,9 @@ from pyscf.pbc.df import pwdf
 # of attraction potential.  An atom-specific eta based on atomic radius might
 # be needed
 #
-def estimate_eta(cell, cutoff=1e-14):
+def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
-    boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-14
+    boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
     '''
     rmax = max(lib.norm(cell.lattice_vectors(), axis=0))
     eta = -numpy.log(cutoff/(4*numpy.pi*rmax**2))/rmax**2
@@ -305,7 +305,7 @@ class XDF(lib.StreamObject):
         self.metric = 'T'  # or 'S'
         self.approx_sr_level = 0  # approximate short range fitting level
         self.auxbasis = None
-        self.eta = 1 #None
+        self.eta = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
