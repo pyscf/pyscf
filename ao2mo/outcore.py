@@ -311,7 +311,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             else:
                 thread_read.join()
                 buf, buf_prefetch = buf_prefetch, buf
-            thread_read = lib.background(prefetch, icomp, row0, row1, buf_prefetch)
+            thread_read = lib.background_thread(prefetch, icomp, row0, row1, buf_prefetch)
             tioi += time.time()-ti0[1]
             pbuf = bufs1[:nrow]
             _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
@@ -320,7 +320,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             tw1 = time.time()
             if thread_io is not None:
                 thread_io.join()
-            thread_io = lib.background(save, icomp, row0, row1, pbuf)
+            thread_io = lib.background_thread(save, icomp, row0, row1, pbuf)
             tioi += time.time()-tw1
 
             ti1 = (time.clock(), time.time())
@@ -470,7 +470,7 @@ def half_e1(mol, mo_coeffs, swapfile,
 
         if thread_io is not None:
             thread_io.join()
-        thread_io = lib.background(save, istep, iobuf)
+        thread_io = lib.background_thread(save, istep, iobuf)
     thread_io.join()
     bufs1 = bufs2 = None
     if isinstance(swapfile, str):
