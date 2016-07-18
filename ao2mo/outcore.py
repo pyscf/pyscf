@@ -290,7 +290,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
-    ao_loc = numpy.asarray(mol.ao_loc_nr(), dtype=numpy.int32)
+    ao_loc = mol.ao_loc_nr('cart' in intor)
     ti0 = time_1pass
     bufs1 = numpy.empty((iobuflen,nkl_pair))
     buf = numpy.empty((iobuflen, nao_pair))
