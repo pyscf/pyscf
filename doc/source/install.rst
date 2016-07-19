@@ -12,11 +12,13 @@ and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use
   $ pip install --target=/path/to/python/libs scipy
   $ pip install --target=/path/to/python/libs h5py
 
-Download the latest version of `pyscf <https://github.com/sunqm/pyscf.git/>`_::
+You can download the latest release version
+`1.1 <https://github.com/sunqm/pyscf/releases/tag/v1.1>`_ or the
+develment branch from github
 
   $ git clone https://github.com/sunqm/pyscf
 
-Now you need build the C extensions in :file:`pyscf/lib`::
+Build the C extensions in :file:`pyscf/lib`::
 
   $ cd pyscf/lib
   $ mkdir build
@@ -141,6 +143,6 @@ functionals.
 
 XianCI
 ------
-XianCI is a spin-adapted MRCI program.  "Bingbing Sun" <bsuo@nwu.edu.cn>
+XianCI is a spin-adapted MRCI program.  "Bingbing Suo" <bsuo@nwu.edu.cn>
 is the main developer of XianCI program.
 
