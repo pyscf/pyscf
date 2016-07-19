@@ -77,6 +77,19 @@ Known problems
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
+* On Mac OSX, error message of "import pyscf"
+```
+  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
+  Referenced from: xxx/pyscf/lib/libcgto.dylib
+  Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
+```
+
+  It is observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
+  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcgto.dylib
+  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcvhf.dylib
+  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libao2mo.dylib
+  ...
+
 
 * Fails at runtime with error message
 ```

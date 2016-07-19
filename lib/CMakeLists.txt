@@ -60,7 +60,7 @@ include(ExternalProject)
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DBLA_VENDOR=${BLA_VENDOR}
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
   )
 #endif()
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
@@ -96,7 +96,8 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
           --enable-shared --disable-fortran LIBS=-lm
   )
 endif()
-if(ENABLE_XCFUN)
+if(NOT DISABLE_DFT)
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND ENABLE_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG origin/stable-1.x
@@ -106,6 +107,7 @@ if(ENABLE_XCFUN)
             -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
   )
+endif()
 endif()
 add_subdirectory(dft)
 endif()
