@@ -3,9 +3,9 @@ PySCF
 
 Python module for quantum chemistry
 
-2016-06-04
+2016-07-19
 
-* [Release 1.1](../../releases/latest) ([development branch](https://github.com/sunqm/pyscf/tree/master))
+* Release 1.1.1
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
@@ -77,6 +77,20 @@ Known problems
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
+* On Mac OSX, error message of "import pyscf"
+```
+  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
+  Referenced from: xxx/pyscf/lib/libcgto.dylib
+  Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
+```
+
+  It is observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
+  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcgto.dylib
+  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcvhf.dylib
+  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libao2mo.dylib
+  ...
+
+
 * Fails at runtime with error message
 ```
   OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
@@ -88,6 +102,21 @@ Known problems
   disable mkl_avx:
 
         BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
+
+
+* Runtime error message
+```
+  MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.
+```
+  This is MKL 11.* bug for "dlopen" function.  Preloading the two libraries
+  works fine with most system:
+
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_core.so
+
+  or 
+
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:/share/apps/ifc/mkl/lib/em64t/libmkl_sequential.so
+
 
 * h5py installation.
   If you got problems to install the latest h5py package,  you can try
