@@ -8,8 +8,9 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
-
 import pyscf.cc.ccsd_eom
+
+
 class UCCSD(pyscf.cc.ccsd_eom.CCSD):
 
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
@@ -44,13 +45,15 @@ class _ERIS:
         nocc = cc.nocc()
         nmo = cc.nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
+        #mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
+        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+        mem_incore *= 4
         mem_now = pyscf.lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize 
         so_coeff = np.zeros((nmo/2,nmo), dtype=mo_coeff.dtype)
-        nocc_a = sum(cc.mo_occ[0])
-        nocc_b = sum(cc.mo_occ[1])
+        nocc_a = int(sum(cc.mo_occ[0]))
+        nocc_b = int(sum(cc.mo_occ[1]))
         nvir_a = nmo/2 - nocc_a
         nvir_b = nmo/2 - nocc_b
         spin = np.zeros(nmo, dtype=int)
@@ -93,7 +96,6 @@ class _ERIS:
             #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
 
         else:
-            raise NotImplementedError
             print "*** Using HDF5 ERI storage ***"
             _tmpfile1 = tempfile.NamedTemporaryFile()
             self.feri1 = h5py.File(_tmpfile1.name)
@@ -114,7 +116,12 @@ class _ERIS:
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
             if mo_coeff.dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nocc,nmo))
-            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            #buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            for i in range(nocc):
+                for p in range(nmo):
+                    if spin[i] != spin[p]:
+                        buf[i,p,:,:] = 0.
+                        buf[:,:,i,p] = 0.
             buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
             cput1 = log.timer_debug1('transforming oopq', *cput1)
@@ -128,7 +135,14 @@ class _ERIS:
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
             if mo_coeff.dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nvir,nmo))
-            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            #buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            for p in range(nmo):
+                for i in range(nocc):
+                    if spin[i] != spin[p]:
+                        buf[i,p,:,:] = 0.
+                for a in range(nvir):
+                    if spin[nocc+a] != spin[p]:
+                        buf[:,:,a,p] = 0.
             buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
@@ -141,11 +155,17 @@ class _ERIS:
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
                 if mo_coeff.dtype == np.float: buf = buf.real
                 buf = buf.reshape((1,nvir,nvir,nvir))
-                if a%2 == 0:
-                    buf[0,1::2,:,:] = 0.
-                else:
-                    buf[0,0::2,:,:] = 0.
-                buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+                #if a%2 == 0:
+                #    buf[0,1::2,:,:] = 0.
+                #else:
+                #    buf[0,0::2,:,:] = 0.
+                #buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+                for b in range(nvir):
+                    if spin[nocc+a] != spin[nocc+b]:
+                        buf[0,b,:,:] = 0.
+                    for c in range(nvir):
+                        if spin[nocc+b] != spin[nocc+c]:
+                            buf[:,:,b,c] = buf[:,:,c,b] = 0.
                 buf1 = buf - buf.transpose(0,3,2,1) 
                 buf1 = buf1.transpose(0,2,1,3) 
                 self.vvvv[a] = buf1[:]
@@ -154,3 +174,12 @@ class _ERIS:
 
         log.timer('CCSD integral transformation', *cput0)
 
+def _mem_usage(nocc, nvir):
+    basic = nocc*(nocc+1)//2*nvir**2 + (nocc*nvir)**2*2
+    basic = basic * 8/1e6
+    nmo = nocc + nvir
+    incore = (max((nmo*(nmo+1)//2)**2*2*8/1e6, basic) +
+              (nocc**4 + nocc*nvir**3 + nvir**4 + nocc**2*nvir**2*2 +
+               nocc**3*nvir*2)*8/1e6)
+    outcore = basic
+    return incore, outcore, basic
