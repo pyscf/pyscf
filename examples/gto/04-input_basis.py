@@ -38,3 +38,14 @@ mol = gto.M(
             }
 )
 
+
+mol = gto.M(
+    atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+    basis = {'H': 'sto3g',
+# even-temper gaussians alpha*beta^i, where i = 0,..,n
+#                                  (l, n, alpha, beta)
+             'O': gto.expand_etbs([(0, 4, 1.5, 2.2),  # s-function
+                                   (1, 2, 0.5, 2.2)]) # p-function
+            }
+)
+

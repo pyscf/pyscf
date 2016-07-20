@@ -65,7 +65,6 @@ include(ExternalProject)
 #endif()
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib)
-link_directories(${PROJECT_SOURCE_DIR}/deps/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
@@ -92,7 +91,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> 
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=lib
           --enable-shared --disable-fortran LIBS=-lm
   )
 endif()
@@ -106,6 +105,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND ENABLE_XCFUN)
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib
   )
 endif()
 endif()

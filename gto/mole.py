@@ -344,6 +344,7 @@ def expand_etbs(etbs):
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
     return pyscf.lib.flatten([expand_etb(*etb) for etb in etbs])
+etbs = expand_etbs
 
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):
@@ -1678,6 +1679,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     @pyscf.lib.with_doc(expand_etbs.__doc__)
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
+    etbs = expand_etbs
 
     def make_env(self, atoms, basis, pre_env=[], nucmod={}):
         return make_env(atoms, basis, pre_env, nucmod)
