@@ -91,7 +91,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=lib
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
           --enable-shared --disable-fortran LIBS=-lm
   )
 endif()
