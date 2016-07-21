@@ -115,7 +115,7 @@ Known problems
 
   or 
 
-  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:/share/apps/ifc/mkl/lib/em64t/libmkl_sequential.so
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:$MKLROOT/lib/intel64/libmkl_sequential.so
 
 
 * h5py installation.
