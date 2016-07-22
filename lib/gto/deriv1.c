@@ -2,6 +2,7 @@
  * Copyright (C) 2016-  Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <string.h>
 #include <math.h>
 #include "grid_ao_drv.h"
 #include "vhf/fblas.h"
@@ -16,8 +17,8 @@ static int _len_cart[] = {
         1, 3, 6, 10, 15, 21, 28, 36
 };
 
-static int contract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                         int l, int nprim, int nctr, int blksize, double fac)
+int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
+                     int l, int nprim, int nctr, int blksize, double fac)
 {
         int i, j;
         double arr, maxc;
@@ -63,8 +64,8 @@ static int contract_exp0(double *ectr, double *coord, double *alpha, double *coe
                 const double D1 = 1;
                 dgemm_(&TRANS_T, &TRANS_N, &blksize, &nctr, &nprim,
                        &D1, eprim, &nprim, coeff, &nprim, &D0, ectr, &blksize);
-//        } else {
-//                memset(ectr, 0, sizeof(double)*nctr*blksize);
+        } else {
+                memset(ectr, 0, sizeof(double)*nctr*blksize);
         }
 
         return not0;
@@ -81,9 +82,9 @@ static int contract_exp0(double *ectr, double *coord, double *alpha, double *coe
 
 // pre-contracted grid AO evaluator
 // contracted factors = \sum c_{i} exp(-a_i*r_i**2)
-static void shell_eval_grid_cart(double *gto, double *ri, double *exps,
-                double *coord, double *alpha, double *coeff,
-                int l, int np, int nc, int blksize)
+void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
+                             double *coord, double *alpha, double *coeff,
+                             int l, int np, int nc, int blksize)
 {
         int lx, ly, lz, i, k;
         double ce[3];
@@ -293,16 +294,16 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                 dgemm_(&TRANS_T, &TRANS_N, &blksize, &nctr, &nprim,
                        &d2, eprim, &nprim, coeff_a, &nprim,
                        &D0, ectr_2a, &blksize);
-//        } else {
-//                memset(ectr, 0, sizeof(double)*nctr*blksize*2);
+        } else {
+                memset(ectr, 0, sizeof(double)*nctr*blksize*2);
         }
 
         return not0;
 }
 
-static void shell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
-                double *coord, double *alpha, double *coeff,
-                int l, int np, int nc, int blksize)
+void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
+                                double *coord, double *alpha, double *coeff,
+                                int l, int np, int nc, int blksize)
 {
         const int degen = _len_cart[l];
         const int gtosize = nc*degen*blksize;
@@ -313,9 +314,12 @@ static void shell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         double ax, ay, az, tmp, tmp1;
         double ce[6];
         double rre[10];
-        double xpows[64];
-        double ypows[64];
-        double zpows[64];
+        double xpows_1less_in_power[64];
+        double ypows_1less_in_power[64];
+        double zpows_1less_in_power[64];
+        double *xpows = xpows_1less_in_power + 1;
+        double *ypows = ypows_1less_in_power + 1;
+        double *zpows = zpows_1less_in_power + 1;
         double *gridx = coord;
         double *gridy = coord+blksize;
         double *gridz = coord+blksize*2;
@@ -591,6 +595,9 @@ static void shell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                 }
                 break;
         default:
+                xpows_1less_in_power[0] = 0;
+                ypows_1less_in_power[0] = 0;
+                zpows_1less_in_power[0] = 0;
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
                                 if (NOTZERO(exps[i])) {
@@ -651,15 +658,13 @@ static void shell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                                         for (lx = l, n = 0; lx >= 0; lx--) {
                                         for (ly = l - lx; ly >= 0; ly--, n++) {
                                                 lz = l - lx - ly;
-                                                xinv = lx/(gridx[i]+1e-200);
-                                                yinv = ly/(gridy[i]+1e-200);
-                                                zinv = lz/(gridz[i]+1e-200);
-                                                tmp = exps_2a[i]/(exps[i]+1e-200);
-                                                tmp1 = xpows[lx] * ypows[ly]
-                                                     * zpows[lz] * exps[i];
-                                                gtox[n*blksize+i] = (xinv + tmp*gridx[i]) * tmp1;
-                                                gtoy[n*blksize+i] = (yinv + tmp*gridy[i]) * tmp1;
-                                                gtoz[n*blksize+i] = (zinv + tmp*gridz[i]) * tmp1;
+                                                tmp = xpows[lx] * ypows[ly] * zpows[lz];
+                                                gtox[n*blksize+i] = exps_2a[i] * gridx[i] * tmp;
+                                                gtoy[n*blksize+i] = exps_2a[i] * gridy[i] * tmp;
+                                                gtoz[n*blksize+i] = exps_2a[i] * gridz[i] * tmp;
+                                                gtox[n*blksize+i] += exps[i] * lx * xpows[lx-1] * ypows[ly] * zpows[lz];
+                                                gtoy[n*blksize+i] += exps[i] * ly * xpows[lx] * ypows[ly-1] * zpows[lz];
+                                                gtoz[n*blksize+i] += exps[i] * lz * xpows[lx] * ypows[ly] * zpows[lz-1];
                                         } }
                                 } else {
                                         for (n = 0; n < degen; n++) {
@@ -684,7 +689,7 @@ void GTOval_cart(int nao, int ngrids,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
-        GTOeval_cart_drv(shell_eval_grid_cart, contract_exp0,
+        GTOeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
                          param, nao, ngrids, blksize, bastart, bascount,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -694,7 +699,7 @@ void GTOval_sph(int nao, int ngrids,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
-        GTOeval_sph_drv(shell_eval_grid_cart, contract_exp0,
+        GTOeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
                         param, nao, ngrids, blksize, bastart, bascount,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -705,7 +710,7 @@ void GTOval_ip_cart(int nao, int ngrids,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
-        GTOeval_cart_drv(shell_eval_grid_ip_cart, GTOcontract_exp1,
+        GTOeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                          param, nao, ngrids, blksize, bastart, bascount,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -715,7 +720,7 @@ void GTOval_ip_sph(int nao, int ngrids,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
-        GTOeval_sph_drv(shell_eval_grid_ip_cart, GTOcontract_exp1,
+        GTOeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                         param, nao, ngrids, blksize, bastart, bascount,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
