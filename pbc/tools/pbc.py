@@ -206,7 +206,7 @@ def madelung(cell, kpts):
 
 def get_monkhorst_pack_size(cell, kpts):
     skpts = cell.get_scaled_kpts(kpts)
-    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
+    Nk = np.array([len(np.unique(ki.round(decimals=6))) for ki in skpts.T])
     return Nk
 
 
