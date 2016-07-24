@@ -99,8 +99,8 @@ def get_eri(mydf, kpts=None, compact=True):
 
 
 def general(mydf, mo_coeffs, kpts=None, compact=True):
-    from pyscf.pbc.df import xdf_ao2mo
-    return xdf_ao2mo.general(mydf, mo_coeffs, kpts, compact)
+    from pyscf.pbc.df import mdf_ao2mo
+    return mdf_ao2mo.general(mydf, mo_coeffs, kpts, compact)
 
 
 if __name__ == '__main__':

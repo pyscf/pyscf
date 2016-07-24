@@ -4,7 +4,7 @@ import numpy as np
 
 from pyscf.pbc import gto as pgto
 import pyscf.pbc.dft as pdft
-from pyscf.pbc.df import fft, pwdf, xdf
+from pyscf.pbc.df import fft, pwdf, mdf
 
 
 
@@ -310,7 +310,7 @@ cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
 cell1.h = np.eye(3) * 2.5
 cell1.gs = [10] * 3
 cell1.build()
-kdf0 = xdf.XDF(cell1)
+kdf0 = mdf.MDF(cell1)
 kdf0.kpts = kpts
 
 
@@ -357,7 +357,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri1), (0.33709287302019619-0.94185725020966538j), 8)
 
     def test_get_eri_gamma(self):
-        odf0 = xdf.XDF(cell1)
+        odf0 = mdf.MDF(cell1)
         odf = pwdf.PWDF(cell1)
         ref = odf0.get_eri()
         eri0000 = odf.get_eri(compact=True)
@@ -406,14 +406,12 @@ class KnowValues(unittest.TestCase):
     def test_get_eri_0123(self):
         odf = pwdf.PWDF(cell1)
         ref = kdf0.get_eri(kpts)
-        eri1111 = kdf0.get_eri(kpts)
-        self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(eri1111), (1.2917703732167864-0.01477364902643963j), 9)
+        eri1111 = odf.get_eri(kpts)
+        self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
+        self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
 
         ref = fft.DF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, kpts)
-        eri1111 = odf.get_eri(kpts)
-        self.assertTrue(np.allclose(eri1111, ref, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
+        self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
 
     def test_get_mo_eri(self):
         df0 = fft.DF(cell)
@@ -454,7 +452,7 @@ class KnowValues(unittest.TestCase):
 
         eri_mo0 = df0.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
         eri_mo1 = odf.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
-        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-7, rtol=1e-7))
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@
 #
 
 '''
-Exact density fitting with Gaussian and planewaves
+Gaussian and planewaves mixed density fitting
 Ref:
 '''
 
@@ -18,15 +18,15 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 import pyscf.df
-import pyscf.df.xdf
+import pyscf.df.mdf
 from pyscf.pbc import gto as pgto
 from pyscf.pbc.df import incore
 from pyscf.pbc.df import outcore
 from pyscf.pbc import tools
 from pyscf.pbc.df import ft_ao
-from pyscf.df.xdf import _uncontract_basis
-from pyscf.pbc.df import xdf_jk
-from pyscf.pbc.df import xdf_ao2mo
+from pyscf.df.mdf import _uncontract_basis
+from pyscf.pbc.df import mdf_jk
+from pyscf.pbc.df import mdf_ao2mo
 from pyscf.pbc.df import pwdf
 
 #
@@ -127,7 +127,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
                 ptr += 1
 
     chgcell._atm = auxcell._atm
-    chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
+    chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
     chgcell.nimgs = auxcell.nimgs
     chgcell._built = True
@@ -293,7 +293,9 @@ get_pp_loc_part1_less_accurate = get_nuc_less_accurate
 get_pp_loc_part1 = get_nuc
 
 
-class XDF(lib.StreamObject):
+class MDF(lib.StreamObject):
+    '''Gaussian and planewaves mixed density fitting
+    '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -520,12 +522,12 @@ class XDF(lib.StreamObject):
                 pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
                 pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
                 pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
-                kLR = numpy.ndarray((nG,naux), buffer=LkRbuf)
-                kLI = numpy.ndarray((nG,naux), buffer=LkIbuf)
-                kLR [:] = aoaux[i0:i1].real
-                kLI [:] = aoaux[i0:i1].imag
-                yield (pqkR.reshape(-1,nG), kLR.T,
-                       pqkI.reshape(-1,nG), kLI.T, p0+i0, p0+i1)
+                LkR = numpy.ndarray((naux,nG), buffer=LkRbuf)
+                LkI = numpy.ndarray((naux,nG), buffer=LkIbuf)
+                LkR [:] = aoaux[i0:i1].real.T
+                LkI [:] = aoaux[i0:i1].imag.T
+                yield (pqkR.reshape(-1,nG), LkR,
+                       pqkI.reshape(-1,nG), LkI, p0+i0, p0+i1)
 
     def ft_loop(self, cell, auxcell, gs=None, kpt=numpy.zeros(3),
                 kpts=None, max_memory=4000):
@@ -596,20 +598,20 @@ class XDF(lib.StreamObject):
         self.exxdiv = exxdiv
 
         if kpts.shape == (3,):
-            return xdf_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j, with_k)
+            return mdf_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j, with_k)
 
         vj = vk = None
         if with_k:
-            vk = xdf_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band)
+            vk = mdf_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band)
         if with_j:
-            vj = xdf_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
+            vj = mdf_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
         return vj, vk
 
-    get_eri = get_ao_eri = xdf_ao2mo.get_eri
-    ao2mo = get_mo_eri = xdf_ao2mo.general
+    get_eri = get_ao_eri = mdf_ao2mo.get_eri
+    ao2mo = get_mo_eri = mdf_ao2mo.general
 
     def update_mf(self, mf):
-        return xdf_jk.density_fit(mf, with_df=self)
+        return mdf_jk.density_fit(mf, with_df=self)
 
     def update_mp(self):
         pass
@@ -741,7 +743,7 @@ def build_Lpq_atomic(mydf, auxcell, chgcell, drop_eta):
     with h5py.File(mydf._cderi) as feri:
         if 'Lpq' in feri:
             del(feri['Lpq'])
-        Lpq = pyscf.df.xdf._make_Lpq_atomic_approx(mydf.cell, auxcell, solve_Lpq)
+        Lpq = pyscf.df.mdf._make_Lpq_atomic_approx(mydf.cell, auxcell, solve_Lpq)
         feri['Lpq'] = compress_Lpq_to_chgcell(Lpq, auxcell, chgcell)
 
 def compress_Lpq_to_chgcell(Lpq, auxcell, chgcell):

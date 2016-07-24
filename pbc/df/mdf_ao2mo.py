@@ -152,19 +152,18 @@ def get_eri(mydf, kpts=None, compact=True):
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
 
-#:        for (pqkR, LkR, pqkI, LkI, coulG), (rskR, MkR, rskI, MkI, coulG1) in \
+#:        for (pqkR, LkR, pqkI, LkI, p0, p1), (rskR, MkR, rskI, MkI, q0, q1) in \
 #:                lib.izip(mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory),
 #:                         mydf.pw_loop(cell, auxcell, mydf.gs,-kptijkl[2:], max_memory)):
-#:            coulG = numpy.sqrt(coulG)
 #:            pqk = pqkR + pqkI*1j
 #:            Lk  = LkR  + LkI *1j
 #:            pqk -= numpy.dot(Lpq.T, Lk)
-#:            pqk *= coulG
+#:            pqk *= numpy.sqrt(coulG[p0:p1])
 #:            rsk = rskR + rskI*1j
 #:            Mk  = MkR  + MkI *1j
-#:            rsk -= numpy.dot(Mrs.T, Mk)
-#:            rsk *= coulG
-#:            v = numpy.dot(pqk, rsk.conj().T)
+#:            rsk = rsk.conj() - numpy.dot(Mrs.T, Mk.conj())
+#:            rsk *= numpy.sqrt(coulG[p0:p1])
+#:            v = numpy.dot(pqk, rsk.T)
 #:            eriR += v.real
 #:            eriI += v.imag
 
@@ -177,11 +176,14 @@ def get_eri(mydf, kpts=None, compact=True):
             lib.dot(LpqI.T, LkI,  1, pqkR, 1)
             pqkR *= coulG[p0:p1]
             pqkI *= coulG[p0:p1]
+# rho'_rs(G-k_rs) = conj(rho_rs(-G+k_rs))
+#                 = conj(rho_rs(-G+k_rs) - d_{k_rs:Q,rs} * Q(-G+k_rs))
+#                 = rho_rs(G-k_rs) - conj(d_{k_rs:Q,rs}) * Q(G-k_rs)
             lib.dot(MrsR.T, MkR, -1, rskR, 1)
             lib.dot(MrsR.T, MkI, -1, rskI, 1)
-            lib.dot(MrsI.T, MkR, -1, rskI, 1)
-            lib.dot(MrsI.T, MkI,  1, rskR, 1)
-# rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
+            lib.dot(MrsI.T, MkR,  1, rskI, 1)
+            lib.dot(MrsI.T, MkI, -1, rskR, 1)
+# rho_pq(G+k_pq) * conj(rho'_rs(G-k_rs))
             lib.dot(pqkR, rskR.T, 1, eriR, 1)
             lib.dot(pqkI, rskI.T, 1, eriR, 1)
             lib.dot(pqkI, rskR.T, 1, eriI, 1)
@@ -225,7 +227,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
-    from pyscf.pbc.df import xdf
+    from pyscf.pbc.df import mdf
 
     L = 5.
     n = 5
@@ -246,7 +248,7 @@ if __name__ == '__main__':
     numpy.random.seed(1)
     kpts = numpy.random.random((4,3))
     kpts[3] = -numpy.einsum('ij->j', kpts[:3])
-    with_df = xdf.XDF(cell)
+    with_df = mdf.MDF(cell)
     with_df.kpts = kpts
     mo =(numpy.random.random((nao,nao)) +
          numpy.random.random((nao,nao))*1j)

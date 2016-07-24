@@ -29,7 +29,7 @@ class KnowValues(unittest.TestCase):
         mydf.kpts = numpy.random.random((4,3))
         mydf.gs = numpy.asarray((5,)*3)
         mydf.auxbasis = 'weigend'
-        vj = pwdf_jk.get_j_kpts(mydf, dm, 1, None, mydf.kpts)
+        vj = pwdf_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(finger(vj[0]), (0.93946193432413905+0.00010862804196223034j)/4, 9)
         self.assertAlmostEqual(finger(vj[1]), (0.94866073525335626+0.005571199307452865j)  /4, 9)
         self.assertAlmostEqual(finger(vj[2]), (1.1492194255929766+0.0093705761598793739j)  /4, 9)
@@ -45,8 +45,7 @@ class KnowValues(unittest.TestCase):
         mydf = pwdf.PWDF(cell)
         mydf.kpts = kpts
         mydf.auxbasis = 'weigend'
-        mydf.exxdiv = None
-        vk = pwdf_jk.get_k_kpts(mydf, dm, 0, mydf, mydf.kpts)
+        vk = pwdf_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (4.3373802352168278-0.062977052131451577j)/8, 9)
         self.assertAlmostEqual(finger(vk[1]), (2.878809181709983+0.028843869853690692j) /8, 9)
         self.assertAlmostEqual(finger(vk[2]), (3.7027622609953061-0.052034330663180237j)/8, 9)
@@ -59,7 +58,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((8,nao,nao))
         dm = dm + dm.transpose(0,2,1)
-        vk = pwdf_jk.get_k_kpts(mydf, dm, 1, mydf, mydf.kpts)
+        vk = pwdf_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (8.7518173818250702-0.11793770445839372j) /8, 9)
         self.assertAlmostEqual(finger(vk[1]), (5.7682393685317894+0.069482280306391239j)/8, 9)
         self.assertAlmostEqual(finger(vk[2]), (7.1890462727492324-0.088727079644645671j)/8, 9)

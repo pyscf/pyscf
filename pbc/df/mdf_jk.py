@@ -14,7 +14,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.df import pwdf_jk
 
 #
 # Split the Coulomb potential to two parts.  Computing short range part in
@@ -31,16 +30,16 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
             for light elements and even-tempered basis for heavy elements.
         gs : tuple
             number of grids in each (+)direction
-        with_df : XDF object
+        with_df : MDF object
     '''
-    from pyscf.pbc.df import xdf
+    from pyscf.pbc.df import mdf
     if with_df is None:
         if hasattr(mf, 'kpts'):
             kpts = mf.kpts
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
 
-        with_df = xdf.XDF(mf.cell, kpts)
+        with_df = mdf.MDF(mf.cell, kpts)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
@@ -62,7 +61,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         t1 = log.timer_debug1('Init get_j_kpts', *t1)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
-    dms = pwdf_jk._format_dms(dm_kpts, kpts)
+    dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
     auxcell = mydf.auxcell
     naux = auxcell.nao_nr()
@@ -183,7 +182,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         t1 = log.timer_debug1('Init get_k_kpts', *t1)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
-    dms = pwdf_jk._format_dms(dm_kpts, kpts)
+    dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
     auxcell = mydf.auxcell
     naux = auxcell.nao_nr()
@@ -369,7 +368,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         t1 = log.timer_debug1('Init get_jk', *t1)
 
     dm = numpy.asarray(dm, order='C')
-    dms = pwdf_jk._format_dms(dm, [kpt])
+    dms = _format_dms(dm, [kpt])
     nset, _, nao = dms.shape[:3]
     dms = dms.reshape(nset,nao,nao)
 
@@ -483,6 +482,12 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vk.real
         vk = vk.reshape(dm.shape)
     return vj, vk
+
+def _format_dms(dm_kpts, kpts):
+    nkpts = len(kpts)
+    nao = dm_kpts.shape[-1]
+    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
+    return dms
 
 
 if __name__ == '__main__':
