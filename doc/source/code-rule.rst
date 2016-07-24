@@ -22,15 +22,19 @@ General
 
   - Do **not** use other program languages (to keep the package light-weight).
 
-* Loose-coupling principle
+* Conservative on advanced language feature.
 
-  - Reinventing-wheel is accepted (to reduce the entanglement to the
-    rest of the package).
+* Minimal dependence principle
+
+  - Minimal requirements on 3rd party program or libraries.
+
+  - Loose-coupling between modules so that the failure of one module can
+    have minimal effects on the other modules.
 
 * Not enforced but recommended
   - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
   - Following C89 standard for C code;
-  - Using ctypes to bridge C/python functions, (to keep minimal dependence on third-party tools)
+  - Using ctypes to bridge C/python functions
 
 
 Name convention

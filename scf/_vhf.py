@@ -407,11 +407,11 @@ def rdirect_mapdm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C'),)
+        dms = (numpy.asarray(dms, order='C', dtype=numpy.complex128),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-        dms = numpy.asarray(dms, order='C')
+        dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
     if isinstance(jkdescript, str):
         njk = 1
         jkdescript = (jkdescript,)
@@ -471,11 +471,11 @@ def rdirect_bindm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         n_dm = 1
         nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C'),)
+        dms = (numpy.asarray(dms, order='C', dtype=numpy.complex128),)
     else:
         n_dm = len(dms)
         nao = dms[0].shape[0]
-        dms = numpy.asarray(dms, order='C')
+        dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
     if isinstance(jkdescript, str):
         njk = 1
         jkdescript = (jkdescript,)

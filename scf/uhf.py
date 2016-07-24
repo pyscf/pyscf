@@ -565,6 +565,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     Args:
          mol: an instance of :class:`Mole`
+
          dm : a list of 2D ndarrays
               a list of density matrices
 

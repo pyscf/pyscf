@@ -99,7 +99,7 @@
   - Molecule symmetry detection
   - Symmetry adapted basis
   - Label orbital symmetry on the fly
-  - Change symmetry information on the fly
+  - Hot update symmetry information
   - Function to symmetrize given orbital space
 
 * Tools
