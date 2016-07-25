@@ -47,9 +47,9 @@ endif()
 
 find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
-execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print numpy.get_include()"
-  OUTPUT_VARIABLE NUMPY_INCLUDE)
-include_directories(${PROJECT_SOURCE_DIR} ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
+#  OUTPUT_VARIABLE NUMPY_INCLUDE)
+#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
 include(ExternalProject)
 # remove the following comment for if ... eles, to bypass the compilation of libcint
@@ -63,6 +63,7 @@ include(ExternalProject)
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
   )
 #endif()
+include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib ${PROJECT_SOURCE_DIR}/deps/lib64)
 
