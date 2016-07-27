@@ -9,6 +9,7 @@
 DMRG solver for CASCI and CASSCF.
 '''
 
+import ctypes
 import os
 import sys
 import struct
@@ -22,6 +23,11 @@ from pyscf.lib import logger
 from pyscf.lib import chkfile
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrg_sym
+
+import pyscf.lib
+
+libE3unpack = pyscf.lib.load_library('libE3unpack')
+
 
 try:
     from pyscf.dmrgscf import settings
@@ -75,7 +81,7 @@ class DMRGCI(pyscf.lib.StreamObject):
     >>> mc.kernel()
     -74.379770619390698
     '''
-    def __init__(self, mol, maxM=None, tol=None):
+    def __init__(self, mol, maxM=None, tol=None, num_thrds=1, memory=None):
         self.mol = mol
         self.verbose = mol.verbose
         self.stdout = mol.stdout
@@ -84,6 +90,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.executable = settings.BLOCKEXE
         self.scratchDirectory = settings.BLOCKSCRATCHDIR
         self.mpiprefix = settings.MPIPREFIX
+        self.memory = memory
 
         self.integralFile = "FCIDUMP"
         self.configFile = "dmrg.conf"
@@ -99,6 +106,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.nroots = 1
         self.weights = []
         self.wfnsym = 1
+        self.extraline = []
 
         if tol is None:
             self.tol = 1e-8
@@ -108,6 +116,8 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.maxM = 1000
         else:
             self.maxM = maxM
+
+        self.num_thrds= num_thrds
         self.startM =  None
         self.restart = False
         self.nonspinAdapted = False
@@ -142,7 +152,7 @@ class DMRGCI(pyscf.lib.StreamObject):
     def generate_schedule(self):
 
         if self.startM is None:
-            self.startM = 25
+            self.startM = 200
         if len(self.scheduleSweeps) == 0:
             startM = self.startM
             N_sweep = 0
@@ -195,6 +205,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         log.info('fullrestart = %s', str(self.restart or self._restart))
         log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
         log.info('wfnsym = %s', self.wfnsym)
+        log.info('num_thrds = %d', self.num_thrds)
         return self
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
@@ -298,6 +309,66 @@ class DMRGCI(pyscf.lib.StreamObject):
                + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
+
+    def make_rdm3(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+        import os
+
+        if self.has_threepdm == False:
+            self.twopdm = False
+            self.extraline.append('threepdm\n')
+
+            writeDMRGConfFile(self, nelec, False)
+            if self.verbose >= logger.DEBUG1:
+                inFile = self.configFile
+                #inFile = os.path.join(self.scratchDirectory,self.configFile)
+                logger.debug1(self, 'Block Input conf')
+                logger.debug1(self, open(inFile, 'r').read())
+            executeBLOCK(self)
+            if self.verbose >= logger.DEBUG1:
+                outFile = self.outputFile
+                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                logger.debug1(self, open(outFile).read())
+            self.has_threepdm = True
+            self.extraline.pop()
+
+        nelectrons = 0
+        if isinstance(nelec, (int, numpy.integer)):
+            nelectrons = nelec
+        else:
+            nelectrons = nelec[0]+nelec[1]
+
+        if (filetype == "binary") :
+            fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin" %(state, state))
+            fnameout = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+            libE3unpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+
+            E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
+            
+        else :
+            fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.txt" %(state, state))
+            f = open(fname, 'r')
+            lines = f.readlines()
+            E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt)
+            for line in lines[1:]:
+                linesp = line.split()
+                if (len(linesp) != 7) :
+                    continue
+                a, b, c, d, e, f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
+                E3[a,b,c, f,e,d] = integral
+                E3[a,c,b, f,d,e] = integral
+                E3[b,a,c, e,f,d] = integral
+                E3[b,c,a, e,d,f] = integral
+                E3[c,a,b, d,f,e] = integral
+                E3[c,b,a, d,e,f] = integral
+                
+        return E3
+
+    def clearSchedule(self):
+        self.scheduleSweeps = []
+        self.scheduleMaxMs = []
+        self.scheduleTols = []
+        self.scheduleNoises = []
 
     def nevpt_intermediate(self, tag, norb, nelec, state, **kwargs):
 
@@ -409,6 +480,10 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     confFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.configFile)
 
     f = open(confFile, 'w')
+
+    if (DMRGCI.memory is not None):
+        f.write('memory, %i, g\n'%(DMRGCI.memory))
+
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2 + nelec%2
         nelecb = nelec - neleca
@@ -485,6 +560,10 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         for weight in DMRGCI.weights:
             f.write('%f '%weight)
         f.write('\n')
+
+    f.write('num_thrds %d\n'%DMRGCI.num_thrds)
+    for line in DMRGCI.extraline:
+        f.write('%s\n'%line)
     for line in DMRGCI.block_extra_keyword:
         f.write('%s\n'%line)
     for line in extraline:
@@ -537,7 +616,7 @@ def readEnergy(DMRGCI):
         return numpy.asarray(calc_e)
 
 
-def DMRGSCF(mf, norb, nelec, *args, **kwargs):
+def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     '''Shortcut function to setup CASSCF using the DMRG solver.  The DMRG
     solver is properly initialized in this function so that the 1-step
     algorithm can applied with DMRG-CASSCF.
@@ -551,7 +630,7 @@ def DMRGSCF(mf, norb, nelec, *args, **kwargs):
     -74.414908818611522
     '''
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
-    mc.fcisolver = DMRGCI(mf.mol)
+    mc.fcisolver = DMRGCI(mf.mol, maxM, tol=tol)
     mc.callback = mc.fcisolver.restart_scheduler_()
     if mc.chkfile == mc._scf._chkfile.name:
         # Do not delete chkfile after mcscf
