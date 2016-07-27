@@ -2,24 +2,27 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# FCI solver for arbitary number of alpha and beta electrons.  The hamiltonian
-# requires spacial part of the integrals (RHF/ROHF MO integrals).  This solver
-# can be used to compute doublet, triplet,...
-#
-# Other files in the directory
-# direct_spin0 singlet
-# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
-#              MO integrals
-# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
-#              MO integrals
-#
 
 '''
-Full CI solver for spin-free Hamiltonian.
+Full CI solver for spin-free Hamiltonian.  This solver can be used to compute
+doublet, triplet,...
 
 The CI wfn are stored as a 2D array [alpha,beta], where each row corresponds
 to an alpha string.  For each row (alpha string), there are
 total-num-beta-strings of columns.  Each column corresponds to a beta string.
+
+Different FCI solvers are implemented to support different type of symmetry.
+                    Symmetry
+File                Point group   Spin singlet   Real hermitian*    Alpha/beta degeneracy
+direct_spin0_symm   Yes           Yes            Yes                Yes
+direct_spin1_symm   Yes           No             Yes                Yes
+direct_spin0        No            Yes            Yes                Yes
+direct_spin1        No            No             Yes                Yes
+direct_uhf          No            No             Yes                No
+direct_nosym        No            No             No**               Yes
+
+*  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
+** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 '''
 
 import sys

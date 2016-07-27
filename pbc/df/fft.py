@@ -151,19 +151,21 @@ class DF(lib.StreamObject):
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
+        if gs is None:
+            gs = self.gs
+        else:
+            self.gs = gs
+        ngrids = numpy.prod(numpy.asarray(gs)*2+1)
+
         if (self._numint.cell is None or id(cell) != id(self._numint.cell) or
             self._numint._deriv != 0 or
             self._numint._kpts.shape != kpts.shape or
             abs(self._numint._kpts - kpts).sum() > 1e-9 or
+            self._numint._coords.shape[0] != ngrids or
             (gs is not None and numpy.any(gs != self.gs))):
 
-            if gs is None:
-                gs = self.gs
-            else:
-                self.gs = gs
-            coords = gen_grid.gen_uniform_grids(cell, gs)
             nkpts = len(kpts)
-            ngrids = coords.shape[0]
+            coords = gen_grid.gen_uniform_grids(cell, gs)
             nao = cell.nao_nr()
             blksize = int(self.max_memory*1e6/(nkpts*nao*16*numint.BLKSIZE))*numint.BLKSIZE
             blksize = min(max(blksize, numint.BLKSIZE), ngrids)
