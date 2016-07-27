@@ -26,7 +26,7 @@ from pyscf.dmrgscf import dmrg_sym
 
 import pyscf.lib
 
-libE3unpack = pyscf.lib.load_library('libE3unpack')
+libE3unpack = pyscf.lib.load_library('libicmpspt')
 
 
 try:
