@@ -126,7 +126,7 @@ int CINTinit_int1e_EnvVars(CINTEnvVars *envs, const int *ng, const int *shls,
                            const int *atm, const int natm,
                            const int *bas, const int nbas, const double *env);
 
-static int init1e_envs(CINTEnvVars *envs, const int *shls,
+static void init1e_envs(CINTEnvVars *envs, const int *shls,
                        const int *atm, const int natm,
                        const int *bas, const int nbas, const double *env)
 {
@@ -1438,7 +1438,7 @@ void PBC_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), double complex *mat,
 
 #pragma omp parallel default(none) \
         shared(intor, mat, Gv, invh, gxyz, gs, nGv, ao_loc, \
-               eval_gz, hermi, atm, natm, bas, nbas, env)
+               dims, eval_gz, hermi, atm, natm, bas, nbas, env)
 {
         int i, j, k, ij, di, dj;
         int shls[2];
