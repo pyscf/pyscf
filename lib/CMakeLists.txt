@@ -78,6 +78,7 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(cc)
+add_subdirectory(icmpspt)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
