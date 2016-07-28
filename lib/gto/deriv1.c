@@ -307,9 +307,7 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
 {
         const int degen = _len_cart[l];
         const int gtosize = nc*degen*blksize;
-        int lx, ly, lz, i, j, k, n;
-        char mask[blksize+16];
-        int *imask = (int *)mask;
+        int lx, ly, lz, i, k, n;
         double xinv, yinv, zinv;
         double ax, ay, az, tmp, tmp1;
         double ce[6];
@@ -601,52 +599,6 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
                                 if (NOTZERO(exps[i])) {
-                                        mask[i] = 1;
-                                } else {
-                                        mask[i] = 0;
-                                }
-                        }
-                        for (i = 0; i < blksize/4; i++) {
-                                if (imask[i]) {
-        for (j = 0; j < 4; j++) {
-                xpows[j] = 1;
-                ypows[j] = 1;
-                zpows[j] = 1;
-        }
-        for (lx = 1; lx <= l; lx++) {
-                for (j = 0; j < 4; j++) {
-                        xpows[lx*4+j] = xpows[(lx-1)*4+j] * gridx[i*4+j];
-                        ypows[lx*4+j] = ypows[(lx-1)*4+j] * gridy[i*4+j];
-                        zpows[lx*4+j] = zpows[(lx-1)*4+j] * gridz[i*4+j];
-                }
-        }
-        for (lx = l, n = 0; lx >= 0; lx--) {
-        for (ly = l - lx; ly >= 0; ly--, n++) {
-                lz = l - lx - ly;
-                for (j = 0; j < 4; j++) {
-                        xinv = lx/(gridx[i*4+j]+1e-200);
-                        yinv = ly/(gridy[i*4+j]+1e-200);
-                        zinv = lz/(gridz[i*4+j]+1e-200);
-                        tmp = exps_2a[i*4+j]/(exps[i*4+j]+1e-200);
-                        tmp1 = xpows[lx*4+j] * ypows[ly*4+j]
-                             * zpows[lz*4+j] * exps[i*4+j];
-                        gtox[n*blksize+i*4+j] = (xinv + tmp*gridx[i*4+j]) * tmp1;
-                        gtoy[n*blksize+i*4+j] = (yinv + tmp*gridy[i*4+j]) * tmp1;
-                        gtoz[n*blksize+i*4+j] = (zinv + tmp*gridz[i*4+j]) * tmp1;
-                }
-        } }
-                                } else {
-        for (n = 0; n < degen; n++) {
-                for (j = 0; j < 4; j++) {
-                        gtox[n*blksize+i*4+j] = 0;
-                        gtoy[n*blksize+i*4+j] = 0;
-                        gtoz[n*blksize+i*4+j] = 0;
-                }
-        }
-                                }
-                        }
-                        for (i = i*4; i < blksize; i++) {
-                                if (mask[i]) {
                                         xpows[0] = 1;
                                         ypows[0] = 1;
                                         zpows[0] = 1;
