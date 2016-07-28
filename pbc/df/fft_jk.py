@@ -105,7 +105,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
         vk_kpts = [0] * nset
         for k2, ao_k2 in mydf.aoR_loop(cell, gs, kpts):
             kpt2 = kpts[k2]
-            vkR_k1k2 = get_vkR(mydf, cell, aoR_kband, ao_k2, kpt_band, kpt2, coords)
+            vkR_k1k2 = get_vkR(mydf, cell, aoR_kband, ao_k2, kpt_band, kpt2,
+                               coords, gs)
             #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
             #:            dm_kpts[k2], aoR_kband.conj(), vkR_k1k2, ao_k2)
             for i in range(nset):
@@ -126,7 +127,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
             aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
             for k1, ao_k1 in mydf.aoR_loop(cell, gs, kpts):
                 kpt1 = kpts[k1]
-                vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2, coords)
+                vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
+                                   coords, gs)
                 for i in range(nset):
                     tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
                     vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
@@ -221,7 +223,7 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
     return vk.reshape(dm.shape)
 
 
-def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords):
+def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs):
     '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r)
     where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
 
@@ -240,14 +242,14 @@ def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords):
     '''
     ngs, nao = aoR_k1.shape
     expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
-    coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mydf)
+    coulG = tools.get_coulG(cell, kpt1-kpt2, True, mydf, gs)
 
     def prod(ij):
         i, j = divmod(ij, nao)
         rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
-        rhoG = tools.fftk(rhoR, cell.gs, expmikr)
+        rhoG = tools.fftk(rhoR, gs, expmikr)
         vG = coulG*rhoG
-        vR = tools.ifftk(vG, cell.gs, expmikr.conj())
+        vR = tools.ifftk(vG, gs, expmikr.conj())
         return vR
 
     if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:

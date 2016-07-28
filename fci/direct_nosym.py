@@ -2,10 +2,21 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Paticle permutation symmetry for 2e Hamiltonian only
-# h2e[i,j,k,l] == h2e[k,l,i,j]
-# h2e[i,j,k,l] =/= h2e[j,i,k,l] =/= h2e[i,j,l,k] ...
-#
+
+'''
+Different FCI solvers are implemented to support different type of symmetry.
+                    Symmetry
+File                Point group   Spin singlet   Real hermitian*    Alpha/beta degeneracy
+direct_spin0_symm   Yes           Yes            Yes                Yes
+direct_spin1_symm   Yes           No             Yes                Yes
+direct_spin0        No            Yes            Yes                Yes
+direct_spin1        No            No             Yes                Yes
+direct_uhf          No            No             Yes                No
+direct_nosym        No            No             No**               Yes
+
+*  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
+** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+'''
 
 import sys
 import ctypes

@@ -2,16 +2,21 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# FCI solver for equivalent number of alpha and beta electrons
-# (requires MS=0, can be singlet, triplet, quintet, dep on init guess)
-#
-# Other files in the directory
-# direct_spin0 singlet
-# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
-#              MO integrals
-# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
-#              MO integrals
-#
+
+'''
+Different FCI solvers are implemented to support different type of symmetry.
+                    Symmetry
+File                Point group   Spin singlet   Real hermitian*    Alpha/beta degeneracy
+direct_spin0_symm   Yes           Yes            Yes                Yes
+direct_spin1_symm   Yes           No             Yes                Yes
+direct_spin0        No            Yes            Yes                Yes
+direct_spin1        No            No             Yes                Yes
+direct_uhf          No            No             Yes                No
+direct_nosym        No            No             No**               Yes
+
+*  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
+** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+'''
 
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin0
