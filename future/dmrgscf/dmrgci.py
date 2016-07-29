@@ -420,13 +420,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         if isinstance(DMRGCI.wfnsym, str):
             wfnsym = dmrg_sym.irrep_name2id(DMRGCI.groupname, DMRGCI.wfnsym)
         else:
-            import pyscf.symm
-            if DMRGCI.groupname.lower() == 'dooh':
-                gpname = 'D2h'
-            elif DMRGCI.groupname.lower() == 'coov':
-                gpname = 'C2v'
-            else:
-                gpname = pyscf.symm.std_symb(DMRGCI.groupname)
+            gpname = dmrg_sym.d2h_subgroup(DMRGCI.groupname)
             assert(DMRGCI.wfnsym in dmrg_sym.IRREP_MAP[gpname])
             wfnsym = DMRGCI.wfnsym
         f.write('irrep %i\n' % wfnsym)
@@ -456,12 +450,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         f.write('onedot \n')
 
     if DMRGCI.groupname is not None:
-        if DMRGCI.groupname.lower() == 'dooh':
-            f.write('sym d2h\n' )
-        elif DMRGCI.groupname.lower() == 'coov':
-            f.write('sym c2v\n' )
-        else:
-            f.write('sym %s\n' % DMRGCI.groupname.lower())
+        f.write('sym %s\n' % dmrg_sym.d2h_subgroup(DMRGCI.groupname).lower())
     f.write('orbitals %s\n' % os.path.join(DMRGCI.runtimeDir,
                                            DMRGCI.integralFile))
     if maxIter is None:
