@@ -14,7 +14,7 @@ General
 
 * To extend python function with C/Fortran:
 
-  - Following C89 standard for C code.  (complex? variable length array?)
+  - Following C89 (gnu89) standard for C code.  (complex? variable length array?)
     http://flash-gordon.me.uk/ansi.c.txt
 
   - Following Fortran 95 standard for Fortran code.
@@ -33,7 +33,7 @@ General
 
 * Not enforced but recommended
   - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
-  - Following C89 standard for C code;
+  - Following C89 (gnu89) standard for C code;
   - Using ctypes to bridge C/python functions
 
 
