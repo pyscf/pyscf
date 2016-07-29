@@ -93,6 +93,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Fvv -= fvv
     Foo -= foo
 
+    # TODO: Remove symmetry-related ERIs.
     # eris might be an HDF5 Dataset, so _cp to ndarray
     eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
     eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
@@ -116,8 +117,10 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Ftmp = Foo + 0.5*einsum('je,me->mj',t1,Fov)
     tmp = einsum('imab,mj->ijab',t2,Ftmp)
     t2new -= (tmp - tmp.transpose(1,0,2,3))
-    t2new += ( 0.5*einsum('mnab,mnij->ijab',tau,Woooo) 
-             + 0.5*einsum('ijef,abef->ijab',tau,Wvvvv) )
+    t2new += 0.5*einsum('mnab,mnij->ijab',tau,Woooo) 
+    #t2new += 0.5*einsum('ijef,abef->ijab',tau,Wvvvv)
+    for a in range(nvir):
+        t2new[:,:,a,:] += 0.5*einsum('ijef,bef->ijb',tau,Wvvvv[a])
     tmp = einsum('imae,mbej->ijab',t2,Wovvo) 
     tmp -= einsum('ie,ma,mbej->ijab',t1,t1,eris_ovvo)
     t2new += ( tmp - tmp.transpose(0,1,3,2) 
@@ -501,7 +504,7 @@ class _ERIS:
         nocc = cc.nocc()
         nmo = cc.nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
+        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize 
@@ -526,13 +529,6 @@ class _ERIS:
             self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
             self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
             self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy() 
-            #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-            #self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-            #for i in range(nocc):
-            #    for j in range(nvir):
-            #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-            #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
-
         else:
             print "*** Using HDF5 ERI storage ***"
             _tmpfile1 = tempfile.NamedTemporaryFile()
@@ -594,3 +590,14 @@ class _ERIS:
 
         log.timer('CCSD integral transformation', *cput0)
 
+
+def _mem_usage(nocc, nvir):
+    incore = (nocc**4 + 2*nocc**3*nvir
+        + 2*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4)*8/1e6
+    # Additional ERIs to be removed, by symmetry
+    incore += (nocc**3*nvir + nocc**2*nvir**2 + nocc*nvir**3)*8/1e6
+    # Roughly, factor of two for intermediates and factor of two 
+    # for safety (temp arrays, copying, etc)
+    incore *= 4
+    outcore = basic = incore
+    return incore, outcore, basic

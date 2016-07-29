@@ -1,3 +1,7 @@
+import tempfile
+import h5py
+import numpy as np
+
 from pyscf.pbc import lib as pbclib
 from pyscf.cc.ccsd import _cp
 
@@ -54,9 +58,20 @@ def cc_Woooo(t1,t2,eris):
 def cc_Wvvvv(t1,t2,eris):
     eris_vovv = _cp(eris.ovvv).transpose(1,0,3,2)
     tau = make_tau(t2,t1,t1)
-    tmp = einsum('mb,amef->abef',t1,eris_vovv)
-    Wabef = eris.vvvv - tmp + tmp.transpose(1,0,2,3)
-    Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
+    #tmp = einsum('mb,amef->abef',t1,eris_vovv)
+    #Wabef = eris.vvvv - tmp + tmp.transpose(1,0,2,3)
+    #Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
+    if t1.dtype == np.complex: ds_type = 'c16'
+    else: ds_type = 'f8'
+    _tmpfile1 = tempfile.NamedTemporaryFile()
+    fimd = h5py.File(_tmpfile1.name)
+    nocc, nvir = t1.shape
+    Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
+    for a in range(nvir):
+        tmp = einsum('mb,mef->bef',t1,eris_vovv[a])
+        tmp_tr = einsum('m,bmef->bef',t1[:,a],eris_vovv)
+        Wabef[a] = eris.vvvv[a] - tmp[:] + tmp_tr[:]
+        Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
     return Wabef
 
 def cc_Wovvo(t1,t2,eris):

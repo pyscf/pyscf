@@ -1,5 +1,9 @@
+import time
 import numpy as np
 import scipy.linalg
+
+from pyscf import lib
+from pyscf.lib import logger
 
 '''
 Extension to scipy.linalg module developed for PBC branch.
@@ -10,7 +14,7 @@ method = 'davidson'
 
 VERBOSE = False 
 
-def eigs(matvec,size,nroots,Adiag=None,guess=False):
+def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
     '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.
     '''
@@ -19,15 +23,15 @@ def eigs(matvec,size,nroots,Adiag=None,guess=False):
     def matvec_args(vec, args=None):
         return matvec(vec)
 
-    nroots = min(nroots,size)
+    nroots = min(nroots, size)
 
     if method == 'davidson':
         if guess == False:
-            e, c, niter = davidson(matvec,size,nroots,Adiag)
+            conv, e, c, niter = davidson(matvec, size, nroots, Adiag, verbose)
         else:
-            e, c, niter = davidson_guess(matvec,size,nroots,Adiag)
-        print "Davidson converged in %d iterations"%(niter)
-        return e,c
+            conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
+        #print "Davidson converged in %d iterations"%(niter)
+        return conv, e, c
     elif method == 'arnoldi':
         # Currently not used:
         x = np.ones((size,1))
@@ -47,13 +51,22 @@ def eigs(matvec,size,nroots,Adiag=None,guess=False):
 
 
 #@profile
-def davidson(mult_by_A,N,neig,Adiag=None):
+def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
     """Diagonalize a matrix via non-symmetric Davidson algorithm.
 
     mult_by_A() is a function which takes a vector of length N
         and returns a vector of length N.
     neig is the number of eigenvalues requested
     """
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        import sys
+        log = logger.Logger(sys.stdout, verbose)
+
+    cput1 = (time.clock(), time.time())
+
     Mmin = min(neig,N)
     Mmax = min(N,2000)
     tol = 1e-6
@@ -74,8 +87,11 @@ def davidson(mult_by_A,N,neig,Adiag=None):
 
     xi = np.zeros(N,np.complex)
 
+    lamda_k_old = 0
+    lamda_k = 0
     target = 0
-    for M in range(Mmin,Mmax+1):
+    conv = False
+    for istep,M in enumerate(range(Mmin,Mmax+1)):
         if M == Mmin:
             # Set of M unit vectors from lowest Adiag (NxM)
             b = np.zeros((N,M))
@@ -96,15 +112,19 @@ def davidson(mult_by_A,N,neig,Adiag=None):
 
         Atilde = np.dot(b.conj().transpose(),Ab)
         lamda, alpha = diagonalize_asymm(Atilde)
-        lamda_k = lamda[target]
+        lamda_k_old, lamda_k = lamda_k, lamda[target]
         alpha_k = alpha[:,target]
 
         if M == Mmax:
             break
 
         q = np.dot( Ab-lamda_k*b, alpha_k )
+        log.info('davidson istep = %d  root = %d  E = %.15g  dE = %.9g  residual = %.6g',
+                 istep, target, lamda_k.real, (lamda_k - lamda_k_old).real, np.linalg.norm(q))
+        cput1 = log.timer('davidson iter', *cput1)
         if np.linalg.norm(q) < tol:
             if target == neig-1:
+                conv = True
                 break
             else:
                 target += 1
@@ -119,13 +139,13 @@ def davidson(mult_by_A,N,neig,Adiag=None):
         # append orthonormalized xi to b
         b = np.column_stack((b,bxi[:,-1]))
 
-    if M > Mmin and M == Mmax:
-        print("WARNING: Davidson algorithm reached max basis size "
-              "M = %d without converging."%(M))
+    #if M > Mmin and M == Mmax:
+    #    print("WARNING: Davidson algorithm reached max basis size "
+    #          "M = %d without converging."%(M))
 
     # Express alpha in original basis
     evecs = np.dot(b,alpha) # b is N x M, alpha is M x M
-    return lamda[:neig], evecs[:,:neig], M
+    return conv, lamda[:neig], evecs[:,:neig], istep 
 
 
 def davidson_guess(mult_by_A,N,neig,Adiag=None):
@@ -157,11 +177,12 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
 
     xi = np.zeros(N,np.complex)
 
-    evals = np.zeros(neig)
+    evals = np.zeros(neig,np.complex)
     evecs = np.zeros((N,neig),np.complex)
 
     Mtot = 0
     for guess in range(neig):
+        print "Working on guess =", guess+1, "/", neig
         for M in range(1,Mmax+1):
             if M == 1:
                 # Unit vector 'target' as the guess
@@ -186,6 +207,7 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
             alpha_k = alpha[:,target]
 
             if M == Mmax:
+                print " -- M reached Mmax"
                 break
 
             q = np.dot( Ab-lamda_k*b, alpha_k )
@@ -193,6 +215,7 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
                 evals[guess] = lamda_k
                 evecs[:,guess] = np.dot(b,alpha_k)
                 Mtot += M
+                print " -- Converged in", M, "iterations"
                 break
 
             for i in range(N):
