@@ -80,6 +80,11 @@ def einsum(idx_str, *tensors):
     inner_shape = 1
     insert_B_loc = 0
     for n in shared_idxAB:
+        if rangeA[n] != rangeB[n]:
+            print "ERROR: Range of index", n, "is different in A (%d) and B (%d)"%(
+                    rangeA[n], rangeB[n])
+            raise SystemExit
+
         # Bring idx all the way to the right for A
         # and to the left (but preserve order) for B
         idxA_n = idxAt.index(n)
