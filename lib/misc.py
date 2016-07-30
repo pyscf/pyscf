@@ -420,7 +420,8 @@ def background_process(func, *args, **kwargs):
     thread.start()
     return thread
 
-bg = background = background_process
+bg = background = bg_thread = background_thread
+bp = bg_process = background_process
 
 
 if __name__ == '__main__':

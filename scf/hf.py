@@ -1096,6 +1096,14 @@ class SCF(lib.StreamObject):
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
+    def update_from_chk(self, chkfile=None):
+        '''Read attributes from the chkfile then replace the attributes of
+        current object.
+        '''
+        if chkfile is None: chkfile = self.chkfile
+        self.__dict__.update(pyscf.scf.chkfile.load(chkfile, 'scf'))
+        return self
+
     def get_init_guess(self, mol=None, key='minao'):
         if callable(key):
             dm = key(mol)
