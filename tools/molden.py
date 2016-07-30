@@ -153,9 +153,9 @@ def load(moldenfile):
             elif '[MO]' in line:
                 break
             line = f.readline()
-        if mol.tot_electrons() % 2 == 0:
+        try:
             mol.build(0, 0)
-        else:
+        except RuntimeError:
             mol.build(0, 0, spin=1)
 
         data = f.read()
