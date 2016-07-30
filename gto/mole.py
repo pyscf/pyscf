@@ -409,7 +409,6 @@ def conc_mol(mol1, mol2):
     mol3.light_speed = mol1.light_speed
     mol3.charge = mol1.charge + mol2.charge
     mol3.spin = mol1.spin + mol2.spin
-    mol3.nelectron = mol1.nelectron + mol2.nelectron
     mol3.symmetry = False
     mol3.symmetry_subgroup = None
     mol3._atom = mol1._atom + mol2._atom
@@ -1456,7 +1455,6 @@ class Mole(pyscf.lib.StreamObject):
         self.stdout = sys.stdout
         self.groupname = 'C1'
         self.topgroup = 'C1'
-        self.nelectron = 0
         self.symm_orb = None
         self.irrep_id = None
         self.irrep_name = None
@@ -1474,9 +1472,15 @@ class Mole(pyscf.lib.StreamObject):
     @property
     def nbas(self):
         return len(self._bas)
+
+    @property
+    def nelectron(self):
+        return tot_electrons(self)
     @property
     def nelec(self):
-        return (self.nelectron+self.spin)//2, (self.nelectron-self.spin)//2
+        nalpha = (self.nelectron+self.spin)//2
+        nbeta = nalpha - self.spin
+        return nalpha, nbeta
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -1629,7 +1633,6 @@ class Mole(pyscf.lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
