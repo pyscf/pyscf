@@ -9,8 +9,12 @@
 #include "cint.h"
 #include "vhf/fblas.h"
 
+//#define ATOM_OF         0
+//#define ANG_OF          1
 #define RADI_POWER      3
 #define ECP_LMAX        4
+//#define PTR_EXP         5
+//#define PTR_COEFF       6
 #define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define CUTOFF          460  // ~ 1e200
@@ -1620,6 +1624,11 @@ int ECPrad_part_step(double *ur, double *rs, int nrs, int step,
                                 ubuf[i] *= r2[i];
                         }
                         break;
+                case 3:
+                        for (i = 0; i < nrs_now; i++) {
+                                ubuf[i] *= r2[i] * rs[i];
+                        }
+                        break;
                 }
 
                 for (i = 0; i < nrs_now; i++) {
@@ -1673,6 +1682,11 @@ int ECPrad_part(double *ur, double *rs, int nrs, int inc,
                 case 2:
                         for (i = 0; i < nrs_now; i++) {
                                 ubuf[i] *= r2[i];
+                        }
+                        break;
+                case 3:
+                        for (i = 0; i < nrs_now; i++) {
+                                ubuf[i] *= r2[i] * rs[i*inc];
                         }
                         break;
                 }

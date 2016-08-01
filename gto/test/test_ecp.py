@@ -27,8 +27,40 @@ class KnowValues(unittest.TestCase):
         mf = scf.RHF(mol)
         self.assertAlmostEqual(mf.kernel(), -0.45002331958981223, 10)
 
+    def test_bfd(self):
+        mol = gto.M(atom='H 0. 0. 0.',
+                    basis={'H':'bfd-vdz'},
+                    ecp = {'H':'bfd-pp'},
+                    spin = 1,
+                    verbose=0)
+        mf = scf.RHF(mol)
+        self.assertAlmostEqual(mf.kernel(), -0.499045, 6)
+
+        mol = gto.M(atom='Na 0. 0. 0.',
+                    basis={'Na':'bfd-vtz'},
+                    ecp = {'Na':'bfd-pp'},
+                    spin = 1,
+                    verbose=0)
+        mf = scf.RHF(mol)
+        self.assertAlmostEqual(mf.kernel(), -0.181799, 6)
+
+        mol = gto.M(atom='Mg 0. 0. 0.',
+                    basis={'Mg':'bfd-vtz'},
+                    ecp = {'Mg':'bfd-pp'},
+                    spin = 0,
+                    verbose=0)
+        mf = scf.RHF(mol)
+        self.assertAlmostEqual(mf.kernel(), -0.784579, 6)
+
+#        mol = gto.M(atom='Ne 0. 0. 0.',
+#                    basis={'Ne':'bfd-vdz'},
+#                    ecp = {'Ne':'bfd-pp'},
+#                    verbose=0)
+#        mf = scf.RHF(mol)
+#        self.assertAlmostEqual(mf.kernel(), -34.709059, 6)
+
 
 if __name__ == '__main__':
-    print("Full Tests for H2O")
+    print("Full Tests for ECP")
     unittest.main()
 

@@ -308,8 +308,7 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         const int degen = _len_cart[l];
         const int gtosize = nc*degen*blksize;
         int lx, ly, lz, i, k, n;
-        double xinv, yinv, zinv;
-        double ax, ay, az, tmp, tmp1;
+        double ax, ay, az, tmp;
         double ce[6];
         double rre[10];
         double xpows_1less_in_power[64];

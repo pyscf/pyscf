@@ -220,7 +220,10 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
 def format_basis(basis_tab):
     '''Convert the input :attr:`Mole.basis` to the internal data format.
 
-    ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
+    ``{ atom: [(l, ((-exp, c_1, c_2, ..),
+                    (-exp, c_1, c_2, ..))),
+               (l, ((-exp, c_1, c_2, ..),
+                    (-exp, c_1, c_2, ..)))], ... }``
 
     Args:
         basis_tab : dict
@@ -291,6 +294,18 @@ def uncontract_basis(_basis):
 uncontract = uncontract_basis
 
 def format_ecp(ecp_tab):
+    '''
+    ``{ atom: (nelec,  # core electrons
+               ((l,  # l=-1 for UL, l>=0 for Ul to indicate |l><l|
+                 (((exp_1, c_1),  # for r^0
+                   (exp_2, c_2),
+                   ...),
+                  ((exp_1, c_1),  # for r^1
+                   (exp_2, c_2),
+                   ...),
+                  ((exp_1, c_1),  # for r^2
+                   ...))))), ...}
+    '''
     fmt_ecp = {}
     for atom in ecp_tab.keys():
         symb = _symbol(atom)
@@ -301,8 +316,8 @@ def format_ecp(ecp_tab):
         if isinstance(ecp_tab[atom], str):
             try:
                 fmt_ecp[symb] = basis.load_ecp(ecp_tab[atom], stdsymb)
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                sys.stderr.write(str(e))
         else:
             fmt_ecp[symb] = ecp_tab[atom]
     return fmt_ecp
