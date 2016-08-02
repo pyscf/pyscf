@@ -5,6 +5,7 @@
 
 '''
 XC functional, the interface to xcfun (https://github.com/dftlibs/xcfun)
+U. Ekstrom et al, J. Chem. Theory Comput., 6, 1971
 '''
 
 import copy
@@ -305,13 +306,20 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
           | v2sigmatau[:,6]
 
         * kxc for restricted case:
-          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
+          v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+          v3rho2tau, v3rhosigmatau, v3rhotau2, v3sigma2tau, v3sigmatau2, v3tau3
 
         * kxc for unrestricted case:
           | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
           | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
           | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-          | v3sigma[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3sigma3[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3rho2tau
+          | v3rhosigmatau
+          | v3rhotau2
+          | v3sigma2tau
+          | v3sigmatau2
+          | v3tau3
 
         see also libxc_itrf.c
     '''
@@ -339,6 +347,42 @@ XC_D31 = 11
 XC_D22 = 12
 XC_D13 = 13
 XC_D04 = 14
+
+XC_D000 = 0
+XC_D100 = 1
+XC_D010 = 2
+XC_D001 = 3
+XC_D200 = 4
+XC_D110 = 5
+XC_D101 = 6
+XC_D020 = 7
+XC_D011 = 8
+XC_D002 = 9
+XC_D300 = 10
+XC_D210 = 11
+XC_D201 = 12
+XC_D120 = 13
+XC_D111 = 14
+XC_D102 = 15
+XC_D030 = 16
+XC_D021 = 17
+XC_D012 = 18
+XC_D003 = 19
+XC_D400 = 20
+XC_D310 = 21
+XC_D301 = 22
+XC_D220 = 23
+XC_D211 = 24
+XC_D202 = 25
+XC_D130 = 26
+XC_D121 = 27
+XC_D112 = 28
+XC_D103 = 29
+XC_D040 = 30
+XC_D031 = 31
+XC_D022 = 32
+XC_D013 = 33
+XC_D004 = 34
 
 XC_D00000 = 0
 XC_D10000 = 1
@@ -467,6 +511,127 @@ XC_D00022 = 123
 XC_D00013 = 124
 XC_D00004 = 125
 
+XC_D0000000 = 0
+XC_D1000000 = 1
+XC_D0100000 = 2
+XC_D0010000 = 3
+XC_D0001000 = 4
+XC_D0000100 = 5
+XC_D0000010 = 6
+XC_D0000001 = 7
+XC_D2000000 = 8
+XC_D1100000 = 9
+XC_D1010000 = 10
+XC_D1001000 = 11
+XC_D1000100 = 12
+XC_D1000010 = 13
+XC_D1000001 = 14
+XC_D0200000 = 15
+XC_D0110000 = 16
+XC_D0101000 = 17
+XC_D0100100 = 18
+XC_D0100010 = 19
+XC_D0100001 = 20
+XC_D0020000 = 21
+XC_D0011000 = 22
+XC_D0010100 = 23
+XC_D0010010 = 24
+XC_D0010001 = 25
+XC_D0002000 = 26
+XC_D0001100 = 27
+XC_D0001010 = 28
+XC_D0001001 = 29
+XC_D0000200 = 30
+XC_D0000110 = 31
+XC_D0000101 = 32
+XC_D0000020 = 33
+XC_D0000011 = 34
+XC_D0000002 = 35
+XC_D3000000 = 36
+XC_D2100000 = 37
+XC_D2010000 = 38
+XC_D2001000 = 39
+XC_D2000100 = 40
+XC_D2000010 = 41
+XC_D2000001 = 42
+XC_D1200000 = 43
+XC_D1110000 = 44
+XC_D1101000 = 45
+XC_D1100100 = 46
+XC_D1100010 = 47
+XC_D1100001 = 48
+XC_D1020000 = 49
+XC_D1011000 = 50
+XC_D1010100 = 51
+XC_D1010010 = 52
+XC_D1010001 = 53
+XC_D1002000 = 54
+XC_D1001100 = 55
+XC_D1001010 = 56
+XC_D1001001 = 57
+XC_D1000200 = 58
+XC_D1000110 = 59
+XC_D1000101 = 60
+XC_D1000020 = 61
+XC_D1000011 = 62
+XC_D1000002 = 63
+XC_D0300000 = 64
+XC_D0210000 = 65
+XC_D0201000 = 66
+XC_D0200100 = 67
+XC_D0200010 = 68
+XC_D0200001 = 69
+XC_D0120000 = 70
+XC_D0111000 = 71
+XC_D0110100 = 72
+XC_D0110010 = 73
+XC_D0110001 = 74
+XC_D0102000 = 75
+XC_D0101100 = 76
+XC_D0101010 = 77
+XC_D0101001 = 78
+XC_D0100200 = 79
+XC_D0100110 = 80
+XC_D0100101 = 81
+XC_D0100020 = 82
+XC_D0100011 = 83
+XC_D0100002 = 84
+XC_D0030000 = 85
+XC_D0021000 = 86
+XC_D0020100 = 87
+XC_D0020010 = 88
+XC_D0020001 = 89
+XC_D0012000 = 90
+XC_D0011100 = 91
+XC_D0011010 = 92
+XC_D0011001 = 93
+XC_D0010200 = 94
+XC_D0010110 = 95
+XC_D0010101 = 96
+XC_D0010020 = 97
+XC_D0010011 = 98
+XC_D0010002 = 99
+XC_D0003000 = 100
+XC_D0002100 = 101
+XC_D0002010 = 102
+XC_D0002001 = 103
+XC_D0001200 = 104
+XC_D0001110 = 105
+XC_D0001101 = 106
+XC_D0001020 = 107
+XC_D0001011 = 108
+XC_D0001002 = 109
+XC_D0000300 = 110
+XC_D0000210 = 111
+XC_D0000201 = 112
+XC_D0000120 = 113
+XC_D0000111 = 114
+XC_D0000102 = 115
+XC_D0000030 = 116
+XC_D0000021 = 117
+XC_D0000012 = 118
+XC_D0000003 = 119
+
 def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
@@ -487,7 +652,12 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 1
         else:
             nvar = 2
-    #elif:  # MGGA
+    elif any((is_meta_gga(x) for x in fn_ids)):
+        raise RuntimeError('xcfun MGGA interface not correct')
+        if spin == 0:
+            nvar = 3
+        else:
+            nvar = 7
     else:  # GGA
         if spin == 0:
             nvar = 2
@@ -548,6 +718,54 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                            XC_D01200,XC_D01110,XC_D01101,XC_D01020,XC_D01011,XC_D01002]].T,
                    outbuf[[XC_D00300,XC_D00210,XC_D00201,XC_D00120,XC_D00111,
                            XC_D00102,XC_D00030,XC_D00021,XC_D00012,XC_D00003]].T)
+# MGGA/MLGGA: Note the MLGGA interface are not implemented. MGGA only needs 3
+# input arguments.  To make the interface compatible with libxc, treat MGGA as
+# MLGGA
+    elif nvar == 3:
+        if deriv > 0:
+            vxc = (outbuf[1], outbuf[2], numpy.zeros_like(outbuf[1]), outbuf[3])
+        if deriv > 1:
+            fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
+                   None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
+        if deriv > 2:
+            kxc = (output[XC_D300], output[XC_D210], output[XC_D120], output[XC_D030],
+                   output[XC_D201], output[XC_D111], output[XC_D102],
+                   output[XC_D021], output[XC_D012], output[XC_D003])
+    elif nvar == 7:
+        if deriv > 0:
+            vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
+        if deriv > 1:
+            fxc = (outbuf[[XC_D2000000,XC_D1100000,XC_D0200000]].T,
+                   outbuf[[XC_D1010000,XC_D1001000,XC_D1000100,
+                           XC_D0110000,XC_D0101000,XC_D0100100]].T,
+                   outbuf[[XC_D0020000,XC_D0011000,XC_D0010100,
+                           XC_D0002000,XC_D0001100,XC_D0000200]].T,
+                   None,
+                   outbuf[[XC_D0000020,XC_D0000011,XC_D0000002]].T,
+                   None,
+                   outbuf[[XC_D1000010,XC_D1000001,XC_D0100010,XC_D0100001]].T,
+                   None, None,
+                   outbuf[[XC_D0010010,XC_D0010001,XC_D0001010,XC_D0001001,
+                           XC_D0000110,XC_D0000101]].T)
+        if deriv > 2:
+            kxc = (outbuf[[XC_D3000000,XC_D2100000,XC_D1200000,XC_D0300000]].T,
+                   outbuf[[XC_D2010000,XC_D2001000,XC_D2000100,
+                           XC_D1110000,XC_D1101000,XC_D1100100,
+                           XC_D0210000,XC_D0201000,XC_D0200100]].T,
+                   outbuf[[XC_D1020000,XC_D1011000,XC_D1010100,XC_D1002000,XC_D1001100,XC_D1000200,
+                           XC_D0120000,XC_D0111000,XC_D0110100,XC_D0102000,XC_D0101100,XC_D0100200]].T,
+                   outbuf[[XC_D0030000,XC_D0021000,XC_D0020100,XC_D0012000,XC_D0011100,
+                           XC_D0010200,XC_D0003000,XC_D0002100,XC_D0001200,XC_D0000300]].T,
+                   output[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
+                   output[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
+                           XC_D0110010,XC_D0110001,XC_D0101010,XC_D0101001,XC_D0100110,XC_D0100101]].T,
+                   output[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
+                   output[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
+                           XC_D0002010,XC_D0002001,XC_D0001110,XC_D0001101,XC_D0000210,XC_D0000201]].T,
+                   output[[XC_D0010020,XC_D0010011,XC_D0010002,
+                           XC_D0001020,XC_D0001011,XC_D0001002,
+                           XC_D0000120,XC_D0000111,XC_D0000102]].T,
+                   output[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
     return exc, vxc, fxc, kxc
 
 

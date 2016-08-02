@@ -318,8 +318,8 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             rho[5] -= rho5 * .5
     return rho
 
-def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-             xctype='LDA', spin=0, verbose=None):
+def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, vlapl=None, vtau=None,
+             non0tab=None, xctype='LDA', spin=0, verbose=None):
     r'''Calculate XC potential matrix.
 
     Args:
@@ -392,7 +392,28 @@ def eval_mat(mol, ao, weight, rho, vrho, vsigma=None, non0tab=None,
         #mat = pyscf.lib.dot(ao[0].T, aow)
         mat = _dot_ao_ao(mol, ao[0], aow, nao, ngrids, non0tab)
     else:
-        raise NotImplementedError('meta-GGA')
+# JCP, 138, 244108
+# JCP, 112, 7002
+        if spin == 0:
+            ngrid = weight.size
+            wv = numpy.empty((4,ngrids))
+            wv[0]  = weight * vrho * .5
+            wv[1:] = rho[1:4] * (weight * vsigma * 2)
+            aow = numpy.einsum('npi,np->pi', ao, wv)
+            #mat = pyscf.lib.dot(ao[0].T, aow)
+            mat = _dot_ao_ao(mol, ao[0], aow, nao, ngrids, non0tab)
+
+            aow = numpy.einsum('npi,p->npi', ao[1:4], weight * (vtau*.5+vlapl))
+            vmat += _dot_ao_ao(mol, ao[1], aow[0], nao, weight.size, mask)
+            vmat += _dot_ao_ao(mol, ao[2], aow[1], nao, weight.size, mask)
+            vmat += _dot_ao_ao(mol, ao[3], aow[2], nao, weight.size, mask)
+
+            XX, YY, ZZ = 4, 7, 9
+            ao2 = ao[XX] + ao[YY] + ao[ZZ]
+            aow = numpy.einsum('pi,p->pi', ao2, weight * vlapl)
+            vmat += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+        else:
+            raise NotImplementedError('meta-GGA')
     return mat + mat.T
 
 
@@ -533,6 +554,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 1
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+            ngrid = weight.size
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
@@ -541,14 +563,40 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 nelec[idm] += den.sum()
                 excsum[idm] += (den * exc).sum()
 # ref eval_mat function
-                wv = numpy.empty_like(rho)
+                wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho * .5
                 wv[1:] = rho[1:] * (weight * vsigma * 2)
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
                 rho = exc = vxc = vrho = vsigma = wv = aow = None
     else:
-        raise NotImplementedError('meta-GGA')
+        ao_deriv = 2
+        assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+            ngrid = weight.size
+            for idm in range(nset):
+                rho = make_rho(idm, ao, mask, 'MGGA')
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+                vrho, vsigma, vlapl, vtau = vxc[:4]
+                den = rho[0] * weight
+                nelec[idm] += den.sum()
+                excsum[idm] += (den * exc).sum()
+
+                wv = numpy.empty((4,ngrid))
+                wv[0]  = weight * vrho * .5
+                wv[1:] = rho[1:4] * (weight * vsigma * 2)
+                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
+
+# FIXME: .5 * .5   First 0.5 for v+v.T symmetrization.
+# Second 0.5 is due to the Libxc convention tau = 1/2 \nabla\phi\dot\nabla\phi
+                wv = (.5 * .5 * weight * vtau).reshape(-1,1)
+                vmat[idm] += _dot_ao_ao(mol, ao[1], wv*ao[1], nao, ngrid, mask)
+                vmat[idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], nao, ngrid, mask)
+                vmat[idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], nao, ngrid, mask)
+
+                rho = exc = vxc = vrho = vsigma = wv = aow = None
 
     for i in range(nset):
         vmat[i] = vmat[i] + vmat[i].T
@@ -641,6 +689,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 1
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+            ngrid = weight.size
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
@@ -654,20 +703,59 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 nelec[1,idm] += den.sum()
                 excsum[idm] += (den*exc).sum()
 
-                wv = numpy.empty_like(rho_a)
+                wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho[:,0] * .5
                 wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
                 wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
                 wv[0]  = weight * vrho[:,1] * .5
                 wv[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
                 wv[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
                 rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
     else:
-        raise NotImplementedError('meta-GGA')
+        ao_deriv = 2
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+            ngrid = weight.size
+            for idm in range(nset):
+                rho_a = make_rhoa(idm, ao, mask, xctype)
+                rho_b = make_rhob(idm, ao, mask, xctype)
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
+                                      1, relativity, 1, verbose)[:2]
+                vrho, vsigma, vlapl, vtau = vxc[:4]
+                den = rho_a[0]*weight
+                nelec[0,idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+                den = rho_b[0]*weight
+                nelec[1,idm] += den.sum()
+                excsum[idm] += (den*exc).sum()
+
+                wv = numpy.empty((4,ngrid))
+                wv[0]  = weight * vrho[:,0] * .5
+                wv[1:] = rho_a[1:4] * (weight * vsigma[:,0] * 2)  # sigma_uu
+                wv[1:]+= rho_b[1:4] * (weight * vsigma[:,1])      # sigma_ud
+                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
+                wv[0]  = weight * vrho[:,1] * .5
+                wv[1:] = rho_b[1:4] * (weight * vsigma[:,2] * 2)  # sigma_dd
+                wv[1:]+= rho_a[1:4] * (weight * vsigma[:,1])      # sigma_ud
+                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
+
+# FIXME: .5 * .5   First 0.5 for v+v.T symmetrization.
+# Second 0.5 is due to the Libxc convention tau = 1/2 \nabla\phi\dot\nabla\phi
+                wv = (.25 * weight * vtau[:,0]).reshape(-1,1)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[1], wv*ao[1], nao, ngrid, mask)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], nao, ngrid, mask)
+                vmat[0,idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], nao, ngrid, mask)
+                wv = (.25 * weight * vtau[:,1]).reshape(-1,1)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[1], wv*ao[1], nao, ngrid, mask)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], nao, ngrid, mask)
+                vmat[1,idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], nao, ngrid, mask)
+                rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
 
     for i in range(nset):
         vmat[0,i] = vmat[0,i] + vmat[0,i].T
@@ -1195,7 +1283,6 @@ class _NumInt(object):
             xctype = 'LDA'
         elif libxc.is_meta_gga(xc_code):
             xctype = 'MGGA'
-            raise NotImplementedError('meta-GGA')
         else:
             xctype = 'GGA'
         return xctype

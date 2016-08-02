@@ -105,6 +105,7 @@ class UKS(pyscf.scf.uhf.UHF):
     def dump_flags(self):
         pyscf.scf.uhf.UHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
+        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
 
     get_veff = get_veff

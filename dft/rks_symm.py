@@ -39,6 +39,7 @@ class ROKS(pyscf.scf.hf_symm.ROHF):
     def dump_flags(self):
         pyscf.scf.hf_symm.ROHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
+        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
 
     get_veff = uks.get_veff
