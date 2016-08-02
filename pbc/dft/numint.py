@@ -152,113 +152,73 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     '''
 
     assert(ao.flags.c_contiguous)
-    if xctype == 'GGA':
-        ngrids, nao = ao[0].shape
-    else:
+    if xctype == 'LDA':
         ngrids, nao = ao.shape
+    else:
+        ngrids, nao = ao[0].shape
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                              dtype=numpy.int8)
 
-    # if xctype == 'GGA':
-    #     rho = numpy.empty((4,ngrids))
-    #     c0 = _dot_ao_dm(cell, ao[0], dm, nao, ngrids, non0tab)
-    #     rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
-    #     for i in range(1, 4):
-    #         c1 = _dot_ao_dm(cell, ao[i], dm, nao, ngrids, non0tab)
-    #         rho[i] = numpy.einsum('pi,pi->p', ao[0], c1) * 2 # *2 for +c.c.
-    # else:
-    #     c0 = _dot_ao_dm(cell, ao, dm, nao, ngrids, non0tab)
-    #     rho = numpy.einsum('pi,pi->p', ao, c0)
-    # return rho
-
-    # if xctype == 'GGA':
-    #     ngrids, nao = ao[0].shape
-    # else:
-    #     ngrids, nao = ao.shape
-
-    # if non0tab is None:
-    #     print "this PATH"
-    #     non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-    #                          dtype=numpy.int8)
-
-    # #if ao[0].dtype==numpy.complex128: # complex orbitals
-    # if True:
-    #     #dm_re = numpy.ascontiguousarray(dm.real)
-    #     dm_re = dm
-    #     rho = numpy.empty((4,ngrids))
-    #     #ao_re = numpy.ascontiguousarray(ao[0].real)
-    #     ao_re = ao[0]
-    #     c0_rr = _dot_ao_dm(cell, ao_re, dm_re, nao, ngrids, non0tab)
-
-    #     rho[0] = (numpy.einsum('pi,pi->p', ao_re, c0_rr))
-
-    #     for i in range(1, 4):
-    #         c1 = _dot_ao_dm(cell, ao[i], dm, nao, ngrids, non0tab)
-    #         rho[i] = numpy.einsum('pi,pi->p', ao[0], c1) * 2 # *2 for +c.c.
-
-    #     for i in range(1, 4):
-    #     #     #ao_re = numpy.ascontiguousarray(ao[i].real)
-    #         ao_re = ao[i]
-
-    #         c1_rr = _dot_ao_dm(cell, ao_re, dm_re, nao, ngrids, non0tab)
-
-    #         rho[i] = (numpy.einsum('pi,pi->p', ao_re, c1_rr)) *2
-    #     return rho
-
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
 
-        dm_re = numpy.ascontiguousarray(dm.real)
-        dm_im = numpy.ascontiguousarray(dm.imag)
-
-        if xctype == 'GGA':
-            rho = numpy.empty((4,ngrids))
-            ao0_re = numpy.ascontiguousarray(ao[0].real)
-            ao0_im = numpy.ascontiguousarray(ao[0].imag)
-
+        def re_im(a):
+            return (numpy.asarray(a.real, order='C'),
+                    numpy.asarray(a.imag, order='C'))
+        dm_re, dm_im = re_im(dm)
+        def dot_dm_ket(ket_re, ket_im):
             # DM * ket: e.g. ir denotes dm_im | ao_re >
-            c0_rr = _dot_ao_dm(cell, ao0_re, dm_re, nao, ngrids, non0tab)
-            c0_ri = _dot_ao_dm(cell, ao0_im, dm_re, nao, ngrids, non0tab)
-            c0_ir = _dot_ao_dm(cell, ao0_re, dm_im, nao, ngrids, non0tab)
-            c0_ii = _dot_ao_dm(cell, ao0_im, dm_im, nao, ngrids, non0tab)
-
+            c0_rr = _dot_ao_dm(cell, ket_re, dm_re, nao, ngrids, non0tab)
+            c0_ri = _dot_ao_dm(cell, ket_im, dm_re, nao, ngrids, non0tab)
+            c0_ir = _dot_ao_dm(cell, ket_re, dm_im, nao, ngrids, non0tab)
+            c0_ii = _dot_ao_dm(cell, ket_im, dm_im, nao, ngrids, non0tab)
+            return c0_ri, c0_rr, c0_ir, c0_ii
+        def dot_bra(bra_re, bra_im, c0):
             # bra * DM
-            rho[0] = (numpy.einsum('pi,pi->p', ao0_im, c0_ri) +
-                      numpy.einsum('pi,pi->p', ao0_re, c0_rr) +
-                      numpy.einsum('pi,pi->p', ao0_im, c0_ir) -
-                      numpy.einsum('pi,pi->p', ao0_re, c0_ii))
+            c0_ri, c0_rr, c0_ir, c0_ii = c0
+            rho = (numpy.einsum('pi,pi->p', bra_im, c0_ri) +
+                   numpy.einsum('pi,pi->p', bra_re, c0_rr) +
+                   numpy.einsum('pi,pi->p', bra_im, c0_ir) -
+                   numpy.einsum('pi,pi->p', bra_re, c0_ii))
+            return rho
+
+        if xctype == 'LDA':
+            ao_re, ao_im = re_im(ao)
+            c0 = dot_dm_ket(ao_re, ao_im)
+            rho = dot_bra(ao_re, ao_im, c0)
+
+        elif xctype == 'GGA':
+            rho = numpy.empty((4,ngrids))
+            ao0_re, ao0_im = re_im(ao[0])
+            c0 = dot_dm_ket(ao0_re, ao0_im)
+            rho[0] = dot_bra(ao0_re, ao0_im, c0)
 
             for i in range(1, 4):
-                # ao_re = numpy.ascontiguousarray(ao[i].real)
-                # ao_im = numpy.ascontiguousarray(ao[i].imag)
-                ao_re = numpy.ascontiguousarray(ao[i].real)
-                ao_im = numpy.ascontiguousarray(ao[i].imag)
+                ao_re, ao_im = re_im(ao[i])
+                rho[0] = dot_bra(ao_re, ao_im, c0) * 2
 
-                c1_rr = _dot_ao_dm(cell, ao_re, dm_re, nao, ngrids, non0tab)
-                c1_ri = _dot_ao_dm(cell, ao_im, dm_re, nao, ngrids, non0tab)
-                c1_ir = _dot_ao_dm(cell, ao_re, dm_im, nao, ngrids, non0tab)
-                c1_ii = _dot_ao_dm(cell, ao_im, dm_im, nao, ngrids, non0tab)
-
-                rho[i] = (numpy.einsum('pi,pi->p', ao0_im, c1_ri) +
-                          numpy.einsum('pi,pi->p', ao0_re, c1_rr) +
-                          numpy.einsum('pi,pi->p', ao0_im, c1_ir) -
-                          numpy.einsum('pi,pi->p', ao0_re, c1_ii)) * 2 # *2 for +c.c.
         else:
-            ao_re = numpy.ascontiguousarray(ao.real)
-            ao_im = numpy.ascontiguousarray(ao.imag)
-            # DM * ket: e.g. ir denotes dm_im | ao_re >
+            # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
+            rho = numpy.empty((6,ngrids))
+            ao0_re, ao0_im = re_im(ao[0])
+            c0 = dot_dm_ket(ao0_re, ao0_im)
+            rho[0] = dot_bra(ao0_re, ao0_im, c0)
 
-            c0_rr = _dot_ao_dm(cell, ao_re, dm_re, nao, ngrids, non0tab)
-            c0_ri = _dot_ao_dm(cell, ao_im, dm_re, nao, ngrids, non0tab)
-            c0_ir = _dot_ao_dm(cell, ao_re, dm_im, nao, ngrids, non0tab)
-            c0_ii = _dot_ao_dm(cell, ao_im, dm_im, nao, ngrids, non0tab)
-            # bra * DM
-            rho = (numpy.einsum('pi,pi->p', ao_im, c0_ri) +
-                   numpy.einsum('pi,pi->p', ao_re, c0_rr) +
-                   numpy.einsum('pi,pi->p', ao_im, c0_ir) -
-                   numpy.einsum('pi,pi->p', ao_re, c0_ii))
+            rho[5] = 0
+            for i in range(1, 4):
+                ao_re, ao_im = re_im(ao[i])
+                rho[i] = dot_bra(ao_re, ao_im, c0) * 2 # *2 for +c.c.
+                c1 = dot_dm_ket(ao_re, ao_im)
+                rho[5] += dot_bra(ao_re, ao_im, c1)
+            XX, YY, ZZ = 4, 7, 9
+            ao2 = ao[XX] + ao[YY] + ao[ZZ]
+            ao_re, ao_im = re_im(ao2)
+            rho[4] = dot_bra(ao_re, ao_im, c0)
+            rho[4] += rho[5]
+            rho[4] *= 2 # *2 for +c.c.
+            rho[5] *= .5
 
     # real orbitals and real DM
     else:
@@ -266,84 +226,108 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
 
     return rho
 
-def eval_mat(cell, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-             xctype='LDA', spin=0, verbose=None):
+def eval_mat(cell, ao, weight, rho, vxc,
+             non0tab=None, xctype='LDA', spin=0, verbose=None):
     '''Calculate the XC potential AO matrix.
 
     Args:
         cell : instance of :class:`Mole` or :class:`Cell`
 
-        ao : ([4,] ngrids, nao=cell.nao_nr()) ndarray
-            The value of the AO crystal orbitals on the real-space grid by default.
-            If xctype='GGA', also contains the value of the gradient in the x, y,
-            and z directions.
-
-        rho : ([4,] ngrids) ndarray
-            The value of the density on the real-space grid. If xctype='GGA',
-            also contains the value of the gradient in the x, y, and z
-            directions.
+        ao : ([4/10,] ngrids, nao) ndarray
+            2D array of shape (N,nao) for LDA,
+            3D array of shape (4,N,nao) for GGA
+            or (10,N,nao) for meta-GGA.
+            N is the number of grids, nao is the number of AO functions.
+            If xctype is GGA, ao[0] is AO value and ao[1:3] are the real space
+            gradients.  If xctype is meta-GGA, ao[4:10] are second derivatives
+            of ao values.
+        rho : ([4/6,] ngrids) ndarray
+            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
+            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
+            where N is number of grids.
+            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
+            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
+            In spin unrestricted case,
+            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
+                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
+        vxc : ([4,] ngrids) ndarray
+            XC potential value on each grid = (vrho, vsigma, vlapl, vtau)
+            vsigma is GGA potential value on each grid.
+            If the kwarg spin is not 0, a list [vsigma_uu,vsigma_ud] is required.
 
     See Also:
         pyscf.dft.numint.eval_mat
 
     '''
 
-    if xctype == 'GGA':
-        ngrids, nao = ao[0].shape
-    else:
+    if xctype == 'LDA':
         ngrids, nao = ao.shape
+    else:
+        ngrids, nao = ao[0].shape
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                              dtype=numpy.int8)
 
     if numpy.iscomplexobj(ao):
-        if xctype == 'GGA':
-            assert(vsigma is not None and rho.ndim==2)
+        def dot(ao1, ao2):
+            ao1_re = numpy.asarray(ao1.real, order='C')
+            ao1_im = numpy.asarray(ao1.imag, order='C')
+            ao2_re = numpy.asarray(ao2.real, order='C')
+            ao2_im = numpy.asarray(ao2.imag, order='C')
+
+            mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, nao, ngrids, non0tab)
+            mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, nao, ngrids, non0tab)
+            mat_im  = _dot_ao_ao(cell, ao1_re, ao2_im, nao, ngrids, non0tab)
+            mat_im -= _dot_ao_ao(cell, ao1_im, ao2_re, nao, ngrids, non0tab)
+            return mat_re + 1j*mat_im
+
+        if xctype == 'LDA':
+            if not isinstance(vxc, numpy.ndarray) or vxc.ndim == 2:
+                vrho = vxc[0]
+            else:
+                vrho = vxc
+            # *.5 because return mat + mat.T
+            aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
+            mat = dot(ao, aow)
+
+        else:
+            vrho, vsigma = vxc[:2]
+            wv = numpy.empty((4,ngrids))
             if spin == 0:
                 #wv = weight * vsigma * 2
                 #aow  = numpy.einsum('pi,p->pi', ao[1], rho[1]*wv)
                 #aow += numpy.einsum('pi,p->pi', ao[2], rho[2]*wv)
                 #aow += numpy.einsum('pi,p->pi', ao[3], rho[3]*wv)
                 #aow += numpy.einsum('pi,p->pi', ao[0], .5*weight*vrho)
-                wv = numpy.empty_like(rho)
                 wv[0]  = weight * vrho * .5
-                wv[1:] = rho[1:] * (weight * vsigma * 2)
+                wv[1:4] = rho[1:4] * (weight * vsigma * 2)
             else:
                 rho_a, rho_b = rho
-                wv = numpy.empty_like(rho_a)
                 wv[0]  = weight * vrho * .5
-                wv[1:] = rho_a[1:] * (weight * vsigma[0] * 2)  # sigma_uu
-                wv[1:]+= rho_b[1:] * (weight * vsigma[1])      # sigma_ud
+                wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
+                wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
+            aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+            mat = dot(ao[0], aow)
 
-            ao_re = numpy.ascontiguousarray(ao[0].real)
-            ao_im = numpy.ascontiguousarray(ao[0].imag)
+        if xctype == 'MGGA':
+            vlapl, vtau = vxc[2:]
+            if vlapl is None:
+                vlpal = 0
+            aow = numpy.einsum('npi,p->npi', ao[1:4], weight * (.25*vtau+vlapl))
+            mat += dot(ao[1], aow[0])
+            mat += dot(ao[2], aow[1])
+            mat += dot(ao[3], aow[2])
 
-            aow = numpy.einsum('npi,np->pi', ao, wv)
-            aow_re = numpy.ascontiguousarray(aow.real)
-            aow_im = numpy.ascontiguousarray(aow.imag)
-
-        else:
-            # *.5 because return mat + mat.T
-            #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
-            ao_re = numpy.ascontiguousarray(ao.real)
-            ao_im = numpy.ascontiguousarray(ao.imag)
-
-            aow_re = ao_re * (.5*weight*vrho).reshape(-1,1)
-            aow_im = ao_im * (.5*weight*vrho).reshape(-1,1)
-            #mat = pyscf.lib.dot(ao.T, aow)
-
-        mat_re  = _dot_ao_ao(cell, ao_re, aow_re, nao, ngrids, non0tab)
-        mat_re += _dot_ao_ao(cell, ao_im, aow_im, nao, ngrids, non0tab)
-        mat_im  = _dot_ao_ao(cell, ao_re, aow_im, nao, ngrids, non0tab)
-        mat_im -= _dot_ao_ao(cell, ao_im, aow_re, nao, ngrids, non0tab)
-
-        mat = mat_re + 1j*mat_im
+            XX, YY, ZZ = 4, 7, 9
+            ao2 = ao[XX] + ao[YY] + ao[ZZ]
+            aow = numpy.einsum('pi,p->pi', ao2, .5 * weight * vlapl)
+            vmat += dot(ao[0], aow)
 
         return (mat + mat.T.conj())
 
     else:
-        return pyscf.dft.numint.eval_mat(cell, ao, weight, rho, vrho, vsigma,
+        return pyscf.dft.numint.eval_mat(cell, ao, weight, rho, vxc,
                                          non0tab, xctype, spin, verbose)
 
 
@@ -407,11 +391,10 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 rho = make_rho(0, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
                 vrho = vxc[0]
-                vsigma = None
                 den = rho*weight
                 nelec[i] += den.sum()
                 excsum[i] += (den*exc).sum()
-                vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vrho, vsigma,
+                vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
     elif xctype == 'GGA':
         ao_deriv = 1
@@ -421,14 +404,25 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
             for i in range(nset):
                 rho = make_rho(0, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
-                vrho, vsigma = vxc[:2]
                 den = rho[0]*weight
                 nelec[i] += den.sum()
                 excsum[i] += (den*exc).sum()
-                vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vrho, vsigma,
+                vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
     else:
-        raise NotImplementedError('meta-GGA')
+        assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
+        ao_deriv = 2
+        for ao_k1, ao_k2, mask, weight, coords \
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
+                                 kpt_band, max_memory):
+            for i in range(nset):
+                rho = make_rho(0, ao_k2, mask, xctype)
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
+                den = rho[0]*weight
+                nelec[i] += den.sum()
+                excsum[i] += (den*exc).sum()
+                vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
+                                       mask, xctype, 0, verbose)
 
     if nset == 1:
         nelec = nelec[0]
@@ -510,9 +504,9 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
                 excsum[i] += (den*exc).sum()
 
                 vmata[i] += ni.eval_mat(cell, ao_k1, weight, rho_a, vrho[:,0],
-                                        None, mask, xctype, 1, verbose)
+                                        mask, xctype, 1, verbose)
                 vmatb[i] += ni.eval_mat(cell, ao_k1, weight, rho_b, vrho[:,1],
-                                        None, mask, xctype, 1, verbose)
+                                        mask, xctype, 1, verbose)
     elif xctype == 'GGA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
@@ -532,13 +526,37 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
                 excsum[i] += (den*exc).sum()
 
                 vmata[i] += ni.eval_mat(cell, ao_k1, weight, (rho_a,rho_b),
-                                        vrho[:,0], (vsigma[:,0],vsigma[:,1]),
+                                        (vrho[:,0], (vsigma[:,0],vsigma[:,1])),
                                         mask, xctype, 1, verbose)
                 vmatb[i] += ni.eval_mat(cell, ao_k1, weight, (rho_b,rho_a),
-                                        vrho[:,1], (vsigma[:,2],vsigma[:,1]),
+                                        (vrho[:,1], (vsigma[:,2],vsigma[:,1])),
                                         mask, xctype, 1, verbose)
     else:
-        raise NotImplementedError('meta-GGA')
+        assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
+        ao_deriv = 2
+        for ao_k1, ao_k2, mask, weight, coords \
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
+                                 kpt_band, max_memory):
+            for i in range(nset):
+                rho_a = make_rhoa(i, ao_k2, mask, xctype)
+                rho_b = make_rhob(i, ao_k2, mask, xctype)
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
+                                      1, relativity, 1, verbose)[:2]
+                vrho, vsigma, vlapl, vtau = vxc
+                den = rho_a[0]*weight
+                nelec[0,i] += den.sum()
+                excsum[i] += (den*exc).sum()
+                den = rho_b[0]*weight
+                nelec[1,i] += den.sum()
+                excsum[i] += (den*exc).sum()
+
+                v = (vrho[:,0], (vsigma[:,0],vsigma[:,1]), None, vtau[:,0])
+                vmata[i] += ni.eval_mat(cell, ao_k1, weight, (rho_a,rho_b), v,
+                                        mask, xctype, 1, verbose)
+                v = (vrho[:,1], (vsigma[:,2],vsigma[:,1]), None, vtau[:,1])
+                vmatb[i] += ni.eval_mat(cell, ao_k1, weight, (rho_b,rho_a), v,
+                                        mask, xctype, 1, verbose)
+                v = None
 
     if nset == 1:
         nelec = nelec[:,0]
@@ -615,11 +633,11 @@ class _NumInt(pyscf.dft.numint._NumInt):
         return nr_uks(self, cell, grids, xc_code, dms,
                       1, 0, 1, kpt, kpt_band, max_memory, verbose)
 
-    def eval_mat(self, cell, ao, weight, rho, vrho, vsigma=None, non0tab=None,
-                 xctype='LDA', spin=0, verbose=None):
+    def eval_mat(self, cell, ao, weight, rho, vxc,
+                 non0tab=None, xctype='LDA', spin=0, verbose=None):
         # use local function for complex eval_mat
-        return eval_mat(cell, ao, weight, rho, vrho, vsigma, non0tab,
-                        xctype, spin, verbose)
+        return eval_mat(cell, ao, weight, rho, vxc,
+                        non0tab, xctype, spin, verbose)
 
     def block_loop(self, cell, grids, nao, deriv=0, kpt=numpy.zeros(3),
                    kpt_band=None, max_memory=2000, non0tab=None, blksize=None):
@@ -779,10 +797,10 @@ class _KNumInt(pyscf.dft.numint._NumInt):
         return nr_uks(self, cell, grids, xc_code, dms, 1, 0,
                       hermi, kpts, kpt_band, max_memory, verbose)
 
-    def eval_mat(self, cell, ao_kpts, weight, rho, vrho, vsigma=None, non0tab=None,
-                 xctype='LDA', spin=0, verbose=None):
+    def eval_mat(self, cell, ao_kpts, weight, rho, vxc,
+                 non0tab=None, xctype='LDA', spin=0, verbose=None):
         nkpts = len(ao_kpts)
-        mat = [eval_mat(cell, ao_kpts[k], weight, rho, vrho, vsigma,
+        mat = [eval_mat(cell, ao_kpts[k], weight, rho, vxc,
                         non0tab, xctype, spin, verbose)
                for k in range(nkpts)]
         return pyscf.lib.asarray(mat)

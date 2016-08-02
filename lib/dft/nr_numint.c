@@ -167,8 +167,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                atm, natm, bas, nbas, env) \
         private(ip, ib, v_priv)
         {
-                v_priv = malloc(sizeof(double) * nao * nao);
-                memset(v_priv, 0, sizeof(double) * nao * nao);
+                v_priv = calloc(nao*nao, sizeof(double));
 #pragma omp for nowait schedule(static)
                 for (ib = 0; ib < nblk; ib++) {
                         ip = ib * blksize;
