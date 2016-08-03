@@ -17,10 +17,6 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF
-from pyscf.df import ft_ao
-from pyscf.df import addons
-from pyscf.df import incore
 from pyscf.df import mdf
 
 #
@@ -269,6 +265,7 @@ def get_jk(mydf, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
 
 if __name__ == '__main__':
     from pyscf import scf
+    from pyscf.df import addons
 
     mol = gto.M(
         atom = '''#Fe    1.3    2.       3.

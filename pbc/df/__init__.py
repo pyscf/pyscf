@@ -1,6 +1,5 @@
 from . import incore
 from . import outcore
-from . import ft_ao
 from . import fft
 from . import mdf
 from . import pwdf

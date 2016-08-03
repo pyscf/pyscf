@@ -1,7 +1,6 @@
 from . import incore
 from . import outcore
 from . import addons
-from . import ft_ao
 from . import mdf
 from .incore import format_aux_basis
 from .addons import load

@@ -38,7 +38,8 @@ class KnowValues(unittest.TestCase):
         coords = pdft.gen_grid.gen_uniform_grids(cell)
         aoR = pdft.numint.eval_ao(cell, coords, kpt=kpt)
         ngs, nao = aoR.shape
-        ref = numpy.asarray([tools.fftk(aoR[:,i], cell.gs, coords, kpt) for i in range(nao)])
+        expmikr = numpy.exp(-1j*numpy.dot(coords,kpt))
+        ref = numpy.asarray([tools.fftk(aoR[:,i], cell.gs, expmikr) for i in range(nao)])
         ref = ref.T * (cell.vol/ngs)
         dat = ft_ao.ft_ao(cell, cell.Gv, kpt=kpt)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0]-dat[:,0])  , 1.3359899490499813e-10, 9)

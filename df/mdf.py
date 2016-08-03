@@ -17,8 +17,8 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF
-from pyscf.df import ft_ao
+from pyscf.gto import ANG_OF, PTR_COEFF
+from pyscf.gto import ft_ao
 from pyscf.df import addons
 from pyscf.df import incore
 
