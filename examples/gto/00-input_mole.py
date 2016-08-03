@@ -123,10 +123,10 @@ C    SP
 mol.basis = {'O': 'sto3g', 'H': '6-31g'}
 # or specify one kind of basis function universally for all atoms
 mol.basis = '6-31g'
-# There is no support for default settings, i.e. specifying a default basis
-# set for all atoms then change one atom to another set.  But as in python
-# environment, it can simply be achieved, e.g.
+# Setting default basis takes two steps:
+# 1. Set default basis for all atoms;
 mol.basis = dict([(a, 'sto-3g') for a in pyscf.lib.parameters.NUC.keys()])
+# 2. Change the basis for certain elements.
 mol.basis['C'] = '6-31g'
 # where pyscf.lib.parameters.NUC.keys() returns all atomic symbols.
 # However, the functions basis.load and basis.parse are defined for other good

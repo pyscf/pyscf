@@ -5,8 +5,6 @@ import numpy
 from pyscf import gto
 from pyscf import dft
 from pyscf import lib
-from pyscf.dft import gen_grid
-from pyscf.dft import radi
 dft.numint.BLKSIZE = 12
 
 mol = gto.Mole()
