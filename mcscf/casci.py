@@ -562,9 +562,11 @@ class CASCI(pyscf.lib.StreamObject):
     def _finalize(self):
         pass
 
+    @pyscf.lib.with_doc(cas_natorb.__doc__)
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
                    casdm1=None, verbose=None):
         return cas_natorb(self, mo_coeff, ci, eris, sort, casdm1, verbose)
+    @pyscf.lib.with_doc(cas_natorb.__doc__)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
@@ -576,6 +578,7 @@ class CASCI(pyscf.lib.StreamObject):
         return get_fock(self, mo_coeff, ci, eris, casdm1, verbose)
 
     canonicalize = canonicalize
+    @pyscf.lib.with_doc(canonicalize.__doc__)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None):
         self.mo_coeff, ci, self.mo_energy = \
@@ -584,8 +587,8 @@ class CASCI(pyscf.lib.StreamObject):
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
-    canonicalize_.__doc__ = canonicalize.__doc__
 
+    @pyscf.lib.with_doc(analyze.__doc__)
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
         return analyze(self, mo_coeff, ci, verbose)
 
