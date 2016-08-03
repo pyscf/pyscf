@@ -10,7 +10,7 @@ import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
 
 
-def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
+def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
@@ -43,15 +43,18 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
     r0 = None
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
-    for imacro in range(macro):
+    imacro = 0
+    while not conv and imacro < casscf.max_cycle_macro:
+        imacro += 1
         njk = 0
         t3m = t2m
         casdm1_old = casdm1
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
         t3m = log.timer('update CAS DM', *t3m)
+        max_cycle_micro = 1 # casscf.micro_cycle_scheduler(locals())
         max_stepsize = casscf.max_stepsize_scheduler(locals())
-        for imicro in range(micro):
+        for imicro in range(max_cycle_micro):
             rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
                                         eris, r0, conv_tol_grad, max_stepsize, log)
             u, g_orb, njk1 = next(rota)
@@ -62,18 +65,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
-            mo = numpy.dot(mo, u)
-            if log.verbose >= logger.DEBUG:
-                ncore = casscf.ncore
-                nocc = ncore + ncas
-                s = reduce(numpy.dot, (mo[:,ncore:nocc].T, casscf._scf.get_ovlp(),
-                                       mo_coeff[:,ncore:nocc]))
-                log.debug('Active space overlap to initial guess, SVD = %s',
-                          numpy.linalg.svd(s)[1])
-                log.debug('Active space overlap to last step, SVD = %s',
-                          numpy.linalg.svd(u[ncore:nocc,ncore:nocc])[1])
+            mo = casscf.rotate_mo(mo, u, log)
+            r0 = casscf.pack_uniq_var(u)
 
-            eris = None
+            u = g_orb = eris = None
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
@@ -87,7 +82,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
             if norm_t < 1e-4 or abs(de) < tol*.4 or norm_gorb < conv_tol_grad*.2:
                 break
 
-        r0 = casscf.pack_uniq_var(u)
         totinner += njk
         totmicro += imicro + 1
 
@@ -105,8 +99,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=1,
         if dump_chk:
             casscf.dump_chk(locals())
 
-        if conv:
-            break
+        if callable(callback):
+            callback(locals())
 
     if conv:
         log.info('2-step CASSCF converged in %d macro (%d JK %d micro) steps',

@@ -209,7 +209,7 @@ def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
     return g_orb, gorb_update, h_op, h_diag
 
 
-def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
+def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
         verbose = casscf.verbose
@@ -231,7 +231,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         conv_tol_grad = numpy.sqrt(tol)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv_tol_ddm = conv_tol_grad * 3
-    max_cycle_micro = micro
     conv = False
     totmicro = totinner = 0
     norm_gorb = norm_gci = 0
@@ -243,8 +242,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
     norm_ddm = 1e2
     casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
-    for imacro in range(macro):
-        max_cycle_micro = casscf.micro_step_scheduler(locals())
+    imacro = 0
+    while not conv and imacro < casscf.max_cycle_macro:
+        imacro += 1
+        max_cycle_micro = casscf.micro_cycle_scheduler(locals())
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         imicro = 0
         rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
@@ -286,10 +287,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         totmicro += imicro
         totinner += njk
 
+        mo = casscf.rotate_mo(mo, u, log)
         r0 = casscf.pack_uniq_var(u)
-        mo = list(map(numpy.dot, mo, u))
 
-        eris = None
+        u = g_orb = eris = None
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
@@ -309,7 +310,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None, macro=50, micro=3,
         if dump_chk:
             casscf.dump_chk(locals())
 
-        if conv: break
+        if callable(callback):
+            callback(locals())
 
     if conv:
         log.info('1-step CASSCF converged in %d macro (%d JK %d micro) steps',
@@ -401,14 +403,11 @@ class CASSCF(casci_uhf.CASCI):
         if hasattr(self, 'max_orb_stepsize'):
             raise AttributeError('"max_orb_stepsize" was replaced by "max_stepsize"')
 
-    def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
-               callback=None, _kern=kernel):
+    def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
 
         if self.verbose >= logger.WARN:
@@ -418,7 +417,6 @@ class CASSCF(casci_uhf.CASCI):
         self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
-                      macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
@@ -426,15 +424,12 @@ class CASSCF(casci_uhf.CASCI):
         self._finalize()
         return self.e_tot, e_cas, self.ci, self.mo_coeff
 
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
-                callback=None):
-        return self.kernel(mo_coeff, ci0, macro, micro, callback)
+    def mc1step(self, mo_coeff=None, ci0=None, callback=None):
+        return self.kernel(mo_coeff, ci0, callback)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
-                callback=None):
+    def mc2step(self, mo_coeff=None, ci0=None, callback=None):
         from pyscf.mcscf import mc2step_uhf
-        return self.kernel(mo_coeff, ci0, macro, micro, callback,
-                           mc2step_uhf.kernel)
+        return self.kernel(mo_coeff, ci0, callback, mc2step_uhf.kernel)
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         if eris is None:
@@ -728,17 +723,35 @@ class CASSCF(casci_uhf.CASCI):
                            envs['e_ci'], civec, overwrite_mol=False)
         return self
 
-    def micro_step_scheduler(self, envs):
+    def rotate_mo(self, mo, u, log=None):
+        '''Rotate orbitals with the given unitary matrix'''
+        mo_a = numpy.dot(mo[0], u[0])
+        mo_b = numpy.dot(mo[1], u[1])
+        if log is not None and log.verbose >= logger.DEBUG:
+            ncore = self.ncore
+            ncas = self.ncas
+            nocc = ncore[0] + ncas
+            s = reduce(numpy.dot, (mo_a[:,ncore:nocc].T, self._scf.get_ovlp(),
+                                   self.mo_coeff[0][:,ncore:nocc]))
+            log.debug('Alpha active space overlap to initial guess, SVD = %s',
+                      numpy.linalg.svd(s)[1])
+            log.debug('Alpha active space overlap to last step, SVD = %s',
+                      numpy.linalg.svd(u[0][ncore:nocc,ncore:nocc])[1])
+        return mo_a, mo_b
+
+    def micro_cycle_scheduler(self, envs):
         #log_norm_ddm = numpy.log(envs['norm_ddm'])
         #return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
         return self.max_cycle_micro
 
     def max_stepsize_scheduler(self, envs):
-        if envs['de'] < self.conv_tol or self._max_stepsize is None:
+        if self._max_stepsize is None:
             self._max_stepsize = self.max_stepsize
-        else:
+        if envs['de'] > self.conv_tol:  # Avoid total energy increasing
             self._max_stepsize *= .5
             logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
+        else:
+            self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
         return self._max_stepsize
 
 
@@ -794,7 +807,7 @@ if __name__ == '__main__':
     mc = CASSCF(m, 4, (2,1))
     #mo = m.mo_coeff
     mo = addons.sort_mo(mc, m.mo_coeff, [(3,4,5,6),(3,4,6,7)], 1)
-    emc = kernel(mc, mo, micro=4, verbose=4)[1]
+    emc = kernel(mc, mo, verbose=4)[1]
     print(ehf, emc, emc-ehf)
     print(emc - -2.9782774463926618)
 

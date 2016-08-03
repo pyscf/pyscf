@@ -20,24 +20,17 @@ class CASSCF(mc1step.CASSCF):
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
         self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
 
-    def mc1step(self, mo_coeff=None, ci0=None, macro=None, micro=None,
-                callback=None):
-        return self.kernel(mo_coeff, ci0, macro, micro, callback,
-                           mc1step.kernel)
+    def mc1step(self, mo_coeff=None, ci0=None, callback=None):
+        return self.kernel(mo_coeff, ci0, callback, mc1step.kernel)
 
-    def mc2step(self, mo_coeff=None, ci0=None, macro=None, micro=1,
-                callback=None):
-        return self.kernel(mo_coeff, ci0, macro, micro, callback,
-                           mc2step.kernel)
+    def mc2step(self, mo_coeff=None, ci0=None, callback=None):
+        return self.kernel(mo_coeff, ci0, callback, mc2step.kernel)
 
-    def kernel(self, mo_coeff=None, ci0=None, macro=None, micro=None,
-               callback=None, _kern=None):
+    def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
             self.mo_coeff = mo_coeff
-        if macro is None: macro = self.max_cycle_macro
-        if micro is None: micro = self.max_cycle_micro
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
@@ -60,7 +53,6 @@ class CASSCF(mc1step.CASSCF):
                 self.mo_coeff, self.mo_energy = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
-                      macro=macro, micro=micro,
                       ci0=ci0, callback=callback, verbose=self.verbose)
         log.note('CASSCF energy = %.15g', self.e_tot)
         self._finalize()
