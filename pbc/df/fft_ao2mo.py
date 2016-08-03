@@ -5,6 +5,18 @@
 
 '''
 Integral transformation with FFT
+
+(ij|kl) = \int dr1 dr2 i*(r1) j(r1) v(r12) k*(r2) l(r2)
+        = (ij|G) v(G) (G|kl)
+
+i*(r) j(r) = 1/N \sum_G e^{iGr}  (G|ij)
+           = 1/N \sum_G e^{-iGr} (ij|G)
+
+"forward" FFT:
+    (G|ij) = \sum_r e^{-iGr} i*(r) j(r) = fft[ i*(r) j(r) ]
+"inverse" FFT:
+    (ij|G) = \sum_r e^{iGr} i*(r) j(r) = N * ifft[ i*(r) j(r) ]
+           = conj[ \sum_r e^{-iGr} j*(r) i(r) ]
 '''
 
 import time
@@ -84,7 +96,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if 0 and (abs(kptijkl).sum() < 1e-9 and
+    if (abs(kptijkl).sum() < 1e-9 and
         not any((numpy.iscomplexobj(mo) for mo in mo_coeffs))):
         mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], compact)
         if ((ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[2]) and
@@ -147,6 +159,7 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), compact=False):
             For gamma point, the shape is (ngs, nao*(nao+1)/2); otherwise the
             shape is (ngs, nao*nao)
     '''
+    if kpts is None: kpts = mydf.kpts
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
     coords = pdft.gen_grid.gen_uniform_grids(cell, mydf.gs)
@@ -193,6 +206,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
         mo_pairs_G : (ngs, nmoi*nmoj) ndarray
             The FFT of the real-space MO pairs.
     '''
+    if kpts is None: kpts = mydf.kpts
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
     coords = pdft.gen_grid.gen_uniform_grids(cell, mydf.gs)
