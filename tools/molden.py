@@ -64,6 +64,18 @@ def dump_scf(mf, filename, ignore_h=False):
             orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
 
+def from_mcscf(mc, filename, ignore_h=False):
+    from pyscf import mcscf
+    mol = mc.mol
+    mo_coeff = mc.mo_coeff
+    dm1 = mc.make_rdm1()
+    mo_inv = numpy.dot(mc._scf.get_ovlp(), mo_coeff)
+    occ = numpy.einsum('pi,pq,qi->i', mo_inv, dm1, mo_inv)
+    with open(filename, 'w') as f:
+        header(mol, f, ignore_h)
+        orbital_coeff(mc.mol, f, mc.mo_coeff,
+                      ene=mc.mo_energy, occ=occ, ignore_h=ignore_h)
+
 def from_chkfile(outfile, chkfile, key='scf/mo_coeff', ignore_h=False):
     import pyscf.scf
     with open(outfile, 'w') as f:
