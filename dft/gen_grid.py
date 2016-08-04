@@ -5,6 +5,10 @@
 
 '''
 Generate DFT grids and weights, based on the code provided by Gerald Knizia <>
+
+Reference for Lebedev-Laikov grid:
+  V. I. Lebedev, and D. N. Laikov "A quadrature formula for the sphere of the
+  131st algebraic order of accuracy", Doklady Mathematics, 59, 477-481 (1999)
 '''
 
 

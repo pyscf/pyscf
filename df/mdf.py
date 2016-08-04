@@ -53,6 +53,8 @@ def make_modrho_basis(mol, auxbasis=None):
         ptr = auxmol._bas[ib,PTR_COEFF]
         cs = auxmol._env[ptr:ptr+np*nc].reshape(nc,np).T
 
+# int1 is the multipole value. l*2+2 is due to the radial part integral
+# \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
         int1 = gto.mole._gaussian_int(l*2+2, es)
         s = numpy.einsum('pi,p->i', cs, int1)
         cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
