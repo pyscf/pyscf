@@ -36,16 +36,21 @@ solver1.nroots = 1
 solver2 = pyscf.fci.addons.fix_spin(fcibase, ss_value=0)
 solver2.nroots = 2
 class FakeCISolver(fcibase_class):
-    def kernel(self, h1, h2, ncas, nelecas, ci0=None, **kwargs):
+    def kernel(self, h1, h2, ncas, nelecas, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
-        e1, c1 = solver1.kernel(h1, h2, ncas, nelecas, ci0, orbsym=self.orbsym)
-        e2, c2 = solver2.kernel(h1, h2, ncas, nelecas, ci0, orbsym=self.orbsym)
+        if isinstance(verbose, pyscf.lib.logger.Logger):
+            log = verbose
+        else:
+            log = pyscf.lib.logger.Logger(sys.stdout, verbose)
+        e1, c1 = solver1.kernel(h1, h2, ncas, nelecas, ci0,
+                                orbsym=self.orbsym, verbose=log)
+        e2, c2 = solver2.kernel(h1, h2, ncas, nelecas, ci0,
+                                orbsym=self.orbsym, verbose=log)
         e = [e1, e2[0], e2[1]]
         c = [c1, c2[0], c2[1]]
         for i, ei in enumerate(e):
             ss = pyscf.fci.spin_op.spin_square0(c[i], ncas, nelecas)
-            pyscf.lib.logger.info(mc, 'state %d  E = %.15g S^2 = %.7f',
-                                  i, ei, ss[0])
+            log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[0])
         return np.einsum('i,i', np.array(e), weights), c
     def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
         e1, c1 = solver1.kernel(h1, h2, norb, nelec, ci0, orbsym=self.orbsym,
