@@ -201,7 +201,8 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # preconditioner when the eigvalue of first davidson iter equals to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
-           davidson_only=False, pspace_size=400, **kwargs):
+           davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
+           **kwargs):
     return _kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                      tol, lindep, max_cycle, max_space, nroots,
                      davidson_only, pspace_size, **kwargs)
@@ -556,7 +557,8 @@ class FCISolver(pyscf.lib.StreamObject):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               orbsym=None, wfnsym=None, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
