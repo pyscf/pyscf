@@ -406,8 +406,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max(dx_norm), e, de[ide], norm_min)
 
-        fresh_start = (icyc+nroots < max_cycle and
-                       (fresh_start or space+nroots > max_space))
+        fresh_start = fresh_start or space+nroots > max_space
 
         if callable(callback):
             callback(locals())

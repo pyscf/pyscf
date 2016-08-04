@@ -503,7 +503,7 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
             tmp = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
             ci1 = -ss * tmp
-            ci1 += spin_op.contract_ss(tmp, norb, nelec)
+            ci1 += spin_op.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
             tmp = None
 
         ci1 *= shift
