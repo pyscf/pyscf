@@ -54,7 +54,7 @@ class DF(lib.StreamObject):
                     self._cderi = self._cderi_file.name
             outcore.cholesky_eri(mol, self._cderi, auxmol=auxmol, verbose=log)
             if nao_pair*nao*8/1e6 < max_memory:
-                with addons.load(self._cderi.name) as feri:
+                with addons.load(self._cderi) as feri:
                     cderi = numpy.asarray(feri)
                 self._cderi = cderi
             log.timer_debug1('Generate density fitting integrals', *t0)

@@ -504,7 +504,6 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     >>> print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
     S^2 = 3.9831589, 2S+1 = 4.1149284
     '''
-    from pyscf import scf
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ovlp is None: ovlp = casscf._scf.get_ovlp()

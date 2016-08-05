@@ -227,6 +227,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
     if log.verbose >= logger.INFO:
+        ovlp_ao = mc._scf.get_ovlp()
         log.debug('where_natorb %s', str(where_natorb))
         log.info('Natural occ %s', str(occ))
         log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')

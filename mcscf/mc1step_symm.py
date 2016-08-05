@@ -71,8 +71,8 @@ class CASSCF(mc1step.CASSCF):
 
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None):
-        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
-                                                 sort, casdm1, verbose)
+        self.mo_coeff, self.ci, occ = self.cas_natorb(mo_coeff, ci, eris,
+                                                      sort, casdm1, verbose)
         if sort:
             casci_symm.label_symmetry_(self, self.mo_coeff)
         return self.mo_coeff, self.ci, occ

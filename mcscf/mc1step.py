@@ -1020,8 +1020,8 @@ class CASSCF(casci.CASCI):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
             e, v = lib.safe_eigh(heff, seff)[:2]
-            ci1 = 0
-            for i in range(nd):
+            ci1 = xs[0] * v[0,0]
+            for i in range(1,nd):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 
