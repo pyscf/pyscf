@@ -1,16 +1,16 @@
-* Hartree-Fock (up to ~3000 basis)
+* Hartree-Fock (up to ~5000 basis)
   - Non-relativistic restricted open-shell, unrestricted HF
   - scalar relativistic HF
   - 2-component relativistic HF
   - 4-component relativistic Dirac-Hartree-Fock
-  - density fitting HF (up to ~5000 basis)
+  - density fitting HF
   - Second order SCF
   - General JK contraction function
 
-* DFT (up to ~3000 basis)
+* DFT (up to ~5000 basis)
   - Non-relativistic restricted, restricted open-shell, unrestricted Kohn-Sham
   - scalar relativistic DFT
-  - density fitting DFT (up to ~5000 basis)
+  - density fitting DFT
   - General XC functional evaluator (for Libxc or XcFun)
   - General AO evaluator
 
@@ -68,6 +68,17 @@
 
 * MRPT
   - Strongly contracted NEVPT2
+  - DMRG-NEVPT2
+  - IC-MPS-PT2
+
+* Extended systems with perodic boundary condition
+  - gamma point RHF, UHF, RKS, UKS
+  - gamma point TDDFT, MP2, CCSD
+  - PBC RHF, UHF, RKS, UKS with k-point sampling
+  - PBC CCSD with k-point sampling
+  - PBC AO integrals
+  - PBC MO integral transformation
+  - PBC density fitting
 
 * Solvation effects
   - COSMO model for Hartree-Fock, DFT, CASCI, CASSCF and DMRG-CASCI, DMRG-CASSCF

@@ -3,7 +3,7 @@ PySCF
 
 Python module for quantum chemistry
 
-2016-08-03
+2016-08-05
 
 * [1.2 alpha] [Stable release 1.1](https://github.com/sunqm/pyscf/tree/1.1)
 * [Changelog](../master/CHANGELOG)

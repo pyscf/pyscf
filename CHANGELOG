@@ -1,12 +1,16 @@
-Version 1.2 alpha (2016-8-?):
+Version 1.2 alpha (2016-8-5):
 * Added
-  - XDF method
+  - MDF method for molecule and PBC 2-election integrals
   - GAMESS WFN wirter
   - Periodic boundary condition (PBC) for gamma point RHF, UHF, RKS, UKS
   - PBC RHF, UHF, RKS, UKS with k-point sampling
   - PBC AO integrals
   - PBC MO integral transformation
   - PBC density fitting
+  - IC-MPS-PT2
+  - DMEG-CAS for active space selection 
+  - FCI electron-phonon coupling solver
+  - meta-GGA for ground state DFT
 
 
 Version 1.1 (2016-6-4):
