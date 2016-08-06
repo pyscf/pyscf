@@ -550,7 +550,8 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
             f.write('%f '%weight)
         f.write('\n')
 
-    f.write('num_thrds %d\n'%DMRGCI.num_thrds)
+    if num_thrds > 1: # Add condition for backward compatiblity
+        f.write('num_thrds %d\n'%DMRGCI.num_thrds)
     for line in DMRGCI.extraline:
         f.write('%s\n'%line)
     for line in DMRGCI.block_extra_keyword:
