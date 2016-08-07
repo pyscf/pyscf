@@ -40,8 +40,7 @@ mf.kernel()
 
 # Change error tolerence (to 0.1 Bohr, default is 1e-5 Bohr) for symmetry
 # detection, so that the program can find the raw symmetry.
-symm.geom.GEOM_THRESHOLD = .1
-symm.geom.PLACE = 1
+symm.geom.TOLERANCE = .1
 mol.symmetry = True
 mol.build(False, False)
 print('Pseudo symmetry %s' % mol.groupname)

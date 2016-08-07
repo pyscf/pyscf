@@ -31,7 +31,7 @@ except ValueError:
     print('The diagonalization for rdm1 breaks the symmetry of the degenerated natural orbitals.')
 
 print('\nIn eigenvalue sovler symm.eigh, we diagonalize the density matrix with the MO symmetry '
-      'information.  The eigenvector are all symmetry adapted.')
+      'information.  The eigenvectors are all symmetry adapted.')
 orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mf.mo_coeff)
 natocc, natorb = symm.eigh(rdm1, orbsym)
 natorb = numpy.dot(mf.mo_coeff, natorb)

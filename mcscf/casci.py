@@ -192,6 +192,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         ucas = ucas[:,idx]
 
     occ = -occ
+    mo_occ = numpy.zeros(mo_coeff.shape[1])
+    mo_occ[:ncore] = 2
+    mo_occ[ncore:nocc] = occ
 
 # where_natorb gives the location of the natural orbital for the input cas
 # orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
@@ -257,7 +260,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         aaaa = ao2mo.kernel(mc.mol, mocas)
     e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0)
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
-    return mo_coeff1, fcivec, occ
+    return mo_coeff1, fcivec, mo_occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE):

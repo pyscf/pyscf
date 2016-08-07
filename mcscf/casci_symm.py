@@ -5,10 +5,10 @@
 
 import numpy
 from pyscf.lib import logger
-import pyscf.symm
-import pyscf.scf
-from pyscf.mcscf import casci
+from pyscf import scf
+from pyscf import symm
 from pyscf import fci
+from pyscf.mcscf import casci
 from pyscf.mcscf import addons
 
 
@@ -16,7 +16,7 @@ class CASCI(casci.CASCI):
     def __init__(self, mf, ncas, nelecas, ncore=None):
         assert(mf.mol.symmetry)
 # Ag, A1 or A
-#TODO:        self.wfnsym = pyscf.symm.param.CHARACTER_TABLE[mol.groupname][0][0]
+#TODO:        self.wfnsym = symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
@@ -71,7 +71,7 @@ def eig(mat, orbsym):
     for i0 in sorted(set(orbsym)):
         lst = numpy.where(orbsym == i0)[0]
         if len(lst) > 0:
-            w, v = pyscf.scf.hf.eig(mat[lst[:,None],lst], None)
+            w, v = scf.hf.eig(mat[lst[:,None],lst], None)
             e[lst] = w
             c[lst[:,None],lst] = v
     return e, c
@@ -81,15 +81,18 @@ def label_symmetry_(mc, mo_coeff):
     irrep_name = mc.mol.irrep_id
     s = mc._scf.get_ovlp()
     try:
-        mc.orbsym = pyscf.symm.label_orb_symm(mc.mol, irrep_name,
-                                              mc.mol.symm_orb, mo_coeff, s=s)
+        mc.orbsym = symm.label_orb_symm(mc.mol, irrep_name,
+                                        mc.mol.symm_orb, mo_coeff, s=s)
     except ValueError:
         logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
-        mo_coeff = pyscf.symm.symmetrize_space(mc.mol, mo_coeff, s=s)
-        diag = numpy.einsum('ki,ki->i', mo_coeff, numpy.dot(s, mo_coeff))
-        mo_coeff = numpy.einsum('ki,i->ki', mo_coeff, 1/numpy.sqrt(diag))
-        mc.orbsym = pyscf.symm.label_orb_symm(mc.mol, irrep_name,
-                                              mc.mol.symm_orb, mo_coeff, s=s)
+        ncore = mc.ncore
+        nocc = mc.ncore + mc.ncas
+        mo_cor = symm.symmetrize_space(mc.mol, mo_coeff[:,    :ncore], s=s)
+        mo_act = symm.symmetrize_space(mc.mol, mo_coeff[:,ncore:nocc], s=s)
+        mo_vir = symm.symmetrize_space(mc.mol, mo_coeff[:,nocc:     ], s=s)
+        mo_coeff = numpy.hstack((mo_cor,mo_act,mo_vir))
+        mc.orbsym = symm.label_orb_symm(mc.mol, irrep_name,
+                                        mc.mol.symm_orb, mo_coeff, s=s)
 
     if not hasattr(mc.fcisolver, 'orbsym') or not mc.fcisolver.orbsym:
         ncore = mc.ncore
@@ -101,8 +104,6 @@ def label_symmetry_(mc, mo_coeff):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
-    import pyscf.fci
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
@@ -125,6 +126,6 @@ if __name__ == '__main__':
     print(emc+75.9624554777)
 
     mc = CASCI(m, 4, (3,1))
-    mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = fci.direct_spin1
     emc = mc.casci()[0]
     print(emc - -75.439016172976)
